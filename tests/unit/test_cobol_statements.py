@@ -8,6 +8,7 @@ from cobol_asg.cobol_statements import (
     AlteredGoto,
     ArithmeticStatement,
     CallStatement,
+    CallTarget,
     CancelStatement,
     CloseStatement,
     ComputeStatement,
@@ -480,10 +481,33 @@ class TestParseStatementDispatch:
             }
         )
         assert isinstance(stmt, CallStatement)
-        assert stmt.program == "SUBPROG"
+        assert stmt.target == CallTarget.of_literal("SUBPROG")
         assert len(stmt.using) == 1
         assert stmt.using[0].name == "WS-A"
         assert stmt.using[0].param_type == "REFERENCE"
+        assert not stmt.target.resolved_at_runtime
+
+    @covers(CobolFeature.CALL_BY_IDENTIFIER, CobolFeature.OCCURS_FIXED)
+    def test_call_by_identifier_carries_the_operand_machinery(self):
+        """The identifier arm is the ordinary operand model, subscripts and all."""
+        stmt = parse_statement(
+            {
+                "type": "CALL",
+                "program_ref": {
+                    "name": "WS-PROGS",
+                    "subscripts": [{"kind": "ref", "name": "I"}],
+                    "qualifiers": ["WS-GRP"],
+                },
+            }
+        )
+        assert isinstance(stmt, CallStatement)
+        assert stmt.target.resolved_at_runtime
+        assert stmt.target.literal == ""
+        operand = stmt.target.identifier
+        assert operand is not None
+        assert operand.name == "WS-PROGS"
+        assert len(operand.subscripts) == 1
+        assert operand.qualifiers == ("WS-GRP",)
 
     @covers(
         CobolFeature.CALL,
@@ -1265,6 +1289,24 @@ class TestRoundTrip:
             "program": "SUBPROG",
             "using": [{"name": "WS-A", "type": "REFERENCE"}],
             "giving": "WS-RESULT",
+        }
+        assert self._round_trip(data) == data
+
+    @covers(CobolFeature.CALL_BY_IDENTIFIER, CobolFeature.REFERENCE_MODIFICATION)
+    def test_call_by_identifier_round_trip(self):
+        """A runtime-resolved callee survives the round trip with its ref-mod.
+
+        `CALL WS-PROG(1:8)` is the idiom that a plain-name model would parse and
+        then call the wrong program with.
+        """
+        data = {
+            "type": "CALL",
+            "program_ref": {
+                "name": "WS-PROG",
+                "ref_mod_start": {"kind": "lit", "value": "1"},
+                "ref_mod_length": {"kind": "lit", "value": "8"},
+            },
+            "using": [{"name": "WS-A", "type": "REFERENCE"}],
         }
         assert self._round_trip(data) == data
 

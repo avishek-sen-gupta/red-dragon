@@ -1,0 +1,19 @@
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. CALLTGT.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01  WS-PROG         PIC X(10) VALUE 'SUBA'.
+       01  WS-PROGS.
+           05 WS-PROG-E    PIC X(8) OCCURS 3 TIMES.
+       01  WS-IDX          PIC 9(4) COMP VALUE 1.
+       01  WS-ARG          PIC X(4) VALUE 'ABCD'.
+       01  WS-GRP.
+           05 WS-INNER     PIC X(8) VALUE 'SUBB'.
+       PROCEDURE DIVISION.
+       MAIN-PARA.
+           CALL 'DSNTIAC' USING WS-ARG
+           CALL WS-PROG USING WS-ARG
+           CALL WS-PROG-E(WS-IDX) USING WS-ARG
+           CALL WS-PROG(1:8) USING WS-ARG
+           CALL WS-INNER OF WS-GRP USING WS-ARG
+           GOBACK.

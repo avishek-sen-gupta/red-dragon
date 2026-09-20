@@ -589,11 +589,16 @@ class CallWithMemory(InstructionBase):
     params_reg: caller passes this region to the callee (callee reads LINKAGE fields from it).
     results_reg: callee writes output back here (BY REF: same as params_reg).
     result_reg: inherited from InstructionBase — scalar return value for GIVING clause.
+    target_reg: when present, holds the callee's name as a runtime string and
+        supersedes func_name. COBOL's ``CALL identifier`` takes the program name
+        from a data item's contents, which no statically known func_name can
+        express (red-dragon-jgra).
     """
 
     func_name: FuncName = NO_FUNC_NAME
     params_reg: Register = NO_REGISTER
     results_reg: Register = NO_REGISTER
+    target_reg: Register = NO_REGISTER
 
     @property
     def opcode(self) -> Opcode:
@@ -601,7 +606,14 @@ class CallWithMemory(InstructionBase):
 
     @property
     def operands(self) -> list[Any]:
-        return [str(self.func_name), str(self.params_reg), str(self.results_reg)]
+        ops: list[Any] = [
+            str(self.func_name),
+            str(self.params_reg),
+            str(self.results_reg),
+        ]
+        if self.target_reg.is_present():
+            ops.append(str(self.target_reg))
+        return ops
 
     def reads(self) -> list[StorageIdentifier]:
         reads: list[StorageIdentifier] = []
@@ -609,6 +621,8 @@ class CallWithMemory(InstructionBase):
             reads.append(self.params_reg)
         if self.results_reg.is_present() and self.results_reg != self.params_reg:
             reads.append(self.results_reg)
+        if self.target_reg.is_present():
+            reads.append(self.target_reg)
         return reads
 
 
@@ -1414,6 +1428,7 @@ def _call_with_memory(inst: Any) -> CallWithMemory:
         func_name=FuncName(str(ops[0])) if len(ops) >= 1 else NO_FUNC_NAME,
         params_reg=Register(str(ops[1])) if len(ops) >= 2 else NO_REGISTER,
         results_reg=Register(str(ops[2])) if len(ops) >= 3 else NO_REGISTER,
+        target_reg=Register(str(ops[3])) if len(ops) >= 4 else NO_REGISTER,
         source_location=inst.source_location,
     )
 

@@ -35,6 +35,7 @@ from interpreter.constants import (
 from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.instructions import (
     CallFunction,
+    CallWithMemory,
     Const,
     DeclVar,
     ImportModule,
@@ -399,6 +400,23 @@ def _collect_resolved_imports(
 # ── Demand-driven filtering ──────────────────────────────────────
 
 
+def _calls_a_runtime_resolved_program(module: ModuleUnit) -> bool:
+    """True when the module calls a program whose name it computes at run time.
+
+    COBOL's ``CALL identifier`` takes the callee from a data item's contents, so
+    no static walk of the source can name it. The only sound statement about
+    such a module's dependencies is that they may be any program in the build —
+    which is what the reachability walk above does with this. Pruning on the
+    statically visible edges alone would drop the callee from the link, and the
+    CALL could then never dispatch however correctly it was lowered
+    (red-dragon-jgra).
+    """
+    return any(
+        isinstance(inst, CallWithMemory) and inst.target_reg.is_present()
+        for inst in module.ir
+    )
+
+
 def _filter_reachable_modules(
     modules: dict[Path, ModuleUnit],
     import_graph: dict[Path, list[Path]],
@@ -431,6 +449,9 @@ def _filter_reachable_modules(
         if path in reachable:
             continue
         reachable.add(path)
+        if _calls_a_runtime_resolved_program(modules[path]):
+            queue.extend(p for p in modules if p not in reachable)
+            continue
         for dep in import_graph.get(path, []):
             if dep not in reachable:
                 queue.append(dep)

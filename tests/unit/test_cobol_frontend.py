@@ -17,6 +17,7 @@ from cobol_asg.cobol_statements import (
     AlterStatement,
     ArithmeticStatement,
     CallStatement,
+    CallTarget,
     CallUsingParam,
     CancelStatement,
     CloseStatement,
@@ -2059,7 +2060,7 @@ class TestCallAlterEntryCancelLowering:
         ]
         stmts = [
             CallStatement(
-                program="SUBPROG",
+                target=CallTarget.of_literal("SUBPROG"),
                 using=[CallUsingParam(name="WS-A", param_type="REFERENCE")],
             )
         ]
@@ -2100,7 +2101,7 @@ class TestCallAlterEntryCancelLowering:
         ]
         stmts = [
             CallStatement(
-                program="CALC",
+                target=CallTarget.of_literal("CALC"),
                 using=[CallUsingParam(name="WS-A")],
                 giving="WS-RESULT",
             )

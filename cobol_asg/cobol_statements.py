@@ -14,6 +14,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Union
 
+from cobol_asg.call_target import CallTarget
 from cobol_asg.cobol_expression import ExprNode, expr_from_dict, expr_to_dict
 from cobol_asg.file_enums import AccessMode, FileOrganization, OpenMode
 from cobol_asg.ref_mod import (
@@ -1148,9 +1149,14 @@ class CallUsingParam:
 
 @dataclass(frozen=True)
 class CallStatement:
-    """CALL 'program' [USING params] [GIVING target]."""
+    """CALL (identifier | literal) [USING params] [GIVING target].
 
-    program: str = ""
+    ``target`` carries the callee. It is a ``CallTarget`` rather than a program
+    name because COBOL lets the callee be a data item whose runtime contents
+    name the program; see ``cobol_asg.call_target``.
+    """
+
+    target: CallTarget = field(default_factory=CallTarget)
     using: list[CallUsingParam] = field(default_factory=list)
     giving: str = ""
     span: SourceSpan | None = None
@@ -1158,14 +1164,15 @@ class CallStatement:
     @classmethod
     def from_dict(cls, data: dict) -> CallStatement:
         return cls(
-            program=data.get("program", ""),
+            target=CallTarget.from_dict(data),
             using=[CallUsingParam.from_dict(p) for p in data.get("using", [])],
             giving=data.get("giving", ""),
             span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
-        result: dict = {"type": "CALL", "program": self.program}
+        result: dict = {"type": "CALL"}
+        self.target.write_into(result)
         if self.using:
             result["using"] = [p.to_dict() for p in self.using]
         if self.giving:
