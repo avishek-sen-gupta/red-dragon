@@ -606,14 +606,28 @@ def lower_move(
             span=span,
         )
         source_fl = source_ref.fl
-        decoded_reg = ctx.emit_decode_field(
-            source_rr,
-            source_ref.fl,
-            source_ref.offset_reg,
-            extent=source_ref.extent,
-            span=span,
-        )
-        value_str_reg = ctx.emit_to_string(decoded_reg, span=span)
+        # A ref-modified source is sliced as characters, so it must start from the
+        # field's character image; without one, a numeric-DISPLAY source is sliced
+        # at offsets that have slid left (red-dragon-wlms). An unmodified source
+        # keeps the decoded-value reading, which _store_move_value converts per
+        # receiving category.
+        if stmt.source.ref_mod_start is not None:
+            value_str_reg = ctx.emit_decode_field_characters(
+                source_rr,
+                source_ref.fl,
+                source_ref.offset_reg,
+                extent=source_ref.extent,
+                span=span,
+            )
+        else:
+            decoded_reg = ctx.emit_decode_field(
+                source_rr,
+                source_ref.fl,
+                source_ref.offset_reg,
+                extent=source_ref.extent,
+                span=span,
+            )
+            value_str_reg = ctx.emit_to_string(decoded_reg, span=span)
     else:
         literal = strip_cobol_literal(translate_cobol_figurative(stmt.source.name))
         value_str_reg = ctx.const_to_reg(literal, span=span)
@@ -2298,10 +2312,9 @@ def _lower_display_operand(
         ref, rr = ctx.resolve_field_ref(
             operand.name, materialised, subscripts=operand.subscripts, span=span
         )
-        decoded_reg = ctx.emit_decode_field(
+        display_reg = ctx.emit_decode_field_characters(
             rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
         )
-        display_reg = ctx.emit_to_string(decoded_reg, span=span)
     else:
         display_reg = ctx.const_to_reg(str(operand.name), span=span)
 

@@ -981,6 +981,42 @@ class EmitContext:
         ir = build_decode_alphanumeric_ir(f"dec_zoned_disp_{fl.name}")
         return self.inline_ir(ir, {"%p_data": data_reg}, span=span)
 
+    def emit_decode_field_characters(
+        self,
+        region_reg: Register,
+        fl: FieldLayout,
+        offset_reg: Register = NO_REGISTER,
+        *,
+        extent: FieldExtent,
+        span: SourceSpan | None = None,
+    ) -> Register:
+        """Emit IR for a field's CHARACTER image — what a character-consuming
+        context (DISPLAY, reference modification, a STRING sending operand) reads.
+
+        An unsigned zoned (USAGE DISPLAY) numeric item is a fixed-width field of
+        exactly PICTURE-many bytes, so its character image is those bytes, leading
+        zeros and all. Decoding it to a number and formatting the number back
+        silently narrows the field, and any reference modification then slices at
+        offsets that have all slid left — PIC 9(09) holding 020973888 renders the
+        CardDemo SSN as 209-73-888 (red-dragon-wlms).
+
+        Signed zoned items keep the decoded-number reading: their last byte carries
+        a sign overpunch, whose faithful character image is a letter rather than a
+        digit, and that is a separate semantic decision (red-dragon-b1ba).
+
+        Every other category already decodes to its character form or has no
+        meaningful one, so this routes them through emit_decode_field unchanged.
+        """
+        td = fl.type_descriptor
+        if td.category == CobolDataCategory.ZONED_DECIMAL and not td.signed:
+            return self.emit_decode_zoned_display(
+                region_reg, fl, offset_reg, extent=extent, span=span
+            )
+        decoded = self.emit_decode_field(
+            region_reg, fl, offset_reg, extent=extent, span=span
+        )
+        return self.emit_to_string(decoded, span=span)
+
     # ── Byte-faithful (raw) region read/write ─────────────────────
 
     def emit_read_region_raw(

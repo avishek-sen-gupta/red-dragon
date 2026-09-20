@@ -57,14 +57,13 @@ def _write_ref_mod_target(
     )
     target_value_reg = value_reg
     if target.ref_mod_start is not None:
-        target_decoded = ctx.emit_decode_field(
+        target_str_reg = ctx.emit_decode_field_characters(
             target_rr,
             target_ref.fl,
             target_ref.offset_reg,
             extent=target_ref.extent,
             span=span,
         )
-        target_str_reg = ctx.emit_to_string(target_decoded, span=span)
         tgt_start_reg = eval_ref_mod_expr(
             ctx, target.ref_mod_start, materialised, span=span
         )
@@ -150,14 +149,13 @@ def lower_string(
                 subscripts=sending.value.subscripts,
                 span=span,
             )
-            decoded_reg = ctx.emit_decode_field(
+            src_str_reg = ctx.emit_decode_field_characters(
                 source_rr,
                 source_ref.fl,
                 source_ref.offset_reg,
                 extent=source_ref.extent,
                 span=span,
             )
-            src_str_reg = ctx.emit_to_string(decoded_reg, span=span)
         else:
             src_str_reg = ctx.const_to_reg(
                 strip_cobol_literal(str(sending.value.name)), span=span
@@ -381,14 +379,13 @@ def lower_unstring(
         source_ref, source_rr = ctx.resolve_field_ref(
             source_name, materialised, span=span
         )
-        decoded_reg = ctx.emit_decode_field(
+        src_str_reg = ctx.emit_decode_field_characters(
             source_rr,
             source_ref.fl,
             source_ref.offset_reg,
             extent=source_ref.extent,
             span=span,
         )
-        src_str_reg = ctx.emit_to_string(decoded_reg, span=span)
     else:
         src_str_reg = ctx.const_to_reg(
             strip_cobol_literal(str(stmt.source.name)), span=span
@@ -617,10 +614,9 @@ def lower_inspect(
         stmt.source.name, materialised, span=span
     )
     source_fl = source_ref.fl
-    decoded_reg = ctx.emit_decode_field(
+    src_str_reg = ctx.emit_decode_field_characters(
         source_rr, source_fl, source_ref.offset_reg, extent=source_ref.extent, span=span
     )
-    src_str_reg = ctx.emit_to_string(decoded_reg, span=span)
 
     if stmt.source.ref_mod_start is not None:
         raw_start_reg = eval_ref_mod_expr(
@@ -680,10 +676,9 @@ def _resolve_inspect_operand(
     name instead of its contents)."""
     if ctx.has_field(operand, materialised):
         ref, rr = ctx.resolve_field_ref(operand, materialised, span=span)
-        decoded = ctx.emit_decode_field(
+        return ctx.emit_decode_field_characters(
             rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
         )
-        return ctx.emit_to_string(decoded, span=span)
     if operand in ("SPACES", "SPACE", "ZEROS", "ZEROES", "ZERO", "LOW-VALUES"):
         return ctx.const_to_reg(translate_cobol_figurative(operand), span=span)
     return ctx.const_to_reg(strip_cobol_literal(str(operand)), span=span)
