@@ -102,7 +102,7 @@ def compile_cobol(
     extension_strategies: Sequence[RedDragonExtensionLoweringStrategy] = (),
     dialect_parsers: Sequence[DialectParser] = (),
     observer: FrontendObserver = NullFrontendObserver(),
-    program_source_dirs: Sequence[Path] = (),
+    source_search_dirs: Sequence[Path] = (),
     extra_subprogram_sources: dict[str, bytes] = {},
     source_transform: Callable[[str], str] = lambda s: s,
     ast_cache_dir: Path | None = None,
@@ -125,25 +125,25 @@ def compile_cobol(
         cache_dir = ast_cache_dir
 
     try:
-        # Note: program_source_dirs disk resolution is intentionally excluded from
+        # Note: source_search_dirs disk resolution is intentionally excluded from
         # the ast-cache path — only extra_subprogram_sources are cached. This is a
-        # known scope limitation: callers using program_source_dirs + ast_cache_dir
+        # known scope limitation: callers using source_search_dirs + ast_cache_dir
         # together will get a LinkedProgram without disk-resolved callees.
         main_path = Path("__main__.cbl")
-        base = program_source_dirs[0] if program_source_dirs else Path(".")
+        base = source_search_dirs[0] if source_search_dirs else Path(".")
 
         sub_sources: dict[str, bytes] = dict(extra_subprogram_sources)
 
-        # Resolve on-disk callees by searching program_source_dirs in order (the
+        # Resolve on-disk callees by searching source_search_dirs in order (the
         # first that resolves a given CALL target wins), applying source_transform
         # to whatever's read. An empty sequence means no directories were given —
         # disk resolution only runs when a caller opts in with at least one.
         disk_sources: dict[Path, bytes] = {}
-        if program_source_dirs:
+        if source_search_dirs:
             disk_sources = _resolve_call_sources(
                 source,
                 main_path,
-                [d.resolve() for d in program_source_dirs],
+                [d.resolve() for d in source_search_dirs],
                 source_transform,
             )
 
@@ -265,13 +265,13 @@ def compile_cobol(
 def _resolve_call_sources(
     main_source: bytes,
     main_path: Path,
-    program_source_dirs: Sequence[Path],
+    source_search_dirs: Sequence[Path],
     source_transform: Callable[[str], str],
 ) -> dict[Path, bytes]:
     """Transitively resolve CALL targets reachable from the main program on disk.
 
     Walks CALL edges via extract_imports + CobolImportResolver, trying each of
-    program_source_dirs in order for a given CALL target (the first that
+    source_search_dirs in order for a given CALL target (the first that
     resolves it wins), reads the resolved program source, applies
     source_transform, and returns {absolute_path: transformed_bytes} for every
     callee found. Unresolvable CALL targets (no matching .cbl in any of the
@@ -288,10 +288,10 @@ def _resolve_call_sources(
         for ref in extract_imports(src, path, Language.COBOL):
             if ref.kind != ImportKind.REQUIRE:
                 continue  # COPY (INCLUDE) is handled by the parser's copybook dirs
-            for program_source_dir in program_source_dirs:
+            for source_search_dir in source_search_dirs:
                 hits = [
                     hit
-                    for hit in resolver.resolve(ref, program_source_dir)
+                    for hit in resolver.resolve(ref, source_search_dir)
                     if hit.is_resolved()
                 ]
                 if not hits:
