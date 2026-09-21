@@ -37,7 +37,12 @@ from cobol_numeric.scale import (
     mul_scale,
 )
 
-FieldTypes = Callable[[str], CobolTypeDescriptor | None]
+FieldTypes = Callable[[str, tuple[str, ...]], CobolTypeDescriptor | None]
+"""Resolves a reference's name and its OF/IN qualifiers to the field's type.
+
+The qualifiers are part of the lookup, not decoration: a name declared under
+two groups resolves to neither without them (red-dragon-2afo).
+"""
 
 FLOAT_INTRINSICS = frozenset(
     {
@@ -135,7 +140,7 @@ def is_floating_literal(text: str) -> bool:
 
 def expression_is_floating(node: ExprNode, field_types: FieldTypes) -> bool:
     if isinstance(node, (FieldRefNode, RefModNode)):
-        td = field_types(node.name)
+        td = field_types(node.name, node.qualifiers)
         return td is not None and is_floating_type(td)
     if isinstance(node, LiteralNode):
         return is_floating_literal(node.value)
@@ -160,7 +165,7 @@ def expression_is_floating(node: ExprNode, field_types: FieldTypes) -> bool:
 def operand_dmax(node: ExprNode, field_types: FieldTypes) -> int:
     """Largest decimal places of any operand except divisors."""
     if isinstance(node, (FieldRefNode, RefModNode)):
-        td = field_types(node.name)
+        td = field_types(node.name, node.qualifiers)
         return field_scale(td).decimal_places if td is not None else 0
     if isinstance(node, LiteralNode):
         scale = _numeric_literal_scale(node.value)
@@ -175,7 +180,7 @@ def operand_dmax(node: ExprNode, field_types: FieldTypes) -> int:
 
 def node_scale(node: ExprNode, dmax: int, field_types: FieldTypes) -> Scale:
     if isinstance(node, (FieldRefNode, RefModNode)):
-        td = field_types(node.name)
+        td = field_types(node.name, node.qualifiers)
         return field_scale(td) if td is not None else Scale(1, 0)
     if isinstance(node, LiteralNode):
         return _numeric_literal_scale(node.value) or Scale(1, 0)

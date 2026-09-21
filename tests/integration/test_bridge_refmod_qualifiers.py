@@ -88,11 +88,17 @@ def test_a_literal_bound_leaves_the_operands_qualifier_intact(bridge_jar):
 
 @covers(CobolFeature.GROUP_ITEM, CobolFeature.REFERENCE_MODIFICATION)
 def test_a_qualified_bound_does_not_requalify_the_sliced_operand(bridge_jar):
-    """The bound's GB stood in for the operand's GA."""
+    """The bound's GB stood in for the operand's GA.
+
+    The bound keeps NB for ITSELF (red-dragon-2afo): when this test was written
+    the ctx-side serializers emitted no qualifiers at all, so the bound's own
+    node was asserted qualifier-less. The operand's GA is what this test is
+    about, and it is unchanged.
+    """
     assert _source_operand(bridge_jar, "MOVE FLD OF GA(1:NL OF NB) TO D.") == {
         "name": "FLD",
         "ref_mod_start": _LIT_1,
-        "ref_mod_length": {"kind": "ref", "name": "NL"},
+        "ref_mod_length": {"kind": "ref", "name": "NL", "qualifiers": ["NB"]},
         "qualifiers": ["GA"],
     }
 
