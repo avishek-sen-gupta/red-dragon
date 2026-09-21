@@ -760,6 +760,9 @@ def _handle_call_with_memory(
             call_push=StackFramePush(
                 function_name=fname,
                 return_label=ctx.current_label,
+                # The callee returns its RETURN-CODE here; the COBOL CALL
+                # lowering copies it into the caller's (red-dragon-ltq6).
+                result_reg=t.result_reg,
             ),
             next_label=flabel,
             reasoning=(

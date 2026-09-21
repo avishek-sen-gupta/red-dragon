@@ -7,6 +7,8 @@ Emits (in order):
        CONST %size_reg, <ws_size>
        ALLOC_REGION %ws_reg, %size_reg  + VALUE initialisers
        STORE_FIELD %ptr, ws_handle, %ws_reg
+       ALLOC_REGION %sr_reg  (special registers -- persistent, like WS)
+       STORE_FIELD %ptr, return_code_handle, %sr_reg
        CONST %run_reg, "func_<pid>_0"       → BoundFuncRef at runtime
        STORE_FIELD %ptr, run, %run_reg
        CONST %init_reg, "func_init_params_<pid>_0"  → BoundFuncRef
@@ -29,6 +31,10 @@ from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.lower_data_division import lower_data_division
 from cobol_memory.region_id import RegionId
+from interpreter.cobol.special_registers import (
+    RETURN_CODE_HANDLE,
+    SPECIAL_REGISTERS_LAYOUT,
+)
 from interpreter.field_name import FieldName
 from interpreter.instructions import (
     Branch,
@@ -71,6 +77,18 @@ def lower_program_init(
 
     ctx.emit_inst(
         StoreField(obj_reg=ptr_reg, field_name=FieldName("ws_handle"), value_reg=ws_reg)
+    )
+
+    # RETURN-CODE (and future special registers) get their own region, isolated
+    # from WS/LS/LINKAGE/FILE so a MOVE into one cannot disturb another field's
+    # layout. It is allocated HERE, with WORKING-STORAGE, because the register
+    # outlives a single invocation: a subprogram is left in its last-used state,
+    # and a callee's value must survive its own exit for the caller to copy it up.
+    sr_reg = lower_data_division(
+        ctx, SPECIAL_REGISTERS_LAYOUT, RegionId.SPECIAL_REGISTERS
+    )
+    ctx.emit_inst(
+        StoreField(obj_reg=ptr_reg, field_name=RETURN_CODE_HANDLE, value_reg=sr_reg)
     )
 
     run_reg = ctx.fresh_reg()

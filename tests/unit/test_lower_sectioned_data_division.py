@@ -45,9 +45,9 @@ def test_lower_sectioned_no_alloc_region_for_ws():
     sl = build_sectioned_layout(asg)
     lower_sectioned_data_division(ctx, sl, "TESTPGM")
     alloc_count = sum(1 for i in ctx.instructions if i.opcode == Opcode.ALLOC_REGION)
-    # WS comes from the singleton (LOAD_VAR, no ALLOC); the only alloc is the
-    # always-present special-registers region (RETURN-CODE). red-dragon-o8uq.
-    assert alloc_count == 1
+    # Nothing is allocated per invocation here: WS and the special registers both
+    # come from the singleton, because both outlive a single call (red-dragon-ltq6).
+    assert alloc_count == 0
 
 
 @covers(CobolFeature.SECTION_LINKAGE)
@@ -84,5 +84,5 @@ def test_lower_sectioned_emits_alloc_region_for_local_storage():
     sl = build_sectioned_layout(asg)
     lower_sectioned_data_division(ctx, sl, "TESTPGM")
     alloc_count = sum(1 for i in ctx.instructions if i.opcode == Opcode.ALLOC_REGION)
-    # LS region + the always-present special-registers region; WS is from singleton.
-    assert alloc_count == 2
+    # LOCAL-STORAGE alone: it is the one section genuinely allocated per call.
+    assert alloc_count == 1

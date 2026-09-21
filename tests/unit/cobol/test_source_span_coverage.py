@@ -244,18 +244,17 @@ def _probe_ir():
 #   lower_ws_from_singleton:        LoadVar(singleton), LoadField(ws_handle),
 #                                    StoreVar(__ws_region)
 #   lower_sectioned_data_division:  LoadVar(__ws_region)
-#     -> lower_data_division(SPECIAL_REGISTERS_LAYOUT): Const(size), AllocRegion
-#        (both span=None -- region-level, no single declaration)
-#   lower_sectioned_data_division:  LoadVar(singleton), StoreField(RETURN_CODE_HANDLE)
+#   lower_sectioned_data_division:  LoadVar(singleton),
+#                                    LoadField(RETURN_CODE_HANDLE)
+# The special registers are ALLOCATED once in the init block, beside WS, so the
+# per-invocation shape only rebinds the handle (red-dragon-ltq6).
 _DATA_DIVISION_SETUP_OPCODES = (
     "LOAD_VAR",
     "LOAD_FIELD",
     "STORE_VAR",
     "LOAD_VAR",
-    "CONST",
-    "ALLOC_REGION",
     "LOAD_VAR",
-    "STORE_FIELD",
+    "LOAD_FIELD",
 )
 
 
@@ -663,10 +662,8 @@ _E2E_SETUP_OPCODES = (
     "ALLOC_REGION",
     "CONST",
     "ALLOC_REGION",
-    "CONST",
-    "ALLOC_REGION",
     "LOAD_VAR",
-    "STORE_FIELD",
+    "LOAD_FIELD",
 )
 
 

@@ -33,11 +33,21 @@ def test_lower_program_init_emits_alloc_region_for_ws():
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_lower_program_init_emits_three_store_fields():
+def test_lower_program_init_publishes_every_singleton_field():
+    """Naming the fields, not counting them: a count says nothing about which."""
     ctx = EmitContext(dispatch_fn=dispatch_statement)
     lower_program_init(ctx, "SUBPROG", _ws_layout_5bytes())
-    count = sum(1 for i in ctx.instructions if i.opcode == Opcode.STORE_FIELD)
-    assert count == 3  # ws_handle, run, __init_params__
+    published = [
+        str(i.field_name) for i in ctx.instructions if i.opcode == Opcode.STORE_FIELD
+    ]
+    # return_code_handle joins them because the special registers are allocated
+    # once, with WORKING-STORAGE, rather than per call (red-dragon-ltq6).
+    assert published == [
+        "ws_handle",
+        "return_code_handle",
+        "run",
+        "__init_params__",
+    ]
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
