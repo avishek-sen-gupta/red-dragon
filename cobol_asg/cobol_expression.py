@@ -71,10 +71,16 @@ class DfhRespNode:
 
 @dataclass(frozen=True)
 class FieldRefNode:
-    """Reference to a COBOL data field by name."""
+    """Reference to a COBOL data field by name.
+
+    ``qualifiers`` are the ``OF``/``IN`` ancestor group names written on the
+    reference, outermost last, which disambiguate a name declared under more
+    than one group (red-dragon-2afo).
+    """
 
     name: str
     subscripts: tuple[ExprNode, ...] = ()
+    qualifiers: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -85,6 +91,7 @@ class RefModNode:
     ref_mod_start: ExprNode
     ref_mod_length: ExprNode | None = None
     subscripts: tuple[ExprNode, ...] = ()
+    qualifiers: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -157,6 +164,12 @@ def _figurative(d: JsonExpr) -> ExprNode:
     return FigurativeNode(value=_text(d, "value"))
 
 
+def _qualifiers(d: JsonExpr) -> tuple[str, ...]:
+    """The OF/IN group names the bridge carried on this reference."""
+    raw = d.get("qualifiers", ())
+    return tuple(str(q) for q in raw) if isinstance(raw, list) else ()
+
+
 def _length_of(d: JsonExpr) -> ExprNode:
     return LengthOfNode(name=_text(d, "name"))
 
@@ -171,6 +184,7 @@ def _ref_mod(d: JsonExpr) -> ExprNode:
         ref_mod_start=_child(d, "ref_mod_start"),
         ref_mod_length=(_child(d, "ref_mod_length") if "ref_mod_length" in d else None),
         subscripts=_children(d, "subscripts"),
+        qualifiers=_qualifiers(d),
     )
 
 
@@ -178,7 +192,11 @@ def _reference(d: JsonExpr) -> ExprNode:
     """A field reference, sliced or whole -- both arrive as ``kind: "ref"``."""
     if "ref_mod_start" in d:
         return _ref_mod(d)
-    return FieldRefNode(name=_text(d, "name"), subscripts=_children(d, "subscripts"))
+    return FieldRefNode(
+        name=_text(d, "name"),
+        subscripts=_children(d, "subscripts"),
+        qualifiers=_qualifiers(d),
+    )
 
 
 def _binop(d: JsonExpr) -> ExprNode:
@@ -232,6 +250,11 @@ def expr_from_dict(d: JsonExpr) -> ExprNode:
 # ── Writing it back ───────────────────────────────────────────────
 
 
+def _qualifiers_dict(qualifiers: Sequence[str]) -> dict:
+    """The qualifiers key, present only on a qualified reference."""
+    return {"qualifiers": list(qualifiers)} if qualifiers else {}
+
+
 def _subscripts_dict(subscripts: Sequence[ExprNode]) -> dict:
     """The subscripts key, present only when there are subscripts."""
     return {"subscripts": [expr_to_dict(s) for s in subscripts]} if subscripts else {}
@@ -261,7 +284,12 @@ def _dfhresp_dict(node: DfhRespNode) -> dict:
 
 
 def _field_ref_dict(node: FieldRefNode) -> dict:
-    return {"kind": "ref", "name": node.name, **_subscripts_dict(node.subscripts)}
+    return {
+        "kind": "ref",
+        "name": node.name,
+        **_subscripts_dict(node.subscripts),
+        **_qualifiers_dict(node.qualifiers),
+    }
 
 
 def _ref_mod_dict(node: RefModNode) -> dict:
@@ -271,6 +299,7 @@ def _ref_mod_dict(node: RefModNode) -> dict:
         "ref_mod_start": expr_to_dict(node.ref_mod_start),
         **_ref_mod_length_dict(node.ref_mod_length),
         **_subscripts_dict(node.subscripts),
+        **_qualifiers_dict(node.qualifiers),
     }
 
 

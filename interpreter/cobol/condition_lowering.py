@@ -627,7 +627,11 @@ def _lower_relation_operand(
         name = expr.get("name", "")
         subscripts = tuple(expr_from_dict(s) for s in expr.get("subscripts", []))
         ref, rr = ctx.resolve_field_ref(
-            name, materialised, subscripts=subscripts, span=span
+            name,
+            materialised,
+            qualifiers=tuple(expr.get("qualifiers", ())),
+            subscripts=subscripts,
+            span=span,
         )
         return ctx.emit_decode_zoned_display(
             rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
@@ -905,7 +909,11 @@ def _lower_expr_dict(
         if ctx.has_field(name, materialised):
             subscripts = tuple(expr_from_dict(s) for s in expr.get("subscripts", []))
             ref, rr = ctx.resolve_field_ref(
-                name, materialised, subscripts=subscripts, span=span
+                name,
+                materialised,
+                qualifiers=tuple(expr.get("qualifiers", ())),
+                subscripts=subscripts,
+                span=span,
             )
             return ctx.emit_decode_field(
                 rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
@@ -1143,7 +1151,11 @@ def _lower_expr_node_body(
     if isinstance(node, FieldRefNode):
         if ctx.has_field(node.name, materialised):
             ref, rr = ctx.resolve_field_ref(
-                node.name, materialised, subscripts=node.subscripts, span=span
+                node.name,
+                materialised,
+                qualifiers=node.qualifiers,
+                subscripts=node.subscripts,
+                span=span,
             )
             reg = ctx.emit_decode_field(
                 rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
@@ -1185,7 +1197,11 @@ def _lower_expr_node_body(
         return result_reg
     if isinstance(node, RefModNode):
         ref, rr = ctx.resolve_field_ref(
-            node.name, materialised, subscripts=node.subscripts, span=span
+            node.name,
+            materialised,
+            qualifiers=node.qualifiers,
+            subscripts=node.subscripts,
+            span=span,
         )
         full_str_reg = ctx.emit_decode_field_characters(
             rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
@@ -1322,10 +1338,10 @@ def lower_expr_node(
     or a floating intrinsic, is computed in IEEE floating point.
     """
 
-    def field_types(name: str):
+    def field_types(name: str, qualifiers: tuple[str, ...] = ()):
         if not ctx.has_field(name, materialised):
             return None
-        return materialised.resolve(name)[0].type_descriptor
+        return materialised.resolve(name, qualifiers)[0].type_descriptor
 
     floating = floating_receiver or expression_is_floating(node, field_types)
     dmax = max(receiver_decimals, operand_dmax(node, field_types))

@@ -38,7 +38,7 @@ _FIELDS = {
 }
 
 
-def _types(name: str):
+def _types(name: str, qualifiers: tuple[str, ...] = ()):
     return _FIELDS.get(name)
 
 

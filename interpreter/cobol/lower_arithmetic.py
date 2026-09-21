@@ -308,7 +308,9 @@ def eval_ref_mod_expr(
         # Return the decoded numeric value (don't convert to string)
         name = expr.name
         if ctx.has_field(name, materialised):
-            field_ref, rr = ctx.resolve_field_ref(name, materialised, span=span)
+            field_ref, rr = ctx.resolve_field_ref(
+                name, materialised, qualifiers=expr.qualifiers, span=span
+            )
             decoded_reg = ctx.emit_decode_field(
                 rr,
                 field_ref.fl,
