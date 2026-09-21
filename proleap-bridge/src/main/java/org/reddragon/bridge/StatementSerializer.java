@@ -2054,26 +2054,72 @@ public final class StatementSerializer {
         return firstReferenceModifierDescendant(ctx);
     }
 
-    /** Depth-first search for the first ReferenceModifierContext descendant. */
-    private static CobolParser.ReferenceModifierContext firstReferenceModifierDescendant(
-            ParserRuleContext ctx) {
-        if (ctx == null) {
+    /**
+     * Depth-first pre-order walk of the subtree an operand IS, stopping at the
+     * first node {@code accepts} matches.
+     *
+     * <p>The containment rules of an operand's subtree live here and nowhere
+     * else. Two of them:
+     *
+     * <ul>
+     *   <li>The walk starts AT the operand, so a referenceModifier <em>enclosing</em>
+     *       it is outside the walk entirely — a slice bound serialized in its own
+     *       right correctly sees itself as the operand.</li>
+     *   <li>The walk never descends below a {@link
+     *       CobolParser.ReferenceModifierContext} it meets inside the operand:
+     *       a name, function call or special register written in a slice's bounds
+     *       belongs to the BOUND, never to the sliced field. Returning one in the
+     *       operand's place dropped the sliced field and both bounds, so
+     *       {@code MOVE M(1:FUNCTION LENGTH(M)) TO D} moved a number where text
+     *       belonged; attributing one as the operand's qualifier resolved
+     *       {@code FA OF GA(1:FB OF GB)} against GB. Six defects
+     *       (red-dragon-jscx, -nwm5, -pe45, -35do, -twfl, -64s4) were one
+     *       traversal at a time forgetting this; a probe built on this walker
+     *       cannot forget it, because it does not state it.</li>
+     * </ul>
+     *
+     * @return the first accepted node, or {@code null} when none was accepted —
+     *     a predicate that records what it sees and never accepts therefore
+     *     walks the whole subtree, which is how the collecting probes use it.
+     */
+    private static org.antlr.v4.runtime.tree.ParseTree walkOperand(
+            org.antlr.v4.runtime.tree.ParseTree operand,
+            java.util.function.Predicate<org.antlr.v4.runtime.tree.ParseTree> accepts) {
+        return walkOperand(operand, operand, accepts);
+    }
+
+    private static org.antlr.v4.runtime.tree.ParseTree walkOperand(
+            org.antlr.v4.runtime.tree.ParseTree node,
+            org.antlr.v4.runtime.tree.ParseTree operand,
+            java.util.function.Predicate<org.antlr.v4.runtime.tree.ParseTree> accepts) {
+        if (node == null) {
             return null;
         }
-        for (int i = 0; i < ctx.getChildCount(); i++) {
-            org.antlr.v4.runtime.tree.ParseTree child = ctx.getChild(i);
-            if (child instanceof CobolParser.ReferenceModifierContext) {
-                return (CobolParser.ReferenceModifierContext) child;
-            }
-            if (child instanceof ParserRuleContext) {
-                CobolParser.ReferenceModifierContext found =
-                        firstReferenceModifierDescendant((ParserRuleContext) child);
-                if (found != null) {
-                    return found;
-                }
+        if (accepts.test(node)) {
+            return node;
+        }
+        if (node != operand && node instanceof CobolParser.ReferenceModifierContext) {
+            return null;
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            org.antlr.v4.runtime.tree.ParseTree found =
+                    walkOperand(node.getChild(i), operand, accepts);
+            if (found != null) {
+                return found;
             }
         }
         return null;
+    }
+
+    /**
+     * The first ReferenceModifierContext inside {@code ctx} — the operand's OWN
+     * modifier, since a pre-order walk reaches it before any nested in its bounds
+     * ({@code M(1:N(1:2))}).
+     */
+    private static CobolParser.ReferenceModifierContext firstReferenceModifierDescendant(
+            ParserRuleContext ctx) {
+        return (CobolParser.ReferenceModifierContext)
+                walkOperand(ctx, n -> n != ctx && n instanceof CobolParser.ReferenceModifierContext);
     }
 
     /**
@@ -2185,10 +2231,9 @@ public final class StatementSerializer {
      * The identifier an operand IS — one that spans {@code ctx} end to end — or
      * {@code null} when {@code ctx} is anything larger.
      *
-     * <p>The span test is the same containment discipline
-     * {@link #boundsTheSliceOf(ParserRuleContext, ParserRuleContext)} enforces:
-     * an identifier nested inside a wider expression is one operand of it, never
-     * a replacement for it.
+     * <p>The span test is the same containment discipline {@link #walkOperand}
+     * enforces: an identifier nested inside a wider expression is one operand of
+     * it, never a replacement for it.
      */
     private static CobolParser.IdentifierContext wholeOperandIdentifier(ParserRuleContext ctx) {
         if (ctx == null) {
@@ -2217,37 +2262,18 @@ public final class StatementSerializer {
      * <p>A register reached through {@code operand}'s own referenceModifier
      * computes a slice bound — {@code NUMF(1:LENGTH OF N)} is four bytes of NUMF,
      * not the number 4. Returning it discarded the sliced field and both bounds
-     * (red-dragon-twfl). Same guard as the functionCall probes.
+     * (red-dragon-twfl); {@link #walkOperand} never reaches it.
      */
     private static CobolParser.SpecialRegisterContext lengthOfSpecialRegisterOperand(
             ParserRuleContext operand) {
-        CobolParser.SpecialRegisterContext sr = findLengthOfSpecialRegister(operand);
-        return boundsTheSliceOf(sr, operand) ? null : sr;
+        return (CobolParser.SpecialRegisterContext)
+                walkOperand(operand, StatementSerializer::isLengthOfSpecialRegister);
     }
 
-    /**
-     * Recursively searches a parse-tree context for a {@code LENGTH OF}
-     * specialRegister (a SpecialRegisterContext whose LENGTH() token is present),
-     * returning it or {@code null}. Structural — no text parsing.
-     */
-    private static CobolParser.SpecialRegisterContext findLengthOfSpecialRegister(
-            org.antlr.v4.runtime.tree.ParseTree node) {
-        if (node == null) {
-            return null;
-        }
-        if (node instanceof CobolParser.SpecialRegisterContext) {
-            CobolParser.SpecialRegisterContext sr = (CobolParser.SpecialRegisterContext) node;
-            if (sr.LENGTH() != null) {
-                return sr;
-            }
-        }
-        for (int i = 0; i < node.getChildCount(); i++) {
-            CobolParser.SpecialRegisterContext found = findLengthOfSpecialRegister(node.getChild(i));
-            if (found != null) {
-                return found;
-            }
-        }
-        return null;
+    /** A {@code LENGTH OF} specialRegister — one whose LENGTH() token is present. */
+    private static boolean isLengthOfSpecialRegister(org.antlr.v4.runtime.tree.ParseTree node) {
+        return node instanceof CobolParser.SpecialRegisterContext
+                && ((CobolParser.SpecialRegisterContext) node).LENGTH() != null;
     }
 
     /**
@@ -2315,18 +2341,21 @@ public final class StatementSerializer {
      * qualifier of every ref-modified or subscripted qualified operand, which then
      * resolved against the wrong group (red-dragon-64s4).
      *
-     * <p>The walk does not descend into a {@link
-     * CobolParser.ReferenceModifierContext}: names written in a slice's bounds
-     * qualify the BOUND's own operand, not the sliced field, so
-     * {@code FA OF GA(1:FB OF GB)} is qualified by GA and never by GB. This is the
-     * collecting form of {@link #boundsTheSliceOf} — a first-hit probe can test a
-     * node after finding it, a collecting walk has to refuse to enter the bound.
+     * <p>{@code FA OF GA(1:FB OF GB)} is qualified by GA and never by GB: names
+     * written in a slice's bounds qualify the BOUND's own operand, which
+     * {@link #walkOperand} enforces for every probe alike.
      */
     private static void collectInDataQualifiers(
             org.antlr.v4.runtime.tree.ParseTree node, JsonArray out) {
-        if (node == null || node instanceof CobolParser.ReferenceModifierContext) {
-            return;
-        }
+        walkOperand(node, n -> {
+            addQualifierName(n, out);
+            return false;
+        });
+    }
+
+    /** Appends the qualifier name {@code node} writes, when it writes one. */
+    private static void addQualifierName(
+            org.antlr.v4.runtime.tree.ParseTree node, JsonArray out) {
         if (node instanceof CobolParser.InDataContext) {
             CobolParser.DataNameContext dn = ((CobolParser.InDataContext) node).dataName();
             if (dn != null) {
@@ -2337,9 +2366,6 @@ public final class StatementSerializer {
             if (base != null) {
                 out.add(base);
             }
-        }
-        for (int i = 0; i < node.getChildCount(); i++) {
-            collectInDataQualifiers(node.getChild(i), out);
         }
     }
 
@@ -2405,8 +2431,7 @@ public final class StatementSerializer {
      * context whose subtree (or parent) holds the actual functionCall rule.
      *
      * <p>A call found below a referenceModifier of {@code ctx} is NOT returned:
-     * it computes a slice bound, not the operand. See
-     * {@link #boundsTheSliceOf(CobolParser.FunctionCallContext, ParserRuleContext)}.
+     * it computes a slice bound, not the operand. See {@link #walkOperand}.
      */
     private static CobolParser.FunctionCallContext findFunctionCallCtx(ParserRuleContext ctx) {
         if (ctx == null) {
@@ -2424,44 +2449,7 @@ public final class StatementSerializer {
         // Search descendants (the functionCall rule may be nested under ctx).
         CobolParser.FunctionCallContext direct =
                 ctx.getRuleContext(CobolParser.FunctionCallContext.class, 0);
-        CobolParser.FunctionCallContext found =
-                (direct != null) ? direct : firstFunctionCallDescendant(ctx);
-        return boundsTheSliceOf(found, ctx) ? null : found;
-    }
-
-    /**
-     * True when {@code node} sits under a referenceModifier that {@code operand}
-     * contains — i.e. the node computes one of the slice's bounds, as the LENGTH
-     * call does in {@code M(1:FUNCTION LENGTH(M))} and the special register does
-     * in {@code NUMF(1:LENGTH OF N)}.
-     *
-     * <p>Such a node is not the operand. An operand serializer that returned it
-     * dropped the sliced field and both bounds, so {@code MOVE M(1:FUNCTION
-     * LENGTH(M)) TO D} moved a number where text belonged. The ref-modified
-     * identifier serializes structurally instead, and the bound reaches the same
-     * probe again as the expression it is (red-dragon-pe45).
-     *
-     * <p>The walk stops at {@code operand}: inside the bound's own serialization
-     * the enclosing referenceModifier is no longer between the node and the
-     * context being serialized, so the node is correctly the operand there.
-     *
-     * <p>Every subtree probe that returns a nested node in place of its container
-     * shares this guard — the functionCall probes (red-dragon-pe45,
-     * red-dragon-35do) and the {@code LENGTH OF} specialRegister probes
-     * (red-dragon-twfl) alike; the nesting question is the same one regardless of
-     * which rule was found.
-     */
-    private static boolean boundsTheSliceOf(
-            ParserRuleContext node, ParserRuleContext operand) {
-        if (node == null) {
-            return false;
-        }
-        for (ParserRuleContext p = node.getParent(); p != null && p != operand; p = p.getParent()) {
-            if (p instanceof CobolParser.ReferenceModifierContext) {
-                return true;
-            }
-        }
-        return false;
+        return (direct != null) ? direct : findFunctionCallCtxInSubtree(ctx);
     }
 
     /**
@@ -2471,39 +2459,11 @@ public final class StatementSerializer {
      * ref nested inside a larger function call must NOT be mistaken for one.
      *
      * <p>A call found below a referenceModifier of {@code ctx} is NOT returned:
-     * it computes a slice bound, not the operand. See
-     * {@link #boundsTheSliceOf(ParserRuleContext, ParserRuleContext)}.
+     * it computes a slice bound, not the operand. See {@link #walkOperand}.
      */
     private static CobolParser.FunctionCallContext findFunctionCallCtxInSubtree(ParserRuleContext ctx) {
-        if (ctx == null) {
-            return null;
-        }
-        if (ctx instanceof CobolParser.FunctionCallContext) {
-            return (CobolParser.FunctionCallContext) ctx;
-        }
-        CobolParser.FunctionCallContext found = firstFunctionCallDescendant(ctx);
-        return boundsTheSliceOf(found, ctx) ? null : found;
-    }
-
-    /** Depth-first search for the first FunctionCallContext descendant. */
-    private static CobolParser.FunctionCallContext firstFunctionCallDescendant(ParserRuleContext ctx) {
-        if (ctx == null) {
-            return null;
-        }
-        for (int i = 0; i < ctx.getChildCount(); i++) {
-            org.antlr.v4.runtime.tree.ParseTree child = ctx.getChild(i);
-            if (child instanceof CobolParser.FunctionCallContext) {
-                return (CobolParser.FunctionCallContext) child;
-            }
-            if (child instanceof ParserRuleContext) {
-                CobolParser.FunctionCallContext found =
-                        firstFunctionCallDescendant((ParserRuleContext) child);
-                if (found != null) {
-                    return found;
-                }
-            }
-        }
-        return null;
+        return (CobolParser.FunctionCallContext)
+                walkOperand(ctx, n -> n instanceof CobolParser.FunctionCallContext);
     }
 
 
@@ -3386,20 +3346,8 @@ public final class StatementSerializer {
 
     private static CobolParser.QualifiedDataNameFormat1Context
             findQualifiedDataNameFormat1(org.antlr.v4.runtime.tree.ParseTree node) {
-        if (node == null) {
-            return null;
-        }
-        if (node instanceof CobolParser.QualifiedDataNameFormat1Context) {
-            return (CobolParser.QualifiedDataNameFormat1Context) node;
-        }
-        for (int i = 0; i < node.getChildCount(); i++) {
-            CobolParser.QualifiedDataNameFormat1Context found =
-                    findQualifiedDataNameFormat1(node.getChild(i));
-            if (found != null) {
-                return found;
-            }
-        }
-        return null;
+        return (CobolParser.QualifiedDataNameFormat1Context)
+                walkOperand(node, n -> n instanceof CobolParser.QualifiedDataNameFormat1Context);
     }
 
     private static String leafDataName(CobolParser.IdentifierContext id) {
