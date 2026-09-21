@@ -898,6 +898,10 @@ public final class StatementSerializer {
                     subject = insertSpaces(extractValueStmtText(select.getSelectValueStmt()));
                 }
                 obj.addProperty("subject", subject);
+                JsonObject subjectRef = structuredSubjectRef(select.getSelectValueStmt());
+                if (subjectRef != null) {
+                    obj.add("subject_ref", subjectRef);
+                }
             }
 
             // EVALUATE subject ALSO also_subject ... (multi-subject form)
@@ -3399,6 +3403,49 @@ public final class StatementSerializer {
             return f1.dataName().getText();
         }
         return null;
+    }
+
+    /**
+     * The EVALUATE subject as the structured ref node an operand would get, or
+     * {@code null} when the subject is nothing a name cannot carry.
+     *
+     * <p>A subject crossed as a flat string, so a reference-modified one could
+     * not survive it: {@code EVALUATE FA(1:2)} arrived as the name "FA(1:2)",
+     * which resolves to no field and was compared as a literal, and
+     * {@code EVALUATE FA OF GA(1:2)} arrived as the leaf "FA", which resolves the
+     * WHOLE field (red-dragon-sfih). A slice, a subscript and a qualifier are
+     * exactly what a name cannot carry, so the node is emitted for those and
+     * only those: a subject that IS a plain name keeps the string alone and no
+     * existing program's lowering moves.
+     */
+    private static JsonObject structuredSubjectRef(ValueStmt vs) {
+        if (vs == null) {
+            return null;
+        }
+        ParserRuleContext ctx;
+        try {
+            ctx = vs.getCtx();
+        } catch (Exception e) {
+            return null;
+        }
+        CobolParser.IdentifierContext id = wholeOperandIdentifier(ctx);
+        if (id == null) {
+            return null;
+        }
+        JsonObject ref = serializeRefModIdentifier(id);
+        if (ref == null) {
+            ref = new JsonObject();
+            ref.addProperty("kind", "ref");
+            ref.addProperty("name", baseDataName(id));
+            addCtxQualifiers(ref, id);
+        }
+        JsonArray subscripts = serializeIdentifierSubscripts(id);
+        if (subscripts.size() > 0) {
+            ref.add("subscripts", subscripts);
+        }
+        boolean carriesMoreThanAName =
+                ref.has("ref_mod_start") || ref.has("subscripts") || ref.has("qualifiers");
+        return carriesMoreThanAName ? ref : null;
     }
 
     private static CobolParser.QualifiedDataNameFormat1Context

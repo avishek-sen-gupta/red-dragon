@@ -819,7 +819,11 @@ def _lower_ref_mod_operand(
 
     subscripts = tuple(expr_from_dict(s) for s in expr.get("subscripts", []))
     ref, rr = ctx.resolve_field_ref(
-        name, materialised, subscripts=subscripts, span=span
+        name,
+        materialised,
+        qualifiers=tuple(expr.get("qualifiers", ())),
+        subscripts=subscripts,
+        span=span,
     )
     full_str_reg = ctx.emit_decode_field_characters(
         rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span

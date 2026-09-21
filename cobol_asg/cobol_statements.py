@@ -507,9 +507,15 @@ class EvaluateStatement:
 
     ``also_subjects`` holds additional ALSO subjects for multi-subject EVALUATE
     (e.g. ``EVALUATE a ALSO b`` → subject="a", also_subjects=("b",)).
+
+    ``subject_ref`` is the subject as a structured ref node, present only when
+    the subject carries a slice, a subscript or a qualifier -- what a name
+    cannot carry. A plain name travels in ``subject`` alone, as it always did
+    (red-dragon-sfih).
     """
 
     subject: str = ""
+    subject_ref: dict | None = None
     also_subjects: tuple[str, ...] = ()
     children: list[CobolStatementType] = field(default_factory=list)
     span: SourceSpan | None = None
@@ -518,6 +524,7 @@ class EvaluateStatement:
     def from_dict(cls, data: dict) -> EvaluateStatement:
         return cls(
             subject=data.get("subject", ""),
+            subject_ref=data.get("subject_ref"),
             also_subjects=tuple(data.get("also_subjects", [])),
             children=[parse_statement(c) for c in data.get("children", [])],
             span=SourceSpan.from_dict(data),
@@ -527,6 +534,8 @@ class EvaluateStatement:
         result: dict = {"type": "EVALUATE"}
         if self.subject:
             result["subject"] = self.subject
+        if self.subject_ref is not None:
+            result["subject_ref"] = self.subject_ref
         if self.also_subjects:
             result["also_subjects"] = list(self.also_subjects)
         if self.children:
