@@ -49,7 +49,6 @@ class TestDeclarativesModel:
 
 from cobol_asg.asg_types import CobolParagraph, CobolSection
 from interpreter.instructions import Label_
-from interpreter.register import Register
 
 
 def _labels(instructions) -> list[str]:
@@ -72,29 +71,23 @@ class TestDeclarativesLoweringOrder:
                 )
             ],
         )
-        # Minimal EmitContext stub: only the attributes lower_procedure_division touches.
-        emitted: list = []
+        # A real EmitContext and layout rather than a stub: the implicit program
+        # exit reads RETURN-CODE out of the special-register region, so lowering
+        # a procedure division now needs a materialised layout to exist.
+        from interpreter.cobol.lower_data_division import (
+            lower_sectioned_data_division,
+        )
+        from interpreter.cobol.sectioned_layout import build_sectioned_layout
+        from interpreter.cobol.statement_dispatch import dispatch_statement
+        from interpreter.cobol.emit_context import EmitContext
 
-        class _Ctx:
-            extension_strategies = []
-            section_paragraphs: dict = {}
-            _next_reg = 0
+        ctx = EmitContext(dispatch_fn=dispatch_statement)
+        materialised = lower_sectioned_data_division(
+            ctx, build_sectioned_layout(asg), "DECLTEST"
+        )
 
-            def emit_inst(self, inst, *, span=None):
-                emitted.append(inst)
-
-            def lower_statement(self, stmt, materialised):
-                pass
-
-            def fresh_reg(self):
-                # The implicit program exit allocates a register for its return
-                # value (red-dragon-i0jd).
-                self._next_reg += 1
-                return Register(f"%{self._next_reg}")
-
-        ctx = _Ctx()
-        lower_procedure_division(ctx, asg, materialised=None)
-        labels = _labels(emitted)
+        lower_procedure_division(ctx, asg, materialised)
+        labels = _labels(ctx.instructions)
         # The real section label must appear before the declaratives section label.
         assert labels.index("section_MAIN") < labels.index("section_ERR-SECTION")
         # Declaratives paragraphs registered for PERFORM THRU resolution.

@@ -124,6 +124,31 @@ def ws_region(vm, program_id: str) -> bytearray:
     raise KeyError(f"No singleton for program {program_id!r} in this VMState")
 
 
+def return_code_of(vm, program_id: str) -> int:
+    """Decode one named program's own RETURN-CODE special register."""
+    from interpreter.address import Address
+    from interpreter.cobol.binary import decode_binary
+    from interpreter.cobol.special_registers import (
+        RETURN_CODE_HANDLE,
+        RETURN_CODE_NAME,
+        SPECIAL_REGISTERS_LAYOUT,
+    )
+    from interpreter.field_name import FieldName
+
+    wanted = f"func_{program_id.lower()}_0"
+    for _addr, obj in vm.heap_items():
+        run_field = obj.fields.get(FieldName("run"))
+        if run_field is None or str(run_field.value.func_ref.name) != wanted:
+            continue
+        handle = obj.fields[RETURN_CODE_HANDLE]
+        region = vm.region_get(Address(str(handle.value)))
+        fl = SPECIAL_REGISTERS_LAYOUT.lookup_or_raise(RETURN_CODE_NAME)
+        raw = bytes(region[fl.offset : fl.offset + fl.byte_length])
+        descriptor = fl.type_descriptor
+        return int(decode_binary(raw, descriptor.decimal_digits, descriptor.signed))
+    raise KeyError(f"No singleton for program {program_id!r} in this VMState")
+
+
 def first_region(vm):
     """Return the first memory region from the VM state."""
     return vm.region_get(list(vm.region_keys())[0])
