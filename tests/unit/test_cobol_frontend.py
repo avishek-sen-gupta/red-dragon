@@ -2154,14 +2154,19 @@ class TestCallAlterEntryCancelLowering:
         fields = [
             CobolField(name="WS-A", level=77, pic="9(1)", usage="DISPLAY", offset=0),
         ]
-        stmts = [CancelStatement(programs=["SUBPROG"])]
-        instructions = self._lower_with_field_and_stmts(fields, stmts)
+        with_cancel = self._lower_with_field_and_stmts(
+            fields, [CancelStatement(programs=["SUBPROG"])]
+        )
+        without_cancel = self._lower_with_field_and_stmts(fields, [])
 
-        # No CALL_FUNCTION, no WRITE_REGION (beyond initial allocation)
-        writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
-        calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
-        assert len(writes) == 0
-        assert len(calls) == 0
+        # Compared against the same program with no CANCEL, rather than counted
+        # over the whole lowering: every program now ends by reading RETURN-CODE
+        # and publishing it, so "CANCEL emits nothing" has to mean "CANCEL adds
+        # nothing", which is the claim anyway and a stricter one.
+        def shape(instructions):
+            return [i.opcode for i in instructions]
+
+        assert shape(with_cancel) == shape(without_cancel)
 
     # ── I/O Statement Tests ──────────────────────────────────────────
 
