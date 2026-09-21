@@ -163,6 +163,12 @@ class VMState:
         None  # Any: optional random.Random — FUNCTION RANDOM sequence state
     )
     cobol_random_seed: int | None = None  # last positive seed passed to FUNCTION RANDOM
+    # The value the run unit would hand the operating system: whatever the LAST
+    # COBOL program to end left in its RETURN-CODE. Published by
+    # __cobol_publish_return_code at every program exit and before every STOP RUN,
+    # so last writer wins -- which is exactly "the program that ended the run
+    # unit" (red-dragon-cvwu). None until some program ends.
+    cobol_run_unit_return_code: int | None = None
 
     def heap_get(self, addr: Address) -> HeapObject:
         """Get heap object by address. Returns NO_HEAP_OBJECT if not found."""

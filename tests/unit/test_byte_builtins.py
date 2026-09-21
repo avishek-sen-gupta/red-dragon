@@ -415,6 +415,7 @@ class TestByteBuiltinsRegistration:
             "__int_from_byte",
             "__bytes_to_string",
             "__string_to_bytes",
+            "__cobol_publish_return_code",
             "__list_get",
             "__list_set",
             "__list_len",
