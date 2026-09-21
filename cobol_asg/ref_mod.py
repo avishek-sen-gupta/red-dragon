@@ -27,9 +27,15 @@ class RefModLiteral:
 
 @dataclass(frozen=True)
 class RefModReference:
-    """Data item reference in reference modification: WS-A, WS-B, etc."""
+    """Data item reference in reference modification: WS-A, WS-B, etc.
+
+    ``qualifiers`` are the bound's own ``OF``/``IN`` group names -- the GB in
+    ``FA OF GA(1:FB OF GB)`` qualifies the bound, never the slice
+    (red-dragon-64s4, red-dragon-2afo).
+    """
 
     name: str
+    qualifiers: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -89,7 +95,10 @@ def ref_mod_expr_from_dict(data: dict) -> RefModExpr:
         return RefModLiteral(value=data.get("value", ""))
 
     elif kind == "ref":
-        return RefModReference(name=data.get("name", ""))
+        return RefModReference(
+            name=data.get("name", ""),
+            qualifiers=tuple(data.get("qualifiers", ())),
+        )
 
     elif kind == "length_of":
         return RefModLengthOf(name=data.get("name", ""))
@@ -114,7 +123,10 @@ def _ref_mod_expr_to_dict(expr: RefModExpr) -> dict:
     if isinstance(expr, RefModLiteral):
         return {"kind": "lit", "value": expr.value}
     elif isinstance(expr, RefModReference):
-        return {"kind": "ref", "name": expr.name}
+        ref: dict = {"kind": "ref", "name": expr.name}
+        if expr.qualifiers:
+            ref["qualifiers"] = list(expr.qualifiers)
+        return ref
     elif isinstance(expr, RefModLengthOf):
         return {"kind": "length_of", "name": expr.name}
     elif isinstance(expr, RefModFunction):

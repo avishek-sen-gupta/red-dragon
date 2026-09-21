@@ -2231,6 +2231,19 @@ public final class StatementSerializer {
         String text = (ctx != null) ? ctx.getText() : extractValueStmtText(vs);
         JsonObject ref = new JsonObject();
         ref.addProperty("kind", "ref");
+        JsonArray qualifiers = new JsonArray();
+        if (ctx != null) {
+            collectInDataQualifiers(ctx, qualifiers);
+        }
+        if (qualifiers.size() > 0) {
+            // A qualified operand's flat text glues to the unresolvable
+            // "FBOFGB"; the leaf plus its qualifiers is the resolvable pair
+            // (red-dragon-2afo).
+            CobolParser.IdentifierContext id = wholeOperandIdentifier(ctx);
+            ref.addProperty("name", id != null ? baseDataName(id) : text);
+            ref.add("qualifiers", qualifiers);
+            return ref;
+        }
         ref.addProperty("name", text);
         return ref;
     }
@@ -3452,7 +3465,28 @@ public final class StatementSerializer {
         if (rm.has("ref_mod_length")) {
             ref.add("ref_mod_length", rm.get("ref_mod_length"));
         }
+        addCtxQualifiers(ref, id);
         return ref;
+    }
+
+    /**
+     * Adds the {@code OF}/{@code IN} qualifiers a grammar-context operand writes,
+     * the way {@link #serializeRef} adds a Call's.
+     *
+     * <p>The ctx-side serializers emitted the leaf name alone, so every expression
+     * position they cover — a FUNCTION argument, an arithmetic basis, a subscript,
+     * a slice bound — resolved a duplicated name against whichever group won,
+     * or raised (red-dragon-2afo). {@link #collectInDataQualifiers} reads both
+     * spellings of a qualifier and stops at a reference modifier, so a bound's
+     * own qualifier stays the bound's.
+     */
+    private static void addCtxQualifiers(
+            JsonObject ref, org.antlr.v4.runtime.tree.ParseTree operand) {
+        JsonArray qualifiers = new JsonArray();
+        collectInDataQualifiers(operand, qualifiers);
+        if (qualifiers.size() > 0) {
+            ref.add("qualifiers", qualifiers);
+        }
     }
 
     /**
@@ -3513,9 +3547,11 @@ public final class StatementSerializer {
             if (subscripts.size() > 0) {
                 ref.addProperty("name", baseDataName(id));
                 ref.add("subscripts", subscripts);
+                addCtxQualifiers(ref, id);
                 return ref;
             }
             ref.addProperty("name", leafDataName(id));
+            addCtxQualifiers(ref, id);
             return ref;
         }
         CobolParser.LiteralContext lit = ctx.literal();
@@ -3570,6 +3606,7 @@ public final class StatementSerializer {
                     (f1 != null && f1.dataName() != null)
                             ? f1.dataName().getText()
                             : sub.getText());
+            addCtxQualifiers(ref, sub);
             return ref;
         }
         return litNode(sub.getText());
