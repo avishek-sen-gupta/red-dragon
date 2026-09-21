@@ -1956,9 +1956,17 @@ public final class StatementSerializer {
         }
         Call unwrapped = call.unwrap();
         if (unwrapped.getCallType() == Call.CallType.TABLE_CALL && unwrapped instanceof TableCall tableCall) {
-            return serializeSubscripts(tableCall.getSubscripts());
+            JsonArray subscripts = serializeSubscripts(tableCall.getSubscripts());
+            if (subscripts.size() > 0) {
+                return subscripts;
+            }
         }
-        return new JsonArray();
+        if (!(unwrapped instanceof ASGElementImpl)) {
+            return new JsonArray();
+        }
+        JsonArray fromQualifier = new JsonArray();
+        collectInTableSubscripts(((ASGElementImpl) unwrapped).getCtx(), fromQualifier);
+        return fromQualifier;
     }
 
     private static JsonArray serializeSubscripts(List<Subscript> subscripts) {
@@ -2366,6 +2374,42 @@ public final class StatementSerializer {
             if (base != null) {
                 out.add(base);
             }
+        }
+    }
+
+    /**
+     * Collects the subscripts ANTLR hung off a QUALIFIER's own {@code tableCall}.
+     *
+     * <p>{@code TB OF HT(I)} subscripts the whole reference — occurrence I of TB —
+     * but the grammar takes the {@code inTable} alternative and {@code (I)} ends up
+     * on HT's {@code tableCall}, where the operand's own subscript probes never look.
+     * Both of them read occurrence 1 whatever I held (red-dragon-ds5t). This is the
+     * subscript half of the {@code inTable} reading {@link #addQualifierName} owns
+     * for the qualifier.
+     *
+     * <p>{@link #walkOperand} keeps a bound's subscripts out: the {@code (I)} in
+     * {@code FA OF GA(1:TB OF HT(I))} is the bound's, never the slice's.
+     */
+    private static void collectInTableSubscripts(
+            org.antlr.v4.runtime.tree.ParseTree node, JsonArray out) {
+        walkOperand(node, n -> {
+            addInTableSubscripts(n, out);
+            return false;
+        });
+    }
+
+    /** Appends the subscripts {@code node} writes on a qualifier, when it writes any. */
+    private static void addInTableSubscripts(
+            org.antlr.v4.runtime.tree.ParseTree node, JsonArray out) {
+        if (!(node instanceof CobolParser.InTableContext)) {
+            return;
+        }
+        CobolParser.TableCallContext tableCall = ((CobolParser.InTableContext) node).tableCall();
+        if (tableCall == null) {
+            return;
+        }
+        for (CobolParser.SubscriptContext sub : tableCall.subscript()) {
+            out.add(serializeSubscriptCtx(sub));
         }
     }
 
@@ -3494,12 +3538,17 @@ public final class StatementSerializer {
      */
     private static JsonArray serializeIdentifierSubscripts(CobolParser.IdentifierContext id) {
         JsonArray arr = new JsonArray();
-        CobolParser.TableCallContext tableCall = (id == null) ? null : id.tableCall();
-        if (tableCall == null) {
+        if (id == null) {
             return arr;
         }
-        for (CobolParser.SubscriptContext sub : tableCall.subscript()) {
-            arr.add(serializeSubscriptCtx(sub));
+        CobolParser.TableCallContext tableCall = id.tableCall();
+        if (tableCall != null) {
+            for (CobolParser.SubscriptContext sub : tableCall.subscript()) {
+                arr.add(serializeSubscriptCtx(sub));
+            }
+        }
+        if (arr.size() == 0) {
+            collectInTableSubscripts(id, arr);
         }
         return arr;
     }
