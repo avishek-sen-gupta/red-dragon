@@ -49,6 +49,7 @@ class TestDeclarativesModel:
 
 from cobol_asg.asg_types import CobolParagraph, CobolSection
 from interpreter.instructions import Label_
+from interpreter.register import Register
 
 
 def _labels(instructions) -> list[str]:
@@ -77,12 +78,19 @@ class TestDeclarativesLoweringOrder:
         class _Ctx:
             extension_strategies = []
             section_paragraphs: dict = {}
+            _next_reg = 0
 
             def emit_inst(self, inst, *, span=None):
                 emitted.append(inst)
 
             def lower_statement(self, stmt, materialised):
                 pass
+
+            def fresh_reg(self):
+                # The implicit program exit allocates a register for its return
+                # value (red-dragon-i0jd).
+                self._next_reg += 1
+                return Register(f"%{self._next_reg}")
 
         ctx = _Ctx()
         lower_procedure_division(ctx, asg, materialised=None)

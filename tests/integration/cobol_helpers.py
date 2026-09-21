@@ -65,6 +65,65 @@ def run_cobol(lines: list[str], max_steps: int = 1000):
     return run(source=source, language="cobol", max_steps=max_steps)
 
 
+def run_cobol_programs(
+    main: list[str], subprograms: dict[str, list[str]], max_steps: int = 500_000
+):
+    """Run a main program plus named subprograms through the full pipeline.
+
+    Entry is by FUNCTION, not top level: ``EntryPoint.top_level()`` executes only
+    the per-module init blocks (each ends in ``branch __after_<pid>_0``), so the
+    PROCEDURE DIVISION never runs and every assertion would read nothing but the
+    VALUE clauses. This mirrors how jackal enters a COBOL step.
+    """
+    from cobol_asg.cobol_parser import make_cobol_parser
+    from interpreter.project.cobol_compile import compile_cobol
+    from interpreter.run import EntryPoint, initial_vm_state, run_linked
+
+    main_id = _program_id(main)
+    _, linked = compile_cobol(
+        to_fixed(main).encode(),
+        parser=make_cobol_parser(),
+        extra_subprogram_sources={
+            name: to_fixed(lines).encode() for name, lines in subprograms.items()
+        },
+    )
+    entry = f"func_{main_id.lower()}_0"
+    return run_linked(
+        linked,
+        entry_point=EntryPoint.function(lambda f: str(f.name) == entry),
+        max_steps=max_steps,
+        initial_vm=initial_vm_state(),
+    )
+
+
+def _program_id(lines: list[str]) -> str:
+    for line in lines:
+        stripped = line.strip().upper()
+        if stripped.startswith("PROGRAM-ID."):
+            return stripped[len("PROGRAM-ID.") :].strip().rstrip(".")
+    raise ValueError("No PROGRAM-ID. found in source lines")
+
+
+def ws_region(vm, program_id: str) -> bytearray:
+    """Return one program's WORKING-STORAGE bytes, found via its program singleton.
+
+    ``first_region`` cannot serve a multi-program run: which region comes first is
+    module link order, not the program under test. The singleton is identified by
+    the ``run`` entry point it publishes, which is stable across link orders.
+    """
+    from interpreter.address import Address
+    from interpreter.field_name import FieldName
+
+    wanted = f"func_{program_id.lower()}_0"
+    for _addr, obj in vm.heap_items():
+        run_field = obj.fields.get(FieldName("run"))
+        if run_field is None or str(run_field.value.func_ref.name) != wanted:
+            continue
+        handle = obj.fields[FieldName("ws_handle")]
+        return vm.region_get(Address(str(handle.value)))
+    raise KeyError(f"No singleton for program {program_id!r} in this VMState")
+
+
 def first_region(vm):
     """Return the first memory region from the VM state."""
     return vm.region_get(list(vm.region_keys())[0])

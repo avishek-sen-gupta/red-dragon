@@ -7,7 +7,9 @@ import logging
 
 from cobol_asg.asg_types import CobolASG, CobolParagraph, CobolSection
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.cobol.lower_program_exit import lower_program_exit
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
+from cobol_asg.source_span import SourceSpan
 from interpreter.continuation_name import ContinuationName
 from interpreter.instructions import Label_, ResumeContinuation
 from interpreter.ir import CodeLabel
@@ -54,10 +56,30 @@ def lower_procedure_division(
     for section in asg.sections:
         lower_section(ctx, section, materialised)
 
+    # Running off the last statement is a legal program exit and returns control
+    # to the caller, exactly as GOBACK does. It is emitted HERE — after the real
+    # flow, before the declaratives — because that is where control falls to; put
+    # it after the declaratives and a program without GOBACK would fall into a USE
+    # procedure instead of returning (red-dragon-i0jd).
+    lower_program_exit(ctx, materialised, span=_end_of_flow_span(asg))
+
     # Declaratives last: real flow above keeps the entry point on the first real
     # element. USE-procedure triggering on I/O errors is deferred to m0oa.4.
     for section in asg.declaratives:
         lower_section(ctx, section, materialised)
+
+
+def _end_of_flow_span(asg: CobolASG) -> SourceSpan | None:
+    """The span of the last element control runs through before the program ends.
+
+    The implicit exit has no source text of its own, but every PROCEDURE DIVISION
+    instruction must carry a location, so it borrows the last real element's —
+    which is where a reader looking for "why did it return here" should land.
+    """
+    for elements in (asg.sections, asg.paragraphs, asg.statements):
+        if elements:
+            return elements[-1].span
+    return None
 
 
 def lower_section(
