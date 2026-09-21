@@ -79,7 +79,11 @@ from interpreter.instructions import (
     Label_,
     Return_,
 )
-from interpreter.cobol.lower_program_exit import lower_program_exit
+from interpreter.cobol.lower_program_exit import (
+    emit_publish_run_unit_return_code,
+    emit_return_code_load,
+    lower_program_exit,
+)
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import BinopKind, resolve_binop
 from interpreter.register import NO_REGISTER, Register
@@ -2422,7 +2426,18 @@ def lower_stop_run(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """STOP RUN — unconditionally terminates the entire run unit, unlike
-    GOBACK/EXIT PROGRAM (which return control to the caller)."""
+    GOBACK/EXIT PROGRAM (which return control to the caller).
+
+    Nothing is returned, so there is no caller to copy RETURN-CODE up to — but the
+    run unit ends HERE, wherever "here" is, so this program's RETURN-CODE is the
+    one the operating system receives, even when STOP RUN is issued inside a
+    subprogram and the entry program never finishes (red-dragon-cvwu).
+    """
+    emit_publish_run_unit_return_code(
+        ctx,
+        emit_return_code_load(ctx, materialised, span=stmt.span),
+        span=stmt.span,
+    )
     ctx.emit_inst(Halt_(), span=stmt.span)
 
 

@@ -612,6 +612,28 @@ def _builtin_binary_bytes_to_int(args: list[TypedValue], vm: VMState) -> Builtin
     )
 
 
+def _builtin_cobol_publish_return_code(
+    args: list[TypedValue], vm: VMState
+) -> BuiltinResult:
+    """Record this program's RETURN-CODE as the run unit's, on the way out.
+
+    Emitted at every COBOL program exit and immediately before every STOP RUN, so
+    the last program to end is the one whose value survives -- which is the value
+    the operating system would receive. Without it read_return_code has to guess
+    which of N per-program registers is the run unit's, and guesses by heap order,
+    i.e. by module link order (red-dragon-cvwu).
+
+    Args: [byte_list: list[int]] -- RETURN-CODE's raw big-endian signed bytes.
+    """
+    if not args or _is_symbolic(args[0].value):
+        return BuiltinResult(value=0)
+    byte_list = args[0].value
+    if not isinstance(byte_list, list):
+        return BuiltinResult(value=0)
+    vm.cobol_run_unit_return_code = int.from_bytes(bytes(byte_list), "big", signed=True)
+    return BuiltinResult(value=0)
+
+
 def _builtin_float_to_bytes(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Pack IEEE 754 float to big-endian bytes.
 
@@ -1824,6 +1846,7 @@ BYTE_BUILTINS: dict[FuncName, Any] = (
         FuncName(BuiltinName.STRING_CONCAT_PAIR): _builtin_string_concat_pair,
         FuncName(BuiltinName.INT_TO_BINARY_BYTES): _builtin_int_to_binary_bytes,
         FuncName(BuiltinName.BINARY_BYTES_TO_INT): _builtin_binary_bytes_to_int,
+        FuncName(BuiltinName.PUBLISH_RETURN_CODE): _builtin_cobol_publish_return_code,
         FuncName(BuiltinName.FLOAT_TO_BYTES): _builtin_float_to_bytes,
         FuncName(BuiltinName.BYTES_TO_FLOAT): _builtin_bytes_to_float,
         FuncName(BuiltinName.COBOL_BLANK_WHEN_ZERO): _builtin_cobol_blank_when_zero,

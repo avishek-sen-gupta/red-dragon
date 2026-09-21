@@ -82,6 +82,7 @@ class BuiltinName:
     STRING_CONCAT_PAIR = "__string_concat_pair"
     INT_TO_BINARY_BYTES = "__int_to_binary_bytes"
     BINARY_BYTES_TO_INT = "__binary_bytes_to_int"
+    PUBLISH_RETURN_CODE = "__cobol_publish_return_code"
     FLOAT_TO_BYTES = "__float_to_bytes"
     BYTES_TO_FLOAT = "__bytes_to_float"
     COBOL_BLANK_WHEN_ZERO = "__cobol_blank_when_zero"

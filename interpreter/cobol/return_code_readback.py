@@ -20,12 +20,24 @@ from interpreter.vm.vm_types import VMState
 
 
 def read_return_code(vm: VMState) -> int:
-    """Return the RETURN-CODE value from a finished VMState.
+    """Return the run unit's RETURN-CODE from a finished VMState.
 
-    Finds the singleton HeapObject carrying ``return_code_handle``, fetches the SR
-    region it points at, and decodes RETURN-CODE (2-byte big-endian signed) at
-    offset 0. Raises if no program set up an SR region.
+    The run unit's value is the one left by the LAST program to end, because that
+    is the value the operating system receives: a GOBACK chain copies each
+    callee's code up until the entry program ends holding it, and a STOP RUN
+    inside a subprogram ends the run unit there, with that subprogram's code
+    (red-dragon-cvwu). Every program exit and every STOP RUN publishes it, so
+    reading it is just reading what was published last.
+
+    Falls back to scanning the heap when nothing was published, which is how a
+    VMState assembled by hand — rather than by running COBOL — still answers.
+    That scan cannot tell one program's register from another's and returns
+    whichever comes first in link order, so it is a last resort, not the rule.
     """
+    published = vm.cobol_run_unit_return_code
+    if published is not None:
+        return published
+
     field_layout = SPECIAL_REGISTERS_LAYOUT.lookup_or_raise(RETURN_CODE_NAME)
     region = _return_code_region(vm)
     raw = region[field_layout.offset : field_layout.offset + field_layout.byte_length]

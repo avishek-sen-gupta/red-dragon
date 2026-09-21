@@ -23,12 +23,14 @@ Kept in its own module so ``lower_procedure`` can reach it without importing
 from __future__ import annotations
 
 from cobol_asg.source_span import SourceSpan
+from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.field_resolution import whole_field_extent
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.cobol.special_registers import RETURN_CODE_NAME
 from cobol_memory.region_id import RegionId
-from interpreter.instructions import Return_
+from interpreter.func_name import FuncName
+from interpreter.instructions import CallFunction, Return_
 from interpreter.register import Register
 
 
@@ -39,8 +41,30 @@ def lower_program_exit(
     span: SourceSpan | None,
 ) -> None:
     """Emit the return that hands control back to this program's caller."""
+    value_reg = emit_return_code_load(ctx, materialised, span=span)
+    emit_publish_run_unit_return_code(ctx, value_reg, span=span)
+    ctx.emit_inst(Return_(value_reg=value_reg), span=span)
+
+
+def emit_publish_run_unit_return_code(
+    ctx: EmitContext,
+    value_reg: Register,
+    *,
+    span: SourceSpan | None,
+) -> None:
+    """Record this program's RETURN-CODE as the run unit's, on the way out.
+
+    Every program exit publishes, and so does ``STOP RUN``, so the last program
+    to end is the one whose value survives — which is the value the operating
+    system receives. Without it the read-back has N per-program registers and no
+    way to tell which is the run unit's (red-dragon-cvwu).
+    """
     ctx.emit_inst(
-        Return_(value_reg=emit_return_code_load(ctx, materialised, span=span)),
+        CallFunction(
+            result_reg=ctx.fresh_reg(),
+            func_name=FuncName(BuiltinName.PUBLISH_RETURN_CODE),
+            args=(value_reg,),
+        ),
         span=span,
     )
 

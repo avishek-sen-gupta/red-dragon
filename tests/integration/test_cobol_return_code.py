@@ -273,3 +273,66 @@ def test_call_seeds_its_result_register_from_the_caller_return_code():
     assert (
         seed is not None
     ), "the register CALL_WITH_MEMORY writes must be loaded from RETURN-CODE first"
+
+
+# ── The run unit's RETURN-CODE, not an arbitrary program's (red-dragon-cvwu) ──
+
+
+@covers(CobolFeature.CALL)
+def test_read_return_code_reports_the_entry_program_not_a_subprogram():
+    """With several programs linked, the run unit's value is the entry program's.
+
+    read_return_code used to scan the heap and take the first object carrying a
+    return_code_handle, which is module LINK order -- so it could report a
+    subprogram's code. jackal feeds this straight into a JCL step's COND CODE.
+    """
+    callee = [
+        "IDENTIFICATION DIVISION.",
+        "PROGRAM-ID. RCNOISY.",
+        "PROCEDURE DIVISION.",
+        "    MOVE 12 TO RETURN-CODE.",
+        "    GOBACK.",
+    ]
+    entry = [
+        "IDENTIFICATION DIVISION.",
+        "PROGRAM-ID. RCQUIETMAIN.",
+        "PROCEDURE DIVISION.",
+        "    CALL 'RCNOISY'.",
+        "    MOVE 3 TO RETURN-CODE.",
+        "    GOBACK.",
+    ]
+
+    vm = run_cobol_programs(entry, {"RCNOISY": callee})
+
+    # The subprogram's own register still holds 12; the run unit's answer is the
+    # entry program's final 3, which is what the operating system would see.
+    assert return_code_of(vm, "RCNOISY") == 12
+    assert read_return_code(vm) == 3
+
+
+@covers(CobolFeature.STOP_RUN)
+def test_stop_run_inside_a_subprogram_decides_the_run_unit_return_code():
+    """STOP RUN ends the run unit wherever it is issued, and its code is the one
+    handed to the operating system -- not the entry program's, which is stale
+    because the entry program never got to finish."""
+    halting_callee = [
+        "IDENTIFICATION DIVISION.",
+        "PROGRAM-ID. RCHALTER.",
+        "PROCEDURE DIVISION.",
+        "    MOVE 8 TO RETURN-CODE.",
+        "    STOP RUN.",
+    ]
+    entry = [
+        "IDENTIFICATION DIVISION.",
+        "PROGRAM-ID. RCSTOPPED.",
+        "PROCEDURE DIVISION.",
+        "    MOVE 1 TO RETURN-CODE.",
+        "    CALL 'RCHALTER'.",
+        "    MOVE 99 TO RETURN-CODE.",
+        "    GOBACK.",
+    ]
+
+    vm = run_cobol_programs(entry, {"RCHALTER": halting_callee})
+
+    assert return_code_of(vm, "RCSTOPPED") == 1, "the entry program never resumed"
+    assert read_return_code(vm) == 8
