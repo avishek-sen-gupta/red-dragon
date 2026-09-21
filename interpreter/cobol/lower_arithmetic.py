@@ -1788,10 +1788,25 @@ def lower_evaluate(
                     # Expression-kind dict (e.g. lit, ref, binop) — the CICS prepass
                     # has already resolved DFHRESP nodes to lit nodes before we get here.
                     # Compare the evaluated value against the EVALUATE subject.
-                    val_reg = lower_expr_node(
-                        ctx, expr_from_dict(cond_dict), materialised, span=span
-                    )
-                    if stmt.subject and stmt.subject.upper() != "TRUE":
+                    if stmt.subject_ref is not None:
+                        # A sliced, subscripted or qualified subject is a
+                        # REFERENCE, not a name: compare it the way the IF
+                        # relation path compares one (red-dragon-sfih).
+                        cond_reg = ctx.lower_condition(
+                            {
+                                "relation": {
+                                    "left": stmt.subject_ref,
+                                    "op": "==",
+                                    "right": cond_dict,
+                                }
+                            },
+                            materialised,
+                            span=span,
+                        )
+                    elif stmt.subject and stmt.subject.upper() != "TRUE":
+                        val_reg = lower_expr_node(
+                            ctx, expr_from_dict(cond_dict), materialised, span=span
+                        )
                         if ctx.has_field(stmt.subject, materialised):
                             subject_ref, subject_rr = ctx.resolve_field_ref(
                                 stmt.subject, materialised, span=span
@@ -1818,7 +1833,9 @@ def lower_evaluate(
                             span=span,
                         )
                     else:
-                        cond_reg = val_reg
+                        cond_reg = lower_expr_node(
+                            ctx, expr_from_dict(cond_dict), materialised, span=span
+                        )
                 else:
                     # Full conditional expression (EVALUATE TRUE WHEN ...): route through
                     # the same structured lowering the IF path uses.
@@ -1830,7 +1847,10 @@ def lower_evaluate(
                 # path split on whitespace (destroying quoted spaces) and treated
                 # figuratives (SPACES / LOW-VALUES) as the literal text, so
                 # WHEN SPACES / WHEN ' ' never matched a blank field (red-dragon-z6ad).
-                subj_node: dict = {"kind": "ref", "name": stmt.subject}
+                subj_node: dict = stmt.subject_ref or {
+                    "kind": "ref",
+                    "name": stmt.subject,
+                }
                 if child.condition_thru is not None:
                     # WHEN <from> THRU <to>: emit (subject >= from) AND (subject <= to)
                     ge_reg = ctx.lower_condition(
