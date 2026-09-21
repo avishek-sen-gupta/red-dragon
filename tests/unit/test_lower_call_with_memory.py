@@ -123,6 +123,29 @@ def test_lower_call_by_reference_copy_back_after_call():
     ), "WRITE_REGION (copy-back) must follow CALL_WITH_MEMORY for BY REFERENCE"
 
 
+def _post_call_accesses_of_region(ctx, region_reg):
+    """Region reads/writes emitted after CALL_WITH_MEMORY that touch one region.
+
+    Scoped to a region on purpose. Every CALL now also reads and writes the
+    SPECIAL_REGISTERS region -- seeding the call's result register with the
+    caller's RETURN-CODE and storing the callee's back into it (red-dragon-ltq6)
+    -- so "no copy-back" has to mean "nothing written back into the ARGUMENT's
+    storage", not "no region traffic at all".
+    """
+    instructions = list(ctx.instructions)
+    call_idx = next(
+        i
+        for i, inst in enumerate(instructions)
+        if inst.opcode == Opcode.CALL_WITH_MEMORY
+    )
+    return [
+        inst.opcode
+        for inst in instructions[call_idx + 1 :]
+        if inst.opcode in (Opcode.LOAD_REGION, Opcode.WRITE_REGION)
+        and inst.region_reg == region_reg
+    ]
+
+
 @covers(CobolFeature.USING_BY_VALUE)
 def test_lower_call_by_value_no_copy_back():
     """BY VALUE: callee gets a copy; no LOAD_REGION or WRITE_REGION after CALL_WITH_MEMORY."""
@@ -133,15 +156,10 @@ def test_lower_call_by_value_no_copy_back():
         giving="",
     )
     lower_call(ctx, stmt, materialised)
-    opcodes = [i.opcode for i in ctx.instructions]
-    call_idx = next(i for i, op in enumerate(opcodes) if op == Opcode.CALL_WITH_MEMORY)
-    post_call = opcodes[call_idx + 1 :]
+    _ws_layout, ws_reg = materialised.working_storage
     assert (
-        Opcode.LOAD_REGION not in post_call
-    ), "BY VALUE must not emit copy-back LoadRegion"
-    assert (
-        Opcode.WRITE_REGION not in post_call
-    ), "BY VALUE must not emit copy-back WriteRegion"
+        _post_call_accesses_of_region(ctx, ws_reg) == []
+    ), "BY VALUE must not copy anything back into the argument's own storage"
 
 
 @covers(CobolFeature.USING_BY_CONTENT)
@@ -154,15 +172,10 @@ def test_lower_call_by_content_no_copy_back():
         giving="",
     )
     lower_call(ctx, stmt, materialised)
-    opcodes = [i.opcode for i in ctx.instructions]
-    call_idx = next(i for i, op in enumerate(opcodes) if op == Opcode.CALL_WITH_MEMORY)
-    post_call = opcodes[call_idx + 1 :]
+    _ws_layout, ws_reg = materialised.working_storage
     assert (
-        Opcode.LOAD_REGION not in post_call
-    ), "BY CONTENT must not emit copy-back LoadRegion"
-    assert (
-        Opcode.WRITE_REGION not in post_call
-    ), "BY CONTENT must not emit copy-back WriteRegion"
+        _post_call_accesses_of_region(ctx, ws_reg) == []
+    ), "BY CONTENT must not copy anything back into the argument's own storage"
 
 
 def _materialised_with_sections() -> tuple[EmitContext, MaterialisedSectionedLayout]:

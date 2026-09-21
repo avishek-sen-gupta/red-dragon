@@ -20,6 +20,10 @@ from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.func_name import FuncName
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.lower_arithmetic import eval_ref_mod_expr
+from interpreter.cobol.lower_program_exit import (
+    emit_return_code_load,
+    emit_return_code_store,
+)
 from interpreter.instructions import (
     AllocRegion,
     Binop,
@@ -231,7 +235,14 @@ def lower_call(
         else NO_REGISTER
     )
 
-    result_reg = ctx.fresh_reg()
+    # The callee returns its RETURN-CODE in result_reg, and the copy-up below
+    # writes it into the caller's. Seeding that same register with the caller's
+    # OWN value first is what makes a callee that returns nothing harmless: a
+    # VOID return is deliberately not written back into the caller's register
+    # (see run.py), so an unseeded result_reg would still be unwritten and would
+    # resolve to the literal string "%n" — which the copy-up would then store
+    # into RETURN-CODE as garbage.
+    result_reg = emit_return_code_load(ctx, materialised, span=span)
     ctx.emit_inst(
         CallWithMemory(
             result_reg=result_reg,
@@ -242,6 +253,10 @@ def lower_call(
         ),
         span=span,
     )
+
+    # Copy-up: a returning COBOL program leaves its RETURN-CODE in register 15
+    # and its caller stores R15 into its own. result_reg is that R15.
+    emit_return_code_store(ctx, materialised, result_reg, span=span)
 
     # Restore the caller's __ws_region binding. CallWithMemory dispatches into the
     # callee's func_init_params, whose body re-binds the shared __ws_region var to

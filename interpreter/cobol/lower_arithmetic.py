@@ -79,6 +79,7 @@ from interpreter.instructions import (
     Label_,
     Return_,
 )
+from interpreter.cobol.lower_program_exit import lower_program_exit
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import BinopKind, resolve_binop
 from interpreter.register import NO_REGISTER, Register
@@ -2430,11 +2431,8 @@ def lower_goback(
     stmt: GobackStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """GOBACK — return control to the caller (same as STOP RUN at the IR level)."""
-    span = stmt.span
-    zero_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const.int_(zero_reg, 0), span=span)
-    ctx.emit_inst(Return_(value_reg=zero_reg), span=span)
+    """GOBACK — return control to the caller, carrying RETURN-CODE."""
+    lower_program_exit(ctx, materialised, span=stmt.span)
 
 
 def lower_exit_program(
@@ -2442,11 +2440,8 @@ def lower_exit_program(
     stmt: ExitProgramStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """EXIT PROGRAM — return control to the caller."""
-    span = stmt.span
-    zero_reg = ctx.fresh_reg()
-    ctx.emit_inst(Const.int_(zero_reg, 0), span=span)
-    ctx.emit_inst(Return_(value_reg=zero_reg), span=span)
+    """EXIT PROGRAM — return control to the caller, carrying RETURN-CODE."""
+    lower_program_exit(ctx, materialised, span=stmt.span)
 
 
 def _lower_computed_goto(

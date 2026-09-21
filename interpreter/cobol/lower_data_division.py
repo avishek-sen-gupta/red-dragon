@@ -16,7 +16,7 @@ from interpreter.cobol.special_registers import (
     RETURN_CODE_HANDLE,
     SPECIAL_REGISTERS_LAYOUT,
 )
-from interpreter.instructions import AllocRegion, Const, LoadVar, StoreField
+from interpreter.instructions import AllocRegion, Const, LoadField, LoadVar
 from interpreter.register import NO_REGISTER, Register
 from interpreter.var_name import VarName
 
@@ -107,20 +107,20 @@ def lower_sectioned_data_division(
     else:
         index_reg = NO_REGISTER
 
-    # RETURN-CODE (and future special registers) live in a dedicated region,
-    # allocated fresh per run and isolated from WS/LS/LINKAGE/FILE storage. Its
-    # handle is published on the program singleton under RETURN_CODE_HANDLE so the
-    # final value is recoverable from the returned VMState (see special_registers).
-    sr_reg = lower_data_division(
-        ctx, SPECIAL_REGISTERS_LAYOUT, RegionId.SPECIAL_REGISTERS
-    )
+    # The special registers are allocated ONCE, in the init block beside
+    # WORKING-STORAGE, and merely rebound here — so this loads the handle rather
+    # than allocating. Allocating per entry would zero RETURN-CODE on every call,
+    # which contradicts both halves of its semantics: a subprogram is left in its
+    # last-used state, and a callee's value has to outlive its own exit long
+    # enough for the caller to copy it up (red-dragon-ltq6).
     singleton_reg = ctx.fresh_reg()
     ctx.emit_inst(
         LoadVar(result_reg=singleton_reg, name=VarName(f"__prog_{program_id.upper()}"))
     )
+    sr_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        StoreField(
-            obj_reg=singleton_reg, field_name=RETURN_CODE_HANDLE, value_reg=sr_reg
+        LoadField(
+            result_reg=sr_reg, obj_reg=singleton_reg, field_name=RETURN_CODE_HANDLE
         )
     )
 
