@@ -39,11 +39,20 @@ def lower_program_exit(
     materialised: MaterialisedSectionedLayout,
     *,
     span: SourceSpan | None,
+    implicit: bool = False,
 ) -> None:
-    """Emit the return that hands control back to this program's caller."""
+    """Emit the return that hands control back to this program's caller.
+
+    ``implicit`` marks the exit the compiler supplies at the end of a PROCEDURE
+    DIVISION, as distinct from one a GOBACK or EXIT PROGRAM asked for. Pascal,
+    Java and the common frontend already mark theirs; COBOL was the odd one out.
+    The flag has one consumer -- type_inference skips implicit returns when
+    inferring a return type -- and it also lets a reader of the IR tell an exit
+    a statement wrote from one that is merely where the program ran out.
+    """
     value_reg = emit_return_code_load(ctx, materialised, span=span)
     emit_publish_run_unit_return_code(ctx, value_reg, span=span)
-    ctx.emit_inst(Return_(value_reg=value_reg), span=span)
+    ctx.emit_inst(Return_(value_reg=value_reg, implicit=implicit), span=span)
 
 
 def emit_publish_run_unit_return_code(

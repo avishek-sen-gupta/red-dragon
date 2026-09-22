@@ -61,7 +61,7 @@ def lower_procedure_division(
     # flow, before the declaratives — because that is where control falls to; put
     # it after the declaratives and a program without GOBACK would fall into a USE
     # procedure instead of returning (red-dragon-i0jd).
-    lower_program_exit(ctx, materialised, span=_end_of_flow_span(asg))
+    lower_program_exit(ctx, materialised, span=_end_of_flow_span(asg), implicit=True)
 
     # Declaratives last: real flow above keeps the entry point on the first real
     # element. USE-procedure triggering on I/O errors is deferred to m0oa.4.
