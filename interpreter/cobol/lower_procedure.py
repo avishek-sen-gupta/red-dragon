@@ -75,10 +75,19 @@ def _end_of_flow_span(asg: CobolASG) -> SourceSpan | None:
     The implicit exit has no source text of its own, but every PROCEDURE DIVISION
     instruction must carry a location, so it borrows the last real element's —
     which is where a reader looking for "why did it return here" should land.
+
+    Read with ``getattr`` because the last element need not be a red-dragon type.
+    A coprocessor frontend swaps its own statement types into the ASG through the
+    extension seam — cicada's ``EXEC CICS``, squall's ``EXEC SQL`` — and that seam
+    promises only that ``dispatch_statement`` can route them, not that they carry
+    any particular attribute. red-dragon cannot import those types to find out,
+    and must not: naming one here would be an import contract violation and would
+    still miss the next extension. A span is optional on this path anyway, so
+    "there isn't one" is an answer, not a failure (red-dragon-7qmn).
     """
     for elements in (asg.sections, asg.paragraphs, asg.statements):
         if elements:
-            return elements[-1].span
+            return getattr(elements[-1], "span", None)
     return None
 
 
