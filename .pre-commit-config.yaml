@@ -1,3 +1,9 @@
+# Without this, a hook with no `stages:` runs at EVERY installed stage. Both a
+# pre-commit and a commit-msg git hook are installed, so every hook — the full
+# test suite included — ran twice per commit. Only terminology-commit-msg
+# belongs to the commit-msg stage, and it opts in explicitly.
+default_stages: [pre-commit]
+
 repos:
   - repo: https://github.com/avishek-sen-gupta/python-fp-lint
     rev: main
