@@ -25,6 +25,10 @@ SAMPLE = f"""def grow(items: list[int]) -> list[int]:
 def long_body() -> int:
 {_LONG_BODY}
     return v14
+
+
+def annotated_default(label: str | None = None) -> str:
+    return label or ""
 """
 
 
@@ -58,9 +62,14 @@ def test_fp_json_rules_and_thresholds_are_what_the_linter_runs(tmp_path):
 
     # no-list-append / no-list-dict-param-annotation: the configured ast-grep
     # rules are live. PLR0915: fp.json's ruff_select and its max_statements of
-    # 10 are honoured (ruff's default ceiling is 50).
+    # 10 are honoured (ruff's default ceiling is 50). no-none-default-param on
+    # an ANNOTATED param: the vendored rule is the fixed one, not the old copy
+    # that matched only unannotated `x=None`. The `str | None` needed to annotate
+    # it also trips no-optional-none.
     assert _rules_reported(sample) == {
         "no-list-append",
         "no-list-dict-param-annotation",
         "PLR0915",
+        "no-none-default-param",
+        "no-optional-none",
     }
