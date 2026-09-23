@@ -1,6 +1,0 @@
-id: no-dict-update
-language: python
-rule:
-  pattern: $DICT.update($OTHER)
-message: "dict.update() — use {**d, **other} merge"
-severity: warning
