@@ -6,11 +6,11 @@ default_stages: [pre-commit]
 
 repos:
   - repo: https://github.com/avishek-sen-gupta/python-fp-lint
-    # Keep in step with the python-fp-lint pin in pyproject.toml; a branch name
-    # here is installed once and never updated.
-    rev: 4943777639261182d450d794e882ab59919ed1b6
+    rev: 12a766b9521158dd0cf968f848a91310ef281663
     hooks:
       - id: python-fp-lint
+        args: [--config, fp.json]
+      - id: python-fp-lint-check
         args: [--config, fp.json]
   - repo: local
     hooks:
