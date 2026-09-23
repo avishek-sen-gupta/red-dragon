@@ -2262,7 +2262,7 @@ wheels = [
 [[package]]
 name = "python-fp-lint"
 version = "0.1.0"
-source = { git = "https://github.com/avishek-sen-gupta/python-fp-lint.git?rev=4943777639261182d450d794e882ab59919ed1b6#4943777639261182d450d794e882ab59919ed1b6" }
+source = { git = "https://github.com/avishek-sen-gupta/python-fp-lint.git?rev=856da3e011caa0d5eb932078484792bd490be682#856da3e011caa0d5eb932078484792bd490be682" }
 dependencies = [
     { name = "ast-grep-cli" },
     { name = "beniget" },
@@ -2481,7 +2481,7 @@ requires-dist = [
     { name = "litellm", specifier = ">=1.60.0,<1.82.6" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.26.0,<2.0.0" },
     { name = "pydantic", specifier = ">=2.12.5,<3.0.0" },
-    { name = "python-fp-lint", git = "https://github.com/avishek-sen-gupta/python-fp-lint.git?rev=4943777639261182d450d794e882ab59919ed1b6" },
+    { name = "python-fp-lint", git = "https://github.com/avishek-sen-gupta/python-fp-lint.git?rev=856da3e011caa0d5eb932078484792bd490be682" },
     { name = "sortedcontainers", specifier = ">=2.4.0,<3.0.0" },
     { name = "tqdm", specifier = ">=4.67,<5.0" },
     { name = "tree-sitter", specifier = ">=0.25.2,<0.26.0" },

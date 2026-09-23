@@ -1,8 +1,13 @@
 id: no-none-default-param
 language: python
 rule:
-  kind: default_parameter
+  # default_parameter is `x=None`; an annotated `x: T | None = None` is a
+  # distinct node kind, typed_default_parameter, and needs matching too.
+  any:
+    - kind: default_parameter
+    - kind: typed_default_parameter
   has:
+    field: value
     kind: none
 message: "None default parameter — use empty structures or sentinel objects"
 severity: warning
