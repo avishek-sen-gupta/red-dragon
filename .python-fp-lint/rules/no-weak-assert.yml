@@ -1,0 +1,17 @@
+id: no-weak-assert
+language: python
+rule:
+  any:
+    - pattern: assert $X is not None
+    - pattern: assert len($X) > 0
+    - pattern: assert len($X) >= 1
+    - pattern: assert $X in $Y
+    - pattern: assert not $X
+    - kind: assert_statement
+      has:
+        any:
+          - kind: identifier
+          - kind: attribute
+          - kind: call
+message: "Weak assertion — assert a concrete expected value, not existence, containment, or truthiness"
+severity: warning

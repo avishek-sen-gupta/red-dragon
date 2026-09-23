@@ -1,0 +1,6 @@
+id: no-classmethod-utility
+language: python
+rule:
+  pattern: "@classmethod"
+message: "@classmethod — use module-level functions or instance behaviour instead of static utilities"
+severity: warning

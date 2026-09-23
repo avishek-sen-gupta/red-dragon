@@ -1,0 +1,17 @@
+id: no-xfail-without-reason
+language: python
+rule:
+  kind: decorator
+  has:
+    stopBy: end
+    kind: identifier
+    regex: "^xfail$"
+  not:
+    has:
+      stopBy: end
+      kind: keyword_argument
+      has:
+        field: name
+        regex: "^reason$"
+message: "xfail without reason= — state why the behaviour is unimplemented and reference an issue"
+severity: warning
