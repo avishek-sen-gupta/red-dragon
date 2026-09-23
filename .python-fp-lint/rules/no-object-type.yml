@@ -1,0 +1,7 @@
+id: no-object-type
+language: python
+rule:
+  kind: type
+  regex: "\\bobject\\b"
+message: "Avoid object — an untyped blob is Any with extra steps; use a precise type, Protocol, or union"
+severity: warning

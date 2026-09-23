@@ -1,0 +1,15 @@
+id: no-mutation-outside-init
+language: python
+rule:
+  any:
+    - pattern: self.$ATTR = $VAL
+    - pattern: "self.$ATTR: $TYPE = $VAL"
+  not:
+    inside:
+      stopBy: end
+      kind: function_definition
+      has:
+        field: name
+        regex: "^(__init__|__post_init__)$"
+message: "Attribute assigned outside __init__ — objects are constructed complete and never mutated"
+severity: warning

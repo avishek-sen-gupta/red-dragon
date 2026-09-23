@@ -1,0 +1,6 @@
+id: no-or-none-fallback
+language: python
+rule:
+  pattern: $X or None
+message: "`or None` fallback converts a falsy value back to None — pass the value through directly"
+severity: warning

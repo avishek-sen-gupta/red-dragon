@@ -1,0 +1,9 @@
+id: no-none-case-pattern
+language: python
+rule:
+  kind: none
+  inside:
+    kind: case_pattern
+    stopBy: end
+message: "None in a match case pattern — model absence with a sentinel case or Option type"
+severity: warning
