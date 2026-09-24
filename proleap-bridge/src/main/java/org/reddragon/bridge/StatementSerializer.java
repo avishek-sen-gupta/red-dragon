@@ -2,6 +2,7 @@ package org.reddragon.bridge;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import io.proleap.cobol.asg.metamodel.procedure.Statement;
@@ -908,6 +909,12 @@ public final class StatementSerializer {
             List<AlsoSelect> alsoSelects = stmt.getAlsoSelects();
             if (alsoSelects != null && !alsoSelects.isEmpty()) {
                 JsonArray alsoSubjectsArr = new JsonArray();
+                // An ALSO subject is a subject: it takes the same structured ref the
+                // first one does, or the leaf name alone would resolve the WHOLE field
+                // where the source sliced or qualified it (red-dragon-ba1). Positional,
+                // so a subject that is only a name holds its slot with null.
+                JsonArray alsoSubjectRefsArr = new JsonArray();
+                boolean anyAlsoSubjectRef = false;
                 for (AlsoSelect alsoSelect : alsoSelects) {
                     io.proleap.cobol.asg.metamodel.procedure.evaluate.Select alsoSel = alsoSelect.getSelect();
                     if (alsoSel != null && alsoSel.getSelectValueStmt() != null) {
@@ -916,9 +923,17 @@ public final class StatementSerializer {
                             alsoSubject = insertSpaces(extractValueStmtText(alsoSel.getSelectValueStmt()));
                         }
                         alsoSubjectsArr.add(alsoSubject);
+                        JsonObject alsoRef = structuredSubjectRef(alsoSel.getSelectValueStmt());
+                        if (alsoRef == null) {
+                            alsoSubjectRefsArr.add(JsonNull.INSTANCE);
+                        } else {
+                            alsoSubjectRefsArr.add(alsoRef);
+                            anyAlsoSubjectRef = true;
+                        }
                     }
                 }
                 if (alsoSubjectsArr.size() > 0) obj.add("also_subjects", alsoSubjectsArr);
+                if (anyAlsoSubjectRef) obj.add("also_subject_refs", alsoSubjectRefsArr);
             }
 
             // Each WhenPhrase is "WHEN c1 [WHEN c2 ...] statements": one or more

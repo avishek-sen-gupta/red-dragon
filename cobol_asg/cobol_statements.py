@@ -512,11 +512,17 @@ class EvaluateStatement:
     the subject carries a slice, a subscript or a qualifier -- what a name
     cannot carry. A plain name travels in ``subject`` alone, as it always did
     (red-dragon-sfih).
+
+    ``also_subject_refs`` is the same for the ALSO subjects, positional against
+    ``also_subjects``: a subject that is only a name holds its slot with an empty
+    mapping, never None. It is empty when no ALSO subject carries more than a
+    name (red-dragon-ba1).
     """
 
     subject: str = ""
     subject_ref: dict | None = None
     also_subjects: tuple[str, ...] = ()
+    also_subject_refs: tuple[dict, ...] = ()
     children: list[CobolStatementType] = field(default_factory=list)
     span: SourceSpan | None = None
 
@@ -526,6 +532,9 @@ class EvaluateStatement:
             subject=data.get("subject", ""),
             subject_ref=data.get("subject_ref"),
             also_subjects=tuple(data.get("also_subjects", [])),
+            also_subject_refs=tuple(
+                ref or {} for ref in data.get("also_subject_refs", [])
+            ),
             children=[parse_statement(c) for c in data.get("children", [])],
             span=SourceSpan.from_dict(data),
         )
