@@ -1750,6 +1750,20 @@ def lower_if(
     ctx.emit_inst(Label_(label=end_label), span=span)
 
 
+def _also_subject_ref(stmt, position: int, also_subject: str) -> dict:
+    """The ALSO subject at ``position`` as a ref node.
+
+    The structured one the bridge sent when the subject carries a slice, a
+    subscript or a qualifier, and the bare name otherwise -- the same choice
+    ``subject_ref`` makes for the first subject. ``also_subject_refs`` is
+    positional and holds a slot for every ALSO subject, so a missing or empty
+    entry means "this one is only a name" (red-dragon-ba1).
+    """
+    refs = stmt.also_subject_refs
+    structured = refs[position] if position < len(refs) else {}
+    return structured or {"kind": "ref", "name": also_subject}
+
+
 def _when_operand_node(value: str) -> dict:
     """Classify an ``EVALUATE <subject> WHEN <value>`` value into a structured
     relation-operand dict, so it lowers through the same path the IF relation
@@ -1906,9 +1920,17 @@ def lower_evaluate(
                     ctx, child.condition, materialised, ctx._condition_index, span=span
                 )
             # AND in also-subject=also-condition pairs (EVALUATE A ALSO B WHEN x ALSO y)
-            for also_subj, also_cond in zip(stmt.also_subjects, child.also_conditions):
+            for position, (also_subj, also_cond) in enumerate(
+                # strict=False: a WHEN with fewer ALSO values than the EVALUATE has
+                # subjects is malformed, and truncating is what this has always done.
+                zip(stmt.also_subjects, child.also_conditions, strict=False)
+            ):
                 if isinstance(also_cond, str) and also_cond.upper() == "ANY":
                     continue
+                # The ALSO subject is a subject: it takes the same structured ref
+                # node the first one does, so a slice or a qualifier on it survives
+                # instead of resolving the whole field (red-dragon-ba1).
+                also_subj_ref = _also_subject_ref(stmt, position, also_subj)
                 if isinstance(also_cond, dict) and "kind" in also_cond:
                     also_val_reg = lower_expr_node(
                         ctx, expr_from_dict(also_cond), materialised, span=span
@@ -1944,7 +1966,7 @@ def lower_evaluate(
                     and "thru" in also_cond
                 ):
                     # WHEN ... ALSO <from> THRU <to>: emit range comparison
-                    also_subj_node: dict = {"kind": "ref", "name": also_subj}
+                    also_subj_node: dict = also_subj_ref
                     also_ge_reg = ctx.lower_condition(
                         {
                             "relation": {
@@ -1981,9 +2003,21 @@ def lower_evaluate(
                     also_cond_reg = ctx.lower_condition(
                         also_cond, materialised, span=span
                     )
+                elif also_subj.upper() == "TRUE":
+                    # EVALUATE ... ALSO TRUE: the WHEN value is a CONDITION, the same
+                    # as it is under a first subject of TRUE. Comparing it against a
+                    # field named TRUE -- which no program declares -- made the pair
+                    # unmatchable (red-dragon-c7p).
+                    also_cond_reg = _lower_condition_str(
+                        ctx,
+                        also_cond,
+                        materialised,
+                        ctx._condition_index,
+                        span=span,
+                    )
                 else:
                     relation = {
-                        "left": {"kind": "ref", "name": also_subj},
+                        "left": also_subj_ref,
                         "op": "==",
                         "right": _when_operand_node(also_cond),
                     }
