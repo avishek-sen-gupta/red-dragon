@@ -26,11 +26,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from interpreter import constants
 from interpreter.cfg import build_cfg
+from interpreter.cli_output import emit
 from interpreter.constants import Language
 from interpreter.frontend import get_frontend
 from interpreter.llm.chunked_llm_frontend import ChunkExtractor
 from interpreter.parser import Parser, TreeSitterParserFactory
-from interpreter.cli_output import emit
 
 SAMPLE_SOURCE = """\
 class Account:

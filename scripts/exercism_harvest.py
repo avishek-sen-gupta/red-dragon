@@ -12,6 +12,7 @@ import logging
 import sys
 import urllib.request
 from pathlib import Path
+
 from interpreter.cli_output import emit
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")

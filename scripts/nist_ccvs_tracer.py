@@ -23,11 +23,11 @@ import sys
 import tempfile
 from pathlib import Path
 
+from interpreter.cli_output import emit
 from interpreter.cobol.ebcdic_table import EbcdicTable
 from interpreter.constants import FRONTEND_COBOL, Language
 from interpreter.frontend import get_frontend
 from tests.nist.conftest import NIST_DIR, make_provider
-from interpreter.cli_output import emit
 
 _runmod = importlib.import_module("interpreter.run")
 _ALPHA = ("PAR-NAME", "FEATURE", "RE-MARK")

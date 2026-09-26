@@ -12,10 +12,10 @@ from interpreter.api import (
     dump_ir,
     dump_mermaid,
 )
+from interpreter.cli_output import emit
 from interpreter.func_name import FuncName
 from interpreter.project.entry_point import EntryPoint
 from interpreter.run import run
-from interpreter.cli_output import emit
 
 
 def main():

@@ -23,13 +23,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from interpreter import constants
+from interpreter.cli_output import emit
 from interpreter.constants import Language
 from interpreter.project.entry_point import EntryPoint
 from interpreter.run import run
 from interpreter.run_types import UnresolvedCallStrategy
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.vm_types import SymbolicValue
-from interpreter.cli_output import emit
 
 SAMPLE_SOURCE = """\
 import math

@@ -21,10 +21,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from interpreter.cfg import build_cfg
+from interpreter.cli_output import emit
 from interpreter.constants import Language
 from interpreter.dataflow import analyze
 from interpreter.frontend import get_frontend
-from interpreter.cli_output import emit
 
 logger = logging.getLogger(__name__)
 

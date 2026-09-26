@@ -6,7 +6,7 @@ authors = [
     {name = "asgupta"}
 ]
 readme = "README.md"
-requires-python = ">=3.10,<4.0"
+requires-python = ">=3.13,<4.0"
 dependencies = [
     "pydantic (>=2.12.5,<3.0.0)",
     "litellm (>=1.60.0,<1.82.6)",

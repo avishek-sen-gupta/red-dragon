@@ -7,6 +7,7 @@ import logging
 from typing import Any
 
 from interpreter.address import Address
+from interpreter.cli_output import emit
 from interpreter.cobol.byte_builtins import BYTE_BUILTINS
 from interpreter.constants import ARR_ADDR_PREFIX, FoundationTypeName
 from interpreter.field_name import FieldKind, FieldName
@@ -22,7 +23,6 @@ from interpreter.vm.vm_types import (
     NewObject,
     Pointer,
 )
-from interpreter.cli_output import emit
 
 _UNCOMPUTABLE = Operators.UNCOMPUTABLE
 

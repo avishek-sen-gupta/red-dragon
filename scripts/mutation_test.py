@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
+
 from interpreter.cli_output import emit
 
 TARGETS: dict[str, list[str]] = {

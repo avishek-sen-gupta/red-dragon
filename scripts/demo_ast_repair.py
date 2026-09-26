@@ -28,12 +28,12 @@ from interpreter.ast_repair.repair_config import RepairConfig
 from interpreter.ast_repair.repairing_frontend_decorator import (
     RepairingFrontendDecorator,
 )
+from interpreter.cli_output import emit
 from interpreter.constants import Language
 from interpreter.frontend import get_frontend
 from interpreter.ir import Opcode
 from interpreter.llm.llm_client import get_llm_client
 from interpreter.parser import TreeSitterParserFactory
-from interpreter.cli_output import emit
 
 BROKEN_SAMPLES: dict[Language, bytes] = {
     Language.PYTHON: b"""\

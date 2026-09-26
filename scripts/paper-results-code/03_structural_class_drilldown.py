@@ -23,11 +23,11 @@ import sys
 sys.path.insert(0, "tests/unit/rosetta")
 
 from interpreter.cfg import build_cfg
+from interpreter.cli_output import emit
 from interpreter.frontends import (
     SUPPORTED_DETERMINISTIC_LANGUAGES,
     get_deterministic_frontend,
 )
-from interpreter.cli_output import emit
 
 LANGS = sorted(SUPPORTED_DETERMINISTIC_LANGUAGES)
 

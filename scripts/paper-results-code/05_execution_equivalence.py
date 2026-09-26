@@ -25,13 +25,13 @@ import sys
 sys.path.insert(0, "tests/unit/rosetta")
 
 from interpreter.cfg import build_cfg
+from interpreter.cli_output import emit, emit_err
 from interpreter.frontends import (
     SUPPORTED_DETERMINISTIC_LANGUAGES,
     get_deterministic_frontend,
 )
 from interpreter.registry import build_registry
 from interpreter.run import VMConfig, execute_cfg, initial_vm_state
-from interpreter.cli_output import emit, emit_err
 
 LANGS = sorted(SUPPORTED_DETERMINISTIC_LANGUAGES)
 LANG_SHORT = {
