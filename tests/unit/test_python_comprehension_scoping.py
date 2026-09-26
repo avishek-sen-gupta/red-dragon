@@ -20,7 +20,7 @@ class TestListComprehensionScoping:
     @covers(PythonFeature.LIST_COMPREHENSION)
     def test_loop_var_does_not_shadow_outer(self):
         """Comprehension var 'x' should not overwrite outer 'x'."""
-        vm, stats = execute_for_language(
+        vm, _stats = execute_for_language(
             "python",
             """\
 x = 99
@@ -60,7 +60,7 @@ class TestDictComprehensionScoping:
     @covers(PythonFeature.DICT_COMPREHENSION)
     def test_loop_var_does_not_shadow_outer(self):
         """Dict comprehension var should not overwrite outer variable."""
-        vm, stats = execute_for_language(
+        vm, _stats = execute_for_language(
             "python",
             """\
 k = 99
@@ -79,7 +79,7 @@ class TestSetComprehensionScoping:
     @covers(PythonFeature.SET_COMPREHENSION)
     def test_loop_var_does_not_shadow_outer(self):
         """Set comprehension var should not overwrite outer variable."""
-        vm, stats = execute_for_language(
+        vm, _stats = execute_for_language(
             "python",
             """\
 x = 99
@@ -98,7 +98,7 @@ class TestGeneratorExpressionScoping:
     @covers(PythonFeature.GENERATOR_EXPRESSION)
     def test_loop_var_does_not_shadow_outer(self):
         """Generator expression var should not overwrite outer variable."""
-        vm, stats = execute_for_language(
+        vm, _stats = execute_for_language(
             "python",
             """\
 x = 99

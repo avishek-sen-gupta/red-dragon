@@ -678,7 +678,7 @@ interface Shape {
 
     @covers(TypeScriptFeature.INTERFACE)
     def test_interface_methods_seed_return_types(self):
-        ir, type_builder = _parse_ts_with_types(self.INTERFACE_SOURCE)
+        _ir, type_builder = _parse_ts_with_types(self.INTERFACE_SOURCE)
         func_return_types = type_builder.func_return_types
         area_entries = {k: v for k, v in func_return_types.items() if "area" in k}
         name_entries = {k: v for k, v in func_return_types.items() if "name" in k}
@@ -738,7 +738,7 @@ interface Config {
     @covers(TypeScriptFeature.INTERFACE)
     def test_property_signature_seeds_var_type(self):
         """Property signatures should seed var types for inference chain walk."""
-        ir, type_builder = _parse_ts_with_types(self.INTERFACE_WITH_PROPS)
+        _ir, type_builder = _parse_ts_with_types(self.INTERFACE_WITH_PROPS)
         var_types = type_builder.var_types
         name_types = {k: v for k, v in var_types.items() if k == "name"}
         id_types = {k: v for k, v in var_types.items() if k == "id"}

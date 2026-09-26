@@ -613,7 +613,7 @@ class TestCSharpInterfaceDeclaration:
     @covers(CSharpFeature.INTERFACE)
     def test_interface_methods_seed_return_types(self):
         source = "interface ICalc { int Compute(int x); string Describe(); }"
-        ir, type_builder = _parse_csharp_with_types(source)
+        _ir, type_builder = _parse_csharp_with_types(source)
         func_return_types = type_builder.func_return_types
         compute_entries = {k: v for k, v in func_return_types.items() if "Compute" in k}
         describe_entries = {

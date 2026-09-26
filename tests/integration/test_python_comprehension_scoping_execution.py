@@ -17,7 +17,7 @@ class TestListComprehensionScopingExecution:
     @covers(PythonFeature.LIST_COMPREHENSION)
     def test_outer_var_preserved_after_comprehension(self):
         """x=99 should survive [x for x in [1,2,3]]."""
-        vm, stats = execute_for_language(
+        vm, _stats = execute_for_language(
             "python",
             """\
 x = 99
@@ -33,7 +33,7 @@ class TestDictComprehensionScopingExecution:
     @covers(PythonFeature.DICT_COMPREHENSION)
     def test_outer_var_preserved_after_dict_comprehension(self):
         """k=99 should survive {k: k for k in [1,2,3]}."""
-        vm, stats = execute_for_language(
+        vm, _stats = execute_for_language(
             "python",
             """\
 k = 99
@@ -49,7 +49,7 @@ class TestSetComprehensionScopingExecution:
     @covers(PythonFeature.SET_COMPREHENSION)
     def test_outer_var_preserved_after_set_comprehension(self):
         """x=99 should survive {x for x in [1,2,3]}."""
-        vm, stats = execute_for_language(
+        vm, _stats = execute_for_language(
             "python",
             """\
 x = 99
@@ -65,7 +65,7 @@ class TestGeneratorExpressionScopingExecution:
     @covers(PythonFeature.GENERATOR_EXPRESSION)
     def test_outer_var_preserved_after_generator(self):
         """x=99 should survive list(x for x in [1,2,3])."""
-        vm, stats = execute_for_language(
+        vm, _stats = execute_for_language(
             "python",
             """\
 x = 99

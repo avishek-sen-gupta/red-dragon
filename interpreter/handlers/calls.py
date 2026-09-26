@@ -270,7 +270,7 @@ def _try_user_function_call(
 
     closure_env_id = func_val.closure_id if closure_env else NO_CLOSURE_ID
     captured_var_names = (
-        [VarName(k) if isinstance(k, str) else k for k in captured.keys()]
+        [VarName(k) if isinstance(k, str) else k for k in captured]
         if closure_env
         else []
     )
@@ -541,7 +541,7 @@ def _handle_call_method(
             if field_tv and isinstance(field_tv.value, BoundFuncRef):
                 return _try_user_function_call(
                     field_tv.value,
-                    [obj_val] + args,
+                    [obj_val, *args],
                     inst,
                     vm,
                     ctx.cfg,

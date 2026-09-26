@@ -668,7 +668,7 @@ class TestCFrontendTypedef:
     def test_typedef_struct(self):
         """typedef struct Point { ... } Point; seeds alias Point."""
         source = "typedef struct Point { int x; int y; } Point;"
-        ir, builder = _parse_and_lower_with_types(source)
+        _ir, builder = _parse_and_lower_with_types(source)
         # Point should be seeded as alias (the struct body is still lowered)
         assert TypeName("Point") in builder.type_aliases
 

@@ -1091,7 +1091,7 @@ class TestStarPatterns:
     @covers(PythonFeature.SEQUENCE_PATTERN)
     @covers(PythonFeature.STAR_PATTERN)
     def test_star_at_end(self):
-        vm, local_vars = _run_python(
+        _vm, local_vars = _run_python(
             """\
 items = [1, 2, 3, 4]
 match items:

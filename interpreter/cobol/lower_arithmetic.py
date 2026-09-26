@@ -2123,9 +2123,9 @@ def lower_initialize(
         if not ctx.has_field(operand, materialised):
             logger.warning("INITIALIZE target %s not found in layout", operand)
             continue
-        ref, rr = ctx.resolve_field_ref(operand, materialised, span=span)
+        ref, _rr = ctx.resolve_field_ref(operand, materialised, span=span)
         # Look up the layout section that owns this field for _leaf_fields_of
-        fl_layout, _ = materialised.resolve(operand)
+        _fl_layout, _ = materialised.resolve(operand)
         # Determine which DataLayout to use for leaf enumeration
         # We use the working_storage layout as a fallback; the actual layout
         # is the one from the resolved section.

@@ -124,7 +124,7 @@ class TestTsImportRequireFunction:
     def test_require_stores_variable(self, ts_func_project: Path):
         """The require() call should store 'utils' in scope (even as symbolic)."""
         linked = compile_directory(ts_func_project, Language.TYPESCRIPT)
-        vm, stats = _execute_linked(linked)
+        vm, _stats = _execute_linked(linked)
         lvars = _local_vars(vm)
         assert (
             VarName("utils") in lvars
@@ -134,7 +134,7 @@ class TestTsImportRequireFunction:
     def test_answer_variable_in_scope(self, ts_func_project: Path):
         """The downstream variable 'answer' should exist in scope."""
         linked = compile_directory(ts_func_project, Language.TYPESCRIPT)
-        vm, stats = _execute_linked(linked)
+        vm, _stats = _execute_linked(linked)
         lvars = _local_vars(vm)
         assert (
             VarName("answer") in lvars
@@ -178,7 +178,7 @@ class TestTsImportRequireClass:
     def test_require_stores_variable(self, ts_class_project: Path):
         """The require() call should store 'greeter' in scope."""
         linked = compile_directory(ts_class_project, Language.TYPESCRIPT)
-        vm, stats = _execute_linked(linked)
+        vm, _stats = _execute_linked(linked)
         lvars = _local_vars(vm)
         assert (
             VarName("greeter") in lvars
@@ -188,7 +188,7 @@ class TestTsImportRequireClass:
     def test_g_variable_in_scope(self, ts_class_project: Path):
         """The Greeter instance 'g' should exist in scope."""
         linked = compile_directory(ts_class_project, Language.TYPESCRIPT)
-        vm, stats = _execute_linked(linked)
+        vm, _stats = _execute_linked(linked)
         lvars = _local_vars(vm)
         assert (
             VarName("g") in lvars

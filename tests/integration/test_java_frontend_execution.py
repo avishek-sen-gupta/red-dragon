@@ -225,7 +225,7 @@ class M {
     static { for (int i = 0; i < 0x0a; i++) { count = count + 1; } }
 }
 """
-        vm, locals_ = _run_java(source, max_steps=500)
+        _vm, locals_ = _run_java(source, max_steps=500)
         assert locals_[VarName("count")] == 10
 
 

@@ -28,7 +28,7 @@ let answer = first;
 """
 
     def test_first_element(self):
-        vm, stats = execute_for_language("javascript", self.PROGRAM)
+        vm, _stats = execute_for_language("javascript", self.PROGRAM)
         answer = extract_answer(vm, "javascript")
         assert answer == 1, f"expected first=1, got {answer}"
 
@@ -52,7 +52,7 @@ let answer = a + b;
 """
 
     def test_correct_sum(self):
-        vm, stats = execute_for_language("javascript", self.PROGRAM)
+        vm, _stats = execute_for_language("javascript", self.PROGRAM)
         answer = extract_answer(vm, "javascript")
         assert answer == 30, f"expected 30, got {answer}"
 
@@ -72,7 +72,7 @@ let answer = head;
 """
 
     def test_ts_rest_pattern(self):
-        vm, stats = execute_for_language("typescript", self.PROGRAM)
+        vm, _stats = execute_for_language("typescript", self.PROGRAM)
         answer = extract_answer(vm, "typescript")
         assert answer == 5, f"expected head=5, got {answer}"
 
@@ -87,7 +87,7 @@ let answer = a;
 """
 
     def test_extracted_field(self):
-        vm, stats = execute_for_language("javascript", self.PROGRAM)
+        vm, _stats = execute_for_language("javascript", self.PROGRAM)
         answer = extract_answer(vm, "javascript")
         assert answer == 1, f"expected a=1, got {answer}"
 

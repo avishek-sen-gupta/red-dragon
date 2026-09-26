@@ -1496,7 +1496,7 @@ interface Shape {
     @covers(JavaFeature.INTERFACE)
     def test_interface_methods_seed_return_types(self):
         """Interface methods should seed return types into the type environment builder."""
-        ir, type_builder = _parse_java_with_types(self.INTERFACE_SOURCE)
+        _ir, type_builder = _parse_java_with_types(self.INTERFACE_SOURCE)
         func_return_types = type_builder.func_return_types
         area_entries = {k: v for k, v in func_return_types.items() if "area" in k}
         name_entries = {k: v for k, v in func_return_types.items() if "name" in k}

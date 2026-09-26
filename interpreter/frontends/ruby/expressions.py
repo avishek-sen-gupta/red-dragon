@@ -178,7 +178,7 @@ def lower_ruby_call(
     )
     if block_node:
         block_reg = lower_ruby_block(ctx, block_node)
-        arg_regs = arg_regs + [block_reg]
+        arg_regs = [*arg_regs, block_reg]
 
     # Class.new(...) -> NEW_OBJECT + CALL_METHOD __init__
     if receiver_node and method_node:

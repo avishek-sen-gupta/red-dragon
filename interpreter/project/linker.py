@@ -209,7 +209,7 @@ def _transform_module(
                     str(label.namespace(dep_prefix)),
                 )
             # Mark variables as importable (value is "VAR" since we skip the pattern)
-            for vname in dep.exports.variables.keys():
+            for vname in dep.exports.variables:
                 import_name_sources[SymbolName(str(vname))] = (dep_path, "VAR")
 
     i = 0

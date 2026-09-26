@@ -885,8 +885,10 @@ class TestPerformLoopLowering:
     ) -> list[InstructionBase]:
         data = CobolASG(
             data_fields=fields,
-            paragraphs=[CobolParagraph(name="MAIN", statements=list(stmts))]
-            + paragraphs,
+            paragraphs=[
+                CobolParagraph(name="MAIN", statements=list(stmts)),
+                *paragraphs,
+            ],
         ).to_dict()
         frontend = CobolFrontend(make_cobol_parser())
         return frontend.lower_from_ast_dict(data)
