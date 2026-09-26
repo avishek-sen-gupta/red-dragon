@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 import struct
+from datetime import UTC
 
 from cobol_numeric.intrinsics import (
     absolute,
@@ -862,7 +863,7 @@ def _builtin_current_date(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """
     from datetime import datetime, timezone
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     date_part = now.strftime("%Y%m%d")
     time_part = now.strftime("%H%M%S")
     hundredths = f"{now.microsecond // 10000:02d}"

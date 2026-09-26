@@ -16,11 +16,11 @@ import logging
 import sys
 from pathlib import Path
 
+from interpreter.cli_output import emit_err
 from interpreter.constants import Language
 from interpreter.project.compiler import compile_directory
 from interpreter.project.entry_point import EntryPoint
 from interpreter.run import initial_vm_state, run, run_linked
-from interpreter.cli_output import emit_err
 
 
 def _configure_logging(level: str) -> None:

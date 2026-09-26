@@ -33,8 +33,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from interpreter.run import run
 from interpreter.cli_output import emit
+from interpreter.run import run
 
 logger = logging.getLogger(__name__)
 

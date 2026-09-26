@@ -30,13 +30,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from interpreter.api import analyze_project, run_project
+from interpreter.cli_output import emit
 from interpreter.constants import Language
 from interpreter.project.compiler import compile_directory, compile_module
 from interpreter.project.imports import extract_imports
 from interpreter.project.resolver import get_resolver
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.vm import SymbolicValue
-from interpreter.cli_output import emit
 
 logger = logging.getLogger(__name__)
 

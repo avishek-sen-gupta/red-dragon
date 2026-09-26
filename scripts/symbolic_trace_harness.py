@@ -35,13 +35,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from interpreter.cli_output import emit, emit_err
 from interpreter.constants import Language
 from interpreter.project.compiler import compile_directory
 from interpreter.project.entry_point import EntryPoint
 from interpreter.run import run_linked_traced
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.vm_types import SymbolicValue
-from interpreter.cli_output import emit, emit_err
 
 
 def parse_args() -> argparse.Namespace:

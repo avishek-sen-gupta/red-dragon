@@ -13,6 +13,7 @@ Exercises all 6 new features:
 import logging
 
 from interpreter.api import lower_and_infer
+from interpreter.cli_output import emit
 from interpreter.ir import Opcode
 from interpreter.types.coercion.default_conversion_rules import (
     DefaultTypeConversionRules,
@@ -20,7 +21,6 @@ from interpreter.types.coercion.default_conversion_rules import (
 from interpreter.types.type_expr import UNBOUND
 from interpreter.types.type_inference import infer_types
 from interpreter.types.type_resolver import TypeResolver
-from interpreter.cli_output import emit
 
 logging.basicConfig(level=logging.WARNING)
 
