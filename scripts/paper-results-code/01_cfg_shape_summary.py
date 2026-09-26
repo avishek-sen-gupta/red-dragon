@@ -24,6 +24,7 @@ from interpreter.frontends import (
     get_deterministic_frontend,
 )
 from interpreter.ir import Opcode
+from interpreter.cli_output import emit
 
 LANGS = sorted(SUPPORTED_DETERMINISTIC_LANGUAGES)
 
@@ -72,22 +73,22 @@ def load_all_rosetta():
                 except Exception as e:
                     results[algo][lang] = {"error": str(e)[:80]}
         except Exception as e:
-            print(f"skip {modname}: {e}")
+            emit(f"skip {modname}: {e}")
     return results
 
 
 def main():
-    print("Loading Rosetta corpus...")
+    emit("Loading Rosetta corpus...")
     data = load_all_rosetta()
-    print(f"Loaded {len(data)} algorithms: {sorted(data.keys())}\n")
+    emit(f"Loaded {len(data)} algorithms: {sorted(data.keys())}\n")
 
     fmt = "{:<22} {:>4} {:>5} {:>5} {:>6} {:>6} {:>9} {:>10}"
-    print(
+    emit(
         fmt.format(
             "algorithm", "lang", "minB", "maxB", "minE", "maxE", "variants", "unres_sym"
         )
     )
-    print("-" * 85)
+    emit("-" * 85)
 
     for algo in sorted(data):
         good = {l: v for l, v in data[algo].items() if "error" not in v}
@@ -97,7 +98,7 @@ def main():
         edges = [v["edges"] for v in good.values()]
         other = [v["other_syms"] for v in good.values()]
         variants = len(set(zip(blocks, edges)))
-        print(
+        emit(
             fmt.format(
                 algo,
                 len(good),
@@ -110,13 +111,13 @@ def main():
             )
         )
 
-    print()
-    print("Column notes:")
-    print("  lang      = number of languages with programs")
-    print("  minB/maxB = min/max basic block count across languages")
-    print("  minE/maxE = min/max CFG edge count")
-    print("  variants  = number of distinct (blocks, edges) structural classes")
-    print(
+    emit()
+    emit("Column notes:")
+    emit("  lang      = number of languages with programs")
+    emit("  minB/maxB = min/max basic block count across languages")
+    emit("  minE/maxE = min/max CFG edge count")
+    emit("  variants  = number of distinct (blocks, edges) structural classes")
+    emit(
         "  unres_sym = max unresolved SYMBOLIC instructions (param/caught_exception excluded)"
     )
 

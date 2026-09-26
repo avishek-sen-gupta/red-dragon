@@ -6,6 +6,7 @@ from interpreter.run import run
 from interpreter.run_types import UnresolvedCallStrategy
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.vm_types import SymbolicValue
+from interpreter.cli_output import emit
 
 SOURCE = """\
 import math
@@ -29,17 +30,17 @@ def _format_val(v):
 def _show_vars(vm):
     frame = vm.call_stack[0]
     for name, val in sorted(frame.local_vars.items()):
-        print(f"    {name} = {_format_val(val)}")
+        emit(f"    {name} = {_format_val(val)}")
 
 
 def main():
-    print("=" * 60)
-    print("SOURCE:")
-    print(SOURCE)
+    emit("=" * 60)
+    emit("SOURCE:")
+    emit(SOURCE)
 
-    print("=" * 60)
-    print("MODE 1: symbolic (default)")
-    print("=" * 60)
+    emit("=" * 60)
+    emit("MODE 1: symbolic (default)")
+    emit("=" * 60)
     vm_sym = run(
         SOURCE,
         language=Language.PYTHON,
@@ -47,13 +48,13 @@ def main():
         unresolved_call_strategy=UnresolvedCallStrategy.SYMBOLIC,
         entry_point=EntryPoint.top_level(),
     )
-    print("\nFinal variables:")
+    emit("\nFinal variables:")
     _show_vars(vm_sym)
 
-    print()
-    print("=" * 60)
-    print("MODE 2: llm (plausible values)")
-    print("=" * 60)
+    emit()
+    emit("=" * 60)
+    emit("MODE 2: llm (plausible values)")
+    emit("=" * 60)
     vm_llm = run(
         SOURCE,
         language=Language.PYTHON,
@@ -61,7 +62,7 @@ def main():
         unresolved_call_strategy=UnresolvedCallStrategy.LLM,
         entry_point=EntryPoint.top_level(),
     )
-    print("\nFinal variables:")
+    emit("\nFinal variables:")
     _show_vars(vm_llm)
 
 

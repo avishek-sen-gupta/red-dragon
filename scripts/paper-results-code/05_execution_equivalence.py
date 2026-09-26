@@ -31,6 +31,7 @@ from interpreter.frontends import (
 )
 from interpreter.registry import build_registry
 from interpreter.run import VMConfig, execute_cfg, initial_vm_state
+from interpreter.cli_output import emit, emit_err
 
 LANGS = sorted(SUPPORTED_DETERMINISTIC_LANGUAGES)
 LANG_SHORT = {
@@ -108,13 +109,13 @@ def main():
             except Exception as e:
                 all_results[algo][lang] = "ERR"
                 all_steps[algo][lang] = -1
-                print(f"  ERR {algo}/{lang}: {e}", file=sys.stderr)
+                emit_err(f"  ERR {algo}/{lang}: {e}")
 
     # Print results table
     short_langs = [LANG_SHORT[l] for l in LANGS]
     hdr = f"{'algorithm':<16} {'exp':>6}  " + "  ".join(f"{s:>4}" for s in short_langs)
-    print(hdr)
-    print("-" * len(hdr))
+    emit(hdr)
+    emit("-" * len(hdr))
 
     all_pass = True
     for algo in sorted(all_results):
@@ -130,25 +131,25 @@ def main():
                 algo_pass = False
         all_pass = all_pass and algo_pass
         marker = "✓" if algo_pass else "✗"
-        print(
+        emit(
             f"{marker} {algo:<15} {expected!s:>6}  "
             + "  ".join(f"{c:>4}" for c in cells)
         )
 
-    print()
-    print(f"Result: {'ALL 75 PAIRS PASS' if all_pass else 'FAILURES — see above'}")
+    emit()
+    emit(f"Result: {'ALL 75 PAIRS PASS' if all_pass else 'FAILURES — see above'}")
 
     if args.steps:
-        print()
-        print("=== VM Step Counts ===")
-        print(f"{'algorithm':<16}  " + "  ".join(f"{s:>5}" for s in short_langs))
-        print("-" * 120)
+        emit()
+        emit("=== VM Step Counts ===")
+        emit(f"{'algorithm':<16}  " + "  ".join(f"{s:>5}" for s in short_langs))
+        emit("-" * 120)
         for algo in sorted(all_steps):
             steps = [str(all_steps[algo].get(lang, "?")) for lang in LANGS]
-            print(f"  {algo:<14}  " + "  ".join(f"{s:>5}" for s in steps))
+            emit(f"  {algo:<14}  " + "  ".join(f"{s:>5}" for s in steps))
 
-        print()
-        print("=== Step Count Deltas (relative to minimum) ===")
+        emit()
+        emit("=== Step Count Deltas (relative to minimum) ===")
         for algo in sorted(all_steps):
             row = all_steps[algo]
             valid = {l: v for l, v in row.items() if v > 0}
@@ -158,9 +159,9 @@ def main():
             groups = {}
             for lang, steps in valid.items():
                 groups.setdefault(steps - base, []).append(LANG_SHORT[lang])
-            print(f"\n{algo} (base={base} steps):")
+            emit(f"\n{algo} (base={base} steps):")
             for delta in sorted(groups):
-                print(f"  +{delta}: {sorted(groups[delta])}")
+                emit(f"  +{delta}: {sorted(groups[delta])}")
 
 
 if __name__ == "__main__":

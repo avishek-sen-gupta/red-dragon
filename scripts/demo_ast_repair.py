@@ -33,6 +33,7 @@ from interpreter.frontend import get_frontend
 from interpreter.ir import Opcode
 from interpreter.llm.llm_client import get_llm_client
 from interpreter.parser import TreeSitterParserFactory
+from interpreter.cli_output import emit
 
 BROKEN_SAMPLES: dict[Language, bytes] = {
     Language.PYTHON: b"""\
@@ -63,26 +64,26 @@ logger = logging.getLogger(__name__)
 
 def _print_header(title: str):
     width = 68
-    print(f"\n{'=' * width}")
-    print(f"  {title}")
-    print(f"{'=' * width}\n")
+    emit(f"\n{'=' * width}")
+    emit(f"  {title}")
+    emit(f"{'=' * width}\n")
 
 
 def _show_source(source: bytes):
     for i, line in enumerate(source.decode("utf-8", errors="replace").splitlines(), 1):
-        print(f"  {i:3d} | {line}")
+        emit(f"  {i:3d} | {line}")
 
 
 def _show_errors(language: Language, source: bytes):
     parser = TreeSitterParserFactory().get_parser(language)
     tree = parser.parse(source)
     spans = extract(tree.root_node, source, context_lines=2)
-    print(f"  tree-sitter has_error: {tree.root_node.has_error}")
-    print(f"  Error spans found: {len(spans)}")
+    emit(f"  tree-sitter has_error: {tree.root_node.has_error}")
+    emit(f"  Error spans found: {len(spans)}")
     for i, span in enumerate(spans, 1):
-        print(f"\n  Span {i} (lines {span.start_line + 1}-{span.end_line + 1}):")
+        emit(f"\n  Span {i} (lines {span.start_line + 1}-{span.end_line + 1}):")
         for line in span.error_text.splitlines():
-            print(f"    > {line}")
+            emit(f"    > {line}")
 
 
 def _count_symbolics(instructions):
@@ -148,9 +149,9 @@ def main():
     plain_ir = plain_frontend.lower(source)
     t_plain = time.perf_counter() - t0
     plain_symbolics = _count_symbolics(plain_ir)
-    print(f"  IR instructions: {len(plain_ir)}")
-    print(f"  SYMBOLIC (unsupported:*): {plain_symbolics}")
-    print(f"  Time: {t_plain:.3f}s")
+    emit(f"  IR instructions: {len(plain_ir)}")
+    emit(f"  SYMBOLIC (unsupported:*): {plain_symbolics}")
+    emit(f"  Time: {t_plain:.3f}s")
 
     # ── Phase 2: With LLM repair ──
     _print_header(
@@ -166,45 +167,45 @@ def main():
         config=config,
     )
 
-    print(f"  Repairing with max {args.max_retries} attempts...")
+    emit(f"  Repairing with max {args.max_retries} attempts...")
     t0 = time.perf_counter()
     repaired_ir = repair_frontend.lower(source)
     t_repair = time.perf_counter() - t0
     repaired_symbolics = _count_symbolics(repaired_ir)
-    print(f"  IR instructions: {len(repaired_ir)}")
-    print(f"  SYMBOLIC (unsupported:*): {repaired_symbolics}")
-    print(f"  Time: {t_repair:.3f}s")
+    emit(f"  IR instructions: {len(repaired_ir)}")
+    emit(f"  SYMBOLIC (unsupported:*): {repaired_symbolics}")
+    emit(f"  Time: {t_repair:.3f}s")
 
     # ── Show repaired source ──
     repaired_source = repair_frontend.last_lowered_source
     _print_header("Repaired Source")
     if repaired_source == source:
-        print("  (Repair failed — original source was used as fallback)")
+        emit("  (Repair failed — original source was used as fallback)")
     else:
-        print("  (LLM-repaired source that was lowered deterministically)")
-    print()
+        emit("  (LLM-repaired source that was lowered deterministically)")
+    emit()
     _show_source(repaired_source)
 
     # ── Show repaired IR ──
     _print_header("Repaired IR")
     for inst in repaired_ir:
-        print(f"  {inst}")
+        emit(f"  {inst}")
 
     # ── Summary ──
     _print_header("Summary")
-    print(f"  Without repair: {plain_symbolics} unsupported SYMBOLIC instruction(s)")
-    print(f"  With repair:    {repaired_symbolics} unsupported SYMBOLIC instruction(s)")
+    emit(f"  Without repair: {plain_symbolics} unsupported SYMBOLIC instruction(s)")
+    emit(f"  With repair:    {repaired_symbolics} unsupported SYMBOLIC instruction(s)")
     improvement = plain_symbolics - repaired_symbolics
     if improvement > 0:
-        print(f"  Improvement:    {improvement} fewer SYMBOLIC instruction(s)")
+        emit(f"  Improvement:    {improvement} fewer SYMBOLIC instruction(s)")
     elif improvement == 0:
-        print("  Improvement:    No change (repair may not have been needed or failed)")
+        emit("  Improvement:    No change (repair may not have been needed or failed)")
     else:
-        print(
+        emit(
             f"  Note:           Repair introduced {-improvement} additional SYMBOLIC instruction(s)"
         )
-    print(f"\n  Plain frontend time:  {t_plain:.3f}s")
-    print(f"  Repair frontend time: {t_repair:.3f}s")
+    emit(f"\n  Plain frontend time:  {t_plain:.3f}s")
+    emit(f"  Repair frontend time: {t_repair:.3f}s")
 
 
 if __name__ == "__main__":

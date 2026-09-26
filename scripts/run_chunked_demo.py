@@ -30,6 +30,7 @@ from interpreter.constants import Language
 from interpreter.frontend import get_frontend
 from interpreter.llm.chunked_llm_frontend import ChunkExtractor
 from interpreter.parser import Parser, TreeSitterParserFactory
+from interpreter.cli_output import emit
 
 SAMPLE_SOURCE = """\
 class Account:
@@ -95,9 +96,9 @@ LANGUAGE = Language.PYTHON
 
 def _print_header(title: str):
     width = 60
-    print(f"\n{'=' * width}")
-    print(f"  {title}")
-    print(f"{'=' * width}\n")
+    emit(f"\n{'=' * width}")
+    emit(f"  {title}")
+    emit(f"{'=' * width}\n")
 
 
 def _print_chunks(source: str):
@@ -107,18 +108,18 @@ def _print_chunks(source: str):
     extractor = ChunkExtractor()
     chunks = extractor.extract_chunks(tree, source.encode(), LANGUAGE)
 
-    print(f"Extracted {len(chunks)} chunks:\n")
+    emit(f"Extracted {len(chunks)} chunks:\n")
     for i, chunk in enumerate(chunks):
         lines = chunk.source_text.count("\n") + 1
         preview = chunk.source_text[:80].replace("\n", " \\ ")
         if len(chunk.source_text) > 80:
             preview += "..."
-        print(
+        emit(
             f"  [{i}] {chunk.chunk_type:<12} {chunk.name:<20} "
             f"{lines:>3} lines  (start line {chunk.start_line})"
         )
-        print(f"      {preview}")
-    print()
+        emit(f"      {preview}")
+    emit()
     return chunks
 
 
@@ -138,7 +139,7 @@ def _lower_and_print(backend: str, show_cfg: bool):
 
     _print_header("IR Output")
     for inst in instructions:
-        print(f"  {inst}")
+        emit(f"  {inst}")
 
     # Collect stats
     registers = {inst.result_reg for inst in instructions if inst.result_reg}
@@ -153,18 +154,18 @@ def _lower_and_print(backend: str, show_cfg: bool):
     ]
 
     _print_header("Summary")
-    print(f"  Total IR instructions : {len(instructions)}")
-    print(f"  Unique registers      : {len(registers)}")
-    print(f"  Labels                : {len(labels)}")
-    print(f"  SYMBOLIC params       : {len(symbolics) - len(errors)}")
-    print(f"  Chunk errors          : {len(errors)}")
-    print(f"  Lowering time         : {elapsed:.2f}s")
+    emit(f"  Total IR instructions : {len(instructions)}")
+    emit(f"  Unique registers      : {len(registers)}")
+    emit(f"  Labels                : {len(labels)}")
+    emit(f"  SYMBOLIC params       : {len(symbolics) - len(errors)}")
+    emit(f"  Chunk errors          : {len(errors)}")
+    emit(f"  Lowering time         : {elapsed:.2f}s")
 
     if show_cfg:
         _print_header("CFG")
         cfg = build_cfg(instructions)
-        print(cfg)
-        print(f"\n  Basic blocks: {len(cfg.blocks)}")
+        emit(cfg)
+        emit(f"\n  Basic blocks: {len(cfg.blocks)}")
 
 
 def main():
@@ -189,7 +190,7 @@ def main():
 
     _print_header("Source")
     for i, line in enumerate(SAMPLE_SOURCE.splitlines(), 1):
-        print(f"  {i:3d} | {line}")
+        emit(f"  {i:3d} | {line}")
 
     _print_header("Chunk Extraction (local, no LLM)")
     _print_chunks(SAMPLE_SOURCE)

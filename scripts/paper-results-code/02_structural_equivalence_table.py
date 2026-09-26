@@ -27,6 +27,7 @@ from interpreter.frontends import (
     SUPPORTED_DETERMINISTIC_LANGUAGES,
     get_deterministic_frontend,
 )
+from interpreter.cli_output import emit, emit_err
 
 LANGS = sorted(SUPPORTED_DETERMINISTIC_LANGUAGES)
 
@@ -69,7 +70,7 @@ def load_shapes():
                 edges = sum(len(b.successors) for b in cfg.blocks.values())
                 shapes[algo][lang] = (len(cfg.blocks), edges)
         except Exception as e:
-            print(f"skip {modname}: {e}", file=sys.stderr)
+            emit_err(f"skip {modname}: {e}")
     return shapes
 
 
@@ -78,7 +79,7 @@ def main():
     parser.add_argument("--csv", action="store_true", help="Output as CSV")
     args = parser.parse_args()
 
-    print("Loading shapes...", file=sys.stderr)
+    emit_err("Loading shapes...")
     all_shapes = load_shapes()
 
     sep = "," if args.csv else " | "
@@ -86,14 +87,14 @@ def main():
     # Header
     header = ["algorithm"] + [LANG_SHORT[l] for l in LANGS] + ["classes", "dom%"]
     if args.csv:
-        print(",".join(header))
+        emit(",".join(header))
     else:
-        print(
+        emit(
             f"{'algorithm':<22}"
             + " ".join(f"{LANG_SHORT[l]:>7}" for l in LANGS)
             + "  classes  dom%"
         )
-        print("-" * 120)
+        emit("-" * 120)
 
     for algo in sorted(all_shapes):
         d = all_shapes[algo]
@@ -116,19 +117,19 @@ def main():
         dom_pct = int(100 * len(groups[shape_list[0]]) / len(d))
 
         if args.csv:
-            print(",".join([algo, *cells, str(n_classes), str(dom_pct)]))
+            emit(",".join([algo, *cells, str(n_classes), str(dom_pct)]))
         else:
-            print(
+            emit(
                 f"{algo:<22}"
                 + " ".join(f"{c:>7}" for c in cells)
                 + f"  {n_classes:>7}  {dom_pct:>3}%"
             )
 
-    print()
-    print(
+    emit()
+    emit(
         "Shape label key: A = dominant class (most languages), B/C/... = minority variants"
     )
-    print(
+    emit(
         "Format: label(blocks/edges). '--' = language not in corpus for this algorithm."
     )
 
