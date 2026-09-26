@@ -79,10 +79,8 @@ from interpreter.instructions import (
     Branch,
     BranchIf,
     CallFunction,
-    Const,
     Halt_,
     Label_,
-    Return_,
 )
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import BinopKind, resolve_binop
