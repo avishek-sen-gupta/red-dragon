@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import logging
 
-from interpreter.cobol.cobol_constants import BuiltinName
 from cobol_asg.cobol_expression import expr_from_dict
 from cobol_asg.cobol_statements import (
     ArithmeticCorrespondingStatement,
@@ -31,7 +30,18 @@ from cobol_asg.cobol_statements import (
     WhenStatement,
 )
 from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
+from cobol_asg.ref_mod import (
+    FunctionCallOperand,
+    RefModBinOp,
+    RefModExpr,
+    RefModFunction,
+    RefModLengthOf,
+    RefModLiteral,
+    RefModOperand,
+    RefModReference,
+)
 from cobol_asg.source_span import SourceSpan
+from cobol_memory.region_id import RegionId
 from cobol_numeric.number import from_literal
 from cobol_numeric.scale import (
     Scale,
@@ -43,6 +53,7 @@ from cobol_numeric.scale import (
 )
 from interpreter.cobol.arithmetic_scale import field_scale, is_floating_type
 from interpreter.cobol.arithmetic_scale import receiver_decimals as _receiver_decimals
+from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.condition_lowering import (
     _float_operand,
     _lower_condition_str,
@@ -56,17 +67,11 @@ from interpreter.cobol.figurative_constants import (
     raw_figurative_byte,
     translate_cobol_figurative,
 )
-from cobol_asg.ref_mod import (
-    FunctionCallOperand,
-    RefModBinOp,
-    RefModExpr,
-    RefModFunction,
-    RefModLengthOf,
-    RefModLiteral,
-    RefModOperand,
-    RefModReference,
+from interpreter.cobol.lower_program_exit import (
+    emit_publish_run_unit_return_code,
+    emit_return_code_load,
+    lower_program_exit,
 )
-from cobol_memory.region_id import RegionId
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
@@ -78,11 +83,6 @@ from interpreter.instructions import (
     Halt_,
     Label_,
     Return_,
-)
-from interpreter.cobol.lower_program_exit import (
-    emit_publish_run_unit_return_code,
-    emit_return_code_load,
-    lower_program_exit,
 )
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import BinopKind, resolve_binop

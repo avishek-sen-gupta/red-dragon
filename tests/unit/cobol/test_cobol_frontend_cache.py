@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 
-from interpreter.cobol.cobol_frontend import CobolFrontend
 from cobol_asg.cobol_parser import make_cobol_parser
+from interpreter.cobol.cobol_frontend import CobolFrontend
 from interpreter.instructions import InstructionBase
 from tests.covers import NotLanguageFeature, covers
 

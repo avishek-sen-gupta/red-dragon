@@ -8,12 +8,12 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from interpreter import constants
 from cobol_asg.cobol_parser import (
     make_cobol_parser as make_cobol_parser,
-)  # noqa: F401 — re-exported for callers outside interpreter.cobol
-from interpreter.constants import Language, LLMProvider
+)
 from cobol_asg.frontend_extension import DialectParser
+from interpreter import constants
+from interpreter.constants import Language, LLMProvider
 from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.instructions import InstructionBase
@@ -111,9 +111,9 @@ def get_frontend(
     if frontend_type == constants.FRONTEND_COBOL:
         import os
 
-        from interpreter.cobol.cobol_frontend import CobolFrontend
         from cobol_asg.cobol_parser import ProLeapCobolParser
         from cobol_asg.subprocess_runner import RealSubprocessRunner
+        from interpreter.cobol.cobol_frontend import CobolFrontend
 
         # Canonical JAR location is the build.sh output — always freshly built
         # from source and gitignored, so it can never go stale. The old tracked

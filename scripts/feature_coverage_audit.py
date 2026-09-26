@@ -217,8 +217,8 @@ def generate_gaps_doc(results: Sequence[LanguageCoverageResult]) -> str:
         "Uncovered members = features the frontend handles but no test annotates."
     )
     lines.append(
-        f"**Regenerate**: `uv run python scripts/feature_coverage_audit.py "
-        f"--gaps-doc docs/frontend-lowering-gaps.md`"
+        "**Regenerate**: `uv run python scripts/feature_coverage_audit.py "
+        "--gaps-doc docs/frontend-lowering-gaps.md`"
     )
     lines.append("")
     lines.append(

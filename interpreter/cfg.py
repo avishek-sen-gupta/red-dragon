@@ -6,7 +6,7 @@ from interpreter import constants
 from interpreter.cfg_types import (
     CFG,
     BasicBlock,
-)  # noqa: F401 — re-exported for backwards compatibility
+)
 from interpreter.instructions import (
     Branch,
     BranchIf,

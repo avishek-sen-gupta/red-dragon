@@ -74,12 +74,12 @@ class TestDeclarativesLoweringOrder:
         # A real EmitContext and layout rather than a stub: the implicit program
         # exit reads RETURN-CODE out of the special-register region, so lowering
         # a procedure division now needs a materialised layout to exist.
+        from interpreter.cobol.emit_context import EmitContext
         from interpreter.cobol.lower_data_division import (
             lower_sectioned_data_division,
         )
         from interpreter.cobol.sectioned_layout import build_sectioned_layout
         from interpreter.cobol.statement_dispatch import dispatch_statement
-        from interpreter.cobol.emit_context import EmitContext
 
         ctx = EmitContext(dispatch_fn=dispatch_statement)
         materialised = lower_sectioned_data_division(

@@ -44,7 +44,7 @@ class TestNoPathName:
         assert str(NO_PATH_NAME) == ""
 
     def test_not_equal_to_pathname(self):
-        assert NO_PATH_NAME != PathName("x")
+        assert PathName("x") != NO_PATH_NAME
 
     def test_is_instance(self):
         assert isinstance(NO_PATH_NAME, PathName)

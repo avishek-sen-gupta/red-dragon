@@ -69,7 +69,7 @@ def _build_resolved_imports_map(
     resolved_imports_map: dict[Path, dict[str, PathName]] = {}
     # Build a normalized lookup table: resolved paths → module paths
     # (handles symlinks and /private/ prefix on macOS)
-    normalized_modules: dict[Path, Path] = {p.resolve(): p for p in modules.keys()}
+    normalized_modules: dict[Path, Path] = {p.resolve(): p for p in modules}
 
     for module_path, module in modules.items():
         resolved_imports_map[module_path] = {}

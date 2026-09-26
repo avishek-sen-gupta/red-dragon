@@ -23,12 +23,12 @@ Kept in its own module so ``lower_procedure`` can reach it without importing
 from __future__ import annotations
 
 from cobol_asg.source_span import SourceSpan
+from cobol_memory.region_id import RegionId
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.field_resolution import whole_field_extent
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.cobol.special_registers import RETURN_CODE_NAME
-from cobol_memory.region_id import RegionId
 from interpreter.func_name import FuncName
 from interpreter.instructions import CallFunction, Return_
 from interpreter.register import Register
