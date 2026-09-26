@@ -302,7 +302,7 @@ class TestClosuresCrossLanguage:
 
     def test_tier_constants_cover_all_programs(self):
         """CLOSURE_LANGUAGES | FALLBACK_LANGUAGES must equal the full program set."""
-        assert set(PROGRAMS.keys()) == CLOSURE_LANGUAGES | FALLBACK_LANGUAGES
+        assert CLOSURE_LANGUAGES | FALLBACK_LANGUAGES == set(PROGRAMS.keys())
 
     def test_cross_language_consistency(self, all_results):
         assert_cross_language_consistency(

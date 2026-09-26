@@ -86,7 +86,7 @@ def main():
 
         print(f"=== [{lang}] Class {label} ({len(cfg.blocks)}B/{edges}E) ===")
         print(f"  Blocks: {list(cfg.blocks.keys())}")
-        print("  Successors:")
+        print(f"  Successors:")
         for blk_label, block in cfg.blocks.items():
             if block.successors:
                 print(f"    {blk_label} -> {[str(s) for s in block.successors]}")

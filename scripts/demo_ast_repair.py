@@ -198,7 +198,9 @@ def main():
     if improvement > 0:
         print(f"  Improvement:    {improvement} fewer SYMBOLIC instruction(s)")
     elif improvement == 0:
-        print("  Improvement:    No change (repair may not have been needed or failed)")
+        print(
+            f"  Improvement:    No change (repair may not have been needed or failed)"
+        )
     else:
         print(
             f"  Note:           Repair introduced {-improvement} additional SYMBOLIC instruction(s)"

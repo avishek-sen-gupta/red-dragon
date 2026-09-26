@@ -291,7 +291,7 @@ def lower_cpp_user_defined_literal(
         if ch == "_" or (
             ch.isalpha()
             and raw[:i]
-            and raw[i - 1 : i] not in ("x", "X", "b", "B", "o", "O", "p", "P", "e", "E")
+            and not raw[i - 1 : i] in ("x", "X", "b", "B", "o", "O", "p", "P", "e", "E")
         ):
             numeric_end = i
             break

@@ -19,12 +19,12 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
-from cobol_asg.ast_store import AstStore, _digest
-from cobol_asg.frontend_extension import DialectParser
 from interpreter import constants
 from interpreter.cfg import build_cfg
+from cobol_asg.ast_store import AstStore, _digest
 from interpreter.constants import Language
 from interpreter.frontend import get_frontend
+from cobol_asg.frontend_extension import DialectParser
 from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.ir import CodeLabel
@@ -184,7 +184,7 @@ def compile_cobol(
                     path=sub_path,
                     ast_path=_ast_path(sub_path),
                 )
-            except Exception:
+            except Exception:  # noqa: BLE001
                 logger.warning(
                     "compile_cobol ast-cache: subprogram %s failed — skipping",
                     prog_name,
@@ -208,7 +208,7 @@ def compile_cobol(
                     path=disk_path,
                     ast_path=_ast_path(disk_path),
                 )
-            except Exception:
+            except Exception:  # noqa: BLE001
                 logger.warning(
                     "compile_cobol ast-cache: disk callee %s failed — skipping",
                     disk_path.stem,

@@ -9,8 +9,8 @@ this asserts the layout plumbing and is tagged INFRASTRUCTURE, NOT
 from __future__ import annotations
 
 from cobol_asg.cobol_parser import ProLeapCobolParser
-from cobol_asg.subprocess_runner import RealSubprocessRunner
 from interpreter.cobol.sectioned_layout import build_sectioned_layout
+from cobol_asg.subprocess_runner import RealSubprocessRunner
 from tests.covers import NotLanguageFeature, covers
 from tests.integration.cobol_helpers import (
     bridge_jar,  # noqa: F401

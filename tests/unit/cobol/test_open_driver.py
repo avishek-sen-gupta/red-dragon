@@ -1,12 +1,12 @@
 from pathlib import Path
 
-from cobol_asg.file_enums import FileOrganization, OpenMode
 from interpreter.cobol.file_drivers import (
     IndexedDriver,
     RelativeDriver,
     SequentialDriver,
     open_driver,
 )
+from cobol_asg.file_enums import FileOrganization, OpenMode
 from tests.covers import NotLanguageFeature, covers
 
 

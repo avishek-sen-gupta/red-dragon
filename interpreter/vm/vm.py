@@ -374,7 +374,7 @@ def _resolve_reg(vm: VMState, operand: str | Register) -> TypedValue:
     return typed_from_runtime(operand)
 
 
-from interpreter.types.typed_value import runtime_type_name
+from interpreter.types.typed_value import runtime_type_name  # noqa: F401 — re-exported
 
 
 def _resolve_typed_reg(
