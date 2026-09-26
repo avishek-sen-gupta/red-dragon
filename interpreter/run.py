@@ -716,7 +716,7 @@ def resume(
 
 def execute_cfg_traced(
     cfg: CFG,
-    entry_point: str,
+    entry_point: CodeLabel,
     registry: FunctionRegistry,
     config: VMConfig = VMConfig(),
     strategies: ExecutionStrategies = ExecutionStrategies(),

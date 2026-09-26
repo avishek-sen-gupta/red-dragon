@@ -31,6 +31,7 @@ from interpreter.instructions import (
     LoadVar,
     StoreVar,
 )
+from interpreter.ir import CodeLabel
 from interpreter.operator_kind import resolve_binop
 from interpreter.path_name import NO_PATH_NAME
 from interpreter.var_name import VarName
@@ -84,7 +85,7 @@ def _lower_python_elif_chain(
     ctx: TreeSitterEmitContext,
     elif_clauses: list,
     else_clause,
-    end_label: str,
+    end_label: CodeLabel,
 ) -> None:
     """Lower a chain of elif_clause nodes followed by optional else_clause."""
     remaining_elifs = elif_clauses[1:] if len(elif_clauses) > 1 else []

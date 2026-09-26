@@ -101,7 +101,7 @@ def _extract_pattern_name(ctx: TreeSitterEmitContext, pattern_node) -> str:
 
 
 def _lower_scala_tuple_destructure(
-    ctx: TreeSitterEmitContext, pattern_node, val_reg: str, parent_node
+    ctx: TreeSitterEmitContext, pattern_node, val_reg: Register, parent_node
 ) -> None:
     """Lower `val (a, b) = expr` — emit LOAD_INDEX + STORE_VAR per element."""
     named_children = [

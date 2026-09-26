@@ -290,7 +290,7 @@ def lower_pascal_case(
 
 
 def _lower_pascal_case_branch(
-    ctx: TreeSitterEmitContext, case_node, selector_reg: str, end_label: str
+    ctx: TreeSitterEmitContext, case_node, selector_reg: Register, end_label: CodeLabel
 ) -> None:
     """Lower a single caseCase -- extract caseLabel values, BINOP == + BRANCH_IF."""
     labels = [c for c in case_node.children if c.type == PascalNodeType.CASE_LABEL]

@@ -503,7 +503,7 @@ def emit_byref_load(
 
 
 def emit_byref_store(
-    ctx: TreeSitterEmitContext, name: str, val_reg: str, *, node: Any = NO_NODE
+    ctx: TreeSitterEmitContext, name: str, val_reg: Register, *, node: Any = NO_NODE
 ) -> None:
     """Store to a variable, writing through pointer if it's a byref param."""
     if name in ctx.byref_params:

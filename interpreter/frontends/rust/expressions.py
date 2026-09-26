@@ -950,7 +950,7 @@ def lower_index_expr(
 
 
 def _lower_range_slice(
-    ctx: TreeSitterEmitContext, range_node, collection_reg: str
+    ctx: TreeSitterEmitContext, range_node, collection_reg: Register
 ) -> Register:
     """Lower arr[start..end] as CALL_FUNCTION('slice', collection, start, end).
 

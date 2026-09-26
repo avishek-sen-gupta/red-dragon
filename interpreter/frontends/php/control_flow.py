@@ -116,7 +116,7 @@ def lower_php_if(
 
 
 def _lower_php_else_clause(
-    ctx: TreeSitterEmitContext, node: Any, end_label: str
+    ctx: TreeSitterEmitContext, node: Any, end_label: CodeLabel
 ) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower else_if_clause or else_clause."""
     if node.type == PHPNodeType.ELSE_IF_CLAUSE:
