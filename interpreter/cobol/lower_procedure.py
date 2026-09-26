@@ -6,10 +6,10 @@ from __future__ import annotations
 import logging
 
 from cobol_asg.asg_types import CobolASG, CobolParagraph, CobolSection
+from cobol_asg.source_span import SourceSpan
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.lower_program_exit import lower_program_exit
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
-from cobol_asg.source_span import SourceSpan
 from interpreter.continuation_name import ContinuationName
 from interpreter.instructions import Label_, ResumeContinuation
 from interpreter.ir import CodeLabel

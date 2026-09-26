@@ -57,9 +57,11 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
-from interpreter.cfg import CFG, BasicBlock
 from cobol_memory.field_extent import FieldExtent
+from cobol_memory.storage_identifier import StorageIdentifier
+from interpreter.cfg import CFG, BasicBlock
 from interpreter.cobol.memory_effects import EffectKind, MemoryEffect
+from interpreter.continuation_name import ContinuationName
 from interpreter.dataflow import (
     BlockDataflowFacts,
     Definition,
@@ -69,7 +71,6 @@ from interpreter.dataflow import (
     solve_reaching_definitions,
     solve_reaching_definitions_checked,
 )
-from interpreter.continuation_name import ContinuationName
 from interpreter.instructions import (
     InstructionBase,
     InstructionId,
@@ -80,7 +81,6 @@ from interpreter.instructions import (
 )
 from interpreter.ir import CodeLabel, Opcode, SourceLocation
 from interpreter.register import NO_REGISTER, Register
-from cobol_memory.storage_identifier import StorageIdentifier
 
 logger = logging.getLogger(__name__)
 

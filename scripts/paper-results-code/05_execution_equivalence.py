@@ -106,7 +106,7 @@ def main():
                 all_results[algo][lang] = val
                 all_steps[algo][lang] = steps
             except Exception as e:
-                all_results[algo][lang] = f"ERR"
+                all_results[algo][lang] = "ERR"
                 all_steps[algo][lang] = -1
                 print(f"  ERR {algo}/{lang}: {e}", file=sys.stderr)
 
@@ -131,7 +131,7 @@ def main():
         all_pass = all_pass and algo_pass
         marker = "✓" if algo_pass else "✗"
         print(
-            f"{marker} {algo:<15} {str(expected):>6}  "
+            f"{marker} {algo:<15} {expected!s:>6}  "
             + "  ".join(f"{c:>4}" for c in cells)
         )
 
