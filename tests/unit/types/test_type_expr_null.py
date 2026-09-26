@@ -11,4 +11,4 @@ def test_null_foundation_name_exists():
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_null_scalar_is_canonical():
-    assert NULL == scalar(FoundationTypeName.NULL)
+    assert scalar(FoundationTypeName.NULL) == NULL

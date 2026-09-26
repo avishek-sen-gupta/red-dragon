@@ -278,8 +278,8 @@ def test_lower_display_threads_operand_subscripts():
     """DISPLAY of a subscripted operand threads operand.subscripts to the
     resolver (multi-dim subscripts raise, proving threading)."""
     from cobol_asg.cobol_statements import DisplayStatement
-    from interpreter.cobol.lower_arithmetic import lower_display
     from cobol_asg.ref_mod import RefModOperand
+    from interpreter.cobol.lower_arithmetic import lower_display
 
     ctx, materialised = _occurs_ctx()
     stmt = DisplayStatement(
@@ -297,8 +297,8 @@ def test_lower_display_threads_operand_subscripts():
 def test_lower_display_threads_single_subscript_happy_path():
     """DISPLAY of an operand with a SINGLE valid subscript lowers cleanly to IR."""
     from cobol_asg.cobol_statements import DisplayStatement
-    from interpreter.cobol.lower_arithmetic import lower_display
     from cobol_asg.ref_mod import RefModOperand
+    from interpreter.cobol.lower_arithmetic import lower_display
 
     ctx, materialised = _occurs_ctx()
     stmt = DisplayStatement(

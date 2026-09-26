@@ -247,7 +247,7 @@ class TestTypeExprStringCompatibility:
         assert ScalarType(TypeName("Int")) == "Int"
 
     def test_scalar_equals_string_reverse(self):
-        assert "Int" == ScalarType(TypeName("Int"))
+        assert ScalarType(TypeName("Int")) == "Int"
 
     def test_scalar_not_equals_different_string(self):
         assert ScalarType(TypeName("Int")) != "Float"
@@ -258,7 +258,7 @@ class TestTypeExprStringCompatibility:
 
     def test_parameterized_equals_string_reverse(self):
         t = ParameterizedType("Pointer", (ScalarType(TypeName("Int")),))
-        assert "Pointer[Int]" == t
+        assert t == "Pointer[Int]"
 
     def test_nested_parameterized_equals_string(self):
         t = ParameterizedType(
@@ -327,22 +327,22 @@ class TestUnknownType:
         assert UNKNOWN == ""
 
     def test_empty_string_equals_unknown(self):
-        assert "" == UNKNOWN
+        assert UNKNOWN == ""
 
     def test_not_equals_nonempty_string(self):
         assert UNKNOWN != "Int"
 
     def test_equals_another_unknown(self):
-        assert UNKNOWN == UnknownType()
+        assert UnknownType() == UNKNOWN
 
     def test_not_equals_scalar(self):
-        assert UNKNOWN != ScalarType(TypeName("Int"))
+        assert ScalarType(TypeName("Int")) != UNKNOWN
 
     def test_not_equals_empty_scalar(self):
         """UnknownType is distinct from ScalarType('') — they represent different concepts."""
         # UnknownType means "type not known"; ScalarType(TypeName("")) would be a type named ""
         # After migration, ScalarType(TypeName("")) should not appear — parse_type("") returns UNKNOWN
-        assert UNKNOWN != ScalarType(TypeName(""))
+        assert ScalarType(TypeName("")) != UNKNOWN
 
     def test_hash_matches_empty_string(self):
         assert hash(UNKNOWN) == hash("")
@@ -604,7 +604,7 @@ class TestFunctionType:
         t = FunctionType(
             params=(scalar(TypeName("Int")),), return_type=scalar(TypeName("Bool"))
         )
-        assert "Fn(Int) -> Bool" == t
+        assert t == "Fn(Int) -> Bool"
 
     def test_hash_matches_string(self):
         t = FunctionType(

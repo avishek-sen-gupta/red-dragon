@@ -10,8 +10,8 @@ import re
 from pathlib import Path
 
 from cobol_memory.field_extent import FieldExtent, Precision
-from interpreter.cobol.memory_effects import CollectingRecorder, EffectKind
 from cobol_memory.region_id import RegionId
+from interpreter.cobol.memory_effects import CollectingRecorder, EffectKind
 from interpreter.instructions import LoadRegion, WriteRegion
 from interpreter.register import Register
 from tests.covers import NotLanguageFeature, covers

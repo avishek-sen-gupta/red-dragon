@@ -173,8 +173,8 @@ class TestArrayDispatch:
 
 
 from cobol_asg.asg_types import CobolASG
-from interpreter.cobol.cobol_frontend import CobolFrontend
 from cobol_asg.cobol_parser import CobolParser
+from interpreter.cobol.cobol_frontend import CobolFrontend
 
 
 class _PreprocessRecordingParser(CobolParser):

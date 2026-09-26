@@ -17,12 +17,12 @@ from typing import Union
 from cobol_asg.call_target import CallTarget
 from cobol_asg.cobol_expression import ExprNode, expr_from_dict, expr_to_dict
 from cobol_asg.file_enums import AccessMode, FileOrganization, OpenMode
+from cobol_asg.frontend_extension import DialectParser
 from cobol_asg.ref_mod import (
     FunctionCallOperand,
     RefModOperand,
     is_function_operand,
 )
-from cobol_asg.frontend_extension import DialectParser
 from cobol_asg.source_span import SourceSpan
 
 # ── Dialect parser injection ──────────────────────────────────────

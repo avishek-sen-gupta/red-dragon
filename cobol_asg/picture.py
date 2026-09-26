@@ -10,9 +10,9 @@ Spec references are to IBM Enterprise COBOL for z/OS 6.4 Language Reference
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping
 
 from lark import Lark, Token, Tree
 

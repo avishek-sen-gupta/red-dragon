@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import logging
 
+from cobol_memory.region_id import RegionId
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.field_resolution import whole_field_extent
-from cobol_memory.region_id import RegionId
 from interpreter.cobol.sectioned_layout import (
     MaterialisedSectionedLayout,
     SectionedLayout,
