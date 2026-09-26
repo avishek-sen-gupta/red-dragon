@@ -743,7 +743,7 @@ def _extract_param_name(ctx: TreeSitterEmitContext, child) -> str | None:
 
 
 def lower_ruby_store_target(
-    ctx: TreeSitterEmitContext, target, val_reg: str, parent_node
+    ctx: TreeSitterEmitContext, target, val_reg: Register, parent_node
 ) -> None:
     """Ruby-specific store target handling for instance variables and element references."""
     if target.type == RubyNodeType.INSTANCE_VARIABLE:

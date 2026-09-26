@@ -121,7 +121,7 @@ def _has_optional_chain(node) -> bool:
 
 
 def _emit_optional_guard(
-    ctx: TreeSitterEmitContext, obj_reg: str, emit_access
+    ctx: TreeSitterEmitContext, obj_reg: Register, emit_access
 ) -> Register:
     """Wrap an access in a null guard: obj == None ? None : access(obj).
 
@@ -272,7 +272,7 @@ def _extract_js_call_args(ctx: TreeSitterEmitContext, args_node) -> list[str]:
 
 
 def lower_js_store_target(
-    ctx: TreeSitterEmitContext, target, val_reg: str, parent_node
+    ctx: TreeSitterEmitContext, target, val_reg: Register, parent_node
 ) -> None:
     if target.type == JSN.IDENTIFIER:
         ctx.emit_inst(
