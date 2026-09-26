@@ -555,7 +555,7 @@ def lower_template_string(
         return lower_string_literal(ctx, node, raw)
 
     # Build by concatenating literal fragments and substitution expressions
-    parts: list[str] = []
+    parts: list[Register] = []
     for child in node.children:
         if child.type == JSN.TEMPLATE_SUBSTITUTION:
             parts.append(lower_template_substitution(ctx, child))

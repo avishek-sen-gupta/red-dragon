@@ -175,7 +175,7 @@ def extract_csharp_call_args(ctx: TreeSitterEmitContext, args_node) -> list[str]
     """Extract call args, emitting ADDRESS_OF for out/ref/in arguments."""
     if args_node is None:
         return []
-    regs: list[str] = []
+    regs: list[Register] = []
     for c in args_node.children:
         if c.type in (
             CommonNodeType.OPEN_PAREN,
@@ -693,7 +693,7 @@ def lower_csharp_interpolated_string(
         }
     )
 
-    parts: list[str] = []
+    parts: list[Register] = []
     for child in node.children:
         if child.type == NT.STRING_CONTENT:
             frag_reg = ctx.fresh_reg()

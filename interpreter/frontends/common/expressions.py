@@ -507,7 +507,7 @@ def extract_call_args_unwrap(
     """Extract args, unwrapping wrapper nodes like 'argument'."""
     if args_node is None:
         return []
-    regs: list[str] = []
+    regs: list[Register] = []
     for c in args_node.children:
         if c.type in (
             CommonNodeType.OPEN_PAREN,

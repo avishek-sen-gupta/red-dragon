@@ -417,7 +417,7 @@ def _extract_param_names(params_node) -> tuple[str, ...]:
 def _extract_js_self_fields(body) -> dict[str, FieldInfo]:
     """Walk a constructor body and collect this.x = ... assignments."""
 
-    fields: dict[str, FieldInfo] = {}
+    fields: dict[FieldName, FieldInfo] = {}
     for stmt in body.children:
         # expression_statement > assignment_expression
         if stmt.type != JSN.EXPRESSION_STATEMENT:

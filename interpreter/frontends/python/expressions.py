@@ -1066,7 +1066,7 @@ def lower_python_concatenated_string(
         return lower_string_literal(
             ctx, node, _unquote_python_string(ctx.node_text(node))
         )
-    parts: list[str] = []
+    parts: list[Register] = []
     for child in string_children:
         raw = ctx.node_text(child)
         parts.append(lower_string_literal(ctx, child, _unquote_python_string(raw)))
@@ -1084,7 +1084,7 @@ def lower_python_string(
         raw = ctx.node_text(node)
         return lower_string_literal(ctx, node, _unquote_python_string(raw))
 
-    parts: list[str] = []
+    parts: list[Register] = []
     for child in node.children:
         if child.type == PythonNodeType.INTERPOLATION:
             parts.append(lower_interpolation(ctx, child))

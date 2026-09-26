@@ -538,7 +538,7 @@ def lower_scala_interpolated_string_body(
     if not interpolations:
         return lower_scala_string_literal(ctx, node)
 
-    parts: list[str] = []
+    parts: list[Register] = []
     content_start = node.start_byte + 1  # skip opening "
     content_end = node.end_byte - 1  # skip closing "
 

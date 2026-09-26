@@ -249,7 +249,7 @@ def lower_ruby_module(
 def _extract_ruby_initialize_fields(body) -> dict[str, FieldInfo]:
     """Walk initialize body and collect @x = ... instance variable assignments."""
 
-    fields: dict[str, FieldInfo] = {}
+    fields: dict[FieldName, FieldInfo] = {}
     for stmt in body.children:
         # Look for assignment nodes: @var = value
         if stmt.type != RubyNodeType.ASSIGNMENT:

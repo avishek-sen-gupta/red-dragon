@@ -96,7 +96,7 @@ def _extract_python_match_args(node) -> tuple[str, ...]:
 
 def _extract_python_self_fields(init_body) -> dict[str, FieldInfo]:
     """Walk an __init__ body block and collect self.x = ... assignments."""
-    fields: dict[str, FieldInfo] = {}
+    fields: dict[FieldName, FieldInfo] = {}
     for stmt in init_body.children:
         if stmt.type != PythonNodeType.ASSIGNMENT:
             continue

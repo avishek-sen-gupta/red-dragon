@@ -177,7 +177,7 @@ class TreeSitterEmitContext:
     symbol_table: SymbolTable = field(default_factory=SymbolTable.empty)
 
     # Tracks names declared in current method scope (params + locals), for implicit-this suppression
-    _method_declared_names: set[str] = field(default_factory=set)
+    _method_declared_names: set[VarName] = field(default_factory=set)
 
     # Namespace resolver — injectable strategy for qualified name resolution
     namespace_resolver: NamespaceResolver = field(default_factory=NamespaceResolver)

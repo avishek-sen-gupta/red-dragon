@@ -400,7 +400,7 @@ def lower_assert_statement(
     cond_node = named_children[0] if named_children else None
     message_node = named_children[1] if len(named_children) > 1 else None
 
-    arg_regs: list[str] = []
+    arg_regs: list[Register] = []
     if cond_node:
         arg_regs.append(ctx.lower_expr(cond_node))
     if message_node:
