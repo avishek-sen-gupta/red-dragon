@@ -133,7 +133,7 @@ def _lower_php_interpolated_children(
     ``_EXPR_DISPATCH`` and falls back to SYMBOLIC -- variable-variable
     indirection cannot be statically lowered.
     """
-    parts: list[str] = [
+    parts: list[Register] = [
         _lower_interpolated_child(ctx, child, single_quoted=single_quoted)
         for child in children
         if _is_interpolation_relevant(child)
@@ -220,7 +220,7 @@ def lower_php_nowdoc(
     if body is None:
         return lower_string_literal(ctx, node, "")
     # Concatenate all nowdoc_string and string_content fragments
-    parts: list[str] = []
+    parts: list[Register] = []
     for child in body.children:
         if child.is_named:
             parts.append(lower_string_literal(ctx, child, ctx.node_text(child)))

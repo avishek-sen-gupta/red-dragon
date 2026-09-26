@@ -120,7 +120,7 @@ def lower_ruby_string(
         )
         return lower_string_literal(ctx, node, value)
 
-    parts: list[str] = []
+    parts: list[Register] = []
     for child in node.children:
         if child.type == RubyNodeType.STRING_CONTENT:
             parts.append(lower_string_literal(ctx, child, ctx.node_text(child)))
@@ -146,7 +146,7 @@ def lower_ruby_heredoc_body(
         )
         return lower_string_literal(ctx, node, content)
 
-    parts: list[str] = []
+    parts: list[Register] = []
     for child in node.children:
         if child.type == RubyNodeType.HEREDOC_CONTENT:
             parts.append(lower_string_literal(ctx, child, ctx.node_text(child)))
