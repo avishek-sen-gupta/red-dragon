@@ -163,8 +163,8 @@ class BaseFrontend(Frontend):
         self._label_counter: int = 0
         self._instructions: list[InstructionBase] = []
         self._source: bytes = b""
-        self._loop_stack: list[dict[str, str]] = []
-        self._break_target_stack: list[str] = []
+        self._loop_stack: list[dict[str, CodeLabel]] = []
+        self._break_target_stack: list[CodeLabel] = []
         # Type alias prepass: injected per-frontend, defaults to no-op
         self._type_alias_extractor: TypeAliasExtractor = NullTypeAliasExtractor()
         # Legacy dispatch: bound methods, called as handler(node)
@@ -990,7 +990,7 @@ class BaseFrontend(Frontend):
                 node=node,
             )
 
-    def _push_loop(self, continue_label: str, end_label: str):
+    def _push_loop(self, continue_label: CodeLabel, end_label: CodeLabel):
         """Push a loop context onto both the loop stack and break target stack."""
         self._loop_stack.append(
             {"continue_label": continue_label, "end_label": end_label}
