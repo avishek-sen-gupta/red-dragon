@@ -19,11 +19,11 @@ from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
 from tests.integration.cobol_helpers import (
     bridge_jar,  # noqa: F401
+    run_cobol,
 )
 from tests.integration.cobol_helpers import (
     first_region as _first_region,
 )
-from tests.integration.cobol_helpers import run_cobol
 
 
 @pytest.fixture(autouse=True)

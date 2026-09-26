@@ -10,12 +10,11 @@ from __future__ import annotations
 
 import inspect
 
-
 from cobol_asg import pic_parser
 from cobol_asg.asg_types import CobolField
 from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
-from interpreter.cobol.features import CobolFeature
 from cobol_asg.pic_parser import parse_pic
+from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
 
 

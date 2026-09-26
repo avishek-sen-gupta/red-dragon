@@ -57,7 +57,7 @@ s = str(123)
 f = float(7)
 b = bool(0)
 """
-    print(f"\n  Source (Python):\n")
+    print("\n  Source (Python):\n")
     for line in source.strip().splitlines():
         print(f"    {line}")
 
@@ -66,7 +66,7 @@ b = bool(0)
     print(f"\n  IR ({len(instructions)} instructions):\n")
     _show_ir(instructions)
 
-    print(f"\n  Inferred variable types:\n")
+    print("\n  Inferred variable types:\n")
     for var in ["n", "r", "x", "s", "f", "b"]:
         vtype = env.var_types.get(var, "<untyped>")
         print(f"    {var} : {vtype}")
@@ -87,7 +87,7 @@ def greet():
         print(f"    {line}")
 
     _instructions, env = _lower_and_infer(py_source, "python")
-    print(f"\n  Inferred function signatures:\n")
+    print("\n  Inferred function signatures:\n")
     for name, sigs in sorted(env.method_signatures.get(UNBOUND, {}).items()):
         sig = sigs[0]
         print(
@@ -105,7 +105,7 @@ function factorial(n) {
         print(f"    {line}")
 
     _instructions, env = _lower_and_infer(js_source, "javascript")
-    print(f"\n  Inferred function signatures:\n")
+    print("\n  Inferred function signatures:\n")
     for name, sigs in sorted(env.method_signatures.get(UNBOUND, {}).items()):
         sig = sigs[0]
         print(
@@ -122,7 +122,7 @@ end
         print(f"    {line}")
 
     _instructions, env = _lower_and_infer(rb_source, "ruby")
-    print(f"\n  Inferred function signatures:\n")
+    print("\n  Inferred function signatures:\n")
     for name, sigs in sorted(env.method_signatures.get(UNBOUND, {}).items()):
         sig = sigs[0]
         print(
@@ -142,7 +142,7 @@ y = not x
         print(f"    {line}")
 
     instructions, env = _lower_and_infer(py_source, "python")
-    print(f"\n  Inferred variable types:")
+    print("\n  Inferred variable types:")
     print(f"    x : {env.var_types.get('x', '<untyped>')}")
     print(f"    y : {env.var_types.get('y', '<untyped>')}")
 
@@ -155,7 +155,7 @@ let negated = !flag;
         print(f"    {line}")
 
     instructions, env = _lower_and_infer(js_source, "javascript")
-    print(f"\n  Inferred variable types:")
+    print("\n  Inferred variable types:")
     print(f"    flag    : {env.var_types.get('flag', '<untyped>')}")
     print(f"    negated : {env.var_types.get('negated', '<untyped>')}")
 
@@ -169,7 +169,7 @@ local n = #t
 
     instructions, env = _lower_and_infer(lua_source, "lua")
     unops = [i for i in instructions if i.opcode == Opcode.UNOP]
-    print(f"\n  UNOP instructions and their result types:")
+    print("\n  UNOP instructions and their result types:")
     for inst in unops:
         reg_type = env.register_types.get(inst.result_reg, "<untyped>")
         print(f"    {inst}  =>  {inst.result_reg} : {reg_type}")
@@ -193,20 +193,20 @@ class Dog {
     }
 }
 """
-    print(f"\n  Source (Java):\n")
+    print("\n  Source (Java):\n")
     for line in java_source.strip().splitlines():
         print(f"    {line}")
 
     instructions, env = _lower_and_infer(java_source, "java")
 
-    print(f"\n  CALL_METHOD instructions and their inferred types:\n")
+    print("\n  CALL_METHOD instructions and their inferred types:\n")
     call_methods = [i for i in instructions if i.opcode == Opcode.CALL_METHOD]
     for inst in call_methods:
         method_name = inst.operands[1] if len(inst.operands) >= 2 else "?"
         reg_type = env.register_types.get(inst.result_reg, "<untyped>")
         print(f"    {inst.result_reg} = call_method {method_name}  =>  {reg_type}")
 
-    print(f"\n  Function signatures:\n")
+    print("\n  Function signatures:\n")
     for name, sigs in sorted(env.method_signatures.get(UNBOUND, {}).items()):
         sig = sigs[0]
         print(f"    {name}() -> {sig.return_type or '?'}")
@@ -226,13 +226,13 @@ class Dog:
         a = self.age
         return a
 """
-    print(f"\n  Source (Python):\n")
+    print("\n  Source (Python):\n")
     for line in py_source.strip().splitlines():
         print(f"    {line}")
 
     instructions, env = _lower_and_infer(py_source, "python")
 
-    print(f"\n  STORE_FIELD instructions:\n")
+    print("\n  STORE_FIELD instructions:\n")
     store_fields = [i for i in instructions if i.opcode == Opcode.STORE_FIELD]
     for inst in store_fields:
         obj_reg = inst.operands[0] if inst.operands else "?"
@@ -242,7 +242,7 @@ class Dog:
         val_type = env.register_types.get(str(val_reg), "?")
         print(f"    {obj_reg}({obj_type}).{field} = {val_reg}({val_type})")
 
-    print(f"\n  LOAD_FIELD instructions:\n")
+    print("\n  LOAD_FIELD instructions:\n")
     load_fields = [i for i in instructions if i.opcode == Opcode.LOAD_FIELD]
     for inst in load_fields:
         obj_reg = inst.operands[0] if inst.operands else "?"
@@ -281,7 +281,7 @@ def demo_region_tagging():
     for inst in instructions:
         print(f"    {inst}")
 
-    print(f"\n  Inferred register types:\n")
+    print("\n  Inferred register types:\n")
     print(f"    %0 (ALLOC_REGION result) : {env.register_types.get('%0', '<untyped>')}")
     print(f"    %1 (LOAD_REGION result)  : {env.register_types.get('%1', '<untyped>')}")
 

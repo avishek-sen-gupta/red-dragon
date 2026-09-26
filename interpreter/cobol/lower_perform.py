@@ -5,13 +5,13 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 
+from cobol_asg.cobol_expression import expr_from_dict
 from cobol_asg.cobol_statements import (
     PerformStatement,
     PerformTimesSpec,
     PerformUntilSpec,
     PerformVaryingSpec,
 )
-from cobol_asg.cobol_expression import expr_from_dict
 from cobol_asg.source_span import SourceSpan
 from interpreter.cobol.condition_lowering import _lower_expr_dict, lower_expr_node
 from interpreter.cobol.emit_context import EmitContext

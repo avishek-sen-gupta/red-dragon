@@ -11,6 +11,12 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from cobol_asg.import_types import (
+    ImportKind as ImportKind,
+)
+from cobol_asg.import_types import (
+    ImportRef as ImportRef,
+)
 from interpreter.cfg_types import CFG
 from interpreter.class_name import ClassName
 from interpreter.constants import Language
@@ -18,12 +24,6 @@ from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.func_name import FuncName
 from interpreter.instructions import InstructionBase
 from interpreter.ir import CodeLabel
-from cobol_asg.import_types import (
-    ImportKind as ImportKind,
-)
-from cobol_asg.import_types import (
-    ImportRef as ImportRef,
-)
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
 from interpreter.register import Register

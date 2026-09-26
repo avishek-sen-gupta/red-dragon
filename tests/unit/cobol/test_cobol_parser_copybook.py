@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 
 from cobol_asg.cobol_parser import CobolParseError, ProLeapCobolParser
-from interpreter.cobol.features import CobolFeature
 from cobol_asg.subprocess_runner import SubprocessRunner
+from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
 
 

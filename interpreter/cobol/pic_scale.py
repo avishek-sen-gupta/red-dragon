@@ -10,6 +10,7 @@ historical tolerance for non-numeric text.
 
 from __future__ import annotations
 
+from cobol_asg.cobol_types import CobolTypeDescriptor
 from cobol_numeric.number import (
     CobolNumber,
     digits_for_encode,
@@ -17,7 +18,6 @@ from cobol_numeric.number import (
     scale_by,
     to_number,
 )
-from cobol_asg.cobol_types import CobolTypeDescriptor
 from interpreter.cobol.data_filters import align_decimal, left_adjust
 
 

@@ -8,13 +8,13 @@ import os
 from pathlib import Path
 from typing import Any
 
-from interpreter.cobol.access_result import AccessCondition, AccessResult
 from cobol_asg.cobol_statements import FileControlEntry
+from cobol_asg.file_enums import FileOrganization, OpenMode
+from interpreter.cobol.access_result import AccessCondition, AccessResult
 from interpreter.cobol.file_drivers import (
     FileOrganizationDriver,
     open_driver,
 )
-from cobol_asg.file_enums import FileOrganization, OpenMode
 from interpreter.cobol.io_provider import CobolIOProvider, IOResult
 from interpreter.vm.vm import Operators
 

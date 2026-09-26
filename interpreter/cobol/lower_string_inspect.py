@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import logging
 
-from interpreter.cobol.cobol_constants import BuiltinName, DelimiterMode, InspectType
 from cobol_asg.cobol_statements import (
     BeforeAfterBoundary,
     InspectStatement,
     StringStatement,
     UnstringStatement,
 )
+from cobol_asg.ref_mod import RefModOperand
+from cobol_asg.source_span import SourceSpan
+from interpreter.cobol.cobol_constants import BuiltinName, DelimiterMode, InspectType
 from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.emit_context import EmitContext, strip_cobol_literal
 from interpreter.cobol.field_resolution import runtime_offset_extent
@@ -20,13 +22,11 @@ from interpreter.cobol.ir_encoders import (
     build_inspect_tally_ir,
 )
 from interpreter.cobol.lower_arithmetic import eval_ref_mod_expr
-from cobol_asg.ref_mod import RefModOperand
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.func_name import FuncName
 from interpreter.instructions import Binop, CallFunction
 from interpreter.operator_kind import resolve_binop
 from interpreter.register import NO_REGISTER, Register
-from cobol_asg.source_span import SourceSpan
 
 logger = logging.getLogger(__name__)
 

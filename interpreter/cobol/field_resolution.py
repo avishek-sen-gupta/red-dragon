@@ -7,9 +7,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from interpreter.cobol.data_layout import FieldLayout, OccursTable
 from cobol_memory.field_extent import FieldExtent, Precision
 from cobol_memory.region_id import RegionId
+from interpreter.cobol.data_layout import FieldLayout, OccursTable
 from interpreter.register import Register
 
 if TYPE_CHECKING:
