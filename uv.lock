@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.10, <4.0"
 resolution-markers = [
     "python_full_version >= '3.14'",
@@ -702,7 +702,7 @@ name = "exceptiongroup"
 version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
+    { name = "typing-extensions" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/50/79/66800aadf48771f6b62f7eb014e352e5d06856655206165d775e675a02c9/exceptiongroup-1.3.1.tar.gz", hash = "sha256:8b412432c6055b0b7d14c310000ae93352ed6754f70fa8f7c34141f91c4e3219", size = 30371, upload-time = "2025-11-21T23:01:54.787Z" }
 wheels = [
@@ -2262,7 +2262,7 @@ wheels = [
 [[package]]
 name = "python-fp-lint"
 version = "0.1.0"
-source = { git = "https://github.com/avishek-sen-gupta/python-fp-lint.git?rev=856da3e011caa0d5eb932078484792bd490be682#856da3e011caa0d5eb932078484792bd490be682" }
+source = { git = "https://github.com/avishek-sen-gupta/python-fp-lint.git?rev=dbe3f45da3f0084efccd855831a7b72f4e851397#dbe3f45da3f0084efccd855831a7b72f4e851397" }
 dependencies = [
     { name = "ast-grep-cli" },
     { name = "beniget" },
@@ -2481,7 +2481,7 @@ requires-dist = [
     { name = "litellm", specifier = ">=1.60.0,<1.82.6" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.26.0,<2.0.0" },
     { name = "pydantic", specifier = ">=2.12.5,<3.0.0" },
-    { name = "python-fp-lint", git = "https://github.com/avishek-sen-gupta/python-fp-lint.git?rev=856da3e011caa0d5eb932078484792bd490be682" },
+    { name = "python-fp-lint", git = "https://github.com/avishek-sen-gupta/python-fp-lint.git?rev=dbe3f45da3f0084efccd855831a7b72f4e851397" },
     { name = "sortedcontainers", specifier = ">=2.4.0,<3.0.0" },
     { name = "tqdm", specifier = ">=4.67,<5.0" },
     { name = "tree-sitter", specifier = ">=0.25.2,<0.26.0" },

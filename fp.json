@@ -1,5 +1,6 @@
 {
   "lint_rules_dir": ".python-fp-lint",
+  "baseline": "fp-baseline.json",
   "exclude": [
     "interpreter/cobol/lower_arithmetic.py",
     "cobol_asg/cobol_statements.py"

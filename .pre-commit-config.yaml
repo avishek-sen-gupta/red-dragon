@@ -6,7 +6,7 @@ default_stages: [pre-commit]
 
 repos:
   - repo: https://github.com/avishek-sen-gupta/python-fp-lint
-    rev: c618ce1fb08f2a1d3f7275f938851691964ecb08
+    rev: dbe3f45da3f0084efccd855831a7b72f4e851397
     hooks:
       - id: python-fp-lint
         args: [--config, fp.json]
