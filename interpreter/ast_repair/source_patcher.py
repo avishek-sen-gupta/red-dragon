@@ -14,7 +14,7 @@ def patch(
     Applies patches from end-of-file backward so earlier byte offsets stay valid.
     """
     pairs = sorted(
-        zip(error_spans, repaired_fragments),
+        zip(error_spans, repaired_fragments, strict=False),
         key=lambda p: p[0].start_byte,
         reverse=True,
     )

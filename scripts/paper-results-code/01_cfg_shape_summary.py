@@ -97,7 +97,7 @@ def main():
         blocks = [v["blocks"] for v in good.values()]
         edges = [v["edges"] for v in good.values()]
         other = [v["other_syms"] for v in good.values()]
-        variants = len(set(zip(blocks, edges)))
+        variants = len(set(zip(blocks, edges, strict=False)))
         emit(
             fmt.format(
                 algo,

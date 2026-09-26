@@ -220,7 +220,9 @@ def test_the_rewritten_cfg_keeps_every_control_flow_edge():
         assert set(block.successors) <= set(new_block.successors)
         assert set(block.predecessors) <= set(new_block.predecessors)
         assert len(new_block.instructions) == len(block.instructions)
-        for old_inst, new_inst in zip(block.instructions, new_block.instructions):
+        for old_inst, new_inst in zip(
+            block.instructions, new_block.instructions, strict=False
+        ):
             if isinstance(new_inst, MemoryAccess):
                 substituted += 1
                 assert new_inst.origin is old_inst

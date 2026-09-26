@@ -183,7 +183,7 @@ def _emit_verb_operation(
     receiver_places = max(
         (
             _receiver_decimals(td, receiver.rounded)
-            for receiver, td in zip(receivers, types[2:])
+            for receiver, td in zip(receivers, types[2:], strict=False)
             if td is not None
         ),
         default=0,

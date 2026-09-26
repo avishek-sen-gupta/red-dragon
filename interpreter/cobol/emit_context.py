@@ -512,7 +512,7 @@ class EmitContext:
             # Multi-dimensional: accumulate sum of (idx_k - 1) * stride_k, then
             # add the field's base offset once at the end.
             total_disp_reg = self.const_to_reg(0, span=span)
-            for sub_node, stride_k in zip(subscripts, strides):
+            for sub_node, stride_k in zip(subscripts, strides, strict=False):
                 idx_reg = lower_expr_node(self, sub_node, materialised, span=span)
                 idx_minus_one = self.fresh_reg()
                 self.emit_inst(
