@@ -196,7 +196,7 @@ def lower_kotlin_string_literal(
             value = raw
         return lower_string_literal(ctx, node, value)
 
-    parts: list[str] = []
+    parts: list[Register] = []
     for child in node.children:
         if child.type == KNT.STRING_CONTENT:
             # STRING_CONTENT fragments are already unquoted — don't re-strip

@@ -211,7 +211,7 @@ def _extract_struct_field_names(
     class_prefix = f"{constants.CLASS_LABEL_PREFIX}{struct_name}"
     end_prefix = f"{constants.END_CLASS_LABEL_PREFIX}{struct_name}"
     in_body = False
-    field_names: list[str] = []
+    field_names: list[FieldName] = []
     for inst in ctx.instructions:
         if (
             inst.opcode == Opcode.LABEL
