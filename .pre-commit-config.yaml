@@ -49,6 +49,20 @@ repos:
         pass_filenames: false
         always_run: true
 
+      # One pyright rule, promoted out of the advisory run above and made
+      # blocking. reportUndefinedVariable stands at zero, so it needs no
+      # ratchet, and it catches a class of defect no test can: an annotation
+      # naming something unimportable. `from __future__ import annotations`
+      # keeps annotations as strings, so the module imports and the suite
+      # passes; it breaks only when typing.get_type_hints() runs, which five
+      # modules here do. See the script's header for the incident.
+      - id: pyright-undefined-names
+        name: Pyright — undefined names (blocking)
+        entry: precommit-scripts/check-undefined-names
+        language: script
+        pass_filenames: false
+        always_run: true
+
       - id: import-linter
         name: import-linter architectural contracts
         entry: uv run lint-imports
