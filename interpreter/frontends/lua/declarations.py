@@ -28,6 +28,7 @@ from interpreter.instructions import (
     StoreIndex,
     StoreVar,
 )
+from interpreter.register import Register
 from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
@@ -85,7 +86,7 @@ def lower_lua_assignment(
 
 
 def lower_lua_store_target(
-    ctx: TreeSitterEmitContext, target, val_reg: str, parent_node
+    ctx: TreeSitterEmitContext, target, val_reg: Register, parent_node
 ) -> None:
     """Lua-specific store target supporting dot_index and bracket_index."""
     if target.type == LuaNodeType.IDENTIFIER:
