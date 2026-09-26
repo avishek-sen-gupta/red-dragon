@@ -36,7 +36,7 @@ def has_property_accessor(
 
 def emit_field_load_or_getter(
     ctx: TreeSitterEmitContext,
-    obj_reg: str,
+    obj_reg: Register,
     class_name: str,
     field_name: str,
     node: Any,  # Any: tree-sitter node — untyped at Python boundary
@@ -68,10 +68,10 @@ def emit_field_load_or_getter(
 
 def emit_field_store_or_setter(
     ctx: TreeSitterEmitContext,
-    obj_reg: str,
+    obj_reg: Register,
     class_name: str,
     field_name: str,
-    val_reg: str,
+    val_reg: Register,
     node: Any,  # Any: tree-sitter node — untyped at Python boundary
 ) -> None:
     """Emit CALL_METHOD for setter if registered, otherwise plain STORE_FIELD."""

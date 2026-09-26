@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from interpreter.type_name import TypeName
 
 if TYPE_CHECKING:
-    from interpreter.ir import SpreadArguments
+    from interpreter.ir import CodeLabel, SpreadArguments
 
 import logging
 import re
@@ -231,7 +231,7 @@ def _extract_kotlin_args(ctx: TreeSitterEmitContext, args_node) -> list[str]:
 
 def _extract_nav_field_name(
     ctx: TreeSitterEmitContext, node: Any
-) -> Register:  # Any: tree-sitter node — untyped at Python boundary
+) -> str:  # Any: tree-sitter node — untyped at Python boundary
     """Extract the identifier name from a navigation_suffix or plain node.
 
     ``navigation_suffix`` nodes include the leading dot in their text,
@@ -548,7 +548,7 @@ def _lower_subjectless_when_entry(
     ctx: TreeSitterEmitContext,
     entry,
     result_var: str,
-    end_label: str,
+    end_label: CodeLabel,
 ) -> None:
     """Lower a single subjectless when entry (boolean dispatch)."""
     cond_node = next((c for c in entry.children if c.type == KNT.WHEN_CONDITION), None)
@@ -1160,7 +1160,7 @@ def lower_type_test(
 
 
 def lower_kotlin_store_target(
-    ctx: TreeSitterEmitContext, target, val_reg: str, parent_node
+    ctx: TreeSitterEmitContext, target, val_reg: Register, parent_node
 ) -> None:
     if target.type == KNT.SIMPLE_IDENTIFIER:
         text = ctx.node_text(target)

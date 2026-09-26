@@ -236,7 +236,7 @@ def lower_let_decl(
 
 
 def _lower_tuple_destructure(
-    ctx: TreeSitterEmitContext, pattern_node, val_reg: str, parent_node
+    ctx: TreeSitterEmitContext, pattern_node, val_reg: Register, parent_node
 ) -> None:
     """Lower `let (a, b) = expr;` -- emit LOAD_INDEX + STORE_VAR per element."""
     named_children = [
@@ -261,7 +261,7 @@ def _lower_tuple_destructure(
 
 
 def _lower_struct_destructure(
-    ctx: TreeSitterEmitContext, pattern_node, val_reg: str, parent_node
+    ctx: TreeSitterEmitContext, pattern_node, val_reg: Register, parent_node
 ) -> None:
     """Lower `let Point { x, y } = expr;` -- emit LOAD_FIELD + STORE_VAR per field."""
     for child in pattern_node.children:
