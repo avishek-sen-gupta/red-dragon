@@ -11,7 +11,6 @@ Expected values follow IBM Enterprise COBOL editing rules.
 
 from __future__ import annotations
 
-import pytest
 
 from cobol_asg.cobol_types import CobolDataCategory
 from cobol_asg.edit_picture import (
