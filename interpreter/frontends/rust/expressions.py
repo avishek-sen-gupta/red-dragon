@@ -1317,7 +1317,7 @@ def lower_struct_pattern_expr(
 
 
 def lower_rust_store_target(
-    ctx: TreeSitterEmitContext, target, val_reg: str, parent_node
+    ctx: TreeSitterEmitContext, target, val_reg: Register, parent_node
 ) -> None:
     """Rust-specific store target handling field_expression and index_expression."""
     if target.type == RustNodeType.IDENTIFIER:
