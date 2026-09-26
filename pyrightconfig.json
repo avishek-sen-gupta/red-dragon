@@ -6,5 +6,7 @@
     "reportMissingImports": true,
     "reportMissingTypeStubs": false,
     "reportUnusedImport": false,
-    "reportUnusedVariable": false
+    "reportUnusedVariable": false,
+    "venvPath": ".",
+    "venv": ".venv"
 }
