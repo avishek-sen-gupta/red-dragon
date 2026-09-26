@@ -443,7 +443,7 @@ def _float_slot(ep: EditPicture, int_part: str) -> int:
         if i < decimal_index and (sym in ("9", "Z", "*") or i in float_digits)
     ]
 
-    for slot, digit in zip(int_slots, int_part, strict=False):
+    for slot, digit in zip(int_slots, int_part):
         if digit == "0":
             continue
         # Suppression ends here. If this digit sits in a float position the

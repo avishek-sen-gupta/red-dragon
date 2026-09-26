@@ -52,7 +52,7 @@ def lower_short_var_decl(
     left_names = extract_expression_list(ctx, left)
     right_regs = lower_expression_list(ctx, right)
 
-    for name, val_reg in zip(left_names, right_regs, strict=False):
+    for name, val_reg in zip(left_names, right_regs):
         var_name = ctx.declare_block_var(name)
         ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)
 
@@ -68,7 +68,7 @@ def lower_go_assignment(
     left_nodes = get_expression_list_children(left)
     right_regs = lower_expression_list(ctx, right)
 
-    for target, val_reg in zip(left_nodes, right_regs, strict=False):
+    for target, val_reg in zip(left_nodes, right_regs):
         lower_go_store_target(ctx, target, val_reg, node)
 
 
@@ -340,7 +340,7 @@ def _lower_var_spec(ctx: TreeSitterEmitContext, spec, parent_node) -> None:
 
     if value_node:
         val_regs = lower_expression_list(ctx, value_node)
-        for name_node, val_reg in zip(names, val_regs, strict=False):
+        for name_node, val_reg in zip(names, val_regs):
             name_str = ctx.declare_block_var(ctx.node_text(name_node))
             ctx.emit_inst(
                 DeclVar(name=VarName(name_str), value_reg=val_reg), node=parent_node

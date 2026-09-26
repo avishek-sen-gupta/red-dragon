@@ -116,7 +116,7 @@ def parse_pattern(
         val_nodes = [c for c in node.children if c.type == PythonNodeType.CASE_PATTERN]
         entries = tuple(
             (_parse_key_literal(ctx, k), parse_pattern(ctx, v))
-            for k, v in zip(key_nodes, val_nodes, strict=False)
+            for k, v in zip(key_nodes, val_nodes)
         )
         return MappingPattern(entries=entries)
 
