@@ -949,7 +949,7 @@ def lower_linq_clause(
 
 
 def lower_csharp_store_target(
-    ctx: TreeSitterEmitContext, target, val_reg: str, parent_node
+    ctx: TreeSitterEmitContext, target, val_reg: Register, parent_node
 ) -> None:
     if target.type == NT.IDENTIFIER:
         name = ctx.node_text(target)
