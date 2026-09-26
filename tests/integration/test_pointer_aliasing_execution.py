@@ -100,7 +100,7 @@ int *p1 = arr;
 int *p2 = p1 + 2;
 int lt = p1 < p2;
 """)
-        assert local_vars[VarName("lt")] == True
+        assert local_vars[VarName("lt")] == 1
 
     def test_pointer_greater_equal(self):
         """p2 >= p1 should be true when p2 points at or after p1."""
@@ -111,8 +111,8 @@ int *p2 = p1 + 1;
 int ge = p2 >= p1;
 int ge_eq = p1 >= p1;
 """)
-        assert local_vars[VarName("ge")] == True
-        assert local_vars[VarName("ge_eq")] == True
+        assert local_vars[VarName("ge")] == 1
+        assert local_vars[VarName("ge_eq")] == 1
 
 
 class TestNestedPointerExecution:

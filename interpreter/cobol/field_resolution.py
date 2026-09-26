@@ -156,7 +156,7 @@ def field_access_extent(
 
     if all(value is not None for value in values):
         offset = fl.offset
-        for value, table in zip(values, aligned):
+        for value, table in zip(values, aligned, strict=False):
             offset += (value - 1) * table.element_size
         if not aligned:
             # No declared OCCURS: the register path strides by the field's own
