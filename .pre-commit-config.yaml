@@ -79,13 +79,6 @@ repos:
       #   pass_filenames: false
       #   always_run: true
 
-      # - id: beads-backup
-      #   name: Beads backup
-      #   entry: bash -c 'command -v bd >/dev/null 2>&1 && bd export --all -o ./issues/issues.jsonl || true'
-      #   language: system
-      #   pass_filenames: false
-      #   always_run: true
-
 
   - repo: local
     hooks:
