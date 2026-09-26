@@ -80,7 +80,7 @@ def _handle_write_region(
     ):
         return ExecutionResult.success(
             StateUpdate(
-                reasoning=f"write_region(symbolic args) — no-op",
+                reasoning="write_region(symbolic args) — no-op",
             )
         )
 
