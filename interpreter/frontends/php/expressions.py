@@ -350,7 +350,7 @@ def lower_php_augmented_assignment_expr(
 
 
 def lower_php_store_target(
-    ctx: TreeSitterEmitContext, target, val_reg: str, parent_node
+    ctx: TreeSitterEmitContext, target, val_reg: Register, parent_node
 ) -> None:
     """Store to a PHP target: variable_name, member_access, subscript, or fallback."""
     if target.type in (PHPNodeType.VARIABLE_NAME, PHPNodeType.NAME):

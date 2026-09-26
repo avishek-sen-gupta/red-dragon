@@ -269,7 +269,7 @@ def lower_assignment_expr(
 
 
 def lower_c_store_target(
-    ctx: TreeSitterEmitContext, target, val_reg: str, parent_node
+    ctx: TreeSitterEmitContext, target, val_reg: Register, parent_node
 ) -> None:
     """C-specific store target handling (field_expression, subscript, pointer)."""
     if target.type == CNodeType.IDENTIFIER:
