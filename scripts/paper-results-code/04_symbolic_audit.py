@@ -26,12 +26,12 @@ import sys
 
 sys.path.insert(0, "tests/unit/rosetta")
 
+from interpreter.cli_output import emit, emit_err
 from interpreter.frontends import (
     SUPPORTED_DETERMINISTIC_LANGUAGES,
     get_deterministic_frontend,
 )
 from interpreter.ir import Opcode
-from interpreter.cli_output import emit, emit_err
 
 LANGS = sorted(SUPPORTED_DETERMINISTIC_LANGUAGES)
 
