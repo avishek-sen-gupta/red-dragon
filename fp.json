@@ -1,13 +1,9 @@
 {
   "lint_rules_dir": ".python-fp-lint",
   "baseline": "fp-baseline.json",
-  "exclude": [
-    "interpreter/cobol/lower_arithmetic.py",
-    "cobol_asg/cobol_statements.py"
-  ],
+  "exclude": [],
   "exclude_why": {
-    "interpreter/cobol/lower_arithmetic.py": "434 findings across these two files predate the rule set d8338f80 switched on, and the hook scans whole staged files -- so every commit touching them failed on a backlog it did not create, including the EVALUATE ALSO fix (red-dragon-ba1 / red-dragon-c7p) that added none. Excluded to unblock, NOT because the code is exempt: the findings are mostly reassignment and no-deep-nesting in the lowering's hot path, and clearing them is its own task. Remove the entry when that is done.",
-    "cobol_asg/cobol_statements.py": "Same backlog, same reason. New code in both files is still expected to hold the line -- check it directly with `python-fp-lint check --config fp.json <file>` and compare against the count on main."
+    "_": "Read by nobody: JSON has no comments, and an exclusion whose reason lives in another file is one nobody can judge later. Every key in `exclude` appears here. Empty is the goal -- the ratchet (see `baseline`) is how a pre-existing backlog stops blocking commits, so unblocking is no longer a reason to exclude a file. Exclude only code the rules genuinely do not apply to, and say why here."
   },
   "ruff_select": "E,F,W,I,B,UP,SIM,RUF,BLE,T20,TID252,C901,PLR0915,ANN401",
   "max_complexity": 3,
