@@ -208,7 +208,7 @@ def lower_assignment_expr(
 
 
 def lower_scala_store_target(
-    ctx: TreeSitterEmitContext, target, val_reg: str, parent_node
+    ctx: TreeSitterEmitContext, target, val_reg: Register, parent_node
 ) -> None:
     if target.type == NT.IDENTIFIER:
         ctx.emit_inst(

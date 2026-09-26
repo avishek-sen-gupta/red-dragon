@@ -554,7 +554,7 @@ def lower_cpp_assignment_expr(
 
 
 def lower_cpp_store_target(
-    ctx: TreeSitterEmitContext, target, val_reg: str, parent_node
+    ctx: TreeSitterEmitContext, target, val_reg: Register, parent_node
 ) -> None:
     """Override C store target to handle C++ subscript_expression with subscript_argument_list."""
     if target.type == CppNodeType.SUBSCRIPT_EXPRESSION:
