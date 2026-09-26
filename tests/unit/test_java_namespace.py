@@ -109,7 +109,7 @@ class TestBuildJavaNamespaceTree:
             stdlib_registry=registry,
         )
 
-        resolved, remaining, qualified = tree.resolve(["java", "util", "Arrays"])
+        resolved, remaining, _qualified = tree.resolve(["java", "util", "Arrays"])
         assert resolved is not None
         assert resolved.short_name == "Arrays"
         assert resolved.module is stub

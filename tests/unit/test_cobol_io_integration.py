@@ -48,7 +48,7 @@ def _execute_with_provider(instructions, provider):
     cfg = build_cfg(instructions)
     registry = build_registry(instructions, cfg)
     config = VMConfig(max_steps=50, io_provider=provider)
-    vm, stats = execute_cfg(
+    vm, _stats = execute_cfg(
         cfg, "entry", registry, config, vm=initial_vm_state(io_provider=provider)
     )
     return vm

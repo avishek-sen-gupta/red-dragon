@@ -79,7 +79,7 @@ class TestVMStatePanelSorting:
         }
         try:
             sorted(regs.items())
-            assert False, "Expected TypeError"
+            raise AssertionError("Expected TypeError")
         except TypeError:
             pass
 
@@ -97,7 +97,7 @@ class TestCodeLabelSorting:
         labels = [CodeLabel("b"), CodeLabel("a")]
         try:
             sorted(labels)
-            assert False, "Expected TypeError"
+            raise AssertionError("Expected TypeError")
         except TypeError:
             pass
 

@@ -49,7 +49,7 @@ class TestNamespaceTreeResolve:
         tree = NamespaceTree()
         tree.register_type("java.util.Arrays", NamespaceType(short_name="Arrays"))
 
-        resolved, remaining, qualified = tree.resolve(["java", "util"])
+        resolved, _remaining, _qualified = tree.resolve(["java", "util"])
         assert resolved is None
 
     def test_register_multiple_types_same_namespace(self):
@@ -68,14 +68,14 @@ class TestNamespaceTreeResolve:
         tree = NamespaceTree()
         tree.register_type("String", NamespaceType(short_name="String"))
 
-        resolved, remaining, qualified = tree.resolve(["String"])
+        resolved, remaining, _qualified = tree.resolve(["String"])
         assert resolved is not None
         assert resolved.short_name == "String"
         assert remaining == []
 
     def test_empty_chain_returns_none(self):
         tree = NamespaceTree()
-        resolved, remaining, qualified = tree.resolve([])
+        resolved, _remaining, _qualified = tree.resolve([])
         assert resolved is None
 
 

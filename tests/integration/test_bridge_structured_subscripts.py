@@ -100,7 +100,7 @@ def test_bridge_keeps_both_subscripts_when_a_literal_follows_a_data_name(bridge_
     1-D read of the wrong element (red-dragon-5wp3).
     """
     src = _move_operands(
-        _TABLE_2D + ["    MOVE WS-CELL(WS-IDX, 3) TO WS-IDX.", "    GOBACK."],
+        [*_TABLE_2D, "    MOVE WS-CELL(WS-IDX, 3) TO WS-IDX.", "    GOBACK."],
         bridge_jar,
     )[0]
     assert src["name"] == "WS-CELL"
@@ -146,7 +146,7 @@ def test_bridge_keeps_a_relative_subscript_as_one_expression(bridge_jar):
 def test_bridge_serialises_an_integer_subscript_as_a_literal(bridge_jar):
     """`TBL(2)` is a literal node, not a reference to a field named "2"."""
     src = _move_operands(
-        _TABLE_2D + ["    MOVE WS-CELL(1, 2) TO WS-IDX.", "    GOBACK."],
+        [*_TABLE_2D, "    MOVE WS-CELL(1, 2) TO WS-IDX.", "    GOBACK."],
         bridge_jar,
     )[0]
     assert src["subscripts"] == [

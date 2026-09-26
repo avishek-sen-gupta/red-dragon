@@ -439,13 +439,16 @@ def lower_perform_varying(
     assert isinstance(spec, PerformVaryingSpec)
     span = stmt.span
 
-    all_specs: tuple[PerformVaryingSpec, ...] = (spec,) + spec.after_specs
+    all_specs: tuple[PerformVaryingSpec, ...] = (spec, *spec.after_specs)
 
     if len(all_specs) == 1:
         _lower_perform_varying_single(ctx, stmt, spec, materialised)
     elif spec.test_before:
         exit_label = ctx.fresh_label("pv_exit")
-        body_fn = lambda: lower_perform_body(ctx, stmt, materialised)
+
+        def body_fn():
+            return lower_perform_body(ctx, stmt, materialised)
+
         _emit_test_before_level(
             ctx, all_specs, body_fn, exit_label, materialised, span=span
         )

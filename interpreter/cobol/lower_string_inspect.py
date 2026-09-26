@@ -478,7 +478,7 @@ def lower_unstring(
         CallFunction(
             result_reg=parts_reg,
             func_name=FuncName(BuiltinName.MULTI_DELIMITER_SPLIT),
-            args=(src_str_reg,) + delim_regs,
+            args=(src_str_reg, *delim_regs),
         ),
         span=span,
     )
@@ -521,7 +521,7 @@ def lower_unstring(
             CallFunction(
                 result_reg=consumed_len_reg,
                 func_name=FuncName(BuiltinName.MULTI_DELIMITER_CONSUMED_LENGTH),
-                args=(src_str_reg, target_count_reg) + delim_regs,
+                args=(src_str_reg, target_count_reg, *delim_regs),
             ),
             span=span,
         )

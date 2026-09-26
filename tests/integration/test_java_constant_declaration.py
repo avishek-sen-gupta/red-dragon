@@ -58,7 +58,7 @@ class TestJavaConstantDeclaration:
             symbol_table=linked.symbol_table,
         )
         config = VMConfig(max_steps=500)
-        vm, stats = execute_cfg(
+        vm, _stats = execute_cfg(
             linked.merged_cfg,
             linked.merged_cfg.entry,
             linked.merged_registry,
@@ -119,7 +119,7 @@ class TestJavaInterfaceConstantDeclaration:
             symbol_table=linked.symbol_table,
         )
         config = VMConfig(max_steps=500)
-        vm, stats = execute_cfg(
+        vm, _stats = execute_cfg(
             linked.merged_cfg,
             linked.merged_cfg.entry,
             linked.merged_registry,

@@ -630,7 +630,7 @@ def _find_cycle(graph: dict[Path, list[Path]], nodes: set[Path]) -> list[Path]:
         if node in path_set:
             # Found cycle — extract it
             cycle_start = path.index(node)
-            return path[cycle_start:] + [node]
+            return [*path[cycle_start:], node]
         if node in visited:
             return None
         visited.add(node)

@@ -117,6 +117,4 @@ class ASTPanel(Tree):
             return False
         if line == ast_node.start_line and col < ast_node.start_col:
             return False
-        if line == ast_node.end_line and col > ast_node.end_col:
-            return False
-        return True
+        return not (line == ast_node.end_line and col > ast_node.end_col)

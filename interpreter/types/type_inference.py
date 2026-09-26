@@ -419,11 +419,9 @@ def infer_types(
         },
         func_symbol_table=func_symbol_table,
         class_symbol_table=class_symbol_table,
-        _seeded_var_names=frozenset(
-            VarName(k) for k in type_env_builder.var_types.keys()
-        ),
+        _seeded_var_names=frozenset(VarName(k) for k in type_env_builder.var_types),
         _seeded_func_return_labels=frozenset(
-            FuncName(k) for k in type_env_builder.func_return_types.keys()
+            FuncName(k) for k in type_env_builder.func_return_types
         ),
     )
 

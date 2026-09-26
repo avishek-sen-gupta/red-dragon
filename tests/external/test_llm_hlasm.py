@@ -63,7 +63,7 @@ class TestHLASMLowering:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
         config = VMConfig(max_steps=500, source_language="hlasm")
-        vm, stats = execute_cfg(
+        vm, _stats = execute_cfg(
             cfg,
             cfg.entry,
             registry,

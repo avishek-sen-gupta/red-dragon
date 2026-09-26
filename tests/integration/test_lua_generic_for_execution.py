@@ -12,7 +12,7 @@ from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 class TestLuaIpairsExecution:
     def test_ipairs_terminates(self):
         """for _, x in ipairs(arr) should iterate and terminate."""
-        vm, stats = execute_for_language(
+        _vm, stats = execute_for_language(
             "lua",
             """\
 local arr = {10, 5, 3}
@@ -27,7 +27,7 @@ end
 
     def test_ipairs_single_element_terminates(self):
         """ipairs over single-element table terminates."""
-        vm, stats = execute_for_language(
+        _vm, stats = execute_for_language(
             "lua",
             """\
 local arr = {42}
@@ -58,7 +58,7 @@ end
 class TestLuaPairsExecution:
     def test_pairs_terminates(self):
         """for k, v in pairs(t) should terminate within step budget."""
-        vm, stats = execute_for_language(
+        _vm, stats = execute_for_language(
             "lua",
             """\
 local t = {10, 20, 30}

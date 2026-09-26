@@ -79,7 +79,7 @@ def test_materialised_resolve_local_storage_wins_over_ws_on_collision(caplog):
     )
 
     with caplog.at_level(logging.WARNING, logger="interpreter.cobol.sectioned_layout"):
-        fl, rr = m.resolve("SHARED-FIELD")
+        _fl, rr = m.resolve("SHARED-FIELD")
 
     assert rr == ls_reg  # LOCAL-STORAGE wins
     assert any(

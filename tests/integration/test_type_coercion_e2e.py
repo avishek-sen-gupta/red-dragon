@@ -82,7 +82,7 @@ class TestTypeCoecionEndToEnd:
         # Verify type inference assigned Int to %idx (Int / Int → Int via floor division)
         assert type_env.register_types.get(Register("%idx")) == FoundationTypeName.INT
 
-        vm, stats = execute_cfg(
+        vm, _stats = execute_cfg(
             cfg,
             "entry",
             registry,
@@ -104,7 +104,7 @@ class TestTypeCoecionEndToEnd:
         registry = build_registry(instructions, cfg)
 
         # No type environment — executor uses identity rules (no coercion)
-        vm, stats = execute_cfg(
+        vm, _stats = execute_cfg(
             cfg,
             "entry",
             registry,

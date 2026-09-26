@@ -133,7 +133,7 @@ def build_call_graph(cfg: CFG, registry: FunctionRegistry) -> CallGraph:
 
             else:  # CallUnknown
                 callees = frozenset()
-                arg_operands = (str(t.target_reg),) + tuple(str(a) for a in t.args)
+                arg_operands = (str(t.target_reg), *tuple(str(a) for a in t.args))
 
             site = CallSite(
                 caller=caller,

@@ -61,7 +61,7 @@ def encode_comp3(
     # If total_digits is even, prepend a zero nibble so total nibbles
     # (digits + sign) fills byte_count bytes exactly.
     if total_digits % 2 == 0:
-        all_nibbles = [0] + all_nibbles
+        all_nibbles = [0, *all_nibbles]
     all_nibbles.append(sign_nibble)
 
     for i in range(byte_count):
