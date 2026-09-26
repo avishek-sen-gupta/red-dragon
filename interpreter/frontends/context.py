@@ -132,8 +132,8 @@ class TreeSitterEmitContext:
     reg_counter: int = 0
     label_counter: int = 0
     instructions: list[InstructionBase] = field(default_factory=list)
-    loop_stack: list[dict[str, str]] = field(default_factory=list)
-    break_target_stack: list[str] = field(default_factory=list)
+    loop_stack: list[dict[str, CodeLabel]] = field(default_factory=list)
+    break_target_stack: list[CodeLabel] = field(default_factory=list)
     switch_result_stack: list[str] = field(default_factory=list)
 
     # Per-language type map: raw type string -> canonical FoundationTypeName
@@ -238,7 +238,7 @@ class TreeSitterEmitContext:
         self,
         func_name: str,
         func_label: CodeLabel,
-        result_reg: str,
+        result_reg: Register,
         node: Any = NO_NODE,
     ) -> Instruction:
         """Register a function reference in the symbol table and emit CONST.
@@ -259,7 +259,7 @@ class TreeSitterEmitContext:
         class_name: str,
         class_label: CodeLabel,
         parents: list[str],
-        result_reg: str,
+        result_reg: Register,
         node: Any = NO_NODE,
     ) -> Instruction:
         """Register a class reference in the symbol table and emit CONST.
@@ -412,7 +412,7 @@ class TreeSitterEmitContext:
 
     # ── loop stack management ────────────────────────────────────
 
-    def push_loop(self, continue_label: str, end_label: str) -> None:
+    def push_loop(self, continue_label: CodeLabel, end_label: CodeLabel) -> None:
         self.loop_stack.append(
             {"continue_label": continue_label, "end_label": end_label}
         )
