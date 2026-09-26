@@ -5,8 +5,12 @@
 default_stages: [pre-commit]
 
 repos:
+  # Pinned to the commit v1.1.414 points at, not the tag: a tag is mutable and
+  # can be re-pointed upstream, and pre-commit would fetch whatever it then
+  # names. Matches how python-fp-lint is pinned below. `pre-commit autoupdate`
+  # will try to move this back to a tag -- re-pin by SHA after running it.
   - repo: https://github.com/RobertCraigie/pyright-python
-    rev: v1.1.414
+    rev: 1aa6dfeb849ae43fb6f16fc17228bcbd358a19c3  # v1.1.414
     hooks:
       - id: pyright
   - repo: https://github.com/avishek-sen-gupta/python-fp-lint
