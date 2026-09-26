@@ -137,7 +137,7 @@ def _build_param_map(site, callee: FunctionEntry, cfg: CFG) -> dict[str, str]:
     block_label = site.location.block_label
     return {
         formal: trace_reg_to_var(actual_reg, cfg, block_label)
-        for formal, actual_reg in zip(callee.params, site.arg_operands, strict=False)
+        for formal, actual_reg in zip(callee.params, site.arg_operands)
     }
 
 

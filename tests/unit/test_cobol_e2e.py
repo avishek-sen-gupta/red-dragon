@@ -405,7 +405,7 @@ class TestCobolFrontendIdempotency:
         ir2 = frontend.lower_from_ast_dict(data)
 
         assert len(ir1) == len(ir2)
-        for i, (a, b) in enumerate(zip(ir1, ir2, strict=False)):
+        for i, (a, b) in enumerate(zip(ir1, ir2)):
             assert a.opcode == b.opcode, f"Mismatch at {i}: {a.opcode} != {b.opcode}"
             assert a.label == b.label
             assert a.result_reg == b.result_reg
