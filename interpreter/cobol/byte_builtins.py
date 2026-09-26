@@ -13,6 +13,7 @@ import struct
 from cobol_numeric.intrinsics import (
     absolute,
     annuity,
+    coerce_argument as _coerce_intrinsic_decimal,
     floor_integer,
     fraction_part,
     integer_part,
@@ -24,15 +25,10 @@ from cobol_numeric.intrinsics import (
     present_value,
     remainder,
     square_root,
+    to_result as _decimal_to_intrinsic,
     total,
     value_range,
     variance,
-)
-from cobol_numeric.intrinsics import (
-    coerce_argument as _coerce_intrinsic_decimal,
-)
-from cobol_numeric.intrinsics import (
-    to_result as _decimal_to_intrinsic,
 )
 from cobol_numeric.number import (
     as_whole_int,
@@ -1088,7 +1084,10 @@ def _test_numval_offset(text: str, *, currency: bool) -> int:
     # Optional trailing sign or CR/DB.
     rest = text[i:]
     stripped = rest.strip()
-    if (stripped in ("+", "-") and not seen_sign) or stripped.upper() in ("CR", "DB"):
+    if stripped in ("+", "-") and not seen_sign:
+        i = n
+        stripped = ""
+    elif stripped.upper() in ("CR", "DB"):
         i = n
         stripped = ""
     # Remaining must be only trailing spaces.

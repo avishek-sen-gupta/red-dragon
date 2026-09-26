@@ -101,7 +101,7 @@ let b = Box::new(n);
 let inner = *b;
 """)
         indirects = _find_all(instructions, Opcode.LOAD_INDIRECT)
-        assert len(indirects) >= 1, "Expected LOAD_INDIRECT for deref, got none"
+        assert len(indirects) >= 1, f"Expected LOAD_INDIRECT for deref, got none"
 
     @covers(RustFeature.BOX_OPTION)
     def test_deref_does_not_emit_load_field_boxed(self):

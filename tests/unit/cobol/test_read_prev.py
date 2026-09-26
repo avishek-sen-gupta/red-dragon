@@ -2,13 +2,13 @@ from pathlib import Path
 
 import pytest
 
-from cobol_asg.file_enums import OpenMode
 from interpreter.cobol.access_result import AccessCondition
 from interpreter.cobol.file_drivers import (
     IndexedDriver,
     RelativeDriver,
     SequentialDriver,
 )
+from cobol_asg.file_enums import OpenMode
 from tests.covers import NotLanguageFeature, covers
 
 

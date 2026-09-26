@@ -209,7 +209,7 @@ def main():
     print(f"  IR instructions   : {len(instructions)}")
     print(f"  CFG blocks        : {len(cfg.blocks)}")
     print(f"  Execution steps   : {stats.steps}")
-    print("  LLM calls (lower) : 1")
+    print(f"  LLM calls (lower) : 1")
     print(f"  LLM calls (VM)    : {stats.llm_calls}")
     print(f"  Lowering time     : {t_lower:.2f}s")
     print(f"  Execution time    : {t_exec:.2f}s")

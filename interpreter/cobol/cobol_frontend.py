@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING
 from cobol_asg.asg_types import CobolASG
 from cobol_asg.cobol_parser import CobolParser
 from cobol_asg.cobol_statements import _dialect_parsers
-from cobol_asg.frontend_extension import DialectParser
 from interpreter.cobol.condition_name_index import build_condition_index
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext, InstructionIdSource
@@ -28,17 +27,18 @@ from interpreter.cobol.lower_data_division import (
     lower_sectioned_data_division,
 )
 from interpreter.cobol.lower_procedure import lower_procedure_division
+from interpreter.cobol.memory_effects import MemoryEffectRecorder, NullRecorder
 from interpreter.cobol.lower_program_init import (
     lower_program_init,
     lower_ws_from_singleton,
 )
-from interpreter.cobol.memory_effects import MemoryEffectRecorder, NullRecorder
 from interpreter.cobol.sectioned_layout import (
     MaterialisedSectionedLayout,
     build_sectioned_layout,
 )
 from interpreter.cobol.statement_dispatch import dispatch_statement
 from interpreter.frontend import Frontend
+from cobol_asg.frontend_extension import DialectParser
 from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.frontends.symbol_table import SymbolTable

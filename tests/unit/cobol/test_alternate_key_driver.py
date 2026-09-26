@@ -2,12 +2,12 @@ from pathlib import Path
 
 import pytest
 
-from cobol_asg.file_enums import OpenMode
 from interpreter.cobol.access_result import AccessCondition
 from interpreter.cobol.file_drivers import (
     AlternateKeyDriver,
     open_alternate_key_driver,
 )
+from cobol_asg.file_enums import OpenMode
 from tests.covers import NotLanguageFeature, covers
 
 # 8-byte records. Primary key at offset 0 (file IS sorted by it: AAA<BBB<CCC).

@@ -10,8 +10,8 @@ from cobol_asg.cobol_statements import (
     StartStatement,
     WriteStatement,
 )
-from cobol_asg.file_enums import AccessMode, FileOrganization, OpenMode
 from interpreter.cobol.features import CobolFeature
+from cobol_asg.file_enums import AccessMode, FileOrganization, OpenMode
 from tests.covers import NotLanguageFeature, covers
 
 

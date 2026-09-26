@@ -292,7 +292,7 @@ def execute_traced(
     return trace
 
 
-def _find_function_node(node: Node, name: str) -> Node | None:
+def _find_function_node(node: Node, name: str) -> Optional[Node]:
     """Recursively walk the AST to find a function/method node matching *name*."""
     if node.type in _FUNCTION_NODE_TYPES:
         name_node = node.child_by_field_name("name")

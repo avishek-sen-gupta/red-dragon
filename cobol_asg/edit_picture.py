@@ -47,7 +47,6 @@ expected values:
 from __future__ import annotations
 
 from dataclasses import dataclass
-
 from cobol_numeric.number import (
     CobolNumber,
     digits_for_encode,

@@ -807,7 +807,7 @@ class TestLuaDottedFunctionCall:
             len(field_loads) >= 1
         ), f"Expected LOAD_FIELD 'increment', got {load_fields}"
         call_unknowns = _find_all(instructions, Opcode.CALL_UNKNOWN)
-        assert len(call_unknowns) >= 1, "Expected CALL_UNKNOWN, got none"
+        assert len(call_unknowns) >= 1, f"Expected CALL_UNKNOWN, got none"
         call_methods = _find_all(instructions, Opcode.CALL_METHOD)
         dotted_methods = [
             inst for inst in call_methods if "increment" in str(inst.operands)

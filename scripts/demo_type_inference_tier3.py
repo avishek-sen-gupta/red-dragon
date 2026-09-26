@@ -54,7 +54,7 @@ class Dog:
 
     instructions, env = _lower_and_infer(py_source, "python")
 
-    print("\n  SYMBOLIC param:self registers:\n")
+    print(f"\n  SYMBOLIC param:self registers:\n")
     symbolics = [
         i
         for i in instructions
@@ -66,7 +66,7 @@ class Dog:
         reg_type = env.register_types.get(sym.result_reg, "<untyped>")
         print(f"    {sym.result_reg} = SYMBOLIC param:self  =>  {reg_type}")
 
-    print("\n  Field tracking through typed self:\n")
+    print(f"\n  Field tracking through typed self:\n")
     store_fields = [i for i in instructions if i.opcode == Opcode.STORE_FIELD]
     for inst in store_fields:
         obj_reg = str(inst.operands[0])
@@ -99,7 +99,7 @@ class Cat {
 
     instructions, env = _lower_and_infer(java_source, "java")
 
-    print("\n  SYMBOLIC param:this registers:\n")
+    print(f"\n  SYMBOLIC param:this registers:\n")
     symbolics = [
         i
         for i in instructions
@@ -161,7 +161,7 @@ def demo_call_unknown():
     for inst in instructions:
         print(f"      {inst}")
 
-    print("\n    Key register types:")
+    print(f"\n    Key register types:")
     print(
         f"      %4 (LOAD_VAR add)       : {env.register_types.get('%4', '<untyped>')}"
     )
@@ -169,7 +169,7 @@ def demo_call_unknown():
         f"      %5 (CALL_UNKNOWN %4)    : {env.register_types.get('%5', '<untyped>')}"
     )
     print(
-        "\n    => CALL_UNKNOWN resolved: %4 came from 'add', add() -> Int, so %5 = Int"
+        f"\n    => CALL_UNKNOWN resolved: %4 came from 'add', add() -> Int, so %5 = Int"
     )
 
 
@@ -197,7 +197,7 @@ def demo_store_load_index():
     for inst in instructions:
         print(f"      {inst}")
 
-    print("\n    Key register types:")
+    print(f"\n    Key register types:")
     print(
         f"      %0 (NEW_ARRAY)          : {env.register_types.get('%0', '<untyped>')}"
     )
@@ -208,11 +208,11 @@ def demo_store_load_index():
         f"      %4 (LOAD_INDEX %0)      : {env.register_types.get('%4', '<untyped>')}"
     )
     print(
-        "\n    => STORE_INDEX recorded element type Int for %0; LOAD_INDEX retrieved it"
+        f"\n    => STORE_INDEX recorded element type Int for %0; LOAD_INDEX retrieved it"
     )
 
     # Second example: last-write-wins
-    print("\n  --- Last-write-wins semantics ---\n")
+    print(f"\n  --- Last-write-wins semantics ---\n")
 
     instructions2 = [
         IRInstruction(opcode=Opcode.LABEL, label="entry"),
@@ -232,8 +232,8 @@ def demo_store_load_index():
 
     env2 = infer_types(instructions2, _resolver())
 
-    print("    First STORE_INDEX: arr[0] = 42 (Int)")
-    print('    Second STORE_INDEX: arr[0] = "hello" (String)')
+    print(f"    First STORE_INDEX: arr[0] = 42 (Int)")
+    print(f'    Second STORE_INDEX: arr[0] = "hello" (String)')
     print(
         f"    LOAD_INDEX result: {env2.register_types.get('%3', '<untyped>')}  (last write wins)"
     )

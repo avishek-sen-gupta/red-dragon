@@ -335,7 +335,7 @@ def main():
         print(f"  IR instructions : {len(linked.merged_ir)}")
         print(f"  CFG blocks      : {len(linked.merged_cfg.blocks)}")
         print(f"  Functions       : {len(linked.merged_registry.func_params)}")
-        print("  LLM calls       : 0 (fully deterministic)")
+        print(f"  LLM calls       : 0 (fully deterministic)")
         print(f"  Total time      : {total_time * 1000:.1f}ms")
         print()
 

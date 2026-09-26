@@ -8,9 +8,9 @@ import json
 from pathlib import Path
 from typing import Any
 
-from cobol_asg.cobol_parser import make_cobol_parser
 from interpreter.cfg import build_cfg
 from interpreter.cobol.cobol_frontend import CobolFrontend
+from cobol_asg.cobol_parser import make_cobol_parser
 from interpreter.cobol.features import CobolFeature
 from interpreter.func_name import FuncName
 from interpreter.instructions import AllocRegion, Const, InstructionBase

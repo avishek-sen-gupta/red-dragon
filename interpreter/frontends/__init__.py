@@ -49,8 +49,8 @@ def get_deterministic_frontend(
 SUPPORTED_DETERMINISTIC_LANGUAGES: tuple[str, ...] = tuple(_FRONTEND_CLASSES.keys())
 
 __all__ = [
-    "SUPPORTED_DETERMINISTIC_LANGUAGES",
     "BaseFrontend",
     "Language",
     "get_deterministic_frontend",
+    "SUPPORTED_DETERMINISTIC_LANGUAGES",
 ]

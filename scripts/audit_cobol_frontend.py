@@ -489,9 +489,9 @@ def _run_pass3_runtime() -> tuple[list[str], bool]:
     cobol_logger.setLevel(logging.WARNING)
 
     try:
+        from interpreter.cobol.cobol_frontend import CobolFrontend
         from cobol_asg.cobol_parser import ProLeapCobolParser
         from cobol_asg.subprocess_runner import RealSubprocessRunner
-        from interpreter.cobol.cobol_frontend import CobolFrontend
 
         parser = ProLeapCobolParser(RealSubprocessRunner(), bridge_jar)
         frontend = CobolFrontend(parser)
@@ -650,12 +650,12 @@ def _print_coverage_matrix(result: CobolAuditResult) -> None:
     )
 
     if result.dispatch_missing:
-        print("\nDispatch gaps (bridge serialises but Python cannot parse):")
+        print(f"\nDispatch gaps (bridge serialises but Python cannot parse):")
         for t in result.dispatch_missing:
             print(f"  - {t}")
 
     if result.not_lowered:
-        print("\nLowering gaps (parsed but not lowered to IR):")
+        print(f"\nLowering gaps (parsed but not lowered to IR):")
         for t in result.not_lowered:
             print(f"  - {t}")
 

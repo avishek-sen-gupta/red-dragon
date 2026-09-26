@@ -5,6 +5,12 @@ from __future__ import annotations
 import logging
 from functools import reduce
 
+from interpreter.cobol.arithmetic_scale import (
+    expression_is_floating,
+    node_scale,
+    operand_dmax,
+)
+from interpreter.cobol.cobol_constants import BuiltinName
 from cobol_asg.cobol_expression import (
     BinOpNode,
     DfhRespNode,
@@ -21,12 +27,6 @@ from cobol_asg.cobol_expression import (
 from cobol_asg.cobol_types import CobolDataCategory
 from cobol_asg.condition_name import ConditionValue
 from cobol_asg.source_span import SourceSpan
-from interpreter.cobol.arithmetic_scale import (
-    expression_is_floating,
-    node_scale,
-    operand_dmax,
-)
-from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.condition_name_index import ConditionNameIndex
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
@@ -955,8 +955,8 @@ def _lower_expr_dict(
         # FUNCTION UPPER-CASE(A) = FUNCTION UPPER-CASE(B). Delegate to the shared
         # function-operand lowering so the call + args produce a computed value
         # register that compares normally.
-        from cobol_asg.ref_mod import FunctionCallOperand
         from interpreter.cobol.lower_arithmetic import lower_function_operand
+        from cobol_asg.ref_mod import FunctionCallOperand
 
         operand = FunctionCallOperand.from_dict(expr)
         return lower_function_operand(ctx, operand, materialised, span=span)

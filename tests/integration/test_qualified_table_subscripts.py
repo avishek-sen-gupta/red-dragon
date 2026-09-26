@@ -18,12 +18,8 @@ import json
 from cobol_asg.subprocess_runner import RealSubprocessRunner
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
-from tests.integration.cobol_helpers import (
-    bridge_jar,  # noqa: F401
-    first_region,
-    run_cobol,
-    to_fixed,
-)
+from tests.integration.cobol_helpers import bridge_jar  # noqa: F401
+from tests.integration.cobol_helpers import first_region, run_cobol, to_fixed
 
 _PREAMBLE = [
     "IDENTIFICATION DIVISION.",

@@ -1624,8 +1624,8 @@ class TestPhpStringEscaping:
         ]
         # it + ' + s \done fragments — check the escape decoded values appear
         assert any("it" in v for v in all_values)
-        assert any(v == "'" for v in all_values), f"Expected apostrophe in {all_values}"
-        assert any(v == "\\" for v in all_values), f"Expected backslash in {all_values}"
+        assert any("'" == v for v in all_values), f"Expected apostrophe in {all_values}"
+        assert any("\\" == v for v in all_values), f"Expected backslash in {all_values}"
 
     @covers(PhpFeature.STRING_INTERPOLATION)
     def test_double_quoted_newline_escape(self):
@@ -1636,7 +1636,7 @@ class TestPhpStringEscaping:
             op for inst in consts for op in inst.operands if isinstance(op, str)
         ]
         # escape_sequence \n should decode to actual newline
-        assert any(v == "\n" for v in all_values), f"Expected newline in {all_values}"
+        assert any("\n" == v for v in all_values), f"Expected newline in {all_values}"
 
     @covers(PhpFeature.STRING_INTERPOLATION)
     def test_double_quoted_dollar_escape(self):
@@ -1646,7 +1646,7 @@ class TestPhpStringEscaping:
         all_values = [
             op for inst in consts for op in inst.operands if isinstance(op, str)
         ]
-        assert any(v == "$" for v in all_values), f"Expected $ in {all_values}"
+        assert any("$" == v for v in all_values), f"Expected $ in {all_values}"
 
     @covers(PhpFeature.STRING_INTERPOLATION)
     def test_single_quoted_no_newline_decode(self):
@@ -1658,7 +1658,7 @@ class TestPhpStringEscaping:
         ]
         # \n in single-quoted PHP is NOT decoded — kept as literal \n string content
         assert not any(
-            v == "\n" for v in all_values
+            "\n" == v for v in all_values
         ), f"Single-quoted \\n must not be decoded to newline; got {all_values}"
         assert any("no" in v or "\\n" in v or "newline" in v for v in all_values)
 

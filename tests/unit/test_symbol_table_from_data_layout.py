@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from interpreter.class_name import ClassName
+from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from interpreter.cobol.data_layout import DataLayout, FieldLayout
 from interpreter.field_name import FieldName
 from interpreter.frontends.symbol_table import SymbolTable

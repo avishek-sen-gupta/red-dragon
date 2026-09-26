@@ -52,13 +52,12 @@ def _collect_boundary_labels(cfg: CFG) -> frozenset[CodeLabel]:
     """
     boundaries: set[CodeLabel] = set()
     for label, block in cfg.blocks.items():
-        if label.starts_with("end_") or (
-            label.starts_with("func_")
-            and any(
-                isinstance((t := inst), Symbolic)
-                and str(t.hint).startswith(constants.PARAM_PREFIX)
-                for inst in block.instructions
-            )
+        if label.starts_with("end_"):
+            boundaries.add(label)
+        elif label.starts_with("func_") and any(
+            isinstance((t := inst), Symbolic)
+            and str(t.hint).startswith(constants.PARAM_PREFIX)
+            for inst in block.instructions
         ):
             boundaries.add(label)
     return frozenset(boundaries)
