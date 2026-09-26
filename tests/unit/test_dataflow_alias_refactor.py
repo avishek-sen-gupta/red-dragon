@@ -1,7 +1,7 @@
 """GEN/KILL expressed via the alias relation, on name-equality locations."""
 
-from interpreter.dataflow import compute_gen_kill, collect_all_definitions
 from interpreter.cfg import build_cfg
+from interpreter.dataflow import collect_all_definitions, compute_gen_kill
 from interpreter.instructions import Const, StoreVar
 from interpreter.register import Register
 from interpreter.var_name import VarName

@@ -24,6 +24,7 @@ from typing import (
     get_type_hints,
 )
 
+from cobol_memory.storage_identifier import StorageIdentifier
 from cobol_numeric.number import CobolNumber, from_literal
 from interpreter.constants import FoundationTypeName
 from interpreter.continuation_name import NO_CONTINUATION_NAME, ContinuationName
@@ -40,7 +41,6 @@ from interpreter.ir import (
 from interpreter.operator_kind import BinopKind, UnopKind, resolve_binop, resolve_unop
 from interpreter.path_name import NO_PATH_NAME, NoPathName, PathName
 from interpreter.register import NO_REGISTER, Register
-from cobol_memory.storage_identifier import StorageIdentifier
 from interpreter.type_name import TypeName
 from interpreter.types.type_expr import (
     NULL,

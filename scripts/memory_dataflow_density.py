@@ -62,29 +62,29 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from cobol_asg.cobol_parser import make_cobol_parser  # noqa: E402
+from cobol_memory.field_extent import FieldExtent  # noqa: E402
 from interpreter import constants  # noqa: E402
 from interpreter.cfg import CFG, BasicBlock, build_cfg  # noqa: E402
 from interpreter.cobol.cobol_frontend import CobolFrontend  # noqa: E402
-from cobol_memory.field_extent import FieldExtent  # noqa: E402
 from interpreter.cobol.memory_dataflow import (  # noqa: E402
     EffectKind,
     MemoryAccess,
     _extract_def_use_chains,
+    _produced_from,
     _substitute,
     _trace_to_extents,
-    _produced_from,
     rewrite_cfg,
 )
 from interpreter.cobol.memory_effects import (  # noqa: E402
     CollectingRecorder,
     MemoryEffect,
 )
-from interpreter.instructions import InstructionId  # noqa: E402
 from interpreter.dataflow import (  # noqa: E402
     DefUseLink,
     _transitive_closure,
     solve_reaching_definitions,
 )
+from interpreter.instructions import InstructionId  # noqa: E402
 
 FieldGraph = dict[str, set[str]]
 

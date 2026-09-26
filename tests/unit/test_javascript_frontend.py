@@ -1385,7 +1385,7 @@ class TestComputedPropertyName:
             "+" in inst.operands for inst in binops
         ), f"Expected BINOP with '+', got: {[i.operands for i in binops]}"
         stores = _find_all(ir, Opcode.STORE_INDEX)
-        assert len(stores) >= 1, f"Expected STORE_INDEX for computed key"
+        assert len(stores) >= 1, "Expected STORE_INDEX for computed key"
 
     @covers(JavaScriptFeature.OBJECT_LITERAL)
     def test_mixed_computed_and_static_keys(self):

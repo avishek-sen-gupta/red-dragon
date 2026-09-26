@@ -23,9 +23,9 @@ from dataclasses import dataclass
 import pytest
 
 from cobol_asg.cobol_parser import make_cobol_parser
+from cobol_memory.field_extent import FieldExtent
 from interpreter.cfg import build_cfg
 from interpreter.cobol.cobol_frontend import CobolFrontend
-from cobol_memory.field_extent import FieldExtent
 from interpreter.cobol.memory_dataflow import (
     MemoryAccess,
     MemoryDataflowResult,

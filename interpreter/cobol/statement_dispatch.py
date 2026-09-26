@@ -40,6 +40,7 @@ from cobol_asg.cobol_statements import (
     UnstringStatement,
     WriteStatement,
 )
+from cobol_memory.region_id import RegionId
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.lower_arithmetic import (
     lower_arithmetic,
@@ -82,7 +83,6 @@ from interpreter.cobol.lower_string_inspect import (
     lower_string,
     lower_unstring,
 )
-from cobol_memory.region_id import RegionId
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 
 logger = logging.getLogger(__name__)

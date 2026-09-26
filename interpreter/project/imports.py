@@ -11,9 +11,9 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from cobol_asg.cobol_imports import extract_cobol_imports
 from interpreter.constants import Language
 from interpreter.parser import TreeSitterParserFactory
-from cobol_asg.cobol_imports import extract_cobol_imports
 from interpreter.project.types import ImportKind, ImportRef
 
 _parser_factory = TreeSitterParserFactory()
