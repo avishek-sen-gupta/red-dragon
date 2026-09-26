@@ -15,6 +15,7 @@ from interpreter.api import (
 from interpreter.func_name import FuncName
 from interpreter.project.entry_point import EntryPoint
 from interpreter.run import run
+from interpreter.cli_output import emit
 
 
 def main():
@@ -86,19 +87,19 @@ def factorial(n):
 
 result = factorial(5)
 """
-        print("No file provided. Using built-in demo:\n")
-        print(source)
+        emit("No file provided. Using built-in demo:\n")
+        emit(source)
     else:
         with open(args.file) as f:
             source = f.read()
 
     if args.ir_only:
-        print("═══ IR ═══")
-        print(dump_ir(source, args.language, args.frontend, args.backend))
+        emit("═══ IR ═══")
+        emit(dump_ir(source, args.language, args.frontend, args.backend))
         return
 
     if args.mermaid:
-        print(
+        emit(
             dump_mermaid(
                 source, args.language, args.frontend, args.backend, args.function
             )
@@ -106,8 +107,8 @@ result = factorial(5)
         return
 
     if args.cfg_only:
-        print("═══ CFG ═══")
-        print(
+        emit("═══ CFG ═══")
+        emit(
             dump_cfg(source, args.language, args.frontend, args.backend, args.function)
         )
         return
@@ -128,8 +129,8 @@ result = factorial(5)
         frontend_type=args.frontend,
     )
 
-    print("\n═══ Final VM State ═══")
-    print(json.dumps(vm.to_dict(), indent=2, default=str))
+    emit("\n═══ Final VM State ═══")
+    emit(json.dumps(vm.to_dict(), indent=2, default=str))
 
 
 if __name__ == "__main__":

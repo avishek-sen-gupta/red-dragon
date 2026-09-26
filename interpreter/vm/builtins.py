@@ -22,6 +22,7 @@ from interpreter.vm.vm_types import (
     NewObject,
     Pointer,
 )
+from interpreter.cli_output import emit
 
 _UNCOMPUTABLE = Operators.UNCOMPUTABLE
 
@@ -63,14 +64,14 @@ def _builtin_range(args: list[TypedValue], vm: VMState) -> BuiltinResult:
 def _builtin_print(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     msg = " ".join(str(a.value) for a in args)
     logger.info("[VM print] %s", msg)
-    print(msg, end="")
+    emit(msg, end="")
     return BuiltinResult(value=None)
 
 
 def _builtin_println(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """println(msg) — print msg to stdout with a newline. Used by java.io.PrintStream stub."""
     msg = " ".join(str(a.value) for a in args)
-    print(msg)
+    emit(msg)
     return BuiltinResult(value=None)
 
 

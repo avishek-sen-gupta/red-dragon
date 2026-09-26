@@ -35,6 +35,7 @@ from interpreter.run import execute_cfg, initial_vm_state
 from interpreter.run_types import UnresolvedCallStrategy, VMConfig
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.vm_types import SymbolicValue
+from interpreter.cli_output import emit
 
 logger = logging.getLogger(__name__)
 
@@ -56,9 +57,9 @@ LANGUAGE_NAME = "haskell"
 
 def _print_header(title: str):
     width = 60
-    print(f"\n{'=' * width}")
-    print(f"  {title}")
-    print(f"{'=' * width}\n")
+    emit(f"\n{'=' * width}")
+    emit(f"  {title}")
+    emit(f"{'=' * width}\n")
 
 
 def _format_val(v):
@@ -77,7 +78,7 @@ def _show_vars(vm):
     for name, val in sorted(frame.local_vars.items()):
         if name.startswith("__"):
             continue
-        print(f"    {name} = {_format_val(val)}")
+        emit(f"    {name} = {_format_val(val)}")
 
 
 def main():
@@ -105,13 +106,13 @@ def main():
     # ── Show source ──
     _print_header(f"Source ({LANGUAGE_NAME})")
     for i, line in enumerate(HASKELL_SOURCE.strip().splitlines(), 1):
-        print(f"  {i:3d} | {line}")
-    print(f"\n  Note: {LANGUAGE_NAME} has no tree-sitter frontend in RedDragon.")
-    print("  The LLM frontend will lower this to the universal IR.")
+        emit(f"  {i:3d} | {line}")
+    emit(f"\n  Note: {LANGUAGE_NAME} has no tree-sitter frontend in RedDragon.")
+    emit("  The LLM frontend will lower this to the universal IR.")
 
     # ── Phase 1: LLM IR generation ──
     _print_header(f"Phase 1: LLM IR Generation ({LANGUAGE_NAME} → IR)")
-    print(f"  Sending {LANGUAGE_NAME} source to LLM for lowering...")
+    emit(f"  Sending {LANGUAGE_NAME} source to LLM for lowering...")
 
     llm_client = get_llm_client(provider=args.backend)
     frontend = LLMFrontend(llm_client=llm_client, language=LANGUAGE_NAME)
@@ -120,15 +121,15 @@ def main():
     instructions = frontend.lower(HASKELL_SOURCE.encode("utf-8"))
     t_lower = time.perf_counter() - t0
 
-    print(f"  LLM produced {len(instructions)} IR instructions in {t_lower:.2f}s\n")
-    print("  IR:")
+    emit(f"  LLM produced {len(instructions)} IR instructions in {t_lower:.2f}s\n")
+    emit("  IR:")
     for inst in instructions:
-        print(f"    {inst}")
+        emit(f"    {inst}")
 
     # ── Phase 2: Build CFG ──
     _print_header("Phase 2: Build CFG (deterministic)")
     cfg = build_cfg(instructions)
-    print(f"  {len(cfg.blocks)} basic blocks:")
+    emit(f"  {len(cfg.blocks)} basic blocks:")
     for label, block in cfg.blocks.items():
         preds = (
             ", ".join(str(p) for p in block.predecessors)
@@ -140,14 +141,14 @@ def main():
             if block.successors
             else "(none)"
         )
-        print(
+        emit(
             f"    [{label}]  {len(block.instructions)} instructions  preds={preds}  succs={succs}"
         )
 
     # ── Phase 3: Execute ──
     _print_header("Phase 3: VM Execution")
     registry = build_registry(instructions, cfg)
-    print(
+    emit(
         f"  Registry: {len(registry.func_params)} functions, {len(registry.classes)} classes"
     )
 
@@ -168,26 +169,26 @@ def main():
         if stats.llm_calls == 0
         else ""
     )
-    print(
+    emit(
         f"\n  Execution: {stats.steps} steps, {stats.llm_calls} LLM backend calls"
         f"{resolver_note} in {t_exec:.2f}s"
     )
-    print("\n  Final variables:")
+    emit("\n  Final variables:")
     _show_vars(vm)
 
     # ── Summary ──
     _print_header("Summary")
-    print(f"  Language          : {LANGUAGE_NAME} (no tree-sitter frontend)")
-    print(f"  IR instructions   : {len(instructions)}")
-    print(f"  CFG blocks        : {len(cfg.blocks)}")
-    print(f"  Functions found   : {len(registry.func_params)}")
-    print(f"  Execution steps   : {stats.steps}")
-    print("  LLM calls (lower) : 1")
-    print(f"  LLM calls (VM backend) : {stats.llm_calls}")
-    print("  LLM calls (resolver)   : see '[local] LLM plausible:' steps above")
-    print(f"  Lowering time     : {t_lower:.2f}s")
-    print(f"  Execution time    : {t_exec:.2f}s")
-    print(f"  Total             : {t_lower + t_exec:.2f}s")
+    emit(f"  Language          : {LANGUAGE_NAME} (no tree-sitter frontend)")
+    emit(f"  IR instructions   : {len(instructions)}")
+    emit(f"  CFG blocks        : {len(cfg.blocks)}")
+    emit(f"  Functions found   : {len(registry.func_params)}")
+    emit(f"  Execution steps   : {stats.steps}")
+    emit("  LLM calls (lower) : 1")
+    emit(f"  LLM calls (VM backend) : {stats.llm_calls}")
+    emit("  LLM calls (resolver)   : see '[local] LLM plausible:' steps above")
+    emit(f"  Lowering time     : {t_lower:.2f}s")
+    emit(f"  Execution time    : {t_exec:.2f}s")
+    emit(f"  Total             : {t_lower + t_exec:.2f}s")
 
 
 if __name__ == "__main__":
