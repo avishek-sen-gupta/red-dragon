@@ -40,6 +40,7 @@ from interpreter.instructions import (
     StoreField,
     Symbolic,
 )
+from interpreter.ir import CodeLabel
 from interpreter.register import Register
 from interpreter.types.type_expr import EnumType
 from interpreter.var_name import VarName
@@ -572,7 +573,7 @@ def _emit_method_params(ctx: TreeSitterEmitContext, param_names: list[str]) -> N
 
 
 def _emit_prelude_func_ref(
-    ctx: TreeSitterEmitContext, func_name: str, func_label: str
+    ctx: TreeSitterEmitContext, func_name: str, func_label: CodeLabel
 ) -> None:
     """Emit CONST <function:name@label> + STORE_VAR."""
     func_reg = ctx.fresh_reg()

@@ -259,9 +259,9 @@ class BaseFrontend(Frontend):
     def _emit_class_ref(
         self,
         class_name: str,
-        class_label: str,
+        class_label: CodeLabel,
         parents: list[str],
-        result_reg: str,
+        result_reg: Register,
         node: Any = NO_NODE,
     ) -> InstructionBase:
         """Legacy-mode equivalent of ctx.emit_class_ref().
@@ -774,7 +774,7 @@ class BaseFrontend(Frontend):
     # ── common store target ──────────────────────────────────────
 
     def _lower_store_target(
-        self, target: Any, val_reg: str, parent_node: Any
+        self, target: Any, val_reg: Register, parent_node: Any
     ) -> None:  # Any: tree-sitter nodes — untyped at Python boundary
         if target.type == BaseNodeType.IDENTIFIER:
             self._emit_inst(
@@ -908,7 +908,7 @@ class BaseFrontend(Frontend):
         self._emit_inst(Label_(label=end_label))
 
     def _lower_alternative(
-        self, alt_node: Any, end_label: str
+        self, alt_node: Any, end_label: CodeLabel
     ) -> None:  # Any: tree-sitter node — untyped at Python boundary
         """Lower an else/elif/else-if alternative block."""
         alt_type = alt_node.type
