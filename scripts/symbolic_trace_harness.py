@@ -141,7 +141,7 @@ def execute_and_trace(linked, label: str, max_steps: int) -> None:
     print(f"  Heap objects: {trace.stats.final_heap_objects}")
 
     # --- Final state symbolic values ---
-    print("\n=== Symbolic Values in Final State ===")
+    print(f"\n=== Symbolic Values in Final State ===")
 
     final_step = trace.steps[-1] if trace.steps else None
     if not final_step:
@@ -183,7 +183,7 @@ def execute_and_trace(linked, label: str, max_steps: int) -> None:
         print(f"    {addr}.{field} = {sym.name} (hint={sym.type_hint})")
 
     # --- Creation points ---
-    print("\n=== Symbolic Value Creation Points ===")
+    print(f"\n=== Symbolic Value Creation Points ===")
     sym_first_seen: dict[str, dict] = {}
     for step in trace.steps:
         update = step.update

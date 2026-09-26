@@ -5,9 +5,9 @@ RedDragon's own fake dialect, not Squall's real ExecSqlStatement)."""
 
 from __future__ import annotations
 
+from interpreter.cobol.cobol_frontend import CobolFrontend
 from cobol_asg.cobol_parser import ProLeapCobolParser
 from cobol_asg.subprocess_runner import RealSubprocessRunner
-from interpreter.cobol.cobol_frontend import CobolFrontend
 from tests.integration.cobol_helpers import (
     bridge_jar,  # noqa: F401
     to_fixed,

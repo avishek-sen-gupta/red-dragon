@@ -16,8 +16,8 @@ import pytest
 from cobol_asg import picture
 from cobol_asg.cobol_types import CobolDataCategory
 from cobol_asg.edit_picture import UnsupportedEditPictureError
-from cobol_asg.pic_parser import parse_pic
 from interpreter.cobol.features import CobolFeature
+from cobol_asg.pic_parser import parse_pic
 from tests.covers import FeatureStatus, covers
 
 

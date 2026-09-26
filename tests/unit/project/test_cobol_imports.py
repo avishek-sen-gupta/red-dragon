@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from cobol_asg.cobol_imports import extract_cobol_imports
 from interpreter.cobol.features import CobolFeature
 from interpreter.constants import Language
+from cobol_asg.cobol_imports import extract_cobol_imports
 from interpreter.project.imports import extract_imports
 from interpreter.project.resolver import NO_PATH
 from interpreter.project.types import ImportKind, ImportRef

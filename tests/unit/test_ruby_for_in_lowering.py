@@ -33,8 +33,8 @@ end
             if inst.opcode == Opcode.CONST and inst.operands
         ]
         assert "in arr" not in const_operands, (
-            "Found 'in arr' as CONST — the 'in' node is being lowered "
-            "as a string constant instead of unwrapping the iterable"
+            f"Found 'in arr' as CONST — the 'in' node is being lowered "
+            f"as a string constant instead of unwrapping the iterable"
         )
 
     @covers(RubyFeature.FOR_IN_LOOP)

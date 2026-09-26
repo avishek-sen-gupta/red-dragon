@@ -113,7 +113,7 @@ def _handle_load_region(
     length = t.length
 
     if _is_symbolic(region_addr) or _is_symbolic(offset):
-        sym = vm.fresh_symbolic(hint="region_load")
+        sym = vm.fresh_symbolic(hint=f"region_load")
         return ExecutionResult.success(
             StateUpdate(
                 register_writes={t.result_reg: typed(sym, UNKNOWN)},

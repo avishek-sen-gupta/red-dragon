@@ -28,8 +28,8 @@ from cobol_asg.edit_picture import (
     format_edited,
     parse_edit_picture,
 )
-from cobol_asg.pic_parser import parse_pic
 from interpreter.cobol.features import CobolFeature
+from cobol_asg.pic_parser import parse_pic
 from tests.covers import covers
 
 

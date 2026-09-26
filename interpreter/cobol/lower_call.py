@@ -12,19 +12,18 @@ from cobol_asg.cobol_statements import (
     EntryStatement,
 )
 from cobol_asg.ref_mod import RefModOperand
-from cobol_asg.source_span import SourceSpan
 from cobol_memory.field_extent import FieldExtent, Precision
 from cobol_memory.region_id import RegionId
-from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
+from interpreter.func_name import FuncName
+from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.lower_arithmetic import eval_ref_mod_expr
 from interpreter.cobol.lower_program_exit import (
     emit_return_code_load,
     emit_return_code_store,
 )
-from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
-from interpreter.func_name import FuncName
 from interpreter.instructions import (
     AllocRegion,
     Binop,
@@ -36,6 +35,7 @@ from interpreter.instructions import (
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import resolve_binop
 from interpreter.register import NO_REGISTER, Register
+from cobol_asg.source_span import SourceSpan
 from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)

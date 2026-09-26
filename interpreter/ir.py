@@ -271,13 +271,13 @@ def IRInstruction(
         """Minimal shim carrying the fields ``_to_typed`` needs."""
 
         __slots__ = (
-            "branch_targets",
-            "label",
-            "literal_type",
             "opcode",
-            "operands",
             "result_reg",
+            "operands",
+            "label",
+            "branch_targets",
             "source_location",
+            "literal_type",
         )
 
         def __init__(

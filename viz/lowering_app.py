@@ -34,14 +34,14 @@ class LoweringIRPanel(Static):
             return
 
         text = Text()
-        text.append("  Handler: ", style="dim")
+        text.append(f"  Handler: ", style="dim")
         text.append(f"{self._event.handler_name}", style="bold cyan")
         text.append(f" ({self._event.handler_module})\n", style="dim")
-        text.append("  Node: ", style="dim")
+        text.append(f"  Node: ", style="dim")
         text.append(f"{self._event.ast_node_type}", style="bold")
-        text.append("  Dispatch: ", style="dim")
+        text.append(f"  Dispatch: ", style="dim")
         text.append(f"{self._event.dispatch_type}\n", style="yellow")
-        text.append("  Source: ", style="dim")
+        text.append(f"  Source: ", style="dim")
         text.append(f"L{self._event.start_line}:{self._event.start_col}")
         text.append(f" → L{self._event.end_line}:{self._event.end_col}\n")
         text.append("\n")

@@ -47,7 +47,7 @@ from interpreter.run_types import (
     PipelineStats,
     UnresolvedCallStrategy,
     VMConfig,
-)
+)  # noqa: F401 — re-exported for backwards compatibility
 from interpreter.trace_types import ExecutionTrace, TraceStep
 from interpreter.type_name import TypeName
 from interpreter.types.coercion.binop_coercion import (

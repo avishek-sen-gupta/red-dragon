@@ -9,6 +9,7 @@ from cobol_asg.asg_types import (
     CobolSection,
 )
 from cobol_asg.cobol_expression import expr_from_dict
+from interpreter.cobol.cobol_frontend import CobolFrontend
 from cobol_asg.cobol_parser import make_cobol_parser
 from cobol_asg.cobol_statements import (
     AcceptStatement,
@@ -56,9 +57,8 @@ from cobol_asg.cobol_statements import (
     UnstringStatement,
     WriteStatement,
 )
-from cobol_asg.ref_mod import RefModOperand
-from interpreter.cobol.cobol_frontend import CobolFrontend
 from interpreter.cobol.features import CobolFeature
+from cobol_asg.ref_mod import RefModOperand
 from interpreter.continuation_name import ContinuationName
 from interpreter.instructions import AllocRegion, Const, InstructionBase
 from interpreter.ir import Opcode
@@ -1323,7 +1323,7 @@ class TestSectionPerform:
         # Should branch to section_WORK-SECTION
         branches = _find_opcodes(instructions, Opcode.BRANCH)
         section_branches = [
-            b for b in branches if b.label and b.label == "section_WORK-SECTION"
+            b for b in branches if b.label and "section_WORK-SECTION" == b.label
         ]
         assert len(section_branches) >= 1
 

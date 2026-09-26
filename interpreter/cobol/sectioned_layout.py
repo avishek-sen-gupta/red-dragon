@@ -7,7 +7,6 @@ import logging
 from dataclasses import dataclass, field
 
 from cobol_asg.asg_types import CobolASG
-from cobol_memory.region_id import RegionId
 from interpreter.cobol.data_layout import (
     DataLayout,
     FieldLayout,
@@ -15,6 +14,7 @@ from interpreter.cobol.data_layout import (
     build_data_layout,
     build_index_layout,
 )
+from cobol_memory.region_id import RegionId
 from interpreter.register import NO_REGISTER, Register
 
 logger = logging.getLogger(__name__)

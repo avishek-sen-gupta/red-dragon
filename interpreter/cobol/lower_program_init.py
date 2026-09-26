@@ -27,10 +27,10 @@ after the procedure body.
 
 from __future__ import annotations
 
-from cobol_memory.region_id import RegionId
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.lower_data_division import lower_data_division
+from cobol_memory.region_id import RegionId
 from interpreter.cobol.special_registers import (
     RETURN_CODE_HANDLE,
     SPECIAL_REGISTERS_LAYOUT,

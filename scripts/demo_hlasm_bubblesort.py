@@ -145,7 +145,7 @@ def main():
     _print_header(f"Source ({LANGUAGE_NAME})")
     for i, line in enumerate(HLASM_SOURCE.strip().splitlines(), 1):
         print(f"  {i:3d} | {line}")
-    print("\n  Input array:    [5, 3, 8, 1, 4]")
+    print(f"\n  Input array:    [5, 3, 8, 1, 4]")
     print(f"  Expected sorted: {EXPECTED_SORTED}")
 
     # ── Phase 1: LLM IR generation ──
@@ -303,9 +303,9 @@ def main():
     else:
         print("\n  Could not find array in variables or heap.")
         print("  Dumping all state for manual inspection:")
-        print("\n  Variables:")
+        print(f"\n  Variables:")
         _show_vars(vm)
-        print("\n  Heap:")
+        print(f"\n  Heap:")
         for addr, obj in vm.heap_items():
             unwrapped = {k: v.value for k, v in obj.fields.items()}
             print(f"    [{addr}] type={obj.type_hint} fields={unwrapped}")
@@ -316,7 +316,7 @@ def main():
     print(f"  IR instructions   : {len(instructions)}")
     print(f"  CFG blocks        : {len(cfg.blocks)}")
     print(f"  Execution steps   : {stats.steps}")
-    print("  LLM calls (lower) : 1")
+    print(f"  LLM calls (lower) : 1")
     print(f"  LLM calls (VM)    : {stats.llm_calls}")
     print(f"  Lowering time     : {t_lower:.2f}s")
     print(f"  Execution time    : {t_exec:.2f}s")
