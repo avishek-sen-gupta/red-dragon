@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import pytest
 
-from interpreter.cobol.features import CobolFeature
 from cobol_asg.pic_parser import parse_pic
+from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.pic_scale import encode_scaled_digits
 from tests.covers import covers
 

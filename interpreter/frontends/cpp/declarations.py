@@ -284,9 +284,10 @@ def _lower_cpp_class_body_b2(
             lower_struct_field(ctx, child)
         elif child.type == CppNodeType.TEMPLATE_DECLARATION:
             lower_template_decl(ctx, child)
-        elif child.type == CppNodeType.FRIEND_DECLARATION:
-            continue
-        elif child.type == CppNodeType.ACCESS_SPECIFIER:
+        elif (
+            child.type == CppNodeType.FRIEND_DECLARATION
+            or child.type == CppNodeType.ACCESS_SPECIFIER
+        ):
             continue
         elif child.type == CppNodeType.FIELD_INITIALIZER_LIST:
             lower_field_initializer_list(ctx, child)
@@ -311,9 +312,10 @@ def lower_cpp_class_body(
             lower_struct_field(ctx, child)
         elif child.type == CppNodeType.TEMPLATE_DECLARATION:
             lower_template_decl(ctx, child)
-        elif child.type == CppNodeType.FRIEND_DECLARATION:
-            continue
-        elif child.type == CppNodeType.ACCESS_SPECIFIER:
+        elif (
+            child.type == CppNodeType.FRIEND_DECLARATION
+            or child.type == CppNodeType.ACCESS_SPECIFIER
+        ):
             continue
         elif child.type == CppNodeType.FIELD_INITIALIZER_LIST:
             lower_field_initializer_list(ctx, child)

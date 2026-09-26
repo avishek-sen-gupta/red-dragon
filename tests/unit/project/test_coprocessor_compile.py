@@ -5,10 +5,10 @@ from unittest import mock
 
 import pytest
 
-from interpreter.frontend import make_cobol_parser
-from interpreter.run import EntryPoint, initial_vm_state, run_linked
 from cobol_asg.frontend_extension import NullDialectParser
+from interpreter.frontend import make_cobol_parser
 from interpreter.project.coprocessor_compile import CoprocessorSpec, compile_program
+from interpreter.run import EntryPoint, initial_vm_state, run_linked
 
 
 def test_default_source_prepass_is_identity():
@@ -177,13 +177,11 @@ def test_specs_contributions_merge_and_a_default_spec_contributes_nothing():
         captured.update(kwargs)
         raise _Captured
 
-    with pytest.raises(_Captured):
-        with mock.patch(
-            "interpreter.project.coprocessor_compile.compile_cobol", capture
-        ):
-            compile_program(
-                _TRIVIAL_PROGRAM, make_cobol_parser(), [quiet, first, second]
-            )
+    with (
+        pytest.raises(_Captured),
+        mock.patch("interpreter.project.coprocessor_compile.compile_cobol", capture),
+    ):
+        compile_program(_TRIVIAL_PROGRAM, make_cobol_parser(), [quiet, first, second])
 
     assert captured["extra_subprogram_sources"] == {"ONE": b"one", "TWO": b"two"}
 

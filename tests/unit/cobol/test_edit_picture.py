@@ -11,14 +11,13 @@ Expected values follow IBM Enterprise COBOL editing rules.
 
 from __future__ import annotations
 
-
 from cobol_asg.cobol_types import CobolDataCategory
 from cobol_asg.edit_picture import (
     format_edited,
     parse_edit_picture,
 )
-from interpreter.cobol.features import CobolFeature
 from cobol_asg.pic_parser import parse_pic
+from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
 
 

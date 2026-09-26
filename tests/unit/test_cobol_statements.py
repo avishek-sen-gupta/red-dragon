@@ -4,16 +4,16 @@ import pytest
 
 from cobol_asg.cobol_statements import (
     AcceptStatement,
-    AlterStatement,
     AlteredGoto,
+    AlterStatement,
     ArithmeticStatement,
     CallStatement,
     CallTarget,
     CancelStatement,
     CloseStatement,
+    ComputedGoto,
     ComputeStatement,
     ComputeTarget,
-    ComputedGoto,
     ContinueStatement,
     DeleteStatement,
     DisplayStatement,
@@ -47,8 +47,8 @@ from cobol_asg.cobol_statements import (
     XmlGenerateStatement,
     parse_statement,
 )
-from interpreter.cobol.features import CobolFeature
 from cobol_asg.ref_mod import RefModOperand
+from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
 
 
