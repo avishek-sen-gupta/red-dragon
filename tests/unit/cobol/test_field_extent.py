@@ -1,7 +1,5 @@
 """FieldExtent alias algebra — overlap, subsumption, and the laws they obey."""
 
-import pytest
-
 from cobol_memory.field_extent import FieldExtent, Precision
 from cobol_memory.region_id import RegionId
 from tests.covers import NotLanguageFeature, covers
