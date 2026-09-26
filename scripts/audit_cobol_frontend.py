@@ -31,6 +31,7 @@ if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
 from cobol_asg.cobol_statements import _DISPATCH_TABLE  # noqa: E402
+from interpreter.cli_output import emit
 
 logger = logging.getLogger(__name__)
 
@@ -591,11 +592,11 @@ def _print_coverage_matrix(result: CobolAuditResult) -> None:
     )
     separator = "-" * len(header)
 
-    print("\n" + separator)
-    print("COBOL Frontend Coverage Audit")
-    print(separator)
-    print(header)
-    print(separator)
+    emit("\n" + separator)
+    emit("COBOL Frontend Coverage Audit")
+    emit(separator)
+    emit(header)
+    emit(separator)
 
     status_counts: dict[str, int] = {}
     for proleap_type in sorted_types:
@@ -619,7 +620,7 @@ def _print_coverage_matrix(result: CobolAuditResult) -> None:
             else ("n/a" if not dispatch_ok else "MISSING")
         )
 
-        print(
+        emit(
             f"{proleap_type:<{col_widths['type']}} "
             f"{bridge_mark:<{col_widths['bridge']}} "
             f"{dispatch_mark:<{col_widths['dispatch']}} "
@@ -627,61 +628,61 @@ def _print_coverage_matrix(result: CobolAuditResult) -> None:
             f"{status:<{col_widths['status']}}"
         )
 
-    print(separator)
+    emit(separator)
 
     # Summary
     handled = status_counts.get(StatusCategory.HANDLED, 0)
     handled_stub = status_counts.get(StatusCategory.HANDLED_STUB, 0)
-    print(f"\nTotal ProLeap statement types: {result.total_proleap_types}")
-    print(f"  HANDLED (full pipeline):     {handled}")
-    print(f"  HANDLED_STUB (I/O provider): {handled_stub}")
-    print(f"  Total handled:               {handled + handled_stub}")
-    print(
+    emit(f"\nTotal ProLeap statement types: {result.total_proleap_types}")
+    emit(f"  HANDLED (full pipeline):     {handled}")
+    emit(f"  HANDLED_STUB (I/O provider): {handled_stub}")
+    emit(f"  Total handled:               {handled + handled_stub}")
+    emit(
         f"  BRIDGE_ONLY (serialised):    {status_counts.get(StatusCategory.BRIDGE_ONLY, 0)}"
     )
-    print(
+    emit(
         f"  DISPATCH_MISSING:            {status_counts.get(StatusCategory.DISPATCH_MISSING, 0)}"
     )
-    print(
+    emit(
         f"  NOT_LOWERED:                 {status_counts.get(StatusCategory.NOT_LOWERED, 0)}"
     )
-    print(
+    emit(
         f"  BRIDGE_UNKNOWN (skeleton):   {status_counts.get(StatusCategory.BRIDGE_UNKNOWN, 0)}"
     )
 
     if result.dispatch_missing:
-        print("\nDispatch gaps (bridge serialises but Python cannot parse):")
+        emit("\nDispatch gaps (bridge serialises but Python cannot parse):")
         for t in result.dispatch_missing:
-            print(f"  - {t}")
+            emit(f"  - {t}")
 
     if result.not_lowered:
-        print("\nLowering gaps (parsed but not lowered to IR):")
+        emit("\nLowering gaps (parsed but not lowered to IR):")
         for t in result.not_lowered:
-            print(f"  - {t}")
+            emit(f"  - {t}")
 
     if result.bridge_unknown:
-        print(
+        emit(
             f"\nBridge gaps ({len(result.bridge_unknown)} types use skeleton serialisation):"
         )
         for t in result.bridge_unknown:
-            print(f"  - {t}")
+            emit(f"  - {t}")
 
     # Pass 3 results
     if result.runtime_available:
         if result.runtime_warnings:
-            print(
+            emit(
                 f"\nRuntime warnings ({len(result.runtime_warnings)} unhandled at lowering):"
             )
             for w in result.runtime_warnings:
-                print(f"  - {w}")
+                emit(f"  - {w}")
         else:
-            print(
+            emit(
                 "\nRuntime: no unhandled statement warnings (all exercised types lowered successfully)"
             )
     else:
-        print("\nRuntime: skipped (bridge JAR not available)")
+        emit("\nRuntime: skipped (bridge JAR not available)")
 
-    print(separator)
+    emit(separator)
 
     # ── DATA DIVISION Coverage ──────────────────────────────────────
     dd = result.data_division
@@ -701,11 +702,11 @@ def _print_coverage_matrix(result: CobolAuditResult) -> None:
     )
     dd_separator = "-" * len(dd_header)
 
-    print("\n" + dd_separator)
-    print("DATA DIVISION Coverage Audit")
-    print(dd_separator)
-    print(dd_header)
-    print(dd_separator)
+    emit("\n" + dd_separator)
+    emit("DATA DIVISION Coverage Audit")
+    emit(dd_separator)
+    emit(dd_header)
+    emit(dd_separator)
 
     dd_status_counts: dict[str, int] = {}
     for feature in sorted(dd.all_features):
@@ -724,7 +725,7 @@ def _print_coverage_matrix(result: CobolAuditResult) -> None:
             else ("n/a" if feature not in dd.python_modelled else "no")
         )
 
-        print(
+        emit(
             f"{feature:<{dd_col_widths['feature']}} "
             f"{bridge_mark:<{dd_col_widths['bridge']}} "
             f"{modelled_mark:<{dd_col_widths['modelled']}} "
@@ -732,7 +733,7 @@ def _print_coverage_matrix(result: CobolAuditResult) -> None:
             f"{status.value:<{dd_col_widths['status']}}"
         )
 
-    print(dd_separator)
+    emit(dd_separator)
 
     dd_handled = dd_status_counts.get(DataDivisionStatus.HANDLED.value, 0)
     dd_bridge_only = dd_status_counts.get(DataDivisionStatus.BRIDGE_ONLY.value, 0)
@@ -741,31 +742,31 @@ def _print_coverage_matrix(result: CobolAuditResult) -> None:
     )
     dd_not_extracted = dd_status_counts.get(DataDivisionStatus.NOT_EXTRACTED.value, 0)
 
-    print(f"\nTotal DATA DIVISION features: {len(dd.all_features)}")
-    print(f"  HANDLED (full pipeline):     {dd_handled}")
-    print(f"  BRIDGE_ONLY:                 {dd_bridge_only}")
-    print(f"  MODELLED_NOT_HANDLED:        {dd_modelled_not}")
-    print(f"  NOT_EXTRACTED:               {dd_not_extracted}")
+    emit(f"\nTotal DATA DIVISION features: {len(dd.all_features)}")
+    emit(f"  HANDLED (full pipeline):     {dd_handled}")
+    emit(f"  BRIDGE_ONLY:                 {dd_bridge_only}")
+    emit(f"  MODELLED_NOT_HANDLED:        {dd_modelled_not}")
+    emit(f"  NOT_EXTRACTED:               {dd_not_extracted}")
 
     dd_not_extracted_features = sorted(
         f for f, s in dd.classified.items() if s == DataDivisionStatus.NOT_EXTRACTED
     )
     if dd_not_extracted_features:
-        print(f"\nNot extracted ({len(dd_not_extracted_features)} features):")
+        emit(f"\nNot extracted ({len(dd_not_extracted_features)} features):")
         for f in dd_not_extracted_features:
-            print(f"  - {f}")
+            emit(f"  - {f}")
 
     dd_bridge_only_features = sorted(
         f for f, s in dd.classified.items() if s == DataDivisionStatus.BRIDGE_ONLY
     )
     if dd_bridge_only_features:
-        print(
+        emit(
             f"\nBridge-only ({len(dd_bridge_only_features)} features — extracted but not modelled in Python):"
         )
         for f in dd_bridge_only_features:
-            print(f"  - {f}")
+            emit(f"  - {f}")
 
-    print(dd_separator + "\n")
+    emit(dd_separator + "\n")
 
 
 # ── COBOL sample source for Pass 3 ───────────────────────────────

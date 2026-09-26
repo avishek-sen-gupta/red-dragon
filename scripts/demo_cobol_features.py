@@ -34,6 +34,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from interpreter.run import run
+from interpreter.cli_output import emit
 
 logger = logging.getLogger(__name__)
 
@@ -130,21 +131,21 @@ def _show_results(title: str, vm, fields: list[Field]) -> None:
     """Display decoded field values from the first memory region."""
     region = list(vm.region_get(list(vm.region_keys())[0]))
 
-    print()
-    print("=" * 72)
-    print(f"  {title}")
-    print("=" * 72)
+    emit()
+    emit("=" * 72)
+    emit(f"  {title}")
+    emit("=" * 72)
     hdr_name = "Field"
     hdr_val = "Value"
-    print(f"  {hdr_name:<14} {hdr_val:>10}   Description")
-    print("-" * 72)
+    emit(f"  {hdr_name:<14} {hdr_val:>10}   Description")
+    emit("-" * 72)
     for f in fields:
         if f.kind == "numeric":
             val = str(_decode_zoned(region, f.offset, f.length))
         else:
             val = repr(_decode_alpha(region, f.offset, f.length))
-        print(f"  {f.name:<14} {val:>10}   {f.description}")
-    print("=" * 72)
+        emit(f"  {f.name:<14} {val:>10}   {f.description}")
+    emit("=" * 72)
 
 
 # ── Demo programs ────────────────────────────────────────────────
@@ -491,15 +492,15 @@ def demo_blank_when_zero() -> None:
 
     region = list(vm.region_get(list(vm.region_keys())[0]))
 
-    print()
-    print("=" * 72)
-    print("  BLANK WHEN ZERO: zero -> spaces, non-zero -> normal digits")
-    print("=" * 72)
+    emit()
+    emit("=" * 72)
+    emit("  BLANK WHEN ZERO: zero -> spaces, non-zero -> normal digits")
+    emit("=" * 72)
     hdr_name = "Field"
     hdr_val = "Value"
     hdr_raw = "Raw bytes"
-    print(f"  {hdr_name:<14} {hdr_val:>10}   {hdr_raw:<20}  Description")
-    print("-" * 72)
+    emit(f"  {hdr_name:<14} {hdr_val:>10}   {hdr_raw:<20}  Description")
+    emit("-" * 72)
 
     bwz_fields = [
         ("WS-AMT1", 0, 4, "BWZ + VALUE 0 -> spaces"),
@@ -517,9 +518,9 @@ def demo_blank_when_zero() -> None:
         else:
             val = _decode_zoned(region, off, ln)
             display = str(val)
-        print(f"  {name:<14} {display:>10}   [{raw_hex}]  {desc}")
+        emit(f"  {name:<14} {display:>10}   [{raw_hex}]  {desc}")
 
-    print("=" * 72)
+    emit("=" * 72)
 
 
 # ── Registry ─────────────────────────────────────────────────────
@@ -563,9 +564,9 @@ def main() -> None:
         logging.basicConfig(level=logging.DEBUG)
 
     if args.list:
-        print("Available COBOL demo programs:")
+        emit("Available COBOL demo programs:")
         for key, (desc, _) in DEMOS.items():
-            print(f"  {key:<18} {desc}")
+            emit(f"  {key:<18} {desc}")
         return
 
     jar_path = os.environ.get(
@@ -575,8 +576,8 @@ def main() -> None:
         ),
     )
     if not os.path.isfile(jar_path):
-        print(f"ERROR: ProLeap bridge JAR not found at {jar_path}")
-        print("Set PROLEAP_BRIDGE_JAR or build with: cd proleap-bridge && mvn package")
+        emit(f"ERROR: ProLeap bridge JAR not found at {jar_path}")
+        emit("Set PROLEAP_BRIDGE_JAR or build with: cd proleap-bridge && mvn package")
         sys.exit(1)
     os.environ["PROLEAP_BRIDGE_JAR"] = jar_path
 
@@ -585,10 +586,10 @@ def main() -> None:
     total = len(programs_to_run)
     for i, key in enumerate(programs_to_run, 1):
         desc, fn = DEMOS[key]
-        print(f"\n>>> [{i}/{total}] {desc}")
+        emit(f"\n>>> [{i}/{total}] {desc}")
         fn()
 
-    print(f"\nAll {total} demo(s) completed successfully.")
+    emit(f"\nAll {total} demo(s) completed successfully.")
 
 
 if __name__ == "__main__":

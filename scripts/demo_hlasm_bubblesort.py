@@ -29,6 +29,7 @@ from interpreter.types.type_inference import infer_types
 from interpreter.types.type_resolver import TypeResolver
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.vm_types import SymbolicValue
+from interpreter.cli_output import emit
 
 logger = logging.getLogger(__name__)
 
@@ -103,9 +104,9 @@ EXPECTED_SORTED = [1, 3, 4, 5, 8]
 
 def _print_header(title: str):
     width = 60
-    print(f"\n{'=' * width}")
-    print(f"  {title}")
-    print(f"{'=' * width}\n")
+    emit(f"\n{'=' * width}")
+    emit(f"  {title}")
+    emit(f"{'=' * width}\n")
 
 
 def _format_val(v):
@@ -124,7 +125,7 @@ def _show_vars(vm):
     for name, val in sorted(frame.local_vars.items()):
         if name.startswith("__"):
             continue
-        print(f"    {name} = {_format_val(val)}")
+        emit(f"    {name} = {_format_val(val)}")
 
 
 def main():
@@ -144,13 +145,13 @@ def main():
     # ── Show source ──
     _print_header(f"Source ({LANGUAGE_NAME})")
     for i, line in enumerate(HLASM_SOURCE.strip().splitlines(), 1):
-        print(f"  {i:3d} | {line}")
-    print("\n  Input array:    [5, 3, 8, 1, 4]")
-    print(f"  Expected sorted: {EXPECTED_SORTED}")
+        emit(f"  {i:3d} | {line}")
+    emit("\n  Input array:    [5, 3, 8, 1, 4]")
+    emit(f"  Expected sorted: {EXPECTED_SORTED}")
 
     # ── Phase 1: LLM IR generation ──
     _print_header(f"Phase 1: LLM IR Generation ({LANGUAGE_NAME} → IR)")
-    print(f"  Sending {LANGUAGE_NAME} source to LLM for lowering...")
+    emit(f"  Sending {LANGUAGE_NAME} source to LLM for lowering...")
 
     llm_client = get_llm_client(provider=args.backend)
     frontend = LLMFrontend(llm_client=llm_client, language=LANGUAGE_NAME)
@@ -159,38 +160,38 @@ def main():
     instructions = frontend.lower(HLASM_SOURCE.encode("utf-8"))
     t_lower = time.perf_counter() - t0
 
-    print(f"  LLM produced {len(instructions)} IR instructions in {t_lower:.2f}s\n")
-    print("  IR:")
+    emit(f"  LLM produced {len(instructions)} IR instructions in {t_lower:.2f}s\n")
+    emit("  IR:")
     for inst in instructions:
-        print(f"    {inst}")
+        emit(f"    {inst}")
 
     # ── Type Inference ──
     _print_header("Type Inference")
     resolver = TypeResolver(DefaultTypeConversionRules())
     env = infer_types(instructions, resolver)
 
-    print("  Register types:")
+    emit("  Register types:")
     for reg, typ in sorted(env.register_types.items()):
-        print(f"    {reg:8s} : {typ}")
+        emit(f"    {reg:8s} : {typ}")
 
-    print("\n  Variable types:")
+    emit("\n  Variable types:")
     for var, typ in sorted(env.var_types.items()):
-        print(f"    {var:8s} : {typ}")
+        emit(f"    {var:8s} : {typ}")
 
     from interpreter.types.type_expr import UNBOUND
 
     unbound_sigs = env.method_signatures.get(UNBOUND, {})
     if unbound_sigs:
-        print("\n  Function signatures:")
+        emit("\n  Function signatures:")
         for name, sigs in sorted(unbound_sigs.items()):
             for sig in sigs:
                 params = ", ".join(f"{p}: {t}" for p, t in sig.params)
-                print(f"    {name}({params}) -> {sig.return_type}")
+                emit(f"    {name}({params}) -> {sig.return_type}")
 
     # ── Phase 2: Build CFG ──
     _print_header("Phase 2: Build CFG (deterministic)")
     cfg = build_cfg(instructions)
-    print(f"  {len(cfg.blocks)} basic blocks:")
+    emit(f"  {len(cfg.blocks)} basic blocks:")
     for label, block in cfg.blocks.items():
         preds = (
             ", ".join(str(p) for p in block.predecessors)
@@ -202,7 +203,7 @@ def main():
             if block.successors
             else "(none)"
         )
-        print(
+        emit(
             f"    [{label}]  {len(block.instructions)} instructions  "
             f"preds={preds}  succs={succs}"
         )
@@ -222,11 +223,11 @@ def main():
     vm, stats = execute_cfg(cfg, cfg.entry, registry, config, vm=initial_vm_state())
     t_exec = time.perf_counter() - t0
 
-    print(
+    emit(
         f"  Execution: {stats.steps} steps, {stats.llm_calls} LLM calls "
         f"in {t_exec:.2f}s"
     )
-    print("\n  Final variables:")
+    emit("\n  Final variables:")
     _show_vars(vm)
 
     # ── Verify ──
@@ -251,14 +252,14 @@ def main():
         key=lambda x: x[0],
     )
 
-    print(f"  All numeric variables: {[(n, v) for n, v in arr_candidates]}")
+    emit(f"  All numeric variables: {[(n, v) for n, v in arr_candidates]}")
 
     # Check heap for array objects
     if vm.heap_count():
-        print(f"\n  Heap objects ({vm.heap_count()}):")
+        emit(f"\n  Heap objects ({vm.heap_count()}):")
         for addr, obj in vm.heap_items():
             unwrapped = {k: v.value for k, v in obj.fields.items()}
-            print(f"    [{addr}] type={obj.type_hint} fields={unwrapped}")
+            emit(f"    [{addr}] type={obj.type_hint} fields={unwrapped}")
 
     # Try to extract the sorted array
     sorted_result = []
@@ -268,7 +269,7 @@ def main():
         fields = obj.fields
         if any(str(i) in fields for i in range(5)):
             sorted_result = [fields.get(str(i)).value for i in range(5)]
-            print(f"\n  Found array in heap object [{addr}]: {sorted_result}")
+            emit(f"\n  Found array in heap object [{addr}]: {sorted_result}")
             break
 
     # Strategy 2: look for variables like arr_0..arr_4
@@ -281,7 +282,7 @@ def main():
                     candidates.append(all_vars[key])
             if len(candidates) == 5:
                 sorted_result = candidates
-                print(
+                emit(
                     f"\n  Found array as variables {prefix}0..{prefix}4: {sorted_result}"
                 )
                 break
@@ -291,36 +292,36 @@ def main():
         for n, v in all_vars.items():
             if isinstance(v, list) and len(v) == 5:
                 sorted_result = v
-                print(f"\n  Found array as list in variable '{n}': {sorted_result}")
+                emit(f"\n  Found array as list in variable '{n}': {sorted_result}")
                 break
 
     if sorted_result:
         concrete = [int(x) if isinstance(x, (int, float)) else x for x in sorted_result]
         if concrete == EXPECTED_SORTED:
-            print(f"\n  ✓ CORRECT: {concrete} matches expected {EXPECTED_SORTED}")
+            emit(f"\n  ✓ CORRECT: {concrete} matches expected {EXPECTED_SORTED}")
         else:
-            print(f"\n  ✗ WRONG: {concrete} does not match expected {EXPECTED_SORTED}")
+            emit(f"\n  ✗ WRONG: {concrete} does not match expected {EXPECTED_SORTED}")
     else:
-        print("\n  Could not find array in variables or heap.")
-        print("  Dumping all state for manual inspection:")
-        print("\n  Variables:")
+        emit("\n  Could not find array in variables or heap.")
+        emit("  Dumping all state for manual inspection:")
+        emit("\n  Variables:")
         _show_vars(vm)
-        print("\n  Heap:")
+        emit("\n  Heap:")
         for addr, obj in vm.heap_items():
             unwrapped = {k: v.value for k, v in obj.fields.items()}
-            print(f"    [{addr}] type={obj.type_hint} fields={unwrapped}")
+            emit(f"    [{addr}] type={obj.type_hint} fields={unwrapped}")
 
     # ── Summary ──
     _print_header("Summary")
-    print(f"  Language          : {LANGUAGE_NAME} (no tree-sitter frontend)")
-    print(f"  IR instructions   : {len(instructions)}")
-    print(f"  CFG blocks        : {len(cfg.blocks)}")
-    print(f"  Execution steps   : {stats.steps}")
-    print("  LLM calls (lower) : 1")
-    print(f"  LLM calls (VM)    : {stats.llm_calls}")
-    print(f"  Lowering time     : {t_lower:.2f}s")
-    print(f"  Execution time    : {t_exec:.2f}s")
-    print(f"  Total             : {t_lower + t_exec:.2f}s")
+    emit(f"  Language          : {LANGUAGE_NAME} (no tree-sitter frontend)")
+    emit(f"  IR instructions   : {len(instructions)}")
+    emit(f"  CFG blocks        : {len(cfg.blocks)}")
+    emit(f"  Execution steps   : {stats.steps}")
+    emit("  LLM calls (lower) : 1")
+    emit(f"  LLM calls (VM)    : {stats.llm_calls}")
+    emit(f"  Lowering time     : {t_lower:.2f}s")
+    emit(f"  Execution time    : {t_exec:.2f}s")
+    emit(f"  Total             : {t_lower + t_exec:.2f}s")
 
 
 if __name__ == "__main__":

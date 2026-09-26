@@ -31,6 +31,7 @@ from interpreter.frontends import (
     get_deterministic_frontend,
 )
 from interpreter.ir import Opcode
+from interpreter.cli_output import emit, emit_err
 
 LANGS = sorted(SUPPORTED_DETERMINISTIC_LANGUAGES)
 
@@ -105,42 +106,42 @@ def main():
                             if category in ("unsupported", "other", "no_hint"):
                                 unresolved.append(entry)
                             if args.verbose:
-                                print(f"  [{algo}/{lang}] {category}: {inst}")
-                                print(f"    before: {before}")
-                                print(f"    after:  {after}")
+                                emit(f"  [{algo}/{lang}] {category}: {inst}")
+                                emit(f"    before: {before}")
+                                emit(f"    after:  {after}")
                 except Exception as e:
-                    print(f"  ERR {algo}/{lang}: {e}", file=sys.stderr)
+                    emit_err(f"  ERR {algo}/{lang}: {e}")
         except Exception as e:
-            print(f"skip {algo}: {e}", file=sys.stderr)
+            emit_err(f"skip {algo}: {e}")
 
-    print("\n=== SYMBOLIC Audit Summary ===\n")
-    print(f"  {'param:':<22} {totals['param']:>6}  (always resolves at call time)")
-    print(
+    emit("\n=== SYMBOLIC Audit Summary ===\n")
+    emit(f"  {'param:':<22} {totals['param']:>6}  (always resolves at call time)")
+    emit(
         f"  {'caught_exception:':<22} {totals['caught_exception']:>6}  (always resolves in catch handler)"
     )
-    print(
+    emit(
         f"  {'unsupported:':<22} {totals['unsupported']:>6}  (genuine frontend incompleteness)"
     )
-    print(f"  {'other:':<22} {totals['other']:>6}")
-    print(f"  {'no_hint:':<22} {totals['no_hint']:>6}")
+    emit(f"  {'other:':<22} {totals['other']:>6}")
+    emit(f"  {'no_hint:':<22} {totals['no_hint']:>6}")
     total = sum(totals.values())
-    print(f"  {'TOTAL:':<22} {total:>6}")
+    emit(f"  {'TOTAL:':<22} {total:>6}")
 
     if unresolved:
-        print(f"\n=== Non-param/caught_exception SYMBOLICs ({len(unresolved)}) ===\n")
+        emit(f"\n=== Non-param/caught_exception SYMBOLICs ({len(unresolved)}) ===\n")
         for entry in unresolved:
-            print(
+            emit(
                 f"  [{entry['algo']}/{entry['lang']}] {entry['category']}: {entry['inst']}"
             )
     else:
-        print("\n✓ No unsupported/other SYMBOLIC instructions found in Rosetta corpus.")
+        emit("\n✓ No unsupported/other SYMBOLIC instructions found in Rosetta corpus.")
 
-    print(
+    emit(
         f"\nConclusion: {totals['param']} param + {totals['caught_exception']} caught_exception = "
         f"{totals['param'] + totals['caught_exception']} SYMBOLICs that always resolve concretely."
     )
     if totals["unsupported"] + totals["other"] + totals["no_hint"] == 0:
-        print("Zero unresolved SYMBOLIC instructions across entire corpus.")
+        emit("Zero unresolved SYMBOLIC instructions across entire corpus.")
 
 
 if __name__ == "__main__":

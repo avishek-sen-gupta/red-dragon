@@ -20,6 +20,7 @@ from interpreter.constants import Language
 from interpreter.project.compiler import compile_directory
 from interpreter.project.entry_point import EntryPoint
 from interpreter.run import initial_vm_state, run, run_linked
+from interpreter.cli_output import emit_err
 
 
 def _configure_logging(level: str) -> None:
@@ -94,7 +95,7 @@ def main() -> int:
             initial_vm=initial_vm_state(),
         )
     else:
-        print(f"error: {target} does not exist", file=sys.stderr)
+        emit_err(f"error: {target} does not exist")
         return 1
 
     return 0

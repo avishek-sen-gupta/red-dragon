@@ -27,6 +27,7 @@ from interpreter.cobol.ebcdic_table import EbcdicTable
 from interpreter.constants import FRONTEND_COBOL, Language
 from interpreter.frontend import get_frontend
 from tests.nist.conftest import NIST_DIR, make_provider
+from interpreter.cli_output import emit
 
 _runmod = importlib.import_module("interpreter.run")
 _ALPHA = ("PAR-NAME", "FEATURE", "RE-MARK")
@@ -110,15 +111,15 @@ def main() -> None:
             remark_counts[rm] += 1
             feature_counts[ft] += 1
     total = sum(per_prog.values())
-    print(
+    emit(
         f"\n=== {len(per_prog)} programs with traced failures, {total} failing assertions ==="
     )
-    print("\n--- top RE-MARK clusters ---")
+    emit("\n--- top RE-MARK clusters ---")
     for rm, c in remark_counts.most_common(25):
-        print(f"  {c:4}  {rm}")
-    print("\n--- top FEATURE clusters ---")
+        emit(f"  {c:4}  {rm}")
+    emit("\n--- top FEATURE clusters ---")
     for ft, c in feature_counts.most_common(25):
-        print(f"  {c:4}  {ft}")
+        emit(f"  {c:4}  {ft}")
 
 
 if __name__ == "__main__":

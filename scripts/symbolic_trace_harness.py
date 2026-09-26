@@ -41,6 +41,7 @@ from interpreter.project.entry_point import EntryPoint
 from interpreter.run import run_linked_traced
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.vm_types import SymbolicValue
+from interpreter.cli_output import emit, emit_err
 
 
 def parse_args() -> argparse.Namespace:
@@ -86,16 +87,16 @@ def resolve_language(name: str) -> Language:
         valid = sorted(
             {m.value.lower() for m in Language} | {m.name.lower() for m in Language}
         )
-        print(f"Unknown language '{name}'. Valid: {', '.join(valid)}", file=sys.stderr)
+        emit_err(f"Unknown language '{name}'. Valid: {', '.join(valid)}")
         sys.exit(1)
     return lookup[key]
 
 
 def compile_project(root: Path, lang: Language):
     """Compile and link the project, returning the LinkedProgram."""
-    print(f"=== Compiling {root} ({lang.value}) ===")
+    emit(f"=== Compiling {root} ({lang.value}) ===")
     linked = compile_directory(root, lang)
-    print(
+    emit(
         f"  {len(linked.modules)} modules, "
         f"{len(linked.merged_ir)} IR instructions, "
         f"{len(linked.func_symbol_table)} functions"
@@ -105,17 +106,17 @@ def compile_project(root: Path, lang: Language):
 
 def search_functions(linked, substring: str) -> None:
     """Print all functions whose label contains the given substring."""
-    print(f"\n=== Functions matching '{substring}' ===")
+    emit(f"\n=== Functions matching '{substring}' ===")
     matches = []
     for label, ref in linked.func_symbol_table.items():
         if substring in str(label):
             matches.append((str(label), ref.name))
     if not matches:
-        print("  (no matches)")
+        emit("  (no matches)")
     else:
         for label_str, name in sorted(matches):
-            print(f"  {label_str}  ->  {name}")
-    print(f"\n  Total: {len(matches)} matches")
+            emit(f"  {label_str}  ->  {name}")
+    emit(f"\n  Total: {len(matches)} matches")
 
 
 def _unwrap(val):
@@ -125,27 +126,27 @@ def _unwrap(val):
 
 def execute_and_trace(linked, label: str, max_steps: int) -> None:
     """Execute a function by exact label and report symbolic values."""
-    print(f"\n=== Executing: {label} (max_steps={max_steps}) ===")
+    emit(f"\n=== Executing: {label} (max_steps={max_steps}) ===")
     entry = EntryPoint.function(lambda f, _lbl=label: str(f.label) == _lbl)
 
     try:
         _vm, trace = run_linked_traced(linked, entry, max_steps=max_steps)
     except Exception as e:
-        print(f"\nExecution failed: {type(e).__name__}: {e}")
+        emit(f"\nExecution failed: {type(e).__name__}: {e}")
         traceback.print_exc()
         return
 
-    print(f"\n  Steps: {trace.stats.steps}")
-    print(f"  LLM calls: {trace.stats.llm_calls}")
-    print(f"  Symbolic count: {trace.stats.final_symbolic_count}")
-    print(f"  Heap objects: {trace.stats.final_heap_objects}")
+    emit(f"\n  Steps: {trace.stats.steps}")
+    emit(f"  LLM calls: {trace.stats.llm_calls}")
+    emit(f"  Symbolic count: {trace.stats.final_symbolic_count}")
+    emit(f"  Heap objects: {trace.stats.final_heap_objects}")
 
     # --- Final state symbolic values ---
-    print("\n=== Symbolic Values in Final State ===")
+    emit("\n=== Symbolic Values in Final State ===")
 
     final_step = trace.steps[-1] if trace.steps else None
     if not final_step:
-        print("  (no execution steps recorded)")
+        emit("  (no execution steps recorded)")
         return
 
     final_vm = final_step.vm_state
@@ -170,20 +171,20 @@ def execute_and_trace(linked, label: str, max_steps: int) -> None:
             if isinstance(raw, SymbolicValue):
                 sym_in_heap.append((str(addr), str(field), raw))
 
-    print(f"\n  Local vars ({len(sym_in_vars)}):")
+    emit(f"\n  Local vars ({len(sym_in_vars)}):")
     for frame_idx, func, var, sym in sym_in_vars[:50]:
-        print(f"    [{frame_idx}] {func} :: {var} = {sym.name} (hint={sym.type_hint})")
+        emit(f"    [{frame_idx}] {func} :: {var} = {sym.name} (hint={sym.type_hint})")
 
-    print(f"\n  Registers ({len(sym_in_regs)}):")
+    emit(f"\n  Registers ({len(sym_in_regs)}):")
     for frame_idx, func, reg, sym in sym_in_regs[:50]:
-        print(f"    [{frame_idx}] {func} :: {reg} = {sym.name} (hint={sym.type_hint})")
+        emit(f"    [{frame_idx}] {func} :: {reg} = {sym.name} (hint={sym.type_hint})")
 
-    print(f"\n  Heap fields ({len(sym_in_heap)}):")
+    emit(f"\n  Heap fields ({len(sym_in_heap)}):")
     for addr, field, sym in sym_in_heap[:50]:
-        print(f"    {addr}.{field} = {sym.name} (hint={sym.type_hint})")
+        emit(f"    {addr}.{field} = {sym.name} (hint={sym.type_hint})")
 
     # --- Creation points ---
-    print("\n=== Symbolic Value Creation Points ===")
+    emit("\n=== Symbolic Value Creation Points ===")
     sym_first_seen: dict[str, dict] = {}
     for step in trace.steps:
         update = step.update
@@ -207,13 +208,13 @@ def execute_and_trace(linked, label: str, max_steps: int) -> None:
                 }
 
     for name, info in sorted(sym_first_seen.items(), key=lambda x: x[1]["step"]):
-        print(f"  {name} (hint={info['hint']})")
-        print(f"    Step {info['step']}: {info['instruction'][:120]}")
-        print(f"    Block: {info['block']}")
-        print()
+        emit(f"  {name} (hint={info['hint']})")
+        emit(f"    Step {info['step']}: {info['instruction'][:120]}")
+        emit(f"    Block: {info['block']}")
+        emit()
 
     total = len(sym_in_vars) + len(sym_in_regs) + len(sym_in_heap)
-    print(
+    emit(
         f"=== Summary: {total} symbolic values, {len(sym_first_seen)} unique creation points ==="
     )
 
@@ -222,7 +223,7 @@ def main() -> None:
     args = parse_args()
 
     if not args.root.exists():
-        print(f"Error: root directory does not exist: {args.root}", file=sys.stderr)
+        emit_err(f"Error: root directory does not exist: {args.root}")
         sys.exit(1)
 
     lang = resolve_language(args.language)
@@ -233,7 +234,7 @@ def main() -> None:
     elif args.label:
         execute_and_trace(linked, args.label, args.max_steps)
     else:
-        print(
+        emit(
             "Error: specify --label to execute or --search to find functions.",
             file=sys.stderr,
         )

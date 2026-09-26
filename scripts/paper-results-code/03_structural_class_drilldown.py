@@ -27,13 +27,14 @@ from interpreter.frontends import (
     SUPPORTED_DETERMINISTIC_LANGUAGES,
     get_deterministic_frontend,
 )
+from interpreter.cli_output import emit
 
 LANGS = sorted(SUPPORTED_DETERMINISTIC_LANGUAGES)
 
 
 def main():
     if len(sys.argv) < 2:
-        print(__doc__)
+        emit(__doc__)
         sys.exit(1)
 
     algo = sys.argv[1]
@@ -43,8 +44,8 @@ def main():
     try:
         mod = importlib.import_module(modname)
     except ModuleNotFoundError:
-        print(f"Error: no Rosetta module '{modname}'")
-        print(
+        emit(f"Error: no Rosetta module '{modname}'")
+        emit(
             f"Available: {sorted(os.path.basename(p).replace('test_rosetta_','').replace('.py','') for p in __import__('glob').glob('tests/unit/rosetta/test_rosetta_*.py'))}"
         )
         sys.exit(1)
@@ -56,7 +57,7 @@ def main():
     lang_data = {}
     for lang in requested_langs:
         if lang not in programs:
-            print(f"  [{lang}] not in corpus for {algo}")
+            emit(f"  [{lang}] not in corpus for {algo}")
             continue
         fe = get_deterministic_frontend(lang)
         ir = fe.lower(programs[lang].encode())
@@ -69,13 +70,13 @@ def main():
     shape_list = sorted(shapes.keys(), key=lambda s: -len(shapes[s]))
     shape_label = {s: chr(65 + i) for i, s in enumerate(shape_list)}
 
-    print(f"Algorithm: {algo}")
-    print(f"Structural classes: {len(shape_list)}")
+    emit(f"Algorithm: {algo}")
+    emit(f"Structural classes: {len(shape_list)}")
     for i, s in enumerate(shape_list):
         label = shape_label[s]
         langs = sorted(shapes[s])
-        print(f"  Class {label} ({s[0]}B/{s[1]}E): {' '.join(langs)}")
-    print()
+        emit(f"  Class {label} ({s[0]}B/{s[1]}E): {' '.join(langs)}")
+    emit()
 
     for lang in requested_langs:
         if lang not in lang_data:
@@ -84,16 +85,16 @@ def main():
         label = shape_label[shape]
         edges = sum(len(b.successors) for b in cfg.blocks.values())
 
-        print(f"=== [{lang}] Class {label} ({len(cfg.blocks)}B/{edges}E) ===")
-        print(f"  Blocks: {list(cfg.blocks.keys())}")
-        print("  Successors:")
+        emit(f"=== [{lang}] Class {label} ({len(cfg.blocks)}B/{edges}E) ===")
+        emit(f"  Blocks: {list(cfg.blocks.keys())}")
+        emit("  Successors:")
         for blk_label, block in cfg.blocks.items():
             if block.successors:
-                print(f"    {blk_label} -> {[str(s) for s in block.successors]}")
-        print(f"  IR ({len(ir)} instructions):")
+                emit(f"    {blk_label} -> {[str(s) for s in block.successors]}")
+        emit(f"  IR ({len(ir)} instructions):")
         for i, inst in enumerate(ir):
-            print(f"    {i:>3}  {inst}")
-        print()
+            emit(f"    {i:>3}  {inst}")
+        emit()
 
 
 if __name__ == "__main__":

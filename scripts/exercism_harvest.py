@@ -12,6 +12,7 @@ import logging
 import sys
 import urllib.request
 from pathlib import Path
+from interpreter.cli_output import emit
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -64,6 +65,6 @@ def main(exercises: list[str]) -> None:
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print(f"Usage: {sys.argv[0]} <exercise-slug> [<exercise-slug> ...]")
+        emit(f"Usage: {sys.argv[0]} <exercise-slug> [<exercise-slug> ...]")
         sys.exit(1)
     main(sys.argv[1:])

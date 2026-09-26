@@ -85,6 +85,7 @@ from interpreter.dataflow import (  # noqa: E402
     solve_reaching_definitions,
 )
 from interpreter.instructions import InstructionId  # noqa: E402
+from interpreter.cli_output import emit
 
 FieldGraph = dict[str, set[str]]
 
@@ -249,7 +250,7 @@ def _flow_sensitive_fraction(
 def _report(title: str, graph: FieldGraph) -> None:
     nodes = _nodes(graph)
     edges = _edge_count(graph)
-    print(f"  {title:<24} nodes={len(nodes):<6} edges={edges}")
+    emit(f"  {title:<24} nodes={len(nodes):<6} edges={edges}")
 
 
 @dataclass
@@ -422,8 +423,8 @@ def _run_corpus(args: argparse.Namespace) -> int:
     sources = sorted(
         p for p in args.corpus.iterdir() if p.suffix.lower() == ".cbl" and p.is_file()
     )
-    print(f"corpus {args.corpus}  ({len(sources)} source files)")
-    print(
+    emit(f"corpus {args.corpus}  ({len(sources)} source files)")
+    emit(
         f"{'program':<14}{'lines':>7}{'nodes':>7}{'edges':>7}"
         f"{'out-deg':>9}{'fraction':>10}{'flow-sens':>11}"
         f"{'med':>6}{'max':>6}  conv"
@@ -443,11 +444,11 @@ def _run_corpus(args: argparse.Namespace) -> int:
             failures.append(
                 (source.name, f"{type(exc).__name__}: {exc}".split("\n")[0])
             )
-            print(f"{source.name:<14}{lines:>7}   FAILED — {type(exc).__name__}")
+            emit(f"{source.name:<14}{lines:>7}   FAILED — {type(exc).__name__}")
             continue
         sizes = stats.impact_sizes
         n = len(stats.nodes)
-        print(
+        emit(
             f"{source.name:<14}{lines:>7}{n:>7}{stats.edges:>7}"
             f"{stats.edges / n if n else 0:>9.2f}{stats.fraction:>10.3f}"
             f"{stats.flow_sensitive:>11.3f}"
@@ -456,9 +457,9 @@ def _run_corpus(args: argparse.Namespace) -> int:
             f"  {'yes' if stats.converged else 'NO'}"
         )
     if failures:
-        print(f"\n{len(failures)} program(s) could not be analysed:")
+        emit(f"\n{len(failures)} program(s) could not be analysed:")
         for name, why in failures:
-            print(f"  {name}: {why}")
+            emit(f"  {name}: {why}")
     return 0
 
 
@@ -543,8 +544,8 @@ def main() -> int:
     connected = _connected_pairs(closed)
     parse_s, solve_s, closure_s = stats.timings
 
-    print(f"program              {stats.name}")
-    print(
+    emit(f"program              {stats.name}")
+    emit(
         "solver converged     "
         + (
             "yes"
@@ -553,22 +554,22 @@ def main() -> int:
         )
     )
     if args.drop_region:
-        print(f"ABLATION             region {args.drop_region} dropped from the graph")
+        emit(f"ABLATION             region {args.drop_region} dropped from the graph")
     if args.sever_perform:
-        print("ABLATION             PERFORM return edges severed — UNSOUND")
-    print(f"IR instructions      {stats.ir_length}")
-    print(f"recorded effects     {stats.effects}")
-    print()
-    print(f"nodes (fields)       {n}")
-    print(f"edges (direct)       {edges}")
-    print(f"mean out-degree      {edges / n if n else 0:.2f}")
-    print(f"connected pairs      {connected} / {pairs}")
-    print(
+        emit("ABLATION             PERFORM return edges severed — UNSOUND")
+    emit(f"IR instructions      {stats.ir_length}")
+    emit(f"recorded effects     {stats.effects}")
+    emit()
+    emit(f"nodes (fields)       {n}")
+    emit(f"edges (direct)       {edges}")
+    emit(f"mean out-degree      {edges / n if n else 0:.2f}")
+    emit(f"connected pairs      {connected} / {pairs}")
+    emit(
         "CONNECTED FRACTION   "
         f"{connected / pairs if pairs else 0:.4f}"
         "   (after transitive closure)"
     )
-    print()
+    emit()
 
     if args.drop_region:
         # Under an ablation this number would be misleading: the dropped
@@ -576,26 +577,26 @@ def main() -> int:
         # in the chains, so a path may still travel through the region that
         # was supposedly removed. The field-graph fraction has no such
         # problem — dropping the nodes removes the edges with them.
-        print("flow-sensitive frac  n/a under --drop-region")
+        emit("flow-sensitive frac  n/a under --drop-region")
     else:
-        print(
+        emit(
             f"flow-sensitive frac  {stats.flow_sensitive:.4f}"
             "   (def-site nodes, no field collapse)"
         )
-    print()
+    emit()
 
     if args.decompose:
-        print("edge decomposition (direct):")
+        emit("edge decomposition (direct):")
         _report("VALUE edges", value)
         _report("REACHING edges", reaching)
         value_only = _transitive_closure(value)
         vp = _connected_pairs(value_only)
         vn = len(_nodes(value))
-        print(
+        emit(
             f"  VALUE-only closure     fraction="
             f"{vp / (vn * (vn - 1)) if vn > 1 else 0:.4f} over {vn} nodes"
         )
-        print()
+        emit()
 
     in_degree = {name: len(direct.get(name, set()) - {name}) for name in nodes}
     out_degree = defaultdict(int)
@@ -610,24 +611,24 @@ def main() -> int:
     impact = stats.impact
     sizes = stats.impact_sizes
     median = sizes[len(sizes) // 2] if sizes else 0
-    print("impact-set size (fields reached FROM a field, after closure):")
-    print(
+    emit("impact-set size (fields reached FROM a field, after closure):")
+    emit(
         f"  max {sizes[0] if sizes else 0}  median {median}  "
         f"mean {sum(sizes) / n if n else 0:.1f}  of {n} fields"
     )
-    print(f"top {args.top} fields by IMPACT (how many fields they reach):")
+    emit(f"top {args.top} fields by IMPACT (how many fields they reach):")
     for name in sorted(nodes, key=lambda f: (-len(impact.get(f, ())), f))[: args.top]:
-        print(f"  {len(impact.get(name, ())):>5} reached   {name}")
-    print()
+        emit(f"  {len(impact.get(name, ())):>5} reached   {name}")
+    emit()
 
-    print(f"top {args.top} fields by IN-degree (how many fields flow INTO them):")
+    emit(f"top {args.top} fields by IN-degree (how many fields flow INTO them):")
     for name in sorted(nodes, key=lambda f: (-in_degree[f], f))[: args.top]:
-        print(
+        emit(
             f"  {in_degree[name]:>5} in  {out_degree[name]:>5} out  "
             f"{len(closed.get(name, set())):>5} closed-in  {name}"
         )
-    print()
-    print(
+    emit()
+    emit(
         f"timing  parse+lower {parse_s:.1f}s  "
         f"solve {solve_s:.1f}s  "
         f"graph+closure {closure_s:.1f}s"

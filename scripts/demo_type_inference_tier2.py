@@ -20,6 +20,7 @@ from interpreter.types.coercion.default_conversion_rules import (
 from interpreter.types.type_expr import UNBOUND
 from interpreter.types.type_inference import infer_types
 from interpreter.types.type_resolver import TypeResolver
+from interpreter.cli_output import emit
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -33,16 +34,16 @@ def _lower_and_infer(source: str, language: str):
 
 
 def _header(title: str) -> None:
-    print(f"\n{'=' * 70}")
-    print(f"  {title}")
-    print(f"{'=' * 70}")
+    emit(f"\n{'=' * 70}")
+    emit(f"  {title}")
+    emit(f"{'=' * 70}")
 
 
 def _show_ir(instructions, limit=30):
     for inst in instructions[:limit]:
-        print(f"    {inst}")
+        emit(f"    {inst}")
     if len(instructions) > limit:
-        print(f"    ... ({len(instructions) - limit} more)")
+        emit(f"    ... ({len(instructions) - limit} more)")
 
 
 def demo_builtin_return_types():
@@ -57,25 +58,25 @@ s = str(123)
 f = float(7)
 b = bool(0)
 """
-    print("\n  Source (Python):\n")
+    emit("\n  Source (Python):\n")
     for line in source.strip().splitlines():
-        print(f"    {line}")
+        emit(f"    {line}")
 
     instructions, env = _lower_and_infer(source, "python")
 
-    print(f"\n  IR ({len(instructions)} instructions):\n")
+    emit(f"\n  IR ({len(instructions)} instructions):\n")
     _show_ir(instructions)
 
-    print("\n  Inferred variable types:\n")
+    emit("\n  Inferred variable types:\n")
     for var in ["n", "r", "x", "s", "f", "b"]:
         vtype = env.var_types.get(var, "<untyped>")
-        print(f"    {var} : {vtype}")
+        emit(f"    {var} : {vtype}")
 
 
 def demo_return_backfill():
     _header("Feature 2: RETURN backfill (unannotated functions)")
 
-    print("\n  --- Python (no return annotation) ---\n")
+    emit("\n  --- Python (no return annotation) ---\n")
     py_source = """\
 def double(x):
     return 42
@@ -84,17 +85,17 @@ def greet():
     return "hello"
 """
     for line in py_source.strip().splitlines():
-        print(f"    {line}")
+        emit(f"    {line}")
 
     _instructions, env = _lower_and_infer(py_source, "python")
-    print("\n  Inferred function signatures:\n")
+    emit("\n  Inferred function signatures:\n")
     for name, sigs in sorted(env.method_signatures.get(UNBOUND, {}).items()):
         sig = sigs[0]
-        print(
+        emit(
             f"    {name}({', '.join(f'{p}: {t or "?"}' for p, t in sig.params)}) -> {sig.return_type or '?'}"
         )
 
-    print("\n  --- JavaScript (never has return annotations) ---\n")
+    emit("\n  --- JavaScript (never has return annotations) ---\n")
     js_source = """\
 function factorial(n) {
     if (n <= 1) { return 1; }
@@ -102,30 +103,30 @@ function factorial(n) {
 }
 """
     for line in js_source.strip().splitlines():
-        print(f"    {line}")
+        emit(f"    {line}")
 
     _instructions, env = _lower_and_infer(js_source, "javascript")
-    print("\n  Inferred function signatures:\n")
+    emit("\n  Inferred function signatures:\n")
     for name, sigs in sorted(env.method_signatures.get(UNBOUND, {}).items()):
         sig = sigs[0]
-        print(
+        emit(
             f"    {name}({', '.join(f'{p}: {t or "?"}' for p, t in sig.params)}) -> {sig.return_type or '?'}"
         )
 
-    print("\n  --- Ruby (never has return annotations) ---\n")
+    emit("\n  --- Ruby (never has return annotations) ---\n")
     rb_source = """\
 def square(x)
   return x * x
 end
 """
     for line in rb_source.strip().splitlines():
-        print(f"    {line}")
+        emit(f"    {line}")
 
     _instructions, env = _lower_and_infer(rb_source, "ruby")
-    print("\n  Inferred function signatures:\n")
+    emit("\n  Inferred function signatures:\n")
     for name, sigs in sorted(env.method_signatures.get(UNBOUND, {}).items()):
         sig = sigs[0]
-        print(
+        emit(
             f"    {name}({', '.join(f'{p}: {t or "?"}' for p, t in sig.params)}) -> {sig.return_type or '?'}"
         )
 
@@ -133,46 +134,46 @@ end
 def demo_unop_refinement():
     _header("Feature 3: UNOP refinement (not/! -> Bool, # -> Int)")
 
-    print("\n  --- Python `not` ---\n")
+    emit("\n  --- Python `not` ---\n")
     py_source = """\
 x = 42
 y = not x
 """
     for line in py_source.strip().splitlines():
-        print(f"    {line}")
+        emit(f"    {line}")
 
     instructions, env = _lower_and_infer(py_source, "python")
-    print("\n  Inferred variable types:")
-    print(f"    x : {env.var_types.get('x', '<untyped>')}")
-    print(f"    y : {env.var_types.get('y', '<untyped>')}")
+    emit("\n  Inferred variable types:")
+    emit(f"    x : {env.var_types.get('x', '<untyped>')}")
+    emit(f"    y : {env.var_types.get('y', '<untyped>')}")
 
-    print("\n  --- JavaScript `!` ---\n")
+    emit("\n  --- JavaScript `!` ---\n")
     js_source = """\
 let flag = true;
 let negated = !flag;
 """
     for line in js_source.strip().splitlines():
-        print(f"    {line}")
+        emit(f"    {line}")
 
     instructions, env = _lower_and_infer(js_source, "javascript")
-    print("\n  Inferred variable types:")
-    print(f"    flag    : {env.var_types.get('flag', '<untyped>')}")
-    print(f"    negated : {env.var_types.get('negated', '<untyped>')}")
+    emit("\n  Inferred variable types:")
+    emit(f"    flag    : {env.var_types.get('flag', '<untyped>')}")
+    emit(f"    negated : {env.var_types.get('negated', '<untyped>')}")
 
-    print("\n  --- Lua `#` (length operator) ---\n")
+    emit("\n  --- Lua `#` (length operator) ---\n")
     lua_source = """\
 local t = {1, 2, 3}
 local n = #t
 """
     for line in lua_source.strip().splitlines():
-        print(f"    {line}")
+        emit(f"    {line}")
 
     instructions, env = _lower_and_infer(lua_source, "lua")
     unops = [i for i in instructions if i.opcode == Opcode.UNOP]
-    print("\n  UNOP instructions and their result types:")
+    emit("\n  UNOP instructions and their result types:")
     for inst in unops:
         reg_type = env.register_types.get(inst.result_reg, "<untyped>")
-        print(f"    {inst}  =>  {inst.result_reg} : {reg_type}")
+        emit(f"    {inst}  =>  {inst.result_reg} : {reg_type}")
 
 
 def demo_call_method_return_types():
@@ -193,23 +194,23 @@ class Dog {
     }
 }
 """
-    print("\n  Source (Java):\n")
+    emit("\n  Source (Java):\n")
     for line in java_source.strip().splitlines():
-        print(f"    {line}")
+        emit(f"    {line}")
 
     instructions, env = _lower_and_infer(java_source, "java")
 
-    print("\n  CALL_METHOD instructions and their inferred types:\n")
+    emit("\n  CALL_METHOD instructions and their inferred types:\n")
     call_methods = [i for i in instructions if i.opcode == Opcode.CALL_METHOD]
     for inst in call_methods:
         method_name = inst.operands[1] if len(inst.operands) >= 2 else "?"
         reg_type = env.register_types.get(inst.result_reg, "<untyped>")
-        print(f"    {inst.result_reg} = call_method {method_name}  =>  {reg_type}")
+        emit(f"    {inst.result_reg} = call_method {method_name}  =>  {reg_type}")
 
-    print("\n  Function signatures:\n")
+    emit("\n  Function signatures:\n")
     for name, sigs in sorted(env.method_signatures.get(UNBOUND, {}).items()):
         sig = sigs[0]
-        print(f"    {name}() -> {sig.return_type or '?'}")
+        emit(f"    {name}() -> {sig.return_type or '?'}")
 
 
 def demo_field_type_table():
@@ -226,13 +227,13 @@ class Dog:
         a = self.age
         return a
 """
-    print("\n  Source (Python):\n")
+    emit("\n  Source (Python):\n")
     for line in py_source.strip().splitlines():
-        print(f"    {line}")
+        emit(f"    {line}")
 
     instructions, env = _lower_and_infer(py_source, "python")
 
-    print("\n  STORE_FIELD instructions:\n")
+    emit("\n  STORE_FIELD instructions:\n")
     store_fields = [i for i in instructions if i.opcode == Opcode.STORE_FIELD]
     for inst in store_fields:
         obj_reg = inst.operands[0] if inst.operands else "?"
@@ -240,16 +241,16 @@ class Dog:
         val_reg = inst.operands[2] if len(inst.operands) >= 3 else "?"
         obj_type = env.register_types.get(str(obj_reg), "?")
         val_type = env.register_types.get(str(val_reg), "?")
-        print(f"    {obj_reg}({obj_type}).{field} = {val_reg}({val_type})")
+        emit(f"    {obj_reg}({obj_type}).{field} = {val_reg}({val_type})")
 
-    print("\n  LOAD_FIELD instructions:\n")
+    emit("\n  LOAD_FIELD instructions:\n")
     load_fields = [i for i in instructions if i.opcode == Opcode.LOAD_FIELD]
     for inst in load_fields:
         obj_reg = inst.operands[0] if inst.operands else "?"
         field = inst.operands[1] if len(inst.operands) >= 2 else "?"
         obj_type = env.register_types.get(str(obj_reg), "?")
         result_type = env.register_types.get(inst.result_reg, "<untyped>")
-        print(
+        emit(
             f"    {inst.result_reg} = {obj_reg}({obj_type}).{field}  =>  {result_type}"
         )
 
@@ -257,8 +258,8 @@ class Dog:
 def demo_region_tagging():
     _header("Feature 6: ALLOC_REGION / LOAD_REGION tagging")
 
-    print("\n  (Regions are used for COBOL-style byte-addressed memory)")
-    print("  Showing IR-level demo with manual instructions:\n")
+    emit("\n  (Regions are used for COBOL-style byte-addressed memory)")
+    emit("  Showing IR-level demo with manual instructions:\n")
 
     from interpreter.ir import IRInstruction
 
@@ -279,17 +280,17 @@ def demo_region_tagging():
     env = infer_types(instructions, _resolver())
 
     for inst in instructions:
-        print(f"    {inst}")
+        emit(f"    {inst}")
 
-    print("\n  Inferred register types:\n")
-    print(f"    %0 (ALLOC_REGION result) : {env.register_types.get('%0', '<untyped>')}")
-    print(f"    %1 (LOAD_REGION result)  : {env.register_types.get('%1', '<untyped>')}")
+    emit("\n  Inferred register types:\n")
+    emit(f"    %0 (ALLOC_REGION result) : {env.register_types.get('%0', '<untyped>')}")
+    emit(f"    %1 (LOAD_REGION result)  : {env.register_types.get('%1', '<untyped>')}")
 
 
 def main():
-    print("\n  Tier 1 + Tier 2 Type Inference Enhancements — Demo")
-    print("  ===================================================\n")
-    print("  This demo exercises all 6 new type inference features.")
+    emit("\n  Tier 1 + Tier 2 Type Inference Enhancements — Demo")
+    emit("  ===================================================\n")
+    emit("  This demo exercises all 6 new type inference features.")
 
     demo_builtin_return_types()
     demo_return_backfill()
@@ -298,9 +299,9 @@ def main():
     demo_field_type_table()
     demo_region_tagging()
 
-    print(f"\n{'=' * 70}")
-    print("  All 6 features demonstrated successfully!")
-    print(f"{'=' * 70}\n")
+    emit(f"\n{'=' * 70}")
+    emit("  All 6 features demonstrated successfully!")
+    emit(f"{'=' * 70}\n")
 
 
 if __name__ == "__main__":

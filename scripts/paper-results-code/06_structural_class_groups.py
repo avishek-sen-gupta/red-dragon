@@ -26,6 +26,7 @@ from interpreter.frontends import (
     SUPPORTED_DETERMINISTIC_LANGUAGES,
     get_deterministic_frontend,
 )
+from interpreter.cli_output import emit, emit_err
 
 LANGS = sorted(SUPPORTED_DETERMINISTIC_LANGUAGES)
 
@@ -52,7 +53,7 @@ def load_shapes(algo_filter=None):
                 edges = sum(len(b.successors) for b in cfg.blocks.values())
                 shapes[algo][lang] = (len(cfg.blocks), edges)
         except Exception as e:
-            print(f"skip {modname}: {e}", file=sys.stderr)
+            emit_err(f"skip {modname}: {e}")
     return shapes
 
 
@@ -70,17 +71,17 @@ def main():
         dom = shape_list[0]
         dom_pct = int(100 * len(groups[dom]) / len(d))
 
-        print(
+        emit(
             f"{algo} — {len(d)} languages, {n_classes} structural class{'es' if n_classes > 1 else ''}:"
         )
         for shape in shape_list:
             langs = sorted(groups[shape])
             label = chr(65 + shape_list.index(shape))
-            print(
+            emit(
                 f"  Class {label} ({shape[0]}B/{shape[1]}E) [{len(langs)} langs]: {' '.join(langs)}"
             )
-        print(f"  Dominant class covers {dom_pct}% of languages")
-        print()
+        emit(f"  Dominant class covers {dom_pct}% of languages")
+        emit()
 
 
 if __name__ == "__main__":

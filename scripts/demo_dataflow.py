@@ -24,6 +24,7 @@ from interpreter.cfg import build_cfg
 from interpreter.constants import Language
 from interpreter.dataflow import analyze
 from interpreter.frontend import get_frontend
+from interpreter.cli_output import emit
 
 logger = logging.getLogger(__name__)
 
@@ -51,9 +52,9 @@ total = h + e + b
 
 def _print_header(title: str):
     width = 60
-    print(f"\n{'=' * width}")
-    print(f"  {title}")
-    print(f"{'=' * width}\n")
+    emit(f"\n{'=' * width}")
+    emit(f"  {title}")
+    emit(f"{'=' * width}\n")
 
 
 def _render_dependency_mermaid(raw_graph: dict[str, set[str]]) -> str:
@@ -126,36 +127,36 @@ def main():
     # ── Show source ──
     _print_header("Source (Python)")
     for i, line in enumerate(SAMPLE_SOURCE.strip().splitlines(), 1):
-        print(f"  {i:3d} | {line}")
+        emit(f"  {i:3d} | {line}")
 
     # ── Phase 1: Lower to IR ──
     _print_header("Phase 1: Lower to IR (deterministic frontend)")
     frontend = get_frontend(Language.PYTHON)
     instructions = frontend.lower(SAMPLE_SOURCE.encode("utf-8"))
-    print(f"  {len(instructions)} IR instructions")
+    emit(f"  {len(instructions)} IR instructions")
 
     if args.verbose:
-        print()
+        emit()
         for inst in instructions:
-            print(f"    {inst}")
+            emit(f"    {inst}")
 
     # ── Phase 2: Build CFG ──
     _print_header("Phase 2: Build CFG")
     cfg = build_cfg(instructions)
-    print(f"  {len(cfg.blocks)} basic blocks")
+    emit(f"  {len(cfg.blocks)} basic blocks")
 
     if args.verbose:
-        print()
+        emit()
         for label, block in cfg.blocks.items():
-            print(f"    [{label}]  {len(block.instructions)} instructions")
+            emit(f"    [{label}]  {len(block.instructions)} instructions")
 
     # ── Phase 3: Dataflow analysis ──
     _print_header("Phase 3: Dataflow Analysis")
     result = analyze(cfg)
 
-    print(f"  Definitions found   : {len(result.definitions)}")
-    print(f"  Def-use chains      : {len(result.def_use_chains)}")
-    print(f"  Variables in graph  : {len(result.dependency_graph)}")
+    emit(f"  Definitions found   : {len(result.definitions)}")
+    emit(f"  Def-use chains      : {len(result.def_use_chains)}")
+    emit(f"  Variables in graph  : {len(result.dependency_graph)}")
 
     # ── Phase 4: Dependency graphs ──
     raw = result.raw_dependency_graph
@@ -165,12 +166,12 @@ def main():
     for var in sorted(raw.keys()):
         deps = sorted(raw[var])
         label = ", ".join(deps) if deps else "(leaf)"
-        print(f"  {var} ← {label}")
+        emit(f"  {var} ← {label}")
 
     _print_header("Phase 4b: Transitive Dependencies")
     for var in sorted(transitive.keys()):
         deps = sorted(transitive[var])
-        print(f"  {var} depends on: {', '.join(deps)}")
+        emit(f"  {var} depends on: {', '.join(deps)}")
 
     # ── Dependency depth ──
     _print_header("Dependency Depth (longest chain from leaf)")
@@ -178,17 +179,17 @@ def main():
     for var in sorted(depths.keys(), key=lambda v: (depths[v], v)):
         direct = sorted(raw.get(var, set()))
         direct_str = f" ← {', '.join(direct)}" if direct else " (leaf)"
-        print(f"  depth {depths[var]}  {var}{direct_str}")
+        emit(f"  depth {depths[var]}  {var}{direct_str}")
 
     # ── Mermaid visualisation ──
     _print_header("Mermaid Dependency Graph (paste into mermaid.live)")
     mermaid = _render_dependency_mermaid(raw)
-    print(mermaid)
+    emit(mermaid)
 
     if args.output:
         output_path = Path(args.output)
         output_path.write_text(f"```mermaid\n{mermaid}\n```\n")
-        print(f"\n  Written to {output_path}")
+        emit(f"\n  Written to {output_path}")
 
 
 if __name__ == "__main__":

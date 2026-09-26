@@ -29,6 +29,7 @@ from interpreter.run import run
 from interpreter.run_types import UnresolvedCallStrategy
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.vm_types import SymbolicValue
+from interpreter.cli_output import emit
 
 SAMPLE_SOURCE = """\
 import math
@@ -42,9 +43,9 @@ total = x + y + z
 
 def _print_header(title: str):
     width = 60
-    print(f"\n{'=' * width}")
-    print(f"  {title}")
-    print(f"{'=' * width}\n")
+    emit(f"\n{'=' * width}")
+    emit(f"  {title}")
+    emit(f"{'=' * width}\n")
 
 
 def _format_val(v):
@@ -63,7 +64,7 @@ def _show_vars(vm):
     for name, val in sorted(frame.local_vars.items()):
         if name.startswith("__"):
             continue
-        print(f"    {name} = {_format_val(val)}")
+        emit(f"    {name} = {_format_val(val)}")
 
 
 def main():
@@ -93,11 +94,11 @@ def main():
     # ── Show source ──
     _print_header("Source")
     for i, line in enumerate(SAMPLE_SOURCE.strip().splitlines(), 1):
-        print(f"  {i:3d} | {line}")
+        emit(f"  {i:3d} | {line}")
 
     # ── Phase 1: LLM Frontend (IR generation) ──
     _print_header(f"Phase 1: LLM IR Generation (backend={backend})")
-    print("  Lowering source to IR via LLM frontend...")
+    emit("  Lowering source to IR via LLM frontend...")
     t0 = time.perf_counter()
     vm_llm_frontend = run(
         SAMPLE_SOURCE,
@@ -110,13 +111,13 @@ def main():
     )
     t_frontend = time.perf_counter() - t0
 
-    print(f"\n  LLM frontend + symbolic execution completed in {t_frontend:.2f}s")
-    print("  Final variables (external calls are symbolic):")
+    emit(f"\n  LLM frontend + symbolic execution completed in {t_frontend:.2f}s")
+    emit("  Final variables (external calls are symbolic):")
     _show_vars(vm_llm_frontend)
 
     # ── Phase 2: LLM Backend (VM execution with plausible resolution) ──
     _print_header(f"Phase 2: LLM VM Execution (backend={backend})")
-    print("  Re-running with deterministic frontend + LLM unresolved call resolver...")
+    emit("  Re-running with deterministic frontend + LLM unresolved call resolver...")
     t0 = time.perf_counter()
     vm_llm_backend = run(
         SAMPLE_SOURCE,
@@ -129,15 +130,15 @@ def main():
     )
     t_backend = time.perf_counter() - t0
 
-    print(f"\n  Deterministic frontend + LLM resolver completed in {t_backend:.2f}s")
-    print("  Final variables (external calls resolved by LLM):")
+    emit(f"\n  Deterministic frontend + LLM resolver completed in {t_backend:.2f}s")
+    emit("  Final variables (external calls resolved by LLM):")
     _show_vars(vm_llm_backend)
 
     # ── Summary ──
     _print_header("Summary")
-    print(f"  Phase 1 (LLM frontend + symbolic VM) : {t_frontend:.2f}s")
-    print(f"  Phase 2 (deterministic + LLM resolver): {t_backend:.2f}s")
-    print(f"  Total                                 : {t_frontend + t_backend:.2f}s")
+    emit(f"  Phase 1 (LLM frontend + symbolic VM) : {t_frontend:.2f}s")
+    emit(f"  Phase 2 (deterministic + LLM resolver): {t_backend:.2f}s")
+    emit(f"  Total                                 : {t_frontend + t_backend:.2f}s")
 
 
 if __name__ == "__main__":

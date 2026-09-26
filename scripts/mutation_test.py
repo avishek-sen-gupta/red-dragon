@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
+from interpreter.cli_output import emit
 
 TARGETS: dict[str, list[str]] = {
     "core": [
@@ -79,7 +80,7 @@ def show_results() -> int:
 def list_targets() -> None:
     """Print all available targets and their paths."""
     for name, paths in TARGETS.items():
-        print(f"  {name}: {', '.join(paths)}")
+        emit(f"  {name}: {', '.join(paths)}")
 
 
 def main() -> None:
