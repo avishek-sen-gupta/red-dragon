@@ -161,7 +161,7 @@ class TypeGraph:
                         pa_i,
                         variances[i] if i < len(variances) else Variance.COVARIANT,
                     )
-                    for i, (ca_i, pa_i) in enumerate(zip(ca, pa, strict=False))
+                    for i, (ca_i, pa_i) in enumerate(zip(ca, pa))
                 )
             case (ParameterizedType(constructor=cc), ScalarType(name=pn)):
                 return self.is_subtype(TypeName(cc), pn)
@@ -173,8 +173,7 @@ class TypeGraph:
                     return False
                 # Contravariant params: parent param must be subtype of child param
                 params_ok = all(
-                    self.is_subtype_expr(pp_i, cp_i)
-                    for cp_i, pp_i in zip(cp, pp, strict=False)
+                    self.is_subtype_expr(pp_i, cp_i) for cp_i, pp_i in zip(cp, pp)
                 )
                 # Covariant return: child return must be subtype of parent return
                 return params_ok and self.is_subtype_expr(cr, pr)
@@ -239,7 +238,7 @@ class TypeGraph:
                         ab_i,
                         variances[i] if i < len(variances) else Variance.COVARIANT,
                     )
-                    for i, (aa_i, ab_i) in enumerate(zip(aa, ab, strict=False))
+                    for i, (aa_i, ab_i) in enumerate(zip(aa, ab))
                 )
                 # If any invariant argument couldn't match, fall back to Any
                 if any(a == scalar(FoundationTypeName.ANY) for a in merged_args):
@@ -260,8 +259,7 @@ class TypeGraph:
                 if len(pa) != len(pb):
                     return scalar(FoundationTypeName.ANY)
                 merged_params = tuple(
-                    self.common_supertype_expr(pa_i, pb_i)
-                    for pa_i, pb_i in zip(pa, pb, strict=False)
+                    self.common_supertype_expr(pa_i, pb_i) for pa_i, pb_i in zip(pa, pb)
                 )
                 merged_return = self.common_supertype_expr(ra, rb)
                 return FunctionType(params=merged_params, return_type=merged_return)

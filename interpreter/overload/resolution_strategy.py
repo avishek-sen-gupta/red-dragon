@@ -54,5 +54,5 @@ class ArityThenTypeStrategy:
         params = sig.callable_params
         return sum(
             self._type_compatibility.score(arg, param_type)
-            for arg, (_, param_type) in zip(args, params, strict=False)
+            for arg, (_, param_type) in zip(args, params)
         )

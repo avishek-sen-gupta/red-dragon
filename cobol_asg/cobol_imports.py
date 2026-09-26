@@ -187,7 +187,7 @@ def _statements(text: str) -> tuple[tuple[tuple[int, str], ...], ...]:
     )
     return tuple(
         tuple(line for _, line in group)
-        for _, group in groupby(zip(starts, lines, strict=False), itemgetter(0))
+        for _, group in groupby(zip(starts, lines), itemgetter(0))
     )
 
 
