@@ -254,7 +254,7 @@ def apply_summary_at_call_site(
     actuals = call_site.arg_operands
 
     # Build param name → actual register mapping
-    param_to_actual = dict(zip(params, actuals))
+    param_to_actual = dict(zip(params, actuals, strict=False))
 
     return frozenset(
         (
