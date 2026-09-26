@@ -25,6 +25,7 @@ from interpreter.instructions import (
     Symbolic,
 )
 from interpreter.operator_kind import resolve_binop
+from interpreter.register import Register
 from interpreter.var_name import VarName
 
 
@@ -154,7 +155,7 @@ def lower_template_decl(
 
 
 def _lower_structured_binding(
-    ctx: TreeSitterEmitContext, binding_node, elem_reg: str
+    ctx: TreeSitterEmitContext, binding_node, elem_reg: Register
 ) -> None:
     """Decompose ``auto [a, b]`` into positional LOAD_INDEX + STORE_VAR."""
     identifiers = [c for c in binding_node.children if c.type == CppNodeType.IDENTIFIER]

@@ -423,7 +423,7 @@ def lower_element_reference(
 
 
 def _lower_range_slice(
-    ctx: TreeSitterEmitContext, range_node, collection_reg: str
+    ctx: TreeSitterEmitContext, range_node, collection_reg: Register
 ) -> Register:
     """Lower arr[start..end] as CALL_FUNCTION('slice', collection, start, end+1).
 
@@ -471,7 +471,7 @@ def _lower_range_slice(
 
 
 def _lower_positional_slice(
-    ctx: TreeSitterEmitContext, named_children: list, collection_reg: str, node
+    ctx: TreeSitterEmitContext, named_children: list, collection_reg: Register, node
 ) -> Register:
     """Lower arr[start, length] as CALL_FUNCTION('slice', arr, start, start+length)."""
     start_reg = ctx.lower_expr(named_children[1])
@@ -786,7 +786,7 @@ def lower_ruby_store_target(
 
 
 def _fallback_store(
-    ctx: TreeSitterEmitContext, target, val_reg: str, parent_node
+    ctx: TreeSitterEmitContext, target, val_reg: Register, parent_node
 ) -> None:
     """Fallback store: delegate to common store_target logic."""
     from interpreter.frontends.common.expressions import lower_store_target

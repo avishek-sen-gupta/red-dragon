@@ -26,12 +26,16 @@ from interpreter.instructions import (
     LoadVar,
     StoreVar,
 )
+from interpreter.ir import CodeLabel
 from interpreter.operator_kind import resolve_binop
 from interpreter.path_name import NO_PATH_NAME
+from interpreter.register import Register
 from interpreter.var_name import VarName
 
 
-def lower_js_alternative(ctx: TreeSitterEmitContext, alt_node, end_label: str) -> None:
+def lower_js_alternative(
+    ctx: TreeSitterEmitContext, alt_node, end_label: CodeLabel
+) -> None:
     alt_type = alt_node.type
     if alt_type == JSN.ELSE_CLAUSE:
         for child in alt_node.children:
@@ -270,7 +274,7 @@ def _is_destructuring_pattern(node) -> bool:
 
 
 def _lower_for_destructure(
-    ctx: TreeSitterEmitContext, pattern_node, elem_reg: str
+    ctx: TreeSitterEmitContext, pattern_node, elem_reg: Register
 ) -> None:
     """Lower destructuring in a for-of/for-in loop body.
 

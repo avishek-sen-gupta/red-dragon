@@ -28,11 +28,11 @@ class FieldFallbackStrategy(ABC):
     """Strategy for resolving bare names as this.field when not in scope."""
 
     @abstractmethod
-    def resolve_load(self, vm: VMState, name: str) -> TypedValue | None:
+    def resolve_load(self, vm: VMState, name: VarName) -> TypedValue | None:
         """Return the field value if resolvable, else None."""
 
     @abstractmethod
-    def resolve_store(self, vm: VMState, name: str) -> str | None:
+    def resolve_store(self, vm: VMState, name: VarName) -> str | None:
         """Return the heap address to write to if resolvable, else None."""
 
 

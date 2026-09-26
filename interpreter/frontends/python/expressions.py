@@ -102,7 +102,7 @@ def lower_store_target(
 
 
 def lower_tuple_unpack(
-    ctx: TreeSitterEmitContext, target, val_reg: str, parent_node
+    ctx: TreeSitterEmitContext, target, val_reg: Register, parent_node
 ) -> None:
     for i, child in enumerate(
         c for c in target.children if c.type != PythonNodeType.COMMA

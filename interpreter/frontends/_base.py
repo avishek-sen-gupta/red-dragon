@@ -285,7 +285,7 @@ class BaseFrontend(Frontend):
         self,
         func_name: str,
         func_label: CodeLabel,
-        result_reg: str,
+        result_reg: Register,
         node: Any = NO_NODE,
     ) -> InstructionBase:
         """Legacy-mode equivalent of ctx.emit_func_ref().
@@ -931,7 +931,7 @@ class BaseFrontend(Frontend):
             self._lower_block(alt_node)
 
     def _lower_elif(
-        self, node: Any, end_label: str
+        self, node: Any, end_label: CodeLabel
     ) -> None:  # Any: tree-sitter node — untyped at Python boundary
         cond_node = node.child_by_field_name(self.IF_CONDITION_FIELD)
         body_node = node.child_by_field_name(self.IF_CONSEQUENCE_FIELD)

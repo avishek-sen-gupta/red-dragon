@@ -10,6 +10,7 @@ from typing import Any
 from interpreter.frontends.common.node_types import CommonNodeType
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.instructions import Branch, BranchIf, Label_, Symbolic
+from interpreter.ir import CodeLabel
 
 
 def lower_if(
@@ -54,7 +55,7 @@ def lower_if(
 
 
 def lower_alternative(
-    ctx: TreeSitterEmitContext, alt_node: Any, end_label: str
+    ctx: TreeSitterEmitContext, alt_node: Any, end_label: CodeLabel
 ) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower an else/elif/else-if alternative block."""
     alt_type = alt_node.type

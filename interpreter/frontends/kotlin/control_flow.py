@@ -32,6 +32,7 @@ from interpreter.instructions import (
     StoreVar,
 )
 from interpreter.operator_kind import resolve_binop
+from interpreter.register import Register
 from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
@@ -138,7 +139,7 @@ def _extract_for_var_name(ctx: TreeSitterEmitContext, var_node) -> str:
 
 
 def _lower_for_multi_destructure(
-    ctx: TreeSitterEmitContext, multi_var_node, elem_reg: str
+    ctx: TreeSitterEmitContext, multi_var_node, elem_reg: Register
 ) -> None:
     """Decompose ``(a, b)`` in a for loop into positional LOAD_INDEX + STORE_VAR."""
     var_decls = [

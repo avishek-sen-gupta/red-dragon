@@ -63,7 +63,7 @@ def lower_lua_if(
 
 
 def _lower_lua_elseif_chain(
-    ctx: TreeSitterEmitContext, elseif_nodes, else_node, end_label: str
+    ctx: TreeSitterEmitContext, elseif_nodes, else_node, end_label: CodeLabel
 ) -> None:
     """Lower a chain of elseif_statement nodes followed by optional else."""
     if not elseif_nodes:

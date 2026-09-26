@@ -205,7 +205,7 @@ def lower_pascal_decl_var(
 
 def _populate_array_with_records(
     ctx: TreeSitterEmitContext,
-    arr_reg: str,
+    arr_reg: Register,
     size: int,
     record_type: str,
     node,

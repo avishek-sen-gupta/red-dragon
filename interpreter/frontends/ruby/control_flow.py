@@ -26,7 +26,7 @@ from interpreter.instructions import (
     TryPush,
     Unop,
 )
-from interpreter.ir import NO_LABEL
+from interpreter.ir import NO_LABEL, CodeLabel
 from interpreter.operator_kind import resolve_binop, resolve_unop
 from interpreter.register import Register
 from interpreter.var_name import VarName
@@ -315,7 +315,7 @@ def lower_ruby_if(
 
 
 def _lower_ruby_alternative(
-    ctx: TreeSitterEmitContext, alt_node, end_label: str
+    ctx: TreeSitterEmitContext, alt_node, end_label: CodeLabel
 ) -> None:
     """Lower an else/elsif alternative block."""
     alt_type = alt_node.type
@@ -333,7 +333,7 @@ def _lower_ruby_alternative(
 
 
 def _lower_ruby_elsif(
-    ctx: TreeSitterEmitContext, node: Any, end_label: str
+    ctx: TreeSitterEmitContext, node: Any, end_label: CodeLabel
 ) -> None:  # Any: tree-sitter node — untyped at Python boundary
     """Lower elsif clause."""
     cond_node = node.child_by_field_name(ctx.constants.if_condition_field)

@@ -70,7 +70,7 @@ def lower_js_var_declaration(
 
 
 def _lower_object_destructure(
-    ctx: TreeSitterEmitContext, pattern_node, val_reg: str, parent_node
+    ctx: TreeSitterEmitContext, pattern_node, val_reg: Register, parent_node
 ) -> None:
     """Lower { a, b } = obj or { x: localX } = obj, including ...rest."""
     extracted_keys: list[str] = []
@@ -149,7 +149,7 @@ def _extract_rest_name(child) -> str | None:
 
 
 def _lower_array_destructure(
-    ctx: TreeSitterEmitContext, pattern_node, val_reg: str, parent_node
+    ctx: TreeSitterEmitContext, pattern_node, val_reg: Register, parent_node
 ) -> None:
     """Lower [a, b] = arr, including rest patterns like [a, ...rest] = arr."""
     named_children = [c for c in pattern_node.children if c.is_named]

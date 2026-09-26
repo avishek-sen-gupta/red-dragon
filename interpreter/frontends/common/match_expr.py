@@ -27,6 +27,7 @@ from interpreter.instructions import (
     Label_,
     LoadVar,
 )
+from interpreter.ir import CodeLabel
 from interpreter.operator_kind import resolve_binop
 from interpreter.register import Register
 from interpreter.var_name import VarName
@@ -50,7 +51,7 @@ class MatchArmSpec:
 
 def lower_match_as_expr(
     ctx: TreeSitterEmitContext,
-    subject_reg: str,
+    subject_reg: Register,
     body_node: object,
     spec: MatchArmSpec,
 ) -> Register:
@@ -72,7 +73,7 @@ def _lower_arm(
     arm: object,
     subject_reg: str,
     result_var: str,
-    end_label: str,
+    end_label: CodeLabel,
     spec: MatchArmSpec,
 ) -> None:
     """Lower a single arm: test pattern, bind, evaluate body, store result."""
