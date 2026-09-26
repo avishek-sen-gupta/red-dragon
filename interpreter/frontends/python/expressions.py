@@ -47,6 +47,7 @@ from interpreter.instructions import (
     Symbolic,
     Unop,
 )
+from interpreter.ir import CodeLabel
 from interpreter.operator_kind import UnopKind, resolve_binop
 from interpreter.register import Register
 from interpreter.types.type_expr import scalar
@@ -91,7 +92,7 @@ def lower_python_comparison(ctx: TreeSitterEmitContext, node: Any) -> Register:
 
 
 def lower_store_target(
-    ctx: TreeSitterEmitContext, target, val_reg: str, parent_node
+    ctx: TreeSitterEmitContext, target, val_reg: Register, parent_node
 ) -> None:
     """Python-specific store target that adds tuple/pattern_list unpacking."""
     if target.type in (PythonNodeType.PATTERN_LIST, PythonNodeType.TUPLE_PATTERN):
@@ -845,7 +846,7 @@ def lower_python_subscript(
 
 
 def _lower_slice_with_collection(
-    ctx: TreeSitterEmitContext, slice_node, collection_reg: str
+    ctx: TreeSitterEmitContext, slice_node, collection_reg: Register
 ) -> Register:
     """Lower a[1:3] or a[1:3:2] as CALL_FUNCTION('slice', collection, start, stop, step)."""
     all_children = list(slice_node.children)
@@ -1116,7 +1117,7 @@ def lower_interpolation(
 
 
 def _emit_for_increment(
-    ctx: TreeSitterEmitContext, idx_reg: str, loop_label: str
+    ctx: TreeSitterEmitContext, idx_reg: Register, loop_label: CodeLabel
 ) -> None:
     one_reg = ctx.fresh_reg()
     ctx.emit_inst(Const.int_(one_reg, 1))
