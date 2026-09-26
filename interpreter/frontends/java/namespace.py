@@ -229,7 +229,7 @@ class JavaNamespaceResolver(NamespaceResolver):
         if root in ctx._method_declared_names:
             return NO_RESOLUTION  # type: ignore[return-value]
 
-        ns_type, remaining, qualified_name = self.tree.resolve(chain)  # type: ignore[arg-type]
+        ns_type, remaining, _qualified_name = self.tree.resolve(chain)  # type: ignore[arg-type]
         if ns_type is None:
             return NO_RESOLUTION  # type: ignore[return-value]
 

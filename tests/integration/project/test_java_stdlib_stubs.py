@@ -59,7 +59,7 @@ def _run_with_stdlib(
         modules=all_modules,
         import_graph={p: [] for p in all_modules},
         project_root=Path("."),
-        topo_order=list(stdlib_modules.keys()) + [user_path],
+        topo_order=[*list(stdlib_modules.keys()), user_path],
         language=Language.JAVA,
     )
     return run_linked(
@@ -83,7 +83,7 @@ def _run_class_with_stdlib(
         modules=all_modules,
         import_graph={p: [] for p in all_modules},
         project_root=Path("."),
-        topo_order=list(stdlib_modules.keys()) + [user_path],
+        topo_order=[*list(stdlib_modules.keys()), user_path],
         language=Language.JAVA,
     )
     return run_linked(

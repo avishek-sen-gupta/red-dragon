@@ -333,7 +333,7 @@ int add(int a, int b) {
 
     def test_pointer_return_type_propagated(self):
         """Pointer variable typed as Pointer[Int] should propagate through LOAD_VAR."""
-        instructions, env = _lower_and_infer(
+        _instructions, env = _lower_and_infer(
             """\
 void f() {
     int *p;
@@ -2348,7 +2348,7 @@ class TestVarTypeScopingCrossLanguage:
     def test_same_var_name_different_types_scoped(self, scoping_lang):
         """Variable 'x' in make_int is Int, 'x' in make_str is String — no collision."""
         source = _SCOPING_SOURCES[scoping_lang]
-        instructions, env = _lower_and_infer(source, scoping_lang)
+        _instructions, env = _lower_and_infer(source, scoping_lang)
         expected_int = _EXPECTED_INT_TYPE.get(scoping_lang, FoundationTypeName.INT)
         expected_str = _EXPECTED_STR_TYPE.get(scoping_lang, FoundationTypeName.STRING)
         cls = self._CLASS_WRAPPED.get(scoping_lang)
@@ -2378,21 +2378,21 @@ class TestJavaGenericTypeInference:
     """End-to-end: Java generic type annotations flow through inference."""
 
     def test_list_of_string_var_type(self):
-        instructions, env = _lower_and_infer(
+        _instructions, env = _lower_and_infer(
             "class M { void m() { List<String> items = new ArrayList<>(); } }",
             "java",
         )
         assert env.var_types[VarName("items")] == "List[String]"
 
     def test_map_generic_normalises_inner_types(self):
-        instructions, env = _lower_and_infer(
+        _instructions, env = _lower_and_infer(
             "class M { void m() { Map<String, Integer> m = new HashMap<>(); } }",
             "java",
         )
         assert env.var_types[VarName("m")] == "Map[String, Int]"
 
     def test_generic_return_type_in_signature(self):
-        instructions, env = _lower_and_infer(
+        _instructions, env = _lower_and_infer(
             "class M { List<String> getNames() { return null; } }",
             "java",
         )
@@ -2406,14 +2406,14 @@ class TestCSharpGenericTypeInference:
     """End-to-end: C# generic type annotations flow through inference."""
 
     def test_list_of_string_var_type(self):
-        instructions, env = _lower_and_infer(
+        _instructions, env = _lower_and_infer(
             "class M { void m() { List<string> items = new List<string>(); } }",
             "csharp",
         )
         assert env.var_types[VarName("items")] == "List[String]"
 
     def test_dictionary_normalises_inner_types(self):
-        instructions, env = _lower_and_infer(
+        _instructions, env = _lower_and_infer(
             "class M { void m() { Dictionary<string, int> d = new Dictionary<string, int>(); } }",
             "csharp",
         )
@@ -2424,14 +2424,14 @@ class TestScalaGenericTypeInference:
     """End-to-end: Scala generic type annotations flow through inference."""
 
     def test_list_of_string_var_type(self):
-        instructions, env = _lower_and_infer(
+        _instructions, env = _lower_and_infer(
             'object M { val items: List[String] = List("a") }',
             "scala",
         )
         assert env.var_types[VarName("items")] == "List[String]"
 
     def test_map_generic_var_type(self):
-        instructions, env = _lower_and_infer(
+        _instructions, env = _lower_and_infer(
             "object M { val m: Map[String, Int] = Map() }",
             "scala",
         )
@@ -2442,14 +2442,14 @@ class TestKotlinGenericTypeInference:
     """End-to-end: Kotlin generic type annotations flow through inference."""
 
     def test_list_of_string_var_type(self):
-        instructions, env = _lower_and_infer(
+        _instructions, env = _lower_and_infer(
             'fun main() { val items: List<String> = listOf("a") }',
             "kotlin",
         )
         assert env.var_types[VarName("items")] == "List[String]"
 
     def test_map_generic_var_type(self):
-        instructions, env = _lower_and_infer(
+        _instructions, env = _lower_and_infer(
             "fun main() { val m: Map<String, Int> = mapOf() }",
             "kotlin",
         )
@@ -2466,7 +2466,7 @@ class TestArrayElementTypePromotion:
 
     def test_python_list_element_type_int(self):
         """Python items = [1, 2, 3] should infer Array[Int] for items."""
-        instructions, env = _lower_and_infer(
+        _instructions, env = _lower_and_infer(
             "items = [1, 2, 3]",
             "python",
         )
@@ -2474,7 +2474,7 @@ class TestArrayElementTypePromotion:
 
     def test_python_list_element_type_string(self):
         """Python names = ['a', 'b'] should infer Array[String] for names."""
-        instructions, env = _lower_and_infer(
+        _instructions, env = _lower_and_infer(
             'names = ["a", "b"]',
             "python",
         )
@@ -2482,7 +2482,7 @@ class TestArrayElementTypePromotion:
 
     def test_javascript_array_element_type(self):
         """JS const items = [1, 2, 3] should infer Array[Int] for items."""
-        instructions, env = _lower_and_infer(
+        _instructions, env = _lower_and_infer(
             "const items = [1, 2, 3];",
             "javascript",
         )
@@ -2490,7 +2490,7 @@ class TestArrayElementTypePromotion:
 
     def test_ruby_array_element_type(self):
         """Ruby items = [1, 2, 3] should infer Array[Int] for items."""
-        instructions, env = _lower_and_infer(
+        _instructions, env = _lower_and_infer(
             "items = [1, 2, 3]",
             "ruby",
         )

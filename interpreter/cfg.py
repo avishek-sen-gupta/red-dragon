@@ -257,7 +257,7 @@ def _collapse_inst_lines(
         return lines
     head_count = max_lines - 2
     hidden = len(lines) - head_count - 1
-    return lines[:head_count] + [f"... ({hidden} more)"] + [lines[-1]]
+    return [*lines[:head_count], f"... ({hidden} more)", lines[-1]]
 
 
 def _render_node(

@@ -29,7 +29,7 @@ class TestExecuteCfgBasic:
         )
         cfg, registry = _build_simple_cfg(instructions)
 
-        vm, stats = execute_cfg(
+        vm, _stats = execute_cfg(
             cfg,
             "entry",
             registry,
@@ -46,7 +46,7 @@ class TestExecuteCfgBasic:
         )
         cfg, registry = _build_simple_cfg(instructions)
 
-        vm, stats = execute_cfg(
+        _vm, stats = execute_cfg(
             cfg,
             "entry",
             registry,
@@ -71,7 +71,7 @@ class TestExecuteCfgBasic:
         cfg, registry = _build_simple_cfg(instructions)
         config = VMConfig(max_steps=3)
 
-        vm, stats = execute_cfg(
+        _vm, stats = execute_cfg(
             cfg,
             "entry",
             registry,
@@ -137,7 +137,7 @@ class TestExecuteCfgBasic:
         cfg = build_cfg(instructions)
         empty_registry = FunctionRegistry()
 
-        vm, stats = execute_cfg(
+        vm, _stats = execute_cfg(
             cfg,
             "entry",
             empty_registry,
@@ -157,7 +157,7 @@ class TestExecuteCfgBasic:
         )
         cfg, registry = _build_simple_cfg(instructions)
 
-        vm, stats = execute_cfg(
+        vm, _stats = execute_cfg(
             cfg,
             "entry",
             registry,
@@ -191,7 +191,7 @@ class TestExecuteCfgBasic:
         )
         cfg, registry = _build_simple_cfg(instructions)
 
-        vm, stats = execute_cfg(
+        vm, _stats = execute_cfg(
             cfg,
             "entry",
             registry,
@@ -246,7 +246,7 @@ class TestExecuteCfgBasic:
         vm.call_stack.append(StackFrame(function_name=FuncName("__main__")))
         vm.current_frame.local_vars[VarName("preexisting")] = typed("hello", UNKNOWN)
 
-        vm_out, stats = execute_cfg(cfg, "entry", registry, vm=vm)
+        vm_out, _stats = execute_cfg(cfg, "entry", registry, vm=vm)
 
         # The preexisting variable should still be in scope
         assert VarName("preexisting") in vm_out.current_frame.local_vars
@@ -302,7 +302,7 @@ class TestExecuteCfgHalt:
         )
         cfg, registry = _build_simple_cfg(instructions)
 
-        vm, stats = execute_cfg(
+        vm, _stats = execute_cfg(
             cfg,
             "entry",
             registry,

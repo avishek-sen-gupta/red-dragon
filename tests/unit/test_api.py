@@ -246,7 +246,7 @@ class TestLowerAndInfer:
         assert any("x" in i.operands for i in store_vars)
 
     def test_propagates_java_type_seeds(self):
-        instructions, env = lower_and_infer(JAVA_SOURCE, language="java")
+        _instructions, env = lower_and_infer(JAVA_SOURCE, language="java")
         assert (
             env.get_func_signature(
                 FuncName("getName"), class_name=scalar(TypeName("Dog"))
@@ -261,7 +261,7 @@ class TestLowerAndInfer:
         )
 
     def test_java_this_param_in_func_signatures(self):
-        instructions, env = lower_and_infer(JAVA_SOURCE, language="java")
+        _instructions, env = lower_and_infer(JAVA_SOURCE, language="java")
         get_age_sig = env.get_func_signature(
             FuncName("getAge"), class_name=scalar(TypeName("Dog"))
         )

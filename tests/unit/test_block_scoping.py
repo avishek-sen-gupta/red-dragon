@@ -36,7 +36,7 @@ class TestVarScopeInfo:
         info = VarScopeInfo(original_name="x", scope_depth=1)
         try:
             info.original_name = "y"
-            assert False, "Should have raised"
+            raise AssertionError("Should have raised")
         except AttributeError:
             pass
 

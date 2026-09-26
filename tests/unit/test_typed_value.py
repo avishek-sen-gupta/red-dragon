@@ -17,7 +17,7 @@ class TestTypedValue:
         tv = TypedValue(value=42, type=scalar(TypeName("Int")))
         try:
             tv.value = 99
-            assert False, "Should have raised"
+            raise AssertionError("Should have raised")
         except AttributeError:
             pass
 

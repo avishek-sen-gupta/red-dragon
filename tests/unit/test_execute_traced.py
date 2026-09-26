@@ -27,7 +27,7 @@ class TestExecuteCfgTracedBasic:
         )
         cfg, registry = _build_simple_cfg(instructions)
 
-        vm, trace = execute_cfg_traced(
+        _vm, trace = execute_cfg_traced(
             cfg,
             "entry",
             registry,
@@ -45,7 +45,7 @@ class TestExecuteCfgTracedBasic:
         )
         cfg, registry = _build_simple_cfg(instructions)
 
-        vm, trace = execute_cfg_traced(
+        _vm, trace = execute_cfg_traced(
             cfg,
             "entry",
             registry,
@@ -66,7 +66,7 @@ class TestExecuteCfgTracedBasic:
         )
         cfg, registry = _build_simple_cfg(instructions)
 
-        vm, trace = execute_cfg_traced(
+        _vm, trace = execute_cfg_traced(
             cfg,
             "entry",
             registry,
@@ -87,7 +87,7 @@ class TestExecuteCfgTracedBasic:
         )
         cfg, registry = _build_simple_cfg(instructions)
 
-        vm, trace = execute_cfg_traced(
+        _vm, trace = execute_cfg_traced(
             cfg,
             "entry",
             registry,
@@ -109,7 +109,7 @@ class TestExecuteCfgTracedBasic:
         )
         cfg, registry = _build_simple_cfg(instructions)
 
-        vm, trace = execute_cfg_traced(
+        _vm, trace = execute_cfg_traced(
             cfg,
             "entry",
             registry,
@@ -135,7 +135,7 @@ class TestExecuteCfgTracedBasic:
         )
         cfg, registry = _build_simple_cfg(instructions)
 
-        vm, trace = execute_cfg_traced(
+        _vm, trace = execute_cfg_traced(
             cfg,
             "entry",
             registry,
@@ -155,7 +155,7 @@ class TestExecuteCfgTracedBasic:
         )
         cfg, registry = _build_simple_cfg(instructions)
 
-        vm, trace = execute_cfg_traced(
+        _vm, trace = execute_cfg_traced(
             cfg,
             "entry",
             registry,
@@ -175,7 +175,7 @@ class TestExecuteCfgTracedBasic:
         )
         cfg, registry = _build_simple_cfg(instructions)
 
-        vm, trace = execute_cfg_traced(
+        _vm, trace = execute_cfg_traced(
             cfg,
             "entry",
             registry,
@@ -193,7 +193,7 @@ class TestExecuteCfgTracedBasic:
         )
         cfg, registry = _build_simple_cfg(instructions)
 
-        vm, trace = execute_cfg_traced(
+        _vm, trace = execute_cfg_traced(
             cfg,
             "entry",
             registry,
@@ -226,7 +226,7 @@ class TestExecuteCfgTracedBasic:
         )
         cfg, registry = _build_simple_cfg(instructions)
 
-        vm, trace = execute_cfg_traced(
+        _vm, trace = execute_cfg_traced(
             cfg,
             "entry",
             registry,
@@ -262,7 +262,7 @@ class TestExecuteCfgTraced:
         vm.call_stack.append(StackFrame(function_name=FuncName("__main__")))
         vm.current_frame.local_vars[VarName("preexisting")] = typed("hello", UNKNOWN)
 
-        vm_out, trace = execute_cfg_traced(cfg, "entry", registry, vm=vm)
+        vm_out, _trace = execute_cfg_traced(cfg, "entry", registry, vm=vm)
 
         assert VarName("preexisting") in vm_out.current_frame.local_vars
         assert vm_out.current_frame.local_vars[VarName("preexisting")].value == "hello"

@@ -116,7 +116,7 @@ def main():
         dom_pct = int(100 * len(groups[shape_list[0]]) / len(d))
 
         if args.csv:
-            print(",".join([algo] + cells + [str(n_classes), str(dom_pct)]))
+            print(",".join([algo, *cells, str(n_classes), str(dom_pct)]))
         else:
             print(
                 f"{algo:<22}"

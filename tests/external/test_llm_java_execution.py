@@ -58,7 +58,7 @@ class TestLLMJavaExecution:
             func_symbol_table=linked.func_symbol_table,
             class_symbol_table=linked.class_symbol_table,
         )
-        vm, stats = execute_cfg(
+        vm, _stats = execute_cfg(
             linked.merged_cfg,
             linked.merged_cfg.entry,
             linked.merged_registry,

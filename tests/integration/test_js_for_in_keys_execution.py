@@ -47,7 +47,7 @@ for (var k in obj) {
     @covers(JavaScriptFeature.FOR_IN_LOOP)
     def test_for_in_empty_object(self):
         """for-in over empty object should not iterate."""
-        vm, stats = execute_for_language(
+        vm, _stats = execute_for_language(
             "javascript",
             """\
 var obj = {};

@@ -60,7 +60,7 @@ class TestJavaCalendarStdlib:
             class_symbol_table=linked.class_symbol_table,
         )
         config = VMConfig(max_steps=500)
-        vm, stats = execute_cfg(
+        vm, _stats = execute_cfg(
             linked.merged_cfg,
             linked.merged_cfg.entry,
             linked.merged_registry,
@@ -88,7 +88,7 @@ class TestJavaCalendarStdlib:
             class_symbol_table=linked.class_symbol_table,
         )
         config = VMConfig(max_steps=500)
-        vm, stats = execute_cfg(
+        vm, _stats = execute_cfg(
             linked.merged_cfg,
             linked.merged_cfg.entry,
             linked.merged_registry,

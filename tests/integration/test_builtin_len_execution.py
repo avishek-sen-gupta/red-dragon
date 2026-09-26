@@ -28,7 +28,7 @@ for (x in arr) {
 
     def test_empty_arrayOf_no_iterations(self):
         """arrayOf() with no elements should not iterate."""
-        vm, stats = execute_for_language(
+        vm, _stats = execute_for_language(
             "kotlin",
             """\
 val arr = arrayOf<Int>()

@@ -212,6 +212,6 @@ try {
 }
 """,
         }
-        vm, stats = execute_for_language(language, programs[language])
+        vm, _stats = execute_for_language(language, programs[language])
         answer = extract_answer(vm, language)
         assert answer == -1, f"[{language}] expected answer=-1, got {answer}"

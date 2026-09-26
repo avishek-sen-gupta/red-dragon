@@ -89,7 +89,7 @@ def _find_function_entry(
 def handle_analyze_program(source: str, language: str) -> dict[str, Any]:
     """Run full pipeline + analysis, return program overview."""
     try:
-        cfg, registry, interprocedural, ir = _run_analysis(source, language)
+        cfg, _registry, interprocedural, ir = _run_analysis(source, language)
     except Exception as e:
         return {"error": str(e)}
 
@@ -125,7 +125,7 @@ def handle_get_function_summary(
 ) -> dict[str, Any]:
     """Return param→return/field flows for a specific function."""
     try:
-        cfg, registry, interprocedural, ir = _run_analysis(source, language)
+        _cfg, _registry, interprocedural, _ir = _run_analysis(source, language)
         func_entry = _find_function_entry(function_name, interprocedural)
     except Exception as e:
         return {"error": str(e)}
@@ -163,7 +163,7 @@ def handle_get_call_chain(
 ) -> dict[str, Any]:
     """Build call-chain tree from top-level calls or a specific function."""
     try:
-        cfg, registry, interprocedural, ir = _run_analysis(source, language)
+        cfg, _registry, interprocedural, _ir = _run_analysis(source, language)
     except Exception as e:
         return {"error": str(e)}
 
@@ -426,7 +426,7 @@ def handle_load_project(
             "functions": sorted(
                 str(f.label) for f in interprocedural.call_graph.functions
             ),
-            "classes": sorted(str(k) for k in linked.merged_registry.classes.keys()),
+            "classes": sorted(str(k) for k in linked.merged_registry.classes),
         }
     except Exception as e:
         logger.exception("handle_load_project failed")

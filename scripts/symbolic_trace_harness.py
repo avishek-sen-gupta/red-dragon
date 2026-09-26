@@ -129,7 +129,7 @@ def execute_and_trace(linked, label: str, max_steps: int) -> None:
     entry = EntryPoint.function(lambda f, _lbl=label: str(f.label) == _lbl)
 
     try:
-        vm, trace = run_linked_traced(linked, entry, max_steps=max_steps)
+        _vm, trace = run_linked_traced(linked, entry, max_steps=max_steps)
     except Exception as e:
         print(f"\nExecution failed: {type(e).__name__}: {e}")
         traceback.print_exc()

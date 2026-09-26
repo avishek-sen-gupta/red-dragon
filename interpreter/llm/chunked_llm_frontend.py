@@ -345,7 +345,7 @@ class ChunkedLLMFrontend(Frontend):
 
         # Prepend the single entry label
         entry = Label_(label=CodeLabel(constants.CFG_ENTRY_LABEL))
-        combined = [entry] + all_instructions
+        combined = [entry, *all_instructions]
 
         # Convert LLM-emitted <function:...> and <class:...> strings to plain labels after renumbering
         _convert_llm_func_refs(combined, self._func_symbol_table)

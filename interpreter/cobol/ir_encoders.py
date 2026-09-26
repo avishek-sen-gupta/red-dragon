@@ -108,33 +108,22 @@ def _encode_digit_step(
     low_reg = _lit(rc, instructions, NibblePosition.LOW)
     return (
         new_result,
-        instructions
-        + [
+        [
+            *instructions,
             CallFunction(
                 result_reg=digit,
                 func_name=FuncName(BuiltinName.LIST_GET),
-                args=(
-                    source_list,
-                    i_reg,
-                ),
+                args=(source_list, i_reg),
             ),
             CallFunction(
                 result_reg=byte_val,
                 func_name=FuncName(BuiltinName.NIBBLE_SET),
-                args=(
-                    zone_reg,
-                    low_reg,
-                    digit,
-                ),
+                args=(zone_reg, low_reg, digit),
             ),
             CallFunction(
                 result_reg=new_result,
                 func_name=FuncName(BuiltinName.LIST_SET),
-                args=(
-                    current_result,
-                    i_reg,
-                    byte_val,
-                ),
+                args=(current_result, i_reg, byte_val),
             ),
         ],
     )
@@ -163,23 +152,17 @@ def _decode_digit_step(
     power_reg = _lit(rc, instructions, power)
     return (
         new_accum,
-        instructions
-        + [
+        [
+            *instructions,
             CallFunction(
                 result_reg=byte_reg,
                 func_name=FuncName(BuiltinName.LIST_GET),
-                args=(
-                    source_list,
-                    idx_reg,
-                ),
+                args=(source_list, idx_reg),
             ),
             CallFunction(
                 result_reg=digit,
                 func_name=FuncName(BuiltinName.NIBBLE_GET),
-                args=(
-                    byte_reg,
-                    low_reg,
-                ),
+                args=(byte_reg, low_reg),
             ),
             Binop(
                 result_reg=contribution,
@@ -217,15 +200,12 @@ def _accumulate_digit_step(
     power_reg = _lit(rc, instructions, power)
     return (
         new_accum,
-        instructions
-        + [
+        [
+            *instructions,
             CallFunction(
                 result_reg=digit,
                 func_name=FuncName(BuiltinName.LIST_GET),
-                args=(
-                    source_list,
-                    i_reg,
-                ),
+                args=(source_list, i_reg),
             ),
             Binop(
                 result_reg=contribution,
@@ -786,50 +766,32 @@ def build_encode_comp3_ir(func_name: str, total_digits: int) -> list[Instruction
         i_reg = _lit(rc, insts, i)
         return (
             new_result,
-            insts
-            + [
+            [
+                *insts,
                 CallFunction(
                     result_reg=high_nibble,
                     func_name=FuncName(BuiltinName.LIST_GET),
-                    args=(
-                        all_nibbles,
-                        hi_idx,
-                    ),
+                    args=(all_nibbles, hi_idx),
                 ),
                 CallFunction(
                     result_reg=low_nibble,
                     func_name=FuncName(BuiltinName.LIST_GET),
-                    args=(
-                        all_nibbles,
-                        lo_idx,
-                    ),
+                    args=(all_nibbles, lo_idx),
                 ),
                 CallFunction(
                     result_reg=byte_with_high,
                     func_name=FuncName(BuiltinName.NIBBLE_SET),
-                    args=(
-                        zero_base,
-                        high_pos,
-                        high_nibble,
-                    ),
+                    args=(zero_base, high_pos, high_nibble),
                 ),
                 CallFunction(
                     result_reg=byte_complete,
                     func_name=FuncName(BuiltinName.NIBBLE_SET),
-                    args=(
-                        byte_with_high,
-                        low_pos,
-                        low_nibble,
-                    ),
+                    args=(byte_with_high, low_pos, low_nibble),
                 ),
                 CallFunction(
                     result_reg=new_result,
                     func_name=FuncName(BuiltinName.LIST_SET),
-                    args=(
-                        current_result,
-                        i_reg,
-                        byte_complete,
-                    ),
+                    args=(current_result, i_reg, byte_complete),
                 ),
             ],
         )
@@ -869,32 +831,23 @@ def build_decode_comp3_ir(
         high_pos = _lit(rc, insts, NibblePosition.HIGH)
         low_pos = _lit(rc, insts, NibblePosition.LOW)
         return (
-            regs + [high, low],
-            insts
-            + [
+            [*regs, high, low],
+            [
+                *insts,
                 CallFunction(
                     result_reg=byte_reg,
                     func_name=FuncName(BuiltinName.LIST_GET),
-                    args=(
-                        p_data,
-                        i_reg,
-                    ),
+                    args=(p_data, i_reg),
                 ),
                 CallFunction(
                     result_reg=high,
                     func_name=FuncName(BuiltinName.NIBBLE_GET),
-                    args=(
-                        byte_reg,
-                        high_pos,
-                    ),
+                    args=(byte_reg, high_pos),
                 ),
                 CallFunction(
                     result_reg=low,
                     func_name=FuncName(BuiltinName.NIBBLE_GET),
-                    args=(
-                        byte_reg,
-                        low_pos,
-                    ),
+                    args=(byte_reg, low_pos),
                 ),
             ],
         )
@@ -923,8 +876,8 @@ def build_decode_comp3_ir(
         power_reg = _lit(rc, insts, power)
         return (
             new_accum,
-            insts
-            + [
+            [
+                *insts,
                 Binop(
                     result_reg=contribution,
                     operator=resolve_binop("*"),

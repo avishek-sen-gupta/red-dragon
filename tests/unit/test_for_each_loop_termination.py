@@ -113,7 +113,7 @@ for (x in arr) {
 
 class TestRustForTermination:
     def test_for_terminates(self):
-        vm, stats = execute_for_language(
+        _vm, stats = execute_for_language(
             "rust",
             """\
 fn main() {
@@ -131,7 +131,7 @@ fn main() {
 
 class TestGoRangeTermination:
     def test_range_terminates(self):
-        vm, stats = execute_for_language(
+        _vm, stats = execute_for_language(
             "go",
             """\
 package main
@@ -182,7 +182,7 @@ for (auto x : arr) {
 
 class TestLuaGenericForTermination:
     def test_generic_for_terminates(self):
-        vm, stats = execute_for_language(
+        _vm, stats = execute_for_language(
             "lua",
             """\
 local arr = {10, 5, 3}

@@ -130,29 +130,25 @@ _ONE_DIM_CASES = [
     ids=[label for label, _, _ in _ONE_DIM_CASES],
 )
 def test_one_dim_subscript_spelling_selects_the_named_element(statement, expected):
-    assert _outf(_ONE_DIM_DATA + [f"    {statement}", "    STOP RUN."]) == expected
+    assert _outf([*_ONE_DIM_DATA, f"    {statement}", "    STOP RUN."]) == expected
 
 
 # ── index names (INDEXED BY): the same integerLiteral? suffix applies ────────
-_INDEXED_DATA = (
-    [
-        "IDENTIFICATION DIVISION.",
-        "PROGRAM-ID. SUBGRMIX.",
-        "DATA DIVISION.",
-        "WORKING-STORAGE SECTION.",
-        "01 OUTF                      PIC 9(4) VALUE 0.",
-        "01 WS-TAB.",
-        "   05 WS-ROW OCCURS 3 TIMES INDEXED BY R-IDX.",
-        "      10 WS-CELL OCCURS 3 TIMES INDEXED BY C-IDX PIC 9(4).",
-        "PROCEDURE DIVISION.",
-        "MAIN.",
-    ]
-    + _TWO_DIM_INIT
-    + [
-        "    SET R-IDX TO 2",
-        "    SET C-IDX TO 3",
-    ]
-)
+_INDEXED_DATA = [
+    "IDENTIFICATION DIVISION.",
+    "PROGRAM-ID. SUBGRMIX.",
+    "DATA DIVISION.",
+    "WORKING-STORAGE SECTION.",
+    "01 OUTF                      PIC 9(4) VALUE 0.",
+    "01 WS-TAB.",
+    "   05 WS-ROW OCCURS 3 TIMES INDEXED BY R-IDX.",
+    "      10 WS-CELL OCCURS 3 TIMES INDEXED BY C-IDX PIC 9(4).",
+    "PROCEDURE DIVISION.",
+    "MAIN.",
+    *_TWO_DIM_INIT,
+    "    SET R-IDX TO 2",
+    "    SET C-IDX TO 3",
+]
 
 _INDEXED_CASES = [
     ("both index names", "MOVE WS-CELL(R-IDX, C-IDX) TO OUTF", 23),
@@ -169,7 +165,7 @@ _INDEXED_CASES = [
     ids=[label for label, _, _ in _INDEXED_CASES],
 )
 def test_index_name_subscript_selects_the_named_cell(statement, expected):
-    assert _outf(_INDEXED_DATA + [f"    {statement}", "    STOP RUN."]) == expected
+    assert _outf([*_INDEXED_DATA, f"    {statement}", "    STOP RUN."]) == expected
 
 
 # ── the receiving side takes the same spellings ─────────────────────────────
@@ -191,8 +187,11 @@ def test_subscripted_target_writes_the_named_cell(statement):
     good must see 77."""
     assert (
         _outf(
-            _two_dim(statement)[:-1]
-            + ["    MOVE WS-CELL(2, 3) TO OUTF", "    STOP RUN."]
+            [
+                *_two_dim(statement)[:-1],
+                "    MOVE WS-CELL(2, 3) TO OUTF",
+                "    STOP RUN.",
+            ]
         )
         == 77
     )
@@ -235,7 +234,7 @@ _THREE_DIM_CASES = [
     ids=[label for label, _, _ in _THREE_DIM_CASES],
 )
 def test_three_dim_subscript_spelling_selects_the_named_cell(statement, expected):
-    assert _outf(_THREE_DIM + [f"    {statement}", "    STOP RUN."]) == expected
+    assert _outf([*_THREE_DIM, f"    {statement}", "    STOP RUN."]) == expected
 
 
 # ── the same subscripts in other statement contexts ─────────────────────────
@@ -266,8 +265,8 @@ def test_subscripted_operand_in_an_if_condition(condition, expected):
     """A relation condition resolves subscripts the same way a MOVE does."""
     assert (
         _outf(
-            _two_dim("CONTINUE")[:-1]
-            + [
+            [
+                *_two_dim("CONTINUE")[:-1],
                 f"    {condition}",
                 "        MOVE 1 TO OUTF",
                 "    ELSE",
@@ -306,8 +305,11 @@ def test_compute_writes_through_a_subscripted_target():
     """COMPUTE's receiving field takes subscripts too."""
     assert (
         _outf(
-            _two_dim("COMPUTE WS-CELL(WS-I, 3) = 99")[:-1]
-            + ["    MOVE WS-CELL(2, 3) TO OUTF", "    STOP RUN."]
+            [
+                *_two_dim("COMPUTE WS-CELL(WS-I, 3) = 99")[:-1],
+                "    MOVE WS-CELL(2, 3) TO OUTF",
+                "    STOP RUN.",
+            ]
         )
         == 99
     )
@@ -345,7 +347,8 @@ _EIGHTY_EIGHT_FALSE = [
 
 
 def _eighty_eight(condition: str) -> list[str]:
-    return _EIGHTY_EIGHT + [
+    return [
+        *_EIGHTY_EIGHT,
         f"    {condition}",
         "        MOVE 1 TO OUTF",
         "    ELSE",

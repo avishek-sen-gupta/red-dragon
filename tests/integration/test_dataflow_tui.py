@@ -17,7 +17,7 @@ from viz.pipeline import run_pipeline
 
 def _collect_labels(nodes: list[ChainNode]) -> list[str]:
     """Collect all labels from a ChainNode tree."""
-    return [lbl for n in nodes for lbl in [n.label] + _collect_labels(n.children)]
+    return [lbl for n in nodes for lbl in [n.label, *_collect_labels(n.children)]]
 
 
 def _resolve_callee(callee_label: str, interprocedural):
@@ -72,7 +72,7 @@ result = g(10)
         assert len(result.interprocedural.summaries) > 0
         # Verify summaries contain expected functions (check by label)
         summary_labels = {
-            str(k.function.label) for k in result.interprocedural.summaries.keys()
+            str(k.function.label) for k in result.interprocedural.summaries
         }
         assert any(
             "func_f" in lbl for lbl in summary_labels

@@ -320,7 +320,7 @@ def _validate_ir(instructions: list[InstructionBase]) -> list[InstructionBase]:
     if not has_entry_label:
         logger.warning("LLM response missing entry label — auto-prepending")
         entry_label = Label_(label=CodeLabel(constants.CFG_ENTRY_LABEL))
-        instructions = [entry_label] + instructions
+        instructions = [entry_label, *instructions]
 
     return instructions
 

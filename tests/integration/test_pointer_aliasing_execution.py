@@ -39,7 +39,7 @@ def _run_rust(source: str, max_steps: int = 300):
 class TestPrimitivePointerAliasing:
     def test_write_through_pointer_updates_original(self):
         """*ptr = 99 should update x when ptr = &x."""
-        vm, local_vars = _run_c("""\
+        _vm, local_vars = _run_c("""\
 int x = 42;
 int *ptr = &x;
 *ptr = 99;
@@ -49,7 +49,7 @@ int answer = x;
 
     def test_read_through_pointer(self):
         """*ptr should read the value of x."""
-        vm, local_vars = _run_c("""\
+        _vm, local_vars = _run_c("""\
 int x = 42;
 int *ptr = &x;
 int answer = *ptr;
@@ -58,7 +58,7 @@ int answer = *ptr;
 
     def test_modify_original_visible_through_pointer(self):
         """Changing x after &x should be visible through *ptr."""
-        vm, local_vars = _run_c("""\
+        _vm, local_vars = _run_c("""\
 int x = 42;
 int *ptr = &x;
 x = 100;
@@ -70,7 +70,7 @@ int answer = *ptr;
 class TestPointerArithmeticExecution:
     def test_array_pointer_arithmetic(self):
         """*(ptr + 1) should access the next array element."""
-        vm, local_vars = _run_c("""\
+        _vm, local_vars = _run_c("""\
 int arr[3] = {10, 20, 30};
 int *ptr = arr;
 int answer = *(ptr + 1);
@@ -81,7 +81,7 @@ int answer = *(ptr + 1);
 class TestPointerSubtractionExecution:
     def test_pointer_difference(self):
         """p2 - p1 should return the element distance."""
-        vm, local_vars = _run_c("""\
+        _vm, local_vars = _run_c("""\
 int arr[4] = {10, 20, 30, 40};
 int *p1 = arr;
 int *p2 = arr;
@@ -94,7 +94,7 @@ int diff = p2 - p1;
 class TestPointerComparisonExecution:
     def test_pointer_less_than(self):
         """p1 < p2 should be true when p1 points before p2."""
-        vm, local_vars = _run_c("""\
+        _vm, local_vars = _run_c("""\
 int arr[3] = {10, 20, 30};
 int *p1 = arr;
 int *p2 = p1 + 2;
@@ -104,7 +104,7 @@ int lt = p1 < p2;
 
     def test_pointer_greater_equal(self):
         """p2 >= p1 should be true when p2 points at or after p1."""
-        vm, local_vars = _run_c("""\
+        _vm, local_vars = _run_c("""\
 int arr[3] = {10, 20, 30};
 int *p1 = arr;
 int *p2 = p1 + 1;
@@ -118,7 +118,7 @@ int ge_eq = p1 >= p1;
 class TestNestedPointerExecution:
     def test_double_pointer_write(self):
         """**pp = 99 should update x through two levels of indirection."""
-        vm, local_vars = _run_c("""\
+        _vm, local_vars = _run_c("""\
 int x = 42;
 int *ptr = &x;
 int **pp = &ptr;
@@ -134,7 +134,7 @@ int answer = x;
 class TestRustReferenceRead:
     def test_read_through_reference(self):
         """let ptr = &x; *ptr should read x's value."""
-        vm, local_vars = _run_rust("""\
+        _vm, local_vars = _run_rust("""\
 let x = 42;
 let ptr = &x;
 let answer = *ptr;
@@ -145,7 +145,7 @@ let answer = *ptr;
 class TestRustMutableReferenceWrite:
     def test_write_through_mutable_reference_updates_original(self):
         """*ptr = 99 should update x when ptr = &mut x."""
-        vm, local_vars = _run_rust("""\
+        _vm, local_vars = _run_rust("""\
 let mut x = 42;
 let ptr = &mut x;
 *ptr = 99;
@@ -155,7 +155,7 @@ let answer = x;
 
     def test_modify_original_visible_through_reference(self):
         """Changing x after &x should be visible through *ptr."""
-        vm, local_vars = _run_rust("""\
+        _vm, local_vars = _run_rust("""\
 let mut x = 42;
 let ptr = &x;
 x = 100;

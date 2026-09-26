@@ -77,7 +77,7 @@ class TestResolveModel:
         assert base == "http://localhost:11434"
 
     def test_ollama_custom_model(self):
-        model, base = _resolve_model("ollama", "llama3", "")
+        model, _base = _resolve_model("ollama", "llama3", "")
         assert model == "ollama/llama3"
 
     def test_huggingface_registry_lookup(self):

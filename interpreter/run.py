@@ -1014,7 +1014,7 @@ def run_linked(
     initial_vm.data_layout = linked.data_layout
 
     if entry_point.is_top_level:
-        vm, exec_stats = execute_cfg(
+        vm, _exec_stats = execute_cfg(
             linked.merged_cfg,
             linked.merged_cfg.entry,
             linked.merged_registry,
@@ -1041,7 +1041,7 @@ def run_linked(
         # Phase 2: dispatch into target function
         remaining = max_steps - preamble_stats.steps
         phase2_config = replace(vm_config, max_steps=max(remaining, 0))
-        vm, phase2_stats = execute_cfg(
+        vm, _phase2_stats = execute_cfg(
             linked.merged_cfg,
             func_label,
             linked.merged_registry,
