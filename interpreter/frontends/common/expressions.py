@@ -708,7 +708,7 @@ def lower_dict_literal(
 def lower_store_target(
     ctx: TreeSitterEmitContext,
     target: Any,
-    val_reg: str,
+    val_reg: Register,
     parent_node: Any,  # Any: tree-sitter nodes — untyped at Python boundary
 ) -> None:
     if target.type == CommonNodeType.IDENTIFIER:

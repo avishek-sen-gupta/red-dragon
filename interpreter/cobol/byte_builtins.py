@@ -861,7 +861,7 @@ def _builtin_current_date(args: list[TypedValue], vm: VMState) -> BuiltinResult:
 
     No arguments.
     """
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     now = datetime.now(UTC)
     date_part = now.strftime("%Y%m%d")
