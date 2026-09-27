@@ -192,12 +192,14 @@ def _compile_indexed_element(
     elem_pat: Pattern,
 ) -> Register:
     """Load element at index from subject and compile its pattern test."""
+    elem_idx_reg = ctx.fresh_reg()
+    ctx.emit_inst(Const.int_(elem_idx_reg, index))
     elem_reg = ctx.fresh_reg()
     ctx.emit_inst(
         LoadIndex(
             result_reg=elem_reg,
             arr_reg=subject_reg,
-            index_reg=str(index),
+            index_reg=elem_idx_reg,
         ),
     )
     return compile_pattern_test(ctx, elem_reg, elem_pat)
@@ -353,12 +355,14 @@ def compile_pattern_test(
             )
             sub_results = [isinstance_reg]
             for i, p in enumerate(pos):
+                elem_idx_reg = ctx.fresh_reg()
+                ctx.emit_inst(Const.int_(elem_idx_reg, i))
                 elem_reg = ctx.fresh_reg()
                 ctx.emit_inst(
                     LoadIndex(
                         result_reg=elem_reg,
                         arr_reg=subject_reg,
-                        index_reg=str(i),
+                        index_reg=elem_idx_reg,
                     ),
                 )
                 sub_results.append(compile_pattern_test(ctx, elem_reg, p))
@@ -496,12 +500,14 @@ def compile_pattern_bindings(
             if not _has_star(elems):
                 # No star — bind each element by literal index
                 for i, elem_pat in enumerate(elems):
+                    seq_idx_reg = ctx.fresh_reg()
+                    ctx.emit_inst(Const.int_(seq_idx_reg, i))
                     elem_reg = ctx.fresh_reg()
                     ctx.emit_inst(
                         LoadIndex(
                             result_reg=elem_reg,
                             arr_reg=subject_reg,
-                            index_reg=str(i),
+                            index_reg=seq_idx_reg,
                         ),
                     )
                     compile_pattern_bindings(ctx, elem_reg, elem_pat)
@@ -519,12 +525,14 @@ def compile_pattern_bindings(
                 after_count = len(elems) - star_idx - 1
                 # Before star: literal indices
                 for i, elem_pat in enumerate(elems[:star_idx]):
+                    prestar_idx_reg = ctx.fresh_reg()
+                    ctx.emit_inst(Const.int_(prestar_idx_reg, i))
                     elem_reg = ctx.fresh_reg()
                     ctx.emit_inst(
                         LoadIndex(
                             result_reg=elem_reg,
                             arr_reg=subject_reg,
-                            index_reg=str(i),
+                            index_reg=prestar_idx_reg,
                         ),
                     )
                     compile_pattern_bindings(ctx, elem_reg, elem_pat)
@@ -569,12 +577,14 @@ def compile_pattern_bindings(
                 compile_pattern_bindings(ctx, field_reg, val_pat)
         case ClassPattern(class_name=_, positional=pos, keyword=kw):
             for i, p in enumerate(pos):
+                cls_idx_reg = ctx.fresh_reg()
+                ctx.emit_inst(Const.int_(cls_idx_reg, i))
                 elem_reg = ctx.fresh_reg()
                 ctx.emit_inst(
                     LoadIndex(
                         result_reg=elem_reg,
                         arr_reg=subject_reg,
-                        index_reg=str(i),
+                        index_reg=cls_idx_reg,
                     ),
                 )
                 compile_pattern_bindings(ctx, elem_reg, p)
