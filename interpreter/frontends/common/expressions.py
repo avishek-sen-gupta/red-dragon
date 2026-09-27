@@ -579,7 +579,7 @@ def lower_subscript(
 
 def lower_interpolated_string_parts(
     ctx: TreeSitterEmitContext,
-    parts: list[str],
+    parts: list[Register],
     node: Any,  # Any: tree-sitter node — untyped at Python boundary
 ) -> Register:
     """Chain a list of string-part registers with BINOP '+' concatenation."""
