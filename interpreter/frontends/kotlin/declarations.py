@@ -143,11 +143,15 @@ def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
     """Emit ``SYMBOLIC param:this`` + ``STORE_VAR this`` for instance methods."""
     param_reg = ctx.fresh_reg()
     class_type = ScalarType(TypeName(ctx._current_class_name))
-    ctx.emit_inst(Symbolic(result_reg=param_reg, hint=f"{constants.PARAM_PREFIX}this"))
+    ctx.emit_inst(
+        Symbolic(
+            result_reg=param_reg, hint=f"{constants.PARAM_PREFIX}{constants.PARAM_THIS}"
+        )
+    )
     ctx.seed_register_type(param_reg, class_type)
-    ctx.seed_param_type("this", class_type)
-    ctx.emit_inst(DeclVar(name=VarName("this"), value_reg=param_reg))
-    ctx.seed_var_type("this", class_type)
+    ctx.seed_param_type(constants.PARAM_THIS, class_type)
+    ctx.emit_inst(DeclVar(name=VarName(constants.PARAM_THIS), value_reg=param_reg))
+    ctx.seed_var_type(constants.PARAM_THIS, class_type)
 
 
 def _lower_kotlin_params(ctx: TreeSitterEmitContext, params_node) -> None:
@@ -556,7 +560,7 @@ def _emit_primary_constructor_init(
         val_reg = ctx.fresh_reg()
         ctx.emit_inst(LoadVar(result_reg=val_reg, name=VarName(name)))
         this_reg = ctx.fresh_reg()
-        ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
+        ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName(constants.PARAM_THIS)))
         ctx.emit_inst(
             StoreField(obj_reg=this_reg, field_name=FieldName(name), value_reg=val_reg)
         )
@@ -648,7 +652,7 @@ def _emit_constructor_delegation(
         if arg.type == KNT.VALUE_ARGUMENT
     ]
     this_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
+    ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName(constants.PARAM_THIS)))
     for i, arg_reg in enumerate(arg_regs):
         field_name = primary_ctor_params[i] if i < len(primary_ctor_params) else str(i)
         ctx.emit_inst(

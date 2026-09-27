@@ -109,11 +109,15 @@ def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
     """Emit ``SYMBOLIC param:this`` + ``STORE_VAR this`` for instance methods."""
     param_reg = ctx.fresh_reg()
     class_type = ScalarType(TypeName(ctx._current_class_name))
-    ctx.emit_inst(Symbolic(result_reg=param_reg, hint=f"{constants.PARAM_PREFIX}this"))
+    ctx.emit_inst(
+        Symbolic(
+            result_reg=param_reg, hint=f"{constants.PARAM_PREFIX}{constants.PARAM_THIS}"
+        )
+    )
     ctx.seed_register_type(param_reg, class_type)
-    ctx.seed_param_type("this", class_type)
-    ctx.emit_inst(DeclVar(name=VarName("this"), value_reg=param_reg))
-    ctx.seed_var_type("this", class_type)
+    ctx.seed_param_type(constants.PARAM_THIS, class_type)
+    ctx.emit_inst(DeclVar(name=VarName(constants.PARAM_THIS), value_reg=param_reg))
+    ctx.seed_var_type(constants.PARAM_THIS, class_type)
 
 
 def _has_static_modifier(
@@ -227,7 +231,7 @@ def _lower_constructor_initializer(
         if arg.type == NT.ARGUMENT
     ]
     this_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
+    ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName(constants.PARAM_THIS)))
     ctx.emit_inst(
         CallMethod(
             result_reg=ctx.fresh_reg(),
@@ -388,7 +392,7 @@ def lower_property_decl(
     prop_name = ctx.node_text(name_node)
 
     this_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
+    ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName(constants.PARAM_THIS)))
 
     # Check for an initializer (e.g. ``= 42``)
     initializer_node = _find_property_initializer(ctx, node)

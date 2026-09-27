@@ -46,7 +46,7 @@ from __future__ import annotations
 from typing import Any
 
 from interpreter.class_name import ClassName
-from interpreter.constants import CanonicalLiteral
+from interpreter.constants import PARAM_THIS, CanonicalLiteral
 from interpreter.field_name import FieldName
 from interpreter.frontends.common.node_types import CommonNodeType
 from interpreter.frontends.context import TreeSitterEmitContext
@@ -261,7 +261,7 @@ def lower_identifier(
         ).name.is_present()
     ):
         this_reg = ctx.fresh_reg()
-        ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")), node=node)
+        ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName(PARAM_THIS)), node=node)
         reg = ctx.fresh_reg()
         ctx.emit_inst(
             LoadField(

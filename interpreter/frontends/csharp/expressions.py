@@ -957,7 +957,9 @@ def lower_csharp_store_target(
             ClassName(ctx._current_class_name), FieldName(name)
         ).name.is_present():
             this_reg = ctx.fresh_reg()
-            ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
+            ctx.emit_inst(
+                LoadVar(result_reg=this_reg, name=VarName(constants.PARAM_THIS))
+            )
             ctx.emit_inst(
                 StoreField(
                     obj_reg=this_reg, field_name=FieldName(name), value_reg=val_reg
