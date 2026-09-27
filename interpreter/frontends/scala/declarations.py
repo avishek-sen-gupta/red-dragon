@@ -621,7 +621,7 @@ def lower_function_def_stmt(
 # ---------------------------------------------------------------------------
 
 
-def _extract_scala_primary_ctor_fields(class_params_node) -> dict[str, FieldInfo]:
+def _extract_scala_primary_ctor_fields(class_params_node) -> dict[FieldName, FieldInfo]:
     """Extract val/var class parameters as fields from a class_parameters node."""
 
     fields: dict[FieldName, FieldInfo] = {}

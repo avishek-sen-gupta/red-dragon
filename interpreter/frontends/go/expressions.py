@@ -554,7 +554,7 @@ def get_expression_list_children(node) -> list:
 
 def lower_expression_list(
     ctx: TreeSitterEmitContext, node: Any
-) -> list[str]:  # Any: tree-sitter node — untyped at Python boundary
+) -> list[Register]:  # Any: tree-sitter node — untyped at Python boundary
     """Lower each expression in an expression_list, return registers."""
     if node is None:
         return []

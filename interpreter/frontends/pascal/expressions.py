@@ -189,7 +189,7 @@ def lower_pascal_call(
     return reg
 
 
-def _extract_pascal_args(ctx: TreeSitterEmitContext, args_node) -> list[str]:
+def _extract_pascal_args(ctx: TreeSitterEmitContext, args_node) -> list[Register]:
     """Extract argument registers from exprArgs node."""
     if args_node is None:
         return []

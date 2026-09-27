@@ -705,7 +705,7 @@ def _extract_java_method(node) -> tuple[str, FunctionInfo] | None:
     )
 
 
-def _extract_java_class_parents(node) -> tuple[str, ...]:
+def _extract_java_class_parents(node) -> tuple[ClassName, ...]:
     """Extract parent class name from a Java class_declaration's superclass node."""
     superclass = next(
         (c for c in node.children if c.type == JavaNodeType.SUPERCLASS),

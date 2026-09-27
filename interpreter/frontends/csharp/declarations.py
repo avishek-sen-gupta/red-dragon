@@ -661,7 +661,7 @@ def _extract_csharp_method(node) -> tuple[str, FunctionInfo] | None:
     )
 
 
-def _extract_csharp_class_parents(node) -> tuple[str, ...]:
+def _extract_csharp_class_parents(node) -> tuple[ClassName, ...]:
     """Extract parent class/interface names from a C# base_list node."""
     base_list = next((c for c in node.children if c.type == NT.BASE_LIST), None)
     if base_list is None:

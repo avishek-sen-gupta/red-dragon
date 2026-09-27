@@ -685,7 +685,7 @@ def _case_match_guard_of(
     return None
 
 
-def _case_match_body_of(ctx: TreeSitterEmitContext, arm) -> str:
+def _case_match_body_of(ctx: TreeSitterEmitContext, arm) -> Register:
     """Lower the body of an in_clause or synthetic else arm as an expression."""
     if isinstance(arm, tuple) and arm[0] == "__else__":
         else_node = arm[1]

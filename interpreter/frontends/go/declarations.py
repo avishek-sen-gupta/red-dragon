@@ -440,7 +440,7 @@ def _lower_const_spec(
 # ---------------------------------------------------------------------------
 
 
-def _extract_go_struct_fields(field_declaration_list) -> dict[str, FieldInfo]:
+def _extract_go_struct_fields(field_declaration_list) -> dict[FieldName, FieldInfo]:
     """Extract fields from a Go struct field_declaration_list node."""
 
     fields: dict[FieldName, FieldInfo] = {}

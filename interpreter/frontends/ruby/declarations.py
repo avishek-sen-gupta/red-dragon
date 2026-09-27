@@ -246,7 +246,7 @@ def lower_ruby_module(
 # ---------------------------------------------------------------------------
 
 
-def _extract_ruby_initialize_fields(body) -> dict[str, FieldInfo]:
+def _extract_ruby_initialize_fields(body) -> dict[FieldName, FieldInfo]:
     """Walk initialize body and collect @x = ... instance variable assignments."""
 
     fields: dict[FieldName, FieldInfo] = {}

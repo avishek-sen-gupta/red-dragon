@@ -111,7 +111,7 @@ def _unescape_c_string(s: str) -> str:
 
 def lower_c_number_literal(
     ctx: TreeSitterEmitContext, node: Any
-) -> str:  # Any: tree-sitter node — untyped at Python boundary
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower a C number literal to a typed int or float Const.
 
     Handles:
@@ -138,7 +138,7 @@ def lower_c_number_literal(
 
 def lower_c_char_literal(
     ctx: TreeSitterEmitContext, node: Any
-) -> str:  # Any: tree-sitter node — untyped at Python boundary
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower a C char literal to its integer ordinal value (typed Const.int_).
 
     Examples: 'A' → 65, '\\\\n' → 10, '\\\\0' → 0.
@@ -149,7 +149,7 @@ def lower_c_char_literal(
 
 def lower_c_string_literal(
     ctx: TreeSitterEmitContext, node: Any
-) -> str:  # Any: tree-sitter node — untyped at Python boundary
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower a C string literal as Const.string.
 
     Strips surrounding double-quotes and resolves escape sequences.
@@ -166,7 +166,7 @@ def lower_c_string_literal(
 
 def lower_c_concatenated_string(
     ctx: TreeSitterEmitContext, node: Any
-) -> str:  # Any: tree-sitter node — untyped at Python boundary
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower a C concatenated string literal (e.g. \"hello\" \" world\") as Const.string."""
     raw = ctx.node_text(node)
     # Concatenated strings: just strip outer quotes from combined text if possible
@@ -186,7 +186,7 @@ def lower_c_concatenated_string(
 
 def lower_c_preproc_arg(
     ctx: TreeSitterEmitContext, node: Any
-) -> str:  # Any: tree-sitter node — untyped at Python boundary
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Lower a preproc_arg (macro body) as a symbolic placeholder.
 
     preproc_arg nodes contain raw macro body text (e.g. ``((a) > (b) ? (a) : (b))``).
@@ -207,7 +207,7 @@ def lower_c_preproc_arg(
 
 def _lower_c_fallback_literal(
     ctx: TreeSitterEmitContext, node: Any
-) -> str:  # Any: tree-sitter node — untyped at Python boundary
+) -> Register:  # Any: tree-sitter node — untyped at Python boundary
     """Emit a symbolic placeholder for an unrecognized C literal node.
 
     Used as the fallback in field_expr, subscript_expr, cast_expr, and
