@@ -41,7 +41,7 @@ from interpreter.instructions import (
     Symbolic,
 )
 from interpreter.ir import CodeLabel
-from interpreter.register import Register
+from interpreter.register import NO_REGISTER, Register
 from interpreter.types.type_expr import EnumType
 from interpreter.var_name import VarName
 
@@ -148,7 +148,7 @@ def _lower_rust_body_with_implicit_return(
         and c.type not in ctx.constants.noise_types
     ]
     if not children:
-        return ""
+        return NO_REGISTER
     *init, last = children
     for child in init:
         ctx.lower_stmt(child)
@@ -160,7 +160,7 @@ def _lower_rust_body_with_implicit_return(
     )
     if is_stmt:
         ctx.lower_stmt(last)
-        return ""
+        return NO_REGISTER
     return ctx.lower_expr(last)
 
 
@@ -194,7 +194,7 @@ def lower_function_def(
 
     if body_node:
         expr_reg = _lower_rust_body_with_implicit_return(ctx, body_node)
-        if expr_reg:
+        if expr_reg.is_present():
             ctx.emit_inst(Return_(value_reg=expr_reg))
         else:
             emit_implicit_return(ctx, node)
