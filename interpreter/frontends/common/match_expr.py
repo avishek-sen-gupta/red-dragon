@@ -46,7 +46,7 @@ class MatchArmSpec:
     extract_arms: Callable[[object], list[object]]
     pattern_of: Callable[[TreeSitterEmitContext, object], Pattern]
     guard_of: Callable[[TreeSitterEmitContext, object], object | None]
-    body_of: Callable[[TreeSitterEmitContext, object], str]
+    body_of: Callable[[TreeSitterEmitContext, object], Register]
 
 
 def lower_match_as_expr(
