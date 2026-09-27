@@ -77,7 +77,7 @@ def _extract_rust_param_name(ctx: TreeSitterEmitContext, child) -> str | None:
     if child.type == RustNodeType.IDENTIFIER:
         return ctx.node_text(child)
     if child.type == RustNodeType.SELF_PARAMETER:
-        return "self"
+        return constants.PARAM_SELF
     if child.type == RustNodeType.PARAMETER:
         pattern_node = child.child_by_field_name("pattern")
         if pattern_node:

@@ -123,7 +123,12 @@ def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
     """Emit ``SYMBOLIC param:$this`` + ``STORE_VAR $this`` for instance methods."""
     param_reg = ctx.fresh_reg()
     class_type = ScalarType(TypeName(ctx._current_class_name))
-    ctx.emit_inst(Symbolic(result_reg=param_reg, hint=f"{constants.PARAM_PREFIX}$this"))
+    ctx.emit_inst(
+        Symbolic(
+            result_reg=param_reg,
+            hint=f"{constants.PARAM_PREFIX}{constants.PARAM_PHP_THIS}",
+        )
+    )
     ctx.seed_register_type(param_reg, class_type)
     ctx.seed_param_type(constants.PARAM_PHP_THIS, class_type)
     ctx.emit_inst(DeclVar(name=VarName(constants.PARAM_PHP_THIS), value_reg=param_reg))

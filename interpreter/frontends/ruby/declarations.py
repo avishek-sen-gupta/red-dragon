@@ -61,7 +61,10 @@ def _lower_body_with_implicit_return(ctx: TreeSitterEmitContext, body_node) -> R
 def _emit_self_param(ctx: TreeSitterEmitContext) -> None:
     """Emit ``SYMBOLIC param:self`` + ``STORE_VAR self`` for instance methods."""
     ctx.emit_inst(
-        Symbolic(result_reg=ctx.fresh_reg(), hint=f"{constants.PARAM_PREFIX}self")
+        Symbolic(
+            result_reg=ctx.fresh_reg(),
+            hint=f"{constants.PARAM_PREFIX}{constants.PARAM_SELF}",
+        )
     )
     ctx.emit_inst(
         DeclVar(

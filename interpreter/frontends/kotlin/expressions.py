@@ -159,7 +159,7 @@ def lower_kotlin_identifier(
     text = ctx.node_text(node)
     if text == "field" and ctx._accessor_backing_field:
         this_reg = ctx.fresh_reg()
-        ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
+        ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName(constants.PARAM_THIS)))
         reg = ctx.fresh_reg()
         ctx.emit_inst(
             LoadField(
@@ -1166,7 +1166,9 @@ def lower_kotlin_store_target(
         text = ctx.node_text(target)
         if text == "field" and ctx._accessor_backing_field:
             this_reg = ctx.fresh_reg()
-            ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
+            ctx.emit_inst(
+                LoadVar(result_reg=this_reg, name=VarName(constants.PARAM_THIS))
+            )
             ctx.emit_inst(
                 StoreField(
                     obj_reg=this_reg,

@@ -316,14 +316,23 @@ def lower_pascal_proc(
     if class_name:
         sym_reg = ctx.fresh_reg()
         ctx.emit_inst(
-            Symbolic(result_reg=sym_reg, hint=f"{constants.PARAM_PREFIX}this"),
+            Symbolic(
+                result_reg=sym_reg,
+                hint=f"{constants.PARAM_PREFIX}{constants.PARAM_THIS}",
+            ),
             node=node,
         )
         ctx.emit_inst(
-            DeclVar(name=VarName("this"), value_reg=Register(f"%{ctx.reg_counter - 1}"))
+            DeclVar(
+                name=VarName(constants.PARAM_THIS),
+                value_reg=Register(f"%{ctx.reg_counter - 1}"),
+            )
         )
         ctx.emit_inst(
-            DeclVar(name=VarName("self"), value_reg=Register(f"%{ctx.reg_counter - 1}"))
+            DeclVar(
+                name=VarName(constants.PARAM_SELF),
+                value_reg=Register(f"%{ctx.reg_counter - 1}"),
+            )
         )
 
     if args_node:
@@ -565,16 +574,23 @@ def _emit_synthetic_init_for_fields(
     ctx.emit_inst(Label_(label=func_label))
 
     sym_reg = ctx.fresh_reg()
-    ctx.emit_inst(Symbolic(result_reg=sym_reg, hint=f"{constants.PARAM_PREFIX}this"))
     ctx.emit_inst(
-        DeclVar(name=VarName("this"), value_reg=Register(f"%{ctx.reg_counter - 1}"))
+        Symbolic(
+            result_reg=sym_reg, hint=f"{constants.PARAM_PREFIX}{constants.PARAM_THIS}"
+        )
+    )
+    ctx.emit_inst(
+        DeclVar(
+            name=VarName(constants.PARAM_THIS),
+            value_reg=Register(f"%{ctx.reg_counter - 1}"),
+        )
     )
 
     for fname in field_names:
         val_reg = ctx.fresh_reg()
         ctx.emit_inst(Const.null_(val_reg))
         this_reg = ctx.fresh_reg()
-        ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
+        ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName(constants.PARAM_THIS)))
         ctx.emit_inst(
             StoreField(obj_reg=this_reg, field_name=FieldName(fname), value_reg=val_reg)
         )
@@ -625,11 +641,16 @@ def _lower_pascal_method(
     # Inject `this` as first parameter
     sym_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        Symbolic(result_reg=sym_reg, hint=f"{constants.PARAM_PREFIX}this"),
+        Symbolic(
+            result_reg=sym_reg, hint=f"{constants.PARAM_PREFIX}{constants.PARAM_THIS}"
+        ),
         node=node,
     )
     ctx.emit_inst(
-        DeclVar(name=VarName("this"), value_reg=Register(f"%{ctx.reg_counter - 1}"))
+        DeclVar(
+            name=VarName(constants.PARAM_THIS),
+            value_reg=Register(f"%{ctx.reg_counter - 1}"),
+        )
     )
 
     if args_node:
@@ -703,13 +724,20 @@ def _emit_property_getter(
     ctx.emit_inst(Label_(label=func_label))
 
     sym_reg = ctx.fresh_reg()
-    ctx.emit_inst(Symbolic(result_reg=sym_reg, hint=f"{constants.PARAM_PREFIX}this"))
     ctx.emit_inst(
-        DeclVar(name=VarName("this"), value_reg=Register(f"%{ctx.reg_counter - 1}"))
+        Symbolic(
+            result_reg=sym_reg, hint=f"{constants.PARAM_PREFIX}{constants.PARAM_THIS}"
+        )
+    )
+    ctx.emit_inst(
+        DeclVar(
+            name=VarName(constants.PARAM_THIS),
+            value_reg=Register(f"%{ctx.reg_counter - 1}"),
+        )
     )
 
     this_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
+    ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName(constants.PARAM_THIS)))
 
     if target in field_names:
         result_reg = ctx.fresh_reg()
@@ -755,9 +783,16 @@ def _emit_property_setter(
     ctx.emit_inst(Label_(label=func_label))
 
     sym_reg = ctx.fresh_reg()
-    ctx.emit_inst(Symbolic(result_reg=sym_reg, hint=f"{constants.PARAM_PREFIX}this"))
     ctx.emit_inst(
-        DeclVar(name=VarName("this"), value_reg=Register(f"%{ctx.reg_counter - 1}"))
+        Symbolic(
+            result_reg=sym_reg, hint=f"{constants.PARAM_PREFIX}{constants.PARAM_THIS}"
+        )
+    )
+    ctx.emit_inst(
+        DeclVar(
+            name=VarName(constants.PARAM_THIS),
+            value_reg=Register(f"%{ctx.reg_counter - 1}"),
+        )
     )
 
     val_sym = ctx.fresh_reg()
@@ -767,7 +802,7 @@ def _emit_property_setter(
     )
 
     this_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
+    ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName(constants.PARAM_THIS)))
     val_reg = ctx.fresh_reg()
     ctx.emit_inst(LoadVar(result_reg=val_reg, name=VarName("value")))
 

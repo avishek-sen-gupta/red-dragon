@@ -495,7 +495,7 @@ def lower_struct_field(
     for decl in declarators:
         fname = ctx.node_text(decl)
         this_reg = ctx.fresh_reg()
-        ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
+        ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName(constants.PARAM_THIS)))
         default_reg = lower_int_literal(ctx, node, text="0")
         ctx.emit_inst(
             StoreField(
