@@ -10,13 +10,13 @@ repos:
   # names. Matches how python-fp-lint is pinned below. `pre-commit autoupdate`
   # will try to move this back to a tag -- re-pin by SHA after running it.
   - repo: https://github.com/RobertCraigie/pyright-python
-    rev: 1aa6dfeb849ae43fb6f16fc17228bcbd358a19c3  # v1.1.414
+    rev: v1.1.414  # v1.1.414
     hooks:
       - id: pyright
         entry: bash -c 'pyright "$@" || true' --
         verbose: true
   - repo: https://github.com/avishek-sen-gupta/python-fp-lint
-    rev: dbe3f45da3f0084efccd855831a7b72f4e851397
+    rev: f59034b26b47c0295f0c9513dd46765c5eece59f
     hooks:
       - id: python-fp-lint
         args: [--config, fp.json]
