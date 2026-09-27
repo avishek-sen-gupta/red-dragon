@@ -22,6 +22,8 @@ register is loaded from an integer constant.
 
 from __future__ import annotations
 
+import pytest
+
 from interpreter.api import lower_source
 from interpreter.constants import Language
 from interpreter.instructions import LoadIndex, StoreIndex
@@ -52,15 +54,27 @@ r1 = classify([3, 4])
 r2 = classify([2, 5, 9, 9])
 """
 
+# Python's `case Point(...)` does not lower to a ClassPattern with positional
+# args, so it misses two of the five sites. A Scala case-class pattern does
+# reach both (compile_pattern_test and compile_pattern_bindings), as do Java
+# record patterns.
+SCALA_PATTERN_SOURCE = "object M { def f(s: Any) = s match { case Circle(r, g) => r } }"
+
+SAMPLES = [
+    pytest.param(PATTERN_SOURCE, Language.PYTHON, id="python-sequence-and-star"),
+    pytest.param(SCALA_PATTERN_SOURCE, Language.SCALA, id="scala-case-class"),
+]
+
 
 def _index_ops(ir):
     return [i for i in ir if isinstance(i, (LoadIndex, StoreIndex))]
 
 
+@pytest.mark.parametrize(("source", "language"), SAMPLES)
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_every_index_operand_is_a_register():
+def test_every_index_operand_is_a_register(source, language):
     """No index operand may be a bare str, which is what str(i) produced."""
-    ir = lower_source(PATTERN_SOURCE, Language.PYTHON)
+    ir = lower_source(source, language)
     ops = _index_ops(ir)
     assert ops, "sample lowered no index instructions — the sample has drifted"
     offenders = [
@@ -71,8 +85,9 @@ def test_every_index_operand_is_a_register():
     assert offenders == [], f"index operands that are not Registers: {offenders}"
 
 
+@pytest.mark.parametrize(("source", "language"), SAMPLES)
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_every_index_operand_is_written_by_some_instruction():
+def test_every_index_operand_is_written_by_some_instruction(source, language):
     """An index operand must name a register the IR actually defines.
 
     This is the invariant `str(i)` broke: '0' is not a register any instruction
@@ -80,7 +95,7 @@ def test_every_index_operand_is_written_by_some_instruction():
     `isinstance(idx_val, int)` fast path. A register loaded by `Const.int_`
     satisfies both.
     """
-    ir = lower_source(PATTERN_SOURCE, Language.PYTHON)
+    ir = lower_source(source, language)
     defined = {
         str(i.result_reg)
         for i in ir
