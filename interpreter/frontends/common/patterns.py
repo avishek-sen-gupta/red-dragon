@@ -399,7 +399,7 @@ def compile_pattern_test(
                 ctx.emit_inst(
                     LoadField(
                         result_reg=next_reg,
-                        obj_reg=str(reg),
+                        obj_reg=reg,
                         field_name=FieldName(part),
                     ),
                 )
@@ -410,7 +410,7 @@ def compile_pattern_test(
                     result_reg=cmp_reg,
                     operator=resolve_binop("=="),
                     left=subject_reg,
-                    right=str(reg),
+                    right=reg,
                 ),
             )
             return cmp_reg
