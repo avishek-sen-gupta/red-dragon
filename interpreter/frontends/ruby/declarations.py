@@ -275,7 +275,7 @@ def _extract_ruby_class(node) -> tuple[str, ClassInfo] | None:
     superclass_node = next(
         (c for c in node.children if c.type == RubyNodeType.SUPERCLASS), None
     )
-    parents: tuple[str, ...] = ()
+    parents: tuple[ClassName, ...] = ()
     if superclass_node is not None:
         parent_name_node = next(
             (c for c in superclass_node.children if c.type == RubyNodeType.CONSTANT),
