@@ -737,7 +737,7 @@ def lower_object_decl(
 # ---------------------------------------------------------------------------
 
 
-def _extract_kotlin_primary_ctor_fields(primary_ctor) -> dict[str, FieldInfo]:
+def _extract_kotlin_primary_ctor_fields(primary_ctor) -> dict[FieldName, FieldInfo]:
     """Extract val/var params from a Kotlin primary_constructor as fields."""
 
     fields: dict[FieldName, FieldInfo] = {}

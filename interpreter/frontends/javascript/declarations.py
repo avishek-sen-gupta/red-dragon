@@ -414,7 +414,7 @@ def _extract_param_names(params_node) -> tuple[str, ...]:
     return tuple(names)
 
 
-def _extract_js_self_fields(body) -> dict[str, FieldInfo]:
+def _extract_js_self_fields(body) -> dict[FieldName, FieldInfo]:
     """Walk a constructor body and collect this.x = ... assignments."""
 
     fields: dict[FieldName, FieldInfo] = {}

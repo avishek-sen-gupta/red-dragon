@@ -29,6 +29,7 @@ from interpreter.instructions import (
 )
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import resolve_binop
+from interpreter.register import Register
 from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
@@ -480,7 +481,7 @@ def lower_expression_switch(
         ctx.exit_block_scope()
 
 
-def _make_const_val(ctx: TreeSitterEmitContext, value: str) -> str:
+def _make_const_val(ctx: TreeSitterEmitContext, value: str) -> Register:
     """Emit a typed CONST for a canonical literal string and return its register.
 
     Used for switch fallback (true sentinel).  Handles True/False/None/int.
