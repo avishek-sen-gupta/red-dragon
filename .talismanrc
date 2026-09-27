@@ -4,13 +4,8 @@ fileignoreconfig:
   checksum: 3974d55425bdf94d6a89c2b8eb0e66b31775a072b8a4bf6209df76d28374a7e2
 - filename: interpreter/vm/vm.py
   checksum: 906d0538524cf23e07dc04c2f930d173f66ca7a76487ccf0dfffce094d2e4aab
-- filename: poetry.lock
-  ignore_detectors:
-    - filecontent
 - filename: interpreter.py
   checksum: 5337b3918a4bbf320a088669079fbe7fe525cb45bf947a62ad3f5f15de093eec
-- filename: interpreter/registry.py
-  checksum: 3bccb3c148fa72a3ddd4d191f1f11b1e82f23f94bebfdb5c2663aec3fb5ecabf
 - filename: docs/notes-on-vm-design.md
   checksum: 3a15d93a6e1b5284016881e3bb7abbefb000dd4b2589a9c1bcd1e53afd7bfc94
 - filename: docs/architectural-design-decisions.md
@@ -53,10 +48,6 @@ fileignoreconfig:
   checksum: 2300b7b98efd38a6d8900c8c10158fba247fe300f7d50043bb8374a1cd4a8ab1
 - filename: interpreter/registry.py
   checksum: af467ca3418f518967b604d790de151f9b1a98fbbc19898769acf0109dfa903b
-- filename: interpreter/type_environment.py
-  checksum: 2c960e4dced6ea78624af6a7f15116b16b0d52eb0359f295d75d5a064154e089
-- filename: interpreter/type_environment_builder.py
-  checksum: 9f9ad9ce8ba943e18533c85fcbaf942f31e3b2f91b0d825f81da09444c561e77
 - filename: tests/unit/test_type_environment_builder.py
   checksum: 1ab4b13a5790e8b08c86a87046ec8ed222b65ad9f1d36f7f38f314f3eb321ad1
 - filename: scripts/paper-results-code/05_execution_equivalence.py
@@ -75,8 +66,6 @@ fileignoreconfig:
   checksum: 553efc4a65dd05221edec9b897a8bda685e1a24b14adf20010733fd5b2ddf9b6
 - filename: interpreter/frontends/_base.py
   checksum: 1a1c48730c38afc3bce95ee0a60c1652766c1aea304faac1c3816742cdda1a88
-- filename: .beads/interactions.jsonl
-  checksum: ec8ec070d72e54bb9f833d4ff236a51b65307281a43913c2fad6f35f6efe1415
 - filename: docs/superpowers/plans/2026-03-31-leaky-function-scoping.md
   checksum: 4be6b2a19a260bb6f89ec260cdfc49af6fb2d6f6510135e88fe9c7ca7a978bc0
 - filename: docs/superpowers/list-opcodes-workflow-walkthrough.md
@@ -93,12 +82,8 @@ fileignoreconfig:
   checksum: f04d6f8adbeceaa6e87846bfcec2aa9767940547849344b07bbc74505a1cd42e
 - filename: docs/superpowers/specs/2026-04-05-namespace-resolution-design.md
   checksum: ee9d30cf23bc94a2b4f95d524f26f8a874f56801803432fd525e8c6b73060642
-- filename: .claude/core/workflow.md
-  checksum: b4d8e3938058251d7b684444e70e9f16ab23d23740e6015725f8e132098402f7
 - filename: docs/linker-design.md
   checksum: d578ee4c13334f12859d889dab668fd268517b00ab275550eb1031cae16e9398
-- filename: README.md
-  checksum: 8321514e8d846db9296ef8782e3f2bc3490384e58cf51af4008ed553255d1bdd
 - filename: docs/superpowers/plans/2026-04-05-namespace-resolution.md
   checksum: 81b587d795b14a57513319f5abaf175ccb1f0bc65d167de7c517d58f535a5aac
 - filename: viz/panels/dataflow_summary_panel.py
@@ -129,18 +114,12 @@ fileignoreconfig:
   checksum: 39ea614ba3cc92415e831c1272a2626e8536cee61035a4cfda507be38037f0d1
 - filename: tests/unit/test_symbol_name.py
   checksum: 47d84e6284172705d13008b2b7fde4aa9da8625450e9a916582a2e35bb2b03b6
-- filename: interpreter/frontends/java/verified_features.py
-  checksum: f57395e26834200675312ac1e170e10400beb9c11f88dc6cb904273039a05cba
 - filename: viz/pipeline-showcase.html
   checksum: 134fbb293001a116958bff315bbaa907d13176cc9ffd7448876c722fda45720b
 - filename: interpreter/frontends/typescript/frontend.py
   checksum: a5236212aeba0fd199259b8ec6216f6088a64f608908a871e874f82660381342
 - filename: .beads/backup/backup_state.json
   checksum: 979f62fa04f2f0e8c0e17d53a87c08e23a4dba6a94e991e35a6c5800dec388fe
-- filename: .beads/backup/issues.jsonl
-  checksum: 001516911142703e764f44bec3df9f8cee3d9e9525396a083ca2bf84bdfaeb8b
-- filename: .beads/backup/config.jsonl
-  checksum: 6272a10b8d746764bbeaf4d2abfe759ac7491508b9c51264a9d4f5480b394c53
 - filename: scripts/redact-beads-issues
   checksum: fac2e11c1f7dc544947b9d77172295cb3f424fa0d9011a00c938b8060ebd6d68
 - filename: scripts/feature_coverage_audit.py
@@ -172,15 +151,6 @@ fileignoreconfig:
   checksum: f9f55752132ae079e1f16ddff9d3ff659a8a8c25d74c1f6240ead6c7efc638a4
 - filename: docs/superpowers/plans/2026-04-18-move-corresponding-recursive-datalayout.md
   checksum: cd3cec2b150c17edb08edd4b55f84545d9662a677bc07e293c1a9f318ceab3ad
-- filename: .beads/backup/issues.jsonl
-  checksum: 7994dcee418bf0084eb0fe78faa77f4cd242d7a0e0aaeefc50e1717316811c32
-
-- filename: .beads/backup/issues.jsonl
-  checksum: ad3c29375235a28b408d12cefb7865785779a52265e23340ee16dbbf6d5d7ed9
-- filename: .beads/backup/issues.jsonl
-  checksum: d71aa1f292cacb3832416e94977fda4fcf1044f90a434db0014c5f7bdc6d32d9
-- filename: .beads/backup/issues.jsonl
-  checksum: cd8f93a4af0591f7dc9421cc3d019719c07ae149be4eaaf6ceca500e20cbf5b9
 - filename: docs/superpowers/specs/2026-04-19-compute-on-size-error-design.md
   checksum: 56a4abe3a3657850c087098249dc2dccdd38f1192f5824c00a71634423a985d9
 - filename: docs/superpowers/specs/2026-04-20-reference-modification-design.md
@@ -189,24 +159,8 @@ fileignoreconfig:
   checksum: 07f76a5f8ee725299d810d5366e63e2c775da1bae0e412c8cec7c6b72d4c421a
 - filename: docs/superpowers/specs/2026-04-20-reference-modification-followups.md
   checksum: eacf269499bce8144766aa3068477b64ece681767dce2610275b82464f9b456a
-- filename: .beads/backup/issues.jsonl
-  checksum: 001516911142703e764f44bec3df9f8cee3d9e9525396a083ca2bf84bdfaeb8b
 - filename: docs/superpowers/plans/2026-04-21-compute-ref-mod.md
   checksum: ede78bb10fe82271d5f477eb43694647bf6f92a7ef5ae76ffb2f1b12120625cb
-- filename: .beads/backup/issues.jsonl
-  checksum: c57b8be5886c6da5c3d52b4c5dbab114af22aeac80a942dea50e6c4f0de3c1d8
-- filename: .claude/hooks/guvnah/pre-tool-use.sh
-  checksum: 5bcba82371cd47b9e298f09a2ea99295977f3945a5714a68ab922ccd1aa47f4d
-- filename: .claude/hooks/guvnah/session-start.sh
-  checksum: 09f088e8f096e56adee03a9b423d20f5d29e12945d2d3e2732e5b7b2232817b6
-- filename: .claude/hooks/guvnah/post-tool-use.sh
-  checksum: 774a1e9411311accc5b4f5098f508ebf3be73f719bb4db6cad3b1f84ba5d8878
-- filename: .claude/hooks/guvnah/ctl
-  checksum: 38c2cc4b5baa982f6cf56707f683e8267b754ab88ab882acc7324d119f1cd99a
-- filename: .claude/hooks/guvnah/user-prompt-submit.sh
-  checksum: 2be377b58fda09a03726238c02b60c843ce7d2750524fddd3d2a68f44395be5e
-- filename: .claude/hooks/guvnah/post-tool-use-failure.sh
-  checksum: 291bc11cf54cb5c15a6c6cce850e3439ef953503dd0269ba5d1eb50043c255db
 - filename: README.md
   checksum: 15e9276aa2b86512d26d5657f202cf53e6627a60f0abfe6c47d6cfa4d9000f68
 - filename: issues/issues.jsonl
@@ -216,8 +170,6 @@ fileignoreconfig:
   # moved; a stale path here silently stops the exclusion applying at all.
   ignore_detectors:
     - filecontent
-- filename: interpreter/project/cobol_connections.py
-  checksum: 5eed28ea03f5708a0a32e9cd4da154a347e1c226165c1681d6145b9bc15a3464
 - filename: tests/integration/test_cobol_pic_scaling.py
   checksum: 23e9e269d9b2fe83d184b83b0ecf8792986471ff9fb1d80237a75be7b1790a19
 - filename: docs/superpowers/plans/2026-08-22-pic-p-decimal-scaling.md
