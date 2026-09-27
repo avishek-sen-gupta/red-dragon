@@ -178,4 +178,22 @@ fileignoreconfig:
   checksum: 93b3daed58efdaedba2a5941bfb93e372aef9afb4959bbec00b0ab672bc51b94
 - filename: docs/superpowers/plans/2026-09-02-cobol-asg-extraction.md
   checksum: 1bb3884f643d6ad83e78241061b223659d59b003d6e50bec4caad1f506953dfd
+- filename: .pre-commit-config.yaml
+  checksum: e3d2ad42180f4fe09386c0f126165b127d98858c6992e912b9a9fa7065224a9a
+- filename: guidelines/design-principles.md
+  checksum: 6b22c098590bfe006953bc1fb467dc36ab434df36011435570debabfcfe4f837
+- filename: guidelines/lang/python/testing.md
+  checksum: b62087be3775094d4985e8bfc4f2b0ef0a836e013c9782f47d50eeae46cb3afa
+- filename: guidelines/data-security.md
+  checksum: bcf5fb39b3deb8c93928e9f848807e097e296811e5eb52bc4a986eb153f28931
+- filename: guidelines/project-context.md
+  checksum: 1d5770c7124b5a0174e0284481064b45577cf69a0095d248e243cc8b0b8bca49
+- filename: guidelines/code-search-tools.md
+  checksum: 36bf1c2c62c6879b42b7e32dbcd9e036c8af395f1b702f8adb692960039973dd
+- filename: guidelines/refactoring.md
+  checksum: dffcd3d3e87c7a44ef63196db3216ebe9315a016b88319e7539cdaf6bf22f2f2
+- filename: guidelines/workflow.md
+  checksum: 74c361a0d40bcd77008845cfff59bba7843bf2761a0a252cb532b0d9bd4b386c
+- filename: guidelines/testing.md
+  checksum: e4094fa4c5d3f3f6f5a61865b11bc8628cc44fe4b25515d61617b7def8afdf94
 version: "1.0"
