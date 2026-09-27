@@ -284,7 +284,7 @@ def _parse_single_instruction(raw: dict[str, Any]) -> InstructionBase:
         label=CodeLabel(raw_label) if raw_label else NO_LABEL,
         branch_targets=[CodeLabel(t) for t in raw_targets],
         source_location=NO_SOURCE_LOCATION,
-        literal_type=raw.get("literal_type"),
+        literal_type=raw.get("literal_type") or "",
     )
 
 

@@ -618,13 +618,22 @@ def _extract_cpp_method(node) -> tuple[str, FunctionInfo] | None:
         (c for c in func_declarator.children if c.type == CppNodeType.PARAMETER_LIST),
         None,
     )
+    # Unnamed parameters are legal in C++ (`int f(int, int b)`) and
+    # _cpp_param_name returns None for them; they are dropped, so the recorded
+    # arity can be lower than the declared one. The inner generator binds that
+    # name once so `pname is not None` narrows it -- the previous form called
+    # _cpp_param_name twice per node (once in the filter, once in the yield),
+    # and a type checker cannot tie the two calls together.
     params = (
         tuple(
-            _cpp_param_name(p)
-            for p in params_node.children
-            if p.type
-            in ("parameter_declaration", CppNodeType.OPTIONAL_PARAMETER_DECLARATION)
-            and _cpp_param_name(p) is not None
+            pname
+            for pname in (
+                _cpp_param_name(p)
+                for p in params_node.children
+                if p.type
+                in ("parameter_declaration", CppNodeType.OPTIONAL_PARAMETER_DECLARATION)
+            )
+            if pname is not None
         )
         if params_node is not None
         else ()

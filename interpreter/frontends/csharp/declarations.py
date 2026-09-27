@@ -43,7 +43,7 @@ from interpreter.instructions import (
     Symbolic,
 )
 from interpreter.type_name import TypeName
-from interpreter.types.type_expr import EnumType, ScalarType
+from interpreter.types.type_expr import UNKNOWN, EnumType, ScalarType, TypeExpr
 from interpreter.var_name import VarName
 
 
@@ -68,7 +68,10 @@ def lower_variable_declaration(
 
 
 def _lower_csharp_declarator(
-    ctx: TreeSitterEmitContext, node, type_hint: str = "", is_ref: bool = False
+    ctx: TreeSitterEmitContext,
+    node,
+    type_hint: TypeExpr = UNKNOWN,
+    is_ref: bool = False,
 ) -> None:
     """Lower a C# variable_declarator.
 
