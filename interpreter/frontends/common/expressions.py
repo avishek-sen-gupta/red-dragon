@@ -592,8 +592,8 @@ def lower_interpolated_string_parts(
             Binop(
                 result_reg=new_reg,
                 operator=resolve_binop("+"),
-                left=str(result),
-                right=str(part),
+                left=result,
+                right=part,
             ),
             node=node,
         )

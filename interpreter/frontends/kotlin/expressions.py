@@ -214,7 +214,7 @@ def lower_kotlin_string_literal(
 # -- call expression ---------------------------------------------------
 
 
-def _extract_kotlin_args(ctx: TreeSitterEmitContext, args_node) -> list[str]:
+def _extract_kotlin_args(ctx: TreeSitterEmitContext, args_node) -> list[Register]:
     """Extract argument registers from value_arguments -> value_argument."""
     if args_node is None:
         return []
