@@ -187,7 +187,7 @@ def _emit_literal_const(
 
 def _compile_indexed_element(
     ctx: TreeSitterEmitContext,
-    subject_reg: Register | str,
+    subject_reg: Register,
     index: int,
     elem_pat: Pattern,
 ) -> Register:
@@ -204,7 +204,7 @@ def _compile_indexed_element(
 
 
 def _emit_binop(
-    ctx: TreeSitterEmitContext, op: str, left: Register | str, right: Register | str
+    ctx: TreeSitterEmitContext, op: str, left: Register, right: Register
 ) -> Register:
     """Emit a single BINOP and return the result register."""
     combined = ctx.fresh_reg()
@@ -212,8 +212,8 @@ def _emit_binop(
         Binop(
             result_reg=combined,
             operator=resolve_binop(op),
-            left=str(left),
-            right=str(right),
+            left=left,
+            right=right,
         ),
     )
     return combined
@@ -231,8 +231,8 @@ def _star_index(elems: tuple[Pattern, ...]) -> int:
 
 def _compile_after_star_element_test(
     ctx: TreeSitterEmitContext,
-    subject_reg: Register | str,
-    len_reg: Register | str,
+    subject_reg: Register,
+    len_reg: Register,
     after_count: int,
     after_offset: int,
     elem_pat: Pattern,
@@ -252,18 +252,18 @@ def _compile_after_star_element_test(
     return compile_pattern_test(ctx, elem_reg, elem_pat)
 
 
-def _and_all(ctx: TreeSitterEmitContext, regs: list[Register | str]) -> Register:
+def _and_all(ctx: TreeSitterEmitContext, regs: list[Register]) -> Register:
     """AND a list of boolean registers together with BINOP &&."""
     return reduce(lambda acc, reg: _emit_binop(ctx, "&&", acc, reg), regs[1:], regs[0])
 
 
-def _or_any(ctx: TreeSitterEmitContext, regs: list[Register | str]) -> Register:
+def _or_any(ctx: TreeSitterEmitContext, regs: list[Register]) -> Register:
     """OR a list of boolean registers together with BINOP ||."""
     return reduce(lambda acc, reg: _emit_binop(ctx, "||", acc, reg), regs[1:], regs[0])
 
 
 def compile_pattern_test(
-    ctx: TreeSitterEmitContext, subject_reg: Register | str, pattern: Pattern
+    ctx: TreeSitterEmitContext, subject_reg: Register, pattern: Pattern
 ) -> Register:
     """Emit IR that tests whether subject matches pattern. Returns a boolean register."""
     match pattern:
@@ -456,8 +456,8 @@ def compile_pattern_test(
 
 def _compile_after_star_element_binding(
     ctx: TreeSitterEmitContext,
-    subject_reg: Register | str,
-    len_reg: Register | str,
+    subject_reg: Register,
+    len_reg: Register,
     after_count: int,
     after_offset: int,
     elem_pat: Pattern,
@@ -478,7 +478,7 @@ def _compile_after_star_element_binding(
 
 
 def compile_pattern_bindings(
-    ctx: TreeSitterEmitContext, subject_reg: Register | str, pattern: Pattern
+    ctx: TreeSitterEmitContext, subject_reg: Register, pattern: Pattern
 ) -> None:
     """Emit IR that binds variables from a matched pattern."""
     match pattern:
@@ -657,9 +657,9 @@ def _needs_pre_guard_bindings(pattern: Pattern) -> bool:
 
 def _compile_refutable_case(
     ctx: TreeSitterEmitContext,
-    subject_reg: Register | str,
+    subject_reg: Register,
     case: MatchCase,
-    end_label: CodeLabel | Register | str,
+    end_label: CodeLabel,
 ) -> None:
     """Emit IR for a refutable case (pattern has a test)."""
     test_reg = compile_pattern_test(ctx, subject_reg, case.pattern)
@@ -703,9 +703,9 @@ def _compile_refutable_case(
 
 def _compile_irrefutable_case(
     ctx: TreeSitterEmitContext,
-    subject_reg: Register | str,
+    subject_reg: Register,
     case: MatchCase,
-    end_label: CodeLabel | Register | str,
+    end_label: CodeLabel,
 ) -> None:
     """Emit IR for an irrefutable case (wildcard or bare capture — always matches)."""
     compile_pattern_bindings(ctx, subject_reg, case.pattern)
@@ -715,7 +715,7 @@ def _compile_irrefutable_case(
 
 
 def compile_match(
-    ctx: TreeSitterEmitContext, subject_reg: Register | str, cases: list[MatchCase]
+    ctx: TreeSitterEmitContext, subject_reg: Register, cases: list[MatchCase]
 ) -> None:
     """Emit IR for a match statement using CPython-style linear chain.
 
