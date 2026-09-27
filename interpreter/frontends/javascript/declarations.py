@@ -452,7 +452,7 @@ def _extract_js_class(node) -> tuple[str, ClassInfo] | None:
     class_name = name_node.text.decode()
 
     heritage = next((c for c in node.children if c.type == JSN.CLASS_HERITAGE), None)
-    parents: tuple[str, ...] = ()
+    parents: tuple[ClassName, ...] = ()
     if heritage is not None:
         # JS: identifier directly in class_heritage
         # TS: extends_clause > identifier
