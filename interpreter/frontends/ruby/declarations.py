@@ -25,7 +25,7 @@ from interpreter.instructions import (
     Return_,
     Symbolic,
 )
-from interpreter.register import Register
+from interpreter.register import NO_REGISTER, Register
 from interpreter.var_name import VarName
 
 
@@ -44,7 +44,7 @@ def _lower_body_with_implicit_return(ctx: TreeSitterEmitContext, body_node) -> R
         and c.type not in ctx.constants.noise_types
     ]
     if not children:
-        return ""
+        return NO_REGISTER
     *init, last = children
     for child in init:
         ctx.lower_stmt(child)
@@ -54,7 +54,7 @@ def _lower_body_with_implicit_return(ctx: TreeSitterEmitContext, body_node) -> R
     )
     if is_stmt:
         ctx.lower_stmt(last)
-        return ""
+        return NO_REGISTER
     return ctx.lower_expr(last)
 
 
@@ -93,11 +93,11 @@ def lower_ruby_method(
     if params_node:
         lower_ruby_params(ctx, params_node)
 
-    expr_reg = ""
+    expr_reg = NO_REGISTER
     if body_node:
         expr_reg = _lower_body_with_implicit_return(ctx, body_node)
 
-    if expr_reg:
+    if expr_reg.is_present():
         ctx.emit_inst(Return_(value_reg=expr_reg))
     else:
         emit_implicit_return(ctx, node)
@@ -204,11 +204,11 @@ def lower_ruby_singleton_method(
     if params_node:
         lower_ruby_params(ctx, params_node)
 
-    expr_reg = ""
+    expr_reg = NO_REGISTER
     if body_node:
         expr_reg = _lower_body_with_implicit_return(ctx, body_node)
 
-    if expr_reg:
+    if expr_reg.is_present():
         ctx.emit_inst(Return_(value_reg=expr_reg))
     else:
         emit_implicit_return(ctx, node)

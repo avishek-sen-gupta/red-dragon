@@ -146,7 +146,7 @@ from interpreter.frontends.common.patterns import (
 )
 from interpreter.frontends.kotlin.node_types import KotlinNodeType as KNT
 from interpreter.frontends.kotlin.patterns import parse_kotlin_pattern
-from interpreter.register import Register
+from interpreter.register import NO_REGISTER, Register
 from interpreter.types.type_expr import scalar
 
 logger = logging.getLogger(__name__)
@@ -792,9 +792,9 @@ def lower_anonymous_function(
         (c for c in node.children if c.type == KNT.FUNCTION_BODY),
         None,
     )
-    expr_reg = _lower_anon_func_body(ctx, body_node) if body_node else ""
+    expr_reg = _lower_anon_func_body(ctx, body_node) if body_node else NO_REGISTER
 
-    if expr_reg:
+    if expr_reg.is_present():
         ctx.emit_inst(Return_(value_reg=expr_reg))
     else:
         emit_implicit_return(ctx, node)
@@ -832,7 +832,7 @@ def _lower_anon_func_params(ctx: TreeSitterEmitContext, params_node) -> None:
 
 def _lower_anon_func_body(ctx: TreeSitterEmitContext, body_node) -> Register:
     """Lower function_body, returning last expression register for expression-bodied funs."""
-    last_reg = ""
+    last_reg = NO_REGISTER
     for child in body_node.children:
         if child.type in ("{", "}", "="):
             continue
@@ -843,7 +843,7 @@ def _lower_anon_func_body(ctx: TreeSitterEmitContext, body_node) -> Register:
             )
             if is_stmt:
                 ctx.lower_stmt(child)
-                last_reg = ""
+                last_reg = NO_REGISTER
             else:
                 last_reg = ctx.lower_expr(child)
     return last_reg

@@ -38,7 +38,7 @@ from interpreter.instructions import (
     StoreField,
     Symbolic,
 )
-from interpreter.register import Register
+from interpreter.register import NO_REGISTER, Register
 from interpreter.type_name import TypeName
 from interpreter.types.type_expr import EnumType, ScalarType
 from interpreter.var_name import VarName
@@ -221,7 +221,7 @@ def _lower_body_with_implicit_return(ctx: TreeSitterEmitContext, body_node) -> R
         and c.type not in ctx.constants.noise_types
     ]
     if not children:
-        return ""
+        return NO_REGISTER
     *init, last = children
     for child in init:
         ctx.lower_stmt(child)
@@ -232,7 +232,7 @@ def _lower_body_with_implicit_return(ctx: TreeSitterEmitContext, body_node) -> R
     # Explicit return already emits its own RETURN opcode
     if is_stmt or last.type == NT.RETURN_EXPRESSION:
         ctx.lower_stmt(last)
-        return ""
+        return NO_REGISTER
     return ctx.lower_expr(last)
 
 
@@ -273,7 +273,7 @@ def lower_function_def(
         if body_node.type in ctx.constants.block_node_types:
             # Block body: implicit return of last expression
             expr_reg = _lower_body_with_implicit_return(ctx, body_node)
-            if expr_reg:
+            if expr_reg.is_present():
                 ctx.emit_inst(Return_(value_reg=expr_reg))
                 expr_returned = True
         else:

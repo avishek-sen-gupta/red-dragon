@@ -38,7 +38,7 @@ from interpreter.instructions import (
     StoreField,
     Symbolic,
 )
-from interpreter.register import Register
+from interpreter.register import NO_REGISTER, Register
 from interpreter.type_name import TypeName
 from interpreter.types.type_expr import EnumType, ScalarType, scalar
 from interpreter.var_name import VarName
@@ -207,7 +207,7 @@ def _lower_function_body(ctx: TreeSitterEmitContext, body_node) -> Register:
     Returns the register of the last expression if the body is
     expression-bodied (e.g. ``fun f() = 42``), otherwise returns empty string.
     """
-    last_reg = ""
+    last_reg = NO_REGISTER
     for child in body_node.children:
         if child.type in ("{", "}", "="):
             continue
@@ -218,7 +218,7 @@ def _lower_function_body(ctx: TreeSitterEmitContext, body_node) -> Register:
             )
             if is_stmt:
                 ctx.lower_stmt(child)
-                last_reg = ""
+                last_reg = NO_REGISTER
             else:
                 last_reg = ctx.lower_expr(child)
     return last_reg
@@ -258,11 +258,11 @@ def lower_function_decl(
     if params_node:
         _lower_kotlin_params(ctx, params_node)
 
-    expr_reg = ""
+    expr_reg = NO_REGISTER
     if body_node:
         expr_reg = _lower_function_body(ctx, body_node)
 
-    if expr_reg:
+    if expr_reg.is_present():
         ctx.emit_inst(Return_(value_reg=expr_reg))
     else:
         emit_implicit_return(ctx, node)
@@ -314,13 +314,13 @@ def _emit_synthetic_getter(
     body_node = next(
         (c for c in getter_node.children if c.type == KNT.FUNCTION_BODY), None
     )
-    expr_reg = ""
+    expr_reg = NO_REGISTER
     if body_node:
         expr_reg = _lower_function_body(ctx, body_node)
 
     ctx._accessor_backing_field = prev_backing
 
-    if expr_reg:
+    if expr_reg.is_present():
         ctx.emit_inst(Return_(value_reg=expr_reg))
     else:
         emit_implicit_return(ctx, getter_node)
