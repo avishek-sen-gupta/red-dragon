@@ -7,6 +7,7 @@ import re
 from typing import Any
 
 from interpreter.class_name import ClassName
+from interpreter.constants import PARAM_THIS
 from interpreter.field_name import FieldName
 from interpreter.frontends.c.node_types import CNodeType
 from interpreter.frontends.common.expressions import (
@@ -278,7 +279,7 @@ def lower_c_store_target(
             ClassName(ctx._current_class_name), FieldName(name)
         ).name.is_present():
             this_reg = ctx.fresh_reg()
-            ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
+            ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName(PARAM_THIS)))
             ctx.emit_inst(
                 StoreField(
                     obj_reg=this_reg, field_name=FieldName(name), value_reg=val_reg

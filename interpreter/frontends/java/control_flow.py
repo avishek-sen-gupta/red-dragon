@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from interpreter.constants import PARAM_THIS
 from interpreter.frontends.common.exceptions import (
     lower_raise_or_throw,
     lower_try_catch,
@@ -527,7 +528,7 @@ def lower_explicit_constructor_invocation(
 
     if target_name == JavaNodeType.THIS:
         this_reg = ctx.fresh_reg()
-        ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
+        ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName(PARAM_THIS)))
         ctx.emit_inst(
             CallMethod(
                 result_reg=ctx.fresh_reg(),

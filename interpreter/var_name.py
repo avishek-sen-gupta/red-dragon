@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from interpreter.constants import SELF_PARAM_NAMES
+
 
 @dataclass(frozen=True)
 class VarName:
@@ -26,7 +28,7 @@ class VarName:
         # "self" — Python, Ruby, Lua, Scala
         # "this" — Java, C#, C++, Kotlin, JS/TS
         # "$this" — PHP
-        return self.value in ("self", "this", "$this")
+        return self.value in SELF_PARAM_NAMES
 
     def __str__(self) -> str:
         return self.value

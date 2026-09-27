@@ -155,7 +155,7 @@ FieldInit = tuple[
 def emit_field_initializers(
     ctx: TreeSitterEmitContext,
     field_inits: list[FieldInit],
-    this_var: str = "this",
+    this_var: str = constants.PARAM_THIS,
 ) -> None:
     """Emit STORE_FIELD this <name> <value> for each collected field initializer.
 
@@ -184,7 +184,7 @@ def emit_synthetic_init(
     ctx: TreeSitterEmitContext,
     field_inits: list[FieldInit],
     constructor_name: str = "__init__",
-    this_var: str = "this",
+    this_var: str = constants.PARAM_THIS,
 ) -> None:
     """Generate a synthetic constructor that initializes fields.
 

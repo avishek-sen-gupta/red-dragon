@@ -166,7 +166,7 @@ def _lower_this_call_as_delegation(
 
     arg_regs = extract_call_args_unwrap(ctx, args_node) if args_node else []
     this_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName("this")))
+    ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName(constants.PARAM_THIS)))
     result_reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallMethod(
