@@ -71,7 +71,7 @@ def lower_match_as_expr(
 def _lower_arm(
     ctx: TreeSitterEmitContext,
     arm: object,
-    subject_reg: str,
+    subject_reg: Register,
     result_var: str,
     end_label: CodeLabel,
     spec: MatchArmSpec,

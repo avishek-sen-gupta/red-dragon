@@ -39,10 +39,10 @@ class FieldFallbackStrategy(ABC):
 class NoFieldFallback(FieldFallbackStrategy):
     """Default: no implicit this resolution."""
 
-    def resolve_load(self, vm: VMState, name: str) -> TypedValue | None:
+    def resolve_load(self, vm: VMState, name: VarName) -> TypedValue | None:
         return None
 
-    def resolve_store(self, vm: VMState, name: str) -> str | None:
+    def resolve_store(self, vm: VMState, name: VarName) -> str | None:
         return None
 
 
@@ -66,13 +66,13 @@ class ImplicitThisFieldFallback(FieldFallbackStrategy):
             return addr
         return None
 
-    def resolve_load(self, vm: VMState, name: str) -> TypedValue | None:
+    def resolve_load(self, vm: VMState, name: VarName) -> TypedValue | None:
         addr = self._find_this_addr(vm)
         if addr is None:
             return None
         return vm.heap_get(Address(addr)).fields.get(FieldName(str(name)))
 
-    def resolve_store(self, vm: VMState, name: str) -> str | None:
+    def resolve_store(self, vm: VMState, name: VarName) -> str | None:
         addr = self._find_this_addr(vm)
         if addr is None:
             return None
