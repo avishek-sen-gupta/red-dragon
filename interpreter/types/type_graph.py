@@ -71,7 +71,7 @@ class TypeGraph:
         if parent not in self._nodes:
             return False
         visited: set[str] = set()
-        queue: deque[str] = deque([child])
+        queue: deque[TypeName] = deque([child])
         while queue:
             current = queue.popleft()
             if current == parent:

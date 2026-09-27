@@ -7,6 +7,7 @@ import logging
 from typing import Protocol
 
 from interpreter.constants import FoundationTypeName
+from interpreter.type_name import TypeName
 from interpreter.types.type_expr import ScalarType, TypeExpr, UnknownType
 from interpreter.types.type_graph import TypeGraph
 from interpreter.types.typed_value import TypedValue
@@ -14,7 +15,7 @@ from interpreter.types.typed_value import TypedValue
 logger = logging.getLogger(__name__)
 
 # Pairs where coercion is valid (source_type, target_type)
-_COMPATIBLE_PAIRS: frozenset[tuple[str, str]] = frozenset(
+_COMPATIBLE_PAIRS: frozenset[tuple[TypeName, TypeName]] = frozenset(
     {
         (FoundationTypeName.INT, FoundationTypeName.FLOAT),
         (FoundationTypeName.FLOAT, FoundationTypeName.INT),
