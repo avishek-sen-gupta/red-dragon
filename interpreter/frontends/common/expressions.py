@@ -429,10 +429,7 @@ def lower_call_impl(
                     result_reg=reg,
                     obj_reg=obj_reg,
                     method_name=FuncName(method_name),
-                    args=tuple(
-                        str(a) if not isinstance(a, SpreadArguments) else a
-                        for a in arg_regs
-                    ),
+                    args=tuple(arg_regs),
                 ),
                 node=node,
             )
@@ -446,10 +443,7 @@ def lower_call_impl(
             CallFunction(
                 result_reg=reg,
                 func_name=FuncName(func_name),
-                args=tuple(
-                    str(a) if not isinstance(a, SpreadArguments) else a
-                    for a in arg_regs
-                ),
+                args=tuple(arg_regs),
             ),
             node=node,
         )
@@ -471,9 +465,7 @@ def lower_call_impl(
         CallUnknown(
             result_reg=reg,
             target_reg=target_reg,
-            args=tuple(
-                str(a) if not isinstance(a, SpreadArguments) else a for a in arg_regs
-            ),
+            args=tuple(arg_regs),
         ),
         node=node,
     )
