@@ -6,6 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from interpreter.ir import CodeLabel
 from interpreter.run_types import ExecutionStats
 
 if TYPE_CHECKING:
@@ -22,7 +23,7 @@ class TraceStep:
     """
 
     step_index: int
-    block_label: str
+    block_label: CodeLabel
     instruction_index: int
     instruction: InstructionBase
     update: StateUpdate

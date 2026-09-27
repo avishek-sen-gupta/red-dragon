@@ -34,6 +34,7 @@ from interpreter.instructions import (
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import resolve_binop
 from interpreter.path_name import NO_PATH_NAME
+from interpreter.register import Register
 from interpreter.var_name import VarName
 
 _WILDCARD_PATTERN = "_"
@@ -245,7 +246,7 @@ def lower_with(
     )
 
     # Collect enter results for nested exit calls
-    enter_info: list[tuple[str, str | None]] = []  # (ctx_reg, var_name or None)
+    enter_info: list[tuple[Register, str | None]] = []  # (ctx_reg, var_name or None)
 
     for item in with_items:
         as_pat = next(
