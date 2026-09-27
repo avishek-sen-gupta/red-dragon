@@ -103,3 +103,15 @@ repos:
         entry: precommit-scripts/check-commit-msg
         language: script
         stages: [commit-msg]
+
+  # Talisman (secrets scanner) is installed globally as a bare .git/hooks/pre-commit
+  # symlink, which pre-commit overwrote on taking over that path -- so it silently
+  # stopped scanning here while .talismanrc stayed behind. Run it as a hook instead,
+  # where pre-commit owns the ordering and the invocation name. The name matters:
+  # talisman derives its hook type from the name it is invoked under, so --githook
+  # states it explicitly rather than relying on the filename.
+  - repo: https://github.com/thoughtworks/talisman
+    rev: v1.37.0
+    hooks:
+      - id: talisman-commit
+        entry: cmd --githook pre-commit
