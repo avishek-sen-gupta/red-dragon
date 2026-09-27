@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from interpreter.constants import Language
 from interpreter.field_name import FieldName
 from interpreter.instructions import LoadField, LoadVar
 from interpreter.namespace import (
@@ -57,7 +58,7 @@ def java_pre_scan(source: bytes) -> JavaPreScanResult:
 
     Walks only top-level nodes — no expression lowering, no control flow.
     """
-    parser = _PARSER_FACTORY.get_parser("java")
+    parser = _PARSER_FACTORY.get_parser(Language.JAVA)
     tree = parser.parse(source)
     root = tree.root_node
 
