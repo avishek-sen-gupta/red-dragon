@@ -171,7 +171,7 @@ def _resolve_csharp_char_escape(inner: str) -> str:
     return inner[0] if inner else "\x00"
 
 
-def extract_csharp_call_args(ctx: TreeSitterEmitContext, args_node) -> list[str]:
+def extract_csharp_call_args(ctx: TreeSitterEmitContext, args_node) -> list[Register]:
     """Extract call args, emitting ADDRESS_OF for out/ref/in arguments."""
     if args_node is None:
         return []

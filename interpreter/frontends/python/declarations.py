@@ -94,7 +94,7 @@ def _extract_python_match_args(node) -> tuple[str, ...]:
     )
 
 
-def _extract_python_self_fields(init_body) -> dict[str, FieldInfo]:
+def _extract_python_self_fields(init_body) -> dict[FieldName, FieldInfo]:
     """Walk an __init__ body block and collect self.x = ... assignments."""
     fields: dict[FieldName, FieldInfo] = {}
     for stmt in init_body.children:

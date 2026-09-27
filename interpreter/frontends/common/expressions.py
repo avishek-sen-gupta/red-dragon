@@ -482,7 +482,7 @@ def lower_call_impl(
 
 def extract_call_args(
     ctx: TreeSitterEmitContext, args_node: Any
-) -> list[str]:  # Any: tree-sitter node — untyped at Python boundary
+) -> list[Register]:  # Any: tree-sitter node — untyped at Python boundary
     """Extract argument registers from a call arguments node."""
     if args_node is None:
         return []
@@ -503,7 +503,7 @@ def extract_call_args(
 
 def extract_call_args_unwrap(
     ctx: TreeSitterEmitContext, args_node: Any
-) -> list[str]:  # Any: tree-sitter node — untyped at Python boundary
+) -> list[Register]:  # Any: tree-sitter node — untyped at Python boundary
     """Extract args, unwrapping wrapper nodes like 'argument'."""
     if args_node is None:
         return []

@@ -261,7 +261,7 @@ def lower_js_call(
     return reg
 
 
-def _extract_js_call_args(ctx: TreeSitterEmitContext, args_node) -> list[str]:
+def _extract_js_call_args(ctx: TreeSitterEmitContext, args_node) -> list[Register]:
     if args_node is None:
         return []
     return [

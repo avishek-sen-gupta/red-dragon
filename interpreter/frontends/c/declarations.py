@@ -202,7 +202,7 @@ def _lower_init_declarator(
 
 def _extract_struct_field_names(
     ctx: TreeSitterEmitContext, struct_name: str
-) -> list[str]:
+) -> list[FieldName]:
     """Scan emitted IR for STORE_FIELD instructions in the struct's class body.
 
     Returns field names in declaration order.  The class body is bounded by
@@ -239,7 +239,7 @@ def _lower_struct_initializer_list(
     struct_type: str,
     var_name: str,
     decl_node,
-) -> str:
+) -> Register:
     """Lower {val, ...} or {.field = val, ...} as CALL_FUNCTION + STORE_FIELD.
 
     For positional elements, field names come from scanning the struct's
@@ -658,7 +658,7 @@ def _extract_c_declarator_name_no_ctx(decl_node) -> str | None:
     return id_node.text.decode() if id_node is not None else None
 
 
-def _extract_c_struct_fields(field_decl_list) -> dict[str, FieldInfo]:
+def _extract_c_struct_fields(field_decl_list) -> dict[FieldName, FieldInfo]:
     """Extract fields from a C struct field_declaration_list node."""
 
     fields: dict[FieldName, FieldInfo] = {}
