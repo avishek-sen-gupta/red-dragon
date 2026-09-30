@@ -6,9 +6,11 @@ import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 /**
- * Copybook extension resolution from the command line.
+ * Command-line parsing: copybook extension resolution, and the expand-only mode.
  *
  * <p>ProLeap resolves a COPY by name + extension, so a corpus whose members
  * all carry one unconventional extension (one production corpus is entirely
@@ -46,5 +48,19 @@ public class MainTest {
 
         assertEquals(
             Arrays.asList("", "cpy", "CPY", "cob", "cbl", "copy", "COPY"), extensions);
+    }
+
+    @Test
+    public void withoutTheFlagTheBridgeEmitsAnAsg() {
+        String[] args = {"-copybook-dir", "sym", "-format", "FIXED"};
+
+        assertFalse(Main.expandOnly(args));
+    }
+
+    @Test
+    public void theExpandOnlyFlagIsReadAlongsideOtherFlags() {
+        String[] args = {"-copybook-dir", "sym", "-expand-only", "-copybook-ext", "txt"};
+
+        assertTrue(Main.expandOnly(args));
     }
 }

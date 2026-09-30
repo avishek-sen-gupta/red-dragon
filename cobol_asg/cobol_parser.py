@@ -12,7 +12,7 @@ import json
 import logging
 import os
 from abc import ABC, abstractmethod
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from cobol_asg.asg_types import CobolASG
@@ -53,8 +53,8 @@ class ProLeapCobolParser(CobolParser):
         self,
         runner: SubprocessRunner,
         bridge_jar: str,
-        copybook_dirs: list[Path] = [],
-        copybook_exts: list[str] = [],
+        copybook_dirs: Sequence[Path] = (),
+        copybook_exts: Sequence[str] = (),
     ):
         self._runner = runner
         self._bridge_jar = bridge_jar
@@ -62,12 +62,9 @@ class ProLeapCobolParser(CobolParser):
         self._copybook_exts: list[str] = list(copybook_exts)
 
     def _build_command(self) -> list[str]:
-        command = ["java", "-jar", self._bridge_jar]
-        for d in self._copybook_dirs:
-            command += ["-copybook-dir", str(d)]
-        for ext in self._copybook_exts:
-            command += ["-copybook-ext", ext]
-        return command
+        dirs = [arg for d in self._copybook_dirs for arg in ("-copybook-dir", str(d))]
+        exts = [arg for e in self._copybook_exts for arg in ("-copybook-ext", e)]
+        return ["java", "-jar", self._bridge_jar, *dirs, *exts]
 
     def parse(
         self,
@@ -80,9 +77,7 @@ class ProLeapCobolParser(CobolParser):
             json_str = self._runner.run(command, decode_source(source))
         except CobolParseError as e:
             raise self._enrich_copybook_error(e) from e
-        data: dict = json.loads(json_str)
-        data = preprocessor(data)
-        asg = CobolASG.from_dict(data)
+        asg = CobolASG.from_dict(preprocessor(json.loads(json_str)))
         logger.debug(
             "Parsed ASG: %d data fields, %d sections, %d paragraphs",
             len(asg.data_fields),
@@ -90,6 +85,19 @@ class ProLeapCobolParser(CobolParser):
             len(asg.paragraphs),
         )
         return asg
+
+    def expand(self, source: bytes) -> str:
+        """The preprocessed source: copybooks inlined, continuations folded.
+
+        The text the ANTLR lexer is handed, and nothing past it -- the bridge
+        stops before the COBOL grammar runs, so this answers "what did the
+        compiler actually see" for a member whose parse fails.
+        """
+        command = [*self._build_command(), "-expand-only"]
+        try:
+            return self._runner.run(command, decode_source(source))
+        except CobolParseError as e:
+            raise self._enrich_copybook_error(e) from e
 
     def parse_to_file(self, source: bytes, out_path: Path) -> Path:
         """Run the bridge and write raw JSON to out_path. Returns out_path.
@@ -124,8 +132,8 @@ class ProLeapCobolParser(CobolParser):
 
 
 def make_cobol_parser(
-    copybook_dirs: list[Path] = [],
-    copybook_exts: list[str] = [],
+    copybook_dirs: Sequence[Path] = (),
+    copybook_exts: Sequence[str] = (),
 ) -> ProLeapCobolParser:
     """Construct a ProLeapCobolParser from PROLEAP_BRIDGE_JAR env var.
 
