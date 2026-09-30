@@ -8,6 +8,7 @@ import io.proleap.cobol.asg.params.CobolParserParams;
 import io.proleap.cobol.asg.params.impl.CobolParserParamsImpl;
 import io.proleap.cobol.asg.runner.impl.CobolParserRunnerImpl;
 import io.proleap.cobol.preprocessor.CobolPreprocessor.CobolSourceFormatEnum;
+import io.proleap.cobol.preprocessor.impl.CobolPreprocessorImpl;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -35,9 +36,17 @@ import java.util.logging.Logger;
  *   <li>{@code -copybook-dir <dir>}: copybook search directory (repeatable)</li>
  *   <li>{@code -copybook-ext <ext>}: copybook filename extension (repeatable;
  *       defaults to {@link #DEFAULT_COPYBOOK_EXTENSIONS} when not given)</li>
+ *   <li>{@code -expand-only}: write the expanded source instead of the ASG</li>
  * </ul>
  *
  * <p>Writes JSON ASG to stdout, matching the RedDragon {@code CobolASG} contract.
+ *
+ * <p>Under {@code -expand-only} it writes the preprocessed source instead: copybooks
+ * inlined, continuations folded, comments stripped -- the exact text the ANTLR lexer
+ * is handed, which is what {@code CobolParserRunnerImpl.parseFile} names
+ * {@code preProcessedInput}. Stopping there skips the COBOL grammar, the seven
+ * visitor passes and the ASG serializer. It also means a member whose parse fails
+ * still yields a file, which is exactly when reading the expansion is of use.
  */
 public final class Main {
 
@@ -96,38 +105,54 @@ public final class Main {
                 i++;
             } else if ("-copybook-ext".equals(args[i]) && i + 1 < args.length) {
                 i++;  // value consumed by copyBookExtensions(args)
+            } else if ("-expand-only".equals(args[i])) {
+                continue;  // valueless; read by expandOnly(args)
             } else {
                 filePath = args[i];
             }
         }
 
         File cobolFile = resolveInputFile(filePath);
-        LOG.info("Parsing COBOL file: " + cobolFile.getAbsolutePath() + " (format=" + format + ")");
+        boolean expandOnly = expandOnly(args);
+        LOG.info((expandOnly ? "Expanding" : "Parsing") + " COBOL file: "
+            + cobolFile.getAbsolutePath() + " (format=" + format + ")");
+
+        CobolParserParams params = new CobolParserParamsImpl();
+        params.setFormat(format);
+        params.setCharset(SOURCE_CHARSET);
+        params.setCopyBookExtensions(copyBookExtensions(args));
+        if (!copyBookDirs.isEmpty()) {
+            params.setCopyBookDirectories(copyBookDirs);
+        }
 
         // ProLeap prints debug info directly to stdout; capture and discard it
         PrintStream originalOut = System.out;
         System.setOut(new PrintStream(new ByteArrayOutputStream()));
-        Program program;
+        String output;
         try {
-            CobolParserParams params = new CobolParserParamsImpl();
-            params.setFormat(format);
-            params.setCharset(SOURCE_CHARSET);
-            params.setCopyBookExtensions(copyBookExtensions(args));
-            if (!copyBookDirs.isEmpty()) {
-                params.setCopyBookDirectories(copyBookDirs);
-            }
-            program = new CobolParserRunnerImpl().analyzeFile(cobolFile, params);
+            output = expandOnly
+                ? new CobolPreprocessorImpl().process(cobolFile, params)
+                : serializeAsg(new CobolParserRunnerImpl().analyzeFile(cobolFile, params));
         } finally {
             System.setOut(originalOut);
         }
 
-        JsonObject asg = AsgSerializer.serialize(program);
-        Gson gson = new GsonBuilder().setPrettyPrinting().create();
-        System.out.println(gson.toJson(asg));
+        System.out.println(output);
 
         if (filePath.isEmpty()) {
             cobolFile.delete();
         }
+    }
+
+    /** Whether {@code -expand-only} was given. */
+    static boolean expandOnly(String[] args) {
+        return Arrays.asList(args).contains("-expand-only");
+    }
+
+    private static String serializeAsg(Program program) {
+        JsonObject asg = AsgSerializer.serialize(program);
+        Gson gson = new GsonBuilder().setPrettyPrinting().create();
+        return gson.toJson(asg);
     }
 
     /**
