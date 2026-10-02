@@ -1223,6 +1223,35 @@ class TestRoundTrip:
         }
         assert self._round_trip(data) == data
 
+    @covers(CobolFeature.STRING_VERB, CobolFeature.UNSTRING_VERB, CobolFeature.CALL)
+    def test_conditional_phrases_round_trip(self):
+        on = [{"type": "DISPLAY", "operands": [{"name": "ON"}]}]
+        not_on = [{"type": "DISPLAY", "operands": [{"name": "NOT ON"}]}]
+        string_data = {
+            "type": "STRING",
+            "sendings": [{"value": {"name": "WS-SRC"}, "delimited_by": "SIZE"}],
+            "into": {"name": "WS-DST"},
+            "on_overflow": on,
+            "not_on_overflow": not_on,
+        }
+        unstring_data = {
+            "type": "UNSTRING",
+            "source": {"name": "WS-FULL"},
+            "delimiters": [","],
+            "into": [{"name": "WS-FIRST"}],
+            "on_overflow": on,
+            "not_on_overflow": not_on,
+        }
+        call_data = {
+            "type": "CALL",
+            "program": "SUBPROG",
+            "on_exception": on,
+            "not_on_exception": not_on,
+        }
+        assert self._round_trip(string_data) == string_data
+        assert self._round_trip(unstring_data) == unstring_data
+        assert self._round_trip(call_data) == call_data
+
     @covers(CobolFeature.INSPECT_TALLYING)
     def test_inspect_tallying_round_trip(self):
         data = {

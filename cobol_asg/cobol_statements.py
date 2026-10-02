@@ -9,7 +9,7 @@ discriminator.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Union
@@ -109,6 +109,14 @@ CobolStatementType = Union[
 
 
 # ── Statement types ──────────────────────────────────────────────
+
+
+def _phrases_to_dict(
+    phrases: Mapping[str, Sequence[CobolStatementType]],
+) -> dict[str, list[dict]]:
+    return {
+        name: [c.to_dict() for c in stmts] for name, stmts in phrases.items() if stmts
+    }
 
 
 def _serialize_ref_mod_expr(expr) -> dict:
@@ -872,6 +880,8 @@ class StringStatement:
     sendings: list[StringSending] = field(default_factory=list)
     into: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
     pointer: str = ""
+    on_overflow: list[CobolStatementType] = field(default_factory=list)
+    not_on_overflow: list[CobolStatementType] = field(default_factory=list)
     span: SourceSpan | None = None
 
     @classmethod
@@ -880,6 +890,10 @@ class StringStatement:
             sendings=[StringSending.from_dict(s) for s in data.get("sendings", [])],
             into=RefModOperand.from_dict(data.get("into", {})),
             pointer=data.get("pointer", ""),
+            on_overflow=[parse_statement(c) for c in data.get("on_overflow", [])],
+            not_on_overflow=[
+                parse_statement(c) for c in data.get("not_on_overflow", [])
+            ],
             span=SourceSpan.from_dict(data),
         )
 
@@ -888,6 +902,12 @@ class StringStatement:
             "type": "STRING",
             "sendings": [s.to_dict() for s in self.sendings],
             "into": self.into.to_dict(),
+            **_phrases_to_dict(
+                {
+                    "on_overflow": self.on_overflow,
+                    "not_on_overflow": self.not_on_overflow,
+                }
+            ),
         }
         if self.pointer:
             result["pointer"] = self.pointer
@@ -910,6 +930,8 @@ class UnstringStatement:
     into: list[RefModOperand] = field(default_factory=list)
     tallying_target: str = ""
     pointer: str = ""
+    on_overflow: list[CobolStatementType] = field(default_factory=list)
+    not_on_overflow: list[CobolStatementType] = field(default_factory=list)
     span: SourceSpan | None = None
 
     @classmethod
@@ -920,6 +942,10 @@ class UnstringStatement:
             into=[RefModOperand.from_dict(i) for i in data.get("into", [])],
             tallying_target=data.get("tallying_target", ""),
             pointer=data.get("pointer", ""),
+            on_overflow=[parse_statement(c) for c in data.get("on_overflow", [])],
+            not_on_overflow=[
+                parse_statement(c) for c in data.get("not_on_overflow", [])
+            ],
             span=SourceSpan.from_dict(data),
         )
 
@@ -929,6 +955,12 @@ class UnstringStatement:
             "source": self.source.to_dict(),
             "delimiters": list(self.delimiters),
             "into": [i.to_dict() for i in self.into],
+            **_phrases_to_dict(
+                {
+                    "on_overflow": self.on_overflow,
+                    "not_on_overflow": self.not_on_overflow,
+                }
+            ),
         }
         if self.tallying_target:
             result["tallying_target"] = self.tallying_target
@@ -1177,6 +1209,8 @@ class CallStatement:
     target: CallTarget = field(default_factory=CallTarget)
     using: list[CallUsingParam] = field(default_factory=list)
     giving: str = ""
+    on_exception: list[CobolStatementType] = field(default_factory=list)
+    not_on_exception: list[CobolStatementType] = field(default_factory=list)
     span: SourceSpan | None = None
 
     @classmethod
@@ -1185,11 +1219,23 @@ class CallStatement:
             target=CallTarget.from_dict(data),
             using=[CallUsingParam.from_dict(p) for p in data.get("using", [])],
             giving=data.get("giving", ""),
+            on_exception=[parse_statement(c) for c in data.get("on_exception", [])],
+            not_on_exception=[
+                parse_statement(c) for c in data.get("not_on_exception", [])
+            ],
             span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
-        result: dict = {"type": "CALL"}
+        result: dict = {
+            "type": "CALL",
+            **_phrases_to_dict(
+                {
+                    "on_exception": self.on_exception,
+                    "not_on_exception": self.not_on_exception,
+                }
+            ),
+        }
         self.target.write_into(result)
         if self.using:
             result["using"] = [p.to_dict() for p in self.using]

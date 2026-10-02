@@ -5,6 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
+import io.proleap.cobol.asg.metamodel.Scope;
 import io.proleap.cobol.asg.metamodel.procedure.Statement;
 import io.proleap.cobol.asg.metamodel.procedure.StatementType;
 import io.proleap.cobol.asg.metamodel.procedure.StatementTypeEnum;
@@ -162,6 +163,12 @@ public final class StatementSerializer {
         obj.addProperty("col_start",  ctx.getStart().getCharPositionInLine());
         obj.addProperty("line_end",   ctx.getStop().getLine());
         obj.addProperty("col_end",    ctx.getStop().getCharPositionInLine());
+    }
+
+    private static void addPhrase(JsonObject obj, String field, Scope phrase) {
+        if (phrase != null) {
+            obj.add(field, serializeStatements(phrase.getStatements()));
+        }
     }
 
     /**
@@ -1201,6 +1208,8 @@ public final class StatementSerializer {
         } catch (Exception e) {
             LOG.fine("Could not extract STRING operands: " + e.getMessage());
         }
+        addPhrase(obj, "on_overflow", stmt.getOnOverflowPhrase());
+        addPhrase(obj, "not_on_overflow", stmt.getNotOnOverflowPhrase());
         return obj;
     }
 
@@ -1257,6 +1266,8 @@ public final class StatementSerializer {
         } catch (Exception e) {
             LOG.fine("Could not extract UNSTRING operands: " + e.getMessage());
         }
+        addPhrase(obj, "on_overflow", stmt.getOnOverflowPhrase());
+        addPhrase(obj, "not_on_overflow", stmt.getNotOnOverflowPhrase());
         return obj;
     }
 
@@ -1489,6 +1500,9 @@ public final class StatementSerializer {
         } catch (Exception e) {
             LOG.fine("Could not extract CALL operands: " + e.getMessage());
         }
+        addPhrase(obj, "on_exception", stmt.getOnExceptionClause());
+        addPhrase(obj, "on_exception", stmt.getOnOverflowPhrase());
+        addPhrase(obj, "not_on_exception", stmt.getNotOnExceptionClause());
         return obj;
     }
 
