@@ -12,7 +12,8 @@ from __future__ import annotations
 
 import dataclasses
 import logging
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -159,6 +160,9 @@ class EmitContext:
         self.use_by_file: dict[str, str] = {}
         self.use_by_mode: dict[str, str] = {}
         self.use_global: str | None = None
+        self._paragraph: str = ""
+        self._section: str = ""
+        self._requested_exits: set[CodeLabel] = set()
 
     # ── Properties ────────────────────────────────────────────────
 
@@ -177,6 +181,45 @@ class EmitContext:
     @property
     def extension_strategies(self) -> tuple[RedDragonExtensionLoweringStrategy, ...]:
         return self._extension_strategies
+
+    # ── Enclosing paragraph and section ───────────────────────────
+
+    @contextmanager
+    def in_paragraph(self, name: str) -> Iterator[None]:
+        enclosing = self._paragraph
+        self._paragraph = name
+        try:
+            yield
+        finally:
+            self._paragraph = enclosing
+
+    @contextmanager
+    def in_section(self, name: str) -> Iterator[None]:
+        enclosing = self._section
+        self._section = name
+        try:
+            yield
+        finally:
+            self._section = enclosing
+
+    def paragraph_exit(self) -> CodeLabel:
+        """The label EXIT PARAGRAPH branches to, recorded so the paragraph emits it."""
+        if not self._paragraph:
+            raise NotImplementedError("EXIT PARAGRAPH outside a named paragraph")
+        return self._request_exit(CodeLabel(f"para_{self._paragraph}_exit"))
+
+    def section_exit(self) -> CodeLabel:
+        """The label EXIT SECTION branches to, recorded so the section emits it."""
+        if not self._section:
+            raise NotImplementedError("EXIT SECTION outside a section")
+        return self._request_exit(CodeLabel(f"section_{self._section}_exit"))
+
+    def exit_requested(self, label: CodeLabel) -> bool:
+        return label in self._requested_exits
+
+    def _request_exit(self, label: CodeLabel) -> CodeLabel:
+        self._requested_exits = self._requested_exits | {label}
+        return label
 
     # ── Core Primitives ───────────────────────────────────────────
 

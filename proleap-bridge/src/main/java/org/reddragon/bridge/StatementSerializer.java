@@ -1083,13 +1083,32 @@ public final class StatementSerializer {
     }
 
     private static JsonObject serializeExit(ExitStatement stmt) {
-        // Distinguish EXIT (no-op paragraph terminator) from EXIT PROGRAM (return to caller).
-        io.proleap.cobol.CobolParser.ExitStatementContext ctx =
-                (io.proleap.cobol.CobolParser.ExitStatementContext) stmt.getCtx();
-        if (ctx != null && ctx.PROGRAM() != null) {
+        // EXIT PROGRAM returns to the caller and is its own statement. Every other
+        // EXIT is one statement with a kind saying which construct it leaves; a
+        // plain paragraph-end EXIT carries none and serialises as before.
+        ExitStatement.ExitStatementType type = stmt.getExitStatementType();
+        if (type == ExitStatement.ExitStatementType.PROGRAM) {
             return newStatement("EXIT_PROGRAM");
         }
-        return newStatement("EXIT");
+        JsonObject result = newStatement("EXIT");
+        String kind = exitKind(type);
+        if (!kind.isEmpty()) {
+            result.addProperty("kind", kind);
+        }
+        return result;
+    }
+
+    private static String exitKind(ExitStatement.ExitStatementType type) {
+        if (type == null) {
+            return "";
+        }
+        switch (type) {
+            case PARAGRAPH: return "paragraph";
+            case SECTION: return "section";
+            case PERFORM: return "perform";
+            case PERFORM_CYCLE: return "perform-cycle";
+            default: return "";
+        }
     }
 
     private static JsonObject serializeGoback(GobackStatement stmt) {

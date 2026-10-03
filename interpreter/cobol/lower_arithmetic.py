@@ -30,6 +30,7 @@ from cobol_asg.cobol_statements import (
     WhenStatement,
 )
 from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
+from cobol_asg.exit_kind import ExitKind
 from cobol_asg.ref_mod import (
     FunctionCallOperand,
     RefModBinOp,
@@ -2068,8 +2069,15 @@ def lower_exit(
     stmt: ExitStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """EXIT — no-op sentinel, emit nothing."""
-    pass
+    """EXIT PARAGRAPH / EXIT SECTION branch past the rest of their construct.
+
+    A plain EXIT is the paragraph-end no-op; EXIT PERFORM [CYCLE] is not
+    lowered yet and emits nothing.
+    """
+    if stmt.kind == ExitKind.PARAGRAPH:
+        ctx.emit_inst(Branch(label=ctx.paragraph_exit()), span=stmt.span)
+    elif stmt.kind == ExitKind.SECTION:
+        ctx.emit_inst(Branch(label=ctx.section_exit()), span=stmt.span)
 
 
 def _leaf_fields_of(target_fl: FieldLayout, layout: DataLayout) -> list[FieldLayout]:

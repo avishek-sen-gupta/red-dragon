@@ -16,6 +16,7 @@ from typing import Union
 
 from cobol_asg.call_target import CallTarget
 from cobol_asg.cobol_expression import ExprNode, expr_from_dict, expr_to_dict
+from cobol_asg.exit_kind import ExitKind
 from cobol_asg.file_enums import AccessMode, FileOrganization, OpenMode
 from cobol_asg.frontend_extension import DialectParser
 from cobol_asg.ref_mod import (
@@ -748,18 +749,23 @@ class ContinueStatement:
 
 @dataclass(frozen=True)
 class ExitStatement:
-    """EXIT — no-op sentinel at paragraph end."""
+    """EXIT -- a no-op sentinel at paragraph end, or, with a kind, an exit from the
+    current paragraph, section or inline PERFORM."""
 
+    kind: ExitKind = ExitKind.PLAIN
     span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> ExitStatement:
         return cls(
+            kind=ExitKind(data.get("kind", "")),
             span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
-        result = {"type": "EXIT"}
+        result = {"type": "EXIT"} | (
+            {} if self.kind is ExitKind.PLAIN else {"kind": self.kind.value}
+        )
         if self.span is not None:
             self.span.write_into(result)
         return result

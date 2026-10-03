@@ -48,6 +48,9 @@ class CobolFeature(Enum):
     STOP_RUN = "STOP RUN program termination"
     CONTINUE = "CONTINUE no-operation placeholder statement"
     EXIT = "EXIT and EXIT PROGRAM section/program exit statements"
+    EXIT_PARAGRAPH = (
+        "EXIT PARAGRAPH / EXIT SECTION leave the current paragraph or section"
+    )
     GOBACK = "GOBACK return control to caller"
     EXIT_PROGRAM = "EXIT PROGRAM return control to caller from subprogram"
     DECLARATIVES = "DECLARATIVES USE procedures (event-driven sections)"
