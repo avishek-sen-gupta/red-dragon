@@ -104,6 +104,7 @@ class CobolFeature(Enum):
     CALL_USING_OMITTED = "CALL 'program' USING OMITTED placeholder for absent arguments"
     CALL_USING_LITERAL = "CALL 'program' USING BY CONTENT/VALUE literal arguments"
     CALL_GIVING = "CALL 'program' GIVING result return value capture in CALL"
+    QUALIFIED_NAMES = "A name declared in more than one group, qualified with OF / IN"
     EXIT_PERFORM = "EXIT PERFORM [CYCLE] leaves an inline PERFORM, or its iteration"
     NEXT_SENTENCE = "NEXT SENTENCE jumps past the period that ends its sentence"
     PROCEDURE_DIVISION_USING = (

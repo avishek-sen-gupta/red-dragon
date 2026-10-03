@@ -128,17 +128,18 @@ _EXACT_VERB_BUILTINS = {
 
 
 def _operand_type(
-    ctx: EmitContext, name: str, materialised: MaterialisedSectionedLayout
+    ctx: EmitContext, operand: RefModOperand, materialised: MaterialisedSectionedLayout
 ):
-    if not ctx.has_field(name, materialised):
+    if not ctx.has_field(operand.name, materialised):
         return None
-    return materialised.resolve(name)[0].type_descriptor
+    return materialised.resolve(operand.name, operand.qualifiers)[0].type_descriptor
 
 
 def _operand_scale(
-    ctx: EmitContext, name: str, materialised: MaterialisedSectionedLayout
+    ctx: EmitContext, operand: RefModOperand, materialised: MaterialisedSectionedLayout
 ) -> Scale:
-    td = _operand_type(ctx, name, materialised)
+    name = operand.name
+    td = _operand_type(ctx, operand, materialised)
     if td is not None:
         return field_scale(td)
     try:
@@ -164,7 +165,7 @@ def _emit_verb_operation(
     floating-point rule applies (a COMP-1/COMP-2 operand or receiver)."""
     result_reg = ctx.fresh_reg()
     types = [
-        _operand_type(ctx, operand.name, materialised)
+        _operand_type(ctx, operand, materialised)
         for operand in (left_operand, right_operand, *receivers)
     ]
     if any(td is not None and is_floating_type(td) for td in types):
@@ -183,8 +184,8 @@ def _emit_verb_operation(
             span=span,
         )
         return result_reg
-    left_scale = _operand_scale(ctx, left_operand.name, materialised)
-    right_scale = _operand_scale(ctx, right_operand.name, materialised)
+    left_scale = _operand_scale(ctx, left_operand, materialised)
+    right_scale = _operand_scale(ctx, right_operand, materialised)
     receiver_places = max(
         (
             _receiver_decimals(td, receiver.rounded)
@@ -1611,7 +1612,7 @@ def lower_compute(
     # receiver (1 / (1 + R) ** N into PIC 9V9(8) carries 8 decimal places),
     # while integer-only expressions still truncate (red-dragon-apoq).
     target_types = [
-        (materialised.resolve(t.name)[0].type_descriptor, t.rounded)
+        (materialised.resolve(t.name, t.qualifiers)[0].type_descriptor, t.rounded)
         for t in stmt.targets
         if ctx.has_field(t.name, materialised)
     ]
@@ -1635,7 +1636,11 @@ def lower_compute(
                 logger.warning("COMPUTE target %s not found in layout", target.name)
                 continue
             target_ref, target_rr = ctx.resolve_field_ref(
-                target.name, materialised, subscripts=target.subscripts, span=span
+                target.name,
+                materialised,
+                target.qualifiers,
+                subscripts=target.subscripts,
+                span=span,
             )
             write_reg = result_str_reg
             if target.rounded:
@@ -1673,7 +1678,11 @@ def lower_compute(
             logger.warning("COMPUTE target %s not found in layout", target.name)
             continue
         ref, rr = ctx.resolve_field_ref(
-            target.name, materialised, subscripts=target.subscripts, span=span
+            target.name,
+            materialised,
+            target.qualifiers,
+            subscripts=target.subscripts,
+            span=span,
         )
         target_triples.append((ref, rr, target))
 

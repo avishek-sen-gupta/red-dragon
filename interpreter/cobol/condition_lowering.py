@@ -443,7 +443,9 @@ def _field_byte_length(
                 return slice_len
         name = expr.get("name", "")
         if ctx.has_field(name, materialised):
-            ref, _ = ctx.resolve_field_ref(name, materialised, span=span)
+            ref, _ = ctx.resolve_field_ref(
+                name, materialised, tuple(expr.get("qualifiers", ())), span=span
+            )
             return ref.fl.byte_length
     return None
 
@@ -531,7 +533,9 @@ def _is_zoned_display_field(
     name = expr.get("name", "")
     if not ctx.has_field(name, materialised):
         return False
-    ref, _ = ctx.resolve_field_ref(name, materialised, span=span)
+    ref, _ = ctx.resolve_field_ref(
+        name, materialised, tuple(expr.get("qualifiers", ())), span=span
+    )
     return ref.fl.type_descriptor.category == CobolDataCategory.ZONED_DECIMAL
 
 
@@ -561,7 +565,9 @@ def _is_numeric_field(
     name = expr.get("name", "")
     if not ctx.has_field(name, materialised):
         return False
-    ref, _ = ctx.resolve_field_ref(name, materialised, span=span)
+    ref, _ = ctx.resolve_field_ref(
+        name, materialised, tuple(expr.get("qualifiers", ())), span=span
+    )
     return ref.fl.type_descriptor.category in _NUMERIC_CATEGORIES
 
 
@@ -581,7 +587,9 @@ def _is_alphanumeric_field(
     name = expr.get("name", "")
     if not ctx.has_field(name, materialised):
         return False
-    ref, _ = ctx.resolve_field_ref(name, materialised, span=span)
+    ref, _ = ctx.resolve_field_ref(
+        name, materialised, tuple(expr.get("qualifiers", ())), span=span
+    )
     return ref.fl.type_descriptor.holds_characters
 
 
