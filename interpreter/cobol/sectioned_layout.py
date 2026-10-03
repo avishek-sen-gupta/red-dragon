@@ -4,7 +4,8 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field, replace
 
 from cobol_asg.asg_types import CobolASG, CobolField
 from cobol_memory.region_id import RegionId
@@ -17,7 +18,7 @@ from interpreter.cobol.data_layout import (
     laid_end_to_end,
     record_length,
 )
-from interpreter.cobol.linkage_binding import LinkageBinding, binding_at
+from interpreter.cobol.linkage_binding import LinkageBinding
 from interpreter.cobol.linkage_record import LinkageRecord
 from interpreter.register import NO_REGISTER, Register
 
@@ -35,6 +36,7 @@ class SectionedLayout:
     indexes: DataLayout = field(default_factory=DataLayout)
     linkage_parameters: tuple[LinkageRecord, ...] = ()
     linkage_unbound: tuple[LinkageRecord, ...] = ()
+    linkage_owners: Mapping[tuple[str, int, int], str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -54,10 +56,15 @@ class MaterialisedSectionedLayout:
         default_factory=lambda: (DataLayout(), NO_REGISTER)
     )
     linkage_bindings: tuple[LinkageBinding, ...] = ()
+    linkage_owners: Mapping[tuple[str, int, int], str] = field(default_factory=dict)
 
     def linkage_binding(self, fl: FieldLayout) -> LinkageBinding:
-        """The binding of the LINKAGE 01 whose static span holds ``fl``."""
-        return binding_at(self.linkage_bindings, fl.offset)
+        """The binding of the LINKAGE 01 that declares ``fl`` -- for a field under
+        a REDEFINES 01, the 01 it redefines, however far it runs past it."""
+        owner = self.linkage_owners[_field_identity(fl)]
+        return next(
+            binding for binding in self.linkage_bindings if binding.name == owner
+        )
 
     def resolve(
         self, name: str, qualifiers: tuple[str, ...] = ()
@@ -248,7 +255,29 @@ def build_sectioned_layout(asg: CobolASG) -> SectionedLayout:
         ),
         linkage_parameters=tuple(by_name[name] for name in named if name in by_name),
         linkage_unbound=tuple(r for r in records if r.name not in named),
+        linkage_owners=_linkage_owners(linkage_fields),
     )
+
+
+def _linkage_owners(
+    linkage_fields: Sequence[CobolField],
+) -> Mapping[tuple[str, int, int], str]:
+    """Each LINKAGE field, leaf or group, mapped to the 01 whose argument it lives
+    in. A REDEFINES 01 is laid out at the 01 it redefines and belongs to it."""
+    by_name = {item.name.upper(): item for item in linkage_fields}
+    return {
+        _field_identity(fl): owner.name.upper()
+        for item in linkage_fields
+        if not item.renames_from
+        for owner in (by_name.get(item.redefines.upper(), item),)
+        for fl in build_data_layout(
+            [replace(item, redefines="", offset=owner.offset)]
+        ).all_fields()
+    }
+
+
+def _field_identity(fl: FieldLayout) -> tuple[str, int, int]:
+    return fl.name.upper(), fl.offset, fl.byte_length
 
 
 def _in_using_order(asg: CobolASG) -> list[CobolField]:

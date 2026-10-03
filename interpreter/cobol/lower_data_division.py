@@ -154,6 +154,7 @@ def lower_sectioned_data_division(
         special_registers=(SPECIAL_REGISTERS_LAYOUT, sr_reg),
         indexes=(layout.indexes, index_reg),
         linkage_bindings=bindings,
+        linkage_owners=layout.linkage_owners,
     )
 
 
@@ -259,7 +260,7 @@ def _loaded(ctx: EmitContext, record: LinkageRecord) -> LinkageBinding:
     ctx.emit_inst(LoadVar(result_reg=region, name=_region_var(record)), span=None)
     delta = ctx.fresh_reg()
     ctx.emit_inst(LoadVar(result_reg=delta, name=_delta_var(record)), span=None)
-    return LinkageBinding(record.start, record.length, region, delta)
+    return LinkageBinding(record.name, record.start, record.length, region, delta)
 
 
 def _region_var(record: LinkageRecord) -> VarName:
