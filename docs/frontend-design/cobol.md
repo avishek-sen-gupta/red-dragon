@@ -111,7 +111,8 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 | Statement | IR Pattern |
 |---|---|
 | `CONTINUE` | No IR emitted |
-| `EXIT` | No IR emitted |
+| `EXIT` | No IR emitted. `EXIT PERFORM [CYCLE]` is parsed (the bridge serialises its `kind`) but not lowered yet |
+| `EXIT PARAGRAPH` / `EXIT SECTION` | `BRANCH` to `para_<name>_exit` / `section_<name>_exit`, a label emitted just before the construct's `ResumeContinuation` — and only when some EXIT asked for it, so programs without these statements lower unchanged |
 
 ### Data Manipulation (2 types)
 
@@ -335,7 +336,7 @@ Full-pipeline tests in `tests/integration/test_cobol_programs.py` exercise real 
 | DISPLAY | Console output only — no memory side-effect to verify |
 | STOP RUN | Implicitly exercised by every test (terminates execution) |
 | CONTINUE | No-op — trivial, no observable effect |
-| EXIT | No-op — trivial, no observable effect |
+| EXIT | Plain EXIT is a no-op; EXIT PARAGRAPH / EXIT SECTION are covered by `TestExitParagraphAndSection` |
 | ALTER | Modifies GO TO targets dynamically — **testable**, not yet written |
 | ENTRY | Alternate entry point — requires multi-program CALL support |
 | CANCEL | Cancels called subprogram — requires multi-program CALL support |

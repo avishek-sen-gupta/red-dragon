@@ -19,6 +19,7 @@ from cobol_asg.cobol_statements import (
     DisplayStatement,
     EntryStatement,
     EvaluateStatement,
+    ExitKind,
     ExitStatement,
     GotoStatement,
     IfStatement,
@@ -322,10 +323,27 @@ class TestParseStatementDispatch:
         stmt = parse_statement({"type": "CONTINUE"})
         assert isinstance(stmt, ContinueStatement)
 
-    @covers(CobolFeature.EXIT)
+    @covers(CobolFeature.EXIT, CobolFeature.EXIT_PARAGRAPH)
     def test_exit(self):
+        """A plain EXIT is the paragraph-end no-op and serialises as before; a kind
+        says which construct an EXIT leaves, and survives the round trip."""
         stmt = parse_statement({"type": "EXIT"})
         assert isinstance(stmt, ExitStatement)
+        assert stmt.kind is ExitKind.PLAIN
+        assert stmt.to_dict() == {"type": "EXIT"}
+        assert [
+            parse_statement({"type": "EXIT", "kind": kind}).kind
+            for kind in ("paragraph", "section", "perform", "perform-cycle")
+        ] == [
+            ExitKind.PARAGRAPH,
+            ExitKind.SECTION,
+            ExitKind.PERFORM,
+            ExitKind.PERFORM_CYCLE,
+        ]
+        assert parse_statement({"type": "EXIT", "kind": "paragraph"}).to_dict() == {
+            "type": "EXIT",
+            "kind": "paragraph",
+        }
 
     @covers(CobolFeature.INITIALIZE)
     def test_initialize(self):
