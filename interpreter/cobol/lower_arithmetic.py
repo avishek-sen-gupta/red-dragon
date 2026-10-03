@@ -23,6 +23,7 @@ from cobol_asg.cobol_statements import (
     InitializeStatement,
     MoveCorrespondingStatement,
     MoveStatement,
+    NextSentenceStatement,
     SetStatement,
     SimpleGoto,
     StopRunStatement,
@@ -2062,6 +2063,15 @@ def lower_continue(
 ) -> None:
     """CONTINUE — no-op, emit nothing."""
     pass
+
+
+def lower_next_sentence(
+    ctx: EmitContext,
+    stmt: NextSentenceStatement,
+    materialised: MaterialisedSectionedLayout,
+) -> None:
+    """NEXT SENTENCE — branch past the period ending the enclosing sentence."""
+    ctx.emit_inst(Branch(label=ctx.sentence_exit()), span=stmt.span)
 
 
 def lower_exit(

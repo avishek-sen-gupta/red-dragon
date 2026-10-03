@@ -187,6 +187,63 @@ public final class StatementSerializer {
     }
 
     /**
+     * NEXT SENTENCE, which ProLeap keeps only as a flag on an IF arm or a SEARCH
+     * WHEN; spanned by that arm, the nearest construct that has a context.
+     */
+    private static JsonObject nextSentence(ParserRuleContext ctx) {
+        JsonObject obj = newStatement("NEXT_SENTENCE");
+        addSpan(obj, ctx);
+        return obj;
+    }
+
+    /**
+     * A paragraph's statements, and the position in that list of each sentence's
+     * last statement: where the period falls. Positions count serialised
+     * statements, since serializeStatements drops any it cannot serialise.
+     */
+    public static void serializeSentences(List<Statement> statements, JsonObject into) {
+        JsonArray stmts = new JsonArray();
+        JsonArray ends = new JsonArray();
+        ParserRuleContext current = null;
+        for (Statement stmt : statements) {
+            ParserRuleContext sentence = sentenceOf(stmt.getCtx());
+            if (current != null && sentence != current) {
+                endSentence(stmts, ends);
+            }
+            current = sentence;
+            JsonObject obj = serializeStatement(stmt);
+            if (obj != null) {
+                addSpan(obj, stmt.getCtx());
+                stmts.add(obj);
+            }
+        }
+        endSentence(stmts, ends);
+        if (stmts.size() > 0) {
+            into.add("statements", stmts);
+            into.add("sentence_ends", ends);
+        }
+    }
+
+    private static void endSentence(JsonArray stmts, JsonArray ends) {
+        int last = stmts.size() - 1;
+        if (last < 0) {
+            return;
+        }
+        if (ends.size() > 0 && ends.get(ends.size() - 1).getAsInt() == last) {
+            return;
+        }
+        ends.add(last);
+    }
+
+    private static ParserRuleContext sentenceOf(ParserRuleContext ctx) {
+        ParserRuleContext at = ctx;
+        while (at != null && !(at instanceof CobolParser.SentenceContext)) {
+            at = at.getParent();
+        }
+        return at;
+    }
+
+    /**
      * Serializes a single Statement to a CobolStatement JSON object.
      */
     public static JsonObject serializeStatement(Statement stmt) {
@@ -651,7 +708,9 @@ public final class StatementSerializer {
 
         JsonArray children = new JsonArray();
         Then thenBlock = stmt.getThen();
-        if (thenBlock != null && thenBlock.getStatements() != null) {
+        if (thenBlock != null && thenBlock.isNextSentence()) {
+            children.add(nextSentence(thenBlock.getCtx()));
+        } else if (thenBlock != null && thenBlock.getStatements() != null) {
             children = serializeStatements(thenBlock.getStatements());
         }
         if (children.size() > 0) {
@@ -660,7 +719,9 @@ public final class StatementSerializer {
 
         JsonArray elseChildren = new JsonArray();
         Else elseBlock = stmt.getElse();
-        if (elseBlock != null && elseBlock.getStatements() != null) {
+        if (elseBlock != null && elseBlock.isNextSentence()) {
+            elseChildren.add(nextSentence(elseBlock.getCtx()));
+        } else if (elseBlock != null && elseBlock.getStatements() != null) {
             elseChildren = serializeStatements(elseBlock.getStatements());
         }
         if (elseChildren.size() > 0) {
@@ -1416,7 +1477,12 @@ public final class StatementSerializer {
                     whenObj.add("condition", serializeConditionNode(when.getCondition()));
                 }
                 // Serialize child statements
-                if (when.getStatements() != null && !when.getStatements().isEmpty()) {
+                if (when.getWhenType()
+                        == io.proleap.cobol.asg.metamodel.procedure.search.WhenPhrase.WhenType.NEXT_SENTENCE) {
+                    JsonArray children = new JsonArray();
+                    children.add(nextSentence(when.getCtx()));
+                    whenObj.add("children", children);
+                } else if (when.getStatements() != null && !when.getStatements().isEmpty()) {
                     JsonArray children = serializeStatements(when.getStatements());
                     if (children.size() > 0) {
                         whenObj.add("children", children);
