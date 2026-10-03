@@ -198,4 +198,6 @@ fileignoreconfig:
   checksum: e4094fa4c5d3f3f6f5a61865b11bc8628cc44fe4b25515d61617b7def8afdf94
 - filename: docs/superpowers/specs/2026-10-03-call-using-addresses-design.md
   checksum: 3e91325496207f7cdf2b5347696e52f0d4eda89d29bdf19ac21ed10601f1158d
+- filename: docs/superpowers/plans/2026-10-03-call-using-addresses.md
+  checksum: f857528c13d19893d09c67efd5f1d72f2174442616d5e41605a1c528eca7f6aa
 version: "1.0"
