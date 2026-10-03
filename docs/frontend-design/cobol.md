@@ -236,7 +236,7 @@ Conditions are serialized by the Java bridge as recursive JSON trees (not raw so
 - `{"kind": "relation", "left": ..., "right": ..., "op": "EQ"|"GT"|"LT"|...}` — relational comparison
 - `{"kind": "and"|"or", "left": ..., "right": ...}` — compound condition
 - `{"kind": "not", "expr": ...}` — negation
-- `{"kind": "condition_name", "name": "COND-88-NAME"}` — 88-level condition name test
+- `{"kind": "condition_name", "name": "COND-88-NAME"}` — 88-level condition name test (names are indexed over WORKING-STORAGE, LOCAL-STORAGE, LINKAGE and the FILE SECTION)
 
 `_lower_condition()` deserializes this tree and recursively emits IR: leaf relation nodes produce a `BINOP` comparison; compound nodes chain via `BRANCH_IF` with short-circuit blocks.
 
