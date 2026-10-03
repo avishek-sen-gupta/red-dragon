@@ -1723,3 +1723,44 @@ class TestAddCorresponding:
         region = _first_region(vm)
         assert _decode(region, 6, 2) == 7  # GA-X in WS-GROUP-B: 10-3=7
         assert _decode(region, 8, 2) == 16  # GA-Y in WS-GROUP-B: 20-4=16
+
+
+class TestExitParagraphAndSection:
+    """EXIT PARAGRAPH and EXIT SECTION leave early, and the PERFORM still returns."""
+
+    @covers(CobolFeature.EXIT_PARAGRAPH, CobolFeature.PERFORM)
+    def test_an_exit_skips_the_rest_of_its_paragraph_or_section(self):
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. E2E-EXITS.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-A     PIC 9 VALUE 1.",
+                "77 WS-B     PIC 9 VALUE 0.",
+                "77 WS-C     PIC 9 VALUE 0.",
+                "77 WS-D     PIC 9 VALUE 0.",
+                "77 WS-E     PIC 9 VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN SECTION.",
+                "MAIN-PARA.",
+                "    PERFORM SKIP-PARA.",
+                "    MOVE 3 TO WS-C.",
+                "    PERFORM WORK.",
+                "    MOVE 4 TO WS-E.",
+                "    STOP RUN.",
+                "SKIP-PARA.",
+                "    IF WS-A = 1",
+                "       EXIT PARAGRAPH",
+                "    END-IF.",
+                "    MOVE 9 TO WS-B.",
+                "WORK SECTION.",
+                "W1.",
+                "    EXIT SECTION.",
+                "W2.",
+                "    MOVE 9 TO WS-D.",
+            ]
+        )
+        region = _first_region(vm)
+
+        assert [_decode(region, offset, 1) for offset in range(5)] == [1, 0, 3, 0, 4]

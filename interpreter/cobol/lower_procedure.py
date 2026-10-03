@@ -98,14 +98,26 @@ def lower_section(
 ) -> None:
     span = section.span
     ctx.emit_inst(Label_(label=CodeLabel(f"section_{section.name}")), span=span)
-    for stmt in section.statements:
-        ctx.lower_statement(stmt, materialised)
-    for para in section.paragraphs:
-        lower_paragraph(ctx, para, materialised)
+    with ctx.in_section(section.name):
+        _lower_section_body(ctx, section, materialised)
+    exit_label = CodeLabel(f"section_{section.name}_exit")
+    if ctx.exit_requested(exit_label):
+        ctx.emit_inst(Label_(label=exit_label), span=span)
     ctx.emit_inst(
         ResumeContinuation(name=ContinuationName(f"section_{section.name}_end")),
         span=span,
     )
+
+
+def _lower_section_body(
+    ctx: EmitContext,
+    section: CobolSection,
+    materialised: MaterialisedSectionedLayout,
+) -> None:
+    for stmt in section.statements:
+        ctx.lower_statement(stmt, materialised)
+    for para in section.paragraphs:
+        lower_paragraph(ctx, para, materialised)
 
 
 def lower_paragraph(
@@ -115,8 +127,12 @@ def lower_paragraph(
 ) -> None:
     span = para.span
     ctx.emit_inst(Label_(label=CodeLabel(f"para_{para.name}")), span=span)
-    for stmt in para.statements:
-        ctx.lower_statement(stmt, materialised)
+    with ctx.in_paragraph(para.name):
+        for stmt in para.statements:
+            ctx.lower_statement(stmt, materialised)
+    exit_label = CodeLabel(f"para_{para.name}_exit")
+    if ctx.exit_requested(exit_label):
+        ctx.emit_inst(Label_(label=exit_label), span=span)
     ctx.emit_inst(
         ResumeContinuation(name=ContinuationName(f"para_{para.name}_end")), span=span
     )
