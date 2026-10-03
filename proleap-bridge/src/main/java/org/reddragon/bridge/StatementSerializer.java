@@ -1005,10 +1005,10 @@ public final class StatementSerializer {
             }
 
             // Each WhenPhrase is "WHEN c1 [WHEN c2 ...] statements": one or more
-            // stacked conditions sharing a single body. Emit ONE WHEN child per
-            // stacked condition, each carrying the (shared) body, so a match on
-            // ANY stacked value runs the body. Serializing only whens.get(0)
-            // previously dropped every value after the first.
+            // stacked conditions sharing a single body. Emit ONE WHEN per phrase:
+            // the first condition on the WHEN itself, the rest as body-less WHENs
+            // under "alternatives", and the body once. A copy of the body per
+            // condition lowered every statement in it once per copy.
             for (WhenPhrase whenPhrase : stmt.getWhenPhrases()) {
                 List<io.proleap.cobol.asg.metamodel.procedure.evaluate.When> whens = whenPhrase.getWhens();
                 boolean hasBody = whenPhrase.getStatements() != null
@@ -1024,6 +1024,8 @@ public final class StatementSerializer {
                     continue;
                 }
 
+                JsonObject phraseObj = null;
+                JsonArray alternatives = new JsonArray();
                 for (io.proleap.cobol.asg.metamodel.procedure.evaluate.When when : whens) {
                     JsonObject whenObj = newStatement("WHEN");
                     io.proleap.cobol.asg.metamodel.procedure.evaluate.Condition cond = when.getCondition();
@@ -1106,16 +1108,20 @@ public final class StatementSerializer {
                         if (alsoCondsArr.size() > 0) whenObj.add("also_conditions", alsoCondsArr);
                     }
 
-                    // Attach the phrase's shared body to each stacked WHEN. Only
-                    // the first matching value's copy executes (each WHEN branches
-                    // to the EVALUATE end after its body), so this duplicates the
-                    // serialization but not the runtime behaviour.
-                    if (hasBody) {
-                        JsonArray whenStmts = serializeStatements(whenPhrase.getStatements());
-                        if (whenStmts.size() > 0) whenObj.add("children", whenStmts);
+                    if (phraseObj == null) {
+                        phraseObj = whenObj;
+                    } else {
+                        alternatives.add(whenObj);
                     }
-                    children.add(whenObj);
                 }
+                if (alternatives.size() > 0) {
+                    phraseObj.add("alternatives", alternatives);
+                }
+                if (hasBody) {
+                    JsonArray whenStmts = serializeStatements(whenPhrase.getStatements());
+                    if (whenStmts.size() > 0) phraseObj.add("children", whenStmts);
+                }
+                children.add(phraseObj);
             }
 
             // WHEN OTHER

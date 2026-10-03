@@ -5,12 +5,14 @@ COMPUTE, IF, EVALUATE, CONTINUE, EXIT, INITIALIZE, SET, DISPLAY, STOP RUN, GO TO
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
+from functools import reduce
 
 from cobol_asg.cobol_expression import expr_from_dict
 from cobol_asg.cobol_statements import (
     ArithmeticCorrespondingStatement,
     ArithmeticStatement,
+    CobolStatementType,
     ComputedGoto,
     ComputeStatement,
     ContinueStatement,
@@ -1789,272 +1791,331 @@ def lower_evaluate(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """EVALUATE subject WHEN value ..."""
-    span = stmt.span
     end_label = ctx.fresh_label("eval_end")
-
     for child in stmt.children:
-        if isinstance(child, WhenStatement) and child.condition:
-            if (
-                isinstance(child.condition, str)
-                and child.condition.strip().upper() == "ANY"
-            ):
-                # WHEN ANY on the primary subject is a wildcard that always
-                # matches (mirrors the existing ANY handling for ALSO
-                # conditions below) — red-dragon-9j01.
-                cond_reg = ctx.const_to_reg(True, span=span)
-            elif isinstance(child.condition, dict):
-                cond_dict = child.condition
-                if "kind" in cond_dict:
-                    # Expression-kind dict (e.g. lit, ref, binop) — the CICS prepass
-                    # has already resolved DFHRESP nodes to lit nodes before we get here.
-                    # Compare the evaluated value against the EVALUATE subject.
-                    if stmt.subject_ref is not None:
-                        # A sliced, subscripted or qualified subject is a
-                        # REFERENCE, not a name: compare it the way the IF
-                        # relation path compares one (red-dragon-sfih).
-                        cond_reg = ctx.lower_condition(
-                            {
-                                "relation": {
-                                    "left": stmt.subject_ref,
-                                    "op": "==",
-                                    "right": cond_dict,
-                                }
-                            },
-                            materialised,
-                            span=span,
-                        )
-                    elif stmt.subject and stmt.subject.upper() != "TRUE":
-                        val_reg = lower_expr_node(
-                            ctx, expr_from_dict(cond_dict), materialised, span=span
-                        )
-                        if ctx.has_field(stmt.subject, materialised):
-                            subject_ref, subject_rr = ctx.resolve_field_ref(
-                                stmt.subject, materialised, span=span
-                            )
-                            subject_reg = ctx.emit_decode_field(
-                                subject_rr,
-                                subject_ref.fl,
-                                subject_ref.offset_reg,
-                                extent=subject_ref.extent,
-                                span=span,
-                            )
-                        else:
-                            subject_reg = ctx.const_to_reg(
-                                ctx.parse_literal(stmt.subject), span=span
-                            )
-                        cond_reg = ctx.fresh_reg()
-                        ctx.emit_inst(
-                            Binop(
-                                result_reg=cond_reg,
-                                operator=resolve_binop("=="),
-                                left=Register(str(subject_reg)),
-                                right=Register(str(val_reg)),
-                            ),
-                            span=span,
-                        )
-                    else:
-                        cond_reg = lower_expr_node(
-                            ctx, expr_from_dict(cond_dict), materialised, span=span
-                        )
-                else:
-                    # Full conditional expression (EVALUATE TRUE WHEN ...): route through
-                    # the same structured lowering the IF path uses.
-                    cond_reg = ctx.lower_condition(cond_dict, materialised, span=span)
-            elif stmt.subject and stmt.subject.upper() != "TRUE":
-                # WHEN <value> against an EVALUATE subject: lower "subject = value"
-                # through the SAME structured relation path the IF lowering uses,
-                # rather than re-parsing a "subject = value" string. The string
-                # path split on whitespace (destroying quoted spaces) and treated
-                # figuratives (SPACES / LOW-VALUES) as the literal text, so
-                # WHEN SPACES / WHEN ' ' never matched a blank field (red-dragon-z6ad).
-                subj_node: dict = stmt.subject_ref or {
-                    "kind": "ref",
-                    "name": stmt.subject,
-                }
-                if child.condition_thru is not None:
-                    # WHEN <from> THRU <to>: emit (subject >= from) AND (subject <= to)
-                    ge_reg = ctx.lower_condition(
-                        {
-                            "relation": {
-                                "left": subj_node,
-                                "op": ">=",
-                                "right": _when_operand_node(child.condition),
-                            }
-                        },
-                        materialised,
-                        span=span,
-                    )
-                    le_reg = ctx.lower_condition(
-                        {
-                            "relation": {
-                                "left": subj_node,
-                                "op": "<=",
-                                "right": _when_operand_node(child.condition_thru),
-                            }
-                        },
-                        materialised,
-                        span=span,
-                    )
-                    cond_reg = ctx.fresh_reg()
-                    ctx.emit_inst(
-                        Binop(
-                            result_reg=cond_reg,
-                            operator=resolve_binop("&&"),
-                            left=Register(str(ge_reg)),
-                            right=Register(str(le_reg)),
-                        ),
-                        span=span,
-                    )
-                else:
-                    relation = {
-                        "left": subj_node,
-                        "op": "==",
-                        "right": _when_operand_node(child.condition),
-                    }
-                    cond_reg = ctx.lower_condition(
-                        {"relation": relation}, materialised, span=span
-                    )
-            else:
-                # subject is TRUE with a flat string condition (e.g. a level-88
-                # name): keep the text-condition path.
-                cond_reg = _lower_condition_str(
-                    ctx, child.condition, materialised, ctx._condition_index, span=span
+        _lower_evaluate_child(ctx, stmt, child, end_label, materialised)
+    ctx.emit_inst(Label_(label=end_label), span=stmt.span)
+
+
+def _lower_evaluate_child(
+    ctx: EmitContext,
+    stmt: EvaluateStatement,
+    child: CobolStatementType,
+    end_label: CodeLabel,
+    materialised: MaterialisedSectionedLayout,
+) -> None:
+    if isinstance(child, WhenStatement) and child.condition:
+        _lower_when(ctx, stmt, child, end_label, materialised)
+    elif isinstance(child, WhenOtherStatement):
+        _lower_body(ctx, child.children, materialised)
+
+
+def _lower_when(
+    ctx: EmitContext,
+    stmt: EvaluateStatement,
+    child: WhenStatement,
+    end_label: CodeLabel,
+    materialised: MaterialisedSectionedLayout,
+) -> None:
+    """The WHEN's body when its condition holds, then out of the EVALUATE: only
+    the first WHEN that matches runs."""
+    span = stmt.span
+    cond_reg = _when_condition(ctx, stmt, child, materialised)
+    when_true = ctx.fresh_label("when_true")
+    when_false = ctx.fresh_label("when_false")
+    ctx.emit_inst(
+        BranchIf(cond_reg=cond_reg, branch_targets=(when_true, when_false)),
+        span=span,
+    )
+    ctx.emit_inst(Label_(label=when_true), span=span)
+    _lower_body(ctx, child.children, materialised)
+    ctx.emit_inst(Branch(label=end_label), span=span)
+    ctx.emit_inst(Label_(label=when_false), span=span)
+
+
+def _lower_body(
+    ctx: EmitContext,
+    statements: Sequence[CobolStatementType],
+    materialised: MaterialisedSectionedLayout,
+) -> None:
+    for statement in statements:
+        ctx.lower_statement(statement, materialised)
+
+
+def _when_condition(
+    ctx: EmitContext,
+    stmt: EvaluateStatement,
+    child: WhenStatement,
+    materialised: MaterialisedSectionedLayout,
+) -> Register:
+    """Whether a WHEN selects its body: its own condition, ORed with each stacked
+    alternative's."""
+    return reduce(
+        lambda left, right: _or(ctx, stmt, left, right),
+        (
+            _when_alternative(ctx, stmt, alternative, materialised)
+            for alternative in child.alternatives
+        ),
+        _when_alternative(ctx, stmt, child, materialised),
+    )
+
+
+def _or(
+    ctx: EmitContext, stmt: EvaluateStatement, left: Register, right: Register
+) -> Register:
+    either = ctx.fresh_reg()
+    ctx.emit_inst(
+        Binop(result_reg=either, operator=resolve_binop("or"), left=left, right=right),
+        span=stmt.span,
+    )
+    return either
+
+
+def _when_alternative(
+    ctx: EmitContext,
+    stmt: EvaluateStatement,
+    child: WhenStatement,
+    materialised: MaterialisedSectionedLayout,
+) -> Register:
+    """One condition of a WHEN -- with its THRU and its ALSO pairs -- against the
+    EVALUATE's subjects."""
+    span = stmt.span
+    if isinstance(child.condition, str) and child.condition.strip().upper() == "ANY":
+        # WHEN ANY on the primary subject is a wildcard that always
+        # matches (mirrors the existing ANY handling for ALSO
+        # conditions below) — red-dragon-9j01.
+        cond_reg = ctx.const_to_reg(True, span=span)
+    elif isinstance(child.condition, dict):
+        cond_dict = child.condition
+        if "kind" in cond_dict:
+            # Expression-kind dict (e.g. lit, ref, binop) — the CICS prepass
+            # has already resolved DFHRESP nodes to lit nodes before we get here.
+            # Compare the evaluated value against the EVALUATE subject.
+            if stmt.subject_ref is not None:
+                # A sliced, subscripted or qualified subject is a
+                # REFERENCE, not a name: compare it the way the IF
+                # relation path compares one (red-dragon-sfih).
+                cond_reg = ctx.lower_condition(
+                    {
+                        "relation": {
+                            "left": stmt.subject_ref,
+                            "op": "==",
+                            "right": cond_dict,
+                        }
+                    },
+                    materialised,
+                    span=span,
                 )
-            # AND in also-subject=also-condition pairs (EVALUATE A ALSO B WHEN x ALSO y)
-            for position, (also_subj, also_cond) in enumerate(
-                # strict=False: a WHEN with fewer ALSO values than the EVALUATE has
-                # subjects is malformed, and truncating is what this has always done.
-                zip(stmt.also_subjects, child.also_conditions, strict=False)
-            ):
-                if isinstance(also_cond, str) and also_cond.upper() == "ANY":
-                    continue
-                # The ALSO subject is a subject: it takes the same structured ref
-                # node the first one does, so a slice or a qualifier on it survives
-                # instead of resolving the whole field (red-dragon-ba1).
-                also_subj_ref = _also_subject_ref(stmt, position, also_subj)
-                if isinstance(also_cond, dict) and "kind" in also_cond:
-                    also_val_reg = lower_expr_node(
-                        ctx, expr_from_dict(also_cond), materialised, span=span
+            elif stmt.subject and stmt.subject.upper() != "TRUE":
+                val_reg = lower_expr_node(
+                    ctx, expr_from_dict(cond_dict), materialised, span=span
+                )
+                if ctx.has_field(stmt.subject, materialised):
+                    subject_ref, subject_rr = ctx.resolve_field_ref(
+                        stmt.subject, materialised, span=span
                     )
-                    if ctx.has_field(also_subj, materialised):
-                        also_ref, also_rr = ctx.resolve_field_ref(
-                            also_subj, materialised, span=span
-                        )
-                        also_subj_reg = ctx.emit_decode_field(
-                            also_rr,
-                            also_ref.fl,
-                            also_ref.offset_reg,
-                            extent=also_ref.extent,
-                            span=span,
-                        )
-                    else:
-                        also_subj_reg = ctx.const_to_reg(
-                            ctx.parse_literal(also_subj), span=span
-                        )
-                    also_cond_reg = ctx.fresh_reg()
-                    ctx.emit_inst(
-                        Binop(
-                            result_reg=also_cond_reg,
-                            operator=resolve_binop("=="),
-                            left=Register(str(also_subj_reg)),
-                            right=Register(str(also_val_reg)),
-                        ),
-                        span=span,
-                    )
-                elif (
-                    isinstance(also_cond, dict)
-                    and "from" in also_cond
-                    and "thru" in also_cond
-                ):
-                    # WHEN ... ALSO <from> THRU <to>: emit range comparison
-                    also_subj_node: dict = also_subj_ref
-                    also_ge_reg = ctx.lower_condition(
-                        {
-                            "relation": {
-                                "left": also_subj_node,
-                                "op": ">=",
-                                "right": _when_operand_node(also_cond["from"]),
-                            }
-                        },
-                        materialised,
-                        span=span,
-                    )
-                    also_le_reg = ctx.lower_condition(
-                        {
-                            "relation": {
-                                "left": also_subj_node,
-                                "op": "<=",
-                                "right": _when_operand_node(also_cond["thru"]),
-                            }
-                        },
-                        materialised,
-                        span=span,
-                    )
-                    also_cond_reg = ctx.fresh_reg()
-                    ctx.emit_inst(
-                        Binop(
-                            result_reg=also_cond_reg,
-                            operator=resolve_binop("&&"),
-                            left=Register(str(also_ge_reg)),
-                            right=Register(str(also_le_reg)),
-                        ),
-                        span=span,
-                    )
-                elif isinstance(also_cond, dict):
-                    also_cond_reg = ctx.lower_condition(
-                        also_cond, materialised, span=span
-                    )
-                elif also_subj.upper() == "TRUE":
-                    # EVALUATE ... ALSO TRUE: the WHEN value is a CONDITION, the same
-                    # as it is under a first subject of TRUE. Comparing it against a
-                    # field named TRUE -- which no program declares -- made the pair
-                    # unmatchable (red-dragon-c7p).
-                    also_cond_reg = _lower_condition_str(
-                        ctx,
-                        also_cond,
-                        materialised,
-                        ctx._condition_index,
+                    subject_reg = ctx.emit_decode_field(
+                        subject_rr,
+                        subject_ref.fl,
+                        subject_ref.offset_reg,
+                        extent=subject_ref.extent,
                         span=span,
                     )
                 else:
-                    relation = {
-                        "left": also_subj_ref,
-                        "op": "==",
-                        "right": _when_operand_node(also_cond),
-                    }
-                    also_cond_reg = ctx.lower_condition(
-                        {"relation": relation}, materialised, span=span
+                    subject_reg = ctx.const_to_reg(
+                        ctx.parse_literal(stmt.subject), span=span
                     )
-                and_reg = ctx.fresh_reg()
+                cond_reg = ctx.fresh_reg()
                 ctx.emit_inst(
                     Binop(
-                        result_reg=and_reg,
-                        operator=resolve_binop("&&"),
-                        left=Register(str(cond_reg)),
-                        right=Register(str(also_cond_reg)),
+                        result_reg=cond_reg,
+                        operator=resolve_binop("=="),
+                        left=Register(str(subject_reg)),
+                        right=Register(str(val_reg)),
                     ),
                     span=span,
                 )
-                cond_reg = and_reg
-            when_true = ctx.fresh_label("when_true")
-            when_false = ctx.fresh_label("when_false")
+            else:
+                cond_reg = lower_expr_node(
+                    ctx, expr_from_dict(cond_dict), materialised, span=span
+                )
+        else:
+            # Full conditional expression (EVALUATE TRUE WHEN ...): route through
+            # the same structured lowering the IF path uses.
+            cond_reg = ctx.lower_condition(cond_dict, materialised, span=span)
+    elif stmt.subject and stmt.subject.upper() != "TRUE":
+        # WHEN <value> against an EVALUATE subject: lower "subject = value"
+        # through the SAME structured relation path the IF lowering uses,
+        # rather than re-parsing a "subject = value" string. The string
+        # path split on whitespace (destroying quoted spaces) and treated
+        # figuratives (SPACES / LOW-VALUES) as the literal text, so
+        # WHEN SPACES / WHEN ' ' never matched a blank field (red-dragon-z6ad).
+        subj_node: dict = stmt.subject_ref or {
+            "kind": "ref",
+            "name": stmt.subject,
+        }
+        if child.condition_thru is not None:
+            # WHEN <from> THRU <to>: emit (subject >= from) AND (subject <= to)
+            ge_reg = ctx.lower_condition(
+                {
+                    "relation": {
+                        "left": subj_node,
+                        "op": ">=",
+                        "right": _when_operand_node(child.condition),
+                    }
+                },
+                materialised,
+                span=span,
+            )
+            le_reg = ctx.lower_condition(
+                {
+                    "relation": {
+                        "left": subj_node,
+                        "op": "<=",
+                        "right": _when_operand_node(child.condition_thru),
+                    }
+                },
+                materialised,
+                span=span,
+            )
+            cond_reg = ctx.fresh_reg()
             ctx.emit_inst(
-                BranchIf(
-                    cond_reg=cond_reg,
-                    branch_targets=(when_true, when_false),
+                Binop(
+                    result_reg=cond_reg,
+                    operator=resolve_binop("&&"),
+                    left=Register(str(ge_reg)),
+                    right=Register(str(le_reg)),
                 ),
                 span=span,
             )
-            ctx.emit_inst(Label_(label=when_true), span=span)
-            for grandchild in child.children:
-                ctx.lower_statement(grandchild, materialised)
-            ctx.emit_inst(Branch(label=end_label), span=span)
-            ctx.emit_inst(Label_(label=when_false), span=span)
-        elif isinstance(child, WhenOtherStatement):
-            for grandchild in child.children:
-                ctx.lower_statement(grandchild, materialised)
-
-    ctx.emit_inst(Label_(label=end_label), span=span)
+        else:
+            relation = {
+                "left": subj_node,
+                "op": "==",
+                "right": _when_operand_node(child.condition),
+            }
+            cond_reg = ctx.lower_condition(
+                {"relation": relation}, materialised, span=span
+            )
+    else:
+        # subject is TRUE with a flat string condition (e.g. a level-88
+        # name): keep the text-condition path.
+        cond_reg = _lower_condition_str(
+            ctx, child.condition, materialised, ctx._condition_index, span=span
+        )
+    # AND in also-subject=also-condition pairs (EVALUATE A ALSO B WHEN x ALSO y)
+    for position, (also_subj, also_cond) in enumerate(
+        # strict=False: a WHEN with fewer ALSO values than the EVALUATE has
+        # subjects is malformed, and truncating is what this has always done.
+        zip(stmt.also_subjects, child.also_conditions, strict=False)
+    ):
+        if isinstance(also_cond, str) and also_cond.upper() == "ANY":
+            continue
+        # The ALSO subject is a subject: it takes the same structured ref
+        # node the first one does, so a slice or a qualifier on it survives
+        # instead of resolving the whole field (red-dragon-ba1).
+        also_subj_ref = _also_subject_ref(stmt, position, also_subj)
+        if isinstance(also_cond, dict) and "kind" in also_cond:
+            also_val_reg = lower_expr_node(
+                ctx, expr_from_dict(also_cond), materialised, span=span
+            )
+            if ctx.has_field(also_subj, materialised):
+                also_ref, also_rr = ctx.resolve_field_ref(
+                    also_subj, materialised, span=span
+                )
+                also_subj_reg = ctx.emit_decode_field(
+                    also_rr,
+                    also_ref.fl,
+                    also_ref.offset_reg,
+                    extent=also_ref.extent,
+                    span=span,
+                )
+            else:
+                also_subj_reg = ctx.const_to_reg(
+                    ctx.parse_literal(also_subj), span=span
+                )
+            also_cond_reg = ctx.fresh_reg()
+            ctx.emit_inst(
+                Binop(
+                    result_reg=also_cond_reg,
+                    operator=resolve_binop("=="),
+                    left=Register(str(also_subj_reg)),
+                    right=Register(str(also_val_reg)),
+                ),
+                span=span,
+            )
+        elif (
+            isinstance(also_cond, dict) and "from" in also_cond and "thru" in also_cond
+        ):
+            # WHEN ... ALSO <from> THRU <to>: emit range comparison
+            also_subj_node: dict = also_subj_ref
+            also_ge_reg = ctx.lower_condition(
+                {
+                    "relation": {
+                        "left": also_subj_node,
+                        "op": ">=",
+                        "right": _when_operand_node(also_cond["from"]),
+                    }
+                },
+                materialised,
+                span=span,
+            )
+            also_le_reg = ctx.lower_condition(
+                {
+                    "relation": {
+                        "left": also_subj_node,
+                        "op": "<=",
+                        "right": _when_operand_node(also_cond["thru"]),
+                    }
+                },
+                materialised,
+                span=span,
+            )
+            also_cond_reg = ctx.fresh_reg()
+            ctx.emit_inst(
+                Binop(
+                    result_reg=also_cond_reg,
+                    operator=resolve_binop("&&"),
+                    left=Register(str(also_ge_reg)),
+                    right=Register(str(also_le_reg)),
+                ),
+                span=span,
+            )
+        elif isinstance(also_cond, dict):
+            also_cond_reg = ctx.lower_condition(also_cond, materialised, span=span)
+        elif also_subj.upper() == "TRUE":
+            # EVALUATE ... ALSO TRUE: the WHEN value is a CONDITION, the same
+            # as it is under a first subject of TRUE. Comparing it against a
+            # field named TRUE -- which no program declares -- made the pair
+            # unmatchable (red-dragon-c7p).
+            also_cond_reg = _lower_condition_str(
+                ctx,
+                also_cond,
+                materialised,
+                ctx._condition_index,
+                span=span,
+            )
+        else:
+            relation = {
+                "left": also_subj_ref,
+                "op": "==",
+                "right": _when_operand_node(also_cond),
+            }
+            also_cond_reg = ctx.lower_condition(
+                {"relation": relation}, materialised, span=span
+            )
+        and_reg = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                result_reg=and_reg,
+                operator=resolve_binop("&&"),
+                left=Register(str(cond_reg)),
+                right=Register(str(also_cond_reg)),
+            ),
+            span=span,
+        )
+        cond_reg = and_reg
+    return cond_reg
 
 
 def lower_continue(
