@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from cobol_asg.cobol_statements import (
+    CallUsingParam,
     CobolStatementType,
     FileControlEntry,
     parse_statement,
@@ -298,6 +299,8 @@ class CobolASG:
     Attributes:
         data_fields: Working-Storage Section fields.
         linkage_fields: Linkage Section fields (subprogram parameters).
+        procedure_using: PROCEDURE DIVISION USING, in order — the parameter each
+            of a caller's CALL USING arguments binds to, by position.
         local_storage_fields: Local-Storage Section fields (per-call locals).
         file_fields: File Section (FD) record fields.
         sections: Procedure Division sections.
@@ -309,6 +312,7 @@ class CobolASG:
     file_control: list[FileControlEntry] = field(default_factory=list)
     data_fields: list[CobolField] = field(default_factory=list)
     linkage_fields: list[CobolField] = field(default_factory=list)
+    procedure_using: list[CallUsingParam] = field(default_factory=list)
     local_storage_fields: list[CobolField] = field(default_factory=list)
     file_fields: list[CobolField] = field(default_factory=list)
     sections: list[CobolSection] = field(default_factory=list)
@@ -342,6 +346,9 @@ class CobolASG:
             linkage_fields=[
                 CobolField.from_dict(f, currency)
                 for f in data.get("linkage_fields", [])
+            ],
+            procedure_using=[
+                CallUsingParam.from_dict(p) for p in data.get("procedure_using", [])
             ],
             local_storage_fields=[
                 CobolField.from_dict(f, currency)
@@ -388,4 +395,9 @@ class CobolASG:
             result["statements"] = [s.to_dict() for s in self.statements]
         if self.declaratives:
             result["declaratives"] = [s.to_dict() for s in self.declaratives]
-        return result
+        return result | self._procedure_using_dict()
+
+    def _procedure_using_dict(self) -> dict:
+        if not self.procedure_using:
+            return {}
+        return {"procedure_using": [p.to_dict() for p in self.procedure_using]}

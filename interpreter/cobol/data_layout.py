@@ -10,8 +10,9 @@ and attaches CobolTypeDescriptor via parse_pic.
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterator
-from dataclasses import dataclass, field
+from collections.abc import Iterator, Sequence
+from dataclasses import dataclass, field, replace
+from itertools import accumulate
 from typing import TypeVar
 
 from cobol_asg.asg_types import CobolField
@@ -707,6 +708,21 @@ def _resolve_renames(
         renames_thru=renames_field.renames_thru,
         span=renames_field.span,
     )
+
+
+def laid_end_to_end(fields: Sequence[CobolField]) -> list[CobolField]:
+    """Top-level items at consecutive offsets in the order given. A REDEFINES or
+    RENAMES item takes its position from what it names, so it keeps its own and
+    occupies no bytes of the run."""
+    spans = [0 if _positioned_by_name(f) else _compute_group_length(f) for f in fields]
+    return [
+        f if _positioned_by_name(f) else replace(f, offset=end - span)
+        for f, span, end in zip(fields, spans, accumulate(spans), strict=True)
+    ]
+
+
+def _positioned_by_name(f: CobolField) -> bool:
+    return bool(f.redefines or f.renames_from)
 
 
 def build_data_layout(fields: list[CobolField]) -> DataLayout:
