@@ -5,6 +5,7 @@ COMPUTE, IF, EVALUATE, CONTINUE, EXIT, INITIALIZE, SET, DISPLAY, STOP RUN, GO TO
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable, Mapping
 
 from cobol_asg.cobol_expression import expr_from_dict
 from cobol_asg.cobol_statements import (
@@ -2079,15 +2080,21 @@ def lower_exit(
     stmt: ExitStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """EXIT PARAGRAPH / EXIT SECTION branch past the rest of their construct.
+    """EXIT PARAGRAPH / SECTION / PERFORM [CYCLE] branch past what they leave.
 
-    A plain EXIT is the paragraph-end no-op; EXIT PERFORM [CYCLE] is not
-    lowered yet and emits nothing.
+    A plain EXIT is the paragraph-end no-op and emits nothing.
     """
-    if stmt.kind == ExitKind.PARAGRAPH:
-        ctx.emit_inst(Branch(label=ctx.paragraph_exit()), span=stmt.span)
-    elif stmt.kind == ExitKind.SECTION:
-        ctx.emit_inst(Branch(label=ctx.section_exit()), span=stmt.span)
+    if stmt.kind not in _EXIT_TARGETS:
+        return
+    ctx.emit_inst(Branch(label=_EXIT_TARGETS[stmt.kind](ctx)), span=stmt.span)
+
+
+_EXIT_TARGETS: Mapping[ExitKind, Callable[[EmitContext], CodeLabel]] = {
+    ExitKind.PARAGRAPH: EmitContext.paragraph_exit,
+    ExitKind.SECTION: EmitContext.section_exit,
+    ExitKind.PERFORM: EmitContext.perform_leave,
+    ExitKind.PERFORM_CYCLE: EmitContext.perform_cycle,
+}
 
 
 def _leaf_fields_of(target_fl: FieldLayout, layout: DataLayout) -> list[FieldLayout]:
