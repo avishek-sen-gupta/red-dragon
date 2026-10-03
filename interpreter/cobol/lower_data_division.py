@@ -60,11 +60,11 @@ def lower_data_division(
         span=None,  # region-level: no single declaration
     )
 
-    fields_with_values = [fl for fl in layout.all_leaves() if fl.value]
+    fields_with_values = [fl for fl in layout.all_fields() if fl.value]
     for fl in fields_with_values:
         # A VALUE clause initialises the whole declared field at its own
         # offset — no subscript is in play — so the whole-field extent is
-        # exactly right here.
+        # exactly right here. A group's VALUE comes before its descendants'.
         ctx.emit_field_encode(
             region_reg,
             fl,
