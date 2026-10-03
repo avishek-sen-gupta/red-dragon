@@ -456,6 +456,10 @@ class WhenStatement:
 
     ``also_conditions`` holds additional ALSO conditions from multi-subject
     EVALUATE (e.g. ``WHEN x ALSO y`` → condition="x", also_conditions=("y",)).
+
+    ``alternatives`` are the further conditions of a stacked ``WHEN c1 WHEN c2
+    <body>``, each a body-less WHEN; any one of them, or this WHEN's own
+    condition, selects ``children``.
     """
 
     condition: dict | str
@@ -463,6 +467,7 @@ class WhenStatement:
     children: list[CobolStatementType] = field(default_factory=list)
     condition_thru: str | None = None
     span: SourceSpan | None = None
+    alternatives: list[WhenStatement] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict) -> WhenStatement:
@@ -473,6 +478,9 @@ class WhenStatement:
             children=[parse_statement(c) for c in data.get("children", [])],
             condition_thru=data.get("condition_thru"),
             span=SourceSpan.from_dict(data),
+            alternatives=[
+                WhenStatement.from_dict(a) for a in data.get("alternatives", [])
+            ],
         )
 
     def to_dict(self) -> dict:
@@ -485,7 +493,11 @@ class WhenStatement:
             result["children"] = [c.to_dict() for c in self.children]
         if self.span is not None:
             self.span.write_into(result)
-        return result
+        return result | (
+            {"alternatives": [a.to_dict() for a in self.alternatives]}
+            if self.alternatives
+            else {}
+        )
 
 
 @dataclass(frozen=True)
