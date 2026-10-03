@@ -179,7 +179,7 @@ fileignoreconfig:
 - filename: docs/superpowers/plans/2026-09-02-cobol-asg-extraction.md
   checksum: 1bb3884f643d6ad83e78241061b223659d59b003d6e50bec4caad1f506953dfd
 - filename: .pre-commit-config.yaml
-  checksum: e3d2ad42180f4fe09386c0f126165b127d98858c6992e912b9a9fa7065224a9a
+  checksum: 382582e37156b89d9db0c8ff982cf02b225880f4865ce2240ad82d5ddfd93c3a
 - filename: guidelines/design-principles.md
   checksum: 6b22c098590bfe006953bc1fb467dc36ab434df36011435570debabfcfe4f837
 - filename: guidelines/lang/python/testing.md
@@ -196,4 +196,6 @@ fileignoreconfig:
   checksum: 74c361a0d40bcd77008845cfff59bba7843bf2761a0a252cb532b0d9bd4b386c
 - filename: guidelines/testing.md
   checksum: e4094fa4c5d3f3f6f5a61865b11bc8628cc44fe4b25515d61617b7def8afdf94
+- filename: docs/superpowers/specs/2026-10-03-call-using-addresses-design.md
+  checksum: 3e91325496207f7cdf2b5347696e52f0d4eda89d29bdf19ac21ed10601f1158d
 version: "1.0"
