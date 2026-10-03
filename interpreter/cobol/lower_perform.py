@@ -40,9 +40,22 @@ def lower_perform(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """PERFORM paragraph-name [THRU paragraph-name] [TIMES|UNTIL|VARYING]."""
+    if not stmt.children:
+        _lower_perform_form(ctx, stmt, materialised)
+        return
+    with ctx.in_inline_perform() as leave:
+        _lower_perform_form(ctx, stmt, materialised)
+    if ctx.exit_requested(leave):
+        ctx.emit_inst(Label_(label=leave), span=stmt.span)
+
+
+def _lower_perform_form(
+    ctx: EmitContext,
+    stmt: PerformStatement,
+    materialised: MaterialisedSectionedLayout,
+) -> None:
     if stmt.children and stmt.spec is None:
-        for child in stmt.children:
-            ctx.lower_statement(child, materialised)
+        lower_perform_body(ctx, stmt, materialised)
         return
 
     if stmt.target and stmt.spec is None:
@@ -115,10 +128,21 @@ def lower_perform_body(
 ) -> None:
     """Emit the body of a PERFORM loop — inline children or procedure branch."""
     if stmt.children:
-        for child in stmt.children:
-            ctx.lower_statement(child, materialised)
+        _lower_inline_body(ctx, stmt, materialised)
     elif stmt.target:
         emit_perform_branch(ctx, stmt, materialised)
+
+
+def _lower_inline_body(
+    ctx: EmitContext,
+    stmt: PerformStatement,
+    materialised: MaterialisedSectionedLayout,
+) -> None:
+    with ctx.in_perform_body() as cycle:
+        for child in stmt.children:
+            ctx.lower_statement(child, materialised)
+    if ctx.exit_requested(cycle):
+        ctx.emit_inst(Label_(label=cycle), span=stmt.span)
 
 
 def lower_perform_times(

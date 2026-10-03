@@ -164,6 +164,9 @@ class EmitContext:
         self._section: str = ""
         self._requested_exits: set[CodeLabel] = set()
         self._sentence: CodeLabel = CodeLabel("")
+        self._perform_scopes: int = 0
+        self._perform_leave: CodeLabel = CodeLabel("")
+        self._perform_cycle: CodeLabel = CodeLabel("")
 
     # ── Properties ────────────────────────────────────────────────
 
@@ -211,6 +214,46 @@ class EmitContext:
             yield
         finally:
             self._sentence = enclosing
+
+    @contextmanager
+    def in_inline_perform(self) -> Iterator[CodeLabel]:
+        """An inline PERFORM's landing after END-PERFORM, for EXIT PERFORM.
+
+        Numbered from a count of its own, not fresh_label's, so no other label is
+        renumbered; it reaches the IR only when an EXIT PERFORM asked for it.
+        """
+        enclosing = self._perform_leave
+        self._perform_leave = CodeLabel(f"perform_leave_{self._next_perform_scope()}")
+        try:
+            yield self._perform_leave
+        finally:
+            self._perform_leave = enclosing
+
+    @contextmanager
+    def in_perform_body(self) -> Iterator[CodeLabel]:
+        """The landing after one iteration of an inline body, for EXIT PERFORM CYCLE:
+        what follows it is the loop's own step."""
+        enclosing = self._perform_cycle
+        self._perform_cycle = CodeLabel(f"perform_cycle_{self._next_perform_scope()}")
+        try:
+            yield self._perform_cycle
+        finally:
+            self._perform_cycle = enclosing
+
+    def _next_perform_scope(self) -> int:
+        scope = self._perform_scopes
+        self._perform_scopes = scope + 1
+        return scope
+
+    def perform_leave(self) -> CodeLabel:
+        if not str(self._perform_leave):
+            raise NotImplementedError("EXIT PERFORM outside an inline PERFORM")
+        return self._request_exit(self._perform_leave)
+
+    def perform_cycle(self) -> CodeLabel:
+        if not str(self._perform_cycle):
+            raise NotImplementedError("EXIT PERFORM CYCLE outside an inline PERFORM")
+        return self._request_exit(self._perform_cycle)
 
     def sentence_exit(self) -> CodeLabel:
         """The label NEXT SENTENCE branches to, recorded so the sentence emits it."""
