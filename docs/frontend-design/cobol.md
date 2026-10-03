@@ -127,7 +127,7 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 
 | Statement | IR Pattern |
 |---|---|
-| `STRING ... INTO` | Decode sources → concatenate (with optional delimiter truncation) → encode → write to target |
+| `STRING ... INTO` | Decode sources → concatenate (with optional delimiter truncation) → `__string_splice` into the target's current characters at offset 0, or at `pointer - 1` WITH POINTER → encode → write the target back whole. Characters STRING does not transfer keep their value. |
 | `UNSTRING ... INTO` | Decode source → `__string_split` → extract parts → encode → write to targets |
 | `INSPECT` | TALLYING: `__string_count` → write count. REPLACING: `__string_replace` → write back. |
 

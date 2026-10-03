@@ -15,7 +15,7 @@ from cobol_asg.source_span import SourceSpan
 from interpreter.cobol.cobol_constants import BuiltinName, DelimiterMode, InspectType
 from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.emit_context import EmitContext, strip_cobol_literal
-from interpreter.cobol.field_resolution import runtime_offset_extent
+from interpreter.cobol.field_resolution import ResolvedFieldRef
 from interpreter.cobol.figurative_constants import translate_cobol_figurative
 from interpreter.cobol.ir_encoders import (
     build_inspect_replace_ir,
@@ -295,36 +295,8 @@ def lower_string(
                 ),
                 span=span,
             )
-            write_offset_reg = ctx.fresh_reg()
-            ctx.emit_inst(
-                Binop(
-                    result_reg=write_offset_reg,
-                    operator=resolve_binop("+"),
-                    left=target_ref.offset_reg,
-                    right=start_0indexed_reg,
-                ),
-                span=span,
-            )
-            # WITH POINTER writes byte_length bytes starting (ptr - 1) bytes
-            # into the receiver, so the bytes touched run up to byte_length - 1
-            # PAST the target field's own end. Clamping to the field would be
-            # under-sized and would silently drop may_alias edges to whatever
-            # follows it, so this clamps to the enclosing 01 — the same rule
-            # field_access_extent applies to a computed subscript it cannot
-            # bound. (The overrun in the emitted instruction is pre-existing;
-            # the extent's job is to describe honestly what it can touch.)
-            ctx.emit_encode_and_write(
-                target_rr,
-                target_ref.fl,
-                concat_reg,
-                write_offset_reg,
-                extent=runtime_offset_extent(
-                    name=target_ref.extent.field_name,
-                    fl=target_ref.fl,
-                    region=target_ref.extent.region,
-                    record=materialised.enclosing_record_extent(stmt.into.name),
-                ),
-                span=span,
+            _splice_into_receiver(
+                ctx, target_ref, target_rr, start_0indexed_reg, concat_reg, span=span
             )
             written_len_reg = ctx.fresh_reg()
             ctx.emit_inst(
@@ -355,16 +327,62 @@ def lower_string(
                 span=span,
             )
         else:
-            ctx.emit_encode_and_write(
+            _splice_into_receiver(
+                ctx,
+                target_ref,
                 target_rr,
-                target_ref.fl,
+                ctx.const_to_reg(0, span=span),
                 concat_reg,
-                target_ref.offset_reg,
-                extent=target_ref.extent,
                 span=span,
             )
     else:
         logger.warning("STRING INTO target %s not found in layout", stmt.into.name)
+
+
+def _splice_into_receiver(
+    ctx: EmitContext,
+    target_ref: ResolvedFieldRef,
+    target_rr: Register,
+    start_reg: Register,
+    value_reg: Register,
+    *,
+    span: SourceSpan | None,
+) -> None:
+    """Write value_reg into the receiver from 0-based start_reg, keeping every
+    character it does not reach: STRING changes only what it transfers."""
+    current_reg = ctx.emit_decode_field_characters(
+        target_rr,
+        target_ref.fl,
+        target_ref.offset_reg,
+        extent=target_ref.extent,
+        span=span,
+    )
+    length_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=length_reg,
+            func_name=FuncName(BuiltinName.LENGTH),
+            args=(value_reg,),
+        ),
+        span=span,
+    )
+    spliced_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=spliced_reg,
+            func_name=FuncName(BuiltinName.STRING_SPLICE),
+            args=(current_reg, start_reg, length_reg, value_reg),
+        ),
+        span=span,
+    )
+    ctx.emit_encode_and_write(
+        target_rr,
+        target_ref.fl,
+        spliced_reg,
+        target_ref.offset_reg,
+        extent=target_ref.extent,
+        span=span,
+    )
 
 
 def lower_unstring(

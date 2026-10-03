@@ -232,36 +232,19 @@ def test_local_storage_and_working_storage_inits_are_kept_apart(probe):
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_string_with_pointer_extent_covers_bytes_past_the_target_field(probe):
-    """FIX 1: the write runs off the end of WS-B1, so the extent must too.
-
-    ``STRING ... INTO WS-B1 WITH POINTER WS-PTR`` emits a write of
-    ``byte_length`` bytes starting ``ptr - 1`` bytes into WS-B1, so it can
-    touch WS-B2 — which sits immediately after it inside WS-BUF. An extent
-    stopping at WS-B1's own end would be under-sized, and ``may_alias`` would
-    silently miss that overlap. Precision alone does not fix this: CLAMPED
-    protects ``must_cover`` only.
-    """
+def test_string_with_pointer_extent_is_the_target_field(probe):
+    """``STRING ... INTO WS-B1 WITH POINTER WS-PTR`` splices what it transfers
+    into WS-B1's own characters and writes WS-B1 back whole, so its extent is
+    exactly WS-B1's and does not reach WS-B2, which follows it in WS-BUF."""
     b1_ref, _ = probe.ctx.resolve_field_ref("WS-B1", probe.materialised)
     b2_ref, _ = probe.ctx.resolve_field_ref("WS-B2", probe.materialised)
-    buf_ref, _ = probe.ctx.resolve_field_ref("WS-BUF", probe.materialised)
 
-    writes = probe.effects("WS-B1", EffectKind.WRITE)
-    assert writes, "the STRING WITH POINTER write declared no effect"
-    effect = writes[-1]
+    effect = probe.effects("WS-B1", EffectKind.WRITE)[-1]
 
-    assert effect.extent.precision is Precision.CLAMPED
-    assert effect.extent.end > b1_ref.extent.end, (
-        f"{effect.extent} stops at the target field's own end; the write can "
-        "run up to byte_length - 1 bytes past it"
+    assert (effect.extent, effect.extent.may_alias(b2_ref.extent)) == (
+        b1_ref.extent,
+        False,
     )
-    assert effect.extent.may_alias(
-        b2_ref.extent
-    ), "the overrun reaches WS-B2, so that alias edge must not be dropped"
-    assert (effect.extent.start, effect.extent.length) == (
-        buf_ref.extent.start,
-        buf_ref.extent.length,
-    ), "clamped to the enclosing 01 WS-BUF, per field_extent's stated doctrine"
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
