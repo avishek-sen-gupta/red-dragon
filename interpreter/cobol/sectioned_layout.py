@@ -6,7 +6,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
-from cobol_asg.asg_types import CobolASG
+from cobol_asg.asg_types import CobolASG, CobolField
 from cobol_memory.region_id import RegionId
 from interpreter.cobol.data_layout import (
     DataLayout,
@@ -14,6 +14,7 @@ from interpreter.cobol.data_layout import (
     OccursTable,
     build_data_layout,
     build_index_layout,
+    laid_end_to_end,
 )
 from interpreter.register import NO_REGISTER, Register
 
@@ -216,7 +217,7 @@ def build_sectioned_layout(asg: CobolASG) -> SectionedLayout:
     """Build SectionedLayout from a CobolASG — one DataLayout per section."""
     return SectionedLayout(
         working_storage=build_data_layout(asg.data_fields),
-        linkage=build_data_layout(asg.linkage_fields),
+        linkage=build_data_layout(laid_end_to_end(_in_using_order(asg))),
         local_storage=build_data_layout(asg.local_storage_fields),
         file=build_data_layout(asg.file_fields),
         indexes=build_index_layout(
@@ -226,3 +227,15 @@ def build_sectioned_layout(asg: CobolASG) -> SectionedLayout:
             asg.file_fields,
         ),
     )
+
+
+def _in_using_order(asg: CobolASG) -> list[CobolField]:
+    """LINKAGE in PROCEDURE DIVISION USING order, since a caller's arguments
+    arrive packed by position; items USING does not name follow, in declaration
+    order. A USING name with no declaration (a missing copybook) has nothing to
+    lay out."""
+    declared = {item.name.upper(): item for item in asg.linkage_fields}
+    listed = [param.name.upper() for param in asg.procedure_using]
+    return [declared[name] for name in listed if name in declared] + [
+        item for item in asg.linkage_fields if item.name.upper() not in listed
+    ]

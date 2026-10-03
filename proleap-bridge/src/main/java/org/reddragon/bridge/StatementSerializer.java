@@ -2784,7 +2784,7 @@ public final class StatementSerializer {
     /**
      * Extracts text from a ValueStmt, falling back to ANTLR context getText().
      */
-    private static String extractValueStmtText(ValueStmt vs) {
+    static String extractValueStmtText(ValueStmt vs) {
         if (vs == null) {
             return "";
         }
