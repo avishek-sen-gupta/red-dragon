@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from interpreter.cobol.alphanumeric import encode_alphanumeric
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.figurative_constants import translate_cobol_figurative
 from tests.covers import NotLanguageFeature, covers
@@ -46,11 +47,15 @@ class TestFigurativeConstantTranslation:
 
     @covers(CobolFeature.FIGURATIVE_HIGH_VALUES)
     def test_high_value_translates_to_max_byte(self):
-        assert translate_cobol_figurative("HIGH-VALUE") == "\xff"
+        assert (
+            encode_alphanumeric(translate_cobol_figurative("HIGH-VALUE"), 1) == b"\xff"
+        )
 
     @covers(CobolFeature.FIGURATIVE_HIGH_VALUES)
     def test_high_values_translates_to_max_byte(self):
-        assert translate_cobol_figurative("HIGH-VALUES") == "\xff"
+        assert (
+            encode_alphanumeric(translate_cobol_figurative("HIGH-VALUES"), 1) == b"\xff"
+        )
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_unknown_token_passes_through(self):
