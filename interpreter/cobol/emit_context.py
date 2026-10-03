@@ -30,10 +30,7 @@ from interpreter.cobol.cobol_constants import BuiltinName, ByteConstants, CobolE
 from interpreter.cobol.condition_name_index import ConditionNameIndex
 from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.field_resolution import ResolvedFieldRef, field_access_extent
-from interpreter.cobol.figurative_constants import (
-    COBOL_FIGURATIVE_CONSTANTS,
-    COBOL_RAW_FIGURATIVE_BYTES,
-)
+from interpreter.cobol.figurative_constants import COBOL_FIGURATIVE_CONSTANTS
 from interpreter.cobol.ir_encoders import (
     build_decode_alphanumeric_ir,
     build_decode_binary_ir,
@@ -789,17 +786,6 @@ class EmitContext:
             # Gated on value_is_figurative so a quoted literal VALUE 'SPACE' is
             # left verbatim. red-dragon-zuhj: surfaced via INSPECT CONVERTING.
             if fl.value_is_figurative and value in COBOL_FIGURATIVE_CONSTANTS:
-                if value in COBOL_RAW_FIGURATIVE_BYTES:
-                    result = self.fresh_reg()
-                    self.emit_inst(
-                        Const(
-                            result_reg=result,
-                            value=[COBOL_RAW_FIGURATIVE_BYTES[value]] * fl.byte_length,
-                            type_expr=array_of(scalar(FoundationTypeName.INT)),
-                        ),
-                        span=span,
-                    )
-                    return result
                 return self.emit_encode_alphanumeric(
                     fl.name,
                     COBOL_FIGURATIVE_CONSTANTS[value] * fl.byte_length,
@@ -858,9 +844,10 @@ class EmitContext:
         """Fill a field's whole region slot with a single raw byte, verbatim.
 
         Used for MOVE HIGH-VALUES / LOW-VALUES, whose semantics are raw 0xFF /
-        0x00 in every receiver position — they must bypass the ASCII→EBCDIC
-        alphanumeric encoder (which would corrupt \\xff into 0x6F). The byte is
-        written as a literal list of ``byte_length`` copies (red-dragon-raxa).
+        0x00 in every receiver position whatever its category — the character
+        path would convert them per the receiver's PICTURE, so a numeric
+        receiver would get a number. The byte is written as a literal list of
+        ``byte_length`` copies (red-dragon-raxa).
         """
         result = self.fresh_reg()
         self.emit_inst(
