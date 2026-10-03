@@ -152,6 +152,8 @@ class DataLayout:
     conditions: list[ConditionName] = field(default_factory=list)
     index_owner: dict[str, str] = field(default_factory=dict)
     span: SourceSpan | None = None
+    value: str = ""
+    value_is_figurative: bool = False
 
     def lookup(self, name: str) -> FieldLayout | None:
         """Search for a leaf field by bare name within this subtree.
@@ -306,7 +308,8 @@ class DataLayout:
     def all_fields(self) -> Iterator[FieldLayout]:
         """Yield all FieldLayouts (leaf and synthesized group storage) depth-first.
 
-        For groups, synthesizes alphanumeric FieldLayout with group's byte bounds.
+        For groups, synthesizes alphanumeric FieldLayout with group's byte bounds
+        and VALUE. A group precedes its descendants.
         Used by the data_layout property to maintain backward compatibility.
         """
         yield from self.fields.values()
@@ -325,6 +328,8 @@ class DataLayout:
                 occurs_count=grp.occurs_count,
                 element_size=elem_size,
                 span=grp.span,
+                value=grp.value,
+                value_is_figurative=grp.value_is_figurative,
             )
             # Recurse into group's children
             yield from grp.all_fields()
@@ -604,6 +609,8 @@ def _flatten_field(
             element_size=elem_size,
             conditions=list(cobol_field.conditions),
             span=cobol_field.span,
+            value=cobol_field.value,
+            value_is_figurative=cobol_field.value_is_figurative,
         )
         return cobol_field.name, group_layout
 
