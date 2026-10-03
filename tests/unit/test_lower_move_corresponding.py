@@ -6,7 +6,6 @@ from unittest.mock import MagicMock
 
 from cobol_asg.asg_types import CobolField
 from cobol_asg.cobol_statements import MoveCorrespondingStatement
-from cobol_memory.region_id import RegionId
 from interpreter.cobol.data_layout import DataLayout, build_data_layout
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.lower_arithmetic import lower_move_corresponding
@@ -74,14 +73,7 @@ class TestLowerMoveCorresponding:
         ]
         stmt = MoveCorrespondingStatement(source="WS-SRC", targets=["WS-DST"])
 
-        lower_move_corresponding(
-            ctx,
-            stmt,
-            layout,
-            "region_r0",
-            RegionId.WORKING_STORAGE,
-            _materialised(layout),
-        )
+        lower_move_corresponding(ctx, stmt, _materialised(layout))
 
         assert ctx.emit_decode_field.call_count == 1
         assert ctx.emit_to_string.call_count == 1
@@ -96,14 +88,7 @@ class TestLowerMoveCorresponding:
         ctx.emit_to_string.return_value = "s"
         stmt = MoveCorrespondingStatement(source="WS-SRC", targets=["WS-DST"])
 
-        lower_move_corresponding(
-            ctx,
-            stmt,
-            layout,
-            "region_r0",
-            RegionId.WORKING_STORAGE,
-            _materialised(layout),
-        )
+        lower_move_corresponding(ctx, stmt, _materialised(layout))
 
         # Only WS-A matches; WS-B (src) and WS-C (dst) do not
         assert ctx.emit_decode_field.call_count == 1
@@ -171,14 +156,7 @@ class TestLowerMoveCorresponding:
             source="WS-SRC", targets=["WS-DST1", "WS-DST2"]
         )
 
-        lower_move_corresponding(
-            ctx,
-            stmt,
-            layout,
-            "region_r0",
-            RegionId.WORKING_STORAGE,
-            _materialised(layout),
-        )
+        lower_move_corresponding(ctx, stmt, _materialised(layout))
 
         assert ctx.emit_encode_and_write.call_count == 2
 
@@ -223,14 +201,7 @@ class TestLowerMoveCorresponding:
         ctx = MagicMock()
         stmt = MoveCorrespondingStatement(source="WS-SRC", targets=["WS-DST"])
 
-        lower_move_corresponding(
-            ctx,
-            stmt,
-            layout,
-            "region_r0",
-            RegionId.WORKING_STORAGE,
-            _materialised(layout),
-        )
+        lower_move_corresponding(ctx, stmt, _materialised(layout))
 
         ctx.emit_decode_field.assert_not_called()
         ctx.emit_encode_and_write.assert_not_called()

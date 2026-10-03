@@ -91,6 +91,7 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 | `MULTIPLY X BY Y` | Decode both → `BINOP *` → encode → write |
 | `DIVIDE X INTO Y` | Decode both → `BINOP /` → encode → write |
 | `DIVIDE ... GIVING ... REMAINDER r` | `remainder = dividend - trunc(quotient) * divisor`, using the same operands the GIVING quotient was computed from, written back alongside the quotient. `DIVIDE X INTO Y GIVING Z` computes `Z = Y / X` (dividend/divisor); `DIVIDE X BY Y GIVING Z` computes `Z = X / Y` — the bridge normalizes both forms to a `[dividend, divisor]` operand order before lowering. |
+| `MOVE CORRESPONDING A TO B ...` | For each direct leaf name present in both groups: decode A.field → encode → write to B.field. Each group is found in whichever section declares it (WORKING-STORAGE, LOCAL-STORAGE, LINKAGE, FILE); a LINKAGE group reads and writes its caller's argument. |
 | `ADD/SUBTRACT CORRESPONDING A TO/FROM B` | For each leaf name present in both groups: decode B.field and A.field → `BINOP +/-` → encode → write back to B.field. Non-matching fields untouched. |
 | `COMPUTE Y = expr` | Recursive expression lowering → encode → write |
 

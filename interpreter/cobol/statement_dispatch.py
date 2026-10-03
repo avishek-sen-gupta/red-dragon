@@ -41,7 +41,6 @@ from cobol_asg.cobol_statements import (
     UnstringStatement,
     WriteStatement,
 )
-from cobol_memory.region_id import RegionId
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.lower_arithmetic import (
     lower_arithmetic,
@@ -99,11 +98,7 @@ def dispatch_statement(
     if isinstance(stmt, MoveStatement):
         lower_move(ctx, stmt, materialised)
     elif isinstance(stmt, MoveCorrespondingStatement):
-        # MoveCorrespondingStatement still uses (layout, region_reg) — uses first WS section
-        ws_layout, ws_reg = materialised.working_storage
-        lower_move_corresponding(
-            ctx, stmt, ws_layout, ws_reg, RegionId.WORKING_STORAGE, materialised
-        )
+        lower_move_corresponding(ctx, stmt, materialised)
     elif isinstance(stmt, ArithmeticCorrespondingStatement):
         lower_arithmetic_corresponding(ctx, stmt, materialised)
     elif isinstance(stmt, ArithmeticStatement):
