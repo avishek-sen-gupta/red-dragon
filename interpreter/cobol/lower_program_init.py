@@ -18,7 +18,7 @@ Emits (in order):
 
   2. func_init_params function — called by _handle_call_with_memory:
        LABEL func_init_params_<pid>_0
-       BRANCH func_<pid>_0               → __params_region/__results_region
+       BRANCH func_<pid>_0               → __call_arguments
                                            already injected by handler
 
 Returns the after_label (CodeLabel) that CobolFrontend must emit
@@ -113,7 +113,7 @@ def lower_program_init(
     ctx.emit_inst(Branch(label=after_label))
 
     # --- func_init_params function ---
-    # __params_region and __results_region are injected by _handle_call_with_memory
+    # __call_arguments is injected by _handle_call_with_memory
     ctx.emit_inst(Label_(label=init_params_label))
     ctx.emit_inst(Branch(label=proc_label))
 

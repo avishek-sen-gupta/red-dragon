@@ -80,16 +80,9 @@ def test_call_with_memory_dispatches_to_init_params():
 
     vm = _make_vm_with_singleton(pid)
     params_reg = Register("%r0")
-    results_reg = Register("%r1")
-    ws_addr = Address("obj_10")
-    vm.current_frame.registers[params_reg] = typed(ws_addr)
-    vm.current_frame.registers[results_reg] = typed(ws_addr)
+    vm.current_frame.registers[params_reg] = typed(Address("arr_10"))
 
-    inst = CallWithMemory(
-        func_name=FuncName(pid),
-        params_reg=params_reg,
-        results_reg=results_reg,
-    )
+    inst = CallWithMemory(func_name=FuncName(pid), params_reg=params_reg)
 
     ctx = replace(_default_handler_context(), cfg=cfg, current_label=CodeLabel("entry"))
     result = _handle_call_with_memory(inst, vm, ctx)
@@ -136,7 +129,6 @@ def test_call_with_memory_gives_the_callee_frame_the_caller_result_register():
         result_reg=result_reg,
         func_name=FuncName(pid),
         params_reg=params_reg,
-        results_reg=params_reg,
     )
     ctx = replace(_default_handler_context(), cfg=cfg, current_label=CodeLabel("entry"))
 

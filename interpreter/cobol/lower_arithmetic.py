@@ -860,6 +860,7 @@ def lower_move_corresponding(
     layout: DataLayout,
     region_reg: Register,
     region: RegionId,
+    materialised: MaterialisedSectionedLayout,
 ) -> None:
     """MOVE CORRESPONDING src TO dst — copy matching direct leaf fields.
 
@@ -878,13 +879,17 @@ def lower_move_corresponding(
             src_fl = src_layout.fields[name]
             dst_fl = dst_layout.fields[name]
 
-            src_ref = ctx.resolve_field_ref_from(src_fl, region_reg, region, span=span)
+            src_ref = ctx.resolve_field_ref_from(
+                src_fl, region_reg, region, materialised, span=span
+            )
             decoded = ctx.emit_decode_field(
                 region_reg, src_fl, src_ref.offset_reg, extent=src_ref.extent, span=span
             )
             value_str = ctx.emit_to_string(decoded, span=span)
 
-            dst_ref = ctx.resolve_field_ref_from(dst_fl, region_reg, region, span=span)
+            dst_ref = ctx.resolve_field_ref_from(
+                dst_fl, region_reg, region, materialised, span=span
+            )
             ctx.emit_encode_and_write(
                 region_reg,
                 dst_fl,
@@ -912,10 +917,23 @@ def _find_group_and_reg(
     ):
         try:
             grp = layout.lookup_group(name)
-            return grp, reg, region
+            return grp, _group_region(grp, reg, region, materialised), region
         except KeyError:
             pass
     return None
+
+
+def _group_region(
+    grp: DataLayout,
+    section_reg: Register,
+    region: RegionId,
+    materialised: MaterialisedSectionedLayout,
+) -> Register:
+    """A LINKAGE group lives in its own 01's argument, not one section region. A
+    group with no leaf of its own has nothing CORRESPONDING reads or writes."""
+    if region is not RegionId.LINKAGE or not grp.fields:
+        return section_reg
+    return materialised.linkage_binding(next(iter(grp.fields.values()))).region_reg
 
 
 def lower_arithmetic_corresponding(
@@ -945,12 +963,16 @@ def lower_arithmetic_corresponding(
         src_fl = src_group.fields[name]
         dst_fl = dst_group.fields[name]
 
-        src_ref = ctx.resolve_field_ref_from(src_fl, src_rr, src_region, span=span)
+        src_ref = ctx.resolve_field_ref_from(
+            src_fl, src_rr, src_region, materialised, span=span
+        )
         src_val = ctx.emit_decode_field(
             src_rr, src_fl, src_ref.offset_reg, extent=src_ref.extent, span=span
         )
 
-        dst_ref = ctx.resolve_field_ref_from(dst_fl, dst_rr, dst_region, span=span)
+        dst_ref = ctx.resolve_field_ref_from(
+            dst_fl, dst_rr, dst_region, materialised, span=span
+        )
         dst_val = ctx.emit_decode_field(
             dst_rr, dst_fl, dst_ref.offset_reg, extent=dst_ref.extent, span=span
         )
