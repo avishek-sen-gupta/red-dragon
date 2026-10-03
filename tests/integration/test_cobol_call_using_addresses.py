@@ -174,3 +174,60 @@ def test_a_wider_parameter_reads_the_callers_next_bytes_and_no_using_binds_nothi
         bytes(ws_region(vm, "WIDER")).decode("cp037"),
         bytes(ws_region(vm, "NOUSE")),
     ) == ("ABCD", b"\x00\x00")
+
+
+_OVERLAY_MAIN = [
+    "IDENTIFICATION DIVISION.",
+    "PROGRAM-ID. OVERM.",
+    "DATA DIVISION.",
+    "WORKING-STORAGE SECTION.",
+    "01 WS-A      PIC X(8)  VALUE 'AAAABBBB'.",
+    "01 WS-C      PIC X(4)  VALUE 'CCCC'.",
+    "01 WS-OUT    PIC X(4)  VALUE SPACES.",
+    "01 WS-TAIL   PIC X(8)  VALUE 'TTTTTTTT'.",
+    "PROCEDURE DIVISION.",
+    "    CALL 'OVERLAY' USING WS-A WS-C WS-OUT.",
+    "    CALL 'OVERLAST' USING WS-TAIL.",
+    "    STOP RUN.",
+]
+
+_OVERLAY = [
+    "IDENTIFICATION DIVISION.",
+    "PROGRAM-ID. OVERLAY.",
+    "DATA DIVISION.",
+    "LINKAGE SECTION.",
+    "01 LK-A      PIC X(4).",
+    "01 LK-B REDEFINES LK-A.",
+    "   05 LK-B1  PIC X(4).",
+    "   05 LK-B2  PIC X(4).",
+    "01 LK-C      PIC X(4).",
+    "01 LK-OUT    PIC X(4).",
+    "PROCEDURE DIVISION USING LK-A LK-C LK-OUT.",
+    "    MOVE LK-B2 TO LK-OUT.",
+    "    MOVE 'ZZZZ' TO LK-B2.",
+    "    GOBACK.",
+]
+
+_OVERLAST = [
+    "IDENTIFICATION DIVISION.",
+    "PROGRAM-ID. OVERLAST.",
+    "DATA DIVISION.",
+    "LINKAGE SECTION.",
+    "01 LK-SHORT  PIC X(4).",
+    "01 LK-LONG REDEFINES LK-SHORT PIC X(8).",
+    "PROCEDURE DIVISION USING LK-SHORT.",
+    "    MOVE 'Q' TO LK-LONG(8:1).",
+    "    GOBACK.",
+]
+
+
+@covers(CobolFeature.CALL_USING)
+def test_a_longer_redefining_01_addresses_through_its_targets_argument() -> None:
+    """A REDEFINES 01 longer than the 01 it redefines overlays the caller's
+    argument past that 01's own length -- it does not reach into the next
+    parameter, and as the last 01 it still lowers."""
+    vm = run_cobol_programs(_OVERLAY_MAIN, {"OVERLAY": _OVERLAY, "OVERLAST": _OVERLAST})
+
+    assert bytes(ws_region(vm, "OVERM")).decode("cp037") == (
+        "AAAAZZZZ" "CCCC" "BBBB" "TTTTTTTQ"
+    )
