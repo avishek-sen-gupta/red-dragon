@@ -29,6 +29,7 @@ from interpreter.cobol.arithmetic_scale import (
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.condition_name_index import ConditionNameIndex
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.cobol.figurative_constants import COBOL_FIGURATIVE_CONSTANTS
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.func_name import FuncName
 from interpreter.instructions import Binop, CallFunction, Const
@@ -62,7 +63,7 @@ def _emit_88_value_reg(
     the read-side counterpart of SET <88-figurative> TO TRUE (CardDemo COACTUPC
     ACUP-DETAILS-NOT-FETCHED VALUES LOW-VALUES, SPACES).
     """
-    fill = _FIGURATIVE_FILL.get(raw.upper())
+    fill = COBOL_FIGURATIVE_CONSTANTS.get(raw.upper())
     if fill is not None:
         # Numeric parent + ZEROS -> integer 0; otherwise build the fill string
         # sized to the parent field so equality holds against the decoded field.
@@ -404,22 +405,6 @@ _OP_MAP: dict[str, str] = {
 }
 
 
-# Canonical figurative-constant fill characters. The value is built sized to the
-# *sibling* operand's field length so equality holds against the decoded field.
-_FIGURATIVE_FILL: dict[str, str] = {
-    "SPACE": " ",
-    "SPACES": " ",
-    "ZERO": "0",
-    "ZEROS": "0",
-    "ZEROES": "0",
-    "LOW-VALUE": "\x00",
-    "LOW-VALUES": "\x00",
-    "HIGH-VALUE": "\xff",
-    "HIGH-VALUES": "\xff",
-    "QUOTE": '"',
-    "QUOTES": '"',
-}
-
 _DEFAULT_FIGURATIVE_LEN = 1
 
 
@@ -473,7 +458,7 @@ def _lower_figurative(
         ctx, sibling, materialised, span=span
     ):
         return ctx.const_to_reg(0, span=span)
-    fill = _FIGURATIVE_FILL.get(value, " ")
+    fill = COBOL_FIGURATIVE_CONSTANTS.get(value, " ")
     length = _field_byte_length(ctx, sibling, materialised, span=span)
     if length is None:
         length = _DEFAULT_FIGURATIVE_LEN
@@ -1379,7 +1364,7 @@ def _lower_figurative_operand(
     raw = node.value.upper()
     if raw in ("ZERO", "ZEROS", "ZEROES"):
         return ctx.const_to_reg(0, span=span)
-    fill = _FIGURATIVE_FILL.get(raw)
+    fill = COBOL_FIGURATIVE_CONSTANTS.get(raw)
     if fill is None:
         logger.warning("Unknown figurative constant %r -> 0", node.value)
         return ctx.const_to_reg(0, span=span)
