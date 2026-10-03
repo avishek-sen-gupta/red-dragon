@@ -550,12 +550,11 @@ _OPCODE_NOTES: dict[str, str] = {
         "object. type_hint is the TypeExpr describing the class."
     ),
     "CALL_WITH_MEMORY": (
-        "Calls a subprogram passing two memory regions. params_reg holds the region "
-        "the caller passes to the callee (callee reads LINKAGE SECTION fields from it). "
-        "results_reg holds the region the callee writes output back into (BY REF: may "
-        "be the same register as params_reg). The VM injects __params_region and "
-        "__results_region as variables in the new call frame. Used by the COBOL "
-        "frontend for CALL … USING statements."
+        "Calls a subprogram, passing its arguments by address. params_reg holds the "
+        "argument array: per CALL USING argument, by position, a region and an offset "
+        "into it (or an OMITTED marker), and a count. The VM injects it as "
+        "__call_arguments in the new call frame, and the callee binds each LINKAGE 01 "
+        "to its argument. Used by the COBOL frontend for CALL … USING statements."
     ),
     "LOAD_FIELD": (
         "Reads field field_name from the object in obj_reg. result_reg receives the "

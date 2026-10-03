@@ -9,7 +9,7 @@ fileignoreconfig:
 - filename: docs/notes-on-vm-design.md
   checksum: 3a15d93a6e1b5284016881e3bb7abbefb000dd4b2589a9c1bcd1e53afd7bfc94
 - filename: docs/architectural-design-decisions.md
-  checksum: 910b2a837916f8dc18233d4086a907296ce8dfe07f6cbf55d6a25cf15dcfd235
+  checksum: 3493bfeb10c0a21656c864ae4209232dcdcd97dcb557aa6bd6fc1bc1379d56a9
 - filename: tests/unit/exercism/exercises/pangram/canonical_data.json
   checksum: fe0ff5850a9bcb260242e145ea21e3e4ddc1b9c5ac41045fdfa714f8d950de85
 - filename: tests/unit/exercism/exercises/pangram/solutions/rust.rs
@@ -200,4 +200,14 @@ fileignoreconfig:
   checksum: 3e91325496207f7cdf2b5347696e52f0d4eda89d29bdf19ac21ed10601f1158d
 - filename: docs/superpowers/plans/2026-10-03-call-using-addresses.md
   checksum: f857528c13d19893d09c67efd5f1d72f2174442616d5e41605a1c528eca7f6aa
+- filename: tests/unit/cobol/test_recorded_memory_effects.py
+  checksum: ba151292b7ee1a3f747628e5950297f904de1c1cd625307f762f7a98b570b3de
+- filename: docs/frontend-design/cobol.md
+  checksum: d6122b3e6800db01debbde2ec5bbce01b7de07f81862430ca6deaab651d4cc81
+- filename: tests/integration/test_cobol_call_using_addresses.py
+  checksum: 353804977c7a3e5eb44a303f7e42a47ef1bdf9f837f41e396bf5033813c4fdb0
+- filename: tests/integration/test_cobol_call_using_slots.py
+  checksum: 1e2fa8b0f7818fd81e4b45de138bb13b44fc6e56b5b2838938b2baaa65abc583
+- filename: tests/unit/test_lower_call_with_memory.py
+  checksum: 0072c9634ccd65457caabbc3ed35700b66e7a268294f9e01e9c16cc5e13c2e86
 version: "1.0"

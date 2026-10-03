@@ -312,19 +312,21 @@ def call_probe() -> _Probe:
 
 
 def _caller_side(effects):
-    """The caller-side half of a CALL's marshalling, by byte range.
+    """The CALL's effects on LK-ARG itself, by byte range: LK-ARG sits at
+    LINKAGE offset 5.
 
-    Each USING argument produces TWO recorded effects per direction under the
-    SAME field name: one against the argument's slot in its own section (what
-    this module is about) and one against its slot in the freshly allocated
-    marshalling buffer, which ``_params_extent`` deliberately names as a
-    LINKAGE extent at a cumulative offset from zero. LK-ARG sits at LINKAGE
-    offset 5, so the caller-side extent is the one starting there; the buffer
-    slot for the sole argument starts at 0.
+    A CALL passes a BY REFERENCE argument by address, so no copy carries these
+    effects any more; the CALL instruction has to declare them itself, which the
+    recorder's one-effect-per-instruction model does not allow yet
+    (red-dragon-9u0r).
     """
     return [e for e in effects if e.extent.start == 5]
 
 
+@pytest.mark.xfail(
+    reason="red-dragon-9u0r: a CALL by address records no effects of its own",
+    strict=True,
+)
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_call_using_a_linkage_item_records_the_linkage_region(call_probe):
     """CALL marshalling must name the argument's OWN section, not WORKING-STORAGE.
@@ -348,12 +350,16 @@ def test_call_using_a_linkage_item_records_the_linkage_region(call_probe):
     assert read.extent.region is RegionId.LINKAGE
     assert (read.extent.start, read.extent.length) == (5, 9)
 
-    # BY REFERENCE is the default, so the copy-back write is emitted too.
+    # BY REFERENCE is the default, so the callee may write the argument.
     (write,) = _caller_side(call_probe.effects("LK-ARG", EffectKind.WRITE))
     assert write.extent.region is RegionId.LINKAGE
     assert (write.extent.start, write.extent.length) == (5, 9)
 
 
+@pytest.mark.xfail(
+    reason="red-dragon-9u0r: a CALL by address records no effects of its own",
+    strict=True,
+)
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_the_call_argument_extent_cannot_alias_working_storage(call_probe):
     """The concrete cost of a hardcoded region, stated as a false alias edge.

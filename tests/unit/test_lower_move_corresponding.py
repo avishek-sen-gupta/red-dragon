@@ -10,7 +10,17 @@ from cobol_memory.region_id import RegionId
 from interpreter.cobol.data_layout import DataLayout, build_data_layout
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.lower_arithmetic import lower_move_corresponding
+from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
+from interpreter.register import NO_REGISTER, Register
 from tests.covers import covers
+
+
+def _materialised(layout: DataLayout) -> MaterialisedSectionedLayout:
+    return MaterialisedSectionedLayout(
+        working_storage=(layout, Register("region_r0")),
+        linkage=(DataLayout(), NO_REGISTER),
+        local_storage=(DataLayout(), NO_REGISTER),
+    )
 
 
 def _make_layout_with_groups() -> DataLayout:
@@ -65,7 +75,12 @@ class TestLowerMoveCorresponding:
         stmt = MoveCorrespondingStatement(source="WS-SRC", targets=["WS-DST"])
 
         lower_move_corresponding(
-            ctx, stmt, layout, "region_r0", RegionId.WORKING_STORAGE
+            ctx,
+            stmt,
+            layout,
+            "region_r0",
+            RegionId.WORKING_STORAGE,
+            _materialised(layout),
         )
 
         assert ctx.emit_decode_field.call_count == 1
@@ -82,7 +97,12 @@ class TestLowerMoveCorresponding:
         stmt = MoveCorrespondingStatement(source="WS-SRC", targets=["WS-DST"])
 
         lower_move_corresponding(
-            ctx, stmt, layout, "region_r0", RegionId.WORKING_STORAGE
+            ctx,
+            stmt,
+            layout,
+            "region_r0",
+            RegionId.WORKING_STORAGE,
+            _materialised(layout),
         )
 
         # Only WS-A matches; WS-B (src) and WS-C (dst) do not
@@ -152,7 +172,12 @@ class TestLowerMoveCorresponding:
         )
 
         lower_move_corresponding(
-            ctx, stmt, layout, "region_r0", RegionId.WORKING_STORAGE
+            ctx,
+            stmt,
+            layout,
+            "region_r0",
+            RegionId.WORKING_STORAGE,
+            _materialised(layout),
         )
 
         assert ctx.emit_encode_and_write.call_count == 2
@@ -199,7 +224,12 @@ class TestLowerMoveCorresponding:
         stmt = MoveCorrespondingStatement(source="WS-SRC", targets=["WS-DST"])
 
         lower_move_corresponding(
-            ctx, stmt, layout, "region_r0", RegionId.WORKING_STORAGE
+            ctx,
+            stmt,
+            layout,
+            "region_r0",
+            RegionId.WORKING_STORAGE,
+            _materialised(layout),
         )
 
         ctx.emit_decode_field.assert_not_called()

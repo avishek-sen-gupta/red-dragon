@@ -6730,21 +6730,11 @@ class TestStopRunTerminatesRunUnit:
             region[0] == 0xF0
         ), f"WS-FLAG: expected 0 (GOBACK halted before MOVE 1), got {hex(region[0])}"
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="red-dragon-zerg: BY REFERENCE copy-back is caller-emitted IR that "
-        "never runs when the callee halts via STOP RUN instead of returning",
-    )
     @covers(CobolFeature.STOP_RUN, CobolFeature.CALL_USING)
-    def test_stop_run_loses_by_reference_write_known_gap(self, tmp_path):
-        """KNOWN GAP (red-dragon-zerg): BY REFERENCE write is lost when the
-        callee terminates via STOP RUN instead of GOBACK/EXIT PROGRAM, because
-        copy-back is caller-emitted IR that only runs if control resumes at
-        the caller (via _handle_return_flow), which STOP RUN's Halt_
-        deliberately never does. This test documents the gap; it should start
-        FAILING (i.e. this xfail should flip) once red-dragon-zerg is fixed —
-        at that point, delete this test and restore a normal passing
-        assertion for BY REFERENCE + STOP RUN interaction."""
+    def test_stop_run_keeps_by_reference_writes(self, tmp_path):
+        """A callee that ends the run with STOP RUN has already written its BY
+        REFERENCE argument: the argument is the caller's own storage, so there is
+        no copy-back for the halt to skip (red-dragon-zerg)."""
         (tmp_path / "MAINPROG.cbl").write_text(
             _to_fixed(
                 [

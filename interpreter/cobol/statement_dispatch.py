@@ -101,7 +101,9 @@ def dispatch_statement(
     elif isinstance(stmt, MoveCorrespondingStatement):
         # MoveCorrespondingStatement still uses (layout, region_reg) — uses first WS section
         ws_layout, ws_reg = materialised.working_storage
-        lower_move_corresponding(ctx, stmt, ws_layout, ws_reg, RegionId.WORKING_STORAGE)
+        lower_move_corresponding(
+            ctx, stmt, ws_layout, ws_reg, RegionId.WORKING_STORAGE, materialised
+        )
     elif isinstance(stmt, ArithmeticCorrespondingStatement):
         lower_arithmetic_corresponding(ctx, stmt, materialised)
     elif isinstance(stmt, ArithmeticStatement):

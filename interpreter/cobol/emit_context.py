@@ -527,8 +527,7 @@ class EmitContext:
         fl, region_reg, region = materialised.resolve_with_region(base_name, qualifiers)
 
         if not subscripts:
-            offset_reg = self.fresh_reg()
-            self.emit_inst(Const.int_(offset_reg, fl.offset), span=span)
+            offset_reg = self._field_offset(fl, region, materialised, span=span)
             extent = field_access_extent(
                 name=base_name,
                 fl=fl,
@@ -599,7 +598,7 @@ class EmitContext:
                 ),
                 span=span,
             )
-            base_offset_reg = self.const_to_reg(fl.offset, span=span)
+            base_offset_reg = self._field_offset(fl, region, materialised, span=span)
             final_offset_reg = self.fresh_reg()
             self.emit_inst(
                 Binop(
@@ -649,7 +648,7 @@ class EmitContext:
                 )
                 total_disp_reg = new_total
 
-            base_offset_reg = self.const_to_reg(fl.offset, span=span)
+            base_offset_reg = self._field_offset(fl, region, materialised, span=span)
             final_offset_reg = self.fresh_reg()
             self.emit_inst(
                 Binop(
@@ -703,6 +702,7 @@ class EmitContext:
         fl: FieldLayout,
         region_reg: Register,
         region: RegionId,
+        materialised: MaterialisedSectionedLayout,
         *,
         span: SourceSpan | None = None,
     ) -> ResolvedFieldRef:
@@ -714,12 +714,36 @@ class EmitContext:
         must say which region it came from. Always EXACT: the access is the
         field's whole declared extent, with no subscript in play.
         """
-        offset_reg = self.fresh_reg()
-        self.emit_inst(Const.int_(offset_reg, fl.offset), span=span)
+        offset_reg = self._field_offset(fl, region, materialised, span=span)
         extent = FieldExtent(
             region, fl.offset, fl.byte_length, Precision.EXACT, fl.name
         )
         return ResolvedFieldRef(fl=fl, offset_reg=offset_reg, extent=extent)
+
+    def _field_offset(
+        self,
+        fl: FieldLayout,
+        region: RegionId,
+        materialised: MaterialisedSectionedLayout,
+        *,
+        span: SourceSpan | None = None,
+    ) -> Register:
+        """The field's offset in its region at run time: a LINKAGE field moves by
+        its 01's shift, every other field sits at its static offset."""
+        static = self.const_to_reg(fl.offset, span=span)
+        if region is not RegionId.LINKAGE:
+            return static
+        shifted = self.fresh_reg()
+        self.emit_inst(
+            Binop(
+                result_reg=shifted,
+                operator=resolve_binop("+"),
+                left=static,
+                right=materialised.linkage_binding(fl).delta_reg,
+            ),
+            span=span,
+        )
+        return shifted
 
     # ── Field Encode / Decode ─────────────────────────────────────
 

@@ -45,25 +45,6 @@ def test_lower_call_emits_call_with_memory():
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_lower_call_by_reference_params_eq_results():
-    """params_reg == results_reg for CALL USING (fresh params region, not WS)."""
-    from interpreter.instructions import CallWithMemory
-
-    ctx, materialised = _materialised_with_ws("WS-PARAM")
-    stmt = CallStatement(
-        target=CallTarget.of_literal("SUBPROG"),
-        using=[CallUsingParam(name="WS-PARAM", param_type="REFERENCE")],
-        giving="",
-    )
-    lower_call(ctx, stmt, materialised)
-    call_insts = [i for i in ctx.instructions if i.opcode == Opcode.CALL_WITH_MEMORY]
-    assert len(call_insts) == 1
-    cwm = call_insts[0]
-    assert isinstance(cwm, CallWithMemory)
-    assert cwm.params_reg == cwm.results_reg
-
-
-@covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_lower_call_giving_result_written_back():
     """GIVING: result written back to caller's WS field via WRITE_REGION."""
     ctx, materialised = _materialised_with_ws("WS-RESULT")
@@ -76,51 +57,6 @@ def test_lower_call_giving_result_written_back():
     opcodes = [i.opcode for i in ctx.instructions]
     assert Opcode.CALL_WITH_MEMORY in opcodes
     assert Opcode.WRITE_REGION in opcodes
-
-
-@covers(CobolFeature.CALL_USING)
-def test_lower_call_using_copy_in_before_call():
-    """CALL with USING: ALLOC_REGION + LOAD_REGION+WRITE_REGION (copy-in) appear before CALL_WITH_MEMORY."""
-    ctx, materialised = _materialised_with_ws("WS-INPUT")
-    stmt = CallStatement(
-        target=CallTarget.of_literal("DOUBLIT"),
-        using=[CallUsingParam(name="WS-INPUT", param_type="REFERENCE")],
-        giving="",
-    )
-    lower_call(ctx, stmt, materialised)
-    opcodes = [i.opcode for i in ctx.instructions]
-    call_idx = next(i for i, op in enumerate(opcodes) if op == Opcode.CALL_WITH_MEMORY)
-    pre_call = opcodes[:call_idx]
-    assert (
-        Opcode.ALLOC_REGION in pre_call
-    ), "ALLOC_REGION must appear before CALL_WITH_MEMORY"
-    assert (
-        Opcode.LOAD_REGION in pre_call
-    ), "LOAD_REGION (copy-in) must precede CALL_WITH_MEMORY"
-    assert (
-        Opcode.WRITE_REGION in pre_call
-    ), "WRITE_REGION (copy-in) must precede CALL_WITH_MEMORY"
-
-
-@covers(CobolFeature.USING_BY_REFERENCE)
-def test_lower_call_by_reference_copy_back_after_call():
-    """BY REFERENCE: LOAD_REGION+WRITE_REGION copy-back appear after CALL_WITH_MEMORY."""
-    ctx, materialised = _materialised_with_ws("WS-INPUT")
-    stmt = CallStatement(
-        target=CallTarget.of_literal("DOUBLIT"),
-        using=[CallUsingParam(name="WS-INPUT", param_type="REFERENCE")],
-        giving="",
-    )
-    lower_call(ctx, stmt, materialised)
-    opcodes = [i.opcode for i in ctx.instructions]
-    call_idx = next(i for i, op in enumerate(opcodes) if op == Opcode.CALL_WITH_MEMORY)
-    post_call = opcodes[call_idx + 1 :]
-    assert (
-        Opcode.LOAD_REGION in post_call
-    ), "LOAD_REGION (copy-back) must follow CALL_WITH_MEMORY for BY REFERENCE"
-    assert (
-        Opcode.WRITE_REGION in post_call
-    ), "WRITE_REGION (copy-back) must follow CALL_WITH_MEMORY for BY REFERENCE"
 
 
 def _post_call_accesses_of_region(ctx, region_reg):
@@ -191,21 +127,121 @@ def _materialised_with_sections() -> tuple[EmitContext, MaterialisedSectionedLay
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_lower_call_marshals_from_the_argument_own_section():
-    """An argument declared outside WORKING-STORAGE is read from its own region.
+def test_lower_call_passes_an_argument_array_with_its_count():
+    """CALL USING hands the callee an array: a count, and one element per argument."""
+    from interpreter.instructions import (
+        CallWithMemory,
+        NewArray,
+        StoreField,
+        StoreIndex,
+    )
 
-    Every section's field offsets are relative to that section, so marshalling a
-    LINKAGE or LOCAL-STORAGE argument out of WS hands the callee whatever bytes
-    sit at that offset in WS, and the BY REFERENCE copy-back overwrites them.
-    """
-    from interpreter.instructions import LoadRegion, WriteRegion
+    ctx, materialised = _materialised_with_ws("WS-PARAM")
+    lower_call(
+        ctx,
+        CallStatement(
+            target=CallTarget.of_literal("SUBPROG"),
+            using=[
+                CallUsingParam(name="WS-PARAM", param_type="REFERENCE"),
+                CallUsingParam(name="", param_type="REFERENCE", omitted=True),
+            ],
+            giving="",
+        ),
+        materialised,
+    )
+    instructions = list(ctx.instructions)
+    (array,) = [i for i in instructions if isinstance(i, NewArray)]
+    (call,) = [i for i in instructions if isinstance(i, CallWithMemory)]
 
-    for name in ("LK-ARG", "LS-ARG"):
+    assert (
+        call.params_reg,
+        [
+            i.field_name.value
+            for i in instructions
+            if isinstance(i, StoreField) and i.obj_reg == array.result_reg
+        ],
+        sum(
+            1
+            for i in instructions
+            if isinstance(i, StoreIndex) and i.arr_reg == array.result_reg
+        ),
+    ) == (array.result_reg, ["count"], 2)
+
+
+def _call_region_traffic(param_type: str) -> list[tuple[Opcode, str]]:
+    """Region allocation and access lower_call itself emits for one argument,
+    each tagged with whose region it touches."""
+    ctx, materialised = _materialised_with_ws("WS-INPUT")
+    before = len(ctx.instructions)
+    lower_call(
+        ctx,
+        CallStatement(
+            target=CallTarget.of_literal("DOUBLIT"),
+            using=[CallUsingParam(name="WS-INPUT", param_type=param_type)],
+            giving="",
+        ),
+        materialised,
+    )
+    emitted = list(ctx.instructions)[before:]
+    _ws_layout, ws_reg = materialised.working_storage
+    _sr_layout, sr_reg = materialised.special_registers
+    copies = {i.result_reg for i in emitted if i.opcode is Opcode.ALLOC_REGION}
+
+    def owner(inst) -> str:
+        if inst.opcode is Opcode.ALLOC_REGION:
+            return "new"
+        if inst.region_reg == ws_reg:
+            return "argument"
+        if inst.region_reg in copies:
+            return "copy"
+        return "other"
+
+    return [
+        (inst.opcode, owner(inst))
+        for inst in emitted
+        if inst.opcode in (Opcode.ALLOC_REGION, Opcode.LOAD_REGION, Opcode.WRITE_REGION)
+        and not (inst.opcode is not Opcode.ALLOC_REGION and inst.region_reg == sr_reg)
+    ]
+
+
+@covers(CobolFeature.USING_BY_REFERENCE, CobolFeature.USING_BY_CONTENT)
+def test_by_reference_copies_nothing_and_by_content_copies_once():
+    """BY REFERENCE passes the argument's own bytes and copies nothing, either
+    way; BY CONTENT copies the argument into one fresh region before the call and
+    writes nothing back."""
+    assert (_call_region_traffic("REFERENCE"), _call_region_traffic("CONTENT")) == (
+        [],
+        [
+            (Opcode.ALLOC_REGION, "new"),
+            (Opcode.LOAD_REGION, "argument"),
+            (Opcode.WRITE_REGION, "copy"),
+        ],
+    )
+
+
+def _materialised_with_sections() -> tuple[EmitContext, MaterialisedSectionedLayout]:
+    asg = CobolASG(
+        data_fields=[_make_field("WS-DECOY", "X(8)")],
+        linkage_fields=[_make_field("LK-ARG", "X(8)")],
+        local_storage_fields=[_make_field("LS-ARG", "X(8)")],
+    )
+    ctx = EmitContext(dispatch_fn=dispatch_statement)
+    return ctx, lower_sectioned_data_division(
+        ctx, build_sectioned_layout(asg), "SECPGM"
+    )
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_a_by_reference_argument_passes_its_own_sections_region():
+    """An argument declared outside WORKING-STORAGE is passed in its own region:
+    a LINKAGE item passed on is its 01's bound region, a LOCAL-STORAGE item the
+    LOCAL-STORAGE region -- never WORKING-STORAGE at the same offset."""
+    from interpreter.instructions import StoreField
+
+    def passed_region(name: str) -> tuple[bool, bool]:
         ctx, materialised = _materialised_with_sections()
         _fl, owning_reg = materialised.resolve(name)
         _ws_layout, ws_reg = materialised.working_storage
-        assert str(owning_reg) != str(ws_reg), f"{name} must not resolve to WS"
-
         lower_call(
             ctx,
             CallStatement(
@@ -215,23 +251,14 @@ def test_lower_call_marshals_from_the_argument_own_section():
             ),
             materialised,
         )
-
-        copy_in = [
-            i
+        (region,) = [
+            i.value_reg
             for i in ctx.instructions
-            if isinstance(i, LoadRegion) and str(i.region_reg) == str(owning_reg)
+            if isinstance(i, StoreField) and i.field_name.value == "region"
         ]
-        assert len(copy_in) == 1, (
-            f"{name}: expected one copy-in reading region {owning_reg}, "
-            f"got {len(copy_in)}"
-        )
+        return region == owning_reg, region == ws_reg
 
-        copy_back = [
-            i
-            for i in ctx.instructions
-            if isinstance(i, WriteRegion) and str(i.region_reg) == str(ws_reg)
-        ]
-        assert copy_back == [], (
-            f"{name}: BY REFERENCE copy-back wrote to WORKING-STORAGE "
-            f"({ws_reg}) instead of {owning_reg}"
-        )
+    assert (passed_region("LK-ARG"), passed_region("LS-ARG")) == (
+        (True, False),
+        (True, False),
+    )

@@ -687,14 +687,13 @@ def _handle_call_with_memory(
     Protocol:
       1. Resolve __prog_<PROGRAMID> in scope chain → singleton HeapObject address
       2. Load __init_params__ field → BoundFuncRef
-      3. Dispatch to __init_params__, injecting __params_region and __results_region
-         into the new call frame
+      3. Dispatch to __init_params__, injecting the argument array as
+         __call_arguments into the new call frame
     """
     t = inst
     assert isinstance(t, CallWithMemory)
 
     params_tv = _resolve_reg(vm, t.params_reg)
-    results_tv = _resolve_reg(vm, t.results_reg)
 
     # `CALL identifier` carries the callee in a register: the program name is
     # whatever the data item held when control reached the CALL. Trailing blanks
@@ -751,8 +750,7 @@ def _handle_call_with_memory(
         return _unresolved()
 
     new_vars: dict[VarName, TypedValue] = {
-        VarName("__params_region"): params_tv,
-        VarName("__results_region"): results_tv,
+        VarName("__call_arguments"): params_tv,
     }
 
     return ExecutionResult.success(
@@ -767,8 +765,7 @@ def _handle_call_with_memory(
             next_label=flabel,
             reasoning=(
                 f"call_with_memory {program_id},"
-                f" params={params_tv.value!r},"
-                f" results={results_tv.value!r},"
+                f" arguments={params_tv.value!r},"
                 f" dispatch to {flabel} via singleton __init_params__"
             ),
             var_writes=new_vars,
