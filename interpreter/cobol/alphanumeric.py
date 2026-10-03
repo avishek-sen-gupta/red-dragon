@@ -31,7 +31,7 @@ def encode_alphanumeric(value: str, length: int) -> bytes:
         EBCDIC byte sequence of exactly `length` bytes,
         right-padded with EBCDIC spaces or truncated.
     """
-    ebcdic = EbcdicTable.ascii_to_ebcdic(value.encode("ascii", errors="replace"))
+    ebcdic = EbcdicTable.ascii_to_ebcdic(value.encode("latin-1", errors="replace"))
 
     if len(ebcdic) >= length:
         result = ebcdic[:length]
@@ -93,7 +93,7 @@ def decode_alphanumeric(data: bytes) -> str:
         Decoded ASCII string (trailing EBCDIC spaces become ASCII spaces).
     """
     ascii_bytes = EbcdicTable.ebcdic_to_ascii(data)
-    result = ascii_bytes.decode("ascii", errors="replace")
+    result = ascii_bytes.decode("latin-1")
 
     logger.debug(
         "decode_alphanumeric(%s) → %r",

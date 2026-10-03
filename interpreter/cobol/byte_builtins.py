@@ -146,7 +146,7 @@ def _builtin_bytes_to_string(args: list[TypedValue], vm: VMState) -> BuiltinResu
     raw = bytes(byte_list)
     if encoding == CobolEncoding.EBCDIC:
         ascii_bytes = EbcdicTable.ebcdic_to_ascii(raw)
-        return BuiltinResult(value=ascii_bytes.decode("ascii", errors="replace"))
+        return BuiltinResult(value=ascii_bytes.decode("latin-1"))
     if encoding == CobolEncoding.ASCII:
         return BuiltinResult(value=raw.decode("ascii", errors="replace"))
     if encoding == CobolEncoding.LATIN1:
@@ -167,7 +167,7 @@ def _builtin_string_to_bytes(args: list[TypedValue], vm: VMState) -> BuiltinResu
     if not isinstance(string, str) or not isinstance(encoding, str):
         return BuiltinResult(value=_UNCOMPUTABLE)
     if encoding == CobolEncoding.EBCDIC:
-        ascii_bytes = string.encode("ascii", errors="replace")
+        ascii_bytes = string.encode("latin-1", errors="replace")
         ebcdic_bytes = EbcdicTable.ascii_to_ebcdic(ascii_bytes)
         return BuiltinResult(value=list(ebcdic_bytes))
     if encoding == CobolEncoding.ASCII:
