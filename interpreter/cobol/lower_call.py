@@ -12,6 +12,7 @@ from cobol_asg.cobol_statements import (
     CancelStatement,
     EntryStatement,
 )
+from cobol_asg.cobol_types import CobolTypeDescriptor
 from cobol_asg.pic_parser import parse_pic
 from cobol_asg.ref_mod import RefModOperand
 from cobol_asg.source_span import SourceSpan
@@ -21,6 +22,10 @@ from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.emit_context import EmitContext, strip_cobol_literal
 from interpreter.cobol.field_resolution import ResolvedFieldRef
+from interpreter.cobol.figurative_constants import (
+    COBOL_FIGURATIVE_CONSTANTS,
+    COBOL_RAW_FIGURATIVE_BYTES,
+)
 from interpreter.cobol.lower_arithmetic import eval_ref_mod_expr
 from interpreter.cobol.lower_program_exit import (
     emit_return_code_load,
@@ -49,6 +54,9 @@ from interpreter.var_name import VarName
 logger = logging.getLogger(__name__)
 
 LITERAL_ARGUMENT = "%LITERAL"
+_ZEROS = frozenset({"ZERO", "ZEROS", "ZEROES"})
+_FULLWORD = parse_pic("S9(9)", usage="COMP-5")
+_COMP2 = parse_pic("", usage="COMP-2")
 
 
 def _emit_callee_name(
@@ -262,7 +270,7 @@ def _address(
 ) -> tuple[Register, Register]:
     """BY REFERENCE: the argument's own bytes. Anything else: a fresh copy."""
     if param.is_literal:
-        return _literal_copy(ctx, strip_cobol_literal(param.name), span=span)
+        return _literal_copy(ctx, param, span=span)
     ref, region_reg = ctx.resolve_field_ref(param.name, materialised, span=span)
     if param.param_type == "REFERENCE":
         return region_reg, ref.offset_reg
@@ -270,30 +278,70 @@ def _address(
 
 
 def _literal_copy(
-    ctx: EmitContext, text: str, *, span: SourceSpan | None
+    ctx: EmitContext, param: CallUsingParam, *, span: SourceSpan | None
 ) -> tuple[Register, Register]:
-    length = max(len(text), 1)
+    """A literal argument in the representation IBM defines for it, in a fresh
+    copy: HIGH-VALUE and LOW-VALUE as their raw byte, anything else encoded."""
+    layout = _layout(_literal_type(param))
     copy = ctx.fresh_reg()
     ctx.emit_inst(
-        AllocRegion(result_reg=copy, size_reg=ctx.const_to_reg(length, span=span)),
+        AllocRegion(
+            result_reg=copy, size_reg=ctx.const_to_reg(layout.byte_length, span=span)
+        ),
         span=span,
     )
-    layout = FieldLayout(
-        name=LITERAL_ARGUMENT,
-        type_descriptor=parse_pic(f"X({length})"),
-        offset=0,
-        byte_length=length,
-    )
     zero = ctx.const_to_reg(0, span=span)
+    extent = _copy_extent(layout.byte_length, LITERAL_ARGUMENT)
+    word = param.name.upper()
+    if word in COBOL_RAW_FIGURATIVE_BYTES:
+        ctx.emit_fill_raw_byte(
+            copy,
+            layout,
+            COBOL_RAW_FIGURATIVE_BYTES[word],
+            zero,
+            extent=extent,
+            span=span,
+        )
+        return copy, zero
     ctx.emit_encode_and_write(
         copy,
         layout,
-        ctx.const_to_reg(text, span=span),
+        ctx.const_to_reg(_literal_value(param), span=span),
         zero,
-        extent=_copy_extent(length, LITERAL_ARGUMENT),
+        extent=extent,
         span=span,
     )
     return copy, zero
+
+
+def _literal_type(param: CallUsingParam) -> CobolTypeDescriptor:
+    """BY VALUE: a numeric literal or ZERO as a fullword binary, a floating-point
+    literal as COMP-2. Anything else: its characters, a figurative constant one."""
+    word = param.name.upper()
+    if param.param_type == "VALUE" and _is_numeric(word):
+        return _COMP2 if word not in _ZEROS and "E" in word else _FULLWORD
+    return parse_pic(f"X({max(len(_literal_value(param)), 1)})")
+
+
+def _is_numeric(word: str) -> bool:
+    return word in _ZEROS or (
+        word not in COBOL_FIGURATIVE_CONSTANTS and strip_cobol_literal(word) == word
+    )
+
+
+def _literal_value(param: CallUsingParam) -> str:
+    return COBOL_FIGURATIVE_CONSTANTS.get(
+        param.name.upper(), strip_cobol_literal(param.name)
+    )
+
+
+def _layout(type_descriptor: CobolTypeDescriptor) -> FieldLayout:
+    return FieldLayout(
+        name=LITERAL_ARGUMENT,
+        type_descriptor=type_descriptor,
+        offset=0,
+        byte_length=type_descriptor.byte_length,
+    )
 
 
 def _content_copy(
