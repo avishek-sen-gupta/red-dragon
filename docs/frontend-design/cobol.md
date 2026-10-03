@@ -112,6 +112,7 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 |---|---|
 | `CONTINUE` | No IR emitted |
 | `EXIT` | No IR emitted. `EXIT PERFORM [CYCLE]` is parsed (the bridge serialises its `kind`) but not lowered yet |
+| `NEXT SENTENCE` | `BRANCH` past the period that ends its sentence: the bridge records each paragraph's `sentence_ends` (positions of each sentence's last statement), and the lowering places `para_<name>_sentence_<n>_exit` after that statement, only when a NEXT SENTENCE asked for it. Unlike CONTINUE it skips anything after an `END-IF` or `END-SEARCH` in the same sentence. Outside a paragraph (section- or division-level statements) it is not lowered and raises |
 | `EXIT PARAGRAPH` / `EXIT SECTION` | `BRANCH` to `para_<name>_exit` / `section_<name>_exit`, a label emitted just before the construct's `ResumeContinuation` — and only when some EXIT asked for it, so programs without these statements lower unchanged |
 
 ### Data Manipulation (2 types)

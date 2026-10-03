@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 
 from cobol_asg.asg_types import CobolASG, CobolParagraph, CobolSection
+from cobol_asg.cobol_statements import CobolStatementType
 from cobol_asg.source_span import SourceSpan
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.lower_program_exit import lower_program_exit
@@ -128,11 +130,39 @@ def lower_paragraph(
     span = para.span
     ctx.emit_inst(Label_(label=CodeLabel(f"para_{para.name}")), span=span)
     with ctx.in_paragraph(para.name):
-        for stmt in para.statements:
-            ctx.lower_statement(stmt, materialised)
+        for position, sentence in enumerate(_sentences(para)):
+            _lower_sentence(ctx, para, position, sentence, materialised)
     exit_label = CodeLabel(f"para_{para.name}_exit")
     if ctx.exit_requested(exit_label):
         ctx.emit_inst(Label_(label=exit_label), span=span)
     ctx.emit_inst(
         ResumeContinuation(name=ContinuationName(f"para_{para.name}_end")), span=span
     )
+
+
+def _sentences(para: CobolParagraph) -> list[list[CobolStatementType]]:
+    """The paragraph's statements cut at each period; one sentence when the ASG
+    records none."""
+    ends = para.sentence_ends or [len(para.statements) - 1]
+    starts = [0, *(end + 1 for end in ends[:-1])]
+    return [
+        para.statements[start : end + 1]
+        for start, end in zip(starts, ends, strict=True)
+    ]
+
+
+def _lower_sentence(
+    ctx: EmitContext,
+    para: CobolParagraph,
+    position: int,
+    statements: Sequence[CobolStatementType],
+    materialised: MaterialisedSectionedLayout,
+) -> None:
+    """A sentence's statements, then the landing a NEXT SENTENCE in them branched
+    to -- only if one did, so a program without one lowers unchanged."""
+    exit_label = CodeLabel(f"para_{para.name}_sentence_{position}_exit")
+    with ctx.in_sentence(exit_label):
+        for stmt in statements:
+            ctx.lower_statement(stmt, materialised)
+    if ctx.exit_requested(exit_label):
+        ctx.emit_inst(Label_(label=exit_label), span=para.span)

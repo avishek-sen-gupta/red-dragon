@@ -28,6 +28,7 @@ from cobol_asg.cobol_statements import (
     InspectStatement,
     MoveCorrespondingStatement,
     MoveStatement,
+    NextSentenceStatement,
     OpenStatement,
     PerformStatement,
     ReadStatement,
@@ -57,6 +58,7 @@ from interpreter.cobol.lower_arithmetic import (
     lower_initialize,
     lower_move,
     lower_move_corresponding,
+    lower_next_sentence,
     lower_set,
     lower_stop_run,
 )
@@ -126,6 +128,8 @@ def dispatch_statement(
         lower_continue(ctx, stmt, materialised)
     elif isinstance(stmt, ExitStatement):
         lower_exit(ctx, stmt, materialised)
+    elif isinstance(stmt, NextSentenceStatement):
+        lower_next_sentence(ctx, stmt, materialised)
     elif isinstance(stmt, InitializeStatement):
         lower_initialize(ctx, stmt, materialised)
     elif isinstance(stmt, SetStatement):

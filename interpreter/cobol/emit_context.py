@@ -163,6 +163,7 @@ class EmitContext:
         self._paragraph: str = ""
         self._section: str = ""
         self._requested_exits: set[CodeLabel] = set()
+        self._sentence: CodeLabel = CodeLabel("")
 
     # ── Properties ────────────────────────────────────────────────
 
@@ -201,6 +202,21 @@ class EmitContext:
             yield
         finally:
             self._section = enclosing
+
+    @contextmanager
+    def in_sentence(self, exit_label: CodeLabel) -> Iterator[None]:
+        enclosing = self._sentence
+        self._sentence = exit_label
+        try:
+            yield
+        finally:
+            self._sentence = enclosing
+
+    def sentence_exit(self) -> CodeLabel:
+        """The label NEXT SENTENCE branches to, recorded so the sentence emits it."""
+        if not str(self._sentence):
+            raise NotImplementedError("NEXT SENTENCE outside a paragraph's sentences")
+        return self._request_exit(self._sentence)
 
     def paragraph_exit(self) -> CodeLabel:
         """The label EXIT PARAGRAPH branches to, recorded so the paragraph emits it."""
