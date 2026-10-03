@@ -361,6 +361,7 @@ class ComputeTarget:
     name: str
     rounded: bool = False
     subscripts: tuple[ExprNode, ...] = ()
+    qualifiers: tuple[str, ...] = ()
 
     @classmethod
     def from_dict(cls, data: dict | str) -> ComputeTarget:
@@ -370,6 +371,7 @@ class ComputeTarget:
             name=data["name"],
             rounded=data.get("rounded", False),
             subscripts=tuple(expr_from_dict(s) for s in data.get("subscripts", [])),
+            qualifiers=tuple(data.get("qualifiers", ())),
         )
 
     def to_dict(self) -> dict:
@@ -378,7 +380,7 @@ class ComputeTarget:
             d["rounded"] = True
         if self.subscripts:
             d["subscripts"] = [expr_to_dict(s) for s in self.subscripts]
-        return d
+        return d | ({"qualifiers": list(self.qualifiers)} if self.qualifiers else {})
 
 
 @dataclass(frozen=True)
