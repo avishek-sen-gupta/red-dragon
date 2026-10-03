@@ -641,6 +641,11 @@ def _flatten_field(
     return cobol_field.name, fl
 
 
+def record_length(cobol_field: CobolField) -> int:
+    """How many bytes a record occupies, REDEFINES children not counted."""
+    return _compute_group_length(cobol_field)
+
+
 def _compute_group_length(cobol_field: CobolField) -> int:
     """Compute the byte length of a group item from its children.
 

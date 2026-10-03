@@ -15,7 +15,10 @@ from interpreter.cobol.data_layout import (
     build_data_layout,
     build_index_layout,
     laid_end_to_end,
+    record_length,
 )
+from interpreter.cobol.linkage_binding import LinkageBinding, binding_at
+from interpreter.cobol.linkage_record import LinkageRecord
 from interpreter.register import NO_REGISTER, Register
 
 logger = logging.getLogger(__name__)
@@ -30,6 +33,8 @@ class SectionedLayout:
     local_storage: DataLayout
     file: DataLayout = field(default_factory=DataLayout)
     indexes: DataLayout = field(default_factory=DataLayout)
+    linkage_parameters: tuple[LinkageRecord, ...] = ()
+    linkage_unbound: tuple[LinkageRecord, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -48,6 +53,11 @@ class MaterialisedSectionedLayout:
     indexes: tuple[DataLayout, Register] = field(
         default_factory=lambda: (DataLayout(), NO_REGISTER)
     )
+    linkage_bindings: tuple[LinkageBinding, ...] = ()
+
+    def linkage_binding(self, fl: FieldLayout) -> LinkageBinding:
+        """The binding of the LINKAGE 01 whose static span holds ``fl``."""
+        return binding_at(self.linkage_bindings, fl.offset)
 
     def resolve(
         self, name: str, qualifiers: tuple[str, ...] = ()
@@ -85,10 +95,10 @@ class MaterialisedSectionedLayout:
         if ws_fl is not None:
             return ws_fl, ws_reg, RegionId.WORKING_STORAGE
 
-        lk_layout, lk_reg = self.linkage
+        lk_layout, _ = self.linkage
         lk_fl = lk_layout.lookup_as_storage(name, qualifiers)
         if lk_fl is not None:
-            return lk_fl, lk_reg, RegionId.LINKAGE
+            return lk_fl, self.linkage_binding(lk_fl).region_reg, RegionId.LINKAGE
 
         file_layout, file_reg = self.file
         file_fl = file_layout.lookup_as_storage(name, qualifiers)
@@ -215,9 +225,19 @@ class MaterialisedSectionedLayout:
 
 def build_sectioned_layout(asg: CobolASG) -> SectionedLayout:
     """Build SectionedLayout from a CobolASG — one DataLayout per section."""
+    linkage_fields = laid_end_to_end(_in_using_order(asg))
+    records = tuple(
+        LinkageRecord(item.name.upper(), item.offset, record_length(item))
+        for item in linkage_fields
+        if not item.redefines and not item.renames_from
+    )
+    named = [param.name.upper() for param in asg.procedure_using] or [
+        record.name for record in records
+    ]
+    by_name = {record.name: record for record in records}
     return SectionedLayout(
         working_storage=build_data_layout(asg.data_fields),
-        linkage=build_data_layout(laid_end_to_end(_in_using_order(asg))),
+        linkage=build_data_layout(linkage_fields),
         local_storage=build_data_layout(asg.local_storage_fields),
         file=build_data_layout(asg.file_fields),
         indexes=build_index_layout(
@@ -226,6 +246,8 @@ def build_sectioned_layout(asg: CobolASG) -> SectionedLayout:
             asg.linkage_fields,
             asg.file_fields,
         ),
+        linkage_parameters=tuple(by_name[name] for name in named if name in by_name),
+        linkage_unbound=tuple(r for r in records if r.name not in named),
     )
 
 

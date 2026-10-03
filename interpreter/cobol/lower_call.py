@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 
 from cobol_asg.cobol_statements import (
     AlterStatement,
@@ -11,19 +12,22 @@ from cobol_asg.cobol_statements import (
     CancelStatement,
     EntryStatement,
 )
+from cobol_asg.pic_parser import parse_pic
 from cobol_asg.ref_mod import RefModOperand
 from cobol_asg.source_span import SourceSpan
 from cobol_memory.field_extent import FieldExtent, Precision
 from cobol_memory.region_id import RegionId
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.data_layout import FieldLayout
-from interpreter.cobol.emit_context import EmitContext
+from interpreter.cobol.emit_context import EmitContext, strip_cobol_literal
+from interpreter.cobol.field_resolution import ResolvedFieldRef
 from interpreter.cobol.lower_arithmetic import eval_ref_mod_expr
 from interpreter.cobol.lower_program_exit import (
     emit_return_code_load,
     emit_return_code_store,
 )
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
+from interpreter.field_name import FieldName
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
     AllocRegion,
@@ -31,6 +35,10 @@ from interpreter.instructions import (
     CallFunction,
     CallWithMemory,
     Label_,
+    NewArray,
+    NewObject,
+    StoreField,
+    StoreIndex,
     StoreVar,
 )
 from interpreter.ir import CodeLabel
@@ -40,48 +48,7 @@ from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
 
-
-def _owning_extent(fl: FieldLayout, region: RegionId) -> FieldExtent:
-    """A USING parameter's slot in the region of ITS OWN declared section.
-
-    The CALL marshalling resolves each USING name with
-    ``materialised.resolve_with_region`` — no subscripts are in play — so the
-    access is the field's whole declared range, EXACT, in whichever section
-    (WORKING-STORAGE, LOCAL-STORAGE, LINKAGE, ...) the argument was declared.
-
-    This used to hardcode ``RegionId.WORKING_STORAGE``, which was faithful at
-    the time: the lowering really did marshal every argument out of the
-    caller's WS region regardless of its declaring section (red-dragon-8krz).
-    That bug was fixed on main in e1e8875d, so the recorded extent now follows
-    the resolved region — otherwise the analysis would claim a LINKAGE or
-    LOCAL-STORAGE argument's bytes lie in WORKING-STORAGE, and since
-    cross-region pairs never alias in this model that would silently drop every
-    aliasing edge for non-WS ``CALL USING`` arguments.
-    """
-    return FieldExtent(
-        region=region,
-        start=fl.offset,
-        length=fl.byte_length,
-        precision=Precision.EXACT,
-        field_name=fl.name,
-    )
-
-
-def _params_extent(fl: FieldLayout, offset: int) -> FieldExtent:
-    """A USING parameter's slot in the freshly allocated marshalling buffer.
-
-    That buffer becomes the callee's LINKAGE storage, so it is named as a
-    LINKAGE extent. This deliberately carries NO cross-region binding: caller
-    and callee extents are recorded independently and no alias edge is drawn
-    between them, which is out of scope for this analysis.
-    """
-    return FieldExtent(
-        region=RegionId.LINKAGE,
-        start=offset,
-        length=fl.byte_length,
-        precision=Precision.EXACT,
-        field_name=fl.name,
-    )
+LITERAL_ARGUMENT = "%LITERAL"
 
 
 def _emit_callee_name(
@@ -162,71 +129,16 @@ def lower_call(
     stmt: CallStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """CALL (identifier | literal) USING params — region-passing subprogram invocation.
+    """CALL (identifier | literal) USING params — one address per argument.
 
-    When stmt.using is non-empty:
-      1. Allocate a fresh params region (sum of USING field byte lengths).
-      2. Copy each USING field from ITS OWN section's region into the params
-         region at cumulative byte offsets. An argument may be declared in
-         LINKAGE or LOCAL-STORAGE -- passing a LINKAGE item on to a further
-         CALL is the ordinary "hand my caller's parameter down" chain -- so the
-         region comes from materialised.resolve_with_region, never from a
-         section chosen here. That same resolved region is what the recorded
-         MemoryEffect names, so the analysis describes the bytes the emitted
-         instruction actually touches.
-      3. Emit CallWithMemory with params_reg pointing at the fresh region.
-      4. For BY REFERENCE params, copy bytes back from the params region into
-         that same owning region.
-
-    When stmt.using is empty, the caller's WS region is passed as params_reg (legacy behaviour).
+    The callee receives an argument array: per USING argument, by position, a
+    region and an offset into it. BY REFERENCE passes the argument's own bytes,
+    so the callee's writes land in the caller as they happen and nothing is
+    copied back; BY CONTENT, BY VALUE and a literal pass a fresh copy; OMITTED
+    passes a marker. The callee binds each LINKAGE 01 to its argument.
     """
     span = stmt.span
-    param_fls: list[tuple[CallUsingParam, FieldLayout, Register, RegionId]] = []
-
-    if stmt.using:
-        for param in stmt.using:
-            if param.omitted:
-                # OMITTED: no value passed — skip entirely (red-dragon-i1rb).
-                continue
-            if param.is_literal:
-                # Literal BY CONTENT/VALUE: no WS field to resolve.  Skip for
-                # static analysis — the callee's LINKAGE slot gets no write.
-                continue
-            fl, owning_reg, owning_region = materialised.resolve_with_region(param.name)
-            param_fls.append((param, fl, owning_reg, owning_region))
-
-        # Allocate fresh params region sized to total USING bytes.
-        total_bytes = sum(fl.byte_length for _, fl, _, _ in param_fls)
-        size_reg = ctx.const_to_reg(total_bytes, span=span)
-        params_reg = ctx.fresh_reg()
-        ctx.emit_inst(AllocRegion(result_reg=params_reg, size_reg=size_reg), span=span)
-
-        # Copy-in: write each USING field from its own section's region into
-        # the params region.
-        cumulative = 0
-        for _, fl, owning_reg, owning_region in param_fls:
-            src_off = ctx.const_to_reg(fl.offset, span=span)
-            tmp = ctx.fresh_reg()
-            ctx._emit_load_region(
-                result_reg=tmp,
-                region_reg=owning_reg,
-                offset_reg=src_off,
-                length=fl.byte_length,
-                extent=_owning_extent(fl, owning_region),
-                span=span,
-            )
-            dst_off = ctx.const_to_reg(cumulative, span=span)
-            ctx._emit_write_region(
-                region_reg=params_reg,
-                offset_reg=dst_off,
-                value_reg=tmp,
-                length=fl.byte_length,
-                extent=_params_extent(fl, cumulative),
-                span=span,
-            )
-            cumulative += fl.byte_length
-    else:
-        _ws_layout, params_reg = materialised.working_storage
+    args_reg = _argument_array(ctx, stmt.using, materialised, span=span)
 
     target = stmt.target
     target_reg = (
@@ -247,8 +159,7 @@ def lower_call(
         CallWithMemory(
             result_reg=result_reg,
             func_name=FuncName(target.literal),
-            params_reg=params_reg,
-            results_reg=params_reg,
+            params_reg=args_reg,
             target_reg=target_reg,
         ),
         span=span,
@@ -273,33 +184,6 @@ def lower_call(
         StoreVar(name=VarName("__ws_region"), value_reg=caller_ws_reg), span=span
     )
 
-    # Copy-back: for BY REFERENCE params, write updated bytes from the params
-    # region back into each argument's OWN section region.
-    if stmt.using:
-        cumulative = 0
-        for param, fl, owning_reg, owning_region in param_fls:
-            if param.param_type == "REFERENCE":
-                src_off = ctx.const_to_reg(cumulative, span=span)
-                tmp = ctx.fresh_reg()
-                ctx._emit_load_region(
-                    result_reg=tmp,
-                    region_reg=params_reg,
-                    offset_reg=src_off,
-                    length=fl.byte_length,
-                    extent=_params_extent(fl, cumulative),
-                    span=span,
-                )
-                dst_off = ctx.const_to_reg(fl.offset, span=span)
-                ctx._emit_write_region(
-                    region_reg=owning_reg,
-                    offset_reg=dst_off,
-                    value_reg=tmp,
-                    length=fl.byte_length,
-                    extent=_owning_extent(fl, owning_region),
-                    span=span,
-                )
-            cumulative += fl.byte_length
-
     if stmt.giving and ctx.has_field(stmt.giving, materialised):
         giving_ref, giving_rr = ctx.resolve_field_ref(
             stmt.giving, materialised, span=span
@@ -318,6 +202,150 @@ def lower_call(
         "CALL %s with %d params (CallWithMemory)",
         target.describe(),
         len(stmt.using),
+    )
+
+
+def _argument_array(
+    ctx: EmitContext,
+    using: Sequence[CallUsingParam],
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> Register:
+    """One element per USING argument, by position: a region, an offset, and
+    whether it was OMITTED."""
+    args = ctx.fresh_reg()
+    ctx.emit_inst(
+        NewArray(result_reg=args, size_reg=ctx.const_to_reg(len(using), span=span)),
+        span=span,
+    )
+    _store_field(ctx, args, "count", ctx.const_to_reg(len(using), span=span), span=span)
+    for position, param in enumerate(using):
+        ctx.emit_inst(
+            StoreIndex(
+                arr_reg=args,
+                index_reg=ctx.const_to_reg(position, span=span),
+                value_reg=_argument(ctx, param, materialised, span=span),
+            ),
+            span=span,
+        )
+    return args
+
+
+def _argument(
+    ctx: EmitContext,
+    param: CallUsingParam,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> Register:
+    element = ctx.fresh_reg()
+    ctx.emit_inst(NewObject(result_reg=element), span=span)
+    omitted = param.omitted
+    _store_field(
+        ctx, element, "omitted", ctx.const_to_reg(omitted, span=span), span=span
+    )
+    if omitted:
+        return element
+    region, offset = _address(ctx, param, materialised, span=span)
+    _store_field(ctx, element, "region", region, span=span)
+    _store_field(ctx, element, "offset", offset, span=span)
+    return element
+
+
+def _address(
+    ctx: EmitContext,
+    param: CallUsingParam,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> tuple[Register, Register]:
+    """BY REFERENCE: the argument's own bytes. Anything else: a fresh copy."""
+    if param.is_literal:
+        return _literal_copy(ctx, strip_cobol_literal(param.name), span=span)
+    ref, region_reg = ctx.resolve_field_ref(param.name, materialised, span=span)
+    if param.param_type == "REFERENCE":
+        return region_reg, ref.offset_reg
+    return _content_copy(ctx, ref, region_reg, param.name, span=span)
+
+
+def _literal_copy(
+    ctx: EmitContext, text: str, *, span: SourceSpan | None
+) -> tuple[Register, Register]:
+    length = max(len(text), 1)
+    copy = ctx.fresh_reg()
+    ctx.emit_inst(
+        AllocRegion(result_reg=copy, size_reg=ctx.const_to_reg(length, span=span)),
+        span=span,
+    )
+    layout = FieldLayout(
+        name=LITERAL_ARGUMENT,
+        type_descriptor=parse_pic(f"X({length})"),
+        offset=0,
+        byte_length=length,
+    )
+    zero = ctx.const_to_reg(0, span=span)
+    ctx.emit_encode_and_write(
+        copy,
+        layout,
+        ctx.const_to_reg(text, span=span),
+        zero,
+        extent=_copy_extent(length, LITERAL_ARGUMENT),
+        span=span,
+    )
+    return copy, zero
+
+
+def _content_copy(
+    ctx: EmitContext,
+    ref: ResolvedFieldRef,
+    region_reg: Register,
+    name: str,
+    *,
+    span: SourceSpan | None,
+) -> tuple[Register, Register]:
+    length = ref.fl.byte_length
+    copy = ctx.fresh_reg()
+    ctx.emit_inst(
+        AllocRegion(result_reg=copy, size_reg=ctx.const_to_reg(length, span=span)),
+        span=span,
+    )
+    value = ctx.fresh_reg()
+    ctx._emit_load_region(
+        result_reg=value,
+        region_reg=region_reg,
+        offset_reg=ref.offset_reg,
+        length=length,
+        extent=ref.extent,
+        span=span,
+    )
+    zero = ctx.const_to_reg(0, span=span)
+    ctx._emit_write_region(
+        region_reg=copy,
+        offset_reg=zero,
+        value_reg=value,
+        length=length,
+        extent=_copy_extent(length, name),
+        span=span,
+    )
+    return copy, zero
+
+
+def _copy_extent(length: int, name: str) -> FieldExtent:
+    return FieldExtent(RegionId.CALL_ARGUMENT, 0, length, Precision.EXACT, name)
+
+
+def _store_field(
+    ctx: EmitContext,
+    obj: Register,
+    name: str,
+    value: Register,
+    *,
+    span: SourceSpan | None,
+) -> None:
+    ctx.emit_inst(
+        StoreField(obj_reg=obj, field_name=FieldName(name), value_reg=value),
+        span=span,
     )
 
 

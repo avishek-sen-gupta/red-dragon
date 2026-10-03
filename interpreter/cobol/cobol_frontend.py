@@ -262,7 +262,7 @@ class CobolFrontend(Frontend):
         # Load persistent WS from singleton into __ws_region
         lower_ws_from_singleton(self._ctx, self._program_id)
 
-        # Bind LINKAGE to __params_region (injected by handler); alloc fresh LS
+        # Bind each LINKAGE 01 to its argument in __call_arguments; alloc fresh LS
         materialised = lower_sectioned_data_division(
             self._ctx, sectioned, self._program_id
         )

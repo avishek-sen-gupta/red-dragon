@@ -300,7 +300,7 @@ def lower_string(
                 Binop(
                     result_reg=write_offset_reg,
                     operator=resolve_binop("+"),
-                    left=ctx.const_to_reg(target_ref.fl.offset, span=span),
+                    left=target_ref.offset_reg,
                     right=start_0indexed_reg,
                 ),
                 span=span,
@@ -719,7 +719,12 @@ def lower_inspect_converting(
         # Write-back of the whole INSPECT source at its own offset — the
         # re-resolved ref is unsubscripted, so its extent is the exact field.
         ctx.emit_encode_and_write(
-            source_rr, source_fl, converted_reg, extent=source_ref_wb.extent, span=span
+            source_rr,
+            source_fl,
+            converted_reg,
+            source_ref_wb.offset_reg,
+            extent=source_ref_wb.extent,
+            span=span,
         )
     else:
         logger.warning(
@@ -925,6 +930,7 @@ def lower_inspect_replacing(
             source_rr,
             source_fl,
             current_str_reg,
+            source_ref_wb.offset_reg,
             extent=source_ref_wb.extent,
             span=span,
         )

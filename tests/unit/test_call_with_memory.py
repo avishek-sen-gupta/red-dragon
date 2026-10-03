@@ -18,67 +18,31 @@ class TestCallWithMemoryOpcode:
 
 class TestCallWithMemoryInstruction:
     @covers(NotLanguageFeature.INFRASTRUCTURE)
-    def test_instruction_fields(self):
+    def test_instruction_carries_the_callee_and_its_argument_array(self):
         from interpreter.instructions import CallWithMemory
 
         inst = CallWithMemory(
             func_name=FuncName("SUBPROG"),
             params_reg=Register("%r1"),
-            results_reg=Register("%r2"),
+            target_reg=Register("%r3"),
         )
-        assert inst.func_name == FuncName("SUBPROG")
-        assert inst.params_reg == Register("%r1")
-        assert inst.results_reg == Register("%r2")
-        assert inst.opcode == Opcode.CALL_WITH_MEMORY
+        defaults = CallWithMemory()
 
-    @covers(NotLanguageFeature.INFRASTRUCTURE)
-    def test_instruction_defaults(self):
-        from interpreter.instructions import CallWithMemory
-
-        inst = CallWithMemory()
-        assert inst.func_name == NO_FUNC_NAME
-        assert inst.params_reg == NO_REGISTER
-        assert inst.results_reg == NO_REGISTER
-
-    @covers(NotLanguageFeature.INFRASTRUCTURE)
-    def test_operands(self):
-        from interpreter.instructions import CallWithMemory
-
-        inst = CallWithMemory(
-            func_name=FuncName("SUBPROG"),
-            params_reg=Register("%r1"),
-            results_reg=Register("%r2"),
+        assert (
+            inst.opcode,
+            inst.operands,
+            inst.reads(),
+            defaults.func_name,
+            defaults.params_reg,
+            defaults.operands,
+        ) == (
+            Opcode.CALL_WITH_MEMORY,
+            ["SUBPROG", "%r1", "%r3"],
+            [Register("%r1"), Register("%r3")],
+            NO_FUNC_NAME,
+            NO_REGISTER,
+            [str(NO_FUNC_NAME), str(NO_REGISTER)],
         )
-        ops = inst.operands
-        assert "SUBPROG" in ops
-        assert "%r1" in ops
-        assert "%r2" in ops
-
-    @covers(NotLanguageFeature.INFRASTRUCTURE)
-    def test_reads_both_regs(self):
-        from interpreter.instructions import CallWithMemory
-
-        inst = CallWithMemory(
-            func_name=FuncName("SUBPROG"),
-            params_reg=Register("%r1"),
-            results_reg=Register("%r2"),
-        )
-        reads = inst.reads()
-        assert Register("%r1") in reads
-        assert Register("%r2") in reads
-
-    @covers(NotLanguageFeature.INFRASTRUCTURE)
-    def test_reads_deduplicates_same_reg(self):
-        """When params_reg == results_reg, reads() should not duplicate it."""
-        from interpreter.instructions import CallWithMemory
-
-        inst = CallWithMemory(
-            func_name=FuncName("SUBPROG"),
-            params_reg=Register("%r1"),
-            results_reg=Register("%r1"),
-        )
-        reads = inst.reads()
-        assert reads.count(Register("%r1")) == 1
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_in_instruction_union(self):
@@ -94,8 +58,9 @@ class TestCallWithMemoryInstruction:
 # ── Handler tests ────────────────────────────────────────────────
 
 
-def _make_vm_with_func_ref(callee_label: str, func_name: str, params_val, results_val):
-    """Build a minimal VMState with a singleton HeapObject in scope and two region registers.
+def _make_vm_with_func_ref(callee_label: str, func_name: str, params_val):
+    """Build a minimal VMState with a singleton HeapObject in scope and the
+    argument array in %r1.
 
     Updated for singleton dispatch: stores __prog_<FUNCNAME> singleton with
     __init_params__ BoundFuncRef pointing at callee_label.
@@ -129,7 +94,6 @@ def _make_vm_with_func_ref(callee_label: str, func_name: str, params_val, result
     )
 
     frame.registers[Reg("%r1")] = typed_from_runtime(params_val)
-    frame.registers[Reg("%r2")] = typed_from_runtime(results_val)
     vm.call_stack.append(frame)
     return vm
 
@@ -152,101 +116,28 @@ def _make_handler_ctx(callee_label: str):
 
 class TestHandleCallWithMemory:
     @covers(NotLanguageFeature.INFRASTRUCTURE)
-    def test_handler_returns_handled(self):
+    def test_handler_dispatches_to_the_callee_with_the_argument_array(self):
         from interpreter.handlers.calls import _handle_call_with_memory
         from interpreter.instructions import CallWithMemory
 
         callee_label = "func_SUBPROG"
-        vm = _make_vm_with_func_ref(
-            callee_label, "SUBPROG", {"region": "params"}, {"region": "results"}
-        )
+        vm = _make_vm_with_func_ref(callee_label, "SUBPROG", "arr_7")
         ctx = _make_handler_ctx(callee_label)
 
-        inst = CallWithMemory(
-            func_name=FuncName("SUBPROG"),
-            params_reg=Register("%r1"),
-            results_reg=Register("%r2"),
+        result = _handle_call_with_memory(
+            CallWithMemory(func_name=FuncName("SUBPROG"), params_reg=Register("%r1")),
+            vm,
+            ctx,
         )
-        result = _handle_call_with_memory(inst, vm, ctx)
 
-        assert result.handled
-
-    @covers(NotLanguageFeature.INFRASTRUCTURE)
-    def test_handler_sets_next_label_to_callee(self):
-        from interpreter.handlers.calls import _handle_call_with_memory
-        from interpreter.instructions import CallWithMemory
-
-        callee_label = "func_SUBPROG"
-        vm = _make_vm_with_func_ref(
-            callee_label, "SUBPROG", {"region": "params"}, {"region": "results"}
+        assert (
+            result.handled,
+            result.update.next_label,
+            {name: tv.value for name, tv in result.update.var_writes.items()},
+            result.update.call_push.function_name,
+        ) == (
+            True,
+            callee_label,
+            {VarName("__call_arguments"): "arr_7"},
+            FuncName("SUBPROG"),
         )
-        ctx = _make_handler_ctx(callee_label)
-
-        inst = CallWithMemory(
-            func_name=FuncName("SUBPROG"),
-            params_reg=Register("%r1"),
-            results_reg=Register("%r2"),
-        )
-        result = _handle_call_with_memory(inst, vm, ctx)
-
-        assert result.update.next_label == callee_label
-
-    @covers(NotLanguageFeature.INFRASTRUCTURE)
-    def test_handler_injects_params_region_var(self):
-        from interpreter.handlers.calls import _handle_call_with_memory
-        from interpreter.instructions import CallWithMemory
-
-        callee_label = "func_SUBPROG"
-        vm = _make_vm_with_func_ref(
-            callee_label, "SUBPROG", {"region": "params"}, {"region": "results"}
-        )
-        ctx = _make_handler_ctx(callee_label)
-
-        inst = CallWithMemory(
-            func_name=FuncName("SUBPROG"),
-            params_reg=Register("%r1"),
-            results_reg=Register("%r2"),
-        )
-        result = _handle_call_with_memory(inst, vm, ctx)
-
-        assert VarName("__params_region") in result.update.var_writes
-
-    @covers(NotLanguageFeature.INFRASTRUCTURE)
-    def test_handler_injects_results_region_var(self):
-        from interpreter.handlers.calls import _handle_call_with_memory
-        from interpreter.instructions import CallWithMemory
-
-        callee_label = "func_SUBPROG"
-        vm = _make_vm_with_func_ref(
-            callee_label, "SUBPROG", {"region": "params"}, {"region": "results"}
-        )
-        ctx = _make_handler_ctx(callee_label)
-
-        inst = CallWithMemory(
-            func_name=FuncName("SUBPROG"),
-            params_reg=Register("%r1"),
-            results_reg=Register("%r2"),
-        )
-        result = _handle_call_with_memory(inst, vm, ctx)
-
-        assert VarName("__results_region") in result.update.var_writes
-
-    @covers(NotLanguageFeature.INFRASTRUCTURE)
-    def test_handler_pushes_call_frame(self):
-        from interpreter.handlers.calls import _handle_call_with_memory
-        from interpreter.instructions import CallWithMemory
-
-        callee_label = "func_SUBPROG"
-        vm = _make_vm_with_func_ref(
-            callee_label, "SUBPROG", {"region": "params"}, {"region": "results"}
-        )
-        ctx = _make_handler_ctx(callee_label)
-
-        inst = CallWithMemory(
-            func_name=FuncName("SUBPROG"),
-            params_reg=Register("%r1"),
-            results_reg=Register("%r2"),
-        )
-        result = _handle_call_with_memory(inst, vm, ctx)
-
-        assert result.update.call_push is not None
