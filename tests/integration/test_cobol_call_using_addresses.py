@@ -53,6 +53,7 @@ _SHIFT = [
     "   05 LK-NUM  PIC 9(3).",
     "   05 LK-OTXT PIC X(4).",
     "PROCEDURE DIVISION USING LK-FIRST LK-REC LK-OUT.",
+    "    ADD 1 TO LK-NUM OF LK-REC.",
     "    IF LK-TXT = 'ABCD'",
     "        MOVE 'WXYZ' TO LK-TXT",
     "    END-IF.",
@@ -99,10 +100,10 @@ def test_a_shifted_parameter_works_in_every_statement_kind() -> None:
 
     assert (ws[0:2], ws[2:5], ws[5:9], ws[13:21], ws[21:28]) == (
         "HH",
-        "005",
+        "006",
         "WXYZ",
         "ABCDEFGH",
-        "005    ",
+        "006    ",
     )
 
 
