@@ -139,7 +139,7 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 
 | Statement | IR Pattern |
 |---|---|
-| `CALL 'prog' USING params` | Allocate a fresh params region (`ALLOC_REGION`), copy each USING field in from WS (`LOAD_REGION`+`WRITE_REGION`), dispatch via `CALL_WITH_MEMORY`. BY REFERENCE: copy-back after the call (`LOAD_REGION`+`WRITE_REGION` into caller WS). BY VALUE / BY CONTENT: no copy-back (callee mutates its own copy). The callee binds LINKAGE fields to `__params_region` at their natural byte offsets. GIVING writes the result back. |
+| `CALL 'prog' USING params` | Allocate a fresh params region (`ALLOC_REGION`), copy each USING field in from WS (`LOAD_REGION`+`WRITE_REGION`), dispatch via `CALL_WITH_MEMORY`. BY REFERENCE: copy-back after the call (`LOAD_REGION`+`WRITE_REGION` into caller WS). BY VALUE / BY CONTENT: no copy-back (callee mutates its own copy). The callee binds LINKAGE to `__params_region` in its PROCEDURE DIVISION USING order (`CobolASG.procedure_using`): the listed 01-levels are laid end to end in that order, then any LINKAGE items USING does not name, in declaration order. Arguments are packed by the caller's field sizes, so a callee item declared at a different size shifts every later parameter. GIVING writes the result back. |
 | `ALTER para-1 TO PROCEED TO para-2` | `STORE_VAR __alter_source = target_label` (captures data flow of dynamic retargeting) |
 | `ENTRY 'name'` | `LABEL entry_name` (alternate subprogram entry point) |
 | `CANCEL prog` | No-op for static analysis (program state invalidation has no data-flow effect) |

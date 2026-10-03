@@ -104,6 +104,9 @@ class CobolFeature(Enum):
     CALL_USING_OMITTED = "CALL 'program' USING OMITTED placeholder for absent arguments"
     CALL_USING_LITERAL = "CALL 'program' USING BY CONTENT/VALUE literal arguments"
     CALL_GIVING = "CALL 'program' GIVING result return value capture in CALL"
+    PROCEDURE_DIVISION_USING = (
+        "PROCEDURE DIVISION USING binds the caller's arguments in its listed order"
+    )
     CALL_BY_IDENTIFIER = (
         "CALL identifier — callee named by a data item's runtime contents, "
         "including subscripted and reference-modified forms"

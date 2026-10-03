@@ -23,6 +23,10 @@ import io.proleap.cobol.asg.metamodel.procedure.Paragraph;
 import io.proleap.cobol.asg.metamodel.procedure.ProcedureDivision;
 import io.proleap.cobol.asg.metamodel.procedure.Section;
 import io.proleap.cobol.asg.metamodel.procedure.Statement;
+import io.proleap.cobol.asg.metamodel.procedure.ByReference;
+import io.proleap.cobol.asg.metamodel.procedure.ByValue;
+import io.proleap.cobol.asg.metamodel.procedure.UsingClause;
+import io.proleap.cobol.asg.metamodel.procedure.UsingParameter;
 import io.proleap.cobol.CobolParser;
 import io.proleap.cobol.asg.metamodel.procedure.declaratives.Declaratives;
 import io.proleap.cobol.asg.metamodel.procedure.declaratives.Declarative;
@@ -45,6 +49,8 @@ import java.util.logging.Logger;
  * {
  *   "data_fields": [...],          // WORKING-STORAGE SECTION
  *   "linkage_fields": [...],       // LINKAGE SECTION (optional)
+ *   "procedure_using": [{"name": "...", "type": "REFERENCE"|"VALUE"}],
+ *                                  // PROCEDURE DIVISION USING, in order (optional)
  *   "local_storage_fields": [...], // LOCAL-STORAGE SECTION (optional)
  *   "data_division_exec_sql": [...], // EXEC SQL entries outside PROCEDURE
  *                                     // DIVISION, e.g. DECLARE CURSOR in
@@ -254,6 +260,11 @@ public final class AsgSerializer {
             return;
         }
 
+        JsonArray using = serializeProcedureUsing(pd.getUsingClause());
+        if (using.size() > 0) {
+            asg.add("procedure_using", using);
+        }
+
         Collection<Section> sections = pd.getSections();
         Collection<Paragraph> allParagraphs = pd.getParagraphs();
         Declaratives decl = pd.getDeclaratives();
@@ -291,6 +302,41 @@ public final class AsgSerializer {
                 LOG.info("Serialized " + stmts.size() + " division-level bare statements");
             }
         }
+    }
+
+    /**
+     * PROCEDURE DIVISION USING, one entry per parameter in the order listed: the
+     * position each caller's CALL USING argument binds to.
+     */
+    private static JsonArray serializeProcedureUsing(UsingClause clause) {
+        JsonArray params = new JsonArray();
+        if (clause == null || clause.getUsingParameters() == null) {
+            return params;
+        }
+        for (UsingParameter param : clause.getUsingParameters()) {
+            if (param.getByReferencePhrase() != null) {
+                for (ByReference br : param.getByReferencePhrase().getByReferences()) {
+                    params.add(usingEntry(
+                            StatementSerializer.extractCallName(br.getReferenceCall()),
+                            "REFERENCE"));
+                }
+            }
+            if (param.getByValuePhrase() != null) {
+                for (ByValue bv : param.getByValuePhrase().getByValues()) {
+                    params.add(usingEntry(
+                            StatementSerializer.extractValueStmtText(bv.getValueValueStmt()),
+                            "VALUE"));
+                }
+            }
+        }
+        return params;
+    }
+
+    private static JsonObject usingEntry(String name, String type) {
+        JsonObject entry = new JsonObject();
+        entry.addProperty("name", name);
+        entry.addProperty("type", type);
+        return entry;
     }
 
     /**
