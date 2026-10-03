@@ -20,7 +20,7 @@ from cobol_asg.asg_types import CobolASG
 from cobol_asg.cobol_parser import CobolParser
 from cobol_asg.cobol_statements import _dialect_parsers
 from cobol_asg.frontend_extension import DialectParser
-from interpreter.cobol.condition_name_index import build_condition_index
+from interpreter.cobol.condition_name_index import build_condition_index_over
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext, InstructionIdSource
 from interpreter.cobol.field_resolution import ResolvedFieldRef
@@ -235,7 +235,14 @@ class CobolFrontend(Frontend):
         )
         self._layout = sectioned.working_storage
         self._symbol_table = SymbolTable.from_data_layout(sectioned.working_storage)
-        condition_index = build_condition_index(sectioned.working_storage)
+        condition_index = build_condition_index_over(
+            (
+                sectioned.file,
+                sectioned.linkage,
+                sectioned.local_storage,
+                sectioned.working_storage,
+            )
+        )
 
         self._ctx = EmitContext(
             dispatch_fn=dispatch_statement,

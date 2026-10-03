@@ -9,6 +9,7 @@ name references (e.g. IF STATUS-ACTIVE) into parent field comparisons.
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from cobol_asg.condition_name import ConditionValue
@@ -83,3 +84,15 @@ def build_condition_index(layout: DataLayout) -> ConditionNameIndex:
 
     logger.debug("Condition name index: %d entries", len(entries))
     return ConditionNameIndex(entries)
+
+
+def build_condition_index_over(layouts: Sequence[DataLayout]) -> ConditionNameIndex:
+    """One index over several sections' layouts; on a name declared in more than
+    one, the later layout's entry wins."""
+    return ConditionNameIndex(
+        {
+            name: entry
+            for layout in layouts
+            for name, entry in build_condition_index(layout).entries.items()
+        }
+    )
