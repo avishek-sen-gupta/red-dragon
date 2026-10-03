@@ -1,4 +1,5 @@
-"""RegionId — which of the (at most six) section buffers a field lives in."""
+"""RegionId — which section buffer a field lives in, or the fresh copy a CALL argument
+is passed in."""
 
 from __future__ import annotations
 
@@ -29,7 +30,7 @@ _PROBE_SRC = b"""\
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_region_ids_are_the_six_section_buffers():
+def test_region_ids_are_the_six_section_buffers_and_the_call_argument_copy():
     assert {r.value for r in RegionId} == {
         "working_storage",
         "linkage",
@@ -37,6 +38,7 @@ def test_region_ids_are_the_six_section_buffers():
         "file",
         "special_registers",
         "indexes",
+        "call_argument",
     }
 
 
