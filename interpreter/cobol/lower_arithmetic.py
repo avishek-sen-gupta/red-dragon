@@ -859,47 +859,44 @@ def _store_move_value(
 def lower_move_corresponding(
     ctx: EmitContext,
     stmt: MoveCorrespondingStatement,
-    layout: DataLayout,
-    region_reg: Register,
-    region: RegionId,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """MOVE CORRESPONDING src TO dst — copy matching direct leaf fields.
-
-    ``region`` names the section buffer ``layout``/``region_reg`` belong to;
-    it cannot be derived here because the FieldLayouts are taken straight out
-    of ``layout`` rather than resolved by name.
-    """
+    """MOVE CORRESPONDING src TO dst — copy matching direct leaf fields, each
+    group found in whichever section declares it."""
     span = stmt.span
-    src_layout = layout.lookup_group(stmt.source)
+    src_group, src_rr, src_region = _require_group(stmt.source, materialised)
 
     for target_name in stmt.targets:
-        dst_layout = layout.lookup_group(target_name)
-        matching = src_layout.fields.keys() & dst_layout.fields.keys()
-
-        for name in matching:
-            src_fl = src_layout.fields[name]
-            dst_fl = dst_layout.fields[name]
-
+        dst_group, dst_rr, dst_region = _require_group(target_name, materialised)
+        for name in src_group.fields.keys() & dst_group.fields.keys():
+            src_fl = src_group.fields[name]
+            dst_fl = dst_group.fields[name]
             src_ref = ctx.resolve_field_ref_from(
-                src_fl, region_reg, region, materialised, span=span
+                src_fl, src_rr, src_region, materialised, span=span
             )
             decoded = ctx.emit_decode_field(
-                region_reg, src_fl, src_ref.offset_reg, extent=src_ref.extent, span=span
+                src_rr, src_fl, src_ref.offset_reg, extent=src_ref.extent, span=span
             )
-            value_str = ctx.emit_to_string(decoded, span=span)
-
             dst_ref = ctx.resolve_field_ref_from(
-                dst_fl, region_reg, region, materialised, span=span
+                dst_fl, dst_rr, dst_region, materialised, span=span
             )
             ctx.emit_encode_and_write(
-                region_reg,
+                dst_rr,
                 dst_fl,
-                value_str,
+                ctx.emit_to_string(decoded, span=span),
                 dst_ref.offset_reg,
                 extent=dst_ref.extent,
                 span=span,
             )
+
+
+def _require_group(
+    name: str, materialised: MaterialisedSectionedLayout
+) -> tuple[DataLayout, Register, RegionId]:
+    found = _find_group_and_reg(name, materialised)
+    if found is None:
+        raise LookupError(f"Group not found in any section: {name!r}")
+    return found
 
 
 def _find_group_and_reg(
