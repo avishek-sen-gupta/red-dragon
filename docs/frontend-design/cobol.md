@@ -99,7 +99,7 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 | Statement | IR Pattern |
 |---|---|
 | `IF / ELSE` | `_lower_condition()` → `BRANCH_IF` → true/false blocks |
-| `EVALUATE / WHEN` | Chain of `BRANCH_IF` per WHEN, `WHEN OTHER` as fallthrough. Primary (non-`ALSO`) `WHEN ANY` short-circuits to an always-true wildcard match. `ALSO` (`EVALUATE a ALSO b WHEN x ALSO y`) ANDs each subject=condition pair together via `BINOP &&`; `ANY` in a WHEN position skips that dimension's comparison. |
+| `EVALUATE / WHEN` | Chain of `BRANCH_IF` per WHEN, `WHEN OTHER` as fallthrough. Primary (non-`ALSO`) `WHEN ANY` short-circuits to an always-true wildcard match. `ALSO` (`EVALUATE a ALSO b WHEN x ALSO y`) ANDs each subject=condition pair together via `BINOP &&`; `ANY` in a WHEN position skips that dimension's comparison. Stacked WHENs (`WHEN c1 WHEN c2 <body>`) are one `WhenStatement` with one body: the first condition on the WHEN itself, the rest in `alternatives`, ORed via `BINOP or`. |
 | `PERFORM` | Simple: `SET_CONTINUATION` + `BRANCH` to paragraph. TIMES/UNTIL/VARYING: loop with counter/condition. THRU: range of paragraphs. Section-level: all paragraphs in section. |
 | `GO TO` | `BRANCH` to paragraph label |
 | `STOP RUN` | `HALT` — unconditionally terminates the entire run unit. Emitted by `lower_stop_run` as a dedicated `Halt_` IR instruction (`interpreter/instructions.py`), distinct from `RETURN`/`Return_`. Previously (fixed red-dragon-mjin) STOP RUN lowered to the same `Return_` as GOBACK/EXIT PROGRAM, so a callee's STOP RUN incorrectly returned control to the caller instead of halting the whole program. |
