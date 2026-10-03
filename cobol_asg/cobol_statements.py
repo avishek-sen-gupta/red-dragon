@@ -86,6 +86,7 @@ CobolStatementType = Union[
     "WhenOtherStatement",
     "ContinueStatement",
     "ExitStatement",
+    "NextSentenceStatement",
     "InitializeStatement",
     "ArithmeticCorrespondingStatement",
     "SetStatement",
@@ -742,8 +743,28 @@ class ContinueStatement:
 
     def to_dict(self) -> dict:
         result = {"type": "CONTINUE"}
-        if self.span is not None:
-            self.span.write_into(result)
+        match self.span:
+            case SourceSpan() as span:
+                span.write_into(result)
+        return result
+
+
+@dataclass(frozen=True)
+class NextSentenceStatement:
+    """NEXT SENTENCE -- control goes past the period that ends the enclosing
+    sentence, which an END-IF before that period does not stop."""
+
+    span: SourceSpan | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict) -> NextSentenceStatement:
+        return cls(span=SourceSpan.from_dict(data))
+
+    def to_dict(self) -> dict:
+        result = {"type": "NEXT_SENTENCE"}
+        match self.span:
+            case SourceSpan() as span:
+                span.write_into(result)
         return result
 
 
@@ -766,8 +787,9 @@ class ExitStatement:
         result = {"type": "EXIT"} | (
             {} if self.kind is ExitKind.PLAIN else {"kind": self.kind.value}
         )
-        if self.span is not None:
-            self.span.write_into(result)
+        match self.span:
+            case SourceSpan() as span:
+                span.write_into(result)
         return result
 
 
@@ -1822,6 +1844,7 @@ _DISPATCH_TABLE: dict[str, type] = {
     "WHEN_OTHER": WhenOtherStatement,
     "CONTINUE": ContinueStatement,
     "EXIT": ExitStatement,
+    "NEXT_SENTENCE": NextSentenceStatement,
     "INITIALIZE": InitializeStatement,
     "SET": SetStatement,
     "STRING": StringStatement,

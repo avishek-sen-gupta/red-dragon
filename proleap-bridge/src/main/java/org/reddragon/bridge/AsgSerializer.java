@@ -476,10 +476,7 @@ public final class AsgSerializer {
             }
 
             if (para.getStatements() != null && !para.getStatements().isEmpty()) {
-                JsonArray stmts = StatementSerializer.serializeStatements(para.getStatements());
-                if (stmts.size() > 0) {
-                    paraObj.add("statements", stmts);
-                }
+                StatementSerializer.serializeSentences(para.getStatements(), paraObj);
             }
 
             arr.add(paraObj);

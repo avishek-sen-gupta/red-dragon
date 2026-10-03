@@ -210,11 +210,16 @@ class CobolField:
 
 @dataclass(frozen=True)
 class CobolParagraph:
-    """A COBOL paragraph — a named block of statements."""
+    """A COBOL paragraph — a named block of statements.
+
+    ``sentence_ends`` holds the position in ``statements`` of each sentence's last
+    statement: where the period falls, which NEXT SENTENCE jumps past.
+    """
 
     name: str
     statements: list[CobolStatementType] = field(default_factory=list)
     span: SourceSpan | None = None
+    sentence_ends: list[int] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict) -> CobolParagraph:
@@ -222,6 +227,7 @@ class CobolParagraph:
             name=data["name"],
             statements=[parse_statement(s) for s in data.get("statements", [])],
             span=SourceSpan.from_dict(data),
+            sentence_ends=list(data.get("sentence_ends", [])),
         )
 
     def to_dict(self) -> dict:
@@ -230,7 +236,9 @@ class CobolParagraph:
             self.span.write_into(result)
         if self.statements:
             result["statements"] = [s.to_dict() for s in self.statements]
-        return result
+        return result | (
+            {"sentence_ends": list(self.sentence_ends)} if self.sentence_ends else {}
+        )
 
 
 @dataclass(frozen=True)
