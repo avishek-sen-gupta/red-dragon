@@ -31,10 +31,9 @@ def translate_cobol_figurative(value: str) -> str:
 
 # Figurative constants whose semantics are RAW bytes, not character data:
 # HIGH-VALUES is 0xFF in every receiver position (the highest collating byte),
-# LOW-VALUES is 0x00. These must bypass ASCII→EBCDIC translation — otherwise the
-# fill char (\xff/\x00) round-trips through encode(errors="replace") and becomes
-# an EBCDIC '?'/space (red-dragon-raxa). SPACES/ZEROS/QUOTES remain character
-# data and go through the normal encode path.
+# LOW-VALUES is 0x00, whatever the receiver's category -- a MOVE into a numeric
+# receiver writes these bytes, not a number converted from them
+# (red-dragon-raxa). SPACES/ZEROS/QUOTES remain character data.
 COBOL_RAW_FIGURATIVE_BYTES: dict[str, int] = {
     "HIGH-VALUE": 0xFF,
     "HIGH-VALUES": 0xFF,

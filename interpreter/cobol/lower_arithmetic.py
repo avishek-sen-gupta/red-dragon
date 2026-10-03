@@ -558,8 +558,9 @@ def lower_move(
         return
 
     # Raw figurative source (HIGH-VALUES / LOW-VALUES): these denote raw bytes —
-    # 0xFF / 0x00 in every receiver position — and must bypass the ASCII→EBCDIC
-    # alphanumeric encoder, which would corrupt \xff into 0x6F (red-dragon-raxa).
+    # 0xFF / 0x00 in every receiver position, whatever its category — so they
+    # skip the character path, which converts per the receiving PICTURE and
+    # would turn a numeric receiver into a number (red-dragon-raxa).
     # Each receiver's whole width is filled with the raw byte. A reference-modified
     # source slice still selects bytes, so it keeps the character path below; a
     # reference-modified TARGET likewise needs the splice path and is excluded here.

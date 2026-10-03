@@ -22,10 +22,7 @@ from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.emit_context import EmitContext, strip_cobol_literal
 from interpreter.cobol.field_resolution import ResolvedFieldRef
-from interpreter.cobol.figurative_constants import (
-    COBOL_FIGURATIVE_CONSTANTS,
-    COBOL_RAW_FIGURATIVE_BYTES,
-)
+from interpreter.cobol.figurative_constants import COBOL_FIGURATIVE_CONSTANTS
 from interpreter.cobol.lower_arithmetic import eval_ref_mod_expr
 from interpreter.cobol.lower_program_exit import (
     emit_return_code_load,
@@ -280,8 +277,7 @@ def _address(
 def _literal_copy(
     ctx: EmitContext, param: CallUsingParam, *, span: SourceSpan | None
 ) -> tuple[Register, Register]:
-    """A literal argument in the representation IBM defines for it, in a fresh
-    copy: HIGH-VALUE and LOW-VALUE as their raw byte, anything else encoded."""
+    """A literal argument in the representation IBM defines for it, in a fresh copy."""
     layout = _layout(_literal_type(param))
     copy = ctx.fresh_reg()
     ctx.emit_inst(
@@ -291,24 +287,12 @@ def _literal_copy(
         span=span,
     )
     zero = ctx.const_to_reg(0, span=span)
-    extent = _copy_extent(layout.byte_length, LITERAL_ARGUMENT)
-    word = param.name.upper()
-    if word in COBOL_RAW_FIGURATIVE_BYTES:
-        ctx.emit_fill_raw_byte(
-            copy,
-            layout,
-            COBOL_RAW_FIGURATIVE_BYTES[word],
-            zero,
-            extent=extent,
-            span=span,
-        )
-        return copy, zero
     ctx.emit_encode_and_write(
         copy,
         layout,
         ctx.const_to_reg(_literal_value(param), span=span),
         zero,
-        extent=extent,
+        extent=_copy_extent(layout.byte_length, LITERAL_ARGUMENT),
         span=span,
     )
     return copy, zero
