@@ -65,7 +65,7 @@ The DATA DIVISION is lowered to byte-addressed memory regions:
 
 1. `build_data_layout()` parses all WORKING-STORAGE fields, computing offsets and byte lengths from PIC clauses
 2. `ALLOC_REGION` allocates a contiguous byte array sized to `layout.total_bytes`
-3. Each field with a VALUE clause is encoded per its PIC type and written via `WRITE_REGION`
+3. Each field with a VALUE clause is encoded per its PIC type and written via `WRITE_REGION`; a group's VALUE is encoded as alphanumeric over the whole group, before its descendants'
 
 ### PIC-Driven Encoding
 
