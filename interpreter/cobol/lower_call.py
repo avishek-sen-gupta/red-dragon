@@ -28,6 +28,7 @@ from interpreter.cobol.lower_program_exit import (
     emit_return_code_load,
     emit_return_code_store,
 )
+from interpreter.cobol.pointer_lowering import PointerLowering
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.field_name import FieldName
 from interpreter.func_name import FuncName
@@ -266,8 +267,17 @@ def _address(
     span: SourceSpan | None,
 ) -> tuple[Register, Register]:
     """BY REFERENCE: the argument's own bytes. Anything else: a fresh copy."""
-    if param.is_literal:
-        return _literal_copy(ctx, param, span=span)
+    if param.is_literal or param.address_of:
+        return (
+            PointerLowering(ctx, materialised, span).address_argument(
+                param.name,
+                _copy_extent(
+                    ctx.addressing_mode.pointer_type.byte_length, LITERAL_ARGUMENT
+                ),
+            )
+            if param.address_of
+            else _literal_copy(ctx, param, span=span)
+        )
     ref, region_reg = ctx.resolve_field_ref(param.name, materialised, span=span)
     if param.param_type == "REFERENCE":
         return region_reg, ref.offset_reg
