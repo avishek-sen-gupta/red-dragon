@@ -6,6 +6,7 @@ from __future__ import annotations
 import logging
 from collections.abc import ItemsView, KeysView, ValuesView
 from dataclasses import dataclass, field
+from bisect import bisect_right
 from functools import reduce
 from typing import Any
 
@@ -166,6 +167,8 @@ class VMState:
     _regions: dict[Address, bytearray] = field(default_factory=dict)
     _segments: dict[Address, Segment] = field(default_factory=dict)
     _next_address: int = FIRST_ADDRESS
+    _bases: tuple[int, ...] = ()
+    _handles: tuple[Address, ...] = ()
     continuations: dict[ContinuationName, CodeLabel] = field(default_factory=dict)
     exception_stack: list[ExceptionHandler] = field(default_factory=list)
     data_layout: dict[str, dict] = field(default_factory=dict)
@@ -225,25 +228,30 @@ class VMState:
             raise ValueError(f"{addr} is {len(region)} bytes; cannot set {len(data)}")
         _write_piece(bytes(data), (region, (0, len(region))))
 
-    def _allocate(self, addr: Address, data: bytearray) -> None:
-        self._segments = {
-            **self._segments,
-            addr: Segment(base=self._next_address, size=len(data)),
-        }
-        self._regions = {**self._regions, addr: data}
-        self._next_address = self._next_address + len(data)
+    @property
+    def next_address(self) -> int:
+        """The base the next allocated region will get."""
+        return self._next_address
 
-    def write_region(self, addr: Address, offset: int, data: bytes) -> None:
-        """A write inside its region is a slice assignment; one running past the
-        region's end goes through the address space into the following segments.
-        A write to an unknown region is ignored."""
-        if addr not in self._regions:
-            return
-        region = self._regions[addr]
-        if offset + len(data) <= len(region):
-            _write_piece(data, (region, (offset, offset + len(data))))
-            return
-        self.write_at(self._segments[addr].base + offset, data)
+    def _allocate(self, addr: Address, data: bytearray) -> None:
+        """Place a region at the next free address. An empty region still takes
+        one address, so no two regions share a base."""
+        base = self._next_address
+        self._segments = {**self._segments, addr: Segment(base=base, size=len(data))}
+        self._regions = {**self._regions, addr: data}
+        self._bases = (*self._bases, base)
+        self._handles = (*self._handles, addr)
+        self._next_address = base + max(len(data), 1)
+
+    def _within_one(self, address: int, length: int) -> tuple[bytearray, int]:
+        """The region holding all of [address, address + length) and the offset
+        of ``address`` in it, or an empty buffer when no one region holds it."""
+        index = bisect_right(self._bases, address) - 1
+        handle = self._handles[index] if index >= 0 else Address("")
+        segment = self._segments.get(handle, Segment(base=0, size=0))
+        if index < 0 or address + length > segment.end:
+            return bytearray(), -1
+        return self._regions[handle], address - segment.base
 
     def segment_of(self, addr: Address) -> Segment:
         """Where a region sits in the address space."""
@@ -279,6 +287,9 @@ class VMState:
     def read_at(self, address: int, length: int) -> bytes:
         """The bytes from ``address`` on, across segments, stopping at the last
         allocated byte."""
+        region, offset = self._within_one(address, length)
+        if offset >= 0:
+            return bytes(region[offset : offset + length])
         pieces = self._pieces(address, length)
         data = b"".join(bytes(region[lo:hi]) for region, (lo, hi) in pieces)
         if len(pieces) != 1 or len(data) < length:
@@ -288,6 +299,10 @@ class VMState:
     def write_at(self, address: int, data: bytes) -> None:
         """Write ``data`` from ``address`` on, across segments; bytes past the
         last allocated byte are dropped."""
+        region, offset = self._within_one(address, len(data))
+        if offset >= 0:
+            _write_piece(data, (region, (offset, offset + len(data))))
+            return
         pieces = self._pieces(address, len(data))
         covered = sum(hi - lo for _, (lo, hi) in pieces)
         if len(pieces) != 1 or covered < len(data):
@@ -364,8 +379,7 @@ class NewObject(BaseModel):
 
 
 class RegionWrite(BaseModel):
-    region_addr: Address
-    offset: int
+    address: int
     data: list[int]
 
 

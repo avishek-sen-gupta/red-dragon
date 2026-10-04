@@ -9,8 +9,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from interpreter.vm.executor import HandlerContext
 
-from interpreter import constants
-from interpreter.address import Address
 from interpreter.instructions import (
     AllocRegion,
     InstructionBase,
@@ -44,13 +42,12 @@ def _handle_alloc_region(
                 reasoning=f"alloc_region(symbolic size) → {sym.name}",
             )
         )
-    addr = f"{constants.REGION_ADDR_PREFIX}{vm.symbolic_counter}"
-    vm.symbolic_counter += 1
+    base = vm.next_address
     return ExecutionResult.success(
         StateUpdate(
-            new_regions={addr: int(size)},
-            register_writes={t.result_reg: typed(addr, UNKNOWN)},
-            reasoning=f"alloc_region({size}) → {addr}",
+            new_regions={str(base): int(size)},
+            register_writes={t.result_reg: typed(base, UNKNOWN)},
+            reasoning=f"alloc_region({size}) → {base}",
         )
     )
 
@@ -88,11 +85,7 @@ def _handle_write_region(
     return ExecutionResult.success(
         StateUpdate(
             region_writes=[
-                RegionWrite(
-                    region_addr=Address(region_addr),
-                    offset=int(offset),
-                    data=data,
-                )
+                RegionWrite(address=int(region_addr) + int(offset), data=data)
             ],
             reasoning=f"write_region({region_addr}, offset={offset}, len={length})",
         )
@@ -121,30 +114,13 @@ def _handle_load_region(
             )
         )
 
-    addr_str = str(region_addr)
-    region_data = vm.region_get(Address(addr_str))
-    if region_data is None:
-        sym = vm.fresh_symbolic(hint=f"region_load({addr_str})")
-        return ExecutionResult.success(
-            StateUpdate(
-                register_writes={t.result_reg: typed(sym, UNKNOWN)},
-                reasoning=f"load_region({addr_str}) — unknown region → {sym.name}",
-            )
-        )
-
-    start = int(offset)
+    start = int(region_addr) + int(offset)
     n = int(length)
-    # A read past the region's end goes on into the following segments, as the
-    # storage would; past the last allocated byte it reads zeroes.
-    raw = (
-        list(region_data[start : start + n])
-        if start + n <= len(region_data)
-        else list(vm.read_at(vm.segment_of(Address(addr_str)).base + start, n))
-    )
+    raw = list(vm.read_at(start, n))
     data = raw + [0] * (n - len(raw))
     return ExecutionResult.success(
         StateUpdate(
             register_writes={t.result_reg: typed(data, UNKNOWN)},
-            reasoning=f"load_region({addr_str}, offset={start}, len={length}) = {data}",
+            reasoning=f"load_region({region_addr}, offset={offset}, len={length}) = {data}",
         )
     )

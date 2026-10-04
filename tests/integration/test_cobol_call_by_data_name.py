@@ -95,7 +95,7 @@ def _ticket(vm) -> int:
     assert main_ptr is not None, "__prog_MAIN singleton not found"
     assert isinstance(main_ptr, Pointer)
     ws = vm.region_get(
-        Address(vm.heap_get(main_ptr.base).fields[FieldName("ws_handle")].value)
+        Address(str(vm.heap_get(main_ptr.base).fields[FieldName("ws_handle")].value))
     )
     assert ws is not None
     return _decode_zoned_unsigned(ws, 0, 4)

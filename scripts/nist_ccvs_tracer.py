@@ -59,17 +59,21 @@ def trace(prog: str, max_steps: int = 400_000) -> list[dict] | None:
     def patched(vm, update, *a, **k):
         r = orig(vm, update, *a, **k)
         for rw in update.region_writes:
-            if rw.offset == ec["offset"]:
-                reg = vm.region_get(rw.region_addr)
-                if reg is None:
-                    continue
-                snap = {
-                    n: _alpha(reg, layout[n]["offset"], layout[n]["length"])
-                    for n in alpha
-                }
-                # Skip the ERROR-COUNTER initialization write (all work fields blank).
-                if any(snap.get(n) for n in alpha):
-                    fails.append(snap)
+            hits = [
+                data
+                for addr, data in vm.region_items()
+                if rw.address - vm.segment_of(addr).base == ec["offset"]
+                and rw.address < vm.segment_of(addr).end
+            ]
+            if not hits:
+                continue
+            reg = hits[0]
+            snap = {
+                n: _alpha(reg, layout[n]["offset"], layout[n]["length"]) for n in alpha
+            }
+            # Skip the ERROR-COUNTER initialization write (all work fields blank).
+            if any(snap.get(n) for n in alpha):
+                fails.append(snap)
         return r
 
     _runmod.apply_update = patched
