@@ -3,8 +3,10 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import ItemsView, KeysView, ValuesView
 from dataclasses import dataclass, field
+from functools import reduce
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
@@ -21,6 +23,9 @@ from interpreter.register import NO_REGISTER, Register
 from interpreter.types.type_expr import UNKNOWN, TypeExpr, scalar
 from interpreter.types.typed_value import TypedValue, typed
 from interpreter.var_name import VarName
+from interpreter.vm.segment import FIRST_ADDRESS, Segment
+
+_LOG = logging.getLogger(__name__)
 
 # ── Data types ───────────────────────────────────────────────────
 
@@ -145,6 +150,12 @@ def _serialize_value(v: Any) -> Any:
     return v
 
 
+def _write_piece(data: bytes, piece: tuple[bytearray, tuple[int, int]]) -> bytes:
+    region, (lo, hi) = piece
+    region[lo:hi] = data[: hi - lo]
+    return data[hi - lo :]
+
+
 @dataclass
 class VMState:
     _heap: dict[Address, HeapObject] = field(default_factory=dict)
@@ -153,6 +164,8 @@ class VMState:
     symbolic_counter: int = 0
     closures: dict[ClosureId, ClosureEnvironment] = field(default_factory=dict)
     _regions: dict[Address, bytearray] = field(default_factory=dict)
+    _segments: dict[Address, Segment] = field(default_factory=dict)
+    _next_address: int = FIRST_ADDRESS
     continuations: dict[ContinuationName, CodeLabel] = field(default_factory=dict)
     exception_stack: list[ExceptionHandler] = field(default_factory=list)
     data_layout: dict[str, dict] = field(default_factory=dict)
@@ -201,8 +214,85 @@ class VMState:
         return self._regions.get(addr)
 
     def region_set(self, addr: Address, data: bytearray) -> None:
-        """Set region data at address."""
-        self._regions[addr] = data
+        """A new region takes the next segment of the address space and keeps
+        ``data`` itself as its storage; an existing one is overwritten in place,
+        and keeps its size."""
+        if addr not in self._regions:
+            self._allocate(addr, data)
+            return
+        region = self._regions[addr]
+        if len(data) != len(region):
+            raise ValueError(f"{addr} is {len(region)} bytes; cannot set {len(data)}")
+        _write_piece(bytes(data), (region, (0, len(region))))
+
+    def _allocate(self, addr: Address, data: bytearray) -> None:
+        self._segments = {
+            **self._segments,
+            addr: Segment(base=self._next_address, size=len(data)),
+        }
+        self._regions = {**self._regions, addr: data}
+        self._next_address = self._next_address + len(data)
+
+    def write_region(self, addr: Address, offset: int, data: bytes) -> None:
+        """A write inside its region is a slice assignment; one running past the
+        region's end goes through the address space into the following segments.
+        A write to an unknown region is ignored."""
+        if addr not in self._regions:
+            return
+        region = self._regions[addr]
+        if offset + len(data) <= len(region):
+            _write_piece(data, (region, (offset, offset + len(data))))
+            return
+        self.write_at(self._segments[addr].base + offset, data)
+
+    def segment_of(self, addr: Address) -> Segment:
+        """Where a region sits in the address space."""
+        return self._segments[addr]
+
+    def _pieces(
+        self, address: int, length: int
+    ) -> tuple[tuple[bytearray, tuple[int, int]], ...]:
+        """Every segment [address, address + length) touches, in address order,
+        with the offsets it covers."""
+        return tuple(
+            (self._regions[addr], span)
+            for _, addr in sorted(
+                (segment.base, addr) for addr, segment in self._segments.items()
+            )
+            for span in (self._segments[addr].overlap(address, length),)
+            if span[1] > span[0]
+        )
+
+    def _report(self, verb: str, address: int, length: int, covered: int) -> None:
+        _LOG.warning(
+            "%s of %d bytes at address %d crosses a segment end", verb, length, address
+        )
+        if covered < length:
+            _LOG.warning(
+                "%s of %d bytes at address %d runs %d bytes past the last segment",
+                verb,
+                length,
+                address,
+                length - covered,
+            )
+
+    def read_at(self, address: int, length: int) -> bytes:
+        """The bytes from ``address`` on, across segments, stopping at the last
+        allocated byte."""
+        pieces = self._pieces(address, length)
+        data = b"".join(bytes(region[lo:hi]) for region, (lo, hi) in pieces)
+        if len(pieces) != 1 or len(data) < length:
+            self._report("read", address, length, len(data))
+        return data
+
+    def write_at(self, address: int, data: bytes) -> None:
+        """Write ``data`` from ``address`` on, across segments; bytes past the
+        last allocated byte are dropped."""
+        pieces = self._pieces(address, len(data))
+        covered = sum(hi - lo for _, (lo, hi) in pieces)
+        if len(pieces) != 1 or covered < len(data):
+            self._report("write", address, len(data), covered)
+        reduce(_write_piece, pieces, data)
 
     def region_items(self) -> ItemsView[Address, bytearray]:
         """Iterate over all (address, bytearray) pairs."""

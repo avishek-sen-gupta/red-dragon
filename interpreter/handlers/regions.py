@@ -134,11 +134,13 @@ def _handle_load_region(
 
     start = int(offset)
     n = int(length)
-    end = start + n
-    # Zero-pad reads past the region end: COBOL CALL USING passes raw memory by
-    # position, so a callee LINKAGE field wider than the caller's USING argument
-    # reads zeroes for the overrun (matching ALLOC_REGION's zero-init semantics).
-    raw = list(region_data[start:end])
+    # A read past the region's end goes on into the following segments, as the
+    # storage would; past the last allocated byte it reads zeroes.
+    raw = (
+        list(region_data[start : start + n])
+        if start + n <= len(region_data)
+        else list(vm.read_at(vm.segment_of(Address(addr_str)).base + start, n))
+    )
     data = raw + [0] * (n - len(raw))
     return ExecutionResult.success(
         StateUpdate(
