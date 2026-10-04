@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from cobol_asg.addressing_mode import AddressingMode
 from cobol_asg.cobol_statements import (
     CallUsingParam,
     CobolStatementType,
@@ -22,7 +23,9 @@ from cobol_asg.edit_picture import (
     DEFAULT_CURRENCY,
     UnsupportedEditPictureError,
 )
+from cobol_asg.lp32 import LP32_MODE
 from cobol_asg.pic_parser import parse_pic
+from cobol_asg.pointer_types import FULLWORD_POINTER
 from cobol_asg.source_span import SourceSpan
 
 
@@ -103,6 +106,10 @@ class CobolField:
     # (red-dragon-3o5f).
     currency_symbol: str = DEFAULT_CURRENCY
     span: SourceSpan | None = None
+    # The addressing mode's pointer type, for a USAGE POINTER item. Like the
+    # currency symbol it is program-wide but arrives as constructor state,
+    # because __post_init__ computes the type descriptor.
+    pointer_type: CobolTypeDescriptor = FULLWORD_POINTER
     type_descriptor: CobolTypeDescriptor = field(init=False)
 
     def __post_init__(self) -> None:
@@ -117,6 +124,7 @@ class CobolField:
                 justified_right=self.justified_right,
                 blank_when_zero=self.blank_when_zero,
                 currency=self.currency_symbol,
+                pointer_type=self.pointer_type,
             )
         except UnsupportedEditPictureError as exc:
             # parse_pic sees only the picture. This is a load-time abort, so
@@ -126,7 +134,12 @@ class CobolField:
         object.__setattr__(self, "type_descriptor", descriptor)
 
     @classmethod
-    def from_dict(cls, data: dict, currency: str = DEFAULT_CURRENCY) -> CobolField:
+    def from_dict(
+        cls,
+        data: dict,
+        currency: str = DEFAULT_CURRENCY,
+        pointer_type: CobolTypeDescriptor = FULLWORD_POINTER,
+    ) -> CobolField:
         sign_data = data.get("sign", {})
         return cls(
             name=data["name"],
@@ -138,7 +151,8 @@ class CobolField:
             value_is_figurative=data.get("value_is_figurative", False),
             redefines=data.get("redefines", ""),
             children=[
-                CobolField.from_dict(c, currency) for c in data.get("children", [])
+                CobolField.from_dict(c, currency, pointer_type)
+                for c in data.get("children", [])
             ],
             occurs=data.get("occurs", 0),
             element_size=data.get("element_size", 0),
@@ -155,6 +169,7 @@ class CobolField:
             renames_thru=data.get("renames_thru", ""),
             blank_when_zero=data.get("blank_when_zero", False),
             currency_symbol=currency,
+            pointer_type=pointer_type,
             span=SourceSpan.from_dict(data),
         )
 
@@ -334,7 +349,9 @@ class CobolASG:
     currency_symbol: str = DEFAULT_CURRENCY
 
     @classmethod
-    def from_dict(cls, data: dict) -> CobolASG:
+    def from_dict(
+        cls, data: dict, addressing_mode: AddressingMode = LP32_MODE
+    ) -> CobolASG:
         # Build FD-record-name → SELECT-file-name mapping from fd_name tags
         # (populated by bridge since the fd_name fix). Level-1 fields only.
         record_to_select: dict[str, str] = {
@@ -343,27 +360,30 @@ class CobolASG:
             if f.get("fd_name") and f.get("level") == 1
         }
         currency = _currency_from_special_names(data)
+        pointer = addressing_mode.pointer_type
         return cls(
             program_id=data.get("program_id", ""),
             file_control=[
                 FileControlEntry.from_dict(e) for e in data.get("file_control", [])
             ],
             data_fields=[
-                CobolField.from_dict(f, currency) for f in data.get("data_fields", [])
+                CobolField.from_dict(f, currency, pointer)
+                for f in data.get("data_fields", [])
             ],
             linkage_fields=[
-                CobolField.from_dict(f, currency)
+                CobolField.from_dict(f, currency, pointer)
                 for f in data.get("linkage_fields", [])
             ],
             procedure_using=[
                 CallUsingParam.from_dict(p) for p in data.get("procedure_using", [])
             ],
             local_storage_fields=[
-                CobolField.from_dict(f, currency)
+                CobolField.from_dict(f, currency, pointer)
                 for f in data.get("local_storage_fields", [])
             ],
             file_fields=[
-                CobolField.from_dict(f, currency) for f in data.get("file_fields", [])
+                CobolField.from_dict(f, currency, pointer)
+                for f in data.get("file_fields", [])
             ],
             sections=[CobolSection.from_dict(s) for s in data.get("sections", [])],
             paragraphs=[

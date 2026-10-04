@@ -128,7 +128,7 @@ def test_get_frontend_passes_copybook_dirs(monkeypatch):
     captured = {}
 
     class _SpyParser:
-        def __init__(self, runner, bridge_jar, copybook_dirs=None):
+        def __init__(self, runner, bridge_jar, copybook_dirs=None, **_modes):
             captured["copybook_dirs"] = copybook_dirs
 
     # get_frontend imports ProLeapCobolParser locally at call time, so patching

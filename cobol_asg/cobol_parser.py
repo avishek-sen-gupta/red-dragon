@@ -15,7 +15,9 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
+from cobol_asg.addressing_mode import AddressingMode
 from cobol_asg.asg_types import CobolASG
+from cobol_asg.lp32 import LP32_MODE
 from cobol_asg.source_text import decode_source
 from cobol_asg.subprocess_runner import (
     CobolParseError,
@@ -55,16 +57,29 @@ class ProLeapCobolParser(CobolParser):
         bridge_jar: str,
         copybook_dirs: Sequence[Path] = (),
         copybook_exts: Sequence[str] = (),
+        addressing_mode: AddressingMode = LP32_MODE,
     ):
         self._runner = runner
         self._bridge_jar = bridge_jar
         self._copybook_dirs: list[Path] = list(copybook_dirs)
         self._copybook_exts: list[str] = list(copybook_exts)
+        self._addressing_mode = addressing_mode
+
+    def with_addressing_mode(self, mode: AddressingMode) -> ProLeapCobolParser:
+        """The same parser, laying out USAGE POINTER items for ``mode``."""
+        return ProLeapCobolParser(
+            self._runner,
+            self._bridge_jar,
+            self._copybook_dirs,
+            self._copybook_exts,
+            mode,
+        )
 
     def _build_command(self) -> list[str]:
         dirs = [arg for d in self._copybook_dirs for arg in ("-copybook-dir", str(d))]
         exts = [arg for e in self._copybook_exts for arg in ("-copybook-ext", e)]
-        return ["java", "-jar", self._bridge_jar, *dirs, *exts]
+        width = str(self._addressing_mode.pointer_type.byte_length)
+        return ["java", "-jar", self._bridge_jar, *dirs, *exts, "-pointer-size", width]
 
     def parse(
         self,

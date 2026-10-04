@@ -16,10 +16,12 @@ import logging
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
+from cobol_asg.addressing_mode import AddressingMode
 from cobol_asg.asg_types import CobolASG
 from cobol_asg.cobol_parser import CobolParser
 from cobol_asg.cobol_statements import _dialect_parsers
 from cobol_asg.frontend_extension import DialectParser
+from cobol_asg.lp32 import LP32_MODE
 from interpreter.cobol.condition_name_index import build_condition_index_over
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext, InstructionIdSource
@@ -71,9 +73,11 @@ class CobolFrontend(Frontend):
         dialect_parsers: Sequence[DialectParser] = (),
         recorder: MemoryEffectRecorder = NullRecorder(),
         tolerant: bool = False,
+        addressing_mode: AddressingMode = LP32_MODE,
     ):
         self._parser = cobol_parser
         self._tolerant = tolerant
+        self._addressing_mode = addressing_mode
         self._observer = observer
         self._extension_strategies = tuple(extension_strategies)
         self._dialect_parsers = tuple(dialect_parsers)
@@ -218,7 +222,7 @@ class CobolFrontend(Frontend):
         try:
             for strat in self._extension_strategies:
                 data = strat.preprocess_program_dict(data)
-            asg = CobolASG.from_dict(data)
+            asg = CobolASG.from_dict(data, self._addressing_mode)
         finally:
             _dialect_parsers.reset(token)
         return self._lower_asg(asg)
@@ -253,6 +257,7 @@ class CobolFrontend(Frontend):
             recorder=self._recorder,
             inst_ids=self._inst_ids,
             tolerant=self._tolerant,
+            addressing_mode=self._addressing_mode,
         )
 
         self._ctx.emit_inst(Label_(label=CodeLabel("entry")))

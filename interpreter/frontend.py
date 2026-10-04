@@ -8,10 +8,12 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from cobol_asg.addressing_mode import AddressingMode
 from cobol_asg.cobol_parser import (
     make_cobol_parser as make_cobol_parser,
 )  # noqa: F401 — re-exported for callers outside interpreter.cobol
 from cobol_asg.frontend_extension import DialectParser
+from cobol_asg.lp32 import LP32_MODE
 from interpreter import constants
 from interpreter.constants import Language, LLMProvider
 from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy
@@ -85,6 +87,7 @@ def get_frontend(
     extension_strategies: Sequence[RedDragonExtensionLoweringStrategy] = (),
     dialect_parsers: Sequence[DialectParser] = (),
     tolerant: bool = False,
+    addressing_mode: AddressingMode = LP32_MODE,
 ) -> Frontend:
     """Build a frontend for the given language.
 
@@ -124,7 +127,10 @@ def get_frontend(
             "proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar",
         )
         resolved_parser = ProLeapCobolParser(
-            RealSubprocessRunner(), bridge_jar, copybook_dirs=copybook_dirs
+            RealSubprocessRunner(),
+            bridge_jar,
+            copybook_dirs=copybook_dirs,
+            addressing_mode=addressing_mode,
         )
         return CobolFrontend(
             resolved_parser,
@@ -132,6 +138,7 @@ def get_frontend(
             extension_strategies=list(extension_strategies),
             dialect_parsers=list(dialect_parsers),
             tolerant=tolerant,
+            addressing_mode=addressing_mode,
         )
 
     if frontend_type == constants.FRONTEND_DETERMINISTIC:

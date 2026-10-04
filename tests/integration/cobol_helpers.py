@@ -12,6 +12,7 @@ from decimal import Decimal
 
 import pytest
 
+from cobol_asg.lp import LP
 from interpreter.run import run
 
 _AREA_A = "       "  # 7 spaces: cols 1-6 (seq) + col 7 (indicator = space)
@@ -66,7 +67,10 @@ def run_cobol(lines: list[str], max_steps: int = 1000):
 
 
 def run_cobol_programs(
-    main: list[str], subprograms: dict[str, list[str]], max_steps: int = 500_000
+    main: list[str],
+    subprograms: dict[str, list[str]],
+    max_steps: int = 500_000,
+    lp: LP = LP.LP32,
 ):
     """Run a main program plus named subprograms through the full pipeline.
 
@@ -86,6 +90,7 @@ def run_cobol_programs(
         extra_subprogram_sources={
             name: to_fixed(lines).encode() for name, lines in subprograms.items()
         },
+        lp=lp,
     )
     entry = f"func_{main_id.lower()}_0"
     return run_linked(
