@@ -2384,8 +2384,8 @@ def lower_set(
     span = stmt.span
     condition_index = ctx._condition_index
     if stmt.set_type == "TO":
-        value_str = stmt.values[0] if stmt.values else "0"
-        for target_name in stmt.targets:
+        value_str = stmt.values[0].text if stmt.values else "0"
+        for target_name in (target.text for target in stmt.targets):
             if condition_index.has_condition(target_name):
                 _set_condition_name(
                     ctx, target_name, value_str, materialised, span=span
@@ -2423,9 +2423,9 @@ def lower_set(
                 span=span,
             )
     elif stmt.set_type == "BY":
-        step_val = stmt.values[0] if stmt.values else "1"
+        step_val = stmt.values[0].text if stmt.values else "1"
         op = "+" if stmt.by_type == "UP" else "-"
-        for target_name in stmt.targets:
+        for target_name in (target.text for target in stmt.targets):
             if not ctx.has_field(target_name, materialised):
                 logger.warning("SET target %s not found in layout", target_name)
                 continue
