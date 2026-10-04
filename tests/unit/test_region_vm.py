@@ -159,12 +159,8 @@ class TestWriteAndLoadRegion:
         assert unwrap(vm.current_frame.registers[Register("%last4")]) == [5, 6, 7, 8]
 
     def test_load_out_of_bounds_zero_pads(self):
-        """LOAD_REGION reading past the region end returns real bytes + zero padding.
-
-        COBOL CALL USING passes raw memory by position. When a callee's LINKAGE
-        field is wider than the caller's USING argument, the overrun must read as
-        zeroes (matching OS zero-page semantics), not raise or silently truncate.
-        """
+        """LOAD_REGION reading past the last allocated byte returns the real bytes
+        and zeroes for the rest, rather than raising or truncating."""
         vm = _make_vm()
 
         # Allocate 4 bytes, fill with [1, 2, 3, 4]
@@ -207,6 +203,49 @@ class TestWriteAndLoadRegion:
             0,
             0,
         ]
+
+    def test_load_past_a_region_end_reads_the_next_region(self):
+        """LOAD_REGION reading past its region's end carries on into the region
+        allocated after it, as storage would."""
+        vm = _make_vm()
+        for name, size in (("%first", 2), ("%second", 3)):
+            _execute(
+                vm,
+                IRInstruction(
+                    opcode=Opcode.ALLOC_REGION,
+                    result_reg=Register(name),
+                    operands=[size],
+                ),
+            )
+        vm.current_frame.registers[Register("%off0")] = 0
+        vm.current_frame.registers[Register("%data")] = [1, 2, 3, 4, 5]
+        _execute(
+            vm,
+            IRInstruction(
+                opcode=Opcode.WRITE_REGION,
+                operands=["%first", "%off0", 5, "%data"],
+            ),
+        )
+        _execute(
+            vm,
+            IRInstruction(
+                opcode=Opcode.LOAD_REGION,
+                result_reg=Register("%result"),
+                operands=["%first", "%off0", 4],
+            ),
+        )
+
+        assert (
+            unwrap(vm.current_frame.registers[Register("%result")]),
+            list(
+                vm.region_get(
+                    Address(
+                        str(unwrap(vm.current_frame.registers[Register("%second")]))
+                    )
+                )
+                or b""
+            ),
+        ) == ([1, 2, 3, 4], [3, 4, 5])
 
     def test_load_offset_past_end_all_zeros(self):
         """LOAD_REGION entirely beyond the region end returns all zero bytes."""
