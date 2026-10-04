@@ -6310,13 +6310,15 @@ class TestCallUsingLinkageRead:
         assert ws_copy == 7, f"WS-COPY: expected 7 (LK-B at offset 4), got {ws_copy}"
 
     @covers(CobolFeature.SECTION_LINKAGE, CobolFeature.CALL_USING)
-    def test_callee_linkage_wider_than_caller_arg_reads_zero_pad(self, tmp_path):
-        """Callee LINKAGE field wider than caller's USING arg: overrun reads as zeroes.
+    def test_callee_linkage_wider_than_caller_arg_reads_the_following_storage(
+        self, tmp_path
+    ):
+        """Callee LINKAGE field wider than caller's USING arg reads on past it.
 
-        MAINPROG passes WS-SMALL PIC 9(2) VALUE 7 (2 bytes) BY REFERENCE.
-        READER declares LK-BIG PIC 9(4) (4 bytes) — wider than the params region.
-        Reading LK-BIG must not crash; the 2 overrun bytes read as zoned zeroes,
-        so the decoded value is 0700 (digits 0,7 from WS-SMALL, then 0,0 padding).
+        MAINPROG calls READER USING BY REFERENCE WS-SMALL PIC 9(2) VALUE 7
+        (2 bytes), followed in its storage by WS-NEXT PIC X(2) VALUE 'NN'. READER declares LK-BIG
+        PIC X(4), wider than the argument, so it reads WS-SMALL and then the
+        caller's following bytes: '07NN'.
         """
         (tmp_path / "MAINPROG.cbl").write_text(
             _to_fixed(
@@ -6326,6 +6328,7 @@ class TestCallUsingLinkageRead:
                     "DATA DIVISION.",
                     "WORKING-STORAGE SECTION.",
                     "77 WS-SMALL PIC 9(2) VALUE 7.",
+                    "77 WS-NEXT PIC X(2) VALUE 'NN'.",
                     "PROCEDURE DIVISION.",
                     "    CALL 'READER' USING BY REFERENCE WS-SMALL.",
                     "    STOP RUN.",
@@ -6339,9 +6342,9 @@ class TestCallUsingLinkageRead:
                     "PROGRAM-ID. READER.",
                     "DATA DIVISION.",
                     "WORKING-STORAGE SECTION.",
-                    "77 WS-COPY PIC 9(4) VALUE 0.",
+                    "77 WS-COPY PIC X(4) VALUE SPACES.",
                     "LINKAGE SECTION.",
-                    "01 LK-BIG PIC 9(4).",
+                    "01 LK-BIG PIC X(4).",
                     "PROCEDURE DIVISION.",
                     "    MOVE LK-BIG TO WS-COPY.",
                     "    STOP RUN.",
@@ -6371,13 +6374,7 @@ class TestCallUsingLinkageRead:
         ws_addr = Address(singleton.fields[FieldName("ws_handle")].value)
         region = vm.region_get(ws_addr)
         assert region is not None
-
-        # WS-SMALL=7 occupies the first 2 bytes; the 2 overrun bytes read as zero,
-        # so LK-BIG decodes as 0700 (no crash from the out-of-bounds read).
-        ws_copy = _decode_zoned_unsigned(region, offset=0, length=4)
-        assert (
-            ws_copy == 700
-        ), f"WS-COPY: expected 700 (zero-padded overrun), got {ws_copy}"
+        assert bytes(region[:4]).decode("cp037") == "07NN"
 
 
 class TestGobackExitProgram:
