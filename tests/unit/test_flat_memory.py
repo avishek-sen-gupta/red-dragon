@@ -123,3 +123,16 @@ def test_region_set_on_an_existing_region_writes_in_place_and_keeps_its_size() -
         b"xy",
         Segment(base=4096, size=2),
     )
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_an_access_across_an_empty_regions_address_stays_aligned() -> None:
+    vm = _vm(("rgn_empty", b""), ("rgn_b", b"\x01\x02\x03"))
+
+    read = vm.read_at(4096, 3)
+    vm.write_at(4096, b"\x09\x08")
+
+    assert (read, bytes(vm.region_get(Address("rgn_b")) or b"")) == (
+        b"\x00\x01\x02",
+        b"\x08\x02\x03",
+    )

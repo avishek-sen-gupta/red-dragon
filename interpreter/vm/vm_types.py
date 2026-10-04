@@ -7,7 +7,6 @@ import logging
 from bisect import bisect_right
 from collections.abc import ItemsView, KeysView, ValuesView
 from dataclasses import dataclass, field
-from functools import reduce
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
@@ -153,10 +152,11 @@ def _serialize_value(v: Any) -> Any:
     return v
 
 
-def _write_piece(data: bytes, piece: tuple[bytearray, tuple[int, int]]) -> bytes:
-    region, (lo, hi) = piece
-    region[lo:hi] = data[: hi - lo]
-    return data[hi - lo :]
+def _write_piece(data: bytes, piece: tuple[bytearray, tuple[int, int], int]) -> None:
+    """Write the part of ``data`` that falls in one segment: bytes ``lo`` to ``hi``
+    of the segment take ``data`` from position ``at`` of the access."""
+    region, (lo, hi), at = piece
+    region[lo:hi] = data[at : at + hi - lo]
 
 
 @dataclass
@@ -229,7 +229,7 @@ class VMState:
         region = self._regions[addr]
         if len(data) != len(region):
             raise ValueError(f"{addr} is {len(region)} bytes; cannot set {len(data)}")
-        _write_piece(bytes(data), (region, (0, len(region))))
+        _write_piece(bytes(data), (region, (0, len(region)), 0))
 
     @property
     def next_address(self) -> int:
@@ -262,11 +262,11 @@ class VMState:
 
     def _pieces(
         self, address: int, length: int
-    ) -> tuple[tuple[bytearray, tuple[int, int]], ...]:
-        """Every segment [address, address + length) touches, in address order,
-        with the offsets it covers."""
+    ) -> tuple[tuple[bytearray, tuple[int, int], int], ...]:
+        """Every segment [address, address + length) touches, in address order:
+        the offsets it covers, and where they fall within the access."""
         return tuple(
-            (self._regions[addr], span)
+            (self._regions[addr], span, self._segments[addr].base + span[0] - address)
             for _, addr in sorted(
                 (segment.base, addr) for addr, segment in self._segments.items()
             )
@@ -298,8 +298,16 @@ class VMState:
         return self._read_across(address, length)
 
     def _read_across(self, address: int, length: int) -> bytes:
+        """The segments' bytes in address order, an unbacked address between
+        them reading as zero, up to the last allocated byte."""
         pieces = self._pieces(address, length)
-        data = b"".join(bytes(region[lo:hi]) for region, (lo, hi) in pieces)
+        ends = [at + hi - lo for _, (lo, hi), at in pieces]
+        data = b"".join(
+            bytes(at - previous) + bytes(region[lo:hi])
+            for (region, (lo, hi), at), previous in zip(
+                pieces, [0, *ends], strict=False
+            )
+        )
         self._report("read", address, length, len(data))
         return data
 
@@ -312,16 +320,16 @@ class VMState:
             return
         region, offset = self._within_one(address, len(data))
         if offset >= 0:
-            _write_piece(data, (region, (offset, offset + len(data))))
+            _write_piece(data, (region, (offset, offset + len(data)), 0))
             return
         self._write_across(address, data)
 
     def _write_across(self, address: int, data: bytes) -> None:
         pieces = self._pieces(address, len(data))
-        self._report(
-            "write", address, len(data), sum(hi - lo for _, (lo, hi) in pieces)
-        )
-        reduce(_write_piece, pieces, data)
+        reach = max((at + hi - lo for _, (lo, hi), at in pieces), default=0)
+        self._report("write", address, len(data), reach)
+        for piece in pieces:
+            _write_piece(data, piece)
 
     def region_items(self) -> ItemsView[Address, bytearray]:
         """Iterate over all (address, bytearray) pairs."""

@@ -145,3 +145,47 @@ def test_an_address_handed_to_a_call_reaches_the_callers_item() -> None:
     ws = bytes(ws_region(run_cobol_programs(main, {"ADRSUB": sub}), "ADRMAIN"))
 
     assert ws[:2].decode("cp037") == "YZ"
+
+
+@covers(CobolFeature.ADDRESS_OF, CobolFeature.USAGE_POINTER)
+def test_a_pointer_walks_a_table_by_length_of_its_row() -> None:
+    program = [
+        "IDENTIFICATION DIVISION.",
+        "PROGRAM-ID. PTRWALK.",
+        "DATA DIVISION.",
+        "WORKING-STORAGE SECTION.",
+        "01 WS-TABLE.",
+        "   05 WS-ROW PIC X(2) OCCURS 3.",
+        "01 WS-P USAGE POINTER.",
+        "01 WS-Q USAGE POINTER.",
+        "01 WS-HIT PIC X VALUE 'N'.",
+        "PROCEDURE DIVISION.",
+        "    SET WS-P TO ADDRESS OF WS-ROW(1).",
+        "    SET WS-P UP BY LENGTH OF WS-ROW.",
+        "    SET WS-Q TO ADDRESS OF WS-ROW(2).",
+        "    IF WS-P = WS-Q MOVE 'Y' TO WS-HIT.",
+        "    STOP RUN.",
+    ]
+
+    ws = bytes(ws_region(run_cobol_programs(program, {}), "PTRWALK"))
+
+    assert ws[14:15].decode("cp037") == "Y"
+
+
+@covers(CobolFeature.USAGE_POINTER)
+def test_an_address_beyond_the_pointer_width_raises() -> None:
+    program = [
+        "IDENTIFICATION DIVISION.",
+        "PROGRAM-ID. PTRBIG.",
+        "DATA DIVISION.",
+        "WORKING-STORAGE SECTION.",
+        "01 WS-X PIC X(2).",
+        "01 WS-P USAGE POINTER.",
+        "PROCEDURE DIVISION.",
+        "    SET WS-P TO ADDRESS OF WS-X.",
+        "    SET WS-P UP BY 2147483647.",
+        "    STOP RUN.",
+    ]
+
+    with pytest.raises(OverflowError):
+        run_cobol_programs(program, {})
