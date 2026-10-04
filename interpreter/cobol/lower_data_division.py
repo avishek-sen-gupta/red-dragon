@@ -166,8 +166,9 @@ def bind_linkage(
     parameters: tuple[LinkageRecord, ...],
     unbound: tuple[LinkageRecord, ...],
 ) -> tuple[LinkageBinding, ...]:
-    """Each parameter bound to the argument at its position; the 01s no USING
-    position names, to zero-filled storage of their own."""
+    """Each parameter bound to the argument at its position, or to NULL when it
+    is OMITTED or not supplied; the 01s no USING position names, to zero-filled
+    storage of their own."""
     return (
         *(
             _bind_parameter(ctx, record, position)
@@ -212,9 +213,15 @@ def _bind_parameter(
     )
     ctx.emit_inst(Branch(label=done), span=None)
     ctx.emit_inst(Label_(label=absent), span=None)
-    _store_zeroed(ctx, record)
+    _store_null(ctx, record)
     ctx.emit_inst(Label_(label=done), span=None)
     return _loaded(ctx, record)
+
+
+def _store_null(ctx: EmitContext, record: LinkageRecord) -> None:
+    """Bind an OMITTED or unsupplied parameter to NULL: ADDRESS OF it is 0."""
+    zero = ctx.const_to_reg(0, span=None)
+    _store_binding(ctx, record, zero, zero)
 
 
 def _placeholder(ctx: EmitContext, record: LinkageRecord) -> LinkageBinding:
