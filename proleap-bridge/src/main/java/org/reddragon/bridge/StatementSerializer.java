@@ -1259,10 +1259,25 @@ public final class StatementSerializer {
         return node;
     }
 
-    /** A data reference, or the item an ADDRESS OF names. */
+    /** A data reference, the item an ADDRESS OF names, or the item a LENGTH OF measures. */
     private static JsonObject callOperand(Call call) {
         Call target = addressOfTarget(call);
-        return target != null ? operandRef(target, "address_of") : operandRef(call, "ref");
+        if (target != null) {
+            return operandRef(target, "address_of");
+        }
+        Call measured = lengthOfTarget(call);
+        return measured != null ? operandRef(measured, "length_of") : operandRef(call, "ref");
+    }
+
+    /** The identifier a LENGTH OF special register names, or null for any other call. */
+    private static Call lengthOfTarget(Call call) {
+        if (call == null) return null;
+        Call unwrapped = call.unwrap();
+        if (unwrapped instanceof SpecialRegisterCall sr
+                && sr.getSpecialRegisterType() == SpecialRegisterCall.SpecialRegisterType.LENGTH_OF) {
+            return sr.getIdentifierCall();
+        }
+        return null;
     }
 
     /** A SET value: a reference, ADDRESS OF, a figurative constant (NULL among them) or a literal. */
