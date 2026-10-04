@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
+from cobol_asg.cobol_expression import JsonExpr
 from cobol_asg.operand_kind import OperandKind
 
 
@@ -13,7 +14,7 @@ class SetOperand:
     kind: OperandKind
     name: str = ""
     qualifiers: tuple[str, ...] = ()
-    subscripts: tuple[str, ...] = ()
+    subscripts: tuple[JsonExpr, ...] = ()
     value: str = ""
 
     @property
@@ -35,11 +36,18 @@ class SetOperand:
 _NAMED = frozenset({OperandKind.REF, OperandKind.ADDRESS_OF})
 
 
-def set_operand_from_dict(data: Mapping[str, str | Sequence[str]]) -> SetOperand:
+def set_operand_from_dict(data: JsonExpr) -> SetOperand:
     return SetOperand(
         kind=OperandKind(str(data["kind"])),
         name=str(data.get("name", "")),
         qualifiers=tuple(str(q) for q in data.get("qualifiers", ())),
-        subscripts=tuple(str(s) for s in data.get("subscripts", ())),
+        subscripts=_expressions(data.get("subscripts", ())),
         value=str(data.get("value", "")),
     )
+
+
+def _expressions(value: str | JsonExpr | Sequence[JsonExpr]) -> tuple[JsonExpr, ...]:
+    """The subscript expressions of a reference, as the bridge wrote them."""
+    if isinstance(value, (str, Mapping)):
+        return ()
+    return tuple(item for item in value if isinstance(item, Mapping))
