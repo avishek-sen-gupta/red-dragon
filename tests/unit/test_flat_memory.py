@@ -28,7 +28,9 @@ def _write(vm: VMState, name: str, offset: int, data: bytes) -> None:
         vm,
         StateUpdate(
             region_writes=[
-                RegionWrite(region_addr=Address(name), offset=offset, data=list(data))
+                RegionWrite(
+                    address=vm.segment_of(Address(name)).base + offset, data=list(data)
+                )
             ]
         ),
     )

@@ -88,7 +88,7 @@ def _main_working_storage(vm):
     )
     assert isinstance(pointer, Pointer)
     region = vm.region_get(
-        Address(vm.heap_get(pointer.base).fields[FieldName("ws_handle")].value)
+        Address(str(vm.heap_get(pointer.base).fields[FieldName("ws_handle")].value))
     )
     assert isinstance(region, bytearray)
     return region

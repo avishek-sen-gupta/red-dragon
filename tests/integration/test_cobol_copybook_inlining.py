@@ -68,7 +68,7 @@ def test_copy_inlined_field_executes(tmp_path):
             break
     assert ptr is not None and isinstance(ptr, Pointer)
     region = vm.region_get(
-        Address(vm.heap_get(ptr.base).fields[FieldName("ws_handle")].value)
+        Address(str(vm.heap_get(ptr.base).fields[FieldName("ws_handle")].value))
     )
     assert region is not None
     assert _decode_zoned_unsigned(region, 0, 4) == 4242
@@ -111,7 +111,7 @@ def test_copy_of_library_inlined(tmp_path):
             break
     assert ptr is not None and isinstance(ptr, Pointer)
     region = vm.region_get(
-        Address(vm.heap_get(ptr.base).fields[FieldName("ws_handle")].value)
+        Address(str(vm.heap_get(ptr.base).fields[FieldName("ws_handle")].value))
     )
     assert region is not None
     assert _decode_zoned_unsigned(region, 0, 4) == 7777
@@ -180,7 +180,7 @@ def test_multiple_copybooks_inlined(tmp_path):
             break
     assert ptr is not None and isinstance(ptr, Pointer)
     region = vm.region_get(
-        Address(vm.heap_get(ptr.base).fields[FieldName("ws_handle")].value)
+        Address(str(vm.heap_get(ptr.base).fields[FieldName("ws_handle")].value))
     )
     assert region is not None
     assert _decode_zoned_unsigned(region, 0, 4) == 11
@@ -243,7 +243,7 @@ def test_copybook_with_a_high_byte_in_a_comment_is_inlined(tmp_path):
             break
     assert ptr is not None and isinstance(ptr, Pointer)
     region = vm.region_get(
-        Address(vm.heap_get(ptr.base).fields[FieldName("ws_handle")].value)
+        Address(str(vm.heap_get(ptr.base).fields[FieldName("ws_handle")].value))
     )
     assert region is not None
     assert _decode_zoned_unsigned(region, 0, 4) == 1234
@@ -323,7 +323,7 @@ def test_copy_shared_record_across_call(tmp_path):
             break
     assert ptr is not None and isinstance(ptr, Pointer)
     region = vm.region_get(
-        Address(vm.heap_get(ptr.base).fields[FieldName("ws_handle")].value)
+        Address(str(vm.heap_get(ptr.base).fields[FieldName("ws_handle")].value))
     )
     assert region is not None
     # SR-VALUE at offset 0: 7 (set by MAINPROG) + 10 (added by CALLEE via LINKAGE)

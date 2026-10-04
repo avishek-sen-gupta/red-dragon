@@ -590,7 +590,9 @@ class TestCobolMultiFile:
         assert main_ptr is not None, "__prog_MAIN singleton not found"
         assert isinstance(main_ptr, Pointer)
         main_ws = vm.region_get(
-            Address(vm.heap_get(main_ptr.base).fields[FieldName("ws_handle")].value)
+            Address(
+                str(vm.heap_get(main_ptr.base).fields[FieldName("ws_handle")].value)
+            )
         )
         assert main_ws is not None
         # WS-TICKET at offset 0 is intentionally NOT asserted here — see the

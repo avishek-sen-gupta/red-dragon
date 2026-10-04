@@ -5649,7 +5649,7 @@ class TestSubprogramWsPersistence:
         ), f"Expected Pointer, got {type(singleton_ptr)}"
         singleton = vm.heap_get(singleton_ptr.base)
         ws_handle_tv = singleton.fields[FieldName("ws_handle")]
-        ws_addr = Address(ws_handle_tv.value)
+        ws_addr = Address(str(ws_handle_tv.value))
         region = vm.region_get(ws_addr)
         assert region is not None, f"WS region not found at {ws_addr}"
         counter = _decode_zoned_unsigned(region, offset=0, length=4)
@@ -5726,7 +5726,9 @@ class TestSubprogramWsPersistence:
         )
         assert ptr is not None, "__prog_MAINCLR singleton not found in VM state"
         region = vm.region_get(
-            Address(vm.heap_get(ptr.value.base).fields[FieldName("ws_handle")].value)
+            Address(
+                str(vm.heap_get(ptr.value.base).fields[FieldName("ws_handle")].value)
+            )
         )
         assert region is not None, "MAINCLR WS region not found"
 
@@ -5807,7 +5809,9 @@ class TestCallUsingByReference:
             assert ptr is not None, f"__prog_{prog_name} not found"
             region = vm.region_get(
                 Address(
-                    vm.heap_get(ptr.value.base).fields[FieldName("ws_handle")].value
+                    str(
+                        vm.heap_get(ptr.value.base).fields[FieldName("ws_handle")].value
+                    )
                 )
             )
             assert region is not None, f"WS region for {prog_name} not found"
@@ -5911,7 +5915,9 @@ class TestCallUsingByReference:
             assert ptr is not None, f"__prog_{prog_name} not found"
             region = vm.region_get(
                 Address(
-                    vm.heap_get(ptr.value.base).fields[FieldName("ws_handle")].value
+                    str(
+                        vm.heap_get(ptr.value.base).fields[FieldName("ws_handle")].value
+                    )
                 )
             )
             assert region is not None, f"WS region for {prog_name} not found"
@@ -5993,7 +5999,9 @@ class TestCallUsingByReference:
         )
         assert ptr is not None, "__prog_MAINPROG not found"
         region = vm.region_get(
-            Address(vm.heap_get(ptr.value.base).fields[FieldName("ws_handle")].value)
+            Address(
+                str(vm.heap_get(ptr.value.base).fields[FieldName("ws_handle")].value)
+            )
         )
         assert region is not None
         ws_value = _decode_zoned_unsigned(region, offset=0, length=4)
@@ -6069,7 +6077,9 @@ class TestCallUsingByValue:
             assert ptr is not None, f"__prog_{prog_name} not found"
             region = vm.region_get(
                 Address(
-                    vm.heap_get(ptr.value.base).fields[FieldName("ws_handle")].value
+                    str(
+                        vm.heap_get(ptr.value.base).fields[FieldName("ws_handle")].value
+                    )
                 )
             )
             assert region is not None, f"WS region for {prog_name} not found"
@@ -6153,7 +6163,9 @@ class TestCallUsingByValue:
             assert ptr is not None, f"__prog_{prog_name} not found"
             region = vm.region_get(
                 Address(
-                    vm.heap_get(ptr.value.base).fields[FieldName("ws_handle")].value
+                    str(
+                        vm.heap_get(ptr.value.base).fields[FieldName("ws_handle")].value
+                    )
                 )
             )
             assert region is not None, f"WS region for {prog_name} not found"
@@ -6235,7 +6247,7 @@ class TestCallUsingLinkageRead:
         assert singleton_ptr is not None, "__prog_READER singleton not found"
         assert isinstance(singleton_ptr, Pointer)
         singleton = vm.heap_get(singleton_ptr.base)
-        ws_addr = Address(singleton.fields[FieldName("ws_handle")].value)
+        ws_addr = Address(str(singleton.fields[FieldName("ws_handle")].value))
         region = vm.region_get(ws_addr)
         assert region is not None
 
@@ -6302,7 +6314,7 @@ class TestCallUsingLinkageRead:
         assert singleton_ptr is not None, "__prog_READER singleton not found"
         assert isinstance(singleton_ptr, Pointer)
         singleton = vm.heap_get(singleton_ptr.base)
-        ws_addr = Address(singleton.fields[FieldName("ws_handle")].value)
+        ws_addr = Address(str(singleton.fields[FieldName("ws_handle")].value))
         region = vm.region_get(ws_addr)
         assert region is not None
 
@@ -6371,7 +6383,7 @@ class TestCallUsingLinkageRead:
         assert singleton_ptr is not None, "__prog_READER singleton not found"
         assert isinstance(singleton_ptr, Pointer)
         singleton = vm.heap_get(singleton_ptr.base)
-        ws_addr = Address(singleton.fields[FieldName("ws_handle")].value)
+        ws_addr = Address(str(singleton.fields[FieldName("ws_handle")].value))
         region = vm.region_get(ws_addr)
         assert region is not None
         assert bytes(region[:4]).decode("cp037") == "07NN"
@@ -6428,7 +6440,7 @@ class TestGobackExitProgram:
         assert singleton_ptr is not None
         assert isinstance(singleton_ptr, Pointer)
         ws_addr = Address(
-            vm.heap_get(singleton_ptr.base).fields[FieldName("ws_handle")].value
+            str(vm.heap_get(singleton_ptr.base).fields[FieldName("ws_handle")].value)
         )
         region = vm.region_get(ws_addr)
         assert region is not None
@@ -6485,7 +6497,7 @@ class TestGobackExitProgram:
         assert singleton_ptr is not None
         assert isinstance(singleton_ptr, Pointer)
         ws_addr = Address(
-            vm.heap_get(singleton_ptr.base).fields[FieldName("ws_handle")].value
+            str(vm.heap_get(singleton_ptr.base).fields[FieldName("ws_handle")].value)
         )
         region = vm.region_get(ws_addr)
         assert region is not None
@@ -6553,7 +6565,7 @@ class TestGobackExitProgram:
         assert singleton_ptr is not None
         assert isinstance(singleton_ptr, Pointer)
         ws_addr = Address(
-            vm.heap_get(singleton_ptr.base).fields[FieldName("ws_handle")].value
+            str(vm.heap_get(singleton_ptr.base).fields[FieldName("ws_handle")].value)
         )
         region = vm.region_get(ws_addr)
         assert region is not None
@@ -6620,7 +6632,7 @@ class TestStopRunTerminatesRunUnit:
         assert singleton_ptr is not None
         assert isinstance(singleton_ptr, Pointer)
         ws_addr = Address(
-            vm.heap_get(singleton_ptr.base).fields[FieldName("ws_handle")].value
+            str(vm.heap_get(singleton_ptr.base).fields[FieldName("ws_handle")].value)
         )
         region = vm.region_get(ws_addr)
         assert region is not None
@@ -6692,7 +6704,7 @@ class TestStopRunTerminatesRunUnit:
         assert singleton_ptr is not None
         assert isinstance(singleton_ptr, Pointer)
         ws_addr = Address(
-            vm.heap_get(singleton_ptr.base).fields[FieldName("ws_handle")].value
+            str(vm.heap_get(singleton_ptr.base).fields[FieldName("ws_handle")].value)
         )
         region = vm.region_get(ws_addr)
         assert region is not None
@@ -6780,7 +6792,7 @@ class TestStopRunTerminatesRunUnit:
         assert singleton_ptr is not None
         assert isinstance(singleton_ptr, Pointer)
         ws_addr = Address(
-            vm.heap_get(singleton_ptr.base).fields[FieldName("ws_handle")].value
+            str(vm.heap_get(singleton_ptr.base).fields[FieldName("ws_handle")].value)
         )
         region = vm.region_get(ws_addr)
         assert region is not None
@@ -8734,7 +8746,9 @@ class TestIndexItemAllocation:
         )
         assert ptr is not None, "__prog_MAINPROG not found"
         region = vm.region_get(
-            Address(vm.heap_get(ptr.value.base).fields[FieldName("ws_handle")].value)
+            Address(
+                str(vm.heap_get(ptr.value.base).fields[FieldName("ws_handle")].value)
+            )
         )
         assert region is not None
         assert _decode_alpha(region, 0, 20) == "ABCDEFGHIJKLMNOPQRST"

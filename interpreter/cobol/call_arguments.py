@@ -37,7 +37,7 @@ def _element(vm: VMState, region: Address) -> TypedValue:
         element,
         HeapObject(
             fields={
-                FieldName("region"): typed(region.value, UNKNOWN),
+                FieldName("region"): typed(vm.segment_of(region).base, UNKNOWN),
                 FieldName("offset"): typed(0, UNKNOWN),
                 FieldName("omitted"): typed(False, UNKNOWN),
             }
