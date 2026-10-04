@@ -224,7 +224,7 @@ def apply_update(
 
     # Region writes
     for rw in update.region_writes:
-        vm.write_region(rw.region_addr, rw.offset, bytes(rw.data))
+        vm.write_at(rw.address, bytes(rw.data))
 
     # Continuation writes
     for name, label in update.continuation_writes.items():

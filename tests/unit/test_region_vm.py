@@ -14,6 +14,7 @@ from interpreter.vm.executor import (
     _default_handler_context,
 )
 from interpreter.vm.vm import apply_update
+from interpreter.vm.segment import Segment
 from interpreter.vm.vm_types import SymbolicValue
 from tests.unit.vm_helpers import make_vm as _make_vm
 
@@ -47,9 +48,12 @@ class TestAllocRegion:
         )
         _execute(vm, inst)
 
-        addr_str = unwrap(vm.current_frame.registers[Register("%r0")])
-        assert addr_str.startswith("rgn_")
-        addr = Address(addr_str)
+        handle = unwrap(vm.current_frame.registers[Register("%r0")])
+        assert (handle, vm.segment_of(Address(str(handle)))) == (
+            4096,
+            Segment(base=4096, size=16),
+        )
+        addr = Address(str(handle))
         assert vm.region_get(addr) is not None
         assert len(vm.region_get(addr)) == 16
         assert all(b == 0 for b in vm.region_get(addr))
@@ -269,9 +273,10 @@ class TestWriteAndLoadRegion:
         )
         assert unwrap(vm.current_frame.registers[Register("%result")]) == [0, 0, 0, 0]
 
-    def test_load_unknown_region_returns_symbolic(self):
+    def test_load_at_an_unallocated_address_reads_zeroes(self):
+        """A handle is an address: a load past the last segment reads zeroes."""
         vm = _make_vm()
-        vm.current_frame.registers[Register("%rgn")] = "rgn_nonexistent"
+        vm.current_frame.registers[Register("%rgn")] = 9000
         vm.current_frame.registers[Register("%off")] = 0
 
         _execute(
@@ -283,8 +288,7 @@ class TestWriteAndLoadRegion:
             ),
         )
 
-        val = unwrap(vm.current_frame.registers[Register("%result")])
-        assert isinstance(val, SymbolicValue)
+        assert unwrap(vm.current_frame.registers[Register("%result")]) == [0, 0, 0, 0]
 
     def test_correct_bytearray_size(self):
         vm = _make_vm()
@@ -297,7 +301,7 @@ class TestWriteAndLoadRegion:
             ),
         )
 
-        addr = Address(unwrap(vm.current_frame.registers[Register("%rgn")]))
+        addr = Address(str(unwrap(vm.current_frame.registers[Register("%rgn")])))
         assert len(vm.region_get(addr)) == 100
 
     def test_overwrite_partial(self):
