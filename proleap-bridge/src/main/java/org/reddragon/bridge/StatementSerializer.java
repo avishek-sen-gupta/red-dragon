@@ -102,6 +102,7 @@ import io.proleap.cobol.asg.metamodel.procedure.execcics.ExecCicsStatement;
 import io.proleap.cobol.asg.metamodel.procedure.execsql.ExecSqlStatement;
 import io.proleap.cobol.asg.metamodel.procedure.xml.XmlGenerateStatement;
 import io.proleap.cobol.asg.metamodel.call.Call;
+import io.proleap.cobol.asg.metamodel.call.SpecialRegisterCall;
 import io.proleap.cobol.asg.metamodel.call.TableCall;
 import io.proleap.cobol.asg.metamodel.valuestmt.ArithmeticValueStmt;
 import io.proleap.cobol.asg.metamodel.valuestmt.CallValueStmt;
@@ -1206,10 +1207,10 @@ public final class StatementSerializer {
                 JsonArray values = new JsonArray();
                 for (SetTo setTo : stmt.getSetTos()) {
                     for (io.proleap.cobol.asg.metamodel.procedure.set.To to : setTo.getTos()) {
-                        targets.add(extractCallName(to.getToCall()));
+                        targets.add(callOperand(to.getToCall()));
                     }
                     for (io.proleap.cobol.asg.metamodel.procedure.set.Value val : setTo.getValues()) {
-                        values.add(extractValueStmtText(val.getValueStmt()));
+                        values.add(setValueOperand(val.getValueStmt()));
                     }
                 }
                 obj.add("targets", targets);
@@ -1222,11 +1223,11 @@ public final class StatementSerializer {
                     obj.addProperty("by_type", byType);
                     JsonArray targets = new JsonArray();
                     for (io.proleap.cobol.asg.metamodel.procedure.set.To to : setBy.getTos()) {
-                        targets.add(extractCallName(to.getToCall()));
+                        targets.add(callOperand(to.getToCall()));
                     }
                     obj.add("targets", targets);
                     if (setBy.getBy() != null && setBy.getBy().getByValueStmt() != null) {
-                        obj.addProperty("value", extractValueStmtText(setBy.getBy().getByValueStmt()));
+                        obj.add("value", setValueOperand(setBy.getBy().getByValueStmt()));
                     }
                 }
             }
@@ -1234,6 +1235,65 @@ public final class StatementSerializer {
             LOG.fine("Could not extract SET operands: " + e.getMessage());
         }
         return obj;
+    }
+
+    /** The identifier an ADDRESS OF special register names, or null for any other call. */
+    private static Call addressOfTarget(Call call) {
+        if (call == null) return null;
+        Call unwrapped = call.unwrap();
+        if (unwrapped instanceof SpecialRegisterCall sr
+                && sr.getSpecialRegisterType() == SpecialRegisterCall.SpecialRegisterType.ADDRESS_OF) {
+            return sr.getIdentifierCall();
+        }
+        return null;
+    }
+
+    /** A reference operand of the given kind, its qualifiers and subscripts always present. */
+    private static JsonObject operandRef(Call call, String kind) {
+        JsonObject ref = serializeRef(call);
+        JsonObject node = new JsonObject();
+        node.addProperty("kind", kind);
+        node.add("name", ref.get("name"));
+        node.add("qualifiers", ref.has("qualifiers") ? ref.get("qualifiers") : new JsonArray());
+        node.add("subscripts", ref.has("subscripts") ? ref.get("subscripts") : new JsonArray());
+        return node;
+    }
+
+    /** A data reference, or the item an ADDRESS OF names. */
+    private static JsonObject callOperand(Call call) {
+        Call target = addressOfTarget(call);
+        return target != null ? operandRef(target, "address_of") : operandRef(call, "ref");
+    }
+
+    /** A SET value: a reference, ADDRESS OF, a figurative constant (NULL among them) or a literal. */
+    private static JsonObject setValueOperand(ValueStmt vs) {
+        if (vs instanceof CallValueStmt && ((CallValueStmt) vs).getCall() != null) {
+            return callOperand(((CallValueStmt) vs).getCall());
+        }
+        if (vs instanceof LiteralValueStmt) {
+            Literal lit = ((LiteralValueStmt) vs).getLiteral();
+            if (lit != null && lit.getLiteralType() == Literal.LiteralType.FIGURATIVE_CONSTANT
+                    && lit.getFigurativeConstant() != null) {
+                String canonical = canonicalFigurative(lit.getFigurativeConstant().getFigurativeConstantType());
+                if (canonical != null) {
+                    JsonObject fig = new JsonObject();
+                    fig.addProperty("kind", "figurative");
+                    fig.addProperty("value", canonical);
+                    return fig;
+                }
+            }
+        }
+        return litNode(extractValueStmtText(vs));
+    }
+
+    /** The item named by a CALL USING ... ADDRESS OF operand. */
+    private static String addressOfName(ValueStmt vs) {
+        if (vs instanceof CallValueStmt && ((CallValueStmt) vs).getCall() != null) {
+            Call call = ((CallValueStmt) vs).getCall();
+            Call target = addressOfTarget(call);
+            return extractCallName(target != null ? target : call);
+        }
+        return extractValueStmtText(vs);
     }
 
     private static JsonObject serializeString(StringStatement stmt) {
@@ -1549,6 +1609,9 @@ public final class StatementSerializer {
                             paramObj.addProperty("type", "REFERENCE");
                             if (br.getByReferenceType() == ByReference.ByReferenceType.OMITTED) {
                                 paramObj.addProperty("omitted", true);
+                            } else if (br.getByReferenceType() == ByReference.ByReferenceType.ADDRESS_OF) {
+                                paramObj.addProperty("name", addressOfName(br.getValueStmt()));
+                                paramObj.addProperty("address_of", true);
                             } else {
                                 paramObj.addProperty("name", extractValueStmtText(br.getValueStmt()));
                                 if (br.getByReferenceType() == ByReference.ByReferenceType.STRING
@@ -1563,7 +1626,12 @@ public final class StatementSerializer {
                         for (ByContent bc : param.getByContentPhrase().getByContents()) {
                             JsonObject paramObj = new JsonObject();
                             paramObj.addProperty("type", "CONTENT");
-                            paramObj.addProperty("name", extractValueStmtText(bc.getValueStmt()));
+                            if (bc.getByContentType() == ByContent.ByContentType.ADDRESS_OF) {
+                                paramObj.addProperty("name", addressOfName(bc.getValueStmt()));
+                                paramObj.addProperty("address_of", true);
+                            } else {
+                                paramObj.addProperty("name", extractValueStmtText(bc.getValueStmt()));
+                            }
                             if (bc.getValueStmt() instanceof io.proleap.cobol.asg.metamodel.valuestmt.LiteralValueStmt) {
                                 paramObj.addProperty("is_literal", true);
                             }
@@ -1574,7 +1642,12 @@ public final class StatementSerializer {
                         for (ByValue bv : param.getByValuePhrase().getByValues()) {
                             JsonObject paramObj = new JsonObject();
                             paramObj.addProperty("type", "VALUE");
-                            paramObj.addProperty("name", extractValueStmtText(bv.getValueStmt()));
+                            if (bv.getByValueType() == ByValue.ByValueType.ADDRESS_OF) {
+                                paramObj.addProperty("name", addressOfName(bv.getValueStmt()));
+                                paramObj.addProperty("address_of", true);
+                            } else {
+                                paramObj.addProperty("name", extractValueStmtText(bv.getValueStmt()));
+                            }
                             if (bv.getValueStmt() instanceof io.proleap.cobol.asg.metamodel.valuestmt.LiteralValueStmt) {
                                 paramObj.addProperty("is_literal", true);
                             }
@@ -3341,6 +3414,10 @@ public final class StatementSerializer {
         ValueStmt vs = b.getBasisValueStmt();
         if (vs instanceof CallValueStmt) {
             Call call = ((CallValueStmt) vs).getCall();
+            Call addressed = addressOfTarget(call);
+            if (addressed != null) {
+                return operandRef(addressed, "address_of");
+            }
             JsonObject ref = new JsonObject();
             ref.addProperty("kind", "ref");
             if (call != null) {
@@ -3825,6 +3902,9 @@ public final class StatementSerializer {
             case QUOTE:
             case QUOTES:
                 return "QUOTES";
+            case NULL:
+            case NULLS:
+                return "NULL";
             default:
                 return null;
         }

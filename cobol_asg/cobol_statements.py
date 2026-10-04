@@ -24,6 +24,7 @@ from cobol_asg.ref_mod import (
     RefModOperand,
     is_function_operand,
 )
+from cobol_asg.set_operand import SetOperand, set_operand_from_dict
 from cobol_asg.source_span import SourceSpan
 
 # ── Dialect parser injection ──────────────────────────────────────
@@ -833,21 +834,22 @@ class SetStatement:
     """SET target TO value / SET target UP|DOWN BY value."""
 
     set_type: str  # "TO" or "BY"
-    targets: list[str] = field(default_factory=list)
-    values: list[str] = field(default_factory=list)
+    targets: list[SetOperand] = field(default_factory=list)
+    values: list[SetOperand] = field(default_factory=list)
     by_type: str = ""  # "UP" or "DOWN" (only for BY)
     span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> SetStatement:
+        values = (
+            data.get("values", [])
+            if data.get("set_type") == "TO"
+            else [data["value"]] if "value" in data else []
+        )
         return cls(
             set_type=data.get("set_type", ""),
-            targets=data.get("targets", []),
-            values=(
-                data.get("values", [data.get("value", "")])
-                if data.get("set_type") == "TO"
-                else [data.get("value", "")]
-            ),
+            targets=[set_operand_from_dict(t) for t in data.get("targets", [])],
+            values=[set_operand_from_dict(v) for v in values],
             by_type=data.get("by_type", ""),
             span=SourceSpan.from_dict(data),
         )
@@ -856,13 +858,13 @@ class SetStatement:
         result: dict = {
             "type": "SET",
             "set_type": self.set_type,
-            "targets": list(self.targets),
+            "targets": [t.to_dict() for t in self.targets],
         }
         if self.set_type == "TO":
-            result["values"] = list(self.values)
+            result["values"] = [v.to_dict() for v in self.values]
         else:
             result["by_type"] = self.by_type
-            result["value"] = self.values[0] if self.values else ""
+            result["value"] = self.values[0].to_dict()
         if self.span is not None:
             self.span.write_into(result)
         return result
@@ -1220,6 +1222,7 @@ class CallUsingParam:
     param_type: str = "REFERENCE"  # REFERENCE, CONTENT, or VALUE
     omitted: bool = False
     is_literal: bool = False
+    address_of: bool = False
 
     @classmethod
     def from_dict(cls, data: dict) -> CallUsingParam:
@@ -1228,15 +1231,20 @@ class CallUsingParam:
             param_type=data.get("type", "REFERENCE"),
             omitted=data.get("omitted", False),
             is_literal=data.get("is_literal", False),
+            address_of=data.get("address_of", False),
         )
 
     def to_dict(self) -> dict:
-        result: dict = {"name": self.name, "type": self.param_type}
-        if self.omitted:
-            result["omitted"] = True
-        if self.is_literal:
-            result["is_literal"] = True
-        return result
+        flags = {
+            "omitted": self.omitted,
+            "is_literal": self.is_literal,
+            "address_of": self.address_of,
+        }
+        return {
+            "name": self.name,
+            "type": self.param_type,
+            **{flag: True for flag, on in flags.items() if on},
+        }
 
 
 @dataclass(frozen=True)

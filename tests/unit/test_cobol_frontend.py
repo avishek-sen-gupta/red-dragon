@@ -56,7 +56,9 @@ from cobol_asg.cobol_statements import (
     UnstringStatement,
     WriteStatement,
 )
+from cobol_asg.operand_kind import OperandKind
 from cobol_asg.ref_mod import RefModOperand
+from cobol_asg.set_operand import SetOperand
 from interpreter.cobol.cobol_frontend import CobolFrontend
 from interpreter.cobol.features import CobolFeature
 from interpreter.continuation_name import ContinuationName
@@ -1528,7 +1530,13 @@ class TestTier1Lowering:
                 value="0",
             ),
         ]
-        stmts = [SetStatement(set_type="TO", targets=["WS-IDX"], values=["5"])]
+        stmts = [
+            SetStatement(
+                set_type="TO",
+                targets=[SetOperand(kind=OperandKind.REF, name="WS-IDX")],
+                values=[SetOperand(kind=OperandKind.LIT, value="5")],
+            )
+        ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
@@ -1553,7 +1561,12 @@ class TestTier1Lowering:
             ),
         ]
         stmts = [
-            SetStatement(set_type="BY", targets=["WS-IDX"], values=["1"], by_type="UP")
+            SetStatement(
+                set_type="BY",
+                targets=[SetOperand(kind=OperandKind.REF, name="WS-IDX")],
+                values=[SetOperand(kind=OperandKind.LIT, value="1")],
+                by_type="UP",
+            )
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
@@ -1581,7 +1594,10 @@ class TestTier1Lowering:
         ]
         stmts = [
             SetStatement(
-                set_type="BY", targets=["WS-IDX"], values=["1"], by_type="DOWN"
+                set_type="BY",
+                targets=[SetOperand(kind=OperandKind.REF, name="WS-IDX")],
+                values=[SetOperand(kind=OperandKind.LIT, value="1")],
+                by_type="DOWN",
             )
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)

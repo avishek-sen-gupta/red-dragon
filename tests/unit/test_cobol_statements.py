@@ -48,7 +48,9 @@ from cobol_asg.cobol_statements import (
     XmlGenerateStatement,
     parse_statement,
 )
+from cobol_asg.operand_kind import OperandKind
 from cobol_asg.ref_mod import RefModOperand
+from cobol_asg.set_operand import SetOperand
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
 
@@ -354,12 +356,26 @@ class TestParseStatementDispatch:
     @covers(CobolFeature.SET_TO)
     def test_set_to(self):
         stmt = parse_statement(
-            {"type": "SET", "set_type": "TO", "targets": ["WS-IDX"], "values": ["5"]}
+            {
+                "type": "SET",
+                "set_type": "TO",
+                "targets": [
+                    {
+                        "kind": "ref",
+                        "name": "WS-IDX",
+                        "qualifiers": [],
+                        "subscripts": [],
+                    }
+                ],
+                "values": [{"kind": "lit", "value": "5"}],
+            }
         )
         assert isinstance(stmt, SetStatement)
-        assert stmt.set_type == "TO"
-        assert stmt.targets == ["WS-IDX"]
-        assert stmt.values == ["5"]
+        assert (stmt.set_type, stmt.targets, stmt.values) == (
+            "TO",
+            [SetOperand(kind=OperandKind.REF, name="WS-IDX")],
+            [SetOperand(kind=OperandKind.LIT, value="5")],
+        )
 
     @covers(CobolFeature.SET_UP_BY)
     def test_set_by_up(self):
@@ -368,14 +384,23 @@ class TestParseStatementDispatch:
                 "type": "SET",
                 "set_type": "BY",
                 "by_type": "UP",
-                "targets": ["WS-IDX"],
-                "value": "1",
+                "targets": [
+                    {
+                        "kind": "ref",
+                        "name": "WS-IDX",
+                        "qualifiers": [],
+                        "subscripts": [],
+                    }
+                ],
+                "value": {"kind": "lit", "value": "1"},
             }
         )
         assert isinstance(stmt, SetStatement)
-        assert stmt.set_type == "BY"
-        assert stmt.by_type == "UP"
-        assert stmt.values == ["1"]
+        assert (stmt.set_type, stmt.by_type, stmt.values) == (
+            "BY",
+            "UP",
+            [SetOperand(kind=OperandKind.LIT, value="1")],
+        )
 
     @covers(CobolFeature.STRING_VERB, CobolFeature.STRING_DELIMITED_BY)
     def test_string(self):
@@ -1192,7 +1217,14 @@ class TestRoundTrip:
 
     @covers(CobolFeature.SET_TO)
     def test_set_to_round_trip(self):
-        data = {"type": "SET", "set_type": "TO", "targets": ["WS-IDX"], "values": ["5"]}
+        data = {
+            "type": "SET",
+            "set_type": "TO",
+            "targets": [
+                {"kind": "ref", "name": "WS-IDX", "qualifiers": [], "subscripts": []}
+            ],
+            "values": [{"kind": "lit", "value": "5"}],
+        }
         assert self._round_trip(data) == data
 
     @covers(CobolFeature.SET_UP_BY)
@@ -1200,9 +1232,11 @@ class TestRoundTrip:
         data = {
             "type": "SET",
             "set_type": "BY",
-            "targets": ["WS-IDX"],
+            "targets": [
+                {"kind": "ref", "name": "WS-IDX", "qualifiers": [], "subscripts": []}
+            ],
             "by_type": "UP",
-            "value": "1",
+            "value": {"kind": "lit", "value": "1"},
         }
         assert self._round_trip(data) == data
 
