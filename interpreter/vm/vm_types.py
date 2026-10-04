@@ -4,9 +4,9 @@
 from __future__ import annotations
 
 import logging
+from bisect import bisect_right
 from collections.abc import ItemsView, KeysView, ValuesView
 from dataclasses import dataclass, field
-from bisect import bisect_right
 from functools import reduce
 from typing import Any
 
@@ -24,7 +24,9 @@ from interpreter.register import NO_REGISTER, Register
 from interpreter.types.type_expr import UNKNOWN, TypeExpr, scalar
 from interpreter.types.typed_value import TypedValue, typed
 from interpreter.var_name import VarName
+from interpreter.vm.null_access import NullAccess
 from interpreter.vm.segment import FIRST_ADDRESS, Segment
+from interpreter.vm.warn_and_ignore import WarnAndIgnore
 
 _LOG = logging.getLogger(__name__)
 
@@ -169,6 +171,7 @@ class VMState:
     _next_address: int = FIRST_ADDRESS
     _bases: tuple[int, ...] = ()
     _handles: tuple[Address, ...] = ()
+    null_access: NullAccess = field(default_factory=WarnAndIgnore)
     continuations: dict[ContinuationName, CodeLabel] = field(default_factory=dict)
     exception_stack: list[ExceptionHandler] = field(default_factory=list)
     data_layout: dict[str, dict] = field(default_factory=dict)
@@ -286,27 +289,38 @@ class VMState:
 
     def read_at(self, address: int, length: int) -> bytes:
         """The bytes from ``address`` on, across segments, stopping at the last
-        allocated byte."""
+        allocated byte; below the first address, the null-access strategy."""
+        if address < FIRST_ADDRESS:
+            return self.null_access.on_read(address, length)
         region, offset = self._within_one(address, length)
         if offset >= 0:
             return bytes(region[offset : offset + length])
+        return self._read_across(address, length)
+
+    def _read_across(self, address: int, length: int) -> bytes:
         pieces = self._pieces(address, length)
         data = b"".join(bytes(region[lo:hi]) for region, (lo, hi) in pieces)
-        if len(pieces) != 1 or len(data) < length:
-            self._report("read", address, length, len(data))
+        self._report("read", address, length, len(data))
         return data
 
     def write_at(self, address: int, data: bytes) -> None:
         """Write ``data`` from ``address`` on, across segments; bytes past the
-        last allocated byte are dropped."""
+        last allocated byte are dropped; below the first address, the
+        null-access strategy decides."""
+        if address < FIRST_ADDRESS:
+            self.null_access.on_write(address, len(data))
+            return
         region, offset = self._within_one(address, len(data))
         if offset >= 0:
             _write_piece(data, (region, (offset, offset + len(data))))
             return
+        self._write_across(address, data)
+
+    def _write_across(self, address: int, data: bytes) -> None:
         pieces = self._pieces(address, len(data))
-        covered = sum(hi - lo for _, (lo, hi) in pieces)
-        if len(pieces) != 1 or covered < len(data):
-            self._report("write", address, len(data), covered)
+        self._report(
+            "write", address, len(data), sum(hi - lo for _, (lo, hi) in pieces)
+        )
         reduce(_write_piece, pieces, data)
 
     def region_items(self) -> ItemsView[Address, bytearray]:
