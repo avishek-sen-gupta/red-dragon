@@ -84,6 +84,7 @@ from interpreter.vm.function_scoping import (
     GlobalLeakFunctionScopingStrategy,
     LocalFunctionScopingStrategy,
 )
+from interpreter.vm.null_access import NullAccess
 from interpreter.vm.unresolved_call import (
     LLMPlausibleResolver,
     SymbolicResolver,
@@ -98,6 +99,7 @@ from interpreter.vm.vm import (
     coerce_local_update,
     materialize_raw_update,
 )
+from interpreter.vm.warn_and_ignore import WARN_AND_IGNORE
 
 logger = logging.getLogger(__name__)
 
@@ -509,7 +511,9 @@ def _warn_step_budget_exhausted(max_steps: int, label: CodeLabel, ip: int) -> No
     )
 
 
-def initial_vm_state(io_provider: Any = None) -> VMState:
+def initial_vm_state(
+    io_provider: Any = None, null_access: NullAccess = WARN_AND_IGNORE
+) -> VMState:
     """Build a fresh VMState seeded with the ``<main>`` call frame.
 
     ``execute_cfg``/``run_resumable``/``execute_cfg_traced``/``run_linked``/
@@ -518,7 +522,7 @@ def initial_vm_state(io_provider: Any = None) -> VMState:
     functions used to build internally when the argument was omitted — callers
     that don't need to continue an existing VM should call this to get one.
     """
-    vm = VMState()
+    vm = VMState(null_access=null_access)
     vm.call_stack.append(StackFrame(function_name=FuncName(constants.MAIN_FRAME_NAME)))
     vm.io_provider = io_provider
     return vm
@@ -1272,6 +1276,7 @@ def run(
     io_provider: Any = None,  # Any: CobolIOProvider — optional COBOL I/O injection
     copybook_dirs: list[Path] = [],
     tolerant: bool = False,
+    null_access: NullAccess = WARN_AND_IGNORE,
 ) -> VMState:
     """End-to-end: parse → lower → build LinkedProgram → run_linked.
 
@@ -1422,7 +1427,7 @@ def run(
         backend=backend,
         unresolved_call_strategy=unresolved_call_strategy,
         io_provider=io_provider,
-        initial_vm=initial_vm_state(io_provider=io_provider),
+        initial_vm=initial_vm_state(io_provider=io_provider, null_access=null_access),
     )
     stats.execution_time = time.perf_counter() - exec_start
     stats.total_time = time.perf_counter() - pipeline_start
