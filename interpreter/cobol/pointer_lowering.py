@@ -166,7 +166,11 @@ class PointerLowering:
         return binding
 
     def step(self, operand: SetOperand) -> Register:
-        """A SET ... BY amount: a data item's value or a literal."""
+        """A SET ... BY amount: a data item's value, LENGTH OF an item, or a literal."""
+        if operand.kind is OperandKind.LENGTH_OF:
+            fl = self.resolve(operand)[0].fl
+            length = fl.element_size if fl.occurs_count else fl.byte_length
+            return self.ctx.const_to_reg(length, span=self.span)
         if operand.kind is not OperandKind.REF:
             return self.ctx.const_to_reg(
                 self.ctx.parse_literal(operand.text), span=self.span

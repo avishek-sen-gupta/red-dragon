@@ -33,7 +33,7 @@ class SetOperand:
         return {"kind": self.kind.value, "value": self.value}
 
 
-_NAMED = frozenset({OperandKind.REF, OperandKind.ADDRESS_OF})
+_NAMED = frozenset({OperandKind.REF, OperandKind.ADDRESS_OF, OperandKind.LENGTH_OF})
 
 
 def set_operand_from_dict(data: JsonExpr) -> SetOperand:
