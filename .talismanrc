@@ -210,4 +210,6 @@ fileignoreconfig:
   checksum: 1e2fa8b0f7818fd81e4b45de138bb13b44fc6e56b5b2838938b2baaa65abc583
 - filename: tests/unit/test_lower_call_with_memory.py
   checksum: 0072c9634ccd65457caabbc3ed35700b66e7a268294f9e01e9c16cc5e13c2e86
+- filename: docs/superpowers/plans/2026-10-04-pointer-model.md
+  checksum: 723dacb21c29d9ba516a2aadfb0672994e813bd80455485b4180ef3a97cbb325
 version: "1.0"
