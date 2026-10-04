@@ -72,6 +72,7 @@ from interpreter.cobol.figurative_constants import (
     raw_figurative_byte,
     translate_cobol_figurative,
 )
+from interpreter.cobol.lower_pointer import is_pointer_set, lower_pointer_set
 from interpreter.cobol.lower_program_exit import (
     emit_publish_run_unit_return_code,
     emit_return_code_load,
@@ -2381,6 +2382,9 @@ def lower_set(
     reads true. SET <88> TO FALSE requires a captured false-value; absent one it
     warns rather than guessing.
     """
+    if is_pointer_set(ctx, stmt, materialised):
+        lower_pointer_set(ctx, stmt, materialised)
+        return
     span = stmt.span
     condition_index = ctx._condition_index
     if stmt.set_type == "TO":

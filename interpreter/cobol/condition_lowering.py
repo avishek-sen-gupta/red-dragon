@@ -30,6 +30,7 @@ from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.condition_name_index import ConditionNameIndex
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.figurative_constants import COBOL_FIGURATIVE_CONSTANTS
+from interpreter.cobol.pointer_lowering import PointerLowering
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.func_name import FuncName
 from interpreter.instructions import Binop, CallFunction, Const
@@ -454,8 +455,10 @@ def _lower_figurative(
     # ZERO / ZEROS against a NUMERIC field compares by value (integer 0), not as
     # a zero-filled character string — otherwise "1000.00" <= "0000000000.00"
     # would be a (broken) number-vs-string comparison (red-dragon-z6ad family).
-    if value in ("ZERO", "ZEROS", "ZEROES") and _is_numeric_field(
-        ctx, sibling, materialised, span=span
+    # NULL is the address 0.
+    if value == "NULL" or (
+        value in ("ZERO", "ZEROS", "ZEROES")
+        and _is_numeric_field(ctx, sibling, materialised, span=span)
     ):
         return ctx.const_to_reg(0, span=span)
     fill = COBOL_FIGURATIVE_CONSTANTS.get(value, " ")
@@ -921,6 +924,11 @@ def _lower_expr_dict(
         raw_val = expr.get("value", "")
         parsed = ctx.parse_literal(raw_val)
         return ctx.const_to_reg(parsed, span=span)
+
+    if kind == "address_of":
+        return PointerLowering(ctx, materialised, span).address_of(
+            expr["name"], expr.get("qualifiers", ()), expr.get("subscripts", ())
+        )
 
     if kind == "binop":
         left_reg = _lower_expr_dict(ctx, expr["left"], materialised, span=span)

@@ -100,24 +100,27 @@ def lower_sectioned_data_division(
 
     bindings = bind_linkage(ctx, layout.linkage_parameters, layout.linkage_unbound)
 
-    if layout.local_storage.total_bytes > 0:
-        ls_reg = lower_data_division(ctx, layout.local_storage, RegionId.LOCAL_STORAGE)
-    else:
-        ls_reg = NO_REGISTER
+    ls_reg = (
+        lower_data_division(ctx, layout.local_storage, RegionId.LOCAL_STORAGE)
+        if layout.local_storage.total_bytes > 0
+        else NO_REGISTER
+    )
 
-    if layout.file.total_bytes > 0:
-        file_reg = lower_data_division(ctx, layout.file, RegionId.FILE)
-    else:
-        file_reg = NO_REGISTER
+    file_reg = (
+        lower_data_division(ctx, layout.file, RegionId.FILE)
+        if layout.file.total_bytes > 0
+        else NO_REGISTER
+    )
 
     # INDEXED BY items belong to no record, so they get their own region rather
     # than being appended to one: LINKAGE in particular is the CALLER's argument
     # storage, sized by the caller and not by total_bytes, so an index placed
     # there would write past the arguments and corrupt them.
-    if layout.indexes.total_bytes > 0:
-        index_reg = lower_data_division(ctx, layout.indexes, RegionId.INDEXES)
-    else:
-        index_reg = NO_REGISTER
+    index_reg = (
+        lower_data_division(ctx, layout.indexes, RegionId.INDEXES)
+        if layout.indexes.total_bytes > 0
+        else NO_REGISTER
+    )
 
     # The special registers are allocated ONCE, in the init block beside
     # WORKING-STORAGE, and merely rebound here — so this loads the handle rather
@@ -240,8 +243,12 @@ def _store_binding(
         ),
         span=None,
     )
-    ctx.emit_inst(StoreVar(name=_region_var(record), value_reg=region), span=None)
-    ctx.emit_inst(StoreVar(name=_delta_var(record), value_reg=delta), span=None)
+    ctx.emit_inst(
+        StoreVar(name=linkage_region_var(record.name), value_reg=region), span=None
+    )
+    ctx.emit_inst(
+        StoreVar(name=linkage_delta_var(record.name), value_reg=delta), span=None
+    )
 
 
 def _store_zeroed(ctx: EmitContext, record: LinkageRecord) -> None:
@@ -257,15 +264,21 @@ def _store_zeroed(ctx: EmitContext, record: LinkageRecord) -> None:
 
 def _loaded(ctx: EmitContext, record: LinkageRecord) -> LinkageBinding:
     region = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=region, name=_region_var(record)), span=None)
+    ctx.emit_inst(
+        LoadVar(result_reg=region, name=linkage_region_var(record.name)), span=None
+    )
     delta = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=delta, name=_delta_var(record)), span=None)
+    ctx.emit_inst(
+        LoadVar(result_reg=delta, name=linkage_delta_var(record.name)), span=None
+    )
     return LinkageBinding(record.name, record.start, record.length, region, delta)
 
 
-def _region_var(record: LinkageRecord) -> VarName:
-    return VarName(f"__linkage_{record.name}_region")
+def linkage_region_var(name: str) -> VarName:
+    """The variable holding a LINKAGE 01's region register."""
+    return VarName(f"__linkage_{name}_region")
 
 
-def _delta_var(record: LinkageRecord) -> VarName:
-    return VarName(f"__linkage_{record.name}_delta")
+def linkage_delta_var(name: str) -> VarName:
+    """The variable holding a LINKAGE 01's shift."""
+    return VarName(f"__linkage_{name}_delta")
