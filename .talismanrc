@@ -203,7 +203,7 @@ fileignoreconfig:
 - filename: tests/unit/cobol/test_recorded_memory_effects.py
   checksum: ba151292b7ee1a3f747628e5950297f904de1c1cd625307f762f7a98b570b3de
 - filename: docs/frontend-design/cobol.md
-  checksum: 369bc8ef4569569c5a2da63e92894a74cfaab20584a2c98fccccd6081bb4cd8f
+  checksum: eaf51074b134562b88f39aee7bc314e3693dff18f582c376ca24e7fc22ccbf20
 - filename: tests/integration/test_cobol_call_using_addresses.py
   checksum: 353804977c7a3e5eb44a303f7e42a47ef1bdf9f837f41e396bf5033813c4fdb0
 - filename: tests/integration/test_cobol_call_using_slots.py

@@ -525,7 +525,7 @@ The VM also handles — all deterministically:
 
 - **Classes & Arrays** — heap allocation via `Pointer(base, offset)` with parameterized types (`Pointer[ClassName]`, `Pointer[ElementType]`), method dispatch with overload resolution (arity + type + subtype-aware scoring via TypeGraph), field access
 - **Closures** — shared mutable environments (capture-by-reference); mutations persist across calls and are visible to sibling closures
-- **Byte-addressed memory regions** — `ALLOC_REGION`/`WRITE_REGION`/`LOAD_REGION` for COBOL-style REDEFINES overlays, each region a segment of one flat address space (ADR-151)
+- **Byte-addressed memory regions** — `ALLOC_REGION`/`WRITE_REGION`/`LOAD_REGION` for COBOL-style REDEFINES overlays, each region a segment of one flat address space (ADR-151), and COBOL pointers — `ADDRESS OF`, `USAGE POINTER`, `SET ADDRESS OF`, NULL — as addresses in it (ADR-152)
 - **Named continuations** — `SET_CONTINUATION`/`RESUME_CONTINUATION` for COBOL PERFORM return semantics
 - **Data layout preservation** — COBOL field names, offsets, lengths, and type metadata attached to `VMState.data_layout` after execution
 - **Builtins** — `len`, `range`, `print`, `int`, `str`, `slice`, `arrayOf`/`listOf`, byte-manipulation primitives, etc. Method builtins (`subList`, `substring`, `slice`, `length`/`size`/`Length`, `toString`) dispatch through `METHOD_TABLE` for cross-language collection and string operations. All builtins return a `BuiltinResult(value, new_objects, heap_writes)` (defined in `vm_types.py`) instead of raw values — no builtin directly mutates `vm.heap`. Heap mutations are expressed as data in the result and applied uniformly via `StateUpdate`, keeping builtins pure and side-effect-free.

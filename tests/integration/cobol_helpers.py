@@ -14,6 +14,8 @@ import pytest
 
 from cobol_asg.lp import LP
 from interpreter.run import run
+from interpreter.vm.null_access import NullAccess
+from interpreter.vm.warn_and_ignore import WARN_AND_IGNORE
 
 _AREA_A = "       "  # 7 spaces: cols 1-6 (seq) + col 7 (indicator = space)
 _COMMENT = "      *"  # col 7 = * for comment line
@@ -71,6 +73,7 @@ def run_cobol_programs(
     subprograms: dict[str, list[str]],
     max_steps: int = 500_000,
     lp: LP = LP.LP32,
+    null_access: NullAccess = WARN_AND_IGNORE,
 ):
     """Run a main program plus named subprograms through the full pipeline.
 
@@ -97,7 +100,7 @@ def run_cobol_programs(
         linked,
         entry_point=EntryPoint.function(lambda f: str(f.name) == entry),
         max_steps=max_steps,
-        initial_vm=initial_vm_state(),
+        initial_vm=initial_vm_state(null_access=null_access),
     )
 
 
