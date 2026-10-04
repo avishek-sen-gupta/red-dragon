@@ -45,6 +45,7 @@ from cobol_asg.edit_picture import (
     DEFAULT_CURRENCY,
     UnsupportedEditPictureError,
 )
+from cobol_asg.pointer_types import FULLWORD_POINTER
 
 _USAGE_TO_CATEGORY = {
     "COMP-3": CobolDataCategory.COMP3,
@@ -155,6 +156,7 @@ def parse_pic(
     justified_right: bool = False,
     blank_when_zero: bool = False,
     currency: str = DEFAULT_CURRENCY,
+    pointer_type: CobolTypeDescriptor = FULLWORD_POINTER,
 ) -> CobolTypeDescriptor:
     """Parse a COBOL PIC clause string into a CobolTypeDescriptor.
 
@@ -179,6 +181,8 @@ def parse_pic(
         UnsupportedEditPictureError: if the picture's category has no runtime
             representation (a ValueError subclass, so existing handling holds).
     """
+    if usage == "POINTER" or pic.upper() == "POINTER":
+        return pointer_type
     usage_category = _USAGE_TO_CATEGORY.get(usage, CobolDataCategory.ZONED_DECIMAL)
 
     # COMP-1 and COMP-2 have no PIC clause — return immediately with fixed size.
@@ -186,11 +190,6 @@ def parse_pic(
         return CobolTypeDescriptor(category=usage_category, total_digits=0)
 
     if not pic:
-        return CobolTypeDescriptor(category=usage_category, total_digits=0)
-
-    if pic.upper() == "POINTER":
-        # A USAGE keyword that reaches this function as if it were a picture. No
-        # stored digits; let the usage-derived category govern the result.
         return CobolTypeDescriptor(category=usage_category, total_digits=0)
 
     try:

@@ -97,6 +97,7 @@ class FieldLayout:
     occurs_min: int = 0
     renames_from: str = ""
     renames_thru: str = ""
+    holds_address: bool = False
     span: SourceSpan | None = None
     """Where this field was declared, or None for compiler-allocated items.
 
@@ -643,6 +644,7 @@ def _flatten_field(
         justified_right=cobol_field.justified_right,
         occurs_depending_on=cobol_field.occurs_depending_on,
         occurs_min=cobol_field.occurs_min,
+        holds_address=cobol_field.usage == "POINTER",
         span=cobol_field.span,
     )
     return cobol_field.name, fl

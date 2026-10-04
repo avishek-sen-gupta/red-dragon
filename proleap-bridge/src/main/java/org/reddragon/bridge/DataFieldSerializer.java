@@ -32,10 +32,18 @@ public final class DataFieldSerializer {
     private static final Logger LOG = Logger.getLogger(DataFieldSerializer.class.getName());
 
 
+    /** Bytes a USAGE POINTER item occupies: 4 under LP(32), 8 under LP(64). */
+    private static int pointerSize = 4;
+
     /** Running counter for disambiguating FILLER fields within a serialization session. */
     private int fillerCount = 0;
 
     private DataFieldSerializer() {
+    }
+
+    /** Sets the USAGE POINTER size for this run, from the -pointer-size option. */
+    public static void setPointerSize(int bytes) {
+        pointerSize = bytes;
     }
 
     /**
@@ -468,6 +476,9 @@ public final class DataFieldSerializer {
      * For COMP/BINARY: 2 for ≤4 digits, 4 for ≤9, 8 for ≤18.
      */
     public static int computePicByteLength(String pic, String usage) {
+        if ("POINTER".equals(usage)) {
+            return pointerSize;
+        }
         if (pic.isEmpty()) {
             return 0;
         }

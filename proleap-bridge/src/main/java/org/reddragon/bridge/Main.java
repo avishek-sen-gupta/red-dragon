@@ -107,6 +107,9 @@ public final class Main {
                 i++;  // value consumed by copyBookExtensions(args)
             } else if ("-expand-only".equals(args[i])) {
                 continue;  // valueless; read by expandOnly(args)
+            } else if ("-pointer-size".equals(args[i]) && i + 1 < args.length) {
+                DataFieldSerializer.setPointerSize(Integer.parseInt(args[i + 1]));
+                i++;
             } else {
                 filePath = args[i];
             }
