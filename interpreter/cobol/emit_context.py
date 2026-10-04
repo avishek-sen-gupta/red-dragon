@@ -16,6 +16,9 @@ from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 
+from cobol_asg.addressing_mode import AddressingMode
+from cobol_asg.lp32 import LP32_MODE
+
 if TYPE_CHECKING:
     from cobol_asg.cobol_expression import ExprNode
 
@@ -138,8 +141,10 @@ class EmitContext:
         recorder: MemoryEffectRecorder = NullRecorder(),
         inst_ids: InstructionIdSource | None = None,
         tolerant: bool = False,
+        addressing_mode: AddressingMode = LP32_MODE,
     ) -> None:
         self._dispatch_fn = dispatch_fn
+        self.addressing_mode = addressing_mode
         # Opt-in: skip (with a WARNING) statements whose lowering raises, e.g.
         # references to fields from missing/stub copybooks. Off by default so
         # lowering errors (ambiguous references etc.) surface.

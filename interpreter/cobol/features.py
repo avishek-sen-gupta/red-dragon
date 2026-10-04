@@ -152,6 +152,8 @@ class CobolFeature(Enum):
         "floating-point data items"
     )
     VALUE_CLAUSE = "VALUE literal initial value clause on data items"
+    USAGE_POINTER = "USAGE POINTER data items, sized by the LP option"
+    ADDRESS_OF = "ADDRESS OF special register and NULL"
     VALUE_THRU_RANGE = "VALUE x THRU y range initial value clause"
     REDEFINES_CLAUSE = "REDEFINES other-field overlay type reuse"
     OCCURS_FIXED = "OCCURS n TIMES fixed-size table declarations"

@@ -19,8 +19,12 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
+from cobol_asg.addressing_mode import AddressingMode
 from cobol_asg.ast_store import AstStore, _digest
 from cobol_asg.frontend_extension import DialectParser
+from cobol_asg.lp import LP
+from cobol_asg.lp32 import LP32_MODE
+from cobol_asg.resolve_addressing_mode import addressing_mode
 from interpreter import constants
 from interpreter.cfg import build_cfg
 from interpreter.constants import Language
@@ -67,6 +71,7 @@ def compile_cobol_module(
     path: Path = Path("__main__.cbl"),
     ast_path: Path,
     tolerant: bool = False,
+    addressing_mode: AddressingMode = LP32_MODE,
 ) -> tuple[Any, ModuleUnit]:
     """Lower one COBOL source into a (frontend, ModuleUnit). The shared core."""
     frontend: Any = get_frontend(
@@ -77,6 +82,7 @@ def compile_cobol_module(
         extension_strategies=extension_strategies,
         dialect_parsers=dialect_parsers,
         tolerant=tolerant,
+        addressing_mode=addressing_mode,
     )
     ir = frontend.lower_from_ast_dict(json.loads(ast_path.read_text("utf-8")))
     exports = build_export_table(
@@ -107,6 +113,7 @@ def compile_cobol(
     source_transform: Callable[[str], str] = lambda s: s,
     ast_cache_dir: Path | None = None,
     tolerant: bool = False,
+    lp: LP = LP.LP32,
 ) -> tuple[Any, LinkedProgram]:
     """Compile a COBOL program (single or multi-module) into a LinkedProgram.
 
@@ -117,6 +124,8 @@ def compile_cobol(
 
     Returns (main_frontend, linked).
     """
+    mode = addressing_mode(lp)
+    mode_parser = parser.with_addressing_mode(mode)
     _owned_tmp: tempfile.TemporaryDirectory[str] | None = None
     if ast_cache_dir is None:
         _owned_tmp = tempfile.TemporaryDirectory()
@@ -152,20 +161,21 @@ def compile_cobol(
             all_sources[(base / f"{prog_name}.cbl").resolve()] = prog_src
         all_sources.update(disk_sources)
 
-        parallel_parse_to_cache(all_sources, parser, cache_dir)
+        parallel_parse_to_cache(all_sources, mode_parser, cache_dir)
 
         def _ast_path(src_path: Path) -> Path:
             return cache_dir / f"{src_path.stem}-{_digest(src_path)}.ast.json"
 
         main_frontend, main_module = compile_cobol_module(
             source,
-            parser=parser,
+            parser=mode_parser,
             copybook_dirs=copybook_dirs,
             extension_strategies=extension_strategies,
             dialect_parsers=dialect_parsers,
             observer=observer,
             path=main_path,
             tolerant=tolerant,
+            addressing_mode=mode,
             ast_path=_ast_path(main_path),
         )
         modules: dict[Path, ModuleUnit] = {main_path: main_module}
@@ -175,12 +185,13 @@ def compile_cobol(
             try:
                 _, sub_module = compile_cobol_module(
                     prog_src,
-                    parser=parser,
+                    parser=mode_parser,
                     copybook_dirs=copybook_dirs,
                     extension_strategies=extension_strategies,
                     dialect_parsers=dialect_parsers,
                     observer=observer,
                     tolerant=tolerant,
+                    addressing_mode=mode,
                     path=sub_path,
                     ast_path=_ast_path(sub_path),
                 )
@@ -199,12 +210,13 @@ def compile_cobol(
             try:
                 _, disk_module = compile_cobol_module(
                     disk_src,
-                    parser=parser,
+                    parser=mode_parser,
                     copybook_dirs=copybook_dirs,
                     extension_strategies=extension_strategies,
                     dialect_parsers=dialect_parsers,
                     observer=observer,
                     tolerant=tolerant,
+                    addressing_mode=mode,
                     path=disk_path,
                     ast_path=_ast_path(disk_path),
                 )
