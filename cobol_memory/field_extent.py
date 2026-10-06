@@ -9,7 +9,7 @@ OCCURS elements and reference modification without a rule for each.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum, auto
 
 from cobol_memory.region_id import RegionId
@@ -28,6 +28,8 @@ class Precision(Enum):
     be, not where it is.
     """
 
+    __hash__ = object.__hash__
+
 
 @dataclass(frozen=True)
 class FieldExtent:
@@ -45,6 +47,27 @@ class FieldExtent:
     length: int
     precision: Precision
     field_name: str
+    _hash: int = field(init=False, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "_hash",
+            hash(
+                (self.region, self.start, self.length, self.precision, self.field_name)
+            ),
+        )
+
+    def __hash__(self) -> int:
+        return self._hash
+
+    def __reduce__(
+        self,
+    ) -> tuple[type[FieldExtent], tuple[RegionId, int, int, Precision, str]]:
+        return (
+            FieldExtent,
+            (self.region, self.start, self.length, self.precision, self.field_name),
+        )
 
     @property
     def end(self) -> int:
