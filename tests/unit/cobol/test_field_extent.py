@@ -114,3 +114,40 @@ def test_clamped_extent_does_not_cover_even_an_identical_range():
     assert clamped.may_alias(exact)
     assert not clamped.must_cover(exact)
     assert exact.must_cover(clamped)
+
+
+_FIND_IN_ANOTHER_PROCESS = """
+import pickle
+import sys
+
+extents = pickle.loads(sys.stdin.buffer.read())
+position = {extent: index for index, extent in enumerate(extents)}
+from cobol_memory.field_extent import FieldExtent, Precision
+from cobol_memory.region_id import RegionId
+
+rebuilt = FieldExtent(RegionId.LINKAGE, 4, 8, Precision.CLAMPED, "LK-B")
+print(position[extents[0]], position[rebuilt], rebuilt in set(extents))
+"""
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_an_extent_is_one_key_in_every_process_it_reaches():
+    import pickle
+    import subprocess
+    import sys
+
+    first = ext(0, 4, name="WS-A")
+    second = FieldExtent(RegionId.LINKAGE, 4, 8, Precision.CLAMPED, "LK-B")
+    assert {first: 0, ext(0, 4, name="WS-A"): 1} == {first: 1}
+    assert pickle.loads(pickle.dumps(second)) == second
+
+    found = subprocess.run(
+        [sys.executable, "-c", _FIND_IN_ANOTHER_PROCESS],
+        input=pickle.dumps((first, second)),
+        capture_output=True,
+        env={"PYTHONHASHSEED": "12345", "PATH": ""},
+        check=True,
+        cwd=".",
+    )
+
+    assert found.stdout.decode().split() == ["0", "1", "True"]
