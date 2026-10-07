@@ -118,7 +118,7 @@ def ref_mod_expr_from_dict(data: dict) -> RefModExpr:
         return RefModLiteral(value="")
 
 
-def _ref_mod_expr_to_dict(expr: RefModExpr) -> dict:
+def ref_mod_expr_to_dict(expr: RefModExpr) -> dict:
     """Serialize RefModExpr back to JSON dict format."""
     if isinstance(expr, RefModLiteral):
         return {"kind": "lit", "value": expr.value}
@@ -135,8 +135,8 @@ def _ref_mod_expr_to_dict(expr: RefModExpr) -> dict:
         return {
             "kind": "binop",
             "op": expr.op,
-            "left": _ref_mod_expr_to_dict(expr.left),
-            "right": _ref_mod_expr_to_dict(expr.right),
+            "left": ref_mod_expr_to_dict(expr.left),
+            "right": ref_mod_expr_to_dict(expr.right),
         }
     return {"kind": "lit", "value": "0"}
 
@@ -237,9 +237,9 @@ class RefModOperand:
             return {"kind": "length_of", "name": self.length_of}
         result: dict = {"name": self.name}
         if self.ref_mod_start is not None:
-            result["ref_mod_start"] = _ref_mod_expr_to_dict(self.ref_mod_start)
+            result["ref_mod_start"] = ref_mod_expr_to_dict(self.ref_mod_start)
         if self.ref_mod_length is not None:
-            result["ref_mod_length"] = _ref_mod_expr_to_dict(self.ref_mod_length)
+            result["ref_mod_length"] = ref_mod_expr_to_dict(self.ref_mod_length)
         if self.qualifiers:
             result["qualifiers"] = list(self.qualifiers)
         if self.subscripts:

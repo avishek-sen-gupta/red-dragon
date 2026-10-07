@@ -46,7 +46,7 @@ def test_refmodoperand_combined_subscript_and_refmod_roundtrip():
 
     Legal COBOL: WS-TABLE(I)(2:3) — subscript selects the element, ref-mod
     slices bytes within it. Both subscripts (via expr_to_dict) and ref-mod
-    (via _ref_mod_expr_to_dict) must survive the round-trip unchanged.
+    (via ref_mod_expr_to_dict) must survive the round-trip unchanged.
     """
     raw = {
         "name": "WS-TABLE",
