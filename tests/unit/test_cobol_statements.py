@@ -1572,3 +1572,36 @@ class TestGotoVariants:
         )
         assert stmt.form.index == RefModOperand(name="WS-SEL", qualifiers=("WS-CTL",))
         assert stmt.to_dict() == d
+
+
+def test_a_move_keeps_every_reference_modification_bound_through_its_dict():
+    data = {
+        "type": "MOVE",
+        "operands": [
+            {
+                "name": "DFHCOMMAREA",
+                "ref_mod_start": {
+                    "kind": "binop",
+                    "op": "+",
+                    "left": {"kind": "length_of", "name": "WS-HEAD"},
+                    "right": {"kind": "lit", "value": "1"},
+                },
+                "ref_mod_length": {
+                    "kind": "function",
+                    "name": "LENGTH",
+                    "args": [{"kind": "ref", "name": "WS-TAIL"}],
+                },
+            },
+            {
+                "name": "WS-TAIL",
+                "ref_mod_start": {
+                    "kind": "ref",
+                    "name": "WS-I",
+                    "qualifiers": ["WS-G"],
+                },
+                "ref_mod_length": {"kind": "lit", "value": "2"},
+            },
+        ],
+    }
+
+    assert MoveStatement.from_dict(data).to_dict()["operands"] == data["operands"]
