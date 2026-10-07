@@ -23,6 +23,7 @@ from cobol_asg.ref_mod import (
     FunctionCallOperand,
     RefModOperand,
     is_function_operand,
+    ref_mod_expr_to_dict,
 )
 from cobol_asg.set_operand import SetOperand, set_operand_from_dict
 from cobol_asg.source_span import SourceSpan
@@ -122,29 +123,6 @@ def _phrases_to_dict(
     }
 
 
-def _serialize_ref_mod_expr(expr) -> dict:
-    """Serialize RefModExpr back to JSON dict format."""
-    from cobol_asg.ref_mod import (
-        RefModBinOp,
-        RefModLiteral,
-        RefModReference,
-    )
-
-    if isinstance(expr, RefModLiteral):
-        return {"kind": "lit", "value": expr.value}
-    elif isinstance(expr, RefModReference):
-        return {"kind": "ref", "name": expr.name}
-    elif isinstance(expr, RefModBinOp):
-        return {
-            "kind": "binop",
-            "op": expr.op,
-            "left": _serialize_ref_mod_expr(expr.left),
-            "right": _serialize_ref_mod_expr(expr.right),
-        }
-    else:
-        return {}
-
-
 @dataclass(frozen=True)
 class MoveStatement:
     """MOVE source TO target.
@@ -185,9 +163,9 @@ class MoveStatement:
             return {"kind": "length_of", "name": operand.length_of}
         d: dict = {"name": operand.name}
         if operand.ref_mod_start is not None:
-            d["ref_mod_start"] = _serialize_ref_mod_expr(operand.ref_mod_start)
+            d["ref_mod_start"] = ref_mod_expr_to_dict(operand.ref_mod_start)
         if operand.ref_mod_length is not None:
-            d["ref_mod_length"] = _serialize_ref_mod_expr(operand.ref_mod_length)
+            d["ref_mod_length"] = ref_mod_expr_to_dict(operand.ref_mod_length)
         if operand.qualifiers:
             d["qualifiers"] = list(operand.qualifiers)
         if operand.subscripts:
