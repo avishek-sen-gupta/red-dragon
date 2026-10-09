@@ -236,3 +236,17 @@ def test_parse_pic_blank_insertion_no_valueerror():
     td = parse_pic("9(5)BB9")
     assert td.category == CobolDataCategory.NUMERIC_EDITED
     assert td.byte_length == 8
+
+
+class TestParsePicRepeats:
+    def test_the_same_picture_parses_once_and_every_caller_shares_the_descriptor(self):
+        first = parse_pic("S9(7)V99", "COMP-3")
+        again = parse_pic("S9(7)V99", "COMP-3")
+        other_usage = parse_pic("S9(7)V99", "DISPLAY")
+
+        assert again is first
+        assert other_usage is not first
+        assert (first.category, other_usage.category) == (
+            CobolDataCategory.COMP3,
+            CobolDataCategory.ZONED_DECIMAL,
+        )
