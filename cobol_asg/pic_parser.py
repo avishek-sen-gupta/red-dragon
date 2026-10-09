@@ -36,6 +36,8 @@ not yet honour — a loud failure instead of a well-formed but wrong field.
 
 from __future__ import annotations
 
+from functools import cache
+
 from lark import Lark
 from lark.exceptions import UnexpectedInput
 
@@ -148,6 +150,7 @@ def _digit_counts(
     return stored_digits, min(analysis.fraction_digits, stored_digits)
 
 
+@cache
 def parse_pic(
     pic: str,
     usage: str = "DISPLAY",
