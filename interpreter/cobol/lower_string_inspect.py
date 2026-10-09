@@ -268,7 +268,11 @@ def lower_string(
             _write_ref_mod_target(ctx, stmt.into, concat_reg, materialised, span=span)
             return
         target_ref, target_rr = ctx.resolve_field_ref(
-            stmt.into.name, materialised, span=span
+            stmt.into.name,
+            materialised,
+            stmt.into.qualifiers,
+            subscripts=stmt.into.subscripts,
+            span=span,
         )
         if stmt.pointer and ctx.has_field(stmt.pointer, materialised):
             # WITH POINTER: read the cursor (1-based), write starting there
