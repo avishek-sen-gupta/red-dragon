@@ -8,7 +8,7 @@ This document captures key architectural decisions made during the development o
 
 **Context:** The project needed a single representation that all source languages lower into, enabling language-agnostic analysis and execution. A tree-based AST would require per-language walkers for every downstream pass.
 
-**Decision:** Adopt a flattened three-address code (TAC) IR (see [IR Reference](ir-reference.md); currently 34 opcodes, grown from the original 27). Each opcode has a dedicated frozen dataclass with named, typed fields. No nested expressions — all intermediates are explicit.
+**Decision:** Adopt a flattened three-address code (TAC) IR (see [IR Reference](ir-reference.md); currently 37 opcodes, grown from the original 27). Each opcode has a dedicated frozen dataclass with named, typed fields. No nested expressions — all intermediates are explicit.
 
 **Consequences:** CFG construction, dataflow analysis, and VM execution all operate on the same flat instruction list, eliminating duplication. Adding a new language frontend only requires emitting these opcodes. The trade-off is that lowering must decompose complex expressions (e.g., `a + b * c`) into multiple instructions, increasing IR verbosity.
 
@@ -48,7 +48,7 @@ This document captures key architectural decisions made during the development o
 
 **Context:** Supporting languages without tree-sitter grammars required an alternative lowering path. Using an LLM as a "reasoning engine" to analyse code produces inconsistent, hallucination-prone results.
 
-**Decision:** Constrain the LLM to act as a **compiler frontend**: the prompt provides a pragmatic subset of the 34 opcode schemas (see [IR Reference](ir-reference.md)), concrete patterns for functions/classes/control flow, and a full worked example. The LLM's job is mechanical translation, not reasoning. Output is structured JSON matching the IR schema.
+**Decision:** Constrain the LLM to act as a **compiler frontend**: the prompt provides a pragmatic subset of the 37 opcode schemas (see [IR Reference](ir-reference.md)), concrete patterns for functions/classes/control flow, and a full worked example. The LLM's job is mechanical translation, not reasoning. Output is structured JSON matching the IR schema.
 
 **Consequences:** LLM output is far more consistent because the task is pattern-matching rather than open-ended reasoning. Any language the LLM has seen in training can be lowered. The trade-off is that the prompt is large (~2K tokens) and quality depends on the LLM's familiarity with the source language.
 
@@ -2251,7 +2251,7 @@ of scope (red-dragon-1qcf, red-dragon-bijo, red-dragon-tq0m).
 
 ---
 
-## ADR-120: Unified Match Expression Lowering Framework (2026-03-21)
+### ADR-120: Unified Match Expression Lowering Framework (2026-03-21)
 
 **Status:** Accepted
 **Issue:** red-dragon-lgsk
@@ -2275,7 +2275,7 @@ statement-style `compile_match` (uses lower_block).
 
 ---
 
-## ADR-121: Ruby `case/in` Pattern Matching (2026-03-21)
+### ADR-121: Ruby `case/in` Pattern Matching (2026-03-21)
 
 **Status:** Accepted
 **Issue:** red-dragon-6n0u
@@ -2303,7 +2303,7 @@ Guard patterns, pin patterns, and find patterns are out of scope
 
 ---
 
-## ADR-122: Interprocedural Dataflow Analysis (2026-03-22)
+### ADR-122: Interprocedural Dataflow Analysis (2026-03-22)
 
 **Status:** Accepted
 **Issue:** red-dragon-j7f4
@@ -2324,7 +2324,7 @@ separate pass.
 6 modules in interpreter/interprocedural/: types, call_graph, summaries,
 propagation, queries, analyze.
 
-## ADR-123: Fix DECL_VAR Handling in Dataflow and Interprocedural Analysis (2026-03-22)
+### ADR-123: Fix DECL_VAR Handling in Dataflow and Interprocedural Analysis (2026-03-22)
 
 **Status:** Accepted
 **Issue:** red-dragon-5mnk
@@ -2346,7 +2346,7 @@ return operands backward through computations (BINOP, CALL, etc.) to
 find param-connected named variables — previously only direct
 `LOAD_VAR → RETURN` chains were detected.
 
-## ADR-124: Multi-File Project Support — Per-Module Compilation and Linking (2026-03-22)
+### ADR-124: Multi-File Project Support — Per-Module Compilation and Linking (2026-03-22)
 
 **Status:** Accepted
 **Issue:** red-dragon-iz14
@@ -2412,7 +2412,7 @@ resolution, topo sort, linker helpers, full pipeline (Python, JS, Java, C),
 multi-file execution for all 15 tree-sitter languages, fixture projects,
 API, MCP.
 
-## ADR-125: Linker Rewrite — Eliminate Compensating Transforms (2026-03-23)
+### ADR-125: Linker Rewrite — Eliminate Compensating Transforms (2026-03-23)
 
 **Status:** Accepted
 **Issue:** red-dragon-x6td
@@ -2441,7 +2441,7 @@ be transparent, but the VM's dispatch model is scope-based.
 The merged IR is one continuous stream that looks exactly like single-file
 compilation. No chaining, no import tables, no special variable handling.
 
-## 2026-03-24: Per-opcode typed instruction classes
+### ADR-177: Per-opcode typed instruction classes (2026-03-24)
 
 **Decision:** Replace `IRInstruction.operands: list[Any]` with 30 per-opcode frozen dataclasses, each with named typed fields.
 
@@ -2687,7 +2687,7 @@ Imports are NOT a tree population source — they only appear in source code. Ty
 2. Keep the LLM frontend contract explicitly scoped to a pragmatic opcode subset used for language lowering (not all 34 opcodes), while preserving compatibility with the universal IR output type.
 3. Fix execution telemetry so `ExecutionStats.llm_calls` includes calls performed by `LLMPlausibleResolver`.
 
-## ADR-139: IMPORT_MODULE Opcode — Dedicated IR for Import Stubs (2026-04-13)
+### ADR-139: IMPORT_MODULE Opcode — Dedicated IR for Import Stubs (2026-04-13)
 
 **Status:** Accepted
 
@@ -2861,6 +2861,8 @@ Because `Halt_` is a distinct type, it is naturally absent from `_infer_return`'
 
 **Consequences:** The four packing failures and zerg are fixed. A parameter declared wider than its argument reads on into the caller's following bytes, as on a real system; a CALL with no USING binds no LINKAGE, where it used to lay the callee's LINKAGE over the caller's WORKING-STORAGE. The CALL no longer records the copy effects the IR memory dataflow relied on, and the recorder's one-effect-per-instruction model cannot yet let the CALL declare its own (red-dragon-9u0r). SET ADDRESS OF stays unsupported; the per-01 binding is what it would hook into.
 
+---
+
 ### ADR-151: Regions are segments of one flat address space (2026-10-04)
 
 **Context:** Each `ALLOC_REGION` was its own `bytearray` named by an `rgn_<N>` handle, and every load and write named a byte as (handle, offset), so no number identified a byte across regions. A pointer model (ADDRESS OF, NULL, USAGE POINTER, SET ADDRESS OF, pointer arithmetic — red-dragon-ooil) needs one: a pointer stored in a field is bytes, and programs do arithmetic on them. A write past a region's end silently grew that region, and a read past it returned zeroes.
@@ -2869,6 +2871,8 @@ Because `Halt_` is a distinct type, it is naturally absent from `_infer_return`'
 
 **Consequences:** Every region byte has an address, which the pointer model will build on. A callee LINKAGE parameter wider than its argument reads on into whatever storage follows, as on a real system, rather than zeroes. Two squall Db2 samples write 2–4 bytes past their WORKING-STORAGE (red-dragon-forge-h14); those bytes now land in the next segment instead of growing the region.
 
+---
+
 ### ADR-152: COBOL pointers are addresses in the flat space (2026-10-04)
 
 **Context:** COBOL had no pointers: `USAGE POINTER` items took no storage, the bridge flattened `ADDRESS OF X` into text, `SET ADDRESS OF` was unsupported, and a callee could not tell an OMITTED argument from a supplied one (red-dragon-ooil). ADR-151 gave every region byte an address, but region registers still held string handles.
@@ -2876,3 +2880,243 @@ Because `Halt_` is a distinct type, it is naturally absent from `_infer_return`'
 **Decision:** A region handle is its segment's base address: `ALLOC_REGION` returns it and `LOAD_REGION`/`WRITE_REGION` act at handle + offset, so every pointer operation is plain IR arithmetic. Addresses below 4096 are the NULL page, governed by an injected `NullAccess` strategy (`WarnAndIgnore` by default, or `HaltOnNull`). Pointer width follows IBM's `LP` option, given to `compile_cobol` and resolved once into an `AddressingMode` whose pointer type (signed binary fullword or doubleword) sizes `USAGE POINTER` items in the bridge's offsets and the layout. The bridge serialises `ADDRESS OF` and `NULL` as structured operands in SET, conditions and CALL USING. `SET ADDRESS OF` rebinds a LINKAGE 01 or 77 item's region register and shift. An OMITTED or unsupplied parameter binds NULL. Spec: `docs/superpowers/specs/2026-10-04-pointer-model-design.md`.
 
 **Consequences:** `ADDRESS OF lk = NULL` detects an OMITTED argument; programs can take, store, hand to a CALL, move along and rebind addresses. A write to an OMITTED parameter, which used to land in private storage, is now dropped with a warning (or halts). LINKAGE records no USING names keep zero-filled placeholders. An address too large for the pointer type raises in its encoding. Procedure and function pointers, CICS `GETMAIN`/`ADDRESS`, and emulated z/OS control blocks are not modelled.
+
+---
+
+### ADR-153: Beads for issue tracking, with a JSONL snapshot tracked in git (2026-03-11)
+
+**Context:** Issues needed to live with the code and move between machines. The Beads database is a local Dolt store.
+
+**Decision:** Track issues with Beads (`bd`). The Dolt database (`.beads/`) is gitignored; a JSONL snapshot is committed. Today that snapshot is `issues/issues.jsonl`, auto-exported by `bd` and staged by hand (see `issues/README.md`). An `xfail` reason must cite a bead id (04ca5b74).
+
+**Consequences:** The issue graph, including dependency edges, is diffable and versioned with the code. A fresh clone rebuilds its database with `bd import issues/issues.jsonl`. Forgetting to stage the snapshot leaves an issue change out of the commit.
+
+---
+
+### ADR-154: Import-linter contracts as a blocking gate (2026-03-23)
+
+**Context:** ADR-066 added import-linter as a report-only CI job, so contract violations never failed a build.
+
+**Decision:** Move `lint-imports` into the blocking lint job and add contracts for project-vs-VM internals, frontend independence, and COBOL isolation. It also runs as a blocking pre-commit hook.
+
+**Consequences:** A layering violation fails the commit and CI. Later leaf contracts (`cobol_asg`, `cobol_memory`, `cobol_numeric`) use the same gate; there are eight contracts today.
+
+---
+
+### ADR-155: Pyright in basic mode, per-file promotion, advisory hook (2026-03-23 to 2026-09-27)
+
+**Context:** Pyright's first run reported 197 errors in basic mode. Blocking on them would stop all work; ignoring them would let new ones in.
+
+**Decision:** Keep `typeCheckingMode: basic` repo-wide and promote files one at a time with a `# pyright: standard` first line once annotated (from 2026-03-31). A per-file blocking hook was tried (f9261623) and made advisory (3e5c9ee6), because fixes that lower the count often touch files with large backlogs.
+
+**Consequences:** 240 files are promoted and held to zero errors. Pyright cannot fail a commit, so its counts must be read rather than assumed.
+
+---
+
+### ADR-156: Further domain types — ClassName, ContinuationName, ClosureId, PathName, TypeName (2026-03-29 to 2026-04-17)
+
+**Context:** Extends ADR-127. Class names, continuation names, closure ids, module paths and scalar type names were still bare strings.
+
+**Decision:** Add `ClassName`, `ContinuationName`, `ClosureId` and `PathName` as frozen wrappers with null-object sentinels and no `__eq__(str)` bridge. Rename the ontology enum `TypeName` to `FoundationTypeName` and reuse `TypeName` as a wrapper for any type name, so `ScalarType.name` is a `TypeName`.
+
+**Consequences:** These names can no longer be mixed with each other or with plain strings. `scalar()` rejects raw strings.
+
+---
+
+### ADR-157: Extract leaf modules to break import cycles (2026-04-05 to 2026-07-09)
+
+**Context:** Small shared vocabularies lived in heavy modules. Importing them caused circular imports or pulled in modules a static consumer did not need.
+
+**Decision:** Move them into stdlib-only leaf modules: `NamespaceResolver` apart from `NamespaceTree` (ea5f64df), the `Language` enum (`interpreter/language.py`), `ImportRef`/`ImportKind`, and the COBOL import extractor. The last two now live in `cobol_asg`.
+
+**Consequences:** The cycles are gone, and a consumer that needs only a language tag or an import record loads no interpreter machinery.
+
+---
+
+### ADR-158: python-fp-lint as the style gate, with a violation ratchet (2026-04-16 to 2026-09-27)
+
+**Context:** The functional-style rules were checked by ad-hoc ast-grep patterns. Once the strict per-file hook was wired, it blocked any commit touching a file with old violations.
+
+**Decision:** Use python-fp-lint (`fp.json`) as the linter. Gate on a whole-repo total in `fp-baseline.json`: a commit that raises it is blocked, one that lowers it tightens the baseline automatically. Both file exclusions were removed (b8433292); new exclusions need explicit review.
+
+**Consequences:** Old backlogs no longer block edits, and regressions are still caught anywhere. A change to the rule set moves the total, so the baseline is re-recorded with it.
+
+---
+
+### ADR-159: `@covers` feature enums for test coverage (2026-04-16)
+
+**Context:** Feature coverage was tracked by per-language `verified_features` registries and a grammar coverage script.
+
+**Decision:** Each language defines a feature enum (`features.py`) with descriptive string values. Tests are tagged with `@covers(Feature.X)` from `tests/covers.py`; infrastructure tests use `NotLanguageFeature.INFRASTRUCTURE`. `scripts/feature_coverage_audit.py` reports uncovered features per language.
+
+**Consequences:** The `verified_features` infrastructure was deleted. The hook that enforced tagging is gone, so tagging rests on review.
+
+---
+
+### ADR-160: Poetry replaced by uv; Python 3.13 declared (2026-04-16 to 2026-09-27)
+
+**Context:** The project used Poetry. `uv.lock` was committed on 2026-04-16, and CI, Makefile and hooks moved to uv on 2026-06-11 (bf399eed), but `poetry.lock` lingered and was relocked by mistake.
+
+**Decision:** uv is the only package manager; `poetry.lock` and all `poetry run` references were removed (338bbb2c). `requires-python` is `>=3.13,<4.0`, matching pyright, CI and the venv (644bfdd9).
+
+**Consequences:** Every command runs under `uv run`. Ruff now parses the repo as 3.13, so files it had skipped as `invalid-syntax` are linted.
+
+---
+
+### ADR-161: Recursive DataLayout (2026-04-18)
+
+**Context:** `DataLayout.fields` was a flat dict keyed by bare field name. Two groups with a same-named child overwrote each other, which also blocked MOVE CORRESPONDING.
+
+**Decision:** `DataLayout` holds direct elementary children in `fields` and direct group children in `groups`, each a nested `DataLayout`. Spec: `docs/superpowers/specs/2026-04-18-move-corresponding-recursive-datalayout-design.md`.
+
+**Consequences:** Same-named fields under different groups coexist, and MOVE CORRESPONDING can match children by name within two groups.
+
+---
+
+### ADR-162: SectionedLayout for multi-section DATA DIVISION (2026-06-03)
+
+**Context:** Lowering took a single `(DataLayout, region_reg)` pair, so LINKAGE and LOCAL-STORAGE had nowhere to live.
+
+**Decision:** `SectionedLayout` groups one `DataLayout` per section (WORKING-STORAGE, LINKAGE, LOCAL-STORAGE, later FILE). `MaterialisedSectionedLayout` binds each to its region register and resolves names with LOCAL-STORAGE over WORKING-STORAGE over LINKAGE, warning on collisions. All lowering modules take it.
+
+**Consequences:** Field resolution returns the field and its region register together. Section semantics stay at lowering time; the VM knows nothing of sections.
+
+---
+
+### ADR-163: Mutation testing with mutmut (2026-06-03)
+
+**Context:** There was no measure of how well the test suite catches faults in RedDragon's own code.
+
+**Decision:** Add mutmut as a dev dependency with a `[tool.mutmut]` config, run manually on the IR, VM and handler modules. The runner disables xdist.
+
+**Consequences:** Mutation scores can be measured on demand. It is not in CI.
+
+---
+
+### ADR-164: COBOL program as a singleton object (2026-06-04)
+
+**Context:** WORKING-STORAGE did not persist across subprogram calls. Each call re-ran `ALLOC_REGION`, because the region handle lived in the discarded call frame.
+
+**Decision:** Each program is a singleton heap object (`__prog_<PROGRAMID>`) created by an init block that allocates WORKING-STORAGE once and stores its region. The procedure division is wrapped as function `func_<pid>_0`, and `CALL_WITH_MEMORY` dispatches through the singleton's `__init_params__` so LINKAGE is bound first. It uses existing VM machinery only.
+
+**Consequences:** WORKING-STORAGE keeps its values between calls, as in GnuCOBOL. COBOL runs use a two-phase entry point. CANCEL is deferred (red-dragon-8dpn).
+
+---
+
+### ADR-165: Lark grammars replace regex parsers for CICS and CSD (2026-06-06 to 2026-06-10)
+
+**Context:** EXEC CICS commands and CSD definitions were parsed with regexes. Compound verbs were stitched together from a table, and the CSD regex required TRANSACTION and PROGRAM to be adjacent.
+
+**Decision:** Parse both with small Lark grammars that consume the full text and yield verbs and attributes directly.
+
+**Consequences:** The envelope regexes and compound-verb table were removed. This code later moved to cicada with the CICS runtime (ADR-166).
+
+---
+
+### ADR-166: CICS runtime, BMS tools and CardDemo end-to-end tests move to cicada (2026-06-12)
+
+**Context:** The CICS runtime, BMS tooling and CardDemo tests lived in this repo, and `interpreter/cobol` imported `interpreter/cics`.
+
+**Decision:** Move them to the cicada repo (now part of red-dragon-forge), which uses RedDragon as a dependency. Before the move, the `ExecCicsStrategy` protocol and its no-op default were moved into `interpreter/cobol` to cut the import. CI and Makefile CICS steps were removed.
+
+**Consequences:** RedDragon has no CICS code; CICS support plugs in through lowering strategies (ADR-167). About 10,600 lines left the repo.
+
+---
+
+### ADR-167: Dialect-parser and extension-lowering seams for EXEC blocks (2026-06-13 to 2026-07-09)
+
+**Context:** After ADR-166, CICS was still special-cased: one `exec_cics_strategy` hook for lowering and a CICS-specific text parser. EXEC SQL needed the same treatment.
+
+**Decision:** Lowering takes `extension_strategies`, a sequence of `RedDragonExtensionLoweringStrategy`; the first whose `handles()` is true lowers the statement (now in `interpreter/frontend_extension_lowering.py`). Statement construction takes injected `dialect_parsers`. `ExecCicsStatement` and `ExecSqlStatement` moved out to cicada and squall.
+
+**Consequences:** RedDragon depends on no dialect. Parsing and lowering are pluggable independently. Seam tests use a fake dialect defined in this repo.
+
+---
+
+### ADR-168: Typed Const literals (2026-06-16)
+
+**Context:** `Const` carried an untyped value, and the VM re-guessed its type with `_parse_const`. A string literal `"10"` became the integer 10, so a COBOL file-status comparison never matched.
+
+**Decision:** `Const` has a required, keyword-only `type_expr` from the existing `TypeExpr` ADT, set by typed factories (`Const.int_`, `Const.string`, `Const.null_` and so on). `_parse_const` is deleted. Spec: `docs/superpowers/specs/2026-06-16-typed-const-literals-design.md`.
+
+**Consequences:** A literal's type is fixed when it is emitted. Workarounds such as COBOL's `_status_const_reg` were removed.
+
+---
+
+### ADR-169: COBOL file I/O through organization drivers over a shared engine (2026-06-16 to 2026-06-26)
+
+**Context:** COBOL I/O verbs reached only null and stub providers. There was no disk access, no AT END / INVALID KEY, and no FILE STATUS.
+
+**Decision:** A `FileOrganizationDriver` protocol with `SequentialDriver`, `IndexedDriver` and `RelativeDriver` implements real file access. Drivers return a neutral `AccessResult`, which each consumer maps to its own codes (COBOL FILE STATUS, CICS responses). Indexed and relative drivers support `read_prev` for CICS browse. Spec: `docs/superpowers/specs/2026-06-16-cobol-file-io-design.md`.
+
+**Consequences:** One storage engine serves COBOL here and the CICS and batch tools downstream. NIST-85 SQ/IX/RL programs run against real files.
+
+---
+
+### ADR-170: Nullability inferred as `Union[T, Null]` (2026-06-18)
+
+**Context:** Extends ADR-088. After ADR-168, null literals were typed `Null`, but inference mapped them to UNKNOWN. Without that shim, synthetic fall-through returns made nearly every function infer a Null return.
+
+**Decision:** Remove the shim. Skip implicit (synthetic) returns, union the types of explicit returns, and never widen a declared return type.
+
+**Consequences:** A function that may return null infers `Union[T, Null]`. Declared return types stay authoritative.
+
+---
+
+### ADR-171: Public COBOL compile API with injected `source_transform` (2026-06-26)
+
+**Context:** Four copies of the source-to-`LinkedProgram` pipeline existed: `run()`, cicada, squall and another downstream tool. They differed only in the lowering strategy, the parser and CALL linking.
+
+**Decision:** `compile_cobol` and `compile_cobol_module` in `interpreter/project/cobol_compile.py` are the shared API. Consumers inject strategies and a parser. A `source_transform` callback is applied to on-disk callees before they are linked.
+
+**Consequences:** Downstream repos call this API instead of copying the pipeline. Dialect-specific preprocessing stays with the consumer.
+
+---
+
+### ADR-172: Mandatory AST cache and AstStore (2026-06-28 to 2026-07-10)
+
+**Context:** `compile_cobol` could parse and lower in one process, keeping every ASG in memory. Tests used fake parsers that hid real parse bugs.
+
+**Decision:** Parse and lower are separate phases. Phase one parses in parallel to JSON on disk; phase two loads and lowers one program at a time. The cache path is the only path, and the parser is a required argument. `AstStore` (now `cobol_asg/ast_store.py`) owns the parse-once cache. Spec: `docs/superpowers/specs/2026-06-28-mandatory-ast-cache-real-parser.md`.
+
+**Consequences:** ASGs do not pile up in memory, and every COBOL compile test uses the real ProLeap bridge.
+
+---
+
+### ADR-173: `cobol_asg` as a sibling package of `interpreter` (2026-09-02)
+
+**Context:** Any `interpreter.*` import runs `interpreter/__init__.py`, which loads the VM: 184 of 301 modules for a consumer that only wanted a PICTURE parser.
+
+**Decision:** Move the 17 COBOL parsing modules into a top-level `cobol_asg` package with an import-free `__init__.py`. `cobol_asg` parses; `interpreter.cobol` lowers. The `cobol-asg-is-a-leaf` contract stops it importing `interpreter`.
+
+**Consequences:** `import cobol_asg.*` loads 18 modules and none from `interpreter`. Three `cobol-isolation` ignores were removed.
+
+---
+
+### ADR-174: Universal instruction id (2026-09-04)
+
+**Context:** Analyses needed to attach data, such as memory effects, to individual instructions. Instructions are compared by value and cannot be hashed.
+
+**Decision:** Every instruction has an `id: InstructionId`, excluded from equality. A frontend-owned `InstructionIdSource` mints ids so they are unique across all programs a frontend lowers. Sidecars key on the id.
+
+**Consequences:** Ids survive `dataclasses.replace`. The recorder asserts each id is unseen, after an id collision between two programs had silently attached wrong extents (00eddebc).
+
+---
+
+### ADR-175: `cobol_memory` as a static-surface sibling package (2026-09-05)
+
+**Context:** The byte-extent alias algebra used by memory dataflow had no IR dependency, but importing it from `interpreter` loaded the VM.
+
+**Decision:** Move it to a top-level `cobol_memory` package, for the same reason as ADR-173. The `cobol-memory-is-a-leaf` contract holds it there.
+
+**Consequences:** Static consumers can compute byte ranges and aliasing without loading the VM.
+
+---
+
+### ADR-176: Cache `parse_pic` and hash `FieldExtent` once (2026-10-06 to 2026-10-09)
+
+**Context:** Hashing `FieldExtent` was over half of a 29-program fixpoint run. Loading 29 cached ASGs made 10,458 `parse_pic` calls for 136 distinct pictures and took 6.8 s.
+
+**Decision:** `FieldExtent` computes its hash at construction, its enums hash by identity, and `__reduce__` rebuilds the hash after unpickling. `parse_pic` is cached, since it is a pure function returning a frozen descriptor.
+
+**Consequences:** The ASG load takes 0.2 s. Callers of the same picture share one immutable descriptor.
