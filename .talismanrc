@@ -7,9 +7,11 @@ fileignoreconfig:
 - filename: interpreter.py
   checksum: 5337b3918a4bbf320a088669079fbe7fe525cb45bf947a62ad3f5f15de093eec
 - filename: docs/notes-on-vm-design.md
-  checksum: 3a15d93a6e1b5284016881e3bb7abbefb000dd4b2589a9c1bcd1e53afd7bfc94
+  checksum: 4dd93945c821ee9608b4fa7cd8084f4c75e83176b48b3161b9afa867bb252040
 - filename: docs/architectural-design-decisions.md
-  checksum: 3493bfeb10c0a21656c864ae4209232dcdcd97dcb557aa6bd6fc1bc1379d56a9
+  checksum: 2984df7502258ef6e13c2e22d5d11efc7a5bd648c20c8291bf1aea350fa4b370
+- filename: docs/ir-reference.md
+  checksum: 962dbce228810b9a418568bcf1c0b8e6c37811a08fc29171fdd8882b0d112a7f
 - filename: tests/unit/exercism/exercises/pangram/canonical_data.json
   checksum: fe0ff5850a9bcb260242e145ea21e3e4ddc1b9c5ac41045fdfa714f8d950de85
 - filename: tests/unit/exercism/exercises/pangram/solutions/rust.rs
