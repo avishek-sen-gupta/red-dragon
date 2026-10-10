@@ -318,6 +318,7 @@ def _handle_load_field_indirect(
             ctx.cfg,
             ctx.registry,
             ctx.current_label,
+            ctx.ip,
         )
     # No __method_missing__ — return symbolic
     sym = vm.fresh_symbolic(hint=f"{addr}.{field_name}")
@@ -509,6 +510,7 @@ def _handle_load_field(
             ctx.cfg,
             ctx.registry,
             ctx.current_label,
+            ctx.ip,
         )
     # No __method_missing__ — create symbolic and cache it
     sym = vm.fresh_symbolic(hint=f"{addr}.{field_name}")
