@@ -208,8 +208,7 @@ for step in range(max_steps):
     result = LocalExecutor.execute(inst, vm, ctx)
     update = handled ? coerce_local_update(result.update)
                      : materialize_raw_update(llm.interpret_instruction(inst, vm))
-    if call_push and next_label: _handle_call_dispatch_setup (completes the push, then apply_update)
-    else:                        apply_update
+    apply_update
     HALT                          → stop
     RETURN, or THROW not caught   → _handle_return_flow
     next_label in cfg             → jump to it, ip = 0
@@ -321,7 +320,7 @@ The callee's first parameter is bound to the receiver.
 
 ### 7.4 Dispatch and frame setup
 
-`_try_user_function_call` returns a `StateUpdate` with `call_push`, `next_label` (the callee's entry) and `var_writes` (parameters, captured closure variables, and an `arguments` heap array). Handlers cannot know where the caller resumes, so `_handle_call_dispatch_setup` fills `return_label`, `return_ip = ip + 1` and `result_reg` on the `StackFramePush` before `apply_update`.
+`_try_user_function_call` returns a `StateUpdate` with `call_push`, `next_label` (the callee's entry) and `var_writes` (parameters, captured closure variables, and an `arguments` heap array). The handler builds a complete `StackFramePush` from `HandlerContext` and the instruction: `return_label = current_label`, `return_ip = ip + 1`, `result_reg = inst.result_reg`. All three are required fields.
 
 ### 7.5 Parameters
 

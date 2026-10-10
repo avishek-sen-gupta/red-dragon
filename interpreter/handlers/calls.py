@@ -153,6 +153,7 @@ def _try_class_constructor_call(
     cfg: CFG,
     registry: FunctionRegistry,
     current_label: CodeLabel,
+    ip: int,
     overload_resolver: OverloadResolver = NullOverloadResolver(),
     type_env: TypeEnvironment = TypeEnvironment(
         register_types=MappingProxyType({}), var_types=MappingProxyType({})
@@ -217,6 +218,8 @@ def _try_class_constructor_call(
             call_push=StackFramePush(
                 function_name=FuncName(f"{class_name}.__init__"),
                 return_label=current_label,
+                return_ip=ip + 1,
+                result_reg=inst.result_reg,
                 is_ctor=True,
             ),
             next_label=init_label,
@@ -238,6 +241,7 @@ def _try_user_function_call(
     cfg: CFG,
     registry: FunctionRegistry,
     current_label: CodeLabel,
+    ip: int,
 ) -> ExecutionResult:
     """Attempt to dispatch a call to a user-defined function."""
     if not isinstance(func_val, BoundFuncRef):
@@ -280,6 +284,8 @@ def _try_user_function_call(
             call_push=StackFramePush(
                 function_name=fname,
                 return_label=current_label,
+                return_ip=ip + 1,
+                result_reg=inst.result_reg,
                 closure_env_id=closure_env_id,
                 captured_var_names=captured_var_names,
             ),
@@ -405,6 +411,7 @@ def _handle_call_function(
         ctx.cfg,
         ctx.registry,
         ctx.current_label,
+        ctx.ip,
         overload_resolver=ctx.overload_resolver,
         type_env=ctx.type_env,
         type_hint=parse_type(str(base_name)) if base_name else UNKNOWN,
@@ -414,7 +421,7 @@ def _handle_call_function(
 
     # 4. User-defined function
     user_result = _try_user_function_call(
-        func_val, args, inst, vm, ctx.cfg, ctx.registry, ctx.current_label
+        func_val, args, inst, vm, ctx.cfg, ctx.registry, ctx.current_label, ctx.ip
     )
     if user_result.handled:
         return user_result
@@ -460,6 +467,7 @@ def _handle_call_ctor(
         ctx.cfg,
         ctx.registry,
         ctx.current_label,
+        ctx.ip,
         overload_resolver=ctx.overload_resolver,
         type_env=ctx.type_env,
         type_hint=t.type_hint,
@@ -469,7 +477,7 @@ def _handle_call_ctor(
 
     # Fallback: try as user function (e.g., factory functions named like classes)
     user_result = _try_user_function_call(
-        func_val, args, inst, vm, ctx.cfg, ctx.registry, ctx.current_label
+        func_val, args, inst, vm, ctx.cfg, ctx.registry, ctx.current_label, ctx.ip
     )
     if user_result.handled:
         return user_result
@@ -494,7 +502,14 @@ def _handle_call_method(
     # If the object is a FUNC_REF, invoke it directly (e.g. .call(), .apply())
     if isinstance(obj_val.value, BoundFuncRef):
         return _try_user_function_call(
-            obj_val.value, args, inst, vm, ctx.cfg, ctx.registry, ctx.current_label
+            obj_val.value,
+            args,
+            inst,
+            vm,
+            ctx.cfg,
+            ctx.registry,
+            ctx.current_label,
+            ctx.ip,
         )
 
     # Static method dispatch: Class.method() where object is a ClassRef
@@ -507,7 +522,14 @@ def _handle_call_method(
                 func_ref=FuncRef(name=FuncName(str(method_name)), label=func_label),
             )
             return _try_user_function_call(
-                bound_ref, args, inst, vm, ctx.cfg, ctx.registry, ctx.current_label
+                bound_ref,
+                args,
+                inst,
+                vm,
+                ctx.cfg,
+                ctx.registry,
+                ctx.current_label,
+                ctx.ip,
             )
 
     # Method builtins: subList, substring, slice, etc.
@@ -547,6 +569,7 @@ def _handle_call_method(
                     ctx.cfg,
                     ctx.registry,
                     ctx.current_label,
+                    ctx.ip,
                 )
         # Unknown object type — resolve via configured strategy
         obj_desc = _symbolic_name(obj_val.value)
@@ -639,6 +662,8 @@ def _handle_call_method(
             call_push=StackFramePush(
                 function_name=FuncName(f"{type_hint}.{method_name}"),
                 return_label=ctx.current_label,
+                return_ip=ctx.ip + 1,
+                result_reg=inst.result_reg,
             ),
             next_label=func_label,
             reasoning=(
@@ -666,7 +691,14 @@ def _handle_call_unknown(
 
     # If the target resolves to a FUNC_REF, invoke it directly
     user_result = _try_user_function_call(
-        target_val.value, args, inst, vm, ctx.cfg, ctx.registry, ctx.current_label
+        target_val.value,
+        args,
+        inst,
+        vm,
+        ctx.cfg,
+        ctx.registry,
+        ctx.current_label,
+        ctx.ip,
     )
     if user_result.handled:
         return user_result
@@ -758,6 +790,7 @@ def _handle_call_with_memory(
             call_push=StackFramePush(
                 function_name=fname,
                 return_label=ctx.current_label,
+                return_ip=ctx.ip + 1,
                 # The callee returns its RETURN-CODE here; the COBOL CALL
                 # lowering copies it into the caller's (red-dragon-ltq6).
                 result_reg=t.result_reg,

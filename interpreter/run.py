@@ -258,37 +258,6 @@ def _log_update(
     logger.info("")
 
 
-def _handle_call_dispatch_setup(
-    vm: VMState,
-    instruction: InstructionBase,
-    update: StateUpdate,
-    current_label: CodeLabel,
-    ip: int,
-    type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
-    conversion_rules: TypeConversionRules = _IDENTITY_RULES,
-):
-    """Augment call_push with call-site context, then apply atomically.
-
-    Handlers cannot know the caller's return address or result register —
-    those only exist at the call site. We complete the StackFramePush here,
-    before apply_update, so the frame is fully initialized on creation.
-    """
-    assert update.call_push is not None
-    complete_push = update.call_push.model_copy(
-        update={
-            "return_label": current_label,
-            "return_ip": ip + 1,
-            "result_reg": instruction.result_reg,
-        }
-    )
-    apply_update(
-        vm,
-        update.model_copy(update={"call_push": complete_push}),
-        type_env=type_env,
-        conversion_rules=conversion_rules,
-    )
-
-
 def _handle_return_flow(
     vm: VMState,
     cfg: CFG,
@@ -458,23 +427,7 @@ def _run_loop(
             else None
         )
 
-        is_call_dispatch = (
-            update.call_push is not None and update.next_label is not None
-        )
-        if is_call_dispatch:
-            _handle_call_dispatch_setup(
-                vm,
-                instruction,
-                update,
-                current_label,
-                ip,
-                type_env=type_env,
-                conversion_rules=conversion_rules,
-            )
-        else:
-            apply_update(
-                vm, update, type_env=type_env, conversion_rules=conversion_rules
-            )
+        apply_update(vm, update, type_env=type_env, conversion_rules=conversion_rules)
 
         if isinstance(instruction, Halt_):
             if config.verbose:
@@ -820,23 +773,7 @@ def execute_cfg_traced(
         is_throw = isinstance(instruction, Throw_)
         return_frame = vm.current_frame if (is_return or is_throw) else None
 
-        is_call_dispatch = (
-            update.call_push is not None and update.next_label is not None
-        )
-        if is_call_dispatch:
-            _handle_call_dispatch_setup(
-                vm,
-                instruction,
-                update,
-                current_label,
-                ip,
-                type_env=type_env,
-                conversion_rules=conversion_rules,
-            )
-        else:
-            apply_update(
-                vm, update, type_env=type_env, conversion_rules=conversion_rules
-            )
+        apply_update(vm, update, type_env=type_env, conversion_rules=conversion_rules)
 
         # Snapshot the VM state after update
         trace_steps.append(

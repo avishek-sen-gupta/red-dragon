@@ -1,11 +1,21 @@
-"""Tests: StackFramePush carries return_ip + result_reg so apply_update
-creates a fully-initialized StackFrame without any post-patch (red-dragon-1hcq)."""
+"""Tests: a call handler emits a complete StackFramePush, and apply_update builds the frame from it."""
 
+from dataclasses import replace
+
+from interpreter.address import Address
+from interpreter.cfg import build_cfg
+from interpreter.field_name import FieldName
 from interpreter.func_name import FuncName
-from interpreter.ir import CodeLabel
-from interpreter.register import NO_REGISTER, Register
+from interpreter.ir import CodeLabel, IRInstruction, Opcode
+from interpreter.refs.func_ref import BoundFuncRef, FuncRef
+from interpreter.register import Register
+from interpreter.registry import build_registry
+from interpreter.types.typed_value import typed_from_runtime
+from interpreter.vm.executor import LocalExecutor, _default_handler_context
 from interpreter.vm.vm import apply_update
 from interpreter.vm.vm_types import (
+    HeapObject,
+    Pointer,
     StackFrame,
     StackFramePush,
     StateUpdate,
@@ -20,75 +30,81 @@ def _vm_with_main() -> VMState:
     return vm
 
 
-class TestStackFramePushCarriesCallSiteContext:
+class TestCallFrameCompleteness:
     @covers(NotLanguageFeature.INFRASTRUCTURE)
-    def test_stack_frame_push_has_return_ip_field(self):
-        """StackFramePush must carry return_ip so apply_update can fully initialize the frame."""
-        push = StackFramePush(
-            function_name=FuncName("callee"),
-            return_label=CodeLabel("block_0"),
-            return_ip=3,
+    def test_call_handler_emits_the_call_site_in_its_push(self):
+        instructions = [
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("__func__greet")),
+            IRInstruction(opcode=Opcode.RETURN, operands=["%param_self"]),
+        ]
+        cfg = build_cfg(instructions)
+        registry = build_registry(instructions, cfg)
+        registry.func_params["__func__greet"] = ["self"]
+        vm = VMState()
+        greet = BoundFuncRef(
+            func_ref=FuncRef(name=FuncName("greet"), label=CodeLabel("__func__greet"))
         )
-        assert push.return_ip == 3
-
-    @covers(NotLanguageFeature.INFRASTRUCTURE)
-    def test_stack_frame_push_has_result_reg_field(self):
-        """StackFramePush must carry result_reg so apply_update can fully initialize the frame."""
-        push = StackFramePush(
-            function_name=FuncName("callee"),
-            result_reg=Register("%r1"),
+        vm.heap_set(
+            Address("obj_0"),
+            HeapObject(
+                type_hint="table",
+                fields={FieldName("greet"): typed_from_runtime(greet)},
+            ),
         )
-        assert push.result_reg == Register("%r1")
-
-    @covers(NotLanguageFeature.INFRASTRUCTURE)
-    def test_stack_frame_push_result_reg_defaults_to_no_register(self):
-        """result_reg default is NO_REGISTER (no-op sentinel)."""
-        push = StackFramePush(function_name=FuncName("callee"))
-        assert push.result_reg == NO_REGISTER
-
-
-class TestApplyUpdateCreatesCompleteFrame:
-    @covers(NotLanguageFeature.INFRASTRUCTURE)
-    def test_apply_update_sets_return_ip_on_new_frame(self):
-        """apply_update must propagate return_ip from StackFramePush into the new StackFrame."""
-        vm = _vm_with_main()
-        update = StateUpdate(
-            call_push=StackFramePush(
-                function_name=FuncName("callee"),
-                return_label=CodeLabel("block_0"),
-                return_ip=3,
+        vm.call_stack.append(
+            StackFrame(
+                function_name=FuncName("<main>"),
+                registers={
+                    Register("%obj"): typed_from_runtime(
+                        Pointer(base=Address("obj_0"), offset=0)
+                    )
+                },
             )
         )
-        apply_update(vm, update)
-        assert vm.current_frame.return_ip == 3
+        ctx = replace(
+            _default_handler_context(),
+            cfg=cfg,
+            registry=registry,
+            current_label=CodeLabel("entry"),
+            ip=4,
+        )
+
+        result = LocalExecutor.execute(
+            inst=IRInstruction(
+                opcode=Opcode.CALL_METHOD,
+                result_reg=Register("%result"),
+                operands=["%obj", "greet", "%obj"],
+            ),
+            vm=vm,
+            ctx=ctx,
+        )
+
+        assert result.update.call_push == StackFramePush(
+            function_name=FuncName("greet"),
+            return_label=CodeLabel("entry"),
+            return_ip=5,
+            result_reg=Register("%result"),
+        )
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
-    def test_apply_update_sets_result_reg_on_new_frame(self):
-        """apply_update must propagate result_reg from StackFramePush into the new StackFrame."""
+    def test_apply_update_builds_the_frame_from_the_push(self):
         vm = _vm_with_main()
-        update = StateUpdate(
-            call_push=StackFramePush(
-                function_name=FuncName("callee"),
-                result_reg=Register("%r1"),
-            )
+        apply_update(
+            vm,
+            StateUpdate(
+                call_push=StackFramePush(
+                    function_name=FuncName("callee"),
+                    return_label=CodeLabel("block_0"),
+                    return_ip=3,
+                    result_reg=Register("%r1"),
+                )
+            ),
         )
-        apply_update(vm, update)
-        assert vm.current_frame.result_reg == Register("%r1")
-
-    @covers(NotLanguageFeature.INFRASTRUCTURE)
-    def test_apply_update_frame_is_complete_without_post_patch(self):
-        """After apply_update, new frame has return_label, return_ip, and result_reg — no patch needed."""
-        vm = _vm_with_main()
-        update = StateUpdate(
-            call_push=StackFramePush(
-                function_name=FuncName("callee"),
-                return_label=CodeLabel("block_0"),
-                return_ip=3,
-                result_reg=Register("%r1"),
-            )
-        )
-        apply_update(vm, update)
         frame = vm.current_frame
-        assert frame.return_label == CodeLabel("block_0")
-        assert frame.return_ip == 3
-        assert frame.result_reg == Register("%r1")
+        assert (
+            frame.function_name,
+            frame.return_label,
+            frame.return_ip,
+            frame.result_reg,
+        ) == (FuncName("callee"), CodeLabel("block_0"), 3, Register("%r1"))
