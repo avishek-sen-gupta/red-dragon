@@ -46,7 +46,7 @@ The analysis is **forward**, **may** (over-approximate), and **intraprocedural**
 
 All types are defined at the top of `interpreter/dataflow.py`.
 
-### Definition (`interpreter/dataflow.py:37`)
+### Definition (`interpreter/dataflow.py`)
 
 A single point where a variable or register is assigned:
 
@@ -76,7 +76,7 @@ class Use:
 
 Parallel structure to `Definition`. Same equality/hash semantics.
 
-### DefUseLink (`interpreter/dataflow.py:81`)
+### DefUseLink (`interpreter/dataflow.py`)
 
 An edge from a definition to a use that reads it:
 
@@ -89,7 +89,7 @@ class DefUseLink:
 
 One definition can feed into many uses; one use can have many reaching definitions (e.g., from different branches of an if/else).
 
-### BlockDataflowFacts (`interpreter/dataflow.py:89`)
+### BlockDataflowFacts (`interpreter/dataflow.py`)
 
 The four classic sets for each basic block:
 
@@ -104,7 +104,7 @@ class BlockDataflowFacts:
 
 These are **mutable** (updated during the fixpoint iteration), unlike the frozen `Definition`/`Use`/`DefUseLink`.
 
-### DataflowResult (`interpreter/dataflow.py:99`)
+### DataflowResult (`interpreter/dataflow.py`)
 
 The complete output of the analysis:
 
@@ -124,18 +124,15 @@ class DataflowResult:
 
 ### Which opcodes define values?
 
-Two sets classify IR opcodes (`interpreter/dataflow.py:17`):
+`VAR_DEFINITION_OPCODES` in `interpreter/ir.py` names the opcodes that define a named variable:
 
 ```python
-_VALUE_PRODUCERS: frozenset[Opcode] = frozenset({
-    Opcode.CONST, Opcode.LOAD_VAR, Opcode.LOAD_FIELD, Opcode.LOAD_INDEX,
-    Opcode.NEW_OBJECT, Opcode.NEW_ARRAY,
-    Opcode.BINOP, Opcode.UNOP,
-    Opcode.CALL_FUNCTION, Opcode.CALL_METHOD, Opcode.CALL_UNKNOWN,
-})
-
-_VAR_DEFINERS: frozenset[Opcode] = frozenset({Opcode.STORE_VAR})
+VAR_DEFINITION_OPCODES: frozenset[Opcode] = frozenset(
+    {Opcode.DECL_VAR, Opcode.STORE_VAR}
+)
 ```
+
+Register definitions come from each instruction's `writes()`, below.
 
 ### instruction.writes() — StorageIdentifier protocol
 
@@ -174,7 +171,7 @@ class StoreVar(InstructionBase):
 This replaces the old opcode-conditional `_defs_of()`/`_uses_of()` functions. Each instruction knows its own dataflow semantics — no central dispatch table needed.
 ```
 
-### collect_all_definitions(cfg) (`interpreter/dataflow.py:154`)
+### collect_all_definitions(cfg) (`interpreter/dataflow.py`)
 
 Walks every block and every instruction, building the global definition list:
 
@@ -195,7 +192,7 @@ def collect_all_definitions(cfg: CFG) -> list[Definition]:
 
 ### GEN and KILL sets
 
-`compute_gen_kill()` (`interpreter/dataflow.py:179`) computes the two local sets for a single block:
+`compute_gen_kill()` (`interpreter/dataflow.py`) computes the two local sets for a single block:
 
 **GEN** = the *last* definition of each variable within the block. If a block defines `x` twice, only the second definition is in GEN (it "generates" the definition that exits the block).
 
@@ -237,7 +234,7 @@ KILL(B) = {x@A:?, x@C:?}      all OTHER defs of x in the program
 
 ### Worklist fixpoint
 
-`solve_reaching_definitions()` (`interpreter/dataflow.py:219`) implements the standard iterative algorithm:
+`solve_reaching_definitions()` (`interpreter/dataflow.py`) implements the standard iterative algorithm:
 
 ```python
 def solve_reaching_definitions(cfg: CFG) -> dict[str, BlockDataflowFacts]:
@@ -316,7 +313,7 @@ flowchart TD
 
 ## 5. Def-Use Chain Extraction
 
-`extract_def_use_chains()` (`interpreter/dataflow.py:265`) links every use to the definition(s) that can reach it.
+`extract_def_use_chains()` (`interpreter/dataflow.py`) links every use to the definition(s) that can reach it.
 
 ### Algorithm
 
@@ -419,33 +416,22 @@ for link in def_use_chains:
         store_var_defs.add((var_name, rhs_reg))
 ```
 
-**Step 3: Trace registers back to named variables** via `_trace_to_named_vars()` (`interpreter/dataflow.py:386`):
+**Step 3: Trace registers back to named variables** via `_trace_to_named_vars()` (`interpreter/dataflow.py`):
 
 ```python
-def _trace_to_named_vars(reg, produced_from, result, visited):
-    if reg in visited:
-        return                           # cycle detection
-    visited.add(reg)
-
-    if not _is_temporary_register(reg):
-        result.add(reg)                  # found a named variable — stop
+def _trace_to_named_vars(identifier, produced_from, result, visited):
+    if isinstance(identifier, VarName):
+        result.add(identifier)           # named variable — stop
         return
+    if identifier in visited:
+        return                           # cycle detection
+    visited.add(identifier)
 
-    for source in produced_from.get(reg, set()):
+    for source in produced_from.get(identifier, set()):
         _trace_to_named_vars(source, produced_from, result, visited)
 ```
 
-`_is_temporary_register()` (`interpreter/dataflow.py:376`) classifies registers:
-
-```python
-def _is_temporary_register(name: str) -> bool:
-    if name.startswith("%"):
-        return True                     # %0, %1, %2
-    if not name.startswith("t"):
-        return False
-    rest = name[1:]
-    return rest.isdigit() or rest.startswith("_")  # t0, t1, t_cond
-```
+`VarName` identifiers are leaves. `Register` identifiers are intermediates, traced through `produced_from`.
 
 Steps 1–3 produce the **raw dependency graph** (direct dependencies only). This is stored as `raw_dependency_graph` in the result.
 
@@ -512,7 +498,7 @@ Transitive closure:
 
 ## 7. The analyze() Entry Point
 
-`analyze()` (`interpreter/dataflow.py:405`) orchestrates the full pipeline:
+`analyze()` (`interpreter/dataflow.py`) orchestrates the full pipeline:
 
 ```python
 def analyze(cfg: CFG) -> DataflowResult:
@@ -554,7 +540,7 @@ The dataflow analysis operates on **exactly the same** data structures used by t
 
 - `CFG` from `interpreter/cfg_types.py` — blocks, edges, entry point
 - `BasicBlock` — label, instructions, successors, predecessors
-- `InstructionBase` subclasses from `interpreter/instructions.py` — 34 per-opcode frozen dataclasses with typed fields
+- `InstructionBase` subclasses from `interpreter/instructions.py` — 37 per-opcode frozen dataclasses with typed fields
 - Each instruction implements `reads()` and `writes()` returning `list[StorageIdentifier]` — the dataflow module uses these directly
 
 This means dataflow analysis can run on CFGs built from any frontend (deterministic or LLM).
@@ -724,14 +710,14 @@ In loops, variables that are updated in terms of themselves (`x = x + 1`) correc
 
 ```
 interpreter/
-├── dataflow.py          Main analysis: 430 lines
+├── dataflow.py          Main analysis
 │   ├── Definition, Use, DefUseLink, BlockDataflowFacts, DataflowResult
 │   ├── _defs_of(), _uses_of()
 │   ├── collect_all_definitions()
 │   ├── compute_gen_kill()
 │   ├── solve_reaching_definitions()
 │   ├── extract_def_use_chains()
-│   ├── _trace_to_named_vars(), _is_temporary_register()
+│   ├── _trace_to_named_vars()
 │   ├── _build_raw_dependency_graph()
 │   ├── _transitive_closure()
 │   ├── build_dependency_graph()   ← convenience: raw + closure
@@ -740,16 +726,12 @@ interpreter/
 ├── cfg_types.py         BasicBlock, CFG (input to analysis)
 ├── cfg.py               build_cfg() (produces CFG from IR)
 ├── ir.py                Opcode enum, Register, CodeLabel
-├── instructions.py      34 per-opcode dataclasses with reads()/writes()
+├── instructions.py      37 per-opcode dataclasses with reads()/writes()
 └── constants.py         DATAFLOW_MAX_ITERATIONS = 1000
 
 tests/unit/
-└── test_dataflow.py     20 test cases
-    ├── TestReachingDefinitions (5 tests)
-    ├── TestDefUseChains (4 tests)
-    ├── TestDependencyGraph (7 tests — direct, transitive, raw graph, multi-operand)
-    ├── TestIntegration (3 tests)
-    └── TestEdgeCases (1 test)
+└── test_dataflow.py     reaching definitions, def-use chains, dependency graphs,
+                         region opcodes, ADDRESS_OF, integration, edge cases
 ```
 
 ### Dependencies

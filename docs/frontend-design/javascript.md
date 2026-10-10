@@ -23,7 +23,7 @@ interpreter/frontends/javascript/
 Frontend (abstract)
   └── BaseFrontend (_base.py)
         └── JavaScriptFrontend (javascript/frontend.py)   ← this frontend
-              └── TypeScriptFrontend (typescript.py)
+              └── TypeScriptFrontend (typescript/)
 ```
 
 `TypeScriptFrontend` extends this class, inheriting all dispatch tables and methods, then adding TypeScript-specific entries.

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Address:
-    """A heap object or region address (e.g., 'obj_0', 'arr_3', 'mem_0')."""
+    """A heap address ('obj_0', 'arr_3', 'mem_0') or a region address (its segment's numeric base, e.g. '4096')."""
 
     value: str
 

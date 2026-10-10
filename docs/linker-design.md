@@ -444,20 +444,20 @@ mcp_server/server.py      load_project MCP tool registration
 
 ## 12. Test Coverage
 
-179 tests across unit and integration:
+Core tests, in `tests/unit/project/` and `tests/integration/project/` (counts are collected items, as of 2026-10-11):
 
 | Test File | Tests | Covers |
 |-----------|-------|--------|
-| `test_types.py` | 26 | Data model: ImportRef, ExportTable, ModuleUnit, LinkedProgram |
+| `test_types.py` | 35 | Data model: ImportRef, ExportTable, ModuleUnit, LinkedProgram |
 | `test_export_table.py` | 10 | Export extraction from IR + symbol tables |
 | `test_import_extraction.py` | 14 | Python import extraction (all forms) |
-| `test_all_language_imports.py` | 33 | Import extraction across all 15 tree-sitter languages |
-| `test_cobol_imports.py` | 11 | COBOL COPY/CALL extraction + resolver |
-| `test_resolver.py` | 10 | Python resolver + protocol |
-| `test_topo_sort.py` | 9 | Topological sort, cycles, edge cases |
-| `test_linker.py` | 18 | Namespace, rebase, register helpers |
+| `test_all_language_imports.py` | 34 | Import extraction across all 15 tree-sitter languages |
+| `test_cobol_imports.py` | 31 | COBOL COPY/CALL extraction + resolver |
+| `test_resolver.py` | 23 | Python resolver + protocol |
+| `test_topo_sort.py` | 10 | Topological sort, cycles, edge cases |
+| `test_linker.py` | 20 | Namespace, rebase, register helpers |
 | `test_project_pipeline.py` | 14 | Full compile→link pipeline (Python, JS, Java, C) |
 | `test_fixture_projects.py` | 5 | On-disk fixture projects |
-| `test_all_languages_execution.py` | 20 | Multi-file execution for all 15 languages |
+| `test_all_languages_execution.py` | 21 | Multi-file execution for all 15 languages |
 | `test_api_integration.py` | 3 | analyze_project(), run_project() |
 | `test_mcp_tool.py` | 5 | MCP load_project tool |

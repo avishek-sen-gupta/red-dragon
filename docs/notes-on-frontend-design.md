@@ -41,7 +41,7 @@ flowchart TD
     factory["get_frontend()\ninterpreter/frontend.py\n← factory"]
 
     det["Deterministic\n(BaseFrontend subclass)\n15 language frontends/"]
-    llm["LLMFrontend\nllm_frontend.py\nLLMClient"]
+    llm["LLMFrontend\nllm/llm_frontend.py\nLLMClient"]
     chunked["ChunkedLLMFrontend\nllm/chunked_llm_frontend.py\nChunkExtractor, IRRenumberer\nwraps LLMFrontend"]
 
     factory --> det & llm & chunked
@@ -355,7 +355,7 @@ except (IRParsingError, Exception) as exc:
 
 ## 8. LLM Client Abstraction
 
-`interpreter/llm_client.py` defines the API client interface:
+`interpreter/llm/llm_client.py` defines the API client interface:
 
 ```python
 class LLMClient(ABC):
@@ -364,16 +364,16 @@ class LLMClient(ABC):
                  max_tokens: int = 4096) -> str: ...
 ```
 
-Four implementations:
+One implementation, `LiteLLMClient`, routes every provider through LiteLLM. Per-provider defaults:
 
-| Class | Provider | Default Model | Notes |
-|---|---|---|---|
-| `ClaudeLLMClient` | Anthropic | `claude-sonnet-4-20250514` | `anthropic.messages.create()` |
-| `OpenAILLMClient` | OpenAI | `gpt-4o` | `response_format={"type":"json_object"}` |
-| `OllamaLLMClient` | Ollama (local) | `qwen2.5-coder:7b-instruct` | OpenAI-compatible at `localhost:11434` |
-| `HuggingFaceLLMClient` | HuggingFace | (endpoint-based) | OpenAI-compatible API |
+| Provider | Default Model | Notes |
+|---|---|---|
+| `claude` | `claude-sonnet-4-20250514` | |
+| `openai` | `gpt-4o` | |
+| `ollama` | `qwen2.5-coder:7b-instruct` | `http://localhost:11434` |
+| `huggingface` | (endpoint-based) | `base_url`, or a registered endpoint |
 
-Factory: `get_llm_client(provider, model, client)` routes to the correct class. All accept a pre-built API client for dependency injection in tests.
+Factory: `get_llm_client(provider, model, completion_fn, base_url)`. Tests inject `completion_fn` in place of `litellm.completion`.
 
 ---
 

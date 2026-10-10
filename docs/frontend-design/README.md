@@ -13,7 +13,7 @@ For the `BaseFrontend` class, `TreeSitterEmitContext`, and common lowerer infras
 | [base-frontend.md](base-frontend.md) | `_base.py` + `context.py` + `common/` | BaseFrontend, TreeSitterEmitContext, GrammarConstants, common lowerers |
 | [python.md](python.md) | `frontends/python/` | Python frontend -- the reference implementation |
 | [javascript.md](javascript.md) | `frontends/javascript/` | JavaScript frontend -- destructuring, arrow functions, template strings |
-| [typescript.md](typescript.md) | `frontends/typescript.py` | TypeScript frontend -- extends JavaScript, type extraction |
+| [typescript.md](typescript.md) | `frontends/typescript/` | TypeScript frontend -- extends JavaScript, type extraction |
 | [java.md](java.md) | `frontends/java/` | Java frontend -- records, instanceof, method references |
 | [kotlin.md](kotlin.md) | `frontends/kotlin/` | Kotlin frontend -- companion objects, elvis operator, when expressions |
 | [scala.md](scala.md) | `frontends/scala/` | Scala frontend -- for-comprehensions, case classes, pattern matching |
@@ -47,7 +47,7 @@ interpreter/frontends/<language>/
 ## Key Files
 
 - `interpreter/ir.py` -- IR types (Opcode enum, Register, CodeLabel, SourceLocation, IRInstruction factory)
-- `interpreter/instructions.py` -- 34 per-opcode frozen dataclasses with typed fields and `reads()`/`writes()` methods
+- `interpreter/instructions.py` -- 37 per-opcode frozen dataclasses with typed fields and `reads()`/`writes()` methods
 - `interpreter/frontend.py` -- `Frontend` ABC and `get_frontend()` factory
 - `interpreter/frontends/__init__.py` -- lazy-loading registry mapping Language enum to frontend classes
 - `interpreter/frontends/context.py` -- `TreeSitterEmitContext` and `GrammarConstants` definitions

@@ -1,6 +1,6 @@
 # TypeScript Frontend
 
-> `interpreter/frontends/typescript.py` · Extends `JavaScriptFrontend` · Single file with `typescript_node_types.py`
+> `interpreter/frontends/typescript/` · Extends `JavaScriptFrontend` · Node types in `typescript_node_types.py`
 
 ## Overview
 
@@ -10,11 +10,14 @@ The TypeScript frontend extends the JavaScript frontend, inheriting all JavaScri
 
 ```
 interpreter/frontends/
-├── typescript.py              # TypeScriptFrontend class + all TS lowering functions
-└── typescript_node_types.py   # TypeScriptNodeType constants class
+├── typescript/
+│   ├── frontend.py              # TypeScriptFrontend class + all TS lowering functions
+│   ├── features.py              # TypeScript feature enum
+│   └── type_alias_extractor.py  # type alias extraction
+└── typescript_node_types.py     # TypeScriptNodeType constants class
 ```
 
-Unlike Python and JavaScript frontends which use a per-language directory, the TypeScript frontend is a single file that extends `JavaScriptFrontend` from `javascript/frontend.py`.
+The TypeScript frontend lives in `typescript/` and extends `JavaScriptFrontend` from `javascript/frontend.py`. Unlike JavaScript, its lowering functions sit in one module, `frontend.py`.
 
 ## Class Hierarchy
 
@@ -22,7 +25,7 @@ Unlike Python and JavaScript frontends which use a per-language directory, the T
 Frontend (abstract)
   └── BaseFrontend (_base.py)
         └── JavaScriptFrontend (javascript/frontend.py)
-              └── TypeScriptFrontend (typescript.py)   ← this frontend
+              └── TypeScriptFrontend (typescript/frontend.py)   ← this frontend
 ```
 
 No other frontend extends `TypeScriptFrontend`.
@@ -281,7 +284,7 @@ STORE_VAR hello %21
 
 8. **Namespace support**: `internal_module` (TypeScript `namespace`) is handled by `lower_ts_internal_module` which simply descends into the body block.
 
-9. **Pure function architecture**: All TS-specific lowering methods are pure functions taking `(ctx: TreeSitterEmitContext, node)` as arguments, defined as module-level functions in `typescript.py`. The `TypeScriptFrontend` class overrides `_build_expr_dispatch()` and `_build_stmt_dispatch()` to wire them in.
+9. **Pure function architecture**: All TS-specific lowering methods are pure functions taking `(ctx: TreeSitterEmitContext, node)` as arguments, defined as module-level functions in `typescript/frontend.py`. The `TypeScriptFrontend` class overrides `_build_expr_dispatch()` and `_build_stmt_dispatch()` to wire them in.
 
 10. **Minimal footprint**: The TypeScript frontend is deliberately thin. By extending `JavaScriptFrontend`, it inherits all JS runtime semantics and only needs to handle the TypeScript-specific type system constructs that tree-sitter parses into distinct node types.
 

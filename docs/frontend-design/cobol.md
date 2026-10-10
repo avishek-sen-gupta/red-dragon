@@ -1,6 +1,6 @@
 # COBOL Frontend
 
-> `interpreter/cobol/cobol_frontend.py` · Extends `Frontend` directly · ~1590 lines
+> `interpreter/cobol/cobol_frontend.py` · Extends `Frontend` directly
 
 ## Overview
 
@@ -18,9 +18,9 @@ ProLeap Bridge (Java subprocess)
   │
   ▼
 Python ASG Layer
-  │  interpreter/cobol/cobol_parser.py    — subprocess invocation
-  │  interpreter/cobol/asg_types.py       — CobolASG, CobolSection, CobolParagraph
-  │  interpreter/cobol/cobol_statements.py — typed statement hierarchy (frozen dataclasses)
+  │  cobol_asg/cobol_parser.py     — subprocess invocation
+  │  cobol_asg/asg_types.py        — CobolASG, CobolSection, CobolParagraph
+  │  cobol_asg/cobol_statements.py — typed statement hierarchy (frozen dataclasses)
   │
   ▼
 CobolFrontend (this file)
@@ -35,21 +35,23 @@ The pipeline has three layers, each independently testable:
 
 1. **Java bridge** — `StatementSerializer.java` dispatches on ProLeap's `StatementTypeEnum` and serializes each statement type to JSON with extracted operands
 2. **Python dispatch** — `cobol_statements.py` provides frozen dataclasses per statement type with `from_dict()`/`to_dict()` round-trip and a `parse_statement()` dispatch function
-3. **Frontend lowering** — `cobol_frontend.py` lowers each statement type to IR via `isinstance` dispatch in `_lower_statement()`
+3. **Frontend lowering** — `statement_dispatch.py` routes each statement type to its lowering function (`dispatch_statement()`)
 
 ## Module Map
+
+Files are under `interpreter/cobol/` unless prefixed with `cobol_asg/`.
 
 | File | Purpose |
 |------|---------|
 | `cobol_frontend.py` | Main frontend: DATA DIVISION allocation, PROCEDURE DIVISION lowering |
-| `cobol_statements.py` | Typed statement hierarchy — 25 frozen dataclasses + union type |
-| `features.py` | `CobolFeature` enum — 114 semantic features; used with `@covers(CobolFeature.X)` test decorators |
+| `cobol_asg/cobol_statements.py` | Typed statement hierarchy — frozen dataclasses + union type |
+| `features.py` | `CobolFeature` enum — 139 semantic features; used with `@covers(CobolFeature.X)` test decorators |
 | `io_provider.py` | Injectable I/O provider: `CobolIOProvider` ABC, `NullIOProvider`, `StubIOProvider` |
-| `cobol_expression.py` | `ExprNode` union type (`LiteralNode | FieldRefNode | RefModNode | BinOpNode`) + `expr_from_dict()` deserializer; legacy `parse_expression` tokenizer retained for standalone tests |
-| `cobol_parser.py` | Subprocess bridge to ProLeap JAR |
-| `asg_types.py` | `CobolASG`, `CobolSection`, `CobolParagraph`, `CobolField` |
-| `cobol_types.py` | `CobolDataCategory` enum, `CobolTypeDescriptor` |
-| `pic_parser.py` | PIC clause parser (e.g., `9(5)V99` → type descriptor) |
+| `cobol_asg/cobol_expression.py` | `ExprNode` union type (`LiteralNode | FieldRefNode | RefModNode | BinOpNode`) + `expr_from_dict()` deserializer; legacy `parse_expression` tokenizer retained for standalone tests |
+| `cobol_asg/cobol_parser.py` | Subprocess bridge to ProLeap JAR |
+| `cobol_asg/asg_types.py` | `CobolASG`, `CobolSection`, `CobolParagraph`, `CobolField` |
+| `cobol_asg/cobol_types.py` | `CobolDataCategory` enum, `CobolTypeDescriptor` |
+| `cobol_asg/pic_parser.py` | PIC clause parser (e.g., `9(5)V99` → type descriptor) |
 | `data_layout.py` | `DataLayout`, `FieldLayout`, `build_data_layout()` |
 | `ir_encoders.py` | IR instruction builders for encode/decode (zoned, COMP-3, alphanumeric, string ops) |
 | `byte_builtins.py` | 19 low-level builtins for byte/nibble/list/string manipulation |
@@ -279,7 +281,7 @@ Output is a per-type coverage matrix showing HANDLED / DISPATCH_MISSING / NOT_LO
 
 ### Unit tests
 
-Tests are in `tests/unit/test_cobol_*.py`:
+Tests are in `tests/unit/test_cobol_*.py` and `tests/unit/cobol/`:
 
 - **Statement hierarchy**: dispatch + round-trip for all 29 handled types
 - **Frontend lowering**: per-statement IR verification (opcode presence, WRITE_REGION counts, loop structure)

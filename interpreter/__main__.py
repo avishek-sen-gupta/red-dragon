@@ -1,7 +1,7 @@
 """CLI: uv run python -m interpreter <path> [--entry PROGRAM] [options]
 
 Compiles and runs a COBOL program through the full pipeline:
-  CICS pre-pass → ProLeap parse → IR lowering → CFG → VM execution
+  ProLeap parse → IR lowering → CFG → VM execution
 
 Examples:
     uv run python -m interpreter myprogram.cbl
