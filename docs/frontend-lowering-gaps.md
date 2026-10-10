@@ -1,10 +1,10 @@
 # Frontend Feature Coverage Gaps
 
-**Generated**: 2026-07-03
+**Generated**: 2026-10-11
 **Method**: Scans `interpreter/frontends/*/features.py` and `interpreter/cobol/features.py` for `XxxFeature` enum members, then cross-references with `@covers(XxxFeature.X)` decorators in `tests/unit/` and `tests/integration/`. Uncovered members = features the frontend handles but no test annotates.
 **Regenerate**: `uv run python scripts/feature_coverage_audit.py --gaps-doc docs/frontend-lowering-gaps.md`
 
-**Totals**: 976 features across 16 languages — 811 covered, 165 uncovered
+**Totals**: 988 features across 16 languages — 823 covered, 165 uncovered
 
 ---
 
@@ -13,7 +13,7 @@
 | Language | Total | Covered | Uncovered | % Covered |
 |----------|-------|---------|-----------|-----------|
 | c | 51 | 36 | 15 ⚠ | 70% |
-| cobol | 127 | 125 | 2 ⚠ | 98% |
+| cobol | 139 | 137 | 2 ⚠ | 98% |
 | cpp | 84 | 45 | 39 ⚠ | 53% |
 | csharp | 94 | 73 | 21 ⚠ | 77% |
 | go | 44 | 41 | 3 ⚠ | 93% |
@@ -53,8 +53,8 @@
 
 ### cobol
 
+- `EXTERNAL_FLOATING_POINT` — External floating-point PIC (mantissa E exponent) display-form floating-point data items
 - `SEARCH_BINARY` — SEARCH ALL table WHEN cond binary table search statements
-- `USAGE_INDEX` — USAGE INDEX table index storage type
 
 ### cpp
 
