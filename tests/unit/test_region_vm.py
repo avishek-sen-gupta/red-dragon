@@ -13,7 +13,7 @@ from interpreter.vm.executor import (
     LocalExecutor,
     _default_handler_context,
 )
-from interpreter.vm.vm import apply_update
+from interpreter.vm.vm import VMState, apply_update
 from interpreter.vm.segment import Segment
 from interpreter.vm.vm_types import SymbolicValue
 from tests.unit.vm_helpers import make_vm as _make_vm
@@ -38,15 +38,22 @@ def _execute(vm, inst):
     return result
 
 
+def _alloc_region(vm: VMState, result_reg: Register, size: int) -> None:
+    vm.current_frame.registers[Register("%alloc_size")] = size
+    _execute(
+        vm,
+        IRInstruction(
+            opcode=Opcode.ALLOC_REGION,
+            result_reg=result_reg,
+            operands=["%alloc_size"],
+        ),
+    )
+
+
 class TestAllocRegion:
     def test_alloc_creates_region(self):
         vm = _make_vm()
-        inst = IRInstruction(
-            opcode=Opcode.ALLOC_REGION,
-            result_reg=Register("%r0"),
-            operands=[16],
-        )
-        _execute(vm, inst)
+        _alloc_region(vm, Register("%r0"), 16)
 
         handle = unwrap(vm.current_frame.registers[Register("%r0")])
         assert (handle, vm.segment_of(Address(str(handle)))) == (
@@ -79,14 +86,7 @@ class TestWriteAndLoadRegion:
         vm = _make_vm()
 
         # Allocate
-        _execute(
-            vm,
-            IRInstruction(
-                opcode=Opcode.ALLOC_REGION,
-                result_reg=Register("%rgn"),
-                operands=[8],
-            ),
-        )
+        _alloc_region(vm, Register("%rgn"), 8)
 
         # Write [0xDE, 0xAD, 0xBE, 0xEF] at offset 2
         vm.current_frame.registers[Register("%offset")] = 2
@@ -119,14 +119,7 @@ class TestWriteAndLoadRegion:
     def test_read_partial_region(self):
         vm = _make_vm()
 
-        _execute(
-            vm,
-            IRInstruction(
-                opcode=Opcode.ALLOC_REGION,
-                result_reg=Register("%rgn"),
-                operands=[8],
-            ),
-        )
+        _alloc_region(vm, Register("%rgn"), 8)
 
         # Write 8 bytes at offset 0
         vm.current_frame.registers[Register("%off0")] = 0
@@ -168,14 +161,7 @@ class TestWriteAndLoadRegion:
         vm = _make_vm()
 
         # Allocate 4 bytes, fill with [1, 2, 3, 4]
-        _execute(
-            vm,
-            IRInstruction(
-                opcode=Opcode.ALLOC_REGION,
-                result_reg=Register("%rgn"),
-                operands=[4],
-            ),
-        )
+        _alloc_region(vm, Register("%rgn"), 4)
         vm.current_frame.registers[Register("%off0")] = 0
         vm.current_frame.registers[Register("%data")] = [1, 2, 3, 4]
         _execute(
@@ -213,14 +199,7 @@ class TestWriteAndLoadRegion:
         allocated after it, as storage would."""
         vm = _make_vm()
         for name, size in (("%first", 2), ("%second", 3)):
-            _execute(
-                vm,
-                IRInstruction(
-                    opcode=Opcode.ALLOC_REGION,
-                    result_reg=Register(name),
-                    operands=[size],
-                ),
-            )
+            _alloc_region(vm, Register(name), size)
         vm.current_frame.registers[Register("%off0")] = 0
         vm.current_frame.registers[Register("%data")] = [1, 2, 3, 4, 5]
         _execute(
@@ -254,14 +233,7 @@ class TestWriteAndLoadRegion:
     def test_load_offset_past_end_all_zeros(self):
         """LOAD_REGION entirely beyond the region end returns all zero bytes."""
         vm = _make_vm()
-        _execute(
-            vm,
-            IRInstruction(
-                opcode=Opcode.ALLOC_REGION,
-                result_reg=Register("%rgn"),
-                operands=[4],
-            ),
-        )
+        _alloc_region(vm, Register("%rgn"), 4)
         vm.current_frame.registers[Register("%off")] = 8
         _execute(
             vm,
@@ -292,14 +264,7 @@ class TestWriteAndLoadRegion:
 
     def test_correct_bytearray_size(self):
         vm = _make_vm()
-        _execute(
-            vm,
-            IRInstruction(
-                opcode=Opcode.ALLOC_REGION,
-                result_reg=Register("%rgn"),
-                operands=[100],
-            ),
-        )
+        _alloc_region(vm, Register("%rgn"), 100)
 
         addr = Address(str(unwrap(vm.current_frame.registers[Register("%rgn")])))
         assert len(vm.region_get(addr)) == 100
@@ -308,14 +273,7 @@ class TestWriteAndLoadRegion:
         """Write to a region, then overwrite part of it."""
         vm = _make_vm()
 
-        _execute(
-            vm,
-            IRInstruction(
-                opcode=Opcode.ALLOC_REGION,
-                result_reg=Register("%rgn"),
-                operands=[8],
-            ),
-        )
+        _alloc_region(vm, Register("%rgn"), 8)
 
         # Write all 8 bytes
         vm.current_frame.registers[Register("%off0")] = 0

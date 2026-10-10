@@ -15,6 +15,7 @@ from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_expr import UNKNOWN, ScalarType, scalar
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter.var_name import VarName
+from interpreter.vm.unwritten_register_read import UnwrittenRegisterRead
 from interpreter.vm.vm_types import (  # noqa: F401 — re-exported for backwards compatibility
     VOID_RETURN,
     ClosureEnvironment,
@@ -350,26 +351,23 @@ def _resolve_reg(vm: VMState, operand: str | Register) -> TypedValue:
     Returns the TypedValue as-is if the register holds one, otherwise
     wraps the raw value via typed_from_runtime().
     """
-    # Handle Register objects directly
     if isinstance(operand, Register):
         if not operand.is_present():
             return typed_from_runtime(None)
-        frame = vm.current_frame
-        val = frame.registers.get(operand)
-        if val is None:
-            # Fallback: try string key (legacy dict may have str keys)
-            val = frame.registers.get(str(operand), str(operand))
-        if isinstance(val, TypedValue):
-            return val
-        return typed_from_runtime(val)
+        return _read_written_register(vm, operand)
     if isinstance(operand, str) and operand.startswith("%"):
-        frame = vm.current_frame
-        reg = Register(operand)
-        val = frame.registers.get(reg, operand)
-        if isinstance(val, TypedValue):
-            return val
-        return typed_from_runtime(val)
+        return _read_written_register(vm, Register(operand))
     return typed_from_runtime(operand)
+
+
+def _read_written_register(vm: VMState, register: Register) -> TypedValue:
+    frame = vm.current_frame
+    if register not in frame.registers:
+        raise UnwrittenRegisterRead(register, frame.function_name)
+    val = frame.registers[register]
+    if isinstance(val, TypedValue):
+        return val
+    return typed_from_runtime(val)
 
 
 from interpreter.types.typed_value import runtime_type_name  # noqa: F401 — re-exported

@@ -1,11 +1,14 @@
 """Tests for _resolve_reg returning TypedValue."""
 
+import pytest
+
 from interpreter.address import Address
 from interpreter.func_name import FuncName
 from interpreter.register import Register
 from interpreter.type_name import TypeName
 from interpreter.types.type_expr import UNKNOWN, pointer, scalar
 from interpreter.types.typed_value import TypedValue, typed
+from interpreter.vm.unwritten_register_read import UnwrittenRegisterRead
 from interpreter.vm.vm import _resolve_reg
 from interpreter.vm.vm_types import Pointer, StackFrame, VMState
 
@@ -50,12 +53,12 @@ class TestResolveRegReturnsTypedValue:
         assert isinstance(result, TypedValue)
         assert result.value == "hello"
 
-    def test_wraps_missing_register(self):
-        """An unset register returns the register name wrapped."""
-        vm = _make_vm()
-        result = _resolve_reg(vm, "%99")
-        assert isinstance(result, TypedValue)
-        assert result.value == "%99"
+    def test_reading_an_unwritten_register_fails(self):
+        vm = _make_vm(**{"%0": 1})
+        with pytest.raises(UnwrittenRegisterRead, match="%99 in frame test"):
+            _resolve_reg(vm, Register("%99"))
+        with pytest.raises(UnwrittenRegisterRead, match="%98 in frame test"):
+            _resolve_reg(vm, "%98")
 
     def test_bare_pointer_in_register_gets_unknown_type(self):
         """A bare Pointer (not wrapped in TypedValue) gets UNKNOWN type."""

@@ -34,6 +34,18 @@ def _execute(vm: VMState, inst: InstructionBase) -> Any:
     return result
 
 
+def _alloc_region(vm: VMState, result_reg: Register, size: int) -> None:
+    vm.current_frame.registers[Register("%alloc_size")] = size
+    _execute(
+        vm,
+        IRInstruction(
+            opcode=Opcode.ALLOC_REGION,
+            result_reg=result_reg,
+            operands=["%alloc_size"],
+        ),
+    )
+
+
 def _execute_ir_sequence(vm: VMState, instructions: list[InstructionBase]) -> Any:
     """Execute a sequence of IR instructions, return the RETURN value."""
     for inst in instructions:
@@ -66,14 +78,7 @@ class TestAlphanumericRedefines:
         vm = _make_vm()
 
         # Allocate 8-byte region
-        _execute(
-            vm,
-            IRInstruction(
-                opcode=Opcode.ALLOC_REGION,
-                result_reg=Register("%rgn"),
-                operands=[8],
-            ),
-        )
+        _alloc_region(vm, Register("%rgn"), 8)
 
         # Encode "20260301" as EBCDIC alphanumeric via IR
         enc_ir = build_encode_alphanumeric_ir("enc_date", length=8)
@@ -114,14 +119,7 @@ class TestAlphanumericRedefines:
         """Write '20260301', read bytes [4:6] → '03'."""
         vm = _make_vm()
 
-        _execute(
-            vm,
-            IRInstruction(
-                opcode=Opcode.ALLOC_REGION,
-                result_reg=Register("%rgn"),
-                operands=[8],
-            ),
-        )
+        _alloc_region(vm, Register("%rgn"), 8)
 
         enc_ir = build_encode_alphanumeric_ir("enc_date", length=8)
         vm.current_frame.registers[Register("%p_value")] = "20260301"
@@ -164,14 +162,7 @@ class TestZonedDecimalRedefines:
         """Write zoned 12345 at offset 0, read it back."""
         vm = _make_vm()
 
-        _execute(
-            vm,
-            IRInstruction(
-                opcode=Opcode.ALLOC_REGION,
-                result_reg=Register("%rgn"),
-                operands=[10],
-            ),
-        )
+        _alloc_region(vm, Register("%rgn"), 10)
 
         # Encode zoned decimal 12345 (5 bytes, unsigned)
         digits = [1, 2, 3, 4, 5]
@@ -218,14 +209,7 @@ class TestMultiFieldRedefines:
         """Allocate 10-byte region, write zoned at [0:5], alphanumeric at [5:10]."""
         vm = _make_vm()
 
-        _execute(
-            vm,
-            IRInstruction(
-                opcode=Opcode.ALLOC_REGION,
-                result_reg=Register("%rgn"),
-                operands=[10],
-            ),
-        )
+        _alloc_region(vm, Register("%rgn"), 10)
 
         # Write zoned decimal 99999 at offset 0
         digits = [9, 9, 9, 9, 9]
@@ -295,14 +279,7 @@ class TestMultiFieldRedefines:
         """Write alphanumeric at offset 0, read overlapping region as raw bytes."""
         vm = _make_vm()
 
-        _execute(
-            vm,
-            IRInstruction(
-                opcode=Opcode.ALLOC_REGION,
-                result_reg=Register("%rgn"),
-                operands=[8],
-            ),
-        )
+        _alloc_region(vm, Register("%rgn"), 8)
 
         # Write "ABCD1234" as alphanumeric
         enc_a = build_encode_alphanumeric_ir("enc_a", length=8)

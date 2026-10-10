@@ -2,6 +2,8 @@
 
 from types import MappingProxyType
 
+import pytest
+
 from interpreter.constants import FoundationTypeName
 from interpreter.register import Register
 from interpreter.types.coercion.default_conversion_rules import (
@@ -9,6 +11,7 @@ from interpreter.types.coercion.default_conversion_rules import (
 )
 from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
 from interpreter.types.type_environment import TypeEnvironment
+from interpreter.vm.unwritten_register_read import UnwrittenRegisterRead
 from interpreter.vm.vm import _resolve_typed_reg, runtime_type_name
 from tests.unit.vm_helpers import make_vm as _make_vm
 
@@ -119,11 +122,9 @@ class TestResolveTypedReg:
         assert isinstance(result, int)
         assert not isinstance(result, bool)
 
-    def test_unregistered_register_passes_through(self):
-        """Register not in VM returns the register name as-is."""
+    def test_unwritten_register_fails(self):
         vm = _make_vm()
         type_env = _type_env_with({"%unknown": FoundationTypeName.INT})
 
-        result = _resolve_typed_reg(vm, "%unknown", type_env, _DEFAULT_RULES)
-
-        assert result == "%unknown"
+        with pytest.raises(UnwrittenRegisterRead, match="%unknown in frame <main>"):
+            _resolve_typed_reg(vm, "%unknown", type_env, _DEFAULT_RULES)

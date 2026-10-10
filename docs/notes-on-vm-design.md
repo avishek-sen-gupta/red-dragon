@@ -170,7 +170,7 @@ VMState
 └── cobol_run_unit_return_code: int | None    see §12.3
 ```
 
-`heap_get` returns `NO_HEAP_OBJECT` (a null object) for a missing address. Heap addresses are `Address` values (`interpreter/address.py`) such as `obj_3`, `arr_4`, `mem_5`; region handles are `Address` values holding a decimal base (`"4096"`).
+Reading a register nothing has written raises `UnwrittenRegisterRead` (`interpreter/vm/unwritten_register_read.py`); it is a lowering bug, not a value. `heap_get` returns `NO_HEAP_OBJECT` (a null object) for a missing address. Heap addresses are `Address` values (`interpreter/address.py`) such as `obj_3`, `arr_4`, `mem_5`; region handles are `Address` values holding a decimal base (`"4096"`).
 
 **Values.** Registers, locals and heap fields hold `TypedValue` (value plus `TypeExpr`). Raw values include Python primitives, `SymbolicValue(name, type_hint, constraints)`, `Pointer(base, offset)`, `FuncRef`/`BoundFuncRef`, `ClassRef`, byte lists for COBOL fields, and `CobolNumber` (`Decimal`) for COBOL arithmetic.
 
