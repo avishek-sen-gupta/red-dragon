@@ -1,47 +1,57 @@
 # IR Reference
 
-RedDragon uses a flattened high-level three-address code IR. Every program — regardless of source language or frontend — is lowered to a linear sequence of typed instruction dataclasses drawn from 35 opcodes.
+RedDragon uses a flattened high-level three-address code IR. Every frontend lowers its program to a linear sequence of typed instruction dataclasses drawn from 37 opcodes (the `Opcode` enum in `interpreter/ir.py`).
 
 ## Instruction format
 
-Each opcode has a dedicated frozen dataclass in `interpreter/instructions.py` (35 classes total). All share an `InstructionBase` with `source_location`. All fields use domain types:
+Each opcode has a frozen dataclass in `interpreter/instructions.py` (37 classes). All inherit from `InstructionBase`, which carries:
 
-- **Register-holding fields**: `Register` objects (e.g., `result_reg`, `left`, `right`)
-- **Label-holding fields**: `CodeLabel` objects (e.g., `label`, `true_label`, `false_label`)
-- **Variable names**: `VarName` objects (e.g., `name` on `LoadVar`/`StoreVar`/`DeclVar`)
-- **Field names**: `FieldName` objects (e.g., `field_name` on `LoadField`/`StoreField`)
-- **Function/method names**: `FuncName` objects (e.g., `func_name` on `CallFunction`, `method_name` on `CallMethod`)
-- **Operators**: `BinopKind`/`UnopKind` enums (e.g., `operator` on `Binop`/`Unop`)
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `source_location` | `SourceLocation` | `NO_SOURCE_LOCATION` | source span |
+| `result_reg` | `Register` | `NO_REGISTER` | target register |
+| `label` | `CodeLabel` | `NO_LABEL` | label (`LABEL`, `BRANCH`) |
+| `branch_targets` | `tuple[CodeLabel, ...]` | `()` | targets (`BRANCH_IF`) |
+| `id` | `InstructionId` | `NO_INSTRUCTION_ID` | stable sidecar coordinate |
 
-Each instruction implements `reads()` and `writes()` methods returning `StorageIdentifier` values (either `Register` or `VarName`) for dataflow analysis.
+`InstructionId` is a `NewType` over `int`; `NO_INSTRUCTION_ID` is `-1`. The field is `compare=False`, so two instructions differing only in `id` are equal. Ids key data kept beside the IR rather than in it. The COBOL frontend mints them from one `InstructionIdSource` shared across every program it lowers, and keys its `MemoryEffect` records by them.
+
+Fields use domain types:
+
+- **Registers**: `Register` (e.g. `result_reg`, `left`, `right`)
+- **Labels**: `CodeLabel` (e.g. `label`, `target_label`, `catch_labels`)
+- **Variable names**: `VarName` (`name` on `LoadVar`/`StoreVar`/`DeclVar`, `var_name` on `AddressOf`)
+- **Field names**: `FieldName` (`field_name` on `LoadField`/`StoreField`)
+- **Function/method names**: `FuncName` (`func_name` on `CallFunction`/`CallCtorFunction`/`CallWithMemory`, `method_name` on `CallMethod`)
+- **Operators**: `BinopKind`/`UnopKind` enums (`operator` on `Binop`/`Unop`)
+
+Each instruction implements `reads() -> list[StorageIdentifier]` and `writes() -> StorageIdentifier | None` for dataflow analysis. `StorageIdentifier` is a protocol that `Register` and `VarName` satisfy. The base `writes()` returns `result_reg` when present, else `None`; `DeclVar` and `StoreVar` return `name`.
 
 ```python
-# Example: Binop instruction
 @dataclass(frozen=True)
 class Binop(InstructionBase):
-    result_reg: Register
-    operator: BinopKind
-    left: Register
-    right: Register
+    result_reg: Register = NO_REGISTER
+    operator: BinopKind = BinopKind.ADD
+    left: Register = NO_REGISTER
+    right: Register = NO_REGISTER
 
     def reads(self) -> list[StorageIdentifier]:
-        return [self.left, self.right]
+        return [r for r in (self.left, self.right) if isinstance(r, Register) and r.is_present()]
 
-    def writes(self) -> list[StorageIdentifier]:
-        return [self.result_reg]
+    # writes() is inherited: result_reg, or None when absent
 ```
 
-The legacy `IRInstruction` name is now a factory function that returns the appropriate typed subclass, maintaining backward compatibility with existing call sites.
+`IRInstruction(opcode, result_reg, operands, label, branch_targets, source_location, literal_type)` in `ir.py` is a factory that builds the typed instruction from flat operands. It is kept for older call sites and test helpers.
 
-Text representation: `%0 = const 42` or `store_var x %0` or `entry:` (for labels).
+Text representation: `%0 = const 42`, `store_var x %0`, `entry:` (labels). A known source location is appended as `  # line:col-line:col`.
 
-Registers are named `%0`, `%1`, ... and are assigned once (SSA-like, though not enforced). Labels are strings like `entry`, `func_fib_0`, `if_true_3`.
+Registers are named `%0`, `%1`, ... (the COBOL frontend uses `%r0`, `%r1`, ...). Each is assigned once by convention; this is not enforced. Labels are `CodeLabel` values such as `entry`, `func_fib_0`, `if_true_3`.
 
 ---
 
 ## Value producers
 
-These opcodes write a result into `result_reg`.
+These opcodes write `result_reg`, except `STORE_INDIRECT`.
 
 ### CONST
 
@@ -50,15 +60,33 @@ Load a constant value.
 | Field | Type | Description |
 |-------|------|-------------|
 | `result_reg` | `Register` | target register |
-| `value` | `str` | literal value string |
+| `value` | Python value | typed payload (`int`, `float`, `CobolNumber`, `str`, `bool`, `None`, or a label string) |
+| `has_value` | `bool` | `False` renders no operand; default `True` |
+| `type_expr` | `TypeExpr` | keyword-only, required; the constant's type |
 
-The value string is parsed at execution time: integers, floats, booleans (`True`/`False`), `None`, quoted strings (`"hello"`), function references (`<function:foo@func_foo_0>`), class references (`<class:Foo@class_Foo_0>`).
+Build constants with the typed factories, not the constructor:
+
+| Factory | `value` | `type_expr` |
+|---------|---------|-------------|
+| `Const.int_(reg, v)` | `int` | `scalar(INT)` |
+| `Const.float_(reg, v)` | `float` | `scalar(FLOAT)` |
+| `Const.decimal_(reg, v)` | `CobolNumber` | `scalar(DECIMAL)` (COBOL only) |
+| `Const.string(reg, v)` | `str`, no quotes | `scalar(STRING)` |
+| `Const.bool_(reg, v)` | `bool` | `scalar(BOOL)` |
+| `Const.null_(reg)` | `None` | `NULL` |
+| `Const.func_ref(reg, label, params, return_type)` | function label | `fn_type(params, return_type)` |
+| `Const.class_ref(reg, label, class_type)` | class label | `metatype(class_type)` |
+
+The handler writes `value` with `type_expr` as its type. A function-typed label found in the function symbol table becomes a `BoundFuncRef`, capturing a closure when not at top level. A metatype label found in the class symbol table becomes a `ClassRef`.
+
+The flat `IRInstruction` path takes a `literal_type` (`"Int"`, `"Float"`, `"Decimal"`, `"String"`, `"Bool"`, `"Null"`, `"FuncRef"`, `"ClassRef"`). Without one, it infers the type from the operand text: `None`, `True`/`False`, `func_`/`<function:` and `class_`/`<class:` prefixes, integer, float, quoted string, else bare string. Only legacy IR and hand-written fixtures reach that path.
 
 ```
 %0 = const 42
-%1 = const "hello"
+%1 = const hello
 %2 = const True
-%3 = const <function:fib@func_fib_0>
+%3 = const None
+%4 = const func_fib_0
 ```
 
 ### LOAD_VAR
@@ -70,11 +98,11 @@ Read a named variable.
 | `result_reg` | `Register` | target register |
 | `name` | `VarName` | variable name |
 
-Searches the call stack from the current frame backwards. If the variable is not found, the VM creates a fresh symbolic value.
+Searches the call stack from the current frame backwards. If no frame binds it, tries the field fallback (implicit `this.name`), then returns a fresh symbolic value.
 
-**Alias-aware**: If the variable has been promoted to the heap via `ADDRESS_OF` (i.e., it has an entry in `var_heap_aliases`), the read goes through the heap object instead of `local_vars`. This ensures that writes through pointers (`*ptr = 99`) are visible when the original variable is read.
+**Alias-aware**: a variable promoted to the heap by `ADDRESS_OF` (an entry in `var_heap_aliases`) is read from the heap object, so writes through pointers are visible.
 
-For block-scoped languages, `var_name` may be a mangled name (e.g. `x$1`) produced by the frontend's scope tracker. See [Block-Scope Tracking](type-system.md#block-scope-tracking-llvm-style).
+For block-scoped languages, `name` may be a mangled name (e.g. `x$1`) produced by the frontend's scope tracker. See [Block-Scope Tracking](type-system.md#block-scope-tracking-llvm-style).
 
 ```
 %4 = load_var x
@@ -93,7 +121,7 @@ Read a field from a heap object.
 Resolves `obj_reg` to a `Pointer`, extracts the base heap address via `_heap_addr()`, then looks up `field_name` in the object's fields. Returns a fresh symbolic value if the field does not exist.
 
 ```
-%5 = load_field %obj "name"
+%5 = load_field %obj name
 ```
 
 ### LOAD_INDEX
@@ -247,7 +275,7 @@ Write through a pointer (pointer dereference write).
 | `ptr_reg` | `Register` | pointer to write through |
 | `value_reg` | `Register` | value to write |
 
-Resolves `ptr_reg` to a `Pointer`, then writes `val_reg` to `heap[base].fields[str(offset)]`. This is how C and Rust lower `*ptr = val`.
+Resolves `ptr_reg` to a `Pointer` and writes `value_reg` to `heap[base].fields[str(offset)]`. A non-pointer target is a no-op. C and Rust lower `*ptr = val` to this.
 
 ```
 store_indirect %ptr %val       // *ptr = val → writes through the pointer
@@ -263,7 +291,7 @@ Call a named function.
 | `func_name` | `FuncName` | function to call |
 | `args` | `tuple[Register \| SpreadArguments, ...]` | arguments |
 
-Arguments may include `SpreadArguments(register)` operands. When the VM encounters a `SpreadArguments` in the operand list, it reads the heap array at that register's pointer and inlines the elements as individual arguments. This supports spread/splat syntax across all 5 supported languages (`*args` in Python/Ruby/Kotlin, `...arr` in JS, `...$arr` in PHP).
+Arguments may include `SpreadArguments(register)`. The VM reads the heap array the register points to and passes its elements as individual arguments. Python, Ruby and Kotlin (`*args`), JavaScript (`...arr`) and PHP (`...$arr`) lower spread syntax to it.
 
 Resolution order: I/O provider, builtins (print, len, range, ...), local variable lookup. If the value is a class reference, dispatches as a constructor (`NEW_OBJECT` + `__init__` call). If it's a function reference, pushes a call frame and branches to the function label. For explicit constructor calls in statically-typed languages, prefer `CALL_CTOR` which carries a `TypeExpr` type hint.
 
@@ -289,8 +317,8 @@ Arguments (after `method_name`) may include `SpreadArguments` operands, expanded
 Resolution order: method builtins, class registry lookup, **heap field callable lookup** (for table-based OOP — if the method exists as a `BoundFuncRef` field on the heap object, it is invoked directly with `obj` injected as `self`), parent chain walk, `__method_missing__` delegation, symbolic fallback.
 
 ```
-%15 = call_method %obj "toString"
-%16 = call_method %list "append" %val
+%15 = call_method %obj toString
+%16 = call_method %list append %val
 ```
 
 ### CALL_UNKNOWN
@@ -313,24 +341,51 @@ Used for higher-order functions and dynamic dispatch. Resolves `target_reg` — 
 
 Call a class constructor with a typed type hint.
 
-| Field | Value |
-|-------|-------|
-| `result_reg` | target register (receives the new object) |
-| `func_name` | class name (string) |
-| `type_hint` | `TypeExpr` — the type of the object being constructed |
-| `args` | `(arg1_reg, arg2_reg, ...)` |
+| Field | Type | Description |
+|-------|------|-------------|
+| `result_reg` | `Register` | target register (receives the new object) |
+| `func_name` | `FuncName` | class name |
+| `type_hint` | `TypeExpr` | type of the object being constructed |
+| `args` | `tuple[Register \| SpreadArguments, ...]` | arguments |
 
-Used by Java, C#, Scala, C++, Pascal, and Go frontends for explicit constructor calls (`new Dog(...)`, `Dog{...}`, type conversions). The `type_hint` carries structured type information (e.g., `ParameterizedType("ArrayList", (scalar("Integer"),))`) that flows through to the heap object. Resolution follows the same path as CALL_FUNCTION's constructor dispatch, but with the typed type hint passed directly to the VM.
+Emitted by the Java, C#, Scala, C++, Pascal and Go frontends for explicit constructor calls (`new Dog(...)`, `Dog{...}`, type conversions). `type_hint` carries structured type information (e.g. `ArrayList<Integer>`) through to the heap object. Resolution follows `CALL_FUNCTION`'s constructor dispatch, with the type hint passed to the VM.
 
 ```
 %obj = call_ctor Dog %x %y
+```
+
+### CALL_WITH_MEMORY
+
+Call a COBOL subprogram, passing each argument by address.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `result_reg` | `Register` | receives the callee's RETURN-CODE; also feeds `GIVING` |
+| `func_name` | `FuncName` | callee program name (static `CALL 'NAME'`) |
+| `params_reg` | `Register` | argument array |
+| `target_reg` | `Register` | callee name as a runtime string (`CALL identifier`); `NO_REGISTER` when static |
+
+Lowers `CALL ... USING` (ADR-150). The caller builds the argument array in plain IR: a `NEW_ARRAY` with a `count` field, and per argument a `NEW_OBJECT` with `region`, `offset` and `omitted`. BY REFERENCE passes the argument's own region and offset. BY CONTENT, BY VALUE and literals pass a fresh copy. OMITTED passes a marker.
+
+Dispatch goes through the callee's program singleton:
+
+1. Take the program id from `target_reg` (stripped, upper-cased) when present, else from `func_name` (upper-cased).
+2. Find `__prog_<PROGRAM-ID>` in the scope chain; it points to the singleton heap object.
+3. Load its `__init_params__` field, a `BoundFuncRef`.
+4. Push a frame for it with `__call_arguments` bound to the argument array, and branch to its label.
+
+The callee binds each LINKAGE 01 from `__call_arguments` in plain IR. If the singleton, `__init_params__` or its label is missing, a static call goes to the configured unresolved-call resolver; a runtime-resolved call raises `UnresolvedProgramError`.
+
+```
+%r9 = call_with_memory SUBPROG %r8
+%r9 = call_with_memory SUBPROG %r8 %r7     # target_reg present: name taken from %r7
 ```
 
 ---
 
 ## Value consumers and control flow
 
-These opcodes have `result_reg = null`.
+These opcodes leave `result_reg` as `NO_REGISTER`.
 
 ### DECL_VAR
 
@@ -356,13 +411,13 @@ Assign a value to an existing variable.
 | `name` | `VarName` | variable name |
 | `value_reg` | `Register` | value to assign |
 
-Walks the **scope chain** (call stack in reverse) to find an existing binding for `var_name`, then writes to that frame. If no existing binding is found, falls back to creating in the current frame. Used for bare assignments (`x = 10`), augmented assignments, and any write to an already-declared variable.
+Walks the **scope chain** (call stack in reverse) to find an existing binding for `name`, then writes to that frame. If no existing binding is found, falls back to creating in the current frame. Used for bare assignments (`x = 10`), augmented assignments, and any write to an already-declared variable.
 
 **Alias-aware**: If the variable has been promoted to the heap via `ADDRESS_OF` (i.e., it has an entry in `var_heap_aliases`), the write goes through the heap object instead of `local_vars`. This ensures that assignments to the original variable are visible through pointers.
 
 **Closure-aware**: If the target frame has a `closure_env_id` and the variable is in `captured_var_names`, the closure environment's bindings are also updated.
 
-For block-scoped languages, `var_name` may be a mangled name (e.g. `x$1`) produced by the frontend's scope tracker. See [Block-Scope Tracking](type-system.md#block-scope-tracking-llvm-style).
+For block-scoped languages, `name` may be a mangled name (e.g. `x$1`) produced by the frontend's scope tracker. See [Block-Scope Tracking](type-system.md#block-scope-tracking-llvm-style).
 
 ```
 store_var x %5
@@ -381,7 +436,7 @@ Write a value into a heap object field.
 Resolves `obj_reg` to a `Pointer`, extracts the base heap address via `_heap_addr()`, then writes `value_reg` into the object's field. All heap references are `Pointer` objects — there is no separate bare-string code path.
 
 ```
-store_field %obj "name" %val
+store_field %obj name %val
 ```
 
 ### STORE_INDEX
@@ -431,9 +486,10 @@ Return from the current function.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `value_reg` | `Register \| None` | return value (`None` for implicit void return) |
+| `value_reg` | `Register \| None` | return value; `None` when there is none |
+| `implicit` | `bool` | `True` for a synthetic fall-off-the-end return; default `False` |
 
-Pops the call frame and delivers the value to the caller's result register.
+Pops the call frame and delivers the value to the caller's result register. Return-type inference skips implicit returns, since they are lowering artifacts.
 
 ```
 return %result
@@ -441,11 +497,11 @@ return %result
 
 ### HALT
 
-Unconditionally terminate the entire run unit. COBOL-only — emitted exclusively by `lower_stop_run` for `STOP RUN`, which must halt the whole program from any call depth (unlike `RETURN`/`GOBACK`/`EXIT PROGRAM`, which resume the caller one frame at a time).
+Terminate the whole run unit from any call depth. COBOL only: `lower_stop_run` emits it for `STOP RUN`. `RETURN` (`GOBACK`, `EXIT PROGRAM`) resumes the caller one frame at a time instead.
 
-_(no fields — carries no operands beyond the `InstructionBase` defaults: `result_reg`, `label`, `branch_targets`, `source_location`)_
+_(no fields beyond the `InstructionBase` defaults: `source_location`, `result_reg`, `label`, `branch_targets`, `id`)_
 
-Both step loops (`_run_loop` and `execute_cfg_traced`) treat `HALT` as an unconditional `break`, bypassing `_handle_return_flow()` entirely regardless of how many frames are on the call stack. Kept as a distinct instruction type (not a flag on `RETURN`) so it is invisible to return-type inference, which dispatches on exact instruction type.
+Both step loops (`_run_loop` and `execute_cfg_traced`) `break` on `HALT` after applying its update, skipping `_handle_return_flow()`. It is a separate type rather than a flag on `RETURN` so that return-type inference, which dispatches on exact type, ignores it.
 
 ```
 halt
@@ -533,21 +589,21 @@ if_true_3:
 
 ## Region operations
 
-Byte-addressed memory for languages with explicit memory layout (COBOL).
+Byte-addressed memory for languages with explicit memory layout (COBOL). Regions are segments of one flat address space owned by `VMState` (ADR-151, ADR-152). A region handle is its segment's base address, an integer.
 
 ### ALLOC_REGION
 
-Allocate a named byte region.
+Allocate a zeroed byte region.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `result_reg` | `Register` | target register (receives region address like `rgn_0`) |
-| `size_reg` | `Register` | register holding allocation size in bytes |
+| `result_reg` | `Register` | receives the region's base address |
+| `size_reg` | `Register` | allocation size in bytes |
 
-Allocates a zeroed `bytearray` of the given size.
+Places the region at the next free address. A symbolic size yields a symbolic address.
 
 ```
-%r0 = alloc_region 1024
+%r0 = alloc_region %r1
 ```
 
 ### WRITE_REGION
@@ -556,12 +612,12 @@ Write bytes into a region.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `region_reg` | `Register` | region address |
+| `region_reg` | `Register` | region base address |
 | `offset_reg` | `Register` | byte offset |
-| `length` | `int` | byte count (compile-time constant from PIC clause) |
-| `value_reg` | `Register` | value to write |
+| `length` | `int` | byte count (compile-time constant) |
+| `value_reg` | `Register` | bytes to write (`list[int]`) |
 
-Writes `value_reg[0:length]` into `region[offset:offset+length]`. No-op if any argument is symbolic.
+Writes `value[0:length]` at address `region + offset`. A write past the segment's end continues into the following segments. No-op if any argument is symbolic.
 
 ```
 write_region %rgn %off 4 %data
@@ -573,10 +629,12 @@ Read bytes from a region.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `result_reg` | `Register` | target register (receives `list[int]`) |
-| `region_reg` | `Register` | region address |
+| `result_reg` | `Register` | receives `list[int]` |
+| `region_reg` | `Register` | region base address |
 | `offset_reg` | `Register` | byte offset |
-| `length` | `int` | byte count (compile-time constant from PIC clause) |
+| `length` | `int` | byte count (compile-time constant) |
+
+Reads `length` bytes from `region + offset`, across segments if needed. Bytes past the last allocated byte read as zero. A symbolic address or offset yields a symbolic result.
 
 ```
 %result = load_region %rgn %off 4
@@ -621,32 +679,46 @@ resume_continuation para_WORK_end
 
 ## Cooperative suspension
 
-A generic, frontend-agnostic suspend/resume primitive. Distinct from the
-continuation operations above (which are intra-execution PERFORM return points):
-`SUSPEND` pauses the executor *and hands a serializable continuation back to its
-caller* — the program yields a value to the driver and is resumed later with an
-injected value. See [VM design notes](notes-on-vm-design.md#cooperative-suspendresume)
-for the execution model.
+A frontend-agnostic suspend/resume primitive. Continuation operations are return points inside one execution; `SUSPEND` instead stops the executor and hands a serializable state back to its caller. See [VM design notes](notes-on-vm-design.md#cooperative-suspendresume).
 
 ### SUSPEND
 
-Cooperatively suspend execution, yielding a value to the driver.
+Suspend execution, yielding a value to the driver.
 
 | Field | Type | Value |
 |-------|------|-------|
-| `operand_reg` | `Register` | the value yielded to the driver (the payload) |
-| `result_reg` | `Register` | receives the driver's injected value on resume |
+| `operand_reg` | `Register` | value yielded to the driver |
+| `result_reg` | `Register` | receives the driver's value on resume |
 
-When `run_resumable()` / `resume()` reach a `SUSPEND`, the step loop stops and
-returns `Suspended(state, value)`, where `value` is `operand_reg`'s contents and
-`state` is an `ExecutionState` (the `VMState` plus the cursor). `resume(cfg,
-registry, state, injected)` writes `injected` into `result_reg` and continues at
-the next instruction — to the next suspension or to termination. Under the plain
-`execute_cfg()` entry point a `SUSPEND` raises (legacy callers never emit it).
+Under `run_resumable()` / `resume()`, the step loop stops at `SUSPEND` and returns `Suspended(state, value)`: `value` is `operand_reg`'s contents, `state` is an `ExecutionState` (the `VMState` plus the cursor). `resume(cfg, registry, state, value)` writes `value` into `result_reg` and continues at the next instruction. Under `execute_cfg()` a `SUSPEND` raises `RuntimeError`.
 
 ```
 %p = const 42
-%v = suspend %p        # yield 42 to the driver; on resume, %v = injected value
+%v = suspend %p        # yield 42 to the driver; on resume, %v = the driver's value
+```
+
+---
+
+## Module imports
+
+### IMPORT_MODULE
+
+Import a module. The linker expands it into other opcodes.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `result_reg` | `Register` | register bound to the module |
+| `module_path` | `str` | module path as written in source (e.g. `os.path`, `./m`) |
+| `resolved_path` | `PathName \| NoPathName` | local file the import resolves to; `NO_PATH_NAME` when external or unresolved |
+
+Emitted by the Python, JavaScript and TypeScript frontends, followed by `DECL_VAR` (whole-module import) or `LOAD_FIELD` + `DECL_VAR` per imported name.
+
+The linker rewrites a resolved import. Each `LOAD_FIELD` + `DECL_VAR` naming an exported function or class becomes `CONST` (`func_ref` or `class_ref` to the namespaced label) + `DECL_VAR`. A pair naming an exported variable is dropped, since the dependency's top-level code already bound it. A name not found in the exports keeps its pair. With no such pairs, the `IMPORT_MODULE` is dropped. An unresolved `IMPORT_MODULE` is kept. The VM has no local handler for it, so executing one falls through to the LLM backend.
+
+```
+%0 = import_module utils /project/utils.py
+%1 = load_field %0 helper
+decl_var helper %1
 ```
 
 ---
@@ -655,32 +727,32 @@ the next instruction — to the next suspension or to termination. Under the pla
 
 ### Function definition
 
-Functions are lowered as a code block bracketed by a branch-over and a label, followed by a CONST+STORE_VAR to register the function reference.
+A function body is bracketed by a branch-over and its entry label. Parameters are bound with `SYMBOLIC` + `DECL_VAR`. After the end label, a `CONST` function reference is bound to the function's name.
 
 ```
 branch end_foo_1
 func_foo_0:
   %0 = symbolic param:x
-  store_var x %0
+  decl_var x %0
   ... body ...
-  %r = const None
-  return %r
+  %2 = const None
+  return %2
 end_foo_1:
-%f = const <function:foo@func_foo_0>
-store_var foo %f
+%3 = const func_foo_0
+decl_var foo %3
 ```
 
 ### Class definition
 
-Same pattern, with method definitions nested inside the class block.
+Same pattern, with method definitions inside the class block.
 
 ```
-branch end_MyClass_1
+branch end_class_MyClass_1
 class_MyClass_0:
   ... method definitions ...
-end_MyClass_1:
-%c = const <class:MyClass@class_MyClass_0>
-store_var MyClass %c
+end_class_MyClass_1:
+%4 = const class_MyClass_0
+decl_var MyClass %4
 ```
 
 ### Constructor call
