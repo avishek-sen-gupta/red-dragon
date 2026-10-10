@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="banner.svg" alt="RedDragon — Multi-language code analysis and execution" width="900">
+  <img src="banner.svg" alt="RedDragon — Multi-language IR and VM for executing incomplete code" width="900">
 </p>
 
 # RedDragon
