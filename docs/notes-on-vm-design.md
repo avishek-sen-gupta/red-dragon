@@ -1,276 +1,136 @@
-# RedDragon VM Design Document
+# RedDragon VM Design
 
-This document describes the design and internals of the RedDragon virtual machine (VM). It is intended for senior technical leads coming to the codebase from scratch. All file references are relative to the repository root.
+How the RedDragon virtual machine works: state, step loop, calls, memory and the COBOL execution model. File references are relative to the repository root and cite a file and symbol, not line numbers. Decisions and their history live in [the ADR log](architectural-design-decisions.md); this document links to them instead of repeating them.
 
----
-
-## Table of Contents
-
-1. [System Overview](#1-system-overview)
-2. [Pipeline Architecture](#2-pipeline-architecture)
-3. [Intermediate Representation (IR)](#3-intermediate-representation-ir)
-4. [Control Flow Graph (CFG)](#4-control-flow-graph-cfg)
-5. [VM State Model](#5-vm-state-model)
-6. [Execution Engine](#6-execution-engine)
-7. [Call Dispatch and Return](#7-call-dispatch-and-return)
-8. [Best-Effort Execution](#8-best-effort-execution)
-9. [Closure Capture and Mutation](#9-closure-capture-and-mutation)
-10. [Pointer Aliasing (C/Rust)](#10-pointer-aliasing-crust)
-11. [Built-in Functions](#11-built-in-functions)
-12. [LLM Backend (Oracle Fallback)](#12-llm-backend-oracle-fallback)
-13. [Function and Class Registry](#13-function-and-class-registry)
-14. [Dataflow Analysis](#14-dataflow-analysis)
-15. [Module Map](#15-module-map)
-16. [End-to-End Worked Example](#16-end-to-end-worked-example)
+Related: [IR reference](ir-reference.md) (every opcode's operands and semantics), [type system](type-system.md), [linker design](linker-design.md), [dataflow notes](notes-on-dataflow-design.md).
 
 ---
 
-## 1. System Overview
+## Contents
 
-RedDragon is a **multi-language symbolic code interpreter**. It parses source code in 15 languages (via tree-sitter) or any language (via LLM), lowers it to a universal intermediate representation, builds a control flow graph, and executes the program symbolically.
+1. [Overview](#1-overview)
+2. [Entry points](#2-entry-points)
+3. [IR in brief](#3-ir-in-brief)
+4. [Control flow graph](#4-control-flow-graph)
+5. [VM state](#5-vm-state)
+6. [Step loop](#6-step-loop)
+7. [Calls and returns](#7-calls-and-returns)
+8. [Best-effort execution](#8-best-effort-execution)
+9. [Closures](#9-closures)
+10. [Heap pointers (C, C++, Rust)](#10-heap-pointers-c-c-rust)
+11. [Flat byte memory](#11-flat-byte-memory)
+12. [COBOL execution model](#12-cobol-execution-model)
+13. [Built-in functions](#13-built-in-functions)
+14. [LLM fallback](#14-llm-fallback)
+15. [Function and class registry](#15-function-and-class-registry)
+16. [Dataflow analysis](#16-dataflow-analysis)
+17. [Module map](#17-module-map)
+18. [Worked example](#18-worked-example)
+19. [Design principles](#19-design-principles)
 
-The core design principle: **execute as much as possible deterministically (0 LLM calls), and only fall back to an LLM oracle when the interpreter encounters truly unknown values**. For programs with concrete inputs and no missing dependencies, the entire execution is deterministic.
+---
+
+## 1. Overview
+
+Every frontend lowers source to one IR of 37 opcodes. The VM executes that IR over a CFG. It runs as far as it can without an LLM: an unknown value becomes a `SymbolicValue` and execution continues. The LLM is a fallback for instructions with no local handler.
 
 ```mermaid
 flowchart TD
-    src["Source Code\n(Python, JS, Java, ...)"]
-    ts["tree-sitter\n15 languages"]
-    llm["LLM Frontend\nany language"]
-    chunked["Chunked LLM\nchunk→LLM×N"]
-    ir["Flattened IR\n(35 opcodes)"]
-    cfg["Build CFG"]
-    reg["Registry"]
-    df["Dataflow Analysis"]
+    src["Source\n(15 tree-sitter languages, COBOL, or any language via LLM)"]
+    ts["tree-sitter frontends"]
+    cobol["COBOL frontend\n(ProLeap bridge → cobol_asg)"]
+    llm["LLM / chunked LLM frontend"]
+    ir["IR\n(37 opcodes)"]
+    linked["LinkedProgram\nCFG + registry + symbol tables"]
 
-    src --> ts & llm & chunked
-    ts & llm & chunked --> ir
-    ir --> cfg & reg & df
+    src --> ts & cobol & llm
+    ts & cobol & llm --> ir --> linked
 
-    subgraph VM ["Symbolic VM"]
-        exec["Local Executor\n← handles all 35 opcodes"]
-        oracle["LLM Oracle\n← fallback only"]
+    subgraph VM ["VM (interpreter/run.py)"]
+        exec["LocalExecutor\n34 opcode handlers"]
+        loop["step loop\nhandles LABEL, SUSPEND, HALT"]
+        oracle["LLM backend\nfallback when no handler"]
+        loop --> exec
         exec -- "not handled" --> oracle
     end
 
-    cfg --> VM
-    reg --> VM
+    linked --> VM
 ```
 
----
+## 2. Entry points
 
-## 2. Pipeline Architecture
+All in `interpreter/run.py`.
 
-The end-to-end pipeline is orchestrated by two functions in `interpreter/run.py`:
-
-- **`run()`** (line 348): Full pipeline — parse, lower, build CFG, build registry, execute. Returns final `VMState`.
-- **`execute_cfg()`** (line 234): Standalone VM execution on a pre-built CFG and registry.
-
-### Pipeline stages and timing
-
-Each stage is individually timed and reported via `PipelineStats` (defined in `interpreter/run_types.py:53`):
-
-```python
-@dataclass
-class PipelineStats:
-    source_bytes: int = 0
-    source_lines: int = 0
-    language: str = ""
-    frontend_type: str = ""
-    parse_time: float = 0.0        # tree-sitter parse
-    lower_time: float = 0.0        # AST → IR lowering
-    cfg_time: float = 0.0          # IR → CFG
-    registry_time: float = 0.0     # function/class scan
-    execution_time: float = 0.0    # VM step loop
-    total_time: float = 0.0
-    ...
-```
-
-### Execution configuration
-
-All VM configuration is grouped in the frozen dataclass `VMConfig` (`interpreter/run_types.py:8`):
-
-```python
-@dataclass(frozen=True)
-class VMConfig:
-    backend: str = "claude"     # LLM provider for fallback
-    max_steps: int = 100        # step budget
-    verbose: bool = False       # print step-by-step trace
-```
-
-Being frozen prevents accidental mutation during execution.
-
----
-
-## 3. Intermediate Representation (IR)
-
-The IR is a **flattened high-level three-address code** defined in `interpreter/ir.py`. Every source language lowers to the same IR, which makes the VM language-agnostic. See the [IR Reference](ir-reference.md) for the full opcode specification with operand layouts, VM semantics, and common patterns.
-
-### Opcodes
-
-The `Opcode` enum (`interpreter/ir.py:11`) defines 35 opcodes in six categories:
-
-| Category | Opcodes | Description |
-|---|---|---|
-| **Value producers** | `CONST`, `LOAD_VAR`, `LOAD_FIELD`, `LOAD_INDEX`, `NEW_OBJECT`, `NEW_ARRAY`, `BINOP`, `UNOP`, `CALL_FUNCTION`, `CALL_METHOD`, `CALL_UNKNOWN`, `CALL_CTOR` | Write result to a register (`result_reg`) |
-| **Consumers / Control** | `DECL_VAR`, `STORE_VAR`, `STORE_FIELD`, `STORE_INDEX`, `BRANCH_IF`, `BRANCH`, `RETURN`, `THROW`, `TRY_PUSH`, `TRY_POP`, `IMPORT_MODULE` | Consume values, affect control flow |
-| **Special** | `SYMBOLIC`, `LABEL` | Parameters, block boundaries |
-| **Pointer ops** | `ADDRESS_OF`, `LOAD_INDIRECT`, `LOAD_FIELD_INDIRECT`, `STORE_INDIRECT` | Pointer creation/dereference (`&x`, `*ptr`, `*ptr = val`) |
-| **Region ops** | `ALLOC_REGION`, `WRITE_REGION`, `LOAD_REGION` | Byte-addressed memory (COBOL) |
-| **Continuation ops** | `SET_CONTINUATION`, `RESUME_CONTINUATION`, `SUSPEND` | PERFORM return points + cooperative suspend/resume |
-
-### Instruction structure
-
-Each opcode has a dedicated frozen dataclass in `interpreter/instructions.py`. All share an `InstructionBase` with `source_location`. The legacy `IRInstruction` name is now a factory function that returns the appropriate typed subclass.
-
-```python
-@dataclass(frozen=True)
-class InstructionBase:
-    source_location: SourceLocation = NO_SOURCE_LOCATION
-
-@dataclass(frozen=True)
-class Binop(InstructionBase):
-    result_reg: Register           # typed: Register, not str
-    operator: BinopKind            # typed: BinopKind enum, not str
-    left: Register
-    right: Register
-```
-
-There are 35 per-opcode frozen dataclasses (e.g., `Const`, `LoadVar`, `StoreVar`, `Binop`, `CallFunction`, `NewObject`, etc.), each with named typed fields. All register-holding fields are `Register` objects, all label-holding fields are `CodeLabel` objects, variable names are `VarName`, field names are `FieldName`, function/method names are `FuncName`, and operators are `BinopKind`/`UnopKind` enums. Each instruction implements `reads()` and `writes()` methods returning `StorageIdentifier` values for dataflow analysis.
-
-**Key design choice**: registers use SSA-like naming (`%0`, `%1`, ...) for temporaries, while named variables use string names (`x`, `total`). The `STORE_VAR` / `LOAD_VAR` opcodes bridge between registers and variables. For block-scoped languages, variable names may be mangled by the frontend (e.g. `x$1`) to disambiguate shadowed declarations — see the [Type System doc](type-system.md#block-scope-tracking-llvm-style) for details.
-
-### Source location traceability
-
-Every IR instruction from deterministic (tree-sitter) frontends carries a `SourceLocation` (`interpreter/ir.py:38`) with the originating AST span:
-
-```python
-class SourceLocation(BaseModel):
-    start_line: int
-    start_col: int
-    end_line: int
-    end_col: int
-```
-
-LLM-generated instructions use `NO_SOURCE_LOCATION` (all zeros).
-
-### Canonical literal constants
-
-All frontends emit **canonical Python-form literals** in `CONST` operands. Language-native null/boolean forms are canonicalized at lowering time so the VM handles a single set:
-
-| Canonical IR form | Language-native forms canonicalized |
+| Function | Does |
 |---|---|
-| `"None"` | `nil` (Lua, Go, Ruby, Pascal), `null` (Java, Kotlin, C#, PHP, Scala), `undefined` (JS/TS), `NULL` (C), `nullptr` (C++) |
-| `"True"` | `true` (all languages) |
-| `"False"` | `false` (all languages) |
+| `run(source, language, …, null_access=)` | Lower, build a single-module `LinkedProgram` (COBOL goes through `compile_cobol`), then call `run_linked`. Returns the final `VMState`. |
+| `run_linked(linked, entry_point, …, initial_vm=)` | Run a linked program. A top-level entry runs `merged_cfg.entry`. A function entry runs in two phases: the module preamble, then the chosen function, sharing the step budget. |
+| `execute_cfg(cfg, entry, registry, config, strategies, vm=)` | Run one CFG against a caller-supplied `VMState`. Raises if it reaches `SUSPEND`. |
+| `run_resumable` / `resume` | As `execute_cfg`, but return `Suspended` or `Completed` (see [6.5](#65-suspend-and-resume)). |
+| `run_linked_resumable` / `resume_linked` | The `LinkedProgram` versions. The preamble runs non-resumably. |
+| `execute_cfg_traced` / `run_linked_traced` | Deep-copy `VMState` after every step into an `ExecutionTrace` (`interpreter/trace_types.py`). A separate loop, not `_run_loop` (see [6.6](#66-the-traced-loop)). |
+| `initial_vm_state(io_provider=, null_access=)` | A fresh `VMState` with one `<main>` frame. `vm`/`initial_vm` arguments are required; this is how callers get one. |
 
-This is implemented via `_lower_canonical_none()`, `_lower_canonical_true()`, `_lower_canonical_false()`, and `_lower_canonical_bool()` methods on `BaseFrontend` (`interpreter/frontends/_base.py:200`). Each frontend's expression dispatch table maps its language-specific null/boolean node types (e.g., `"nil"`, `"null_literal"`, `"boolean_literal"`, `"kTrue"`) to these canonical lowering methods instead of the raw `_lower_const_literal()`.
+For COBOL, `run()` switches a top-level entry to the program's procedure function, so phase 1 runs the program's init block and phase 2 enters `func_<PID>_0`.
 
-The VM's `_parse_const()` (`interpreter/vm/vm.py`) then only needs to recognize the three canonical forms:
+**Configuration.** `VMConfig` (`interpreter/run_types.py`, frozen): `backend`, `max_steps` (default 100), `verbose`, `unresolved_call_strategy` (`SYMBOLIC` or `LLM`), `source_language`, `io_provider`, `step_callback` and `step_callback_interval`.
 
-```python
-def _parse_const(raw: str) -> Any:
-    if raw == "None":   return None
-    if raw == "True":   return True
-    if raw == "False":  return False
-    # ... int/float/string parsing unchanged
-```
+**Strategies.** `ExecutionStrategies` (`interpreter/run.py`, frozen) bundles the per-language pieces: `type_env`, `conversion_rules`, `overload_resolver`, `binop_coercion`, `unop_coercion`, the function and class symbol tables, `field_fallback`, `function_scoping` and `symbol_table`. `build_execution_strategies` and `_build_strategies_from_linked` build it, running type inference and building the overload resolver. Language choices:
 
-**Key design choice**: canonicalization happens in the **frontend** (at lowering time), not in the VM. This keeps the VM simple and ensures the IR itself is language-agnostic — inspecting a `CONST` operand never reveals which source language it came from. Language-specific `DEFAULT_RETURN_VALUE` overrides are preserved where they represent unit types (`"()"` for Rust/Scala, `"0"` for C) rather than null.
-
-### Example IR
-
-For `x = 2 + 3`:
-
-```
-%0 = const 2          # line 1:4-1:5
-%1 = const 3          # line 1:8-1:9
-%2 = binop + %0 %1    # line 1:4-1:9
-store_var x %2         # line 1:0-1:9
-```
-
----
-
-## 4. Control Flow Graph (CFG)
-
-### Data types
-
-Defined in `interpreter/cfg_types.py`:
-
-```python
-@dataclass
-class BasicBlock:
-    label: str
-    instructions: list[IRInstruction] = field(default_factory=list)
-    successors: list[str] = field(default_factory=list)
-    predecessors: list[str] = field(default_factory=list)
-
-@dataclass
-class CFG:
-    blocks: dict[str, BasicBlock] = field(default_factory=dict)
-    entry: str = constants.CFG_ENTRY_LABEL    # "entry"
-```
-
-### Build algorithm
-
-`build_cfg()` in `interpreter/cfg.py:13` uses a classic three-phase algorithm:
-
-**Phase 1 — Identify block boundaries** (lines 17-29):
-Block starts occur at instruction 0, after every `LABEL` opcode, and after any terminator (`BRANCH`, `BRANCH_IF`, `RETURN`, `THROW`, `HALT`).
-
-**Phase 2 — Create blocks** (lines 33-47):
-Slice the instruction stream between consecutive starts. The leading `LABEL` pseudo-instruction is stripped from each block and used as the block's label. Blocks without a `LABEL` get a synthetic name (`__block_N`).
-
-**Phase 3 — Wire edges** (lines 50-79):
-
-```
-BRANCH target       →  edge to target
-BRANCH_IF t,f       →  edges to both t and f
-RETURN / THROW      →  no successors (terminal)
-HALT                →  no successors (terminal)
-(anything else)     →  fall through to next block
-```
-
-### CFG edge wiring
-
-Edges are added via `_add_edge()` (`interpreter/cfg.py:280`), which maintains both `successors` and `predecessors` lists on each block:
-
-```python
-def _add_edge(cfg: CFG, src: str, dst: str):
-    if dst not in cfg.blocks[src].successors:
-        cfg.blocks[src].successors.append(dst)
-    if src not in cfg.blocks[dst].predecessors:
-        cfg.blocks[dst].predecessors.append(src)
-```
-
-### Label conventions
-
-Functions and classes use structured labels defined in `interpreter/constants.py`:
-
-| Pattern | Example | Meaning |
+| Strategy | Languages | Behaviour |
 |---|---|---|
-| `func_<name>_<N>` | `func_factorial_0` | Function entry |
-| `end_<name>_<N>` | `end_factorial_1` | Function exit |
-| `class_<name>_<N>` | `class_Point_0` | Class body entry |
-| `end_class_<name>_<N>` | `end_class_Point_1` | Class body exit |
+| `ImplicitThisFieldFallback` | Java, C#, Kotlin, Scala, C++ | A bare name not in scope resolves to `this.name` |
+| `GlobalLeakFunctionScopingStrategy` | Ruby, PHP, Lua | A nested function definition is also written to the global frame |
+| `JavaBinopCoercion` | Java | Java binary-operator coercion |
 
-### Visual: CFG for an if/else
+**Stats.** `ExecutionStats` (steps, LLM calls, heap objects, symbolic count, closures) comes back from `execute_cfg`. `PipelineStats` holds per-stage timings for `run()`.
 
-Source:
-```python
-if x > 0:
-    label = "pos"
-else:
-    label = "neg"
-return label
+## 3. IR in brief
+
+The full reference is [ir-reference.md](ir-reference.md). The `Opcode` enum is in `interpreter/ir.py`; each opcode has a frozen dataclass in `interpreter/instructions.py` deriving from `InstructionBase`.
+
+| Category | Opcodes |
+|---|---|
+| Value producers | `CONST`, `LOAD_VAR`, `LOAD_FIELD`, `LOAD_INDEX`, `NEW_OBJECT`, `NEW_ARRAY`, `BINOP`, `UNOP`, `CALL_FUNCTION`, `CALL_METHOD`, `CALL_UNKNOWN`, `CALL_CTOR`, `CALL_WITH_MEMORY` |
+| Consumers and control flow | `DECL_VAR`, `STORE_VAR`, `STORE_FIELD`, `STORE_INDEX`, `BRANCH_IF`, `BRANCH`, `RETURN`, `THROW`, `HALT`, `TRY_PUSH`, `TRY_POP` |
+| Special | `SYMBOLIC`, `LABEL` |
+| Regions | `ALLOC_REGION`, `WRITE_REGION`, `LOAD_REGION` |
+| Continuations | `SET_CONTINUATION`, `RESUME_CONTINUATION` |
+| Suspension | `SUSPEND` |
+| Pointers | `ADDRESS_OF`, `LOAD_INDIRECT`, `LOAD_FIELD_INDIRECT`, `STORE_INDIRECT` |
+| Modules | `IMPORT_MODULE` |
+
+`InstructionBase` carries `source_location`, `result_reg`, `label`, `branch_targets` and `id`, and exposes `opcode`, `operands`, `map_registers`, `map_labels`, `reads()` (a list of `StorageIdentifier`) and `writes()` (one `StorageIdentifier` or `None`). `IRInstruction` in `interpreter/ir.py` is a factory that builds the typed instruction from flat `(opcode, operands)` form.
+
+Fields are domain types: `Register`, `CodeLabel`, `VarName`, `FieldName`, `FuncName`, `BinopKind`/`UnopKind`. Registers are `%0`, `%1`, …; named variables use `LOAD_VAR`/`STORE_VAR`/`DECL_VAR`. Block-scoped frontends may mangle names (`x$1`); see [type-system.md](type-system.md#block-scope-tracking-llvm-style).
+
+**Constants are typed.** `Const` requires a `type_expr` and holds a real Python value. Build it with the factories `Const.int_`, `float_`, `decimal_` (COBOL only), `string`, `bool_`, `null_`, `func_ref`, `class_ref`. The VM does not parse literal text. Frontends map each language's null and booleans (`nil`, `null`, `undefined`, `NULL`, `nullptr`, `true`, `false`) to the canonical constants through `_lower_canonical_none`/`_true`/`_false`/`_bool` on `BaseFrontend` (`interpreter/frontends/_base.py`), so a `CONST` never reveals its source language.
+
+## 4. Control flow graph
+
+Types in `interpreter/cfg_types.py`: `BasicBlock(label, instructions, successors, predecessors)` and `CFG(blocks, entry)`, all keyed by `CodeLabel`. `build_cfg` in `interpreter/cfg.py`:
+
+1. **Block starts:** instruction 0, every `LABEL`, and the instruction after any `BRANCH`, `BRANCH_IF`, `RETURN`, `THROW`, `HALT` or `RESUME_CONTINUATION`.
+2. **Blocks:** slice between starts. A leading `LABEL` is removed and names the block; otherwise the block is `__block_<index>`.
+3. **Edges** (via `_add_edge`, which keeps both directions):
+
+```
+BRANCH t               → t
+BRANCH_IF t, f         → t and f
+RESUME_CONTINUATION    → next block only (the real target is dynamic)
+RETURN / THROW / HALT  → none
+anything else / empty  → next block
 ```
 
-CFG:
+The entry is the first block. Known gap: PERFORM return edges are missing because the continuation target is dynamic (red-dragon-picc; see the `build_cfg` docstring).
+
+Function and class labels follow `func_<name>_<N>`, `end_<name>_<N>`, `class_<name>_<N>`, `end_class_<name>_<N>` (prefixes in `interpreter/constants.py`).
 
 ```mermaid
 flowchart TD
-    entry["entry\nLOAD x, CONST 0\nBINOP >, BRANCH_IF"]
-    if_true["if_true\nCONST pos\nSTORE"]
-    if_false["if_false\nCONST neg\nSTORE"]
+    entry["entry\nLOAD_VAR x, CONST 0\nBINOP >, BRANCH_IF"]
+    if_true["if_true\nCONST pos\nSTORE_VAR"]
+    if_false["if_false\nCONST neg\nSTORE_VAR"]
     merge["merge\nLOAD_VAR label\nRETURN"]
 
     entry -- "T" --> if_true
@@ -279,1037 +139,427 @@ flowchart TD
     if_false --> merge
 ```
 
----
+## 5. VM state
 
-## 5. VM State Model
-
-All VM state types live in `interpreter/vm_types.py`. The state model is designed for serialisability (every type has a `to_dict()` method) so it can be sent to an LLM oracle.
-
-### State hierarchy
+All state types are in `interpreter/vm/vm_types.py`.
 
 ```
 VMState
-├── _heap: dict[Address, HeapObject]     (PRIVATE — access via heap_get/heap_set/heap_contains)
-│   └── HeapObject
-│       ├── type_hint: TypeExpr    (e.g., scalar("Point"))
-│       └── fields: dict[FieldName, TypedValue]  (FieldName with FieldKind: PROPERTY/INDEX/SPECIAL)
-│
-├── _regions: dict[Address, bytearray]   (PRIVATE — access via region_get/region_set)
-│
+├── _heap: dict[Address, HeapObject]          heap_get / heap_set / heap_contains / heap_ensure / heap_items …
+│   └── HeapObject(type_hint: TypeExpr, fields: dict[FieldName, TypedValue])
+├── _regions: dict[Address, bytearray]        region_get / region_set / region_items …
+├── _segments: dict[Address, Segment]         segment_of; see §11
+├── _next_address, _bases, _handles           bump allocator and sorted lookup
+├── null_access: NullAccess                   NULL-page strategy; see §11
 ├── call_stack: list[StackFrame]
 │   └── StackFrame
-│       ├── function_name: FuncName      (domain type, not str)
+│       ├── function_name: FuncName
 │       ├── registers: dict[Register, TypedValue]
 │       ├── local_vars: dict[VarName, TypedValue]
-│       ├── var_heap_aliases: dict[VarName, Pointer]  (for &x aliasing)
-│       ├── return_label: CodeLabel | None
-│       ├── return_ip: int         (instruction index in caller's block)
-│       ├── result_reg: Register   (caller's register for return value)
-│       ├── closure_env_id: str    (shared environment ID)
-│       ├── captured_var_names: frozenset[VarName]
-│       └── is_ctor: bool          (true if executing a constructor)
-│
-├── path_conditions: list[str]     (assumptions from symbolic branches)
-├── symbolic_counter: int          (gensym: sym_0, sym_1, ...)
-│
-├── closures: dict[str, ClosureEnvironment]
-│   └── ClosureEnvironment
-│       └── bindings: dict[VarName, TypedValue]
-│
-├── continuations: dict[str, CodeLabel]  (COBOL PERFORM return points)
+│       ├── var_heap_aliases: dict[VarName, Pointer]   (&x promotion)
+│       ├── return_label, return_ip, result_reg        (filled at call time)
+│       ├── closure_env_id: ClosureId, captured_var_names
+│       └── is_ctor: bool
+├── path_conditions: list[str]
+├── symbolic_counter: int                     gensym for sym_N and heap addresses
+├── closures: dict[ClosureId, ClosureEnvironment]
+├── continuations: dict[ContinuationName, CodeLabel]
 ├── exception_stack: list[ExceptionHandler]
-└── data_layout: dict[str, dict]   (COBOL field metadata)
+├── data_layout: dict[str, dict]              COBOL field layout, set by run_linked
+├── io_provider, cobol_random, cobol_random_seed
+└── cobol_run_unit_return_code: int | None    see §12.3
 ```
 
-**Heap privatization:** The heap and regions are private (`_heap`, `_regions`) — all access goes through accessor methods: `heap_get(addr)`, `heap_set(addr, obj)`, `heap_contains(addr)`, `heap_ensure(addr)`, `heap_items()`, `heap_keys()`, `heap_count()`, `heap_values()`, and corresponding `region_*` methods. `heap_get` returns `NO_HEAP_OBJECT` (null object sentinel) for missing addresses — no `KeyError`, no `None` checks. Keys are `Address` domain type objects, not bare strings.
+`heap_get` returns `NO_HEAP_OBJECT` (a null object) for a missing address. Heap addresses are `Address` values (`interpreter/address.py`) such as `obj_3`, `arr_4`, `mem_5`; region handles are `Address` values holding a decimal base (`"4096"`).
 
-### SymbolicValue
+**Values.** Registers, locals and heap fields hold `TypedValue` (value plus `TypeExpr`). Raw values include Python primitives, `SymbolicValue(name, type_hint, constraints)`, `Pointer(base, offset)`, `FuncRef`/`BoundFuncRef`, `ClassRef`, byte lists for COBOL fields, and `CobolNumber` (`Decimal`) for COBOL arithmetic.
 
-When the VM encounters an unknown (unresolvable variable, missing import, external call), it creates a `SymbolicValue` (`interpreter/vm_types.py:14`) rather than erroring:
+**`fresh_symbolic(hint)`** returns `sym_<counter>` and increments `symbolic_counter`. Handlers use the same counter to name heap objects and closures, so it is the VM's single ID source.
 
-```python
-@dataclass
-class SymbolicValue:
-    name: str                                  # "sym_0", "sym_1", ...
-    type_hint: str | None = None               # "int", "process(items)", ...
-    constraints: list[str] = field(...)        # ["sym_0 + 1", "len(items)"]
-```
+**`StateUpdate`** (Pydantic) is the effect of one instruction:
 
-Symbolic values propagate through arithmetic, comparisons, and function calls, accumulating constraints. This allows the VM to track *what the program would do* even when it doesn't know concrete values.
+| Field | Effect |
+|---|---|
+| `register_writes`, `var_writes` | Write the current frame (var writes go to the new frame if `call_push` fired) |
+| `heap_writes`, `new_objects` | Heap fields and allocations |
+| `new_regions: dict[str, int]` | Allocate regions, keyed by stringified base address |
+| `region_writes: list[RegionWrite(address, data)]` | Byte writes at flat addresses |
+| `continuation_writes`, `continuation_clear` | Set or clear a continuation |
+| `next_label` | Jump target |
+| `call_push: StackFramePush`, `call_pop` | Push or pop a frame |
+| `return_value` | Defaults to `VOID_RETURN` |
+| `path_condition`, `reasoning` | Assumption and log text |
 
-### Fresh symbolic generation
+**`ExecutionResult(handled, update)`** is what a handler returns. `ExecutionResult.not_handled()` sends the instruction to the LLM fallback; `success(update)` carries the effect.
 
-`VMState.fresh_symbolic()` (`interpreter/vm_types.py:92`) is a gensym — it monotonically increments `symbolic_counter` to produce unique names:
+## 6. Step loop
 
-```python
-def fresh_symbolic(self, hint: str = "") -> SymbolicValue:
-    name = f"sym_{self.symbolic_counter}"
-    self.symbolic_counter += 1
-    return SymbolicValue(name=name, type_hint=hint or None)
-```
+### 6.1 The loop
 
-The counter is also used to generate unique heap addresses (`obj_0`, `arr_1`, `env_2`), so it serves as a universal ID generator.
-
-### StateUpdate — the instruction effect
-
-Every instruction (whether locally executed or LLM-interpreted) produces a `StateUpdate` — a Pydantic model (`interpreter/vm_types.py:118`) describing the instruction's *effect* on the VM:
-
-```python
-class StateUpdate(BaseModel):
-    register_writes: dict[Register, Any] = {}     # {Register("%0"): 42}
-    var_writes: dict[VarName, Any] = {}            # {VarName("x"): 42}
-    heap_writes: list[HeapWrite] = []              # [{obj_addr: Address, field: FieldName, value}]
-    new_objects: list[NewObject] = []               # [{addr: Address, type_hint: TypeExpr}]
-    region_writes: list[RegionWrite] = []           # COBOL byte-addressed regions
-    new_regions: dict[str, int] = {}                # region allocations
-    continuation_writes: dict[str, CodeLabel] = {}  # COBOL PERFORM
-    next_label: CodeLabel | None = None             # branch target
-    call_push: StackFramePush | None = None         # push new call frame
-    call_pop: bool = False                          # pop current frame
-    return_value: Any | None = None                 # value to return to caller
-    path_condition: str | None = None               # assumption for symbolic branches
-    reasoning: str = ""                             # human-readable explanation
-```
-
-This is the **central communication contract** between the executor and the VM. Both local execution and LLM fallback produce `StateUpdate`; the VM doesn't know or care which produced it.
-
-### ExecutionResult — the handler outcome
-
-Each opcode handler returns an `ExecutionResult` (`interpreter/vm_types.py:140`):
-
-```python
-@dataclass
-class ExecutionResult:
-    handled: bool
-    update: StateUpdate = field(default_factory=...)
-
-    @classmethod
-    def not_handled(cls) -> ExecutionResult: ...
-    @classmethod
-    def success(cls, update: StateUpdate) -> ExecutionResult: ...
-```
-
-This is a **result type** that replaces the antipattern of returning `None` to mean "not handled". The `handled` flag tells the step loop whether to fall back to the LLM.
-
----
-
-## 6. Execution Engine
-
-### Step loop
-
-The core execution loop lives in `execute_cfg()` (`interpreter/run.py:234`). Here is the simplified flow:
+`_run_loop` in `interpreter/run.py` serves `execute_cfg`, `run_resumable` and `resume`. Every iteration counts against `max_steps`, including block transitions.
 
 ```
-initialise VM with a single <main> StackFrame
-set current_label = entry, ip = 0
-
 for step in range(max_steps):
-    block = cfg.blocks[current_label]
-
-    if ip >= len(block.instructions):       ─── end of block
-        if block has successors:
-            current_label = first successor
-            ip = 0; continue
-        else:
-            break                           ─── program terminates
-
-    instruction = block.instructions[ip]
-    if instruction is LABEL: ip++; continue ─── skip pseudo-instructions
+    if ip past end of block:
+        follow successors[0], or stop if none
+    inst = block.instructions[ip]
+    LABEL   → ip += 1; continue
+    SUSPEND → return a suspension cursor
+    result = LocalExecutor.execute(inst, vm, ctx)
+    update = handled ? coerce_local_update(result.update)
+                     : materialize_raw_update(llm.interpret_instruction(inst, vm))
+    if call_push and next_label: _handle_call_dispatch_setup (completes the push, then apply_update)
+    else:                        apply_update
+    HALT                          → stop
+    RETURN, or THROW not caught   → _handle_return_flow
+    next_label in cfg             → jump to it, ip = 0
+    otherwise                     → ip += 1
+else:
+    warn that the step budget ran out
 ```
+
+The LLM backend is created lazily on the first unhandled instruction. `step_callback` fires every `step_callback_interval` steps.
+
+### 6.2 Dispatch
+
+`LocalExecutor.DISPATCH` in `interpreter/vm/executor.py` is a `dict[Opcode, handler]` looked up by `inst.opcode`. It has 34 entries. The three opcodes without one:
+
+| Opcode | Handled by |
+|---|---|
+| `LABEL` | `build_cfg` strips labels from blocks; the loop also skips any it meets |
+| `SUSPEND` | `_run_loop` intercepts it before dispatch |
+| `IMPORT_MODULE` | The linker removes resolved local imports. An unresolved import reaches the LLM fallback |
+
+Handlers live in `interpreter/handlers/` by family: `variables.py`, `arithmetic.py`, `calls.py`, `control_flow.py`, `memory.py`, `objects.py`, `regions.py`, with shared helpers in `_common.py`. Each has the signature `handler(inst, vm, ctx) -> ExecutionResult`.
+
+**`HandlerContext`** (frozen, in `executor.py`) is passed to every handler: `cfg`, `registry`, `current_label`, `ip`, `call_resolver`, `overload_resolver`, `type_env`, `binop_coercion`, `unop_coercion`, the function and class symbol tables, `field_fallback`, `function_scoping`, `symbol_table`. `_make_base_ctx` builds it once per run and the loop `replace`s the cursor each step.
+
+### 6.3 apply_update
+
+`apply_update` in `interpreter/vm/vm.py` applies a `StateUpdate` in this order:
+
+1. `new_regions` (allocate), then `region_writes` (`vm.write_at`)
+2. `continuation_writes`, then `continuation_clear`
+3. `new_objects`
+4. `register_writes`, coerced to the declared register type
+5. `heap_writes`
+6. `path_condition`
+7. `call_push`
+8. `var_writes` into the current frame, alias-aware, and mirrored into the closure environment for captured names
+9. `call_pop` (never pops the last frame)
+
+Pushing before `var_writes` is how arguments are passed: a call's parameter bindings land in the callee's frame.
+
+`coerce_local_update` coerces handler register writes to the types in `type_env`. `materialize_raw_update` turns LLM output (plain JSON values, `__symbolic__` and `__pointer__` dicts) into `TypedValue`s.
+
+### 6.4 Where state changes outside apply_update
+
+`apply_update` is the main mutator, but not the only one. These write `VMState` directly:
+
+- `DECL_VAR`, `STORE_VAR` write frames through `_write_var_to_frame` (alias-aware, closure-aware, and routed through `function_scoping` for function values).
+- `TRY_PUSH`, `TRY_POP`, `THROW` push and pop `exception_stack`.
+- `CONST` creates closure environments; `ADDRESS_OF` allocates `mem_N` and records `var_heap_aliases`.
+- Class construction allocates its heap object; `LOAD_FIELD`, `STORE_FIELD`, `LOAD_INDEX`, `STORE_INDEX` materialise synthetic heap objects.
+- Many handlers advance `symbolic_counter`.
+- Builtins such as `__cobol_publish_return_code` set fields on `VMState`.
+
+### 6.5 Suspend and resume
+
+The only control state outside `VMState` is the cursor `(current_label, ip)`. Frames, return addresses, heap, regions and continuations are all in `VMState`. So `(VMState, label, ip)` is a complete continuation with no Python stack behind it.
+
+- `SUSPEND` yields the value in `operand_reg`; on resume the injected value lands in `result_reg`. See [IR reference](ir-reference.md#suspend).
+- `ExecutionState(vm, current_label, ip, resume_reg)` is the continuation. It holds no CFG or registry; `resume(cfg, registry, state, value)` takes them again, so the program can be rebuilt between suspend and resume.
+- `run_resumable` returns `Suspended(state, value)` or `Completed(vm, stats)`. `resume` mutates `state.vm`; deep-copy the state to resume one suspension more than once.
+
+Suspension happens between instructions, so `VMState` is consistent, including inside nested calls.
+
+### 6.6 The traced loop
+
+`execute_cfg_traced` has its own loop. It differs from `_run_loop`: it does not intercept `SUSPEND`, sends every `THROW` (caught or not) to `_handle_return_flow`, and has no `step_callback`. `run_linked_traced` always starts from `initial_vm_state()` with default settings.
+
+## 7. Calls and returns
+
+### 7.1 Function values
+
+A function definition lowers to `CONST` with a `FunctionType` and the function's entry label. `_handle_const` looks the label up in `func_symbol_table` and produces a `BoundFuncRef(func_ref=FuncRef(name, label), closure_id)` (`interpreter/refs/func_ref.py`). A class constant with a `Type[X]` metatype becomes the `ClassRef` from `class_symbol_table`. There is no string encoding of function or class references.
+
+### 7.2 CALL_FUNCTION
+
+`_handle_call_function` (`interpreter/handlers/calls.py`) resolves arguments with `_resolve_call_args` (which expands `SpreadArguments` from a heap array), then tries in order:
+
+```
+0. io_provider        __cobol_* names the injected COBOL I/O provider recognises
+1. builtin            Builtins.TABLE (§13)
+2. scope lookup       walk call_stack innermost-out for the name; not found → call_resolver
+2b. heap call-index   f(i) on a heap array (Scala apply)
+2c. native index      s(i) on a Python str or list
+3. constructor        value is a ClassRef → _try_class_constructor_call
+4. user function      value is a BoundFuncRef → _try_user_function_call
+5. otherwise          call_resolver.resolve_call
+```
+
+`CALL_CTOR` (`_handle_call_ctor`) does the scope lookup, then constructor, then user function, then the resolver, carrying the instruction's `type_hint`. `CALL_UNKNOWN` tries a user-function call on the target register, then the resolver.
+
+### 7.3 CALL_METHOD
+
+`_handle_call_method`:
+
+```
+1. receiver is a BoundFuncRef  → call it
+2. receiver is a ClassRef      → static method from registry.class_methods, no self
+3. method builtin              Builtins.METHOD_TABLE
+4. receiver type not in the registry:
+     heap field holding a BoundFuncRef → call it with the receiver as first arg (Lua tables, JS objects)
+     else                              → call_resolver.resolve_method
+5. registry method on the type, overloads chosen by overload_resolver
+6. parent chain via registry.class_parents
+7. __method_missing__ / __boxed__ delegation (_resolve_method_delegation_target)
+8. otherwise → call_resolver.resolve_method
+```
+
+The callee's first parameter is bound to the receiver.
+
+### 7.4 Dispatch and frame setup
+
+`_try_user_function_call` returns a `StateUpdate` with `call_push`, `next_label` (the callee's entry) and `var_writes` (parameters, captured closure variables, and an `arguments` heap array). Handlers cannot know where the caller resumes, so `_handle_call_dispatch_setup` fills `return_label`, `return_ip = ip + 1` and `result_reg` on the `StackFramePush` before `apply_update`.
+
+### 7.5 Parameters
+
+A function body declares each parameter with `SYMBOLIC param:<name>`. `_handle_symbolic` returns the caller's binding from the frame if present; otherwise a fresh symbolic. So a called function sees concrete arguments, and a function entered directly sees symbols.
+
+### 7.6 Constructors
+
+`_try_class_constructor_call` allocates `obj_N` with the class type, writes a `Pointer` to it into `result_reg`, and, if the class has an `__init__` in the CFG, pushes a frame with `is_ctor=True`. `self`/`this` is bound to the pointer: as the first declared parameter when it is named `self` or `this`, otherwise as an implicit `this`. A constructor frame's `RETURN` yields void, so the pointer already in `result_reg` survives.
+
+### 7.7 Return flow
+
+`_handle_return` produces `return_value` and `call_pop`. After `apply_update` pops the frame, `_handle_return_flow`:
+
+1. stops if the returning frame is `<main>` or the stack is empty;
+2. writes `return_value` to the caller's `result_reg`, unless the value is void or there is no result register;
+3. resumes at `return_label:return_ip`, or stops if that label is not in the CFG.
+
+### 7.8 HALT
+
+`HALT` (`Halt_`) is emitted only by COBOL `STOP RUN`. The loop breaks on it unconditionally, after applying its (empty) update, without consulting the call stack. `GOBACK` and `EXIT PROGRAM` lower to `RETURN`. `Halt_` is a separate type so return-type inference does not see it. See [ADR-145](architectural-design-decisions.md) and [ADR-147](architectural-design-decisions.md).
+
+## 8. Best-effort execution
+
+An unknown becomes a `SymbolicValue` and execution goes on.
+
+| Situation | Result |
+|---|---|
+| `LOAD_VAR` of an unbound name | Field fallback (implicit `this`), then `sym_N` hinted with the name |
+| Unknown function or method | `call_resolver` (`interpreter/vm/unresolved_call.py`): `SymbolicResolver` returns `sym_N` with constraint `f(args)`; `LLMPlausibleResolver` asks an LLM for a plausible value |
+| `BINOP`/`UNOP` with a symbolic operand | New `sym_N` with constraint `a op b` (`sym == null` is `False`) |
+| Concrete but uncomputable (`x / 0`, type error) | `Operators.eval_binop` returns `UNCOMPUTABLE`; the handler makes a symbolic |
+| Field or index on an object not on the heap | A synthetic `HeapObject` is materialised at that address; a missing field becomes `sym_N` and, for `LOAD_FIELD`, is cached in the object so repeat reads agree |
+| `BRANCH_IF` on a symbolic | Take the true branch and record `assuming <sym> is True` |
+| Builtin returns `UNCOMPUTABLE` | `_try_builtin_call` wraps it as `sym_N` with constraint `name(args)` |
+
+`Operators` (`interpreter/vm/vm.py`) holds `BINOP_TABLE` and `eval_unop`. Failures come back as the `UNCOMPUTABLE` sentinel, not exceptions. Concrete branches also record a path condition, such as `%3 is True`.
+
+`LOAD_VAR` and `STORE_VAR` walk the call stack from innermost to outermost. `STORE_VAR` updates the frame where the name already exists; otherwise implicit `this`, otherwise the current frame. `DECL_VAR` always writes the current frame.
+
+## 9. Closures
+
+Closures capture by reference. Closures made in the same frame share one `ClosureEnvironment(bindings)`.
+
+When `CONST` creates a `BoundFuncRef` inside a function (`len(call_stack) > 1`), `_handle_const`:
+
+- reuses the enclosing frame's environment if it has one, adding any new locals; otherwise creates `env_N` from the frame's locals and records `closure_env_id` and `captured_var_names` on the frame;
+- registers the same environment under a fresh `closure_N` and stamps that ID on the `BoundFuncRef`.
+
+On a call, `_try_user_function_call` copies the environment's bindings into the new frame (parameters win) and marks them captured. Writes to captured names, through `apply_update` or `_write_var_to_frame`, also update the environment, so sibling closures and later calls see them.
 
 ```mermaid
 flowchart TD
-    try["result = _try_execute_locally(...)"]
-    handled{{"result.handled?"}}
-    local["update = result.update"]
-    fallback["update = llm.interpret(inst, vm)\n← LLM fallback"]
-
-    try --> handled
-    handled -- "yes" --> local
-    handled -- "no" --> fallback
-```
-
-```
-    apply_update(vm, update)                ─── mutate VM state
-
-    handle control flow:
-        RETURN/THROW → _handle_return_flow()
-        HALT         → break              ─── unconditional, skips _handle_return_flow()
-        next_label set → jump to target block
-        default → ip++
-```
-
-### apply_update — the state mutator
-
-`apply_update()` (`interpreter/vm/vm.py`) is the **only function that mutates the VM**. The order of operations is critical and carefully designed:
-
-```python
-def apply_update(vm: VMState, update: StateUpdate):
-    # 1. Create new heap objects (via accessor)
-    for obj in update.new_objects:
-        vm.heap_set(obj.addr, HeapObject(type_hint=obj.type_hint))
-
-    # 2. Register writes → CURRENT (caller's) frame
-    for reg, val in update.register_writes.items():
-        frame.registers[reg] = _deserialize_value(val, vm)
-
-    # 3. Heap writes (via accessor)
-    for hw in update.heap_writes:
-        vm.heap_ensure(hw.obj_addr).fields[hw.field] = _deserialize_value(hw.value, vm)
-
-    # 4. Path conditions
-    if update.path_condition:
-        vm.path_conditions.append(update.path_condition)
-
-    # 5. Call push ← BEFORE var_writes!
-    if update.call_push:
-        vm.call_stack.append(StackFrame(...))
-
-    # 6. Variable writes → CURRENT frame (new frame if call_push fired)
-    target_frame = vm.current_frame
-    for var, val in update.var_writes.items():
-        target_frame.local_vars[var] = deserialized
-        # Also sync to closure environment if captured
-        if target_frame.closure_env_id and var in target_frame.captured_var_names:
-            env.bindings[var] = deserialized
-
-    # 7. Call pop
-    if update.call_pop and len(vm.call_stack) > 1:
-        vm.call_stack.pop()
-```
-
-**Why this order matters**: When dispatching a function call, the `StateUpdate` contains both `call_push` (new frame) *and* `var_writes` (parameter bindings). By pushing the frame (step 5) *before* writing variables (step 6), parameter bindings land in the *callee's* frame, not the caller's. This is the mechanism for passing arguments.
-
-### Dispatch table
-
-The local executor (`interpreter/vm/executor.py`) uses a static dispatch table mapping instruction types to handler functions:
-
-```python
-class LocalExecutor:
-    DISPATCH: dict[type, Any] = {
-        Const: _handle_const,
-        LoadVar: _handle_load_var,
-        DeclVar: _handle_decl_var,
-        StoreVar: _handle_store_var,
-        Binop: _handle_binop,
-        Unop: _handle_unop,
-        AddressOf: _handle_address_of,
-        CallFunction: _handle_call_function,
-        CallMethod: _handle_call_method,
-        CallCtorFunction: _handle_call_ctor,
-        ... # all 35 instruction types covered
-    }
-```
-
-Dispatch uses `type(instruction)` lookup (not `Opcode` enum), matching the per-opcode dataclass type directly. If the type isn't in the table, it returns `ExecutionResult.not_handled()`, triggering LLM fallback.
-
-### Cooperative suspend/resume
-
-The VM can pause mid-execution and be resumed later — the basis for cooperative
-coroutines, conversational terminal I/O, lazy generators, and step debuggers. It
-rests on one observation about the model above: **the only control state that
-lives outside `VMState` is the cursor `(current_label, ip)`** — a pair of loop
-locals. Everything else needed to continue execution is already plain data in
-`VMState`: registers and locals per frame, the entire `call_stack` (each frame's
-`return_label`/`return_ip`/`result_reg`), the heap, regions, and the continuation
-table. So a snapshot of `(VMState, current_label, ip)` is a **complete,
-serializable continuation** — no frozen Python/native stack is involved.
-
-The primitive is three pieces (all in `interpreter/run.py`):
-
-- **`SUSPEND` instruction** (`interpreter/instructions.py`) — yields the value in
-  its `operand_reg` and pauses; on resume the injected value lands in `result_reg`.
-  See [IR reference](ir-reference.md#suspend).
-- **`ExecutionState`** — the reified continuation: `vm` + `current_label` + `ip` +
-  `resume_reg`. It deliberately does **not** hold the static program; the
-  CFG/registry are rebuilt and passed back to `resume()`, so a continuation can be
-  pickled, the whole pipeline torn down and rebuilt, and execution resumed against
-  the fresh program.
-- **`run_resumable()` / `resume()`** — like `execute_cfg()` but returning a
-  `Suspended(state, value)` or `Completed(vm, stats)`. `resume(cfg, registry,
-  state, injected)` writes `injected` into the Suspend's `result_reg` and re-enters
-  the loop at the saved cursor.
-
-The step loop itself is extracted into a shared `_run_loop()` used by both
-`execute_cfg()` and `run_resumable()`/`resume()`; on a `SUSPEND` it returns the
-suspension cursor instead of running to a terminus. `execute_cfg()` is unchanged
-in behaviour — it raises if a `SUSPEND` is ever reached (frontends that don't use
-the primitive never emit one).
-
-Two properties fall out of the continuation being plain data, neither available to
-a thread/greenlet implementation:
-
-- **multi-shot** — deep-copy an `ExecutionState` and resume the copies independently
-  (speculative execution, what-if exploration, replay);
-- **durable** — serialize a suspended task, resume it in another process.
-
-Suspension is captured at instruction boundaries, so `VMState` is always
-consistent at a suspend point. Resume works identically when the `SUSPEND` is deep
-inside a nested `CALL`: the whole `call_stack` is in the snapshot, and the returns
-unwind normally afterward.
-
----
-
-## 7. Call Dispatch and Return
-
-Function calls are the most complex part of the VM. The design supports user-defined functions, class constructors, built-in functions, methods, and closures — all through the same `StateUpdate` mechanism.
-
-### CALL_FUNCTION dispatch chain
-
-`_handle_call_function()` tries five strategies in order. Before dispatch, arguments are resolved via `_resolve_call_args()`, which expands any `SpreadArguments` operands by reading the heap array and inlining its elements as individual arguments.
-
-```
-0. RESOLVE ARGS → _resolve_call_args()           (expand SpreadArguments)
-
-1. BUILTIN?     → _try_builtin_call()           (len, range, print, ...)
-   └─ if handled: return computed result
-
-2. SCOPE LOOKUP → walk call_stack backwards for function variable
-   └─ if not found: return symbolic result
-
-3. CLASS CTOR?  → _try_class_constructor_call()  (parse ClassRef)
-   └─ if matched: allocate heap object, dispatch __init__
-
-4. USER FUNC?   → _try_user_function_call()      (parse BoundFuncRef)
-   └─ if matched: push frame, jump to function entry
-
-5. UNKNOWN      → call_resolver.resolve_call()   (create symbolic value)
-```
-
-### CALL_METHOD dispatch chain
-
-`_handle_call_method()` resolves the object, then tries these strategies:
-
-```
-0. RESOLVE ARGS → _resolve_call_args()           (expand SpreadArguments)
-
-1. BOUND_FUNC?  → _try_user_function_call()      (obj is a BoundFuncRef)
-
-2. METHOD BUILTIN? → Builtins.METHOD_TABLE        (subList, toString, ...)
-
-3. HEAP FIELD?  → check heap_obj.fields[method_name] for BoundFuncRef
-   └─ if found: inject obj as self, dispatch function
-   └─ supports Lua table OOP (t:method()), JS/Python dynamic properties
-
-4. CLASSREF?    → check if obj is a ClassRef (static method dispatch)
-   └─ dispatch directly to registry.class_methods[class_name][method]
-   └─ no this/self injection — static methods operate without an instance
-   └─ used by: Java/C# ClassName.method(), C++ Util::square(), PHP Class::method(), Ruby def self.method
-
-5. REGISTRY?    → registry.class_methods[type_hint]
-   └─ overload resolution via type signatures
-
-6. PARENT CHAIN → walk registry.class_parents for inherited methods
-
-7. DELEGATION   → __method_missing__ delegation chain
-
-8. UNKNOWN      → call_resolver.resolve_method()  (create symbolic value)
-```
-
-### How function references work
-
-When the frontend lowers a function definition, it emits a `CONST` instruction with a **function reference string**:
-
-```
-%2 = const <function:factorial@func_factorial_0>
-store_var factorial %2
-```
-
-This string encodes the function name and its CFG entry label. It is parsed by `_parse_func_ref()` (`interpreter/registry.py:33`) using the regex pattern `<function:(\w+)@(\w+)(?:#(\w+))?>`.
-
-Class references follow a similar pattern: `<class:Point@class_Point_0>`.
-
-### Call dispatch (user function)
-
-When `_try_user_function_call()` (`interpreter/handlers/calls.py`) matches a function reference, it produces a `StateUpdate` with:
-
-```python
-StateUpdate(
-    call_push=StackFramePush(
-        function_name=fname,
-        return_label=current_label,      # caller's block
-    ),
-    next_label=flabel,                    # callee's entry block
-    var_writes=param_vars,                # parameter bindings
-)
-```
-
-Remember `apply_update`'s ordering: the frame is pushed *before* `var_writes`, so parameters land in the new frame.
-
-### Call dispatch setup
-
-After `apply_update`, the step loop calls `_handle_call_dispatch_setup()` (`interpreter/run.py:172`) to write return info into the new frame:
-
-```python
-def _handle_call_dispatch_setup(vm, instruction, update, current_label, ip):
-    apply_update(vm, update)
-    new_frame = vm.current_frame
-    new_frame.return_label = call_return_label    # where to resume
-    new_frame.return_ip = ip + 1                  # next instruction in caller
-    new_frame.result_reg = call_result_reg        # where to write return value
-```
-
-### Return flow
-
-On `RETURN`, `_handle_return_flow()` (`interpreter/run.py:199`) pops the callee frame and resumes the caller:
-
-```
-caller frame:                   callee frame:
-  return_label = "entry"          function_name = "factorial"
-  return_ip = 4                   result_reg = "%4"  (caller's register)
-  ...                             return_value = 120
-
-After RETURN:
-  1. Pop callee frame
-  2. Write return_value (120) to caller's result_reg (%4)
-  3. Jump to return_label:return_ip (entry:4)
-```
-
-### HALT vs RETURN
-
-`HALT` (`interpreter/instructions.py` — `Halt_`) is COBOL-only, emitted exclusively by
-`lower_stop_run` (`interpreter/cobol/lower_arithmetic.py`) for `STOP RUN`. COBOL's `STOP RUN`
-must terminate the *entire program* immediately, no matter how deep the current call stack is —
-unlike `GOBACK`/`EXIT PROGRAM`, which correctly compile to `RETURN` and pop exactly one frame,
-resuming the caller (or halting only if that frame is the top-level/`MAIN_FRAME_NAME` frame or
-the stack is empty).
-
-Both step loops (`_run_loop` in `interpreter/run.py` and `execute_cfg_traced`) special-case
-`HALT` as an unconditional `break` that runs *before* `_handle_return_flow()` is ever consulted —
-it ignores `call_stack` depth entirely, so a `STOP RUN` ten frames deep in nested `CALL`s still
-ends execution immediately rather than returning control up the chain one frame at a time.
-
-`Halt_` is a genuinely distinct instruction type rather than a boolean flag on `Return_`. The
-reason is type inference (`interpreter/types/type_inference.py`) dispatches on exact instruction
-type when inferring function return types; a flagged `Return_` would still be unioned into the
-inferred return type even though `STOP RUN` never produces a value. `Halt_` has `writes() ->
-None` and `reads() -> []` — it carries no operands. See [IR reference](ir-reference.md#halt).
-
-### Parameter binding via SYMBOLIC
-
-Parameters in function bodies are represented as `SYMBOLIC` instructions with `param:` hints:
-
-```
-LABEL func_factorial_0
-%0 = SYMBOLIC param:n        ← parameter declaration
-```
-
-When the executor handles `SYMBOLIC` (`interpreter/vm/executor.py`), it checks whether the parameter was pre-bound by the caller:
-
-```python
-def _handle_symbolic(inst, vm, **kwargs):
-    hint = inst.operands[0]
-    if hint.startswith(constants.PARAM_PREFIX):
-        param_name = hint[len(constants.PARAM_PREFIX):]
-        if param_name in frame.local_vars:
-            val = frame.local_vars[param_name]
-            return ExecutionResult.success(
-                StateUpdate(register_writes={inst.result_reg: val}, ...)
-            )
-    # Not pre-bound → create fresh symbolic
-    sym = vm.fresh_symbolic(hint=hint)
-    return ExecutionResult.success(...)
-```
-
-This is how the VM handles both concrete calls (where the caller pre-binds `n=5`) and top-level function analysis (where `n` becomes `sym_0`).
-
-### Class constructor flow
-
-`_try_class_constructor_call()` (`interpreter/handlers/calls.py`) handles `<class:Point@class_Point_0>`:
-
-```
-1. Allocate heap object: vm.heap["obj_0"] = HeapObject(type_hint="Point")
-2. Write object address to result_reg: %4 = "obj_0"
-3. If __init__ exists in registry:
-   a. Push frame with function_name="Point.__init__"
-   b. Bind self=obj_0, other params from args
-   c. Dispatch to __init__ label
-4. If no __init__: just return the allocated address
-```
-
-### Method dispatch
-
-`_handle_call_method()` (`interpreter/handlers/calls.py`) resolves the object's type from the heap, looks up the method in the registry, and dispatches:
-
-```python
-addr = _heap_addr(obj_val)
-type_hint = vm.heap[addr].type_hint         # e.g., "Point"
-methods = registry.class_methods[type_hint]  # {"__init__": "func___init___4", "move": "func_move_6"}
-func_label = methods[method_name]
-# Push frame with self bound to object address
-```
-
----
-
-## 8. Best-Effort Execution
-
-The VM's best-effort execution mechanism enables running programs with incomplete information by substituting symbolic placeholder values where concrete values are unavailable.
-
-### When symbolic values arise
-
-| Situation | Example | What happens |
-|---|---|---|
-| Unresolved variable | `process(items)` where `process` not in scope | `LOAD_VAR` creates `sym_N` with hint `"process"` |
-| Missing function | calling unknown function | `_symbolic_call_result` creates `sym_N` with constraint `"process(sym_M)"` |
-| Symbolic arithmetic | `sym_0 + 1` | `_handle_binop` creates `sym_N` with constraint `"sym_0 + 1"` |
-| Symbolic field access | `sym_0.field` | `_handle_load_field` creates `sym_N` with hint `"sym_0.field"` |
-| Symbolic branch | `if sym_0:` | Takes true branch, records path condition |
-
-### Symbolic propagation through BINOP
-
-`_handle_binop()` (`interpreter/handlers/arithmetic.py`):
-
-```python
-def _handle_binop(inst, vm, **kwargs):
-    oper = inst.operands[0]
-    lhs = _resolve_reg(vm, inst.operands[1])   # returns TypedValue
-    rhs = _resolve_reg(vm, inst.operands[2])   # returns TypedValue
-
-    if _is_symbolic(lhs.value) or _is_symbolic(rhs.value):
-        # Either operand is symbolic → result must be symbolic
-        sym = vm.fresh_symbolic(hint=f"{lhs_desc} {oper} {rhs_desc}")
-        sym.constraints = [f"{lhs_desc} {oper} {rhs_desc}"]
-        return ExecutionResult.success(
-            StateUpdate(register_writes={inst.result_reg: sym.to_dict()}, ...)
-        )
-
-    # Both concrete → compute
-    result = Operators.eval_binop(oper, lhs, rhs)
-    if result is Operators.UNCOMPUTABLE:
-        # Edge case: concrete but uncomputable (e.g., division by zero)
-        sym = vm.fresh_symbolic(...)
-        ...
-    return ExecutionResult.success(
-        StateUpdate(register_writes={inst.result_reg: result}, ...)
-    )
-```
-
-### UNCOMPUTABLE sentinel
-
-`Operators.UNCOMPUTABLE` (`interpreter/vm/vm.py`) is a sentinel that replaces exceptions for operations that fail at the value level (not at the system level). This avoids exception-heavy control flow:
-
-```python
-class Operators:
-    class _Uncomputable:
-        def __repr__(self) -> str:
-            return "UNCOMPUTABLE"
-
-    UNCOMPUTABLE = _Uncomputable()
-
-    BINOP_TABLE: dict[str, Any] = {
-        "+": lambda a, b: a + b,
-        "/": lambda a, b: a / b if b != 0 else Operators.UNCOMPUTABLE,
-        ...
-    }
-```
-
-### Symbolic branching
-
-`_handle_branch_if()` (`interpreter/handlers/control_flow.py`):
-
-When the branch condition is symbolic, the VM **deterministically takes the true branch** and records the assumption:
-
-```python
-if _is_symbolic(cond_val):
-    return ExecutionResult.success(
-        StateUpdate(
-            next_label=true_label,
-            path_condition=f"assuming {sym_desc} is True",
-            reasoning=f"branch_if {sym_desc} (symbolic) → {true_label} (assumed true)",
-        )
-    )
-```
-
-Path conditions accumulate in `vm.path_conditions` and are included in LLM prompts, giving the oracle context about what assumptions the VM has made.
-
-### Lazy heap materialisation
-
-When the VM accesses a field on a symbolic object (not yet on the heap), it **materialises** a synthetic heap entry on the fly (`interpreter/handlers/memory.py`):
-
-```python
-def _handle_load_field(inst, vm, **kwargs):
-    addr = _heap_addr(obj_val)
-    if addr and addr not in vm.heap:
-        # Materialise a synthetic heap entry for symbolic objects
-        # so repeated field accesses return the same symbolic value
-        vm.heap[addr] = HeapObject(type_hint=_symbolic_type_hint(obj_val))
-    ...
-    # If field not found, create symbolic and cache it
-    sym = vm.fresh_symbolic(hint=f"{addr}.{field_name}")
-    heap_obj.fields[field_name] = sym   # ← cache for deduplication
-```
-
-This ensures that `obj.x` and `obj.x` on the same symbolic object return the *same* symbolic value, which is important for constraint consistency.
-
-### Variable resolution via scope chain
-
-`_handle_load_var()` (`interpreter/handlers/variables.py`) walks the call stack backwards (innermost to outermost frame), implementing proper lexical scoping:
-
-```python
-def _handle_load_var(inst, vm, **kwargs):
-    name = inst.operands[0]
-    for f in reversed(vm.call_stack):
-        if name in f.local_vars:
-            return ExecutionResult.success(
-                StateUpdate(register_writes={inst.result_reg: val}, ...)
-            )
-    # Not found anywhere → create symbolic
-    sym = vm.fresh_symbolic(hint=name)
-    return ExecutionResult.success(...)
-```
-
----
-
-## 9. Closure Capture and Mutation
-
-The VM supports **capture-by-reference** closures with shared mutable environments. This means:
-
-1. Multiple closures from the same scope share the same environment
-2. Mutations inside one closure are visible to sibling closures
-3. Mutations persist across calls
-
-### ClosureEnvironment
-
-Defined in `interpreter/vm/vm_types.py`:
-
-```python
-@dataclass
-class ClosureEnvironment:
-    """Shared mutable environment for closure capture-by-reference."""
-    bindings: dict[VarName, TypedValue] = field(default_factory=dict)
-```
-
-### Capture mechanism
-
-When `_handle_const()` (`interpreter/handlers/variables.py`) encounters a function reference being created inside another function (i.e., `len(vm.call_stack) > 1`), it creates or reuses a `ClosureEnvironment`:
-
-```python
-if len(vm.call_stack) > 1 and isinstance(val, str):
-    fr = _parse_func_ref(val)
-    if fr.matched:
-        enclosing = vm.current_frame
-        env_id = enclosing.closure_env_id
-        if env_id:
-            # REUSE existing environment (second closure from same factory)
-            env = vm.closures[env_id]
-            for k, v in enclosing.local_vars.items():
-                if k not in env.bindings:
-                    env.bindings[k] = v
-        else:
-            # CREATE new environment from enclosing frame's local vars
-            env_id = f"env_{vm.symbolic_counter}"
-            env = ClosureEnvironment(bindings=dict(enclosing.local_vars))
-            vm.closures[env_id] = env
-            enclosing.closure_env_id = env_id
-        # Annotate function reference with closure ID
-        val = f"<function:{fr.name}@{fr.label}#{closure_id}>"
-```
-
-The `#closure_id` suffix on the function reference string links the closure to its shared environment at call time.
-
-### Mutation persistence
-
-In `apply_update()` (`interpreter/vm/vm.py`), variable writes to captured names are synced back to the shared environment:
-
-```python
-target_frame = vm.current_frame
-for var, val in update.var_writes.items():
-    target_frame.local_vars[var] = deserialized
-    # Sync to closure environment
-    if target_frame.closure_env_id and var in target_frame.captured_var_names:
-        env = vm.closures.get(target_frame.closure_env_id)
-        if env:
-            env.bindings[var] = deserialized
-```
-
-### Visual: shared closure environments
-
-```
-def make_counter():
-    count = 0
-    def increment():
-        count = count + 1       ← mutates shared env
-        return count
-    def get():
-        return count            ← reads shared env
-    return (increment, get)
-```
-
-```mermaid
-flowchart TD
-    env["ClosureEnvironment env_0\nbindings:\n  count = 0\n← shared mutable state"]
-    inc["increment\n#closure_1\nenv → env_0"]
-    get["get\n#closure_2\nenv → env_0"]
-
+    env["ClosureEnvironment env_0\ncount = 0"]
+    inc["increment\nBoundFuncRef #closure_1"]
+    get["get\nBoundFuncRef #closure_2"]
     env --> inc
     env --> get
 ```
 
-After `increment()`:  `env_0.bindings["count"] = 1`
-After `get()`:        reads `env_0.bindings["count"] → 1`
+After `increment()`, `env_0.bindings["count"]` is 1, and `get()` reads 1.
 
----
+## 10. Heap pointers (C, C++, Rust)
 
-## 10. Pointer Aliasing (C/Rust)
+These are object pointers on the heap. COBOL pointers are flat byte addresses instead (§11, §12.4).
 
-The VM implements a **KLEE-inspired promote-on-address-of** memory model for languages with pointer semantics (C, Rust). The core abstraction is the `Pointer` dataclass (`interpreter/vm/vm_types.py`):
+`Pointer(base: Address, offset: int)` names `heap[base].fields[offset]`. `ADDRESS_OF x` (`_handle_address_of`, `interpreter/handlers/memory.py`):
 
-```python
-@dataclass(frozen=True)
-class Pointer:
-    base: Address   # heap object address (Address domain type, e.g., Address("mem_0"))
-    offset: int = 0 # element offset within the object
+- already aliased → the existing pointer;
+- a function value → the function value itself;
+- a pointer to an `obj_`/`arr_` heap object, or an address on the heap → `Pointer(addr, 0)`, no alias;
+- otherwise → promote: allocate `mem_N` with field `0` holding the current value, record `var_heap_aliases[x]`, return `Pointer(mem_N, 0)`. A pointer held in a variable is promoted the same way, which gives `**pp`.
+
+After promotion, `LOAD_VAR`/`STORE_VAR` of `x` read and write the heap slot.
+
+| Operation | Behaviour |
+|---|---|
+| `LOAD_INDIRECT p` | Field `offset` (INDEX kind, then PROPERTY). Missing on an `obj_`/`arr_` base → the pointer itself; otherwise a symbolic. A function value dereferences to itself. |
+| `STORE_INDIRECT p v` | Heap write to field `offset` (INDEX kind) |
+| `p + n`, `p - n`, `n + p` | New `Pointer` with the offset moved |
+| `p - q` (same base) | Offset difference |
+| `<`, `>`, `<=`, `>=`, `==`, `!=` (same base) | Compare offsets |
+
+## 11. Flat byte memory
+
+Regions are byte-addressed memory, used by COBOL. [ADR-151](architectural-design-decisions.md) and [ADR-152](architectural-design-decisions.md).
+
+**One address space.** `VMState` places each region as a `Segment(base, size)` (`interpreter/vm/segment.py`) in one flat space. A bump allocator starts at `FIRST_ADDRESS = 4096`; each region takes the next free address, and an empty region still takes one address. Storage stays one `bytearray` per segment, because callers hold and mutate those buffers in place.
+
+```
+address: 0 ........ 4095 | 4096 ......... 4096+a | 4096+a ......... | …
+         NULL page       | segment A (WS)        | segment B (LINKAGE copy) | …
+                           handle "4096"           handle "<4096+a>"
 ```
 
-### Promote-on-address-of
+**Handles are addresses.** `ALLOC_REGION` returns the next base as an `int` and emits `new_regions={str(base): size}`. `WRITE_REGION r, off, len, bytes` writes at `r + off`; `LOAD_REGION r, off, len` reads `len` bytes at `r + off` and zero-pads a short read. Pointer arithmetic is plain integer `BINOP`. A symbolic size or address gives a symbolic result (or a no-op write).
 
-When `&x` is taken on a primitive variable, the `ADDRESS_OF` handler:
+**Access.** `read_at(address, length)` and `write_at(address, data)`:
 
-1. Creates a new `HeapObject` with `fields={"0": current_value}`
-2. Records the alias in `frame.var_heap_aliases[var_name] = Pointer(base=heap_addr, offset=0)`
-3. Returns the `Pointer` as the instruction result
+- below 4096 → the `null_access` strategy;
+- within one segment → a direct slice;
+- across a segment end → continue into the following segments in address order, log a warning; gaps read as zero, bytes past the last segment are dropped on write and missing on read.
 
-After promotion, all reads (`LOAD_VAR`) and writes (`STORE_VAR`) for that variable are **alias-aware** — they go through the heap object instead of `local_vars`. This means `*ptr = 99` (via `STORE_INDIRECT ptr, val`) writes to the heap, and the next `LOAD_VAR x` reads back `99` from the same heap location.
+`region_set` on an existing handle overwrites in place and rejects a size change. `segment_of(handle)` gives a region's `Segment`.
 
-### Pointer operations
+**NULL page.** `NullAccess` (`interpreter/vm/null_access.py`) is a protocol with `on_read` and `on_write`, injected into `VMState.null_access`:
 
-| Operation | IR pattern | Executor behaviour |
+| Strategy | Read | Write |
 |---|---|---|
-| **Dereference read** (`*ptr`) | `LOAD_INDIRECT %ptr` | Reads `heap[ptr.base].fields[str(ptr.offset)]` (INDEX then PROPERTY kind). If field absent and base is `obj_`/`arr_` prefix, returns the pointer identity (no-op for object references). Otherwise produces a symbolic. |
-| **Dereference write** (`*ptr = val`) | `STORE_INDIRECT %ptr %val` | Writes to `heap[ptr.base].fields[str(ptr.offset)]` |
-| **Pointer + int** | `BINOP "+" %ptr %n` | `Pointer(base=ptr.base, offset=ptr.offset + n)` |
-| **Pointer - int** | `BINOP "-" %ptr %n` | `Pointer(base=ptr.base, offset=ptr.offset - n)` |
-| **Pointer - Pointer** | `BINOP "-" %p2 %p1` | `p2.offset - p1.offset` (integer result, same base required) |
-| **Pointer comparison** | `BINOP "<" %p1 %p2` | Compares offsets within same base object |
-| **Array decay** (C) | Heap address string in arithmetic | Auto-wraps as `Pointer(base=addr, offset=0)` |
+| `WarnAndIgnore` (default, `WARN_AND_IGNORE`) | zeroes, warning | dropped, warning |
+| `HaltOnNull` | raises `NullAddressAccess` | raises `NullAddressAccess` |
 
-### What does NOT get aliased
+`run(null_access=)` and `initial_vm_state(null_access=)` choose it.
 
-- **Structs/arrays** already on the heap: `&s` wraps the existing heap address in a `Pointer` but does **not** create an alias entry (the variable already points to the heap).
-- **Function references**: `&func` returns the function reference unchanged (identity — functions are already values).
-- **Nested pointers**: `int **pp = &ptr` promotes `ptr` itself to the heap, enabling double dereference (`**pp`).
+## 12. COBOL execution model
 
----
+### 12.1 Program singletons
 
-## 11. Built-in Functions
+Each program's lowering (`interpreter/cobol/lower_program_init.py`) emits an init block that runs once at load. It allocates WORKING-STORAGE and the special-registers region, and stores a singleton heap object in `__prog_<PID>` with fields `ws_handle`, `return_code_handle`, `run` (a `BoundFuncRef` to `func_<PID>_0`) and `__init_params__` (a `BoundFuncRef` to `func_init_params_<PID>_0`).
 
-Built-in functions are defined in `interpreter/vm/builtins.py`. They are dispatched before user functions in the call chain.
+### 12.2 CALL_WITH_MEMORY
 
-### Built-in table
+`CALL … USING` passes one address per argument ([ADR-150](architectural-design-decisions.md), replacing ADR-144's copy-in/copy-back):
 
-```python
-class Builtins:
-    TABLE: dict[str, Any] = {
-        "len": _builtin_len,
-        "range": _builtin_range,
-        "print": _builtin_print,
-        "int": _builtin_int,
-        "float": _builtin_float,
-        "str": _builtin_str,
-        "bool": _builtin_bool,
-        "abs": _builtin_abs,
-        "max": _builtin_max,
-        "min": _builtin_min,
-        # … (str_upper, str_lower, str_strip, list_append, dict_contains_key, __py_contains__, …)
-    }
-```
-
-The table is keyed by `FuncName` (not plain `str`). Language-specific builtins use name-mangled keys (e.g. `__py_contains__`) to avoid collision with user-defined functions of the same name.
+1. The caller builds an argument array in plain IR: `NEW_ARRAY` with a `count` field and, per argument, a `NEW_OBJECT` with `region`, `offset` and `omitted`. BY REFERENCE passes the argument's own region and offset. BY CONTENT, BY VALUE and literals pass a fresh `RegionId.CALL_ARGUMENT` copy.
+2. `_handle_call_with_memory` resolves the callee name (from `func_name`, or from `target_reg` for `CALL identifier`, trimmed and upper-cased), finds `__prog_<PID>` in scope, and dispatches to its `__init_params__`, binding the array as `__call_arguments` in the new frame.
+3. The callee binds each LINKAGE 01 to its argument: a region and a shift from its static offset. An absent or OMITTED argument binds NULL ([ADR-152](architectural-design-decisions.md)).
 
-### `__py_contains__` builtin
+A literal callee that is not linked goes to `call_resolver` and stays symbolic. A runtime-resolved name that is not linked raises `UnresolvedProgramError`.
 
-The Python frontend lowers `x in lst` / `x not in lst` to `CALL_FUNCTION __py_contains__(collection, element)` rather than `BINOP IN` / `BINOP NOT_IN`. This is necessary because list literals lower to heap `Pointer` values at runtime, and `BINOP_TABLE` lambdas cannot walk the heap.
+Harnesses build an argument array with `call_arguments(vm, regions)` (`interpreter/cobol/call_arguments.py`), passing each region BY REFERENCE at offset 0.
 
-`_builtin_py_contains(args, vm)` resolves the collection:
-1. If it is a heap `Pointer`, resolves the address and checks `element in HeapObject.fields.values()`.
-2. Otherwise, falls back to native `__contains__` for plain Python containers (strings, dicts, sets).
-3. Returns `UNCOMPUTABLE` for symbolic arguments.
+### 12.3 RETURN-CODE
 
-For `not in`, the frontend appends `UNOP NOT` after the call.
+- A program exit (`lower_program_exit`) loads its RETURN-CODE bytes, calls `__cobol_publish_return_code`, then `RETURN`s the bytes. `STOP RUN` publishes before `HALT`.
+- The caller's `CALL_WITH_MEMORY` result register is seeded with its own RETURN-CODE, so a void return leaves it unchanged; the CALL lowering then copies the register into the caller's RETURN-CODE.
+- `__cobol_publish_return_code` sets `VMState.cobol_run_unit_return_code`. The last program to end wins, which is the value the operating system would get.
+- `read_return_code(vm)` (`interpreter/cobol/return_code_readback.py`) returns the published value, or falls back to scanning the heap for a `return_code_handle` region.
 
-### isinstance builtin
+### 12.4 Pointers
 
-The `isinstance` builtin supports both heap objects and primitive Python types:
+`USAGE POINTER` items store flat addresses. `ADDRESS OF`, `NULL` (the constant 0), `SET ADDRESS OF` (rebinds a LINKAGE item's region register and shift) and `SET … UP BY` are ordinary IR over integers. Pointer width follows IBM's `LP` option via `AddressingMode`. [ADR-152](architectural-design-decisions.md).
 
-```python
-# Heap object: looks up type_hint from the object's TypedValue via the class registry
-isinstance(obj, Dog)   # → True if obj was allocated as NEW_OBJECT "Dog" or a subclass
+### 12.5 PERFORM continuations
 
-# Primitive types: maps names to native Python types
-isinstance(42, int)    # → True
-isinstance("hi", str)  # → True
-isinstance(3.14, float) # → True
-isinstance(True, bool) # → True
-isinstance([1,2], list) # → True
-```
+`SET_CONTINUATION name, label` records a return point. `RESUME_CONTINUATION name` jumps to it if set and clears it either way (`continuation_clear`); if unset it falls through.
 
-The primitive type map (`{"int": int, "str": str, "float": float, "bool": bool, "list": list}`) is checked before the registry lookup, enabling pattern matching class patterns against primitive arguments.
+### 12.6 Exact numerics
 
-### Handling symbolic arguments
+COBOL arithmetic uses `CobolNumber` (`Decimal`) from `cobol_numeric`, a top-level package that does not import `interpreter` (import-linter contract `cobol-numeric-is-a-leaf`). Lowering emits `Const.decimal_` and boundary builtins (`__cobol_add`, `__cobol_divide`, `__cobol_from_digits`, `__cobol_to_text`, …); intermediate scales follow IBM `ARITH(COMPAT)` and are computed at lowering time by `cobol_numeric.scale`. `_serialize_value` renders a `CobolNumber` as plain text. [ADR-148](architectural-design-decisions.md), [ADR-149](architectural-design-decisions.md), [ADR-146](architectural-design-decisions.md) for ROUNDED.
 
-Built-ins gracefully degrade when given symbolic arguments. For example, `_builtin_len()` (`interpreter/vm/builtins.py`):
+### 12.7 cobol_memory
 
-```python
-def _builtin_len(args, vm):
-    val = args[0]
-    addr = _heap_addr(val)
-    if addr and addr in vm.heap:
-        return len(vm.heap[addr].fields)     # heap object: count fields
-    if isinstance(val, (list, tuple, str)):
-        return len(val)                       # concrete collection
-    return _UNCOMPUTABLE                      # symbolic → can't compute
-```
+`cobol_memory` is the static byte-extent algebra, also a leaf package (`cobol-memory-is-a-leaf`). The VM does not use it at run time; lowering and dataflow do.
 
-When a builtin returns `UNCOMPUTABLE`, the call handler in `_try_builtin_call()` (`interpreter/handlers/calls.py`) wraps it in a symbolic value:
+| Type | Role |
+|---|---|
+| `RegionId` | The section a field lives in: WORKING_STORAGE, LINKAGE, LOCAL_STORAGE, FILE, SPECIAL_REGISTERS, INDEXES, CALL_ARGUMENT |
+| `FieldExtent` | A byte range in one region, `EXACT` or `CLAMPED`; two fields alias when their ranges meet |
+| `AbstractLocation` | Protocol: `may_alias`, `must_cover`, `alias_key` |
+| `StorageIdentifier` | Protocol for registers and variables; the type of `InstructionBase.reads()`/`writes()` |
 
-```python
-result = Builtins.TABLE[func_name](args, vm)
-if result is Operators.UNCOMPUTABLE:
-    sym = vm.fresh_symbolic(hint=f"{func_name}({args_desc})")
-    sym.constraints = [f"{func_name}({args_desc})"]
-    return ExecutionResult.success(
-        StateUpdate(register_writes={inst.result_reg: sym.to_dict()}, ...)
-    )
-```
+## 13. Built-in functions
 
----
+`Builtins` in `interpreter/vm/builtins.py`:
 
-## 12. LLM Backend (Oracle Fallback)
+- `TABLE: dict[FuncName, builtin]` — `len`, `strlen`, `range`, `print`, `println`, `int`, `float`, `str`, `bool`, `abs`, `max`, `min`, `keys`, `arrayOf` and its aliases, `slice`, `clone`, `isinstance`, `object_rest`, `str_upper`, `str_lower`, `str_strip`, `list_append`, `dict_contains_key`, `__py_contains__`, plus the COBOL `BYTE_BUILTINS` from `interpreter/cobol/byte_builtins.py`.
+- `METHOD_TABLE` — `subList`, `substring`, `slice`, `to_string`, `toString`, `length`, `size`, `Length`.
 
-The LLM backend (`interpreter/backend.py`) is the fallback for instructions the local executor can't handle. In practice, the local executor handles all 35 opcodes, so the LLM is only called when the local executor explicitly delegates (which currently doesn't happen — all opcodes have handlers).
+A builtin takes `(args: list[TypedValue], vm)` and returns `BuiltinResult(value, new_objects, heap_writes)`; heap effects travel in the result. `UNCOMPUTABLE` becomes a symbolic. Language-specific helpers use mangled names (`__py_contains__`) so they cannot clash with user functions.
 
-### Architecture
+`__py_contains__` exists because Python list literals are heap objects, which `BINOP_TABLE`'s `in` cannot see. The Python frontend lowers `x in c` to it and adds `UNOP not` for `not in`.
 
-```python
-class LLMBackend(ABC):
-    SYSTEM_PROMPT = "..."   # detailed instruction for the LLM
+`isinstance` compares a heap object's scalar type name with `str()` of the second argument (exact match, no parent walk). For a value not on the heap it maps `int`, `str`, `float`, `bool`, `list` to Python types.
 
-    @abstractmethod
-    def interpret_instruction(self, instruction, state) -> StateUpdate: ...
+## 14. LLM fallback
 
-    def _build_prompt(self, instruction, state) -> str: ...
-    def _parse_response(self, text) -> StateUpdate: ...
-```
+`interpreter/llm/backend.py`. `get_backend(name)` returns an `LLMInterpreterBackend` wrapping an `LLMClient`; providers go through LiteLLM. `interpret_instruction(instruction, vm)` sends a compact JSON prompt (instruction, resolved operands, relevant state) and parses a `StateUpdate`. The loop materialises it with `materialize_raw_update` and counts it in `llm_calls`.
 
-One concrete backend: `LLMInterpreterBackend`, which accepts any `LLMClient` via constructor injection. All providers (Claude, OpenAI, Ollama, HuggingFace) are accessed through [LiteLLM](https://github.com/BerriAI/litellm), a unified completion interface — `get_llm_client()` resolves the provider string to a LiteLLM model identifier and returns a `LiteLLMClient`.
+All opcodes except `LABEL`, `SUSPEND` and `IMPORT_MODULE` have local handlers, so the fallback runs only for an unresolved `IMPORT_MODULE` or a `SUSPEND` under the traced loop.
 
-### Prompt construction
+## 15. Function and class registry
 
-`_build_prompt()` (`interpreter/backend.py:87`) builds a compact JSON payload:
+`FunctionRegistry` (`interpreter/registry.py`), built by `build_registry(instructions, cfg, func_symbol_table, class_symbol_table)`:
 
-```json
-{
-    "instruction": "%5 = binop * sym_0 4",
-    "result_reg": "%5",
-    "opcode": "BINOP",
-    "operands": ["*", "%3", "%4"],
-    "resolved_operand_values": {"%3": {"__symbolic__": true, "name": "sym_0"}, "%4": 4},
-    "state": {
-        "local_vars": {"x": {"__symbolic__": true, "name": "sym_0"}},
-        "heap": {},
-        "path_conditions": ["assuming sym_0 > 0 is True"]
-    }
-}
-```
+| Field | Contents |
+|---|---|
+| `func_params: dict[CodeLabel, list[str]]` | From `SYMBOLIC param:x` in each `func_` block, in order |
+| `classes: dict[ClassName, CodeLabel]` | From `class_symbol_table` |
+| `class_methods: dict[ClassName, dict[FuncName, list[CodeLabel]]]` | Function constants inside a class scope; lists hold overloads. Methods hoisted after `end_class_` still count |
+| `class_parents: dict[ClassName, list[ClassName]]` | Linearised parent chain |
+| `func_refs: dict[FuncName, FuncRef]` | Name to reference |
 
-Only relevant state is included (no empty heap, no empty path conditions) to minimize token usage.
+Use `lookup_methods`, `lookup_func`, `register_func`, `register_method`.
 
-### System prompt contract
+## 16. Dataflow analysis
 
-The system prompt (`interpreter/backend.py:16`) defines the `StateUpdate` JSON schema and gives concrete examples for each opcode category. The LLM must respond with valid JSON matching the schema.
+`interpreter/dataflow.py`, `analyze(cfg)`: collect definitions, solve reaching definitions (worklist, capped by `DATAFLOW_MAX_ITERATIONS` worklist pops), extract def-use chains, build the raw dependency graph by tracing registers back from stores, then its transitive closure. `DataflowResult` holds both graphs. Definitions and uses are `StorageIdentifier`s from each instruction's `reads()`/`writes()`. COBOL field-level memory dataflow is in `interpreter/cobol/memory_dataflow.py`. Details: [notes-on-dataflow-design.md](notes-on-dataflow-design.md).
 
----
-
-## 13. Function and Class Registry
-
-The `FunctionRegistry` (`interpreter/registry.py`) is built by scanning IR instructions and the CFG. Access is through accessor methods — callers never index dicts directly:
-
-```python
-@dataclass
-class FunctionRegistry:
-    # Internal storage uses domain-typed keys:
-    # _func_params: dict[CodeLabel, list[VarName]]
-    # _class_methods: dict[ClassName, dict[FuncName, ...]]
-    # _func_refs: dict[FuncName, BoundFuncRef]
-    # Access via: get_func_params(), lookup_method(), lookup_func_ref(), etc.
-```
-
-### Building the registry
-
-`build_registry()` (`interpreter/registry.py:132`) runs two scans:
-
-**1. Function parameters** — `_scan_func_params()` (line 71):
-Walks CFG blocks starting with `func_`. Extracts `SYMBOLIC param:x` instructions to discover parameter names and their order.
-
-```
-LABEL func_factorial_0
-%0 = SYMBOLIC param:n      ← discovered: func_factorial_0 → ["n"]
-```
-
-**2. Classes and methods** — `_scan_classes()` (line 88):
-- First pass: find `CONST <class:Point@class_Point_0>` instructions
-- Second pass: walk IR linearly, tracking class scope between `class_*` and `end_class_*` labels; collect function references inside class scopes as methods
-
----
-
-## 14. Dataflow Analysis
-
-`interpreter/dataflow.py` implements classic intraprocedural dataflow analysis on the CFG.
-
-### Analysis pipeline
-
-`analyze()` (`interpreter/dataflow.py:405`) runs four phases:
-
-```
-1. Collect all definitions
-2. Solve reaching definitions (worklist fixpoint)
-3. Extract def-use chains
-4. Build raw dependency graph (direct deps only)
-5. Compute transitive closure
-```
-
-### Core data types
-
-```python
-@dataclass(frozen=True)
-class Definition:
-    variable: StorageIdentifier  # Register or VarName (domain-typed)
-    block_label: CodeLabel
-    instruction_index: int
-    instruction: InstructionBase
-
-@dataclass(frozen=True)
-class Use:
-    variable: StorageIdentifier  # Register or VarName (domain-typed)
-    block_label: CodeLabel
-    instruction_index: int
-    instruction: InstructionBase
-
-@dataclass(frozen=True)
-class DefUseLink:
-    definition: Definition
-    use: Use
-```
-
-`StorageIdentifier` is a runtime-checkable `Protocol` requiring a `name` property. Both `Register` and `VarName` implement it. Each instruction class provides `reads()` and `writes()` methods that return lists of `StorageIdentifier` values, replacing the old opcode-conditional logic in the dataflow module.
-
-### Reaching definitions
-
-`solve_reaching_definitions()` (`interpreter/dataflow.py:219`) uses the standard worklist algorithm:
-
-```
-for each block B:
-    compute GEN(B) = last definition of each variable in B
-    compute KILL(B) = all defs of variables redefined in B (from other blocks)
-
-worklist = all blocks
-while worklist not empty:
-    B = worklist.pop()
-    reach_in(B) = ∪ reach_out(P) for P in predecessors(B)
-    reach_out(B) = GEN(B) ∪ (reach_in(B) - KILL(B))
-    if reach_out changed:
-        add successors to worklist
-```
-
-Convergence is capped at `DATAFLOW_MAX_ITERATIONS` (1000) to prevent non-termination on pathological CFGs.
-
-### Def-use chains
-
-`extract_def_use_chains()` (`interpreter/dataflow.py:265`) walks each block forward, tracking local definitions. For each use:
-- If a local definition shadows incoming defs, link to the local def
-- Otherwise, link to all matching definitions in `reach_in`
-
-### Dependency graph
-
-`_build_raw_dependency_graph()` traces register chains backward from `STORE_VAR` instructions to find direct named variable dependencies. `_transitive_closure()` then propagates indirect dependencies:
-
-```
-subtotal = price * quantity
-tax = subtotal * tax_rate
-total = subtotal + tax
-
-Traces: subtotal ← %2 (BINOP) ← %0 (LOAD_VAR price), %1 (LOAD_VAR quantity)
-
-Raw (direct):       subtotal → {price, quantity}
-                    tax      → {subtotal, tax_rate}
-                    total    → {subtotal, tax}
-
-Transitive closure: total    → {subtotal, tax, price, quantity, tax_rate}
-```
-
-Both graphs are returned in `DataflowResult`: `raw_dependency_graph` (direct edges) and `dependency_graph` (transitive closure).
-
----
-
-## 15. Module Map
+## 17. Module map
 
 ```
 interpreter/
-├── ir.py                    Opcode enum, Register, CodeLabel, SourceLocation, IRInstruction factory
-├── instructions.py          35 per-opcode frozen dataclasses + InstructionBase + StorageIdentifier
-├── register.py              Register domain type
-├── var_name.py              VarName domain type
-├── field_name.py            FieldName domain type (with FieldKind enum)
-├── func_name.py             FuncName domain type
-├── class_name.py            ClassName domain type
-├── address.py               Address domain type (heap/region keys)
-├── operator_kind.py         BinopKind/UnopKind enums
-├── storage_identifier.py    StorageIdentifier protocol for dataflow
-├── cfg_types.py             BasicBlock, CFG
-├── cfg.py                   build_cfg(), cfg_to_mermaid(), extract_function_instructions()
-├── run_types.py             VMConfig, ExecutionStats, PipelineStats
-├── run.py                   execute_cfg(), run() — orchestration and step loop
-├── registry.py              FunctionRegistry, function/class scanning
-├── dataflow.py              Reaching definitions, def-use chains, dependency graphs
-├── parser.py                tree-sitter parser wrapper
-├── frontend.py              Frontend ABC + factory, language routing
-├── frontends/               15 language-specific tree-sitter frontends
-├── constants.py             All magic strings/numbers as named constants
-├── api.py                   Composable public API (lower_source, dump_ir, ...)
-├── refs/                    FuncRef, ClassRef (structured function/class references)
-├── types/                   TypeExpr ADT, type inference, coercion rules
-├── overload/                Overload resolution (arity + type scoring)
-├── vm/                      VM execution engine
-│   ├── vm_types.py          VM data types (SymbolicValue, HeapObject, VMState, StateUpdate, ...)
-│   ├── vm.py                apply_update(), helpers (Operators, _parse_const, _resolve_reg → TypedValue)
-│   ├── executor.py          LocalExecutor dispatch table, all 35 opcode handlers
-│   ├── builtins.py          Built-in function table (len, range, print, ...)
-│   ├── unresolved_call.py   Symbolic/LLM call resolution strategies
-│   └── field_fallback.py    Field access fallback chain
-├── llm/                     LLM integration (backends, clients, frontends)
-├── interprocedural/         Call graph, function summaries, whole-program analysis
-├── project/                 Multi-file support (compiler, resolver, linker)
-├── handlers/                Shared instruction handler utilities
-├── cobol/                   COBOL type system, EBCDIC tables, IR encoder/decoder
-└── __init__.py              Package exports
+├── ir.py                 Opcode (37), CodeLabel, SourceLocation, SpreadArguments, IRInstruction factory
+├── instructions.py       InstructionBase and one frozen dataclass per opcode
+├── register.py, var_name.py, field_name.py, func_name.py, class_name.py,
+│   address.py, closure_id.py, continuation_name.py, operator_kind.py   domain types
+├── cfg_types.py, cfg.py  BasicBlock, CFG, build_cfg, cfg_to_mermaid
+├── registry.py           FunctionRegistry, build_registry
+├── refs/                 FuncRef, BoundFuncRef, ClassRef
+├── run.py                entry points, _run_loop, execute_cfg_traced, ExecutionStrategies
+├── run_types.py          VMConfig, ExecutionStats, PipelineStats
+├── trace_types.py        TraceStep, ExecutionTrace
+├── vm/
+│   ├── vm_types.py       VMState, StackFrame, HeapObject, Pointer, SymbolicValue, StateUpdate, ExecutionResult, BuiltinResult
+│   ├── vm.py             apply_update, coerce_local_update, materialize_raw_update, _resolve_reg, _heap_addr, Operators
+│   ├── executor.py       HandlerContext, LocalExecutor.DISPATCH
+│   ├── segment.py        Segment, FIRST_ADDRESS
+│   ├── null_access.py, warn_and_ignore.py, halt_on_null.py, null_address_access.py   NULL-page strategies
+│   ├── builtins.py       Builtins.TABLE, METHOD_TABLE
+│   ├── unresolved_call.py  SymbolicResolver, LLMPlausibleResolver
+│   ├── field_fallback.py   NoFieldFallback, ImplicitThisFieldFallback
+│   └── function_scoping.py Local / GlobalLeak function scoping
+├── handlers/             opcode handlers by family (variables, arithmetic, calls, control_flow, memory, objects, regions, _common)
+├── llm/                  LLM backend, client, LLM frontends
+├── types/                TypeExpr, type inference, coercion
+├── overload/             overload resolution
+├── project/              compiler, linker, LinkedProgram, EntryPoint, compile_cobol
+├── frontends/            15 tree-sitter frontends
+├── cobol/                COBOL lowering, byte builtins, call_arguments, return_code_readback, memory dataflow
+└── dataflow.py           reaching definitions, def-use, dependency graphs
+cobol_numeric/            CobolNumber, exact arithmetic, IBM scale rules (leaf)
+cobol_memory/             RegionId, FieldExtent, AbstractLocation, StorageIdentifier (leaf)
+cobol_asg/                COBOL parse model (leaf)
 ```
 
-### Dependency flow
+Import contracts (`.importlinter`): `interpreter.vm` and `interpreter.handlers` must not import `interpreter.frontends` (one exception: `executor` → `frontends.symbol_table`); they must not import `interpreter.cobol` (one exception: `vm.builtins` → `cobol.byte_builtins`); `interpreter.ir` imports none of the VM; `interpreter.project` must not import VM internals.
 
-```mermaid
-flowchart BT
-    constants["constants.py"]
-    ir["ir.py"] --> constants
-    instructions["instructions.py"] --> ir
-    domain["domain types\n(register, var_name, field_name,\nfunc_name, address, operator_kind)"]
-    instructions --> domain
-    cfg_types["cfg_types.py"] --> ir & constants
-    cfg["cfg.py"] --> cfg_types & ir & constants
-    vm_types["vm/vm_types.py\n(standalone, pydantic only)"] --> domain
-    vm["vm/vm.py"] --> vm_types
-    registry["registry.py"] --> ir & cfg & constants
-    builtins["vm/builtins.py"] --> vm
-    executor["vm/executor.py"] --> instructions & cfg & vm & registry & builtins & constants
-    run["run.py"] --> executor
-```
-
-Domain type files (`register.py`, `var_name.py`, `field_name.py`, `func_name.py`, `address.py`, `operator_kind.py`) and `*_types.py` files are **pure data** with no business-logic imports, ensuring they sit at the bottom of the dependency graph with zero risk of circular imports.
-
----
-
-## 16. End-to-End Worked Example
-
-### Source
+## 18. Worked example
 
 ```python
 def double(x):
@@ -1318,127 +568,63 @@ def double(x):
 result = double(5)
 ```
 
-### Step 1: Lower to IR
+IR from the Python frontend (`dump_ir`), as CFG blocks:
 
 ```
-LABEL func_double_0
-  %0 = SYMBOLIC param:x
-  %1 = CONST 2
-  %2 = BINOP * %0 %1
-  RETURN %2
-LABEL end_double_1
-  %3 = CONST <function:double@func_double_0>
-  STORE_VAR double %3
-  %4 = CONST 5
-  %5 = CALL_FUNCTION double %4
-  STORE_VAR result %5
-  RETURN %5
+[entry]          succs=end_double_1
+  branch end_double_1
+[func_double_0]
+  %0 = symbolic param:x
+  decl_var x %0
+  %1 = load_var x
+  %2 = const 2
+  %3 = binop * %1 %2
+  return %3
+[__block_9]                       (implicit return, unreachable here)
+  %4 = const None
+  return %4
+[end_double_1]
+  %5 = const func_double_0
+  decl_var double %5
+  %6 = const 5
+  %7 = call_function double %6
+  store_var result %7
 ```
 
-### Step 2: Build CFG
+Registry: `func_params = {func_double_0: ["x"]}`.
+
+Execution (`run(..., verbose=True)`):
 
 ```
-┌─────────────────────────────────┐
-│ func_double_0                   │
-│ %0=SYMBOLIC param:x             │
-│ %1=CONST 2                     │
-│ %2=BINOP * %0 %1               │
-│ RETURN %2                       │
-└─────────────────────────────────┘
-
-┌─────────────────────────────────┐
-│ end_double_1                    │
-│ %3=CONST <function:double@...>  │
-│ STORE_VAR double %3             │
-│ %4=CONST 5                     │
-│ %5=CALL_FUNCTION double %4      │
-│ STORE_VAR result %5             │
-│ RETURN %5                       │
-└─────────────────────────────────┘
-
-Entry = end_double_1 (first block after function skip)
+step 0   entry:0          branch                    → end_double_1
+step 1   end_double_1:0   const func_double_0       %5 = BoundFuncRef(double @ func_double_0)
+step 2   end_double_1:1   decl_var double           <main>.double = %5
+step 3   end_double_1:2   const 5                   %6 = 5
+step 4   end_double_1:3   call_function double %6   scope lookup finds the BoundFuncRef;
+                                                    push frame "double" (return end_double_1:4, result %7);
+                                                    var_writes x = 5, arguments = arr_0
+step 5   func_double_0:0  symbolic param:x          bound by caller → %0 = 5
+step 6   func_double_0:1  decl_var x %0
+step 7   func_double_0:2  load_var x                %1 = 5
+step 8   func_double_0:3  const 2                   %2 = 2
+step 9   func_double_0:4  binop * %1 %2             %3 = 10
+step 10  func_double_0:5  return %3                 pop frame; caller %7 = 10; resume end_double_1:4
+step 11  end_double_1:4   store_var result %7       <main>.result = 10
+step 12  end of end_double_1, no successors         stop
 ```
 
-### Step 3: Build registry
+`ExecutionStats.steps` is 13 and `llm_calls` is 0.
 
-```
-func_params: {"func_double_0": ["x"]}
-classes: {}
-class_methods: {}
-```
+## 19. Design principles
 
-### Step 4: Execute
-
-```
-VM initialised: call_stack = [StackFrame("<main>")]
-
-Step 0: end_double_1:0  %3 = CONST <function:double@func_double_0>
-  → _handle_const: registers[%3] = "<function:double@func_double_0>"
-
-Step 1: end_double_1:1  STORE_VAR double %3
-  → _handle_store_var: local_vars["double"] = "<function:double@func_double_0>"
-
-Step 2: end_double_1:2  %4 = CONST 5
-  → _handle_const: registers[%4] = 5
-
-Step 3: end_double_1:3  %5 = CALL_FUNCTION double %4
-  → _handle_call_function:
-    1. "double" not in builtins
-    2. Scope lookup: local_vars["double"] = "<function:double@func_double_0>"
-    3. Not a class reference
-    4. _try_user_function_call matches!
-       → call_push: StackFrame("double"), var_writes: {"x": 5}
-       → next_label: "func_double_0"
-  → _handle_call_dispatch_setup:
-       new_frame.return_label = "end_double_1"
-       new_frame.return_ip = 4
-       new_frame.result_reg = "%5"
-
-Step 4: func_double_0:0  %0 = SYMBOLIC param:x
-  → _handle_symbolic: param "x" found in frame.local_vars (pre-bound to 5)
-  → registers[%0] = 5
-
-Step 5: func_double_0:1  %1 = CONST 2
-  → _handle_const: registers[%1] = 2
-
-Step 6: func_double_0:2  %2 = BINOP * %0 %1
-  → _handle_binop: both concrete → 5 * 2 = 10
-  → registers[%2] = 10
-
-Step 7: func_double_0:3  RETURN %2
-  → _handle_return: return_value = 10, call_pop = True
-  → _handle_return_flow:
-       Pop "double" frame
-       Write 10 to caller's %5
-       Resume at end_double_1:4
-
-Step 8: end_double_1:4  STORE_VAR result %5
-  → _handle_store_var: local_vars["result"] = 10
-
-Step 9: end_double_1:5  RETURN %5
-  → _handle_return: return from <main> → stop
-
-Final state:
-  local_vars = {"double": "<function:double@func_double_0>", "result": 10}
-  heap = {}
-  9 steps, 0 LLM calls
-```
-
----
-
-## Design Principles Summary
-
-| Principle | Manifestation |
+| Principle | Where it shows |
 |---|---|
-| **Deterministic first** | Local executor handles all 35 opcodes; LLM is pure fallback |
-| **Functional core, imperative shell** | Pure data types in `*_types.py`, mutation only in `apply_update()` |
-| **Result types over exceptions** | `ExecutionResult.not_handled()` instead of raising or returning `None` |
-| **Sentinel over exception** | `Operators.UNCOMPUTABLE` instead of try/catch for arithmetic failures |
-| **Single mutator** | Only `apply_update()` writes to VMState; everything else produces `StateUpdate` |
-| **Serialisable state** | Every type has `to_dict()`; state can be sent to LLM or serialised |
-| **Scope chain resolution** | Variables resolved by walking call stack backwards |
-| **Lazy materialisation** | Symbolic heap entries created on first access, then cached |
-| **Shared environments** | Closures from same scope share one `ClosureEnvironment` |
-| **Domain types over primitives** | `Register`, `VarName`, `FieldName`, `FuncName`, `Address`, `CodeLabel`, `BinopKind` — no bare strings in instruction fields or VM storage keys |
-| **Private heap with accessors** | `_heap`/`_regions` accessed only via `heap_get`/`heap_set` etc.; `NO_HEAP_OBJECT` null sentinel |
-| **Convention over configuration** | Structured label names (`func_`, `class_`, `end_`) encode semantics |
+| Deterministic first | 34 local handlers; the LLM only sees what has no handler |
+| Effects as data | Handlers return `StateUpdate`; `apply_update` applies most of it (exceptions in §6.4) |
+| Result types over exceptions | `ExecutionResult.not_handled()`; `Operators.UNCOMPUTABLE` |
+| Null objects | `NO_HEAP_OBJECT`, `NO_REGISTER`, `NO_LABEL`, `NO_ADDRESS`, `VOID_RETURN` |
+| Domain types | `Register`, `CodeLabel`, `VarName`, `FieldName`, `FuncName`, `Address`, `BinopKind`; typed `Const`; `FuncRef`/`ClassRef` instead of strings |
+| Injected strategies | `ExecutionStrategies`, `UnresolvedCallResolver`, `NullAccess` |
+| Continuation as data | `(VMState, label, ip)` is enough to suspend and resume |
+| One address space for bytes | Region handles are addresses; pointers are integers (ADR-151, ADR-152) |
+| Leaf packages for COBOL statics | `cobol_numeric`, `cobol_memory`, `cobol_asg` import nothing from `interpreter` |
