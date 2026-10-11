@@ -8,6 +8,8 @@ from pathlib import Path
 import pytest
 
 from cobol_asg.cobol_statements import FileControlEntry
+from cobol_asg.file_enums import FileOrganization, OpenMode
+from interpreter.cobol.file_drivers import FileOrganizationDriver, open_driver
 from interpreter.cobol.real_file_provider import RealFileIOProvider
 from tests.covers import NotLanguageFeature, covers
 
@@ -153,3 +155,36 @@ class TestRealFileIOProvider:
         )
         r = prov._open_file("IN-FILE", "INPUT", 5, "SEQUENTIAL", 0, 0)
         assert r.status == "00"
+
+
+class _WideRecords(RealFileIOProvider):
+    def _driver(
+        self,
+        org: FileOrganization,
+        path: Path,
+        mode: OpenMode,
+        record_length: int,
+        key_offset: int,
+        key_length: int,
+    ) -> FileOrganizationDriver:
+        return open_driver(
+            org,
+            path,
+            mode,
+            record_length * 2,
+            key_offset,
+            key_length,
+        )
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_a_subclass_chooses_the_driver_each_open_uses(tmp_path: Path) -> None:
+    fce = [FileControlEntry.from_dict({"file_name": "F1", "assign_to": "f1.dat"})]
+    prov = _WideRecords(base_dir=tmp_path, file_control=fce)
+    opened = prov._open_file("F1", "OUTPUT", 5, "SEQUENTIAL", 0, 0)
+    prov._write_record("F1", "HELLO")
+    prov._close_file("F1")
+    assert (opened.status, (tmp_path / "f1.dat").read_bytes()) == (
+        "00",
+        b"HELLO     ",
+    )
