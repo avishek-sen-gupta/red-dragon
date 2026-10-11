@@ -24,6 +24,7 @@ _FILE_STATUS: dict[AccessCondition, str] = {
     AccessCondition.DUPLICATE_KEY: "22",
     AccessCondition.NOT_FOUND: "23",
     AccessCondition.FILE_NOT_FOUND: "35",
+    AccessCondition.ATTRIBUTE_CONFLICT: "39",
     AccessCondition.NOT_OPEN: "47",
     AccessCondition.WRITE_NOT_PERMITTED: "48",
 }
