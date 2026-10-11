@@ -243,6 +243,13 @@ public final class AsgSerializer {
                 asg.add("file_fields", allFields);
                 LOG.info("Serialized " + allFields.size() + " file-section fields");
             }
+            JsonArray fileDescriptions = new JsonArray();
+            for (FileDescriptionEntry fd : fileSection.getFileDescriptionEntries()) {
+                fileDescriptions.add(FileDescriptionSerializer.serialize(fd));
+            }
+            if (fileDescriptions.size() > 0) {
+                asg.add("file_descriptions", fileDescriptions);
+            }
         }
     }
 

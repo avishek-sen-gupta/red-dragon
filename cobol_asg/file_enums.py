@@ -27,3 +27,13 @@ class AccessMode(str, Enum):
     SEQUENTIAL = "SEQUENTIAL"
     RANDOM = "RANDOM"
     DYNAMIC = "DYNAMIC"
+
+
+class RecordingMode(Enum):
+    """An FD's RECORDING MODE, or NOT_CODED when the FD has none."""
+
+    F = "F"
+    V = "V"
+    U = "U"
+    S = "S"
+    NOT_CODED = ""

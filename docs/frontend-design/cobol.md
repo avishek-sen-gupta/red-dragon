@@ -169,6 +169,8 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 
 I/O statements dispatch to an injectable `CobolIOProvider` (ABC in `io_provider.py`). `NullIOProvider` returns `UNCOMPUTABLE` (symbolic fallthrough). `StubIOProvider` returns queued test data for concrete execution without real files or console. Provider is injected via `VMConfig(io_provider=stub)`.
 
+Each FD's `RECORDING MODE` and `RECORD` clause (`CONTAINS n`, `CONTAINS m TO n`, `IS VARYING [FROM m] [TO n] [DEPENDING ON x]`) reach `CobolASG.file_descriptions` as `FileDescription` values, for an I/O provider to derive the file's record format from. The runtime does not act on them: a `WRITE` hands the provider the whole record area (red-dragon-1hc3).
+
 ### Remaining 19 types
 
 Not yet implemented in the bridge. Includes communication (SEND, RECEIVE), embedded SQL (EXEC SQL), and less common statements (GENERATE, SORT, etc.).
