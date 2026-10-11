@@ -15,6 +15,7 @@ from cobol_asg.cobol_statements import (
     CallUsingParam,
     CobolStatementType,
     FileControlEntry,
+    FileDescription,
     parse_statement,
 )
 from cobol_asg.cobol_types import CobolTypeDescriptor
@@ -326,6 +327,7 @@ class CobolASG:
             of a caller's CALL USING arguments binds to, by position.
         local_storage_fields: Local-Storage Section fields (per-call locals).
         file_fields: File Section (FD) record fields.
+        file_descriptions: Each FD's RECORDING MODE and RECORD clause.
         sections: Procedure Division sections.
         paragraphs: Standalone paragraphs (no section).
         statements: Division-level bare statements (no paragraph or section).
@@ -338,6 +340,7 @@ class CobolASG:
     procedure_using: list[CallUsingParam] = field(default_factory=list)
     local_storage_fields: list[CobolField] = field(default_factory=list)
     file_fields: list[CobolField] = field(default_factory=list)
+    file_descriptions: list[FileDescription] = field(default_factory=list)
     sections: list[CobolSection] = field(default_factory=list)
     paragraphs: list[CobolParagraph] = field(default_factory=list)
     statements: list[CobolStatementType] = field(default_factory=list)
@@ -385,6 +388,9 @@ class CobolASG:
                 CobolField.from_dict(f, currency, pointer)
                 for f in data.get("file_fields", [])
             ],
+            file_descriptions=[
+                FileDescription.from_dict(d) for d in data.get("file_descriptions", [])
+            ],
             sections=[CobolSection.from_dict(s) for s in data.get("sections", [])],
             paragraphs=[
                 CobolParagraph.from_dict(p) for p in data.get("paragraphs", [])
@@ -423,7 +429,12 @@ class CobolASG:
             result["statements"] = [s.to_dict() for s in self.statements]
         if self.declaratives:
             result["declaratives"] = [s.to_dict() for s in self.declaratives]
-        return result | self._procedure_using_dict()
+        return result | self._procedure_using_dict() | self._file_descriptions_dict()
+
+    def _file_descriptions_dict(self) -> dict:
+        if not self.file_descriptions:
+            return {}
+        return {"file_descriptions": [d.to_dict() for d in self.file_descriptions]}
 
     def _procedure_using_dict(self) -> dict:
         if not self.procedure_using:

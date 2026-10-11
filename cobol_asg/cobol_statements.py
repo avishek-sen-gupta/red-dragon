@@ -9,7 +9,7 @@ discriminator.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Union
@@ -17,7 +17,7 @@ from typing import Union
 from cobol_asg.call_target import CallTarget
 from cobol_asg.cobol_expression import ExprNode, expr_from_dict, expr_to_dict
 from cobol_asg.exit_kind import ExitKind
-from cobol_asg.file_enums import AccessMode, FileOrganization, OpenMode
+from cobol_asg.file_enums import AccessMode, FileOrganization, OpenMode, RecordingMode
 from cobol_asg.frontend_extension import DialectParser
 from cobol_asg.ref_mod import (
     FunctionCallOperand,
@@ -1424,6 +1424,87 @@ class FileControlEntry:
             "record_key": self.record_key,
             "relative_key": self.relative_key,
             "file_status_var": self.file_status_var,
+        }
+
+
+@dataclass(frozen=True)
+class NoRecordClause:
+    """An FD with no RECORD clause."""
+
+    def to_dict(self) -> dict:
+        return {"kind": "none"}
+
+
+@dataclass(frozen=True)
+class RecordContains:
+    """RECORD CONTAINS n CHARACTERS."""
+
+    size: int
+
+    def to_dict(self) -> dict:
+        return {"kind": "contains", "size": self.size}
+
+
+@dataclass(frozen=True)
+class RecordContainsRange:
+    """RECORD CONTAINS m TO n CHARACTERS."""
+
+    minimum: int
+    maximum: int
+
+    def to_dict(self) -> dict:
+        return {"kind": "range", "minimum": self.minimum, "maximum": self.maximum}
+
+
+@dataclass(frozen=True)
+class RecordVarying:
+    """RECORD IS VARYING [FROM m] [TO n] [DEPENDING ON data-name]; 0 and "" where omitted."""
+
+    minimum: int
+    maximum: int
+    depending_on: str
+
+    def to_dict(self) -> dict:
+        return {
+            "kind": "varying",
+            "minimum": self.minimum,
+            "maximum": self.maximum,
+            "depending_on": self.depending_on,
+        }
+
+
+RecordClause = NoRecordClause | RecordContains | RecordContainsRange | RecordVarying
+
+_RECORD_CLAUSES: dict[str, Callable[[Mapping], RecordClause]] = {
+    "none": lambda d: NoRecordClause(),
+    "contains": lambda d: RecordContains(d["size"]),
+    "range": lambda d: RecordContainsRange(d["minimum"], d["maximum"]),
+    "varying": lambda d: RecordVarying(d["minimum"], d["maximum"], d["depending_on"]),
+}
+
+
+@dataclass(frozen=True)
+class FileDescription:
+    """An FD's RECORDING MODE and RECORD clause, from the FILE SECTION."""
+
+    fd_name: str
+    recording_mode: RecordingMode
+    record_clause: RecordClause
+
+    @classmethod
+    def from_dict(cls, data: Mapping) -> FileDescription:
+        clause = data["record_clause"]
+        return cls(
+            fd_name=data["fd_name"],
+            recording_mode=RecordingMode(data["recording_mode"]),
+            record_clause=_RECORD_CLAUSES[clause["kind"]](clause),
+        )
+
+    def to_dict(self) -> dict:
+        return {
+            "fd_name": self.fd_name,
+            "recording_mode": self.recording_mode.value,
+            "record_clause": self.record_clause.to_dict(),
         }
 
 
