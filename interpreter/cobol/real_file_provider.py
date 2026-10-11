@@ -34,7 +34,7 @@ def _file_status(condition: AccessCondition) -> str:
     return _FILE_STATUS[condition]
 
 
-def _to_ioresult(result: AccessResult) -> IOResult:
+def to_ioresult(result: AccessResult) -> IOResult:
     # Bytes→str at the VM boundary, exactly as before (latin-1, byte-faithful).
     data = result.data.decode("latin-1") if result.data is not None else None
     return IOResult(_file_status(result.condition), data)
@@ -112,15 +112,15 @@ class RealFileIOProvider(CobolIOProvider):
             )
         except FileNotFoundError:
             logger.warning("OPEN %s: file not found at %s", filename, path)
-            return _to_ioresult(AccessResult(AccessCondition.FILE_NOT_FOUND))
+            return to_ioresult(AccessResult(AccessCondition.FILE_NOT_FOUND))
         except OSError as exc:
             logger.warning("OPEN %s failed: %s", filename, exc)
-            return _to_ioresult(AccessResult(AccessCondition.FILE_NOT_FOUND))
+            return to_ioresult(AccessResult(AccessCondition.FILE_NOT_FOUND))
 
         self._drivers[filename] = drv
         self._open_modes[filename.upper()] = mode
         logger.info("OPEN %s mode=%s org=%s path=%s", filename, mode, org.value, path)
-        return _to_ioresult(AccessResult(AccessCondition.OK))
+        return to_ioresult(AccessResult(AccessCondition.OK))
 
     def _close_file(self, filename: str) -> IOResult:
         drv = self._drivers.pop(filename, None)
@@ -128,7 +128,7 @@ class RealFileIOProvider(CobolIOProvider):
             drv.close()
         self._open_modes.pop(filename.upper(), None)
         logger.info("CLOSE %s", filename)
-        return _to_ioresult(AccessResult(AccessCondition.OK))
+        return to_ioresult(AccessResult(AccessCondition.OK))
 
     def _open_mode(self, filename: Any) -> Any:
         return self._open_modes.get(str(filename).upper(), "")
@@ -136,32 +136,32 @@ class RealFileIOProvider(CobolIOProvider):
     def _read_record(self, filename: str, key: str) -> IOResult:
         drv = self._drivers.get(filename)
         if drv is None:
-            return _to_ioresult(AccessResult(AccessCondition.NOT_OPEN))
+            return to_ioresult(AccessResult(AccessCondition.NOT_OPEN))
         if key:
-            return _to_ioresult(drv.read_key(key.encode("latin-1")))
-        return _to_ioresult(drv.read_seq())
+            return to_ioresult(drv.read_key(key.encode("latin-1")))
+        return to_ioresult(drv.read_seq())
 
     def _write_record(self, filename: str, data: str) -> IOResult:
         drv = self._drivers.get(filename)
         if drv is None:
-            return _to_ioresult(AccessResult(AccessCondition.NOT_OPEN))
-        return _to_ioresult(drv.write(data.encode("latin-1")))
+            return to_ioresult(AccessResult(AccessCondition.NOT_OPEN))
+        return to_ioresult(drv.write(data.encode("latin-1")))
 
     def _rewrite_record(self, filename: str, data: str) -> IOResult:
         drv = self._drivers.get(filename)
         if drv is None:
-            return _to_ioresult(AccessResult(AccessCondition.NOT_OPEN))
-        return _to_ioresult(drv.rewrite(data.encode("latin-1")))
+            return to_ioresult(AccessResult(AccessCondition.NOT_OPEN))
+        return to_ioresult(drv.rewrite(data.encode("latin-1")))
 
     def _start_file(self, filename: str, key: str, relop: str) -> IOResult:
         drv = self._drivers.get(filename)
         if drv is None:
-            return _to_ioresult(AccessResult(AccessCondition.NOT_OPEN))
-        key_bytes = key.encode("latin-1") if key else b""
-        return _to_ioresult(drv.start(key_bytes, relop or ">="))
+            return to_ioresult(AccessResult(AccessCondition.NOT_OPEN))
+        position = key.encode("latin-1") if key else b""
+        return to_ioresult(drv.start(position, relop or ">="))
 
     def _delete_record(self, filename: str) -> IOResult:
         drv = self._drivers.get(filename)
         if drv is None:
-            return _to_ioresult(AccessResult(AccessCondition.NOT_OPEN))
-        return _to_ioresult(drv.delete())
+            return to_ioresult(AccessResult(AccessCondition.NOT_OPEN))
+        return to_ioresult(drv.delete())
