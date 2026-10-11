@@ -25,6 +25,7 @@ def test_conditions_present():
         "DUPLICATE_KEY",
         "FILE_NOT_FOUND",
         "ATTRIBUTE_CONFLICT",
+        "BOUNDARY_VIOLATION",
         "NOT_OPEN",
         "WRITE_NOT_PERMITTED",
     }
