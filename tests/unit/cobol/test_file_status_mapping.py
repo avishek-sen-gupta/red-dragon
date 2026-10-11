@@ -13,4 +13,5 @@ def test_condition_to_file_status():
     assert _file_status(AccessCondition.NOT_OPEN) == "47"
     assert _file_status(AccessCondition.ATTRIBUTE_CONFLICT) == "39"
     assert _file_status(AccessCondition.BOUNDARY_VIOLATION) == "44"
+    assert _file_status(AccessCondition.OPEN_MODE_NOT_SUPPORTED) == "37"
     assert _file_status(AccessCondition.WRITE_NOT_PERMITTED) == "48"

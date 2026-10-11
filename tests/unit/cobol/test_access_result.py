@@ -26,6 +26,7 @@ def test_conditions_present():
         "FILE_NOT_FOUND",
         "ATTRIBUTE_CONFLICT",
         "BOUNDARY_VIOLATION",
+        "OPEN_MODE_NOT_SUPPORTED",
         "NOT_OPEN",
         "WRITE_NOT_PERMITTED",
     }
