@@ -160,6 +160,7 @@ class TestRealFileIOProvider:
 class _WideRecords(RealFileIOProvider):
     def _driver(
         self,
+        filename: str,
         org: FileOrganization,
         path: Path,
         mode: OpenMode,
@@ -171,20 +172,28 @@ class _WideRecords(RealFileIOProvider):
             org,
             path,
             mode,
-            record_length * 2,
+            record_length * (2 if filename == "F1" else 1),
             key_offset,
             key_length,
         )
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_a_subclass_chooses_the_driver_each_open_uses(tmp_path: Path) -> None:
-    fce = [FileControlEntry.from_dict({"file_name": "F1", "assign_to": "f1.dat"})]
+def test_a_subclass_chooses_the_driver_each_open_of_each_file_uses(
+    tmp_path: Path,
+) -> None:
+    fce = [
+        FileControlEntry.from_dict({"file_name": name, "assign_to": f"{name}.dat"})
+        for name in ("F1", "F2")
+    ]
     prov = _WideRecords(base_dir=tmp_path, file_control=fce)
-    opened = prov._open_file("F1", "OUTPUT", 5, "SEQUENTIAL", 0, 0)
+    opened = [prov._open_file(n, "OUTPUT", 5, "SEQUENTIAL", 0, 0) for n in ("F1", "F2")]
     prov._write_record("F1", "HELLO")
+    prov._write_record("F2", "WORLD")
     prov._close_file("F1")
-    assert (opened.status, (tmp_path / "f1.dat").read_bytes()) == (
-        "00",
-        b"HELLO     ",
-    )
+    prov._close_file("F2")
+    assert (
+        [o.status for o in opened],
+        (tmp_path / "F1.dat").read_bytes(),
+        (tmp_path / "F2.dat").read_bytes(),
+    ) == (["00", "00"], b"HELLO     ", b"WORLD")

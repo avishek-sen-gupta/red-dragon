@@ -90,6 +90,7 @@ class RealFileIOProvider(CobolIOProvider):
 
     def _driver(
         self,
+        filename: str,
         org: FileOrganization,
         path: Path,
         mode: OpenMode,
@@ -128,6 +129,7 @@ class RealFileIOProvider(CobolIOProvider):
 
         try:
             drv = self._driver(
+                filename,
                 org,
                 path,
                 open_mode,
