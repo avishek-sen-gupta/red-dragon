@@ -9,7 +9,8 @@ discriminator.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Union
@@ -35,6 +36,16 @@ from cobol_asg.source_span import SourceSpan
 _dialect_parsers: ContextVar[Sequence[DialectParser]] = ContextVar(
     "_dialect_parsers", default=()
 )
+
+
+@contextmanager
+def dialect_parsers_in_scope(parsers: Sequence[DialectParser]) -> Iterator[None]:
+    """Decode statements with ``parsers`` as the dialect fallback until the block ends."""
+    token = _dialect_parsers.set(tuple(parsers))
+    try:
+        yield
+    finally:
+        _dialect_parsers.reset(token)
 
 
 # ── PERFORM specs ────────────────────────────────────────────────
