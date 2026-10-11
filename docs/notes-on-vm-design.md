@@ -66,7 +66,7 @@ All in `interpreter/run.py`.
 | `run(source, language, …, null_access=)` | Lower, build a single-module `LinkedProgram` (COBOL goes through `compile_cobol`), then call `run_linked`. Returns the final `VMState`. |
 | `run_linked(linked, entry_point, …, initial_vm=)` | Run a linked program. A top-level entry runs `merged_cfg.entry`. A function entry runs in two phases: the module preamble, then the chosen function, sharing the step budget. |
 | `execute_cfg(cfg, entry, registry, config, strategies, vm=)` | Run one CFG against a caller-supplied `VMState`. Raises if it reaches `SUSPEND`. |
-| `run_resumable` / `resume` | As `execute_cfg`, but return `Suspended` or `Completed` (see [6.5](#65-suspend-and-resume)). |
+| `run_resumable` / `resume` | As `execute_cfg`, but return `Suspended`, `Completed` or `BudgetExhausted` (see [6.5](#65-suspend-and-resume)). |
 | `run_linked_resumable` / `resume_linked` | The `LinkedProgram` versions. The preamble runs non-resumably. |
 | `execute_cfg_traced` / `run_linked_traced` | Deep-copy `VMState` after every step into an `ExecutionTrace` (`interpreter/trace_types.py`). A separate loop, not `_run_loop` (see [6.6](#66-the-traced-loop)). |
 | `initial_vm_state(io_provider=, null_access=)` | A fresh `VMState` with one `<main>` frame. `vm`/`initial_vm` arguments are required; this is how callers get one. |
@@ -214,7 +214,7 @@ for step in range(max_steps):
     next_label in cfg             → jump to it, ip = 0
     otherwise                     → ip += 1
 else:
-    warn that the step budget ran out
+    warn that the step budget ran out; the result is marked exhausted
 ```
 
 The LLM backend is created lazily on the first unhandled instruction. `step_callback` fires every `step_callback_interval` steps.
@@ -268,7 +268,7 @@ The only control state outside `VMState` is the cursor `(current_label, ip)`. Fr
 
 - `SUSPEND` yields the value in `operand_reg`; on resume the injected value lands in `result_reg`. See [IR reference](ir-reference.md#suspend).
 - `ExecutionState(vm, current_label, ip, resume_reg)` is the continuation. It holds no CFG or registry; `resume(cfg, registry, state, value)` takes them again, so the program can be rebuilt between suspend and resume.
-- `run_resumable` returns `Suspended(state, value)` or `Completed(vm, stats)`. `resume` mutates `state.vm`; deep-copy the state to resume one suspension more than once.
+- `run_resumable` returns `Suspended(state, value)`, `Completed(vm, stats)`, or `BudgetExhausted(vm, stats)` when `max_steps` ran out before the program ended. `execute_cfg`, `run` and `run_linked` only warn in that case. `resume` mutates `state.vm`; deep-copy the state to resume one suspension more than once.
 
 Suspension happens between instructions, so `VMState` is consistent, including inside nested calls.
 

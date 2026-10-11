@@ -302,6 +302,7 @@ class _LoopResult:
     """Internal outcome of one slice of the step loop."""
 
     suspended: bool
+    exhausted: bool = False
     steps: int = 0
     llm_calls: int = 0
     # Suspension cursor (set only when suspended=True):
@@ -449,6 +450,12 @@ def _run_loop(
             ip += 1
     else:
         _warn_step_budget_exhausted(config.max_steps, current_label, ip)
+        return _LoopResult(
+            suspended=False,
+            exhausted=True,
+            steps=config.max_steps,
+            llm_calls=llm_calls,
+        )
 
     return _LoopResult(suspended=False, steps=step + 1, llm_calls=llm_calls)
 
@@ -583,7 +590,15 @@ class Completed:
     stats: ExecutionStats
 
 
-RunOutcome = Union[Suspended, Completed]
+@dataclass(frozen=True)
+class BudgetExhausted:
+    """Outcome: execution stopped on the step budget before the program ended."""
+
+    vm: VMState
+    stats: ExecutionStats
+
+
+RunOutcome = Union[Suspended, Completed, BudgetExhausted]
 
 
 def _wrap_outcome(loop: _LoopResult, vm: VMState, call_resolver: Any) -> RunOutcome:
@@ -606,7 +621,8 @@ def _wrap_outcome(loop: _LoopResult, vm: VMState, call_resolver: Any) -> RunOutc
         final_symbolic_count=vm.symbolic_counter,
         closures_captured=len(vm.closures),
     )
-    return Completed(vm=vm, stats=stats)
+    terminal = BudgetExhausted if loop.exhausted else Completed
+    return terminal(vm=vm, stats=stats)
 
 
 def run_resumable(
@@ -996,7 +1012,7 @@ def run_linked(
 
 
 def _attach_layout(outcome: RunOutcome, linked: LinkedProgram) -> RunOutcome:
-    out_vm = outcome.vm if isinstance(outcome, Completed) else outcome.state.vm
+    out_vm = outcome.state.vm if isinstance(outcome, Suspended) else outcome.vm
     out_vm.data_layout = linked.data_layout
     return outcome
 
