@@ -86,6 +86,24 @@ class RealFileIOProvider(CobolIOProvider):
     def _accept(self, from_device: str) -> Any:
         return _UNCOMPUTABLE
 
+    def _driver(
+        self,
+        org: FileOrganization,
+        path: Path,
+        mode: OpenMode,
+        record_length: int,
+        key_offset: int,
+        key_length: int,
+    ) -> FileOrganizationDriver:
+        return open_driver(
+            org,
+            path,
+            mode,
+            record_length,
+            key_offset,
+            key_length,
+        )
+
     def _open_file(
         self,
         filename: str,
@@ -107,8 +125,13 @@ class RealFileIOProvider(CobolIOProvider):
         open_mode = OpenMode(mode)
 
         try:
-            drv: FileOrganizationDriver = open_driver(
-                org, path, open_mode, record_length, key_offset, key_length
+            drv = self._driver(
+                org,
+                path,
+                open_mode,
+                record_length,
+                key_offset,
+                key_length,
             )
         except FileNotFoundError:
             logger.warning("OPEN %s: file not found at %s", filename, path)
