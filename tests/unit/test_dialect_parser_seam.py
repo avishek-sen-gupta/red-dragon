@@ -212,3 +212,14 @@ class TestFrontendExtensionArray:
     def test_default_array_is_empty(self):
         frontend = CobolFrontend(_PreprocessRecordingParser())
         assert tuple(frontend._extension_strategies) == ()
+
+
+class TestDialectParsersInScope:
+    def test_dialect_parsers_decode_statements_only_inside_the_scope(self):
+        from cobol_asg.cobol_statements import dialect_parsers_in_scope
+
+        with dialect_parsers_in_scope([FakeDialectParser()]):
+            inside = parse_statement({"type": "FAKE_EXTENSION", "fake_text": "hi"})
+        with pytest.raises(ValueError, match="Unknown COBOL statement type"):
+            parse_statement({"type": "FAKE_EXTENSION", "fake_text": "hi"})
+        assert (type(inside), inside.text) == (FakeExtensionStatement, "hi")

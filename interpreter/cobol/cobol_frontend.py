@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 from cobol_asg.addressing_mode import AddressingMode
 from cobol_asg.asg_types import CobolASG
 from cobol_asg.cobol_parser import CobolParser
-from cobol_asg.cobol_statements import _dialect_parsers
+from cobol_asg.cobol_statements import dialect_parsers_in_scope
 from cobol_asg.frontend_extension import DialectParser
 from cobol_asg.lp32 import LP32_MODE
 from interpreter.cobol.condition_name_index import build_condition_index_over
@@ -204,11 +204,8 @@ class CobolFrontend(Frontend):
                 data = strat.preprocess_program_dict(data)
             return data
 
-        token = _dialect_parsers.set(self._dialect_parsers)
-        try:
+        with dialect_parsers_in_scope(self._dialect_parsers):
             asg = self._parser.parse(source, preprocessor=_chained_preprocess)
-        finally:
-            _dialect_parsers.reset(token)
         return self._lower_asg(asg)
 
     def lower_from_ast_dict(self, data: dict) -> list[InstructionBase]:
@@ -218,13 +215,10 @@ class CobolFrontend(Frontend):
         the resulting ASG to IR. Use this in Phase 2 of the AST cache pipeline
         after parse_to_file has written ASTs to disk.
         """
-        token = _dialect_parsers.set(self._dialect_parsers)
-        try:
+        with dialect_parsers_in_scope(self._dialect_parsers):
             for strat in self._extension_strategies:
                 data = strat.preprocess_program_dict(data)
             asg = CobolASG.from_dict(data, self._addressing_mode)
-        finally:
-            _dialect_parsers.reset(token)
         return self._lower_asg(asg)
 
     def _lower_asg(self, asg: CobolASG) -> list[InstructionBase]:
