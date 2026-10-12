@@ -53,6 +53,7 @@ from interpreter.cobol.cobol_constants import (
 )
 from interpreter.cobol.ebcdic_table import EbcdicTable
 from interpreter.cobol.numeric_builtins import NUMERIC_BUILTINS
+from interpreter.cobol.run_unit import advanced, restarted, value_of
 from interpreter.func_name import FuncName
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.vm import Operators, VMState, _is_symbolic
@@ -1287,39 +1288,31 @@ def _builtin_sum(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     return BuiltinResult(value=_decimal_to_intrinsic(total(values)))
 
 
-def _builtin_random(args: list[TypedValue], vm: VMState) -> BuiltinResult:
-    """COBOL FUNCTION RANDOM [(seed)]: next value 0 <= n < 1 in a VM-scoped
-    pseudo-random sequence backed by Python's ``random`` module — an accepted
-    deviation from ISO COBOL's implementation-defined generator (red-dragon-clpn).
-
-    No argument: returns the next value in the current sequence (a fresh
-    unseeded generator on first use). seed == 0: reseed non-reproducibly from
-    system entropy. seed > 0: reseed deterministically and remember the seed.
-    seed < 0: restart the sequence from the last positive seed supplied (falls
-    back to a fresh unseeded generator if none was ever supplied).
-    """
-    import random as _random_mod
-
-    if vm.cobol_random is None:
-        vm.cobol_random = _random_mod.Random()
-
-    if args:
-        if _is_symbolic(args[0].value):
+def _builtin_random_next_state(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """FUNCTION RANDOM's next state, from the run-unit region's 4 state bytes and,
+    when coded, the seed that starts a new sequence. Reads and writes no VM state."""
+    if any(_is_symbolic(a.value) for a in args):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    state = int.from_bytes(bytes(args[0].value), "big")
+    match args[1:]:
+        case []:
+            following = advanced(state)
+        case [seed_arg]:
+            match _coerce_intrinsic_int(seed_arg.value):
+                case int() as seed:
+                    following = restarted(seed)
+                case _:
+                    return BuiltinResult(value=_UNCOMPUTABLE)
+        case _:
             return BuiltinResult(value=_UNCOMPUTABLE)
-        seed = _coerce_intrinsic_int(args[0].value)
-        if seed is None:
-            return BuiltinResult(value=_UNCOMPUTABLE)
-        if seed > 0:
-            vm.cobol_random = _random_mod.Random(seed)
-            vm.cobol_random_seed = seed
-        elif seed == 0:
-            vm.cobol_random = _random_mod.Random()
-        elif vm.cobol_random_seed is not None:
-            vm.cobol_random = _random_mod.Random(vm.cobol_random_seed)
-        else:
-            vm.cobol_random = _random_mod.Random()
+    return BuiltinResult(value=list(following.to_bytes(4, "big")))
 
-    return BuiltinResult(value=vm.cobol_random.random())
+
+def _builtin_random_value(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """FUNCTION RANDOM's value for a state: strictly between zero and one."""
+    if _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=value_of(int.from_bytes(bytes(args[0].value), "big")))
 
 
 def _coerce_intrinsic_float(raw: object) -> float | None:
@@ -1862,7 +1855,8 @@ BYTE_BUILTINS: dict[FuncName, Any] = (
         FuncName(BuiltinName.MAX): _builtin_max,
         FuncName(BuiltinName.MIN): _builtin_min,
         FuncName(BuiltinName.SUM): _builtin_sum,
-        FuncName(BuiltinName.RANDOM): _builtin_random,
+        FuncName(BuiltinName.RANDOM_NEXT_STATE): _builtin_random_next_state,
+        FuncName(BuiltinName.RANDOM_VALUE): _builtin_random_value,
         FuncName(BuiltinName.ABS): _builtin_abs,
         FuncName(BuiltinName.SQRT): _builtin_sqrt,
         FuncName(BuiltinName.SIN): _builtin_sin,

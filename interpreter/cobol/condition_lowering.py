@@ -20,6 +20,7 @@ from cobol_asg.cobol_expression import (
 )
 from cobol_asg.cobol_types import CobolDataCategory
 from cobol_asg.condition_name import ConditionValue
+from cobol_asg.ref_mod import FunctionCallOperand
 from cobol_asg.source_span import SourceSpan
 from interpreter.cobol.arithmetic_scale import (
     expression_is_floating,
@@ -956,7 +957,6 @@ def _lower_expr_dict(
         # FUNCTION UPPER-CASE(A) = FUNCTION UPPER-CASE(B). Delegate to the shared
         # function-operand lowering so the call + args produce a computed value
         # register that compares normally.
-        from cobol_asg.ref_mod import FunctionCallOperand
         from interpreter.cobol.lower_arithmetic import lower_function_operand
 
         operand = FunctionCallOperand.from_dict(expr)
@@ -1260,32 +1260,14 @@ def _lower_expr_node_body(
         # FUNCTION UPPER-CASE(A) = FUNCTION UPPER-CASE(B), or COMPUTE X =
         # FUNCTION TRIM(WS-A)). Each arg is lowered to a string-valued register
         # then passed to the COBOL-layer builtin (red-dragon-ge72).
-        from interpreter.cobol.lower_arithmetic import (
-            _INTRINSIC_FUNCTIONS,
-            _lower_function_arg_to_string,
-        )
+        from interpreter.cobol.lower_arithmetic import lower_function_operand
 
-        builtin = _INTRINSIC_FUNCTIONS.get(node.name.upper())
-        arg_regs = tuple(
-            _lower_function_arg_to_string(
-                ctx, expr_to_dict(arg), materialised, span=span
-            )
-            for arg in node.args
-        )
-        if builtin is None:
-            logger.warning(
-                "Unsupported COBOL intrinsic FUNCTION %r — falling back to first argument",
-                node.name,
-            )
-            result_reg = arg_regs[0] if arg_regs else ctx.const_to_reg("", span=span)
-            return _float_operand(ctx, result_reg, floating, span=span)
-        result_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            CallFunction(
-                result_reg=result_reg,
-                func_name=FuncName(builtin),
-                args=arg_regs,
+        result_reg = lower_function_operand(
+            ctx,
+            FunctionCallOperand(
+                name=node.name, args=tuple(expr_to_dict(arg) for arg in node.args)
             ),
+            materialised,
             span=span,
         )
         return _float_operand(ctx, result_reg, floating, span=span)

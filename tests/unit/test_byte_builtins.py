@@ -66,7 +66,8 @@ from interpreter.cobol.byte_builtins import (
     _builtin_ord_max,
     _builtin_ord_min,
     _builtin_present_value,
-    _builtin_random,
+    _builtin_random_next_state,
+    _builtin_random_value,
     _builtin_range,
     _builtin_rem,
     _builtin_reverse,
@@ -93,6 +94,7 @@ from interpreter.cobol.byte_builtins import (
 )
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.features import CobolFeature
+from interpreter.cobol.run_unit import advanced, restarted, value_of
 from interpreter.func_name import FuncName
 from interpreter.types.typed_value import typed_from_runtime
 from interpreter.vm.vm import Operators
@@ -465,7 +467,8 @@ class TestByteBuiltinsRegistration:
             "__max",
             "__min",
             "__sum",
-            "__random",
+            "__random_next_state",
+            "__random_value",
             "__abs",
             "__sqrt",
             "__sin",
@@ -2471,49 +2474,35 @@ class TestSum:
 
 
 class TestRandom:
-    """FUNCTION RANDOM([seed]) -> next value in [0,1) from a VM-scoped sequence.
-
-    Python's random module is an accepted deviation from ISO COBOL's
-    implementation-defined generator (red-dragon-clpn): only reproducibility
-    for a fixed seed and the [0,1) range are contractually required.
-    """
+    """FUNCTION RANDOM's two pure builtins: the state lives in the run-unit
+    region, and neither builtin reads or writes the VM."""
 
     @covers(CobolFeature.INTRINSIC_FUNCTION)
-    def test_no_seed_in_unit_range(self):
-        vm = VMState()
-        result = _builtin_random([], vm).value
-        assert 0 <= result < 1
+    def test_next_state_and_value_follow_the_generator_without_touching_the_vm(self):
+        def state(n: int):
+            return typed_from_runtime(list(n.to_bytes(4, "big")))
 
-    @covers(CobolFeature.INTRINSIC_FUNCTION)
-    def test_positive_seed_is_reproducible(self):
-        first = _builtin_random([typed_from_runtime(42)], VMState()).value
-        second = _builtin_random([typed_from_runtime(42)], VMState()).value
-        assert first == second
+        def next_state(*args):
+            return _builtin_random_next_state(list(args), VMState()).value
 
-    @covers(CobolFeature.INTRINSIC_FUNCTION)
-    def test_successive_unseeded_calls_differ(self):
-        vm = VMState()
-        first = _builtin_random([], vm).value
-        second = _builtin_random([], vm).value
-        assert first != second
-
-    @covers(CobolFeature.INTRINSIC_FUNCTION)
-    def test_negative_seed_replays_last_positive_seed(self):
-        vm = VMState()
-        first = _builtin_random([typed_from_runtime(7)], vm).value
-        _builtin_random([], vm)  # advance the sequence
-        replayed = _builtin_random([typed_from_runtime(-1)], vm).value
-        assert replayed == first
-
-    @covers(CobolFeature.INTRINSIC_FUNCTION)
-    def test_symbolic_seed_uncomputable(self):
-        vm = VMState()
-        sym = SymbolicValue("s0")
-        assert _builtin_random([typed_from_runtime(sym)], vm).value is _UNCOMPUTABLE
-
-    @covers(CobolFeature.INTRINSIC_FUNCTION)
-    def test_registered_in_builtins(self):
-        assert FuncName(BuiltinName.RANDOM) in BYTE_BUILTINS
+        assert next_state(state(0)) == list(advanced(0).to_bytes(4, "big"))
+        assert next_state(state(16807)) == list(advanced(16807).to_bytes(4, "big"))
+        assert next_state(state(16807), typed_from_runtime(42)) == list(
+            restarted(42).to_bytes(4, "big")
+        )
+        assert next_state(state(0), typed_from_runtime("42")) == list(
+            restarted(42).to_bytes(4, "big")
+        )
+        sym = typed_from_runtime(SymbolicValue("s0"))
+        assert next_state(sym) is _UNCOMPUTABLE
+        assert next_state(state(0), sym) is _UNCOMPUTABLE
+        assert _builtin_random_value([state(16807)], VMState()).value == value_of(16807)
+        assert _builtin_random_value([sym], VMState()).value is _UNCOMPUTABLE
+        assert FuncName(BuiltinName.RANDOM_NEXT_STATE) in BYTE_BUILTINS
+        assert FuncName(BuiltinName.RANDOM_VALUE) in BYTE_BUILTINS
+        assert FuncName("__random") not in BYTE_BUILTINS
+        assert not hasattr(VMState(), "cobol_random")
+        assert not hasattr(VMState(), "cobol_random_seed")
 
 
 class TestAbs:

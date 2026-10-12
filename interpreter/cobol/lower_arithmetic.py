@@ -66,7 +66,7 @@ from interpreter.cobol.condition_lowering import (
 )
 from interpreter.cobol.data_layout import DataLayout, FieldLayout
 from interpreter.cobol.emit_context import EmitContext, strip_cobol_literal
-from interpreter.cobol.field_resolution import ResolvedFieldRef
+from interpreter.cobol.field_resolution import ResolvedFieldRef, whole_field_extent
 from interpreter.cobol.figurative_constants import (
     COBOL_FIGURATIVE_CONSTANTS,
     raw_figurative_byte,
@@ -78,6 +78,7 @@ from interpreter.cobol.lower_program_exit import (
     emit_return_code_load,
     lower_program_exit,
 )
+from interpreter.cobol.run_unit import RANDOM_STATE, RUN_UNIT_LAYOUT, RUN_UNIT_VAR
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
@@ -87,6 +88,7 @@ from interpreter.instructions import (
     CallFunction,
     Halt_,
     Label_,
+    LoadVar,
 )
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import BinopKind, resolve_binop
@@ -399,7 +401,6 @@ _INTRINSIC_FUNCTIONS = {
     "MAX": BuiltinName.MAX,
     "MIN": BuiltinName.MIN,
     "SUM": BuiltinName.SUM,
-    "RANDOM": BuiltinName.RANDOM,
     "ABS": BuiltinName.ABS,
     "SQRT": BuiltinName.SQRT,
     "SIN": BuiltinName.SIN,
@@ -489,7 +490,19 @@ def lower_function_operand(
     Recognised functions (UPPER-CASE, LOWER-CASE, CURRENT-DATE) are emitted as a
     CallFunction against the COBOL-layer builtins. Unknown functions log a warning
     and fall back to their first argument (or empty string) — never silent wrong data.
+    FUNCTION RANDOM keeps its state in the run-unit region, so it lowers on its own.
     """
+    lowering = _STATEFUL_FUNCTIONS.get(operand.name.upper(), _lower_builtin_function)
+    return lowering(ctx, operand, materialised, span=span)
+
+
+def _lower_builtin_function(
+    ctx: EmitContext,
+    operand: FunctionCallOperand,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> Register:
     builtin = _INTRINSIC_FUNCTIONS.get(operand.name.upper())
     if builtin is None:
         logger.warning(
@@ -516,6 +529,64 @@ def lower_function_operand(
         span=span,
     )
     return result_reg
+
+
+def _lower_random(
+    ctx: EmitContext,
+    operand: FunctionCallOperand,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> Register:
+    """FUNCTION RANDOM [(seed)]: load the run unit's generator state, step it,
+    store it back, and return its value -- one sequence for the whole run unit."""
+    fl = RUN_UNIT_LAYOUT.lookup_or_raise(RANDOM_STATE)
+    extent = whole_field_extent(fl, RegionId.RUN_UNIT)
+    region_reg, state_reg = ctx.fresh_reg(), ctx.fresh_reg()
+    offset_reg = ctx.const_to_reg(fl.offset, span=span)
+    ctx.emit_inst(LoadVar(result_reg=region_reg, name=RUN_UNIT_VAR), span=span)
+    ctx._emit_load_region(
+        result_reg=state_reg,
+        region_reg=region_reg,
+        offset_reg=offset_reg,
+        length=fl.byte_length,
+        extent=extent,
+        span=span,
+    )
+    seed_regs = tuple(
+        _lower_function_arg_to_string(ctx, arg, materialised, span=span)
+        for arg in operand.args[:1]
+    )
+    next_reg = _call_builtin(
+        ctx, BuiltinName.RANDOM_NEXT_STATE, (state_reg, *seed_regs), span=span
+    )
+    ctx._emit_write_region(
+        region_reg=region_reg,
+        offset_reg=offset_reg,
+        value_reg=next_reg,
+        length=fl.byte_length,
+        extent=extent,
+        span=span,
+    )
+    return _call_builtin(ctx, BuiltinName.RANDOM_VALUE, (next_reg,), span=span)
+
+
+def _call_builtin(
+    ctx: EmitContext,
+    builtin: str,
+    args: tuple[Register, ...],
+    *,
+    span: SourceSpan | None,
+) -> Register:
+    result_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(result_reg=result_reg, func_name=FuncName(builtin), args=args),
+        span=span,
+    )
+    return result_reg
+
+
+_STATEFUL_FUNCTIONS = {"RANDOM": _lower_random}
 
 
 def lower_move(
