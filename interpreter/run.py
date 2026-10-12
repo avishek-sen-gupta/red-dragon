@@ -1294,7 +1294,6 @@ def run(
             llm_provider=backend,
             llm_client=llm_client,
             observer=observer,
-            copybook_dirs=copybook_dirs,
         )
         instructions = frontend.lower(source.encode("utf-8"))
 

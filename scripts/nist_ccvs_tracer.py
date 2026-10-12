@@ -25,8 +25,7 @@ from pathlib import Path
 
 from interpreter.cli_output import emit
 from interpreter.cobol.ebcdic_table import EbcdicTable
-from interpreter.constants import FRONTEND_COBOL, Language
-from interpreter.frontend import get_frontend
+from interpreter.frontends import get_cobol_frontend
 from tests.nist.conftest import NIST_DIR, make_provider
 
 _runmod = importlib.import_module("interpreter.run")
@@ -44,7 +43,7 @@ def _alpha(region: bytearray, off: int, ln: int) -> str:
 def trace(prog: str, max_steps: int = 400_000) -> list[dict] | None:
     """Return one snapshot dict per failing assertion, or None if not traceable."""
     src = (NIST_DIR / f"{prog}.CBL").read_text()
-    fe = get_frontend(Language.COBOL, frontend_type=FRONTEND_COBOL)
+    fe = get_cobol_frontend()
     fe.lower(src.encode())
     layout = fe.data_layout
     ec = layout.get("ERROR-COUNTER")

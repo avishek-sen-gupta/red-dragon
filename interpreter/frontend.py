@@ -4,19 +4,13 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from cobol_asg.addressing_mode import AddressingMode
 from cobol_asg.cobol_parser import (
     make_cobol_parser as make_cobol_parser,
 )  # noqa: F401 — re-exported for callers outside interpreter.cobol
-from cobol_asg.frontend_extension import DialectParser
-from cobol_asg.lp32 import LP32_MODE
 from interpreter import constants
 from interpreter.constants import Language, LLMProvider
-from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.instructions import InstructionBase
 from interpreter.ir import CodeLabel
@@ -90,11 +84,6 @@ def get_frontend(
     llm_client: Any = None,
     observer: FrontendObserver = NullFrontendObserver(),
     repair_client: Any = _NO_REPAIR_CLIENT,
-    copybook_dirs: list[Path] = [],
-    extension_strategies: Sequence[RedDragonExtensionLoweringStrategy] = (),
-    dialect_parsers: Sequence[DialectParser] = (),
-    tolerant: bool = False,
-    addressing_mode: AddressingMode = LP32_MODE,
 ) -> Frontend:
     """Build a frontend for the given language.
 
@@ -106,48 +95,10 @@ def get_frontend(
         observer: Timing observer for parse/lower phases.
         repair_client: Optional LLMClient for AST repair. When provided with
             a deterministic frontend, wraps it in RepairingFrontendDecorator.
-        copybook_dirs: COBOL copybook search directories, passed to the
-            ProLeap parser for COPY resolution. Ignored by other languages.
-        extension_strategies: Extension lowering strategies (e.g. CICS/SQL).
-            Passed to CobolFrontend. COBOL only.
-        dialect_parsers: Dialect parsers (e.g. CICS/SQL). Passed to
-            CobolFrontend. COBOL only.
-        tolerant: Skip (with a WARNING) COBOL statements whose lowering
-            raises, instead of failing compilation. Default off. COBOL only.
 
     Returns:
         A Frontend instance.
     """
-    if frontend_type == constants.FRONTEND_COBOL:
-        import os
-
-        from cobol_asg.cobol_parser import ProLeapCobolParser
-        from cobol_asg.subprocess_runner import RealSubprocessRunner
-        from interpreter.cobol.cobol_frontend import CobolFrontend
-
-        # Canonical JAR location is the build.sh output — always freshly built
-        # from source and gitignored, so it can never go stale. The old tracked
-        # root "proleap-bridge.jar" was a cached binary that build.sh did not
-        # regenerate; it has been removed. Override with PROLEAP_BRIDGE_JAR.
-        bridge_jar = os.environ.get(
-            "PROLEAP_BRIDGE_JAR",
-            "proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar",
-        )
-        resolved_parser = ProLeapCobolParser(
-            RealSubprocessRunner(),
-            bridge_jar,
-            copybook_dirs=copybook_dirs,
-            addressing_mode=addressing_mode,
-        )
-        return CobolFrontend(
-            resolved_parser,
-            observer=observer,
-            extension_strategies=list(extension_strategies),
-            dialect_parsers=list(dialect_parsers),
-            tolerant=tolerant,
-            addressing_mode=addressing_mode,
-        )
-
     if frontend_type == constants.FRONTEND_DETERMINISTIC:
         from interpreter.frontends import get_deterministic_frontend
 
