@@ -120,32 +120,15 @@ def test_non_copybook_error_passes_through():
 
 
 @covers(CobolFeature.MULTI_FILE_IMPORTS)
-def test_get_frontend_passes_copybook_dirs(monkeypatch):
-    import interpreter.frontend as frontend_mod
-    from interpreter import constants
-    from interpreter.constants import Language
+def test_get_cobol_frontend_builds_a_proleap_backed_frontend():
+    from interpreter.cobol.cobol_frontend import CobolFrontend
+    from interpreter.frontends import get_cobol_frontend
 
-    captured = {}
-
-    class _SpyParser:
-        def __init__(self, runner, bridge_jar, copybook_dirs=None, **_modes):
-            captured["copybook_dirs"] = copybook_dirs
-
-    # get_frontend imports ProLeapCobolParser locally at call time, so patching
-    # the module attribute is picked up.
-    import cobol_asg.cobol_parser as cp
-
-    monkeypatch.setattr(cp, "ProLeapCobolParser", _SpyParser)
-
-    # COBOL only routes to ProLeapCobolParser via the FRONTEND_COBOL branch
-    # (run.py resolves Language.COBOL -> FRONTEND_COBOL). The deterministic
-    # default has no COBOL frontend, so the COBOL frontend_type is required.
-    frontend_mod.get_frontend(
-        Language.COBOL,
-        frontend_type=constants.FRONTEND_COBOL,
-        copybook_dirs=[Path("/proj/cpy")],
-    )
-    assert captured["copybook_dirs"] == [Path("/proj/cpy")]
+    frontend = get_cobol_frontend(copybook_dirs=[Path("/proj/cpy")], tolerant=True)
+    assert type(frontend) is CobolFrontend
+    assert type(frontend._parser) is ProLeapCobolParser
+    assert frontend._parser._copybook_dirs == [Path("/proj/cpy")]
+    assert frontend._tolerant is True
 
 
 @covers(CobolFeature.MULTI_FILE_IMPORTS)

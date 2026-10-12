@@ -7,7 +7,6 @@ compile_cobol(): bytes → (CobolFrontend, LinkedProgram)
 This is the canonical entry point for compiling COBOL source.
 It knows about COBOL-specific injection points (parser, extension_strategies,
 dialect_parsers) abstractly — no CICS/SQL specifics live here.
-All frontend construction is routed through get_frontend (the factory).
 """
 
 from __future__ import annotations
@@ -25,11 +24,10 @@ from cobol_asg.frontend_extension import DialectParser
 from cobol_asg.lp import LP
 from cobol_asg.lp32 import LP32_MODE
 from cobol_asg.resolve_addressing_mode import addressing_mode
-from interpreter import constants
 from interpreter.constants import Language
-from interpreter.frontend import get_frontend
 from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
+from interpreter.frontends import get_cobol_frontend
 from interpreter.ir import CodeLabel
 from interpreter.project.compiler import build_export_table
 from interpreter.project.imports import extract_imports
@@ -73,9 +71,7 @@ def compile_cobol_module(
     addressing_mode: AddressingMode = LP32_MODE,
 ) -> tuple[Any, ModuleUnit]:
     """Lower one COBOL source into a (frontend, ModuleUnit). The shared core."""
-    frontend: Any = get_frontend(
-        Language.COBOL,
-        frontend_type=constants.FRONTEND_COBOL,
+    frontend = get_cobol_frontend(
         observer=observer,
         copybook_dirs=copybook_dirs,
         extension_strategies=extension_strategies,

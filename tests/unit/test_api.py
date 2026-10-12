@@ -14,7 +14,7 @@ from interpreter.api import (
 from interpreter.cfg import CFG
 from interpreter.func_name import FuncName
 from interpreter.instructions import InstructionBase
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import Opcode
 from interpreter.type_name import TypeName
 from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_expr import scalar
@@ -175,49 +175,6 @@ class TestExtractFunctionSource:
         )
         assert "function add(a, b)" in result
         assert "return a + b" in result
-
-
-class FakeFrontend:
-    """Stub frontend that records calls and returns canned instructions."""
-
-    def __init__(self, instructions: list[InstructionBase]) -> None:
-        self.instructions = instructions
-        self.lower_calls: list[tuple] = []
-
-    def lower(self, source_bytes):
-        self.lower_calls.append((source_bytes,))
-        return self.instructions
-
-
-class TestLowerSourceCobolRouting:
-    """Verify that lower_source routes COBOL frontend correctly."""
-
-    def test_cobol_frontend_type_skips_tree_sitter(self, monkeypatch):
-        """lower_source with frontend_type='cobol' should invoke the COBOL
-        frontend (via get_frontend) instead of tree-sitter parsing."""
-        fake_instructions = [IRInstruction(opcode=Opcode.CONST, operands=["1"])]
-        fake_frontend = FakeFrontend(fake_instructions)
-
-        get_frontend_calls = []
-
-        def fake_get_frontend(language, frontend_type="deterministic", **kwargs):
-            get_frontend_calls.append(
-                {"language": language, "frontend_type": frontend_type}
-            )
-            return fake_frontend
-
-        monkeypatch.setattr("interpreter.api.get_frontend", fake_get_frontend)
-
-        result = lower_source(
-            "IDENTIFICATION DIVISION.\n",
-            language="cobol",
-            frontend_type="cobol",
-        )
-
-        assert len(get_frontend_calls) == 1
-        assert get_frontend_calls[0] == {"language": "cobol", "frontend_type": "cobol"}
-        assert len(fake_frontend.lower_calls) == 1
-        assert result is fake_instructions
 
 
 JAVA_SOURCE = """\

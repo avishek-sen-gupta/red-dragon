@@ -110,6 +110,6 @@ forbidden_modules =
 # parsing half is cobol_asg now, which this contract does not police.
 ignore_imports =
     interpreter.vm.builtins -> interpreter.cobol.byte_builtins
-    interpreter.frontend -> interpreter.cobol.cobol_frontend
+    interpreter.frontends -> interpreter.cobol.cobol_frontend
     interpreter.frontend_extension_lowering -> interpreter.cobol.emit_context
     interpreter.frontend_extension_lowering -> interpreter.cobol.sectioned_layout

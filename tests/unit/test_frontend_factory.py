@@ -75,6 +75,11 @@ class TestGetFrontend:
         with pytest.raises(ValueError, match="Unknown frontend type"):
             get_frontend("python", frontend_type="magic")
 
+    def test_cobol_is_not_a_frontend_type(self):
+        with pytest.raises(ValueError, match="Unknown frontend type: cobol"):
+            get_frontend("cobol", frontend_type="cobol")
+        assert not hasattr(constants, "FRONTEND_COBOL")
+
     def test_deterministic_with_repair_client_returns_decorator(self):
         from interpreter.ast_repair.repairing_frontend_decorator import (
             RepairingFrontendDecorator,
