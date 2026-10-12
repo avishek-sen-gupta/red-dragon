@@ -1,25 +1,45 @@
 from __future__ import annotations
 
 import dataclasses
-from unittest import mock
+import logging
+from collections.abc import Callable, Mapping
 
 import pytest
 
 from cobol_asg.frontend_extension import NullDialectParser
 from interpreter.frontend import make_cobol_parser
 from interpreter.project.coprocessor_compile import CoprocessorSpec, compile_program
-from interpreter.run import EntryPoint, initial_vm_state, run_linked
+from interpreter.project.types import LinkedProgram
+
+_ORDER = logging.getLogger(__name__)
+
+
+class _FakeStrategy:
+    """A minimal RedDragonExtensionLoweringStrategy that handles nothing —
+    proves compile_program's plumbing without needing real CICS/SQL lowering."""
+
+    def handles(self, stmt) -> bool:
+        return False
+
+    def preprocess_program_dict(self, data: Mapping[str, str]) -> dict[str, str]:
+        return dict(data)
+
+    def on_procedure_entry(self, ctx, materialised) -> None:
+        pass
+
+    def lower(self, ctx, stmt, materialised) -> None:
+        pass
 
 
 def test_default_source_prepass_is_identity():
-    spec = CoprocessorSpec(name="noop", make_strategy=lambda: object())
+    spec = CoprocessorSpec(name="noop", make_strategy=_FakeStrategy)
     assert spec.source_prepass("       IDENTIFICATION DIVISION.") == (
         "       IDENTIFICATION DIVISION."
     )
 
 
 def test_defaults_are_non_execution_owning_with_null_dialect_parser():
-    spec = CoprocessorSpec(name="noop", make_strategy=lambda: object())
+    spec = CoprocessorSpec(name="noop", make_strategy=_FakeStrategy)
     assert spec.owns_execution is False
     assert isinstance(spec.dialect_parser, NullDialectParser)
     assert spec.dialect_parser.applies({"type": "ANYTHING"}) is False
@@ -27,9 +47,9 @@ def test_defaults_are_non_execution_owning_with_null_dialect_parser():
 
 
 def test_spec_is_frozen():
-    spec = CoprocessorSpec(name="noop", make_strategy=lambda: object())
+    spec = CoprocessorSpec(name="noop", make_strategy=_FakeStrategy)
     with pytest.raises(dataclasses.FrozenInstanceError):
-        spec.name = "renamed"
+        setattr(spec, "name", "renamed")
 
 
 _TRIVIAL_PROGRAM = b"""\
@@ -44,55 +64,32 @@ _TRIVIAL_PROGRAM = b"""\
 """
 
 
-class _FakeStrategy:
-    """A minimal RedDragonExtensionLoweringStrategy that handles nothing —
-    proves compile_program's plumbing without needing real CICS/SQL lowering."""
-
-    def handles(self, stmt) -> bool:
-        return False
-
-    def preprocess_program_dict(self, data: dict) -> dict:
-        return data
-
-    def on_procedure_entry(self, ctx, materialised) -> None:
-        pass
-
-    def lower(self, ctx, stmt, materialised) -> None:
-        pass
-
-
-def test_every_specs_prepass_runs_before_any_make_strategy():
-    call_order = []
-
-    def prepass_a(source: str) -> str:
-        call_order.append("prepass_a")
+def _logging_transform(name: str) -> Callable[[str], str]:
+    def transform(source: str) -> str:
+        _ORDER.info("prepass_%s", name)
         return source
 
-    def prepass_b(source: str) -> str:
-        call_order.append("prepass_b")
-        return source
+    return transform
 
-    def make_strategy_a():
-        call_order.append("make_strategy_a")
+
+def _logging_factory(name: str) -> Callable[[], _FakeStrategy]:
+    def make() -> _FakeStrategy:
+        _ORDER.info("make_strategy_%s", name)
         return _FakeStrategy()
 
-    def make_strategy_b():
-        call_order.append("make_strategy_b")
-        return _FakeStrategy()
+    return make
 
+
+def test_every_specs_prepass_runs_before_any_make_strategy(caplog):
     specs = [
-        CoprocessorSpec(
-            name="a", make_strategy=make_strategy_a, source_prepass=prepass_a
-        ),
-        CoprocessorSpec(
-            name="b", make_strategy=make_strategy_b, source_prepass=prepass_b
-        ),
+        CoprocessorSpec(name, _logging_factory(name), _logging_transform(name))
+        for name in ("a", "b")
     ]
-    parser = make_cobol_parser()
 
-    compile_program(_TRIVIAL_PROGRAM, parser, specs)
+    with caplog.at_level(logging.INFO, logger=__name__):
+        compile_program(_TRIVIAL_PROGRAM, make_cobol_parser(), specs)
 
-    assert call_order == [
+    assert [r.message for r in caplog.records if r.name == __name__] == [
         "prepass_a",
         "prepass_b",
         "make_strategy_a",
@@ -125,6 +122,14 @@ _DATA_NAME_CALLEE = b"""\
 """
 
 
+def _linked_stems(linked: LinkedProgram) -> list[str]:
+    return sorted(path.stem for path in linked.modules)
+
+
+def _callee(program_id: str) -> bytes:
+    return _DATA_NAME_CALLEE.replace(b"DNCALLEE", program_id.encode())
+
+
 def test_a_spec_links_a_subprogram_no_static_call_scan_can_discover():
     """A CALL by data-name resolves to the contributed subprogram at run time.
 
@@ -140,51 +145,41 @@ def test_a_spec_links_a_subprogram_no_static_call_scan_can_discover():
 
     _, linked = compile_program(_DATA_NAME_CALLER, make_cobol_parser(), [spec])
 
-    assert any(
-        "dncallee" in str(getattr(instr, "label", "")).lower()
-        for instr in linked.merged_ir
-        if hasattr(instr, "label")
-    ), "the contributed callee's IR must be linked into the run unit"
+    assert _linked_stems(linked) == ["DNCALLEE", "__main__"]
 
-    assert (
-        run_linked(
-            linked,
-            entry_point=EntryPoint.top_level(),
-            max_steps=10_000,
-            initial_vm=initial_vm_state(),
-        )
-        is not None
+
+def test_the_caller_links_a_subprogram_no_static_call_scan_can_discover():
+    """A caller with no coprocessor links a data-name callee itself, as a link
+    list names the members of a load module."""
+    _, linked = compile_program(
+        _DATA_NAME_CALLER,
+        make_cobol_parser(),
+        [],
+        linked_subprogram_sources={"DNCALLEE": _DATA_NAME_CALLEE},
     )
+
+    assert _linked_stems(linked) == ["DNCALLEE", "__main__"]
 
 
 def test_specs_contributions_merge_and_a_default_spec_contributes_nothing():
     quiet = CoprocessorSpec(name="quiet", make_strategy=_FakeStrategy)
-    assert quiet.linked_subprogram_sources() == {}
-
     first = CoprocessorSpec(
         name="first",
         make_strategy=_FakeStrategy,
-        linked_subprogram_sources=lambda: {"ONE": b"one"},
+        linked_subprogram_sources=lambda: {"PGMONE": _callee("PGMONE")},
     )
     second = CoprocessorSpec(
         name="second",
         make_strategy=_FakeStrategy,
-        linked_subprogram_sources=lambda: {"TWO": b"two"},
+        linked_subprogram_sources=lambda: {"PGMTWO": _callee("PGMTWO")},
     )
-    captured: dict = {}
 
-    def capture(_source, **kwargs):
-        captured.update(kwargs)
-        raise _Captured
+    _, linked = compile_program(
+        _TRIVIAL_PROGRAM,
+        make_cobol_parser(),
+        [quiet, first, second],
+        linked_subprogram_sources={"PGMZERO": _callee("PGMZERO")},
+    )
 
-    with (
-        pytest.raises(_Captured),
-        mock.patch("interpreter.project.coprocessor_compile.compile_cobol", capture),
-    ):
-        compile_program(_TRIVIAL_PROGRAM, make_cobol_parser(), [quiet, first, second])
-
-    assert captured["extra_subprogram_sources"] == {"ONE": b"one", "TWO": b"two"}
-
-
-class _Captured(Exception):
-    """Ends compile_program once the forwarded arguments have been captured."""
+    assert quiet.linked_subprogram_sources() == {}
+    assert _linked_stems(linked) == ["PGMONE", "PGMTWO", "PGMZERO", "__main__"]

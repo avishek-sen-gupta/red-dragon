@@ -13,14 +13,15 @@ from __future__ import annotations
 
 import functools
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
+from cobol_asg.cobol_parser import ProLeapCobolParser
 from cobol_asg.frontend_extension import (
     DialectParser,
     NullDialectParser,
 )
+from interpreter.frontend import Frontend
 from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy
 from interpreter.project.cobol_compile import compile_cobol
 from interpreter.project.types import LinkedProgram
@@ -93,7 +94,7 @@ class CoprocessorSpec:
     make_strategy: Callable[[], RedDragonExtensionLoweringStrategy]
     source_prepass: Callable[[str], str] = _identity
     owns_execution: bool = False
-    dialect_parser: DialectParser = NullDialectParser()
+    dialect_parser: DialectParser = field(default_factory=NullDialectParser)
     source_search_dirs: Callable[[], Sequence[Path]] = _no_source_search_dirs
     linked_subprogram_sources: Callable[[], Mapping[str, bytes]] = (
         _no_linked_subprogram_sources
@@ -102,18 +103,23 @@ class CoprocessorSpec:
 
 def compile_program(
     source: bytes,
-    parser: Any,
+    parser: ProLeapCobolParser,
     specs: Sequence[CoprocessorSpec],
     *,
     source_search_dirs: Sequence[Path] = (),
+    linked_subprogram_sources: Mapping[str, bytes] = {},
     tolerant: bool = False,
-) -> tuple[Any, LinkedProgram]:
+) -> tuple[Frontend, LinkedProgram]:
     """Compile ``source`` with every spec's prepass and strategy composed.
 
     Every spec's ``source_prepass`` runs, in order, before ANY spec's
     ``make_strategy`` is called — a spec whose strategy construction depends
     on state its own prepass populates relies on this ordering (see
     CoprocessorSpec's docstring).
+
+    ``source_search_dirs`` and ``linked_subprogram_sources`` are the caller's
+    own contributions to the pairs of the same names on CoprocessorSpec; each
+    spec's are added after them.
     """
     text = functools.reduce(
         lambda t, spec: spec.source_prepass(t), specs, source.decode("utf-8")
@@ -129,7 +135,7 @@ def compile_program(
     all_subprogram_sources: dict[str, bytes] = functools.reduce(
         lambda srcs, spec: {**srcs, **spec.linked_subprogram_sources()},
         specs,
-        {},
+        dict(linked_subprogram_sources),
     )
 
     return compile_cobol(
