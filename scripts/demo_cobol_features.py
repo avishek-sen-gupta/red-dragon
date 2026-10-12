@@ -33,7 +33,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from interpreter.address import Address
 from interpreter.cli_output import emit
+from interpreter.cobol.run_unit import RUN_UNIT_VAR
 from interpreter.run import run
 
 logger = logging.getLogger(__name__)
@@ -127,9 +129,15 @@ class Field:
     description: str
 
 
+def _working_storage(vm) -> bytearray:
+    """The program's WORKING-STORAGE: the first region allocated after the run unit's."""
+    run_unit = Address(str(vm.call_stack[0].local_vars[RUN_UNIT_VAR].value))
+    return vm.region_get(next(filter(run_unit.__ne__, vm.region_keys())))
+
+
 def _show_results(title: str, vm, fields: list[Field]) -> None:
-    """Display decoded field values from the first memory region."""
-    region = list(vm.region_get(list(vm.region_keys())[0]))
+    """Display decoded field values from the program's WORKING-STORAGE."""
+    region = list(_working_storage(vm))
 
     emit()
     emit("=" * 72)
@@ -490,7 +498,7 @@ def demo_blank_when_zero() -> None:
         ]
     )
 
-    region = list(vm.region_get(list(vm.region_keys())[0]))
+    region = list(_working_storage(vm))
 
     emit()
     emit("=" * 72)
