@@ -61,8 +61,15 @@ from cobol_asg.ref_mod import RefModOperand
 from cobol_asg.set_operand import SetOperand
 from interpreter.cobol.cobol_frontend import CobolFrontend
 from interpreter.cobol.features import CobolFeature
+from interpreter.cobol.run_unit import RUN_UNIT_VAR
 from interpreter.continuation_name import ContinuationName
-from interpreter.instructions import AllocRegion, Const, InstructionBase
+from interpreter.instructions import (
+    AllocRegion,
+    Const,
+    InstructionBase,
+    LoadVar,
+    WriteRegion,
+)
 from interpreter.ir import Opcode
 from tests.covers import covers
 
@@ -71,6 +78,21 @@ def _find_opcodes(
     instructions: list[InstructionBase], opcode: Opcode
 ) -> list[InstructionBase]:
     return [inst for inst in instructions if inst.opcode == opcode]
+
+
+def _program_writes(instructions: list[InstructionBase]) -> list[InstructionBase]:
+    """Region writes into the program's own storage: every WRITE_REGION except the
+    RETURN-CODE publish into the run-unit region at each program exit."""
+    run_unit_regs = {
+        inst.result_reg
+        for inst in instructions
+        if isinstance(inst, LoadVar) and inst.name == RUN_UNIT_VAR
+    }
+    return [
+        inst
+        for inst in _find_opcodes(instructions, Opcode.WRITE_REGION)
+        if isinstance(inst, WriteRegion) and inst.region_reg not in run_unit_regs
+    ]
 
 
 def _ref(name: str) -> dict:
@@ -147,7 +169,7 @@ class TestDataDivisionLowering:
         frontend = CobolFrontend(make_cobol_parser())
         instructions = frontend.lower_from_ast_dict(data)
 
-        writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
+        writes = _program_writes(instructions)
         assert len(writes) == 1  # Exactly one WRITE_REGION for initial value
         # Verify the write contains encoded bytes for "123"
         write_bytes = [w.operands for w in writes]
@@ -239,7 +261,7 @@ class TestDataDivisionLowering:
         frontend = CobolFrontend(make_cobol_parser())
         instructions = frontend.lower_from_ast_dict(data)
 
-        writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
+        writes = _program_writes(instructions)
         assert len(writes) == 2  # One for each field with a VALUE
 
 
@@ -1394,7 +1416,7 @@ class TestTier1Lowering:
 
         # Only infrastructure instructions (LABEL, ALLOC_REGION, RESUME_CONTINUATION)
         # No CALL_FUNCTION, no WRITE_REGION for CONTINUE itself
-        writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
+        writes = _program_writes(instructions)
         assert len(writes) == 0
 
     @covers(CobolFeature.EXIT, CobolFeature.PIC_CLAUSE, CobolFeature.USAGE_DISPLAY)
@@ -1405,7 +1427,7 @@ class TestTier1Lowering:
         stmts = [ExitStatement()]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
-        writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
+        writes = _program_writes(instructions)
         assert len(writes) == 0
 
     @covers(
