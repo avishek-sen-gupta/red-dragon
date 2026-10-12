@@ -165,8 +165,7 @@ VMState
 ├── continuations: dict[ContinuationName, CodeLabel]
 ├── exception_stack: list[ExceptionHandler]
 ├── data_layout: dict[str, dict]              COBOL field layout, set by run_linked
-├── io_provider, cobol_random, cobol_random_seed
-└── cobol_run_unit_return_code: int | None    see §12.3
+└── io_provider
 ```
 
 Reading a register nothing has written raises `UnwrittenRegisterRead` (`interpreter/vm/unwritten_register_read.py`); it is a lowering bug, not a value. `heap_get` returns `NO_HEAP_OBJECT` (a null object) for a missing address. Heap addresses are `Address` values (`interpreter/address.py`) such as `obj_3`, `arr_4`, `mem_5`; region handles are `Address` values holding a decimal base (`"4096"`).
@@ -259,7 +258,6 @@ Pushing before `var_writes` is how arguments are passed: a call's parameter bind
 - `CONST` creates closure environments; `ADDRESS_OF` allocates `mem_N` and records `var_heap_aliases`.
 - Class construction allocates its heap object; `LOAD_FIELD`, `STORE_FIELD`, `LOAD_INDEX`, `STORE_INDEX` materialise synthetic heap objects.
 - Many handlers advance `symbolic_counter`.
-- Builtins such as `__cobol_publish_return_code` set fields on `VMState`.
 
 ### 6.5 Suspend and resume
 
@@ -453,10 +451,12 @@ Harnesses build an argument array with `call_arguments(vm, regions)` (`interpret
 
 ### 12.3 RETURN-CODE
 
-- A program exit (`lower_program_exit`) loads its RETURN-CODE bytes, calls `__cobol_publish_return_code`, then `RETURN`s the bytes. `STOP RUN` publishes before `HALT`.
+- Every COBOL link carries a start-up module. The COBOL frontend supplies its code through `Frontend.start_up_ir`, and `interpreter/project/start_up.py` makes it a dependency of every module, so it runs first. It allocates the 6-byte run-unit region (`interpreter/cobol/run_unit.py`): the run unit's RETURN-CODE at offset 0, the FUNCTION RANDOM state at offset 2. It declares the region as `__cobol_run_unit` in the outermost frame.
+- A program exit (`lower_program_exit`) loads its RETURN-CODE bytes, writes them into the run-unit region, then `RETURN`s the bytes. `STOP RUN` writes them before `HALT`.
 - The caller's `CALL_WITH_MEMORY` result register is seeded with its own RETURN-CODE, so a void return leaves it unchanged; the CALL lowering then copies the register into the caller's RETURN-CODE.
-- `__cobol_publish_return_code` sets `VMState.cobol_run_unit_return_code`. The last program to end wins, which is the value the operating system would get.
-- `read_return_code(vm)` (`interpreter/cobol/return_code_readback.py`) returns the published value, or falls back to scanning the heap for a `return_code_handle` region.
+- The last program to end wins, which is the value the operating system would get.
+- `read_return_code(vm)` (`interpreter/cobol/return_code_readback.py`) decodes the run-unit region's RETURN-CODE field.
+- FUNCTION RANDOM keeps its generator state in the same region: lowering loads it, steps it with a pure builtin, and stores it back. The sequence belongs to the run unit, and starts at seed 0 when the first reference has no argument (Enterprise COBOL 6.5 LR ch. 83). `VMState` holds no COBOL state for either.
 
 ### 12.4 Pointers
 
