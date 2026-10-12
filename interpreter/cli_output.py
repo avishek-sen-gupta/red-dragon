@@ -2,10 +2,10 @@
 
 Ruff's T201 bans bare `print` because it "is not configurable by clients, unlike
 logging statements". Logging is the wrong substitute for a CLI's *product*,
-though: `interpreter.py --mermaid` is piped into a .mmd file and `--ir-only`
-into a diff, and a logger would send both to stderr, level-filter them and
-prefix each line with a timestamp. Ruff's own fix is worse still — it deletes
-the print, and with it the `dump_ir(...)` call that was its argument.
+though: `interpreter.py`'s final state is piped into a file or a diff, and a
+logger would send it to stderr, level-filter it and prefix each line with a
+timestamp. Ruff's own fix is worse still — it deletes the print, and with it
+the call that produced its argument.
 
 So program output goes through here: one place that decides the stream, and one
 that a test can redirect without capturing global stdout. Diagnostics still

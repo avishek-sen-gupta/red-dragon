@@ -60,7 +60,6 @@ LinkedProgram
 | Function | Module | Purpose |
 |----------|--------|---------|
 | `compile_directory(directory, language)` | `compiler.py` | Full pipeline: scan → compile → link |
-| `run_project(entry_file, language, project_root?, ...)` | `api.py` | compile_directory + VM execution |
 
 ---
 
@@ -430,9 +429,6 @@ interpreter/project/
 interpreter/registry.py
     _is_func_label(), _is_class_label(), _is_end_class_label()
 
-interpreter/api.py
-    run_project()
-
 ```
 
 ---
@@ -454,4 +450,3 @@ Core tests, in `tests/unit/project/` and `tests/integration/project/` (counts ar
 | `test_project_pipeline.py` | 14 | Full compile→link pipeline (Python, JS, Java, C) |
 | `test_fixture_projects.py` | 5 | On-disk fixture projects |
 | `test_all_languages_execution.py` | 21 | Multi-file execution for all 15 languages |
-| `test_api_integration.py` | 1 | run_project() |
