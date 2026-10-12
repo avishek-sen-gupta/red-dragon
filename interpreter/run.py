@@ -15,7 +15,7 @@ from typing import Any, Union
 from interpreter import constants
 from interpreter.cfg import CFG, build_cfg
 from interpreter.constants import FoundationTypeName, Language, LLMProvider
-from interpreter.frontend import Frontend, get_frontend, make_cobol_parser
+from interpreter.frontend import get_frontend, make_cobol_parser
 from interpreter.frontend_observer import FrontendObserver
 from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.func_name import FuncName
@@ -843,49 +843,6 @@ def execute_cfg_traced(
     )
 
     return (vm, trace)
-
-
-def build_execution_strategies(
-    frontend: Frontend,
-    instructions: list[InstructionBase],
-    registry: FunctionRegistry,
-    lang: Language,
-) -> ExecutionStrategies:
-    """Build ExecutionStrategies with type inference, overload resolution, and symbol tables.
-
-    Shared by run() and the TUI pipeline to ensure identical execution behaviour.
-    """
-    conversion_rules = DefaultTypeConversionRules()
-    type_resolver = TypeResolver(conversion_rules)
-    type_env = infer_types(
-        instructions,
-        type_resolver,
-        type_env_builder=frontend.type_env_builder,
-        func_symbol_table=frontend.func_symbol_table,
-        class_symbol_table=frontend.class_symbol_table,
-    )
-    class_nodes = tuple(
-        TypeNode(
-            name=TypeName(str(cls)), parents=tuple(TypeName(str(p)) for p in parents)
-        )
-        for cls, parents in registry.class_parents.items()
-    )
-    type_graph = TypeGraph(DEFAULT_TYPE_NODES + class_nodes)
-    overload_resolver = OverloadResolver(
-        ArityThenTypeStrategy(DefaultTypeCompatibility(type_graph)),
-        FallbackFirstWithWarning(),
-    )
-    return ExecutionStrategies(
-        type_env=type_env,
-        conversion_rules=conversion_rules,
-        overload_resolver=overload_resolver,
-        binop_coercion=_binop_coercion_for_language(lang),
-        func_symbol_table=frontend.func_symbol_table,
-        class_symbol_table=frontend.class_symbol_table,
-        field_fallback=_field_fallback_for_language(lang),
-        function_scoping=_function_scoping_for_language(lang),
-        symbol_table=frontend.symbol_table,
-    )
 
 
 def _build_strategies_from_linked(linked: LinkedProgram) -> ExecutionStrategies:

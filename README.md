@@ -198,6 +198,7 @@ uv run python -m interpreter cobol/ --entry MAINPROG --max-steps 100000 --log-le
 ```python
 from interpreter import run
 from interpreter.constants import Language
+from interpreter.var_name import VarName
 
 source = """
 def factorial(n):
@@ -208,7 +209,7 @@ result = factorial(6)
 """
 
 vm = run(source, language=Language.PYTHON, verbose=True)
-print(vm.call_stack[0].local_vars["result"])  # 720
+print(vm.call_stack[0].local_vars[VarName("result")].value)  # 720
 ```
 
 With an LLM resolving external calls the deterministic frontend cannot:
@@ -234,11 +235,14 @@ from interpreter.cfg import build_cfg
 from interpreter.constants import Language
 from interpreter.frontend import get_frontend
 from interpreter.registry import build_registry
+from interpreter.run import initial_vm_state
 
 instructions = get_frontend(Language.PYTHON).lower(source.encode("utf-8"))
 cfg = build_cfg(instructions)
 registry = build_registry(instructions, cfg)
-vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=200))
+vm, stats = execute_cfg(
+    cfg, "entry", registry, VMConfig(max_steps=200), vm=initial_vm_state()
+)
 ```
 
 ### Multi-file project support
@@ -253,10 +257,12 @@ from pathlib import Path
 from interpreter.constants import Language
 from interpreter.project.compiler import compile_directory
 from interpreter.project.entry_point import EntryPoint
-from interpreter.run import run_linked
+from interpreter.run import initial_vm_state, run_linked
 
 linked = compile_directory(Path("src"), Language.PYTHON)
-vm = run_linked(linked, EntryPoint.top_level(), max_steps=500)
+vm = run_linked(
+    linked, EntryPoint.top_level(), max_steps=500, initial_vm=initial_vm_state()
+)
 ```
 
 The pipeline:
