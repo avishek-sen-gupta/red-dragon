@@ -16,8 +16,6 @@ from interpreter.cfg_types import CFG
 from interpreter.constants import Language
 from interpreter.frontend import get_frontend
 from interpreter.instructions import InstructionBase
-from interpreter.interprocedural.analyze import analyze_interprocedural
-from interpreter.interprocedural.types import InterproceduralResult
 from interpreter.registry import FunctionRegistry, build_registry
 from interpreter.run import (
     build_execution_strategies,
@@ -40,14 +38,13 @@ class Session:
     ir: list[InstructionBase]
     cfg: CFG
     registry: FunctionRegistry
-    interprocedural: InterproceduralResult
     vm: VMState
     trace: ExecutionTrace
     step_index: int
 
 
 def load_session(source: str, language: str, max_steps: int = 300) -> Session:
-    """Load, compile, execute, and analyze a program. Returns a ready-to-replay Session."""
+    """Load, compile and execute a program. Returns a ready-to-replay Session."""
     lang = Language(language)
     frontend = get_frontend(lang)
     ir = frontend.lower(source.encode("utf-8"))
@@ -63,7 +60,6 @@ def load_session(source: str, language: str, max_steps: int = 300) -> Session:
     vm, trace = execute_cfg_traced(
         cfg, "", registry, config, strategies, vm=initial_vm_state()
     )
-    interprocedural = analyze_interprocedural(cfg, registry)
 
     return Session(
         source=source,
@@ -71,7 +67,6 @@ def load_session(source: str, language: str, max_steps: int = 300) -> Session:
         ir=ir,
         cfg=cfg,
         registry=registry,
-        interprocedural=interprocedural,
         vm=vm,
         trace=trace,
         step_index=0,

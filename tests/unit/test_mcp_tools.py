@@ -4,9 +4,6 @@ from __future__ import annotations
 
 from mcp_server.session import clear_session
 from mcp_server.tools import (
-    handle_analyze_program,
-    handle_get_call_chain,
-    handle_get_function_summary,
     handle_get_ir,
     handle_get_state,
     handle_list_opcodes,
@@ -14,57 +11,6 @@ from mcp_server.tools import (
     handle_run_to_end,
     handle_step,
 )
-
-
-class TestAnalyzeProgram:
-    SOURCE = "def f(x):\n    return x + 1\ndef g(y):\n    return f(y)\nresult = g(5)\n"
-
-    def test_returns_functions(self):
-        result = handle_analyze_program(self.SOURCE, "python")
-        assert len(result["functions"]) >= 2
-        labels = [f["label"] for f in result["functions"]]
-        assert any("f" in l for l in labels)
-        assert any("g" in l for l in labels)
-
-    def test_returns_call_graph(self):
-        result = handle_analyze_program(self.SOURCE, "python")
-        assert len(result["call_graph"]) >= 1
-
-    def test_returns_counts(self):
-        result = handle_analyze_program(self.SOURCE, "python")
-        assert result["ir_instruction_count"] > 0
-        assert result["cfg_block_count"] > 0
-        assert result["whole_program_edge_count"] >= 0
-
-    def test_invalid_language_returns_error(self):
-        result = handle_analyze_program("x = 1", "klingon")
-        assert "error" in result
-
-
-class TestGetFunctionSummary:
-    SOURCE = "def add(a, b):\n    return a + b\nadd(1, 2)\n"
-
-    def test_returns_flows(self):
-        result = handle_get_function_summary(self.SOURCE, "python", "add")
-        assert len(result["flows"]) == 2
-        sources = {f["source"] for f in result["flows"]}
-        assert sources == {"a", "b"}
-
-    def test_unknown_function_returns_error(self):
-        result = handle_get_function_summary(self.SOURCE, "python", "nonexistent")
-        assert "error" in result
-
-
-class TestGetCallChain:
-    SOURCE = (
-        "def add(a, b):\n    return a + b\n"
-        "def double(x):\n    return add(x, x)\n"
-        "result = double(5)\n"
-    )
-
-    def test_returns_tree(self):
-        result = handle_get_call_chain(self.SOURCE, "python")
-        assert "root" in result or "chains" in result
 
 
 class TestLoadProgram:
@@ -75,6 +21,7 @@ class TestLoadProgram:
         result = handle_load_program("def f(x):\n    return x\nf(5)\n", "python")
         assert result["total_steps"] > 0
         assert result["ir_instruction_count"] > 0
+        assert result["functions"] == ["func_f_0"]
 
     def test_invalid_language(self):
         result = handle_load_program("x = 1", "klingon")
@@ -142,9 +89,7 @@ class TestGetIr:
     def test_get_ir_for_function(self):
         handle_load_program("def f(x):\n    return x\nf(5)\n", "python")
         result = handle_get_ir("f")
-        blocks = result["blocks"]
-        assert len(blocks) >= 1
-        assert any("f" in b["label"] for b in blocks)
+        assert [str(b["label"]) for b in result["blocks"]] == ["func_f_0"]
 
 
 class TestListOpcodes:

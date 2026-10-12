@@ -41,7 +41,6 @@ from interpreter.types.type_inference import infer_types
 from interpreter.types.type_resolver import TypeResolver
 
 if TYPE_CHECKING:
-    from interpreter.interprocedural.types import InterproceduralResult
     from interpreter.vm.vm import VMState
 
 logger = logging.getLogger(__name__)
@@ -344,34 +343,6 @@ def extract_function_source(
 
 
 # ── Multi-file project APIs ──────────────────────────────────────
-
-
-def analyze_project(
-    entry_file: str | Path,
-    language: str | Language,
-    project_root: str | Path | None = None,
-) -> InterproceduralResult:
-    """Multi-file analysis: discover → compile → link → analyze.
-
-    Returns the same InterproceduralResult as single-file analysis,
-    but with cross-module call graphs and dataflow.
-
-    Args:
-        entry_file: Path to the entry point file (e.g. main.py).
-        language: Source language for all files in the project.
-        project_root: Root directory. Inferred from entry_file if not given.
-
-    Returns:
-        An InterproceduralResult with cross-module analysis.
-    """
-    from interpreter.interprocedural.analyze import analyze_interprocedural
-    from interpreter.project.compiler import compile_directory
-
-    lang = Language(language)
-    entry_path = Path(entry_file)
-    directory = Path(project_root) if project_root else entry_path.parent
-    linked = compile_directory(directory, lang)
-    return analyze_interprocedural(linked.merged_cfg, linked.merged_registry)
 
 
 def run_project(

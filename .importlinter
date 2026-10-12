@@ -101,7 +101,6 @@ source_modules =
     interpreter.vm
     interpreter.handlers
     interpreter.project
-    interpreter.interprocedural
     interpreter.run
 forbidden_modules =
     interpreter.cobol

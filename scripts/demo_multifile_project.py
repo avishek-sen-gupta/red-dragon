@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Demo: multi-file project compilation, linking, execution, and analysis.
+"""Demo: multi-file project compilation, linking and execution.
 
 Shows the full multi-file pipeline end-to-end:
   1. Import discovery — BFS from entry file, tree-sitter-based extraction
@@ -7,7 +7,6 @@ Shows the full multi-file pipeline end-to-end:
   3. Per-module compilation — each file compiled independently to IR
   4. Linking — namespace labels, rebase registers, rewrite cross-module refs
   5. Execution — merged program runs in the VM with cross-module function calls
-  6. Interprocedural analysis — cross-module call graphs and dataflow
 
 Creates a temporary multi-file Python project on disk, then runs the
 full pipeline programmatically.
@@ -29,7 +28,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from interpreter.api import analyze_project, run_project
+from interpreter.api import run_project
 from interpreter.cli_output import emit
 from interpreter.constants import Language
 from interpreter.project.compiler import compile_directory, compile_module
@@ -301,31 +300,6 @@ def main():
 
         emit(f"\n  Heap objects       : {vm.heap_count()}")
         emit(f"  Time               : {exec_time * 1000:.1f}ms")
-
-        # ── Phase 6: Interprocedural analysis ──
-        _print_header("Phase 5: Interprocedural Analysis")
-        t3 = time.perf_counter()
-        result = analyze_project(entry_file, language, project_root=tmp_dir)
-        analysis_time = time.perf_counter() - t3
-
-        emit(f"  Functions in call graph : {len(result.call_graph.functions)}")
-        emit(f"  Call sites              : {len(result.call_graph.call_sites)}")
-        emit(f"  Function summaries      : {len(result.summaries)}")
-        emit(f"  Time                    : {analysis_time * 1000:.1f}ms")
-
-        if result.call_graph.functions:
-            _print_subheader("Discovered Functions")
-            for func in sorted(result.call_graph.functions, key=lambda f: f.label):
-                emit(f"    {func.label}")
-
-        if result.call_graph.call_sites:
-            _print_subheader("Call Sites")
-            for cs in sorted(
-                result.call_graph.call_sites,
-                key=lambda c: c.caller.label,
-            ):
-                for callee in sorted(cs.callees, key=lambda f: f.label):
-                    emit(f"    {cs.caller.label} → {callee.label}")
 
         # ── Summary ──
         total_time = time.perf_counter() - t0

@@ -3130,3 +3130,13 @@ Because `Halt_` is a distinct type, it is naturally absent from `_infer_return`'
 **Decision:** Delete the memory dataflow, the `MemoryEffectRecorder` threaded through `CobolFrontend` and `EmitContext`, and `InstructionId` (ADR-174), whose only purpose was keying the recorder's sidecar. Supersedes ADR-174.
 
 **Consequences:** `CobolFrontend` and `EmitContext` no longer take `recorder`. Instructions carry no `id`. The region-access helpers still take a `FieldExtent`, now unused; removing it reaches into forge's CICS lowering and is tracked separately.
+
+---
+
+### ADR-179: Remove register dataflow and interprocedural analysis (2026-10-12)
+
+**Context:** Reaching definitions (`interpreter/dataflow.py`) and the interprocedural layer (`interpreter/interprocedural/`: call graph, 1-CFA summaries, SCC propagation, queries) had no consumer outside this repo. They were reachable only through `api.analyze_project`, three MCP tools and the TUI's dataflow mode. The solver silently returned partial results on programs above roughly 650 lines (red-dragon-aso9).
+
+**Decision:** Delete both packages, `analyze_project`, the MCP tools `analyze_program`, `get_function_summary` and `get_call_chain`, the TUI dataflow panels and `d` binding, and `scripts/demo_dataflow.py`. Supersedes the dataflow and interprocedural ADRs. `get_ir` and `load_project` take function lists from the registry, and per-function IR comes from `cfg.function_sub_cfg`, moved out of the summaries module.
+
+**Consequences:** RedDragon lowers, links and executes; it no longer analyses. Each instruction's `reads()`/`writes()` now has no production caller (red-dragon-zdeh).

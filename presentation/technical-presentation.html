@@ -380,7 +380,7 @@
     <span class="arch-arrow fragment" data-fragment-index="5">&rarr;</span>
     <div class="arch-box fragment" data-fragment-index="5">Link<br><span class="small dim">multi-file</span></div>
     <span class="arch-arrow fragment" data-fragment-index="6">&rarr;</span>
-    <div class="arch-box fragment" data-fragment-index="6">CFG<br><span class="small dim">dataflow</span></div>
+    <div class="arch-box fragment" data-fragment-index="6">CFG<br><span class="small dim">basic blocks</span></div>
     <span class="arch-arrow fragment" data-fragment-index="7">&rarr;</span>
     <div class="arch-box green fragment" data-fragment-index="7">VM<br><span class="small dim">LocalExecutor</span></div>
     <span class="arch-arrow fragment" data-fragment-index="8">&rarr;</span>
@@ -456,7 +456,7 @@
   </p>
   <aside class="notes">
     37 opcodes total. The IR is deliberately flat — no nested expressions.
-    Every value has a named register. This makes dataflow analysis trivial.
+    Every value has a named register.
   </aside>
 </section>
 
@@ -631,7 +631,7 @@ BINOP     t11, t9, "==", t10</code></pre>
     <li class="fragment">Prompt engineered with <strong>concrete IR patterns</strong> as examples</li>
     <li class="fragment">LLM output is <strong>schema-validated</strong> before execution</li>
     <li class="fragment">Fallback for unsupported languages or complex constructs</li>
-    <li class="fragment">Same VM, same dataflow &mdash; only the lowering step differs</li>
+    <li class="fragment">Same VM &mdash; only the lowering step differs</li>
   </ul>
   <aside class="notes">
     The LLM frontend is language-agnostic. It sends raw source plus the IR spec
@@ -856,7 +856,7 @@ Chunk errors          : 0</code></pre>
 </section>
 
 <!-- ============================================================ -->
-<!-- ACT 4: CFG & DATAFLOW                                        -->
+<!-- ACT 4: CFG                                                   -->
 <!-- ============================================================ -->
 
 <!-- Slide 12: CFG Builder -->
@@ -1208,222 +1208,6 @@ end;</code></pre>
   </section>
 </section>
 
-<!-- Slide 14: Reaching Definitions -->
-<section>
-  <h2>Reaching Definitions</h2>
-  <p>Worklist-based <strong class="accent">fixed-point solver</strong></p>
-  <div style="margin: 20px 0; padding: 15px; border: 1px solid var(--accent); border-radius: 8px; font-size: 0.8em;">
-    <p><strong>GEN[B]</strong> = definitions created in block B</p>
-    <p><strong>KILL[B]</strong> = definitions overwritten in block B</p>
-    <p style="margin-top: 15px;">
-      <strong class="accent">IN[B]</strong> = &cup; OUT[p] for all predecessors p of B
-    </p>
-    <p>
-      <strong class="accent2">OUT[B]</strong> = GEN[B] &cup; (IN[B] &minus; KILL[B])
-    </p>
-  </div>
-  <ul>
-    <li class="fragment">Iterate until no OUT set changes (fixed point)</li>
-    <li class="fragment">Worst case: O(n&sup2;) iterations, typically converges in 2&ndash;3 passes</li>
-    <li class="fragment">Result: for each use, the <strong class="accent">set of definitions that could reach it</strong></li>
-  </ul>
-  <aside class="notes">
-    Classic dataflow analysis. The flat IR makes this straightforward —
-    every STORE_VAR is a definition, every LOAD_VAR is a use.
-    No aliasing complications from nested expressions.
-  </aside>
-</section>
-
-<!-- Slide 15: Def-Use Chains & Dependency Graph -->
-<section>
-  <h2>Def-Use Chains &amp; Dependency Graph</h2>
-  <ul>
-    <li class="fragment">Link each <strong class="accent">use</strong> (LOAD_VAR) to its reaching <strong>definitions</strong> (STORE_VAR)</li>
-    <li class="fragment">Trace registers back to <strong class="accent2">named variables</strong> via the chain</li>
-    <li class="fragment">Build a <strong class="accent2">raw dependency graph</strong> (direct edges) and a <strong class="accent3">transitive closure</strong> (all reachable deps)</li>
-  </ul>
-  <div class="fragment" style="margin-top: 25px;">
-    <pre><code class="language-python"># result depends on...
-result = income * rate + bonus
-
-# Dependency graph:
-# result -> income   (direct)
-# result -> rate     (direct)
-# result -> bonus    (direct)
-# If bonus = base * 0.1:
-#   result -> base   (transitive)</code></pre>
-  </div>
-</section>
-
-<!-- Slide 16: Dataflow Example -->
-<section>
-  <h2>Dataflow Example</h2>
-  <pre><code class="language-python">def compute_tax(income, rate, has_bonus):
-    total = income * rate
-    if has_bonus:
-        bonus = income * 0.1
-        total = total + bonus       # total redefined
-    return total                    # 2 reaching defs!</code></pre>
-  <div class="fragment" style="margin-top: 20px;">
-    <table>
-      <tr>
-        <th>Variable</th>
-        <th>Reaching Defs at <code>return</code></th>
-        <th>Depends On</th>
-      </tr>
-      <tr>
-        <td><code>total</code></td>
-        <td class="accent3"><strong>2 defs</strong> (line 2 and line 5)</td>
-        <td><code>income</code>, <code>rate</code>, <code>bonus</code></td>
-      </tr>
-      <tr>
-        <td><code>bonus</code></td>
-        <td>1 def (line 4)</td>
-        <td><code>income</code></td>
-      </tr>
-    </table>
-  </div>
-  <p class="fragment small dim" style="margin-top: 15px;">
-    At the merge point, <code>total</code> has two reaching definitions.
-    The dependency graph captures the transitive closure: <code>total &rarr; income</code> via both paths.
-  </p>
-</section>
-
-<!-- Slide 17: Dependency Graph: Source → Graph -->
-<section>
-  <h2>Dependency Graph: Source &rarr; Graph</h2>
-  <div class="two-col">
-    <div>
-      <h3>Source</h3>
-      <pre><code class="language-python">a = 1
-b = 2
-c = a + b
-d = a * b
-e = c + d
-f = e - a
-
-def square(x):
-    return x * x
-
-g = square(c)
-h = g + f
-total = h + e + b</code></pre>
-    </div>
-    <div class="dep-graph">
-      <h3>Direct Dependency Graph</h3>
-      <svg viewBox="0 0 380 400" width="380" height="400">
-        <defs>
-          <marker id="arrowDirect" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-            <polygon points="0 0, 8 3, 0 6" fill="#4fc3f7"/>
-          </marker>
-        </defs>
-        <!-- Leaf nodes (row 1) -->
-        <circle class="node-circle" cx="100" cy="30" r="22" stroke="#4fc3f7"/>
-        <text class="node-label" x="100" y="30">a</text>
-        <circle class="node-circle" cx="280" cy="30" r="22" stroke="#4fc3f7"/>
-        <text class="node-label" x="280" y="30">b</text>
-
-        <!-- Row 2: c, d (diamond) -->
-        <g class="fragment" data-fragment-index="1">
-          <circle class="node-circle" cx="100" cy="110" r="22" stroke="#81c784"/>
-          <text class="node-label" x="100" y="110">c</text>
-          <line class="edge-direct" x1="100" y1="52" x2="100" y2="88" marker-end="url(#arrowDirect)"/>
-          <line class="edge-direct" x1="268" y1="48" x2="116" y2="94" marker-end="url(#arrowDirect)"/>
-        </g>
-        <g class="fragment" data-fragment-index="1">
-          <circle class="node-circle" cx="280" cy="110" r="22" stroke="#81c784"/>
-          <text class="node-label" x="280" y="110">d</text>
-          <line class="edge-direct" x1="112" y1="48" x2="264" y2="94" marker-end="url(#arrowDirect)"/>
-          <line class="edge-direct" x1="280" y1="52" x2="280" y2="88" marker-end="url(#arrowDirect)"/>
-        </g>
-
-        <!-- Row 3: e, g -->
-        <g class="fragment" data-fragment-index="2">
-          <circle class="node-circle" cx="190" cy="190" r="22" stroke="#81c784"/>
-          <text class="node-label" x="190" y="190">e</text>
-          <line class="edge-direct" x1="116" y1="126" x2="176" y2="174" marker-end="url(#arrowDirect)"/>
-          <line class="edge-direct" x1="264" y1="126" x2="204" y2="174" marker-end="url(#arrowDirect)"/>
-        </g>
-        <g class="fragment" data-fragment-index="2">
-          <circle class="node-circle" cx="50" cy="190" r="22" stroke="#ffb74d"/>
-          <text class="node-label" x="50" y="190">g</text>
-          <line class="edge-direct" x1="86" y1="126" x2="60" y2="172" marker-end="url(#arrowDirect)"/>
-        </g>
-
-        <!-- Row 4: f -->
-        <g class="fragment" data-fragment-index="3">
-          <circle class="node-circle" cx="250" cy="270" r="22" stroke="#81c784"/>
-          <text class="node-label" x="250" y="270">f</text>
-          <line class="edge-direct" x1="202" y1="208" x2="240" y2="252" marker-end="url(#arrowDirect)"/>
-          <line class="edge-direct" x1="100" y1="52" x2="236" y2="256" marker-end="url(#arrowDirect)" stroke-dasharray="6,4"/>
-        </g>
-
-        <!-- Row 5: h -->
-        <g class="fragment" data-fragment-index="4">
-          <circle class="node-circle" cx="150" cy="330" r="22" stroke="#81c784"/>
-          <text class="node-label" x="150" y="330">h</text>
-          <line class="edge-direct" x1="60" y1="210" x2="138" y2="314" marker-end="url(#arrowDirect)"/>
-          <line class="edge-direct" x1="238" y1="286" x2="162" y2="314" marker-end="url(#arrowDirect)"/>
-        </g>
-
-        <!-- Row 6: total -->
-        <g class="fragment" data-fragment-index="5">
-          <circle class="node-circle" cx="190" cy="390" r="26" stroke="#e57373" stroke-width="3"/>
-          <text class="node-label" x="190" y="390" style="font-size: 14px; font-weight: bold;">total</text>
-          <line class="edge-merge" x1="158" y1="350" x2="182" y2="366" marker-end="url(#arrowDirect)"/>
-          <line class="edge-merge" x1="196" y1="210" x2="192" y2="366" marker-end="url(#arrowDirect)"/>
-          <line class="edge-merge" x1="280" y1="52" x2="204" y2="370" marker-end="url(#arrowDirect)" stroke-dasharray="6,4"/>
-        </g>
-      </svg>
-    </div>
-  </div>
-  <div class="dep-legend fragment" data-fragment-index="1">
-    <span class="leg-direct accent">Direct dependency</span>
-  </div>
-  <p class="fragment small dim" style="margin-top: 4px;">
-    Diamond: <code>c</code> and <code>d</code> both depend on <code>a</code>, <code>b</code>. Function call: <code>g = square(c)</code>. Multi-operand: <code>total = h + e + b</code>.
-  </p>
-</section>
-
-<!-- Slide 18: Dependency Graph — Raw vs Transitive -->
-<section>
-  <h2>Raw vs Transitive Dependencies</h2>
-  <p class="small">Two graphs returned in <code class="accent">DataflowResult</code>:</p>
-  <div class="two-col" style="margin-top: 15px;">
-    <div>
-      <h3 style="color: var(--accent2);">raw_dependency_graph</h3>
-      <p class="small dim">Direct edges only &mdash; what the expression reads</p>
-      <pre style="font-size: 0.55em;"><code class="nohighlight">a &larr; (leaf)
-b &larr; (leaf)
-c &larr; a, b
-d &larr; a, b
-e &larr; c, d
-f &larr; a, e
-g &larr; c
-h &larr; f, g
-total &larr; b, e, h</code></pre>
-    </div>
-    <div class="fragment">
-      <h3 style="color: var(--accent3);">dependency_graph</h3>
-      <p class="small dim">Transitive closure &mdash; all reachable deps</p>
-      <pre style="font-size: 0.55em;"><code class="nohighlight">c &rarr; {a, b}
-d &rarr; {a, b}
-e &rarr; {a, b, c, d}
-f &rarr; {a, b, c, d, e}
-g &rarr; {a, b, c}
-h &rarr; {a, b, c, d, e, f, g}
-total &rarr; {a, b, c, d, e, f, g, h}</code></pre>
-    </div>
-  </div>
-  <div class="fragment" style="margin-top: 20px; padding: 12px; border: 1px solid var(--accent3); border-radius: 8px;">
-    <strong class="accent3">Key distinction:</strong> <code>total = h + e + b</code> has 3 direct deps (<code>h</code>, <code>e</code>, <code>b</code>)
-    but 8 transitive deps. The raw graph shows what the code <em>reads</em>; the transitive graph shows what <em>affects</em> it.
-  </div>
-  <p class="fragment small dim" style="margin-top: 8px;">
-    Demo: <code>poetry run python scripts/demo_dataflow.py</code>
-  </p>
-</section>
-
 <!-- ============================================================ -->
 <!-- ACT 5: THE SYMBOLIC VM                                       -->
 <!-- ============================================================ -->
@@ -1703,7 +1487,7 @@ CALL_METHOD "fill"      &larr; concrete</code></pre>
   <div style="margin-top: 20px;">
     <div class="arch-box fragment" style="width: 80%; display: block; margin: 15px auto; text-align: left; padding: 15px 25px;">
       <strong class="accent">No expression trees</strong><br>
-      <span class="small dim">Every intermediate value is named &rarr; trivial def-use analysis</span>
+      <span class="small dim">Every intermediate value is named &rarr; each step is inspectable</span>
     </div>
     <div class="arch-box fragment" style="width: 80%; display: block; margin: 15px auto; text-align: left; padding: 15px 25px;">
       <strong class="accent2">No register allocation</strong><br>

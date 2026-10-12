@@ -115,11 +115,11 @@ NO_MODULE_UNIT = ModuleUnit(
 
 @dataclass
 class LinkedProgram:
-    """Merged multi-file program ready for execution or analysis.
+    """Merged multi-file program ready for execution.
 
     After linking, all labels are namespaced and cross-module references
     are resolved. The merged_ir/merged_cfg/merged_registry feed directly
-    into execute_cfg() and analyze_interprocedural() with zero changes.
+    into execute_cfg() with zero changes.
     """
 
     modules: dict[Path, ModuleUnit]

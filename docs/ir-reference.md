@@ -22,7 +22,7 @@ Fields use domain types:
 - **Function/method names**: `FuncName` (`func_name` on `CallFunction`/`CallCtorFunction`/`CallWithMemory`, `method_name` on `CallMethod`)
 - **Operators**: `BinopKind`/`UnopKind` enums (`operator` on `Binop`/`Unop`)
 
-Each instruction implements `reads() -> list[StorageIdentifier]` and `writes() -> StorageIdentifier | None` for dataflow analysis. `StorageIdentifier` is a protocol that `Register` and `VarName` satisfy. The base `writes()` returns `result_reg` when present, else `None`; `DeclVar` and `StoreVar` return `name`.
+Each instruction implements `reads() -> list[StorageIdentifier]` and `writes() -> StorageIdentifier | None`. `StorageIdentifier` is a protocol that `Register` and `VarName` satisfy. The base `writes()` returns `result_reg` when present, else `None`; `DeclVar` and `StoreVar` return `name`.
 
 ```python
 @dataclass(frozen=True)

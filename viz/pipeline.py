@@ -10,8 +10,6 @@ from interpreter.cfg_types import CFG
 from interpreter.constants import Language
 from interpreter.frontend import get_frontend
 from interpreter.instructions import InstructionBase
-from interpreter.interprocedural.analyze import analyze_interprocedural
-from interpreter.interprocedural.types import InterproceduralResult
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.registry import build_registry
 from interpreter.run import (
@@ -71,7 +69,6 @@ class PipelineResult:
     ir: list[InstructionBase] = field(default_factory=list)
     cfg: CFG = field(default_factory=CFG)
     trace: ExecutionTrace = field(default_factory=ExecutionTrace)
-    interprocedural: InterproceduralResult | None = None
 
 
 def run_pipeline(
@@ -104,12 +101,6 @@ def run_pipeline(
         cfg, "", registry, config, strategies, vm=initial_vm_state()
     )
 
-    try:
-        interprocedural = analyze_interprocedural(cfg, registry)
-    except Exception:
-        logger.warning("Interprocedural analysis failed", exc_info=True)
-        interprocedural = None
-
     return PipelineResult(
         source=source,
         language=language,
@@ -117,5 +108,4 @@ def run_pipeline(
         ir=ir,
         cfg=cfg,
         trace=trace,
-        interprocedural=interprocedural,
     )

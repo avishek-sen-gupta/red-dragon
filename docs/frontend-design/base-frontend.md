@@ -331,7 +331,7 @@ Unknown node types produce `SYMBOLIC "unsupported:<type>"` rather than raising e
 
 ### Canonical Literals
 
-All null/boolean literals are canonicalized to Python-form (`"None"`, `"True"`, `"False"`) in the IR so downstream analysis (VM, dataflow, CFG) does not need language-specific logic for basic constant values. The canonicalization happens at the frontier -- in the frontend dispatch tables -- so it is zero-cost at analysis time.
+All null/boolean literals are canonicalized to Python-form (`"None"`, `"True"`, `"False"`) in the IR so downstream consumers (VM, CFG) does not need language-specific logic for basic constant values. The canonicalization happens at the frontier -- in the frontend dispatch tables -- so it is zero-cost at analysis time.
 
 ### Separation of Expression and Statement Dispatch
 

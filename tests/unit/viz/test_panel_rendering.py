@@ -85,7 +85,7 @@ class TestVMStatePanelSorting:
 
 
 class TestCodeLabelSorting:
-    """Verify CodeLabel sorting in dataflow panels uses str key."""
+    """Verify CodeLabel sorting uses a str key."""
 
     def test_code_labels_sort_by_str(self):
         labels = [CodeLabel("func_z_0"), CodeLabel("func_a_0"), CodeLabel("func_m_0")]

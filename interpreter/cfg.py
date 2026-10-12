@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from interpreter import constants
 from interpreter.cfg_types import (
     CFG,
@@ -17,6 +19,7 @@ from interpreter.instructions import (
     Label_,
     ResumeContinuation,
     Return_,
+    Symbolic,
     Throw_,
 )
 from interpreter.ir import CodeLabel, Opcode
@@ -394,3 +397,54 @@ def _add_edge(cfg: CFG, src: CodeLabel, dst: CodeLabel) -> None:
         cfg.blocks[src].successors.append(dst)
     if src not in cfg.blocks[dst].predecessors:
         cfg.blocks[dst].predecessors.append(src)
+
+
+def function_sub_cfg(cfg: CFG, entry: CodeLabel) -> CFG:
+    """The blocks reachable from ``entry`` without entering another function or an ``end_`` block."""
+    boundaries = _function_boundaries(cfg) - {entry}
+    reachable = _reachable(cfg, frozenset({entry}), frozenset(), boundaries)
+    return CFG(
+        blocks={
+            label: BasicBlock(
+                label=label,
+                instructions=cfg.blocks[label].instructions,
+                successors=[s for s in cfg.blocks[label].successors if s in reachable],
+                predecessors=[
+                    p for p in cfg.blocks[label].predecessors if p in reachable
+                ],
+            )
+            for label in reachable
+        },
+        entry=entry,
+    )
+
+
+def _function_boundaries(cfg: CFG) -> frozenset[CodeLabel]:
+    return frozenset(
+        label
+        for label, block in cfg.blocks.items()
+        if label.starts_with("end_")
+        or (label.starts_with("func_") and _declares_a_param(block.instructions))
+    )
+
+
+def _declares_a_param(instructions: Sequence[InstructionBase]) -> bool:
+    return any(
+        isinstance(inst, Symbolic) and str(inst.hint).startswith(constants.PARAM_PREFIX)
+        for inst in instructions
+    )
+
+
+def _reachable(
+    cfg: CFG,
+    frontier: frozenset[CodeLabel],
+    seen: frozenset[CodeLabel],
+    boundaries: frozenset[CodeLabel],
+) -> frozenset[CodeLabel]:
+    if not frontier:
+        return seen
+    reached = seen | frontier
+    successors = frozenset(
+        s for label in frontier for s in cfg.blocks[label].successors if s in cfg.blocks
+    )
+    return _reachable(cfg, successors - reached - boundaries, reached, boundaries)

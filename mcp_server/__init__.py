@@ -1,2 +1,2 @@
 # pyright: standard
-"""RedDragon MCP Server — exposes compilation pipeline, VM, and dataflow analysis to LLMs."""
+"""RedDragon MCP Server — exposes the compilation pipeline and VM to LLMs."""

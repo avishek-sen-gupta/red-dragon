@@ -4,13 +4,10 @@ from __future__ import annotations
 
 import bisect
 import dataclasses
-import logging
 from dataclasses import dataclass
 from pathlib import Path
 
 from interpreter.constants import Language
-from interpreter.interprocedural.analyze import analyze_interprocedural
-from interpreter.interprocedural.types import InterproceduralResult
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.project.compiler import compile_directory
 from interpreter.project.entry_point import EntryPoint
@@ -20,8 +17,6 @@ from interpreter.project.types import LinkedProgram
 from interpreter.run import run_linked_traced
 from interpreter.trace_types import ExecutionTrace
 from viz.pipeline import ASTNode, _ast_from_ts_node
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -35,7 +30,6 @@ class ProjectPipelineResult:
     module_ir_ranges: list[tuple[int, int, Path]]
     instruction_to_index: dict[int, int]
     trace: ExecutionTrace | None = None
-    interprocedural: InterproceduralResult | None = None
 
 
 def run_project_pipeline(directory: str | Path, language: str) -> ProjectPipelineResult:
@@ -76,14 +70,7 @@ def execute_project(
     if entry_point is None:
         entry_point = EntryPoint.top_level()
     _vm, trace = run_linked_traced(result.linked, entry_point, max_steps=max_steps)
-    try:
-        interprocedural = analyze_interprocedural(
-            result.linked.merged_cfg, result.linked.merged_registry
-        )
-    except Exception:
-        logger.warning("Interprocedural analysis failed", exc_info=True)
-        interprocedural = None
-    return dataclasses.replace(result, trace=trace, interprocedural=interprocedural)
+    return dataclasses.replace(result, trace=trace)
 
 
 def lookup_module_for_index(
