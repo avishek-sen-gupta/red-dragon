@@ -115,40 +115,6 @@ flowchart TD
     VM -->|symbolic values only| ORACLE[LLM Oracle]
 ```
 
-### Pipeline visualisation
-
-![Pipeline Visualisation](docs/pipeline-viz.gif)
-
-### Built-in pipeline visualizer
-
-An interactive TUI for stepping through the full pipeline (source → AST → IR → CFG → execution) is included in `viz/`:
-
-```bash
-# Single-language mode
-uv run python -m viz viz/examples/pointer_demo.c -l c
-uv run python -m viz viz/examples/factorial.py -l python
-
-# Compare mode — side-by-side across languages
-uv run python -m viz compare c:viz/examples/pointer_demo.c rust:viz/examples/pointer_demo.rs
-
-# Lowering trace — interactive exploration of how frontend lowers AST to IR
-uv run python -m viz lower viz/examples/factorial.py -l python
-
-# Coverage matrix — cross-language frontend handler availability
-uv run python -m viz coverage
-uv run python -m viz coverage -l python,javascript,rust
-
-# Multi-file project — compile directory, browse import graph, debug across modules
-uv run python -m viz project tests/fixtures/projects/python_basic -l python
-uv run python -m viz project /path/to/java/project -l java -s 500
-```
-
-Six synchronized panels: **Source** (span-highlighted), **AST** (collapsible tree, toggle `a`), **IR** (grouped by CFG block), **VM State** (heap/stack/registers with diff highlighting), **CFG** (box-drawing graph, toggle `g`), and **Step** (delta summary). Arrow keys step forward/backward, space toggles auto-play, `q` quits.
-
-**Project mode** (`viz project`) compiles a directory with `compile_directory()`. It first shows the import DAG and an entry-point picker. Execution then uses the standard panels, and the Source and AST panels follow execution across modules. `p` returns to the overview.
-
-**Lowering trace** mode shows which frontend handler processed each AST node and the IR it emitted. **Coverage matrix** mode shows which AST node types each frontend handles: language-specific (`✓`) or shared (`✓*`).
-
 ## Setup
 
 ### Prerequisites

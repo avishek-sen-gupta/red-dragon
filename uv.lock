@@ -1565,7 +1565,6 @@ dev = [
     { name = "pytest-xdist" },
     { name = "radon" },
     { name = "tdd-guard-pytest" },
-    { name = "textual" },
 ]
 
 [package.metadata]
@@ -1595,7 +1594,6 @@ dev = [
     { name = "pytest-xdist", specifier = ">=3.8.0" },
     { name = "radon", specifier = ">=6.0" },
     { name = "tdd-guard-pytest", specifier = ">=0.1.2" },
-    { name = "textual", specifier = ">=8.1.0" },
 ]
 
 [[package]]

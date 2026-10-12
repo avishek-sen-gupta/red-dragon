@@ -38,7 +38,7 @@ consumer that only reads COBOL or computes byte ranges must not pay for the VM.
 - python-fp-lint — ast-grep, Ruff and beniget backends; needs `sg` and `ruff` reachable
 - import-linter (`lint-imports`)
 - tree-sitter and tree-sitter-language-pack — the 15 deterministic frontends
-- Pydantic — boundary parsing; textual — the TUI
+- Pydantic — boundary parsing
 - **JDK 17+ and Maven**, for the ProLeap COBOL parser bridge. `make jar` builds
   `proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar`, `make test` depends on
   it, and the parser JAR itself resolves from `~/.m2`.
