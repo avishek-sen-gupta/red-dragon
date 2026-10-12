@@ -88,16 +88,6 @@ fileignoreconfig:
   checksum: d578ee4c13334f12859d889dab668fd268517b00ab275550eb1031cae16e9398
 - filename: docs/superpowers/plans/2026-04-05-namespace-resolution.md
   checksum: 81b587d795b14a57513319f5abaf175ccb1f0bc65d167de7c517d58f535a5aac
-- filename: viz/panels/dataflow_summary_panel.py
-  checksum: b7bf334972b057a10e0ed2d21b815fc7d5b761ffd17548f8caf5c242d12038ca
-- filename: viz/panels/dataflow_graph_panel.py
-  checksum: c06ea51b0f066b3b49df2a2ea5cec4b00869780e41dd4bae28cc522ecd72d245
-- filename: viz/panels/vm_state_panel.py
-  checksum: 957a53fd69e05b7ceb86b79ae3700184fa98225c03e348d2ac07b29d2bb28bac
-- filename: tests/unit/viz/test_panel_rendering.py
-  checksum: 4479448a812174d943a526154562faa59db53a02eeceb223e278ba6bcc44c7da
-- filename: tests/unit/test_mcp_formatting.py
-  checksum: ccd6789eb7adc3a81ed186d4e90b83a212fb2c4f1e470e85aca3ea1737f49e77
 - filename: docs/superpowers/specs/2026-04-05-tui-mvvm-design.md
   checksum: b53c35744657dc6e1c89f0d2b69f3aca639bdeaed3ca44b8b7dc2d93d592fe6c
 - filename: docs/superpowers/plans/2026-04-05-tui-mvvm.md
@@ -116,8 +106,6 @@ fileignoreconfig:
   checksum: 39ea614ba3cc92415e831c1272a2626e8536cee61035a4cfda507be38037f0d1
 - filename: tests/unit/test_symbol_name.py
   checksum: 47d84e6284172705d13008b2b7fde4aa9da8625450e9a916582a2e35bb2b03b6
-- filename: viz/pipeline-showcase.html
-  checksum: 74e3900f1f5a57b42f3f2ac58f97996a755e7030c4e53ff06a21c9dfe3503cfa
 - filename: interpreter/frontends/typescript/frontend.py
   checksum: a5236212aeba0fd199259b8ec6216f6088a64f608908a871e874f82660381342
 - filename: .beads/backup/backup_state.json
