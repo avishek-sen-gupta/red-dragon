@@ -517,7 +517,7 @@ Use `lookup_methods`, `lookup_func`, `register_func`, `register_method`.
 
 ## 16. Dataflow analysis
 
-`interpreter/dataflow.py`, `analyze(cfg)`: collect definitions, solve reaching definitions (worklist, capped by `DATAFLOW_MAX_ITERATIONS` worklist pops), extract def-use chains, build the raw dependency graph by tracing registers back from stores, then its transitive closure. `DataflowResult` holds both graphs. Definitions and uses are `StorageIdentifier`s from each instruction's `reads()`/`writes()`. COBOL field-level memory dataflow is in `interpreter/cobol/memory_dataflow.py`. Details: [notes-on-dataflow-design.md](notes-on-dataflow-design.md).
+`interpreter/dataflow.py`, `analyze(cfg)`: collect definitions, solve reaching definitions (worklist, capped by `DATAFLOW_MAX_ITERATIONS` worklist pops), extract def-use chains, build the raw dependency graph by tracing registers back from stores, then its transitive closure. `DataflowResult` holds both graphs. Definitions and uses are `StorageIdentifier`s from each instruction's `reads()`/`writes()`. Details: [notes-on-dataflow-design.md](notes-on-dataflow-design.md).
 
 ## 17. Module map
 
@@ -549,7 +549,7 @@ interpreter/
 ├── overload/             overload resolution
 ├── project/              compiler, linker, LinkedProgram, EntryPoint, compile_cobol
 ├── frontends/            15 tree-sitter frontends
-├── cobol/                COBOL lowering, byte builtins, call_arguments, return_code_readback, memory dataflow
+├── cobol/                COBOL lowering, byte builtins, call_arguments, return_code_readback
 └── dataflow.py           reaching definitions, def-use, dependency graphs
 cobol_numeric/            CobolNumber, exact arithmetic, IBM scale rules (leaf)
 cobol_memory/             RegionId, FieldExtent, AbstractLocation, StorageIdentifier (leaf)

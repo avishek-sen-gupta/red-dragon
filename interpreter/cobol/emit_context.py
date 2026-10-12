@@ -49,12 +49,6 @@ from interpreter.cobol.ir_encoders import (
     build_encode_zoned_ir,
     build_encode_zoned_separate_ir,
 )
-from interpreter.cobol.memory_effects import (
-    EffectKind,
-    MemoryEffect,
-    MemoryEffectRecorder,
-    NullRecorder,
-)
 from interpreter.cobol.pic_scale import encode_digits
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.cobol.source_spans import to_source_location
@@ -67,7 +61,6 @@ from interpreter.instructions import (
     CallFunction,
     Const,
     InstructionBase,
-    InstructionId,
     Label_,
     LoadRegion,
     Return_,
@@ -105,29 +98,6 @@ DispatchFn = Callable[
 ]  # Any: CobolStatementType, circular-import boundary
 
 
-class InstructionIdSource:
-    """Mints ``InstructionId``s, and may outlive any one ``EmitContext``.
-
-    Ids exist to key the ``MemoryEffect`` sidecar. A ``CollectingRecorder`` is
-    held at FRONTEND level while a fresh ``EmitContext`` is built per program,
-    so a counter owned by the context restarts at 0 for program 2 and its ids
-    collide with program 1's in the one shared ``effects`` dict — silently
-    attaching the wrong extent to a region access, which is precisely the
-    dropped-edge failure this analysis exists to prevent. The frontend
-    therefore owns the source and hands the SAME one to every context, making
-    ids unique across every program it lowers. A context constructed without
-    one gets its own, so standalone lowering is unaffected.
-    """
-
-    def __init__(self, start: int = 0) -> None:
-        self._next = start
-
-    def mint(self) -> InstructionId:
-        inst_id = InstructionId(self._next)
-        self._next += 1
-        return inst_id
-
-
 class EmitContext:
     """Shared state and emit primitives for COBOL IR lowering."""
 
@@ -138,8 +108,6 @@ class EmitContext:
         condition_index: ConditionNameIndex = ConditionNameIndex({}),
         extension_strategies: Sequence[RedDragonExtensionLoweringStrategy] = (),
         asg: CobolASG = CobolASG(),
-        recorder: MemoryEffectRecorder = NullRecorder(),
-        inst_ids: InstructionIdSource | None = None,
         tolerant: bool = False,
         addressing_mode: AddressingMode = LP32_MODE,
     ) -> None:
@@ -149,7 +117,6 @@ class EmitContext:
         # references to fields from missing/stub copybooks. Off by default so
         # lowering errors (ambiguous references etc.) surface.
         self._tolerant = tolerant
-        self._recorder: MemoryEffectRecorder = recorder
         self._observer = observer
         self._condition_index = condition_index
         self._extension_strategies = tuple(extension_strategies)
@@ -157,7 +124,6 @@ class EmitContext:
         self._instructions: list[InstructionBase] = []
         self._reg_counter: int = 0
         self._label_counter: int = 0
-        self._inst_ids: InstructionIdSource = inst_ids or InstructionIdSource()
         self._section_paragraphs: dict[str, list[str]] = {}
         self.use_by_file: dict[str, str] = {}
         self.use_by_mode: dict[str, str] = {}
@@ -303,24 +269,17 @@ class EmitContext:
     def emit_inst(
         self, inst: InstructionBase, *, span: SourceSpan | None = None
     ) -> InstructionBase:
-        """Emit a typed instruction directly, assigning it a stable id.
+        """Emit a typed instruction directly.
 
         ``span`` is the COBOL construct this instruction was lowered from.
         Precedence matches the tree-sitter frontends' ``node=`` parameter
         (``frontends/context.py:219-222``): a source location already on
         the instruction wins, then ``span``, then unknown.
         """
-        inst = dataclasses.replace(inst, id=self._inst_ids.mint())
         if inst.source_location.is_unknown() and span is not None:
             inst = dataclasses.replace(inst, source_location=to_source_location(span))
         self._instructions.append(inst)
         return inst
-
-    # ── Region access funnel ──────────────────────────────────────
-    #
-    # Every LoadRegion/WriteRegion in the system is constructed here, so that a
-    # region access and the declaration of what it touches cannot drift apart.
-    # See tests/unit/cobol/test_region_funnel_invariant.py.
 
     def _emit_load_region(
         self,
@@ -332,18 +291,8 @@ class EmitContext:
         *,
         span: SourceSpan | None = None,
     ) -> None:
-        """Emit a region read AND declare its memory effect.
-
-        The only way to construct a ``LoadRegion`` — see
-        ``test_region_funnel_invariant``.
-
-        ``length`` is how many bytes the machine touches; ``extent`` is where
-        the analysis believes those bytes lie. They coincide for an EXACT
-        access, but a CLAMPED extent deliberately spans the whole OCCURS
-        construct while the instruction still reads one element, so the
-        instruction length is never derived from the extent.
-        """
-        inst = self.emit_inst(
+        """Emit a region read of ``length`` bytes."""
+        self.emit_inst(
             LoadRegion(
                 result_reg=result_reg,
                 region_reg=region_reg,
@@ -351,14 +300,6 @@ class EmitContext:
                 length=length,
             ),
             span=span,
-        )
-        self._recorder.record(
-            inst.id,
-            MemoryEffect(
-                kind=EffectKind.READ,
-                extent=extent,
-                source_location=inst.source_location,
-            ),
         )
 
     def _emit_write_region(
@@ -371,13 +312,8 @@ class EmitContext:
         *,
         span: SourceSpan | None = None,
     ) -> None:
-        """Emit a region write AND declare its memory effect.
-
-        The only way to construct a ``WriteRegion`` — see
-        ``test_region_funnel_invariant``. ``length`` and ``extent`` are
-        distinct for the reason given on ``_emit_load_region``.
-        """
-        inst = self.emit_inst(
+        """Emit a region write of ``length`` bytes."""
+        self.emit_inst(
             WriteRegion(
                 region_reg=region_reg,
                 offset_reg=offset_reg,
@@ -385,14 +321,6 @@ class EmitContext:
                 value_reg=value_reg,
             ),
             span=span,
-        )
-        self._recorder.record(
-            inst.id,
-            MemoryEffect(
-                kind=EffectKind.WRITE,
-                extent=extent,
-                source_location=inst.source_location,
-            ),
         )
 
     def _materialise_offset(

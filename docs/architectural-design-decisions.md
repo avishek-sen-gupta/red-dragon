@@ -3120,3 +3120,13 @@ Because `Halt_` is a distinct type, it is naturally absent from `_infer_return`'
 **Decision:** `FieldExtent` computes its hash at construction, its enums hash by identity, and `__reduce__` rebuilds the hash after unpickling. `parse_pic` is cached, since it is a pure function returning a frozen descriptor.
 
 **Consequences:** The ASG load takes 0.2 s. Callers of the same picture share one immutable descriptor.
+
+---
+
+### ADR-178: Remove COBOL memory dataflow and instruction ids (2026-10-12)
+
+**Context:** RedDragon is now mainly the VM that red-dragon-forge runs on, and nothing outside this repo used the IR memory dataflow (`interpreter/cobol/memory_dataflow.py`). It had drifted: since CALL USING passes addresses (ADR-150), it no longer saw a CALL write its BY REFERENCE arguments. Forge's cobble has its own field dataflow over the ASG.
+
+**Decision:** Delete the memory dataflow, the `MemoryEffectRecorder` threaded through `CobolFrontend` and `EmitContext`, and `InstructionId` (ADR-174), whose only purpose was keying the recorder's sidecar. Supersedes ADR-174.
+
+**Consequences:** `CobolFrontend` and `EmitContext` no longer take `recorder`. Instructions carry no `id`. The region-access helpers still take a `FieldExtent`, now unused; removing it reaches into forge's CICS lowering and is tracked separately.

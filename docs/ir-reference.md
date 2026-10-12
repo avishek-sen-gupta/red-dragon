@@ -12,9 +12,6 @@ Each opcode has a frozen dataclass in `interpreter/instructions.py` (37 classes)
 | `result_reg` | `Register` | `NO_REGISTER` | target register |
 | `label` | `CodeLabel` | `NO_LABEL` | label (`LABEL`, `BRANCH`) |
 | `branch_targets` | `tuple[CodeLabel, ...]` | `()` | targets (`BRANCH_IF`) |
-| `id` | `InstructionId` | `NO_INSTRUCTION_ID` | stable sidecar coordinate |
-
-`InstructionId` is a `NewType` over `int`; `NO_INSTRUCTION_ID` is `-1`. The field is `compare=False`, so two instructions differing only in `id` are equal. Ids key data kept beside the IR rather than in it. The COBOL frontend mints them from one `InstructionIdSource` shared across every program it lowers, and keys its `MemoryEffect` records by them.
 
 Fields use domain types:
 

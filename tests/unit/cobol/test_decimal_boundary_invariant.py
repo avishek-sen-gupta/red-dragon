@@ -12,9 +12,8 @@ from tests.covers import NotLanguageFeature, covers
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
-# A deliberate regex rather than ast-grep, for the same reason as
-# test_region_funnel_invariant.py: the tokens are single-line and unambiguous,
-# and over-matching only names an extra file for a human to clear.
+# A deliberate regex rather than ast-grep: the tokens are single-line and
+# unambiguous, and over-matching only names an extra file for a human to clear.
 DECIMAL_USE = re.compile(
     r"^\s*(from\s+decimal\s+import|import\s+decimal)\b|\bDecimal\(", re.MULTILINE
 )
