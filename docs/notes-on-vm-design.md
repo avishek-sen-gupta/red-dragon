@@ -74,7 +74,7 @@ For COBOL, `run()` switches a top-level entry to the program's procedure functio
 
 **Configuration.** `VMConfig` (`interpreter/run_types.py`, frozen): `backend`, `max_steps` (default 100), `verbose`, `unresolved_call_strategy` (`SYMBOLIC` or `LLM`), `source_language`, `io_provider`, `step_callback` and `step_callback_interval`.
 
-**Strategies.** `ExecutionStrategies` (`interpreter/run.py`, frozen) bundles the per-language pieces: `type_env`, `conversion_rules`, `overload_resolver`, `binop_coercion`, `unop_coercion`, the function and class symbol tables, `field_fallback`, `function_scoping` and `symbol_table`. `build_execution_strategies` and `_build_strategies_from_linked` build it, running type inference and building the overload resolver. Language choices:
+**Strategies.** `ExecutionStrategies` (`interpreter/run.py`, frozen) bundles the per-language pieces: `type_env`, `conversion_rules`, `overload_resolver`, `binop_coercion`, `unop_coercion`, the function and class symbol tables, `field_fallback`, `function_scoping` and `symbol_table`. `_build_strategies_from_linked` builds it from a `LinkedProgram`, running type inference and building the overload resolver. Language choices:
 
 | Strategy | Languages | Behaviour |
 |---|---|---|

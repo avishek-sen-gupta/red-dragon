@@ -7,12 +7,12 @@ from interpreter.constants import Language
 from interpreter.frontend import get_frontend
 from interpreter.frontends.c import CFrontend
 from interpreter.frontends.c.features import CFeature
+from interpreter.func_name import FuncName
 from interpreter.instructions import Binop, BranchIf, CallFunction, InstructionBase
 from interpreter.ir import Opcode
 from interpreter.parser import TreeSitterParserFactory
-from interpreter.registry import build_registry
-from interpreter.run import build_execution_strategies, execute_cfg, initial_vm_state
-from interpreter.run_types import VMConfig
+from interpreter.project.entry_point import EntryPoint
+from interpreter.run import run
 from interpreter.type_name import TypeName
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 from interpreter.types.typed_value import unwrap
@@ -1107,37 +1107,11 @@ class TestCFrontendTernaryOperator:
             return result1 + result2;
         }
         """
-        c_frontend = get_frontend(Language("c"))
-
-        instructions = c_frontend.lower(source.encode("utf-8"))
-        cfg = build_cfg(instructions)
-        registry = build_registry(
-            instructions,
-            cfg,
-            func_symbol_table=c_frontend.func_symbol_table,
-            class_symbol_table=c_frontend.class_symbol_table,
-        )
-        strategies = build_execution_strategies(
-            c_frontend, instructions, registry, Language("c")
-        )
-
-        # Phase 1: preamble
-        vm, _ = execute_cfg(
-            cfg,
-            cfg.entry,
-            registry,
-            VMConfig(max_steps=200),
-            strategies,
-            vm=initial_vm_state(),
-        )
-
-        main_label = next(
-            lbl for lbl in cfg.blocks if "main" in str(lbl) and "func" in str(lbl)
-        )
-
-        # Phase 2: call main
-        final_state, _ = execute_cfg(
-            cfg, main_label, registry, VMConfig(max_steps=200), strategies, vm=vm
+        final_state = run(
+            source,
+            language=Language.C,
+            entry_point=EntryPoint.function(lambda f: f.name == FuncName("main")),
+            max_steps=400,
         )
 
         assert unwrap(final_state.current_frame.local_vars[VarName("result1")]) == 6

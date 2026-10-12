@@ -1591,11 +1591,12 @@ class InstructionBase:          # 37 per-opcode frozen subclasses
   <pre><code class="language-python">from interpreter import run, execute_cfg, VMConfig
 from interpreter.constants import Language
 from interpreter.project.compiler import compile_directory
-from interpreter.run import run_linked
+from interpreter.run import initial_vm_state, run_linked
 
 vm           = run(source, language="python")
-vm, ex_stats = execute_cfg(cfg, "entry", registry, VMConfig())
-vm           = run_linked(compile_directory(root, Language.JAVA), entry_point)</code></pre>
+vm, ex_stats = execute_cfg(cfg, "entry", registry, VMConfig(), vm=initial_vm_state())
+vm           = run_linked(compile_directory(root, Language.JAVA), entry_point,
+                          initial_vm=initial_vm_state())</code></pre>
   <div class="fragment" style="margin-top: 15px;">
     <table style="font-size: 0.7em;">
       <tr><th>Function</th><th>Returns</th></tr>
