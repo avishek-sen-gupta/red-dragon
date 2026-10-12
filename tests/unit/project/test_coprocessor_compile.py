@@ -49,7 +49,7 @@ def test_defaults_are_non_execution_owning_with_null_dialect_parser():
 def test_spec_is_frozen():
     spec = CoprocessorSpec(name="noop", make_strategy=_FakeStrategy)
     with pytest.raises(dataclasses.FrozenInstanceError):
-        setattr(spec, "name", "renamed")
+        spec.name = "renamed"
 
 
 _TRIVIAL_PROGRAM = b"""\
@@ -188,4 +188,55 @@ def test_specs_contributions_merge_and_a_default_spec_contributes_nothing():
         "PGMZERO",
         "__main__",
         "__start_up__",
+    ]
+
+
+_CALLS_BOTH_KINDS = b"""\
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. BOTHCALL.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01 WS-CALLEE PIC X(8) VALUE 'DNCALLEE'.
+       PROCEDURE DIVISION.
+           CALL 'DISKCALL'.
+           CALL WS-CALLEE.
+           GOBACK.
+"""
+
+
+def _program_id(source: str) -> str:
+    line = next(text for text in source.splitlines() if "PROGRAM-ID." in text)
+    return line.split("PROGRAM-ID.")[1].strip(" .")
+
+
+def _logging_rewrite(name: str) -> Callable[[str], str]:
+    def rewrite(source: str) -> str:
+        _ORDER.info("%s:%s", name, _program_id(source))
+        return source
+
+    return rewrite
+
+
+def test_every_compiled_program_is_rewritten_by_every_spec(tmp_path, caplog):
+    """The main program, a callee discovered on the search path and a linked
+    subprogram are all compiled, so each must be rewritten by every spec: a
+    callee's EXEC SQL INCLUDE or EIB references need the same treatment as
+    the caller's."""
+    (tmp_path / "DISKCALL.cbl").write_bytes(_callee("DISKCALL"))
+    specs = [CoprocessorSpec(n, _FakeStrategy, _logging_rewrite(n)) for n in "ab"]
+
+    with caplog.at_level(logging.INFO, logger=__name__):
+        _, linked = compile_program(
+            _CALLS_BOTH_KINDS,
+            make_cobol_parser(),
+            specs,
+            source_search_dirs=(tmp_path,),
+            linked_subprogram_sources={"DNCALLEE": _callee("DNCALLEE")},
+        )
+
+    assert _linked_stems(linked) == ["DISKCALL", "DNCALLEE", "__main__", "__start_up__"]
+    assert sorted(r.message for r in caplog.records if r.name == __name__) == [
+        f"{spec}:{program}"
+        for spec in "ab"
+        for program in ("BOTHCALL", "DISKCALL", "DNCALLEE")
     ]
