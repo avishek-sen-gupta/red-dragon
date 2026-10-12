@@ -24,7 +24,7 @@ from cobol_asg.frontend_extension import DialectParser
 from cobol_asg.lp32 import LP32_MODE
 from interpreter.cobol.condition_name_index import build_condition_index_over
 from interpreter.cobol.data_layout import DataLayout
-from interpreter.cobol.emit_context import EmitContext, InstructionIdSource
+from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.field_resolution import ResolvedFieldRef
 from interpreter.cobol.lower_data_division import (
     lower_sectioned_data_division,
@@ -34,7 +34,6 @@ from interpreter.cobol.lower_program_init import (
     lower_program_init,
     lower_ws_from_singleton,
 )
-from interpreter.cobol.memory_effects import MemoryEffectRecorder, NullRecorder
 from interpreter.cobol.sectioned_layout import (
     MaterialisedSectionedLayout,
     build_sectioned_layout,
@@ -71,7 +70,6 @@ class CobolFrontend(Frontend):
         observer: FrontendObserver = NullFrontendObserver(),
         extension_strategies: Sequence[RedDragonExtensionLoweringStrategy] = (),
         dialect_parsers: Sequence[DialectParser] = (),
-        recorder: MemoryEffectRecorder = NullRecorder(),
         tolerant: bool = False,
         addressing_mode: AddressingMode = LP32_MODE,
     ):
@@ -82,23 +80,10 @@ class CobolFrontend(Frontend):
         self._extension_strategies = tuple(extension_strategies)
         self._dialect_parsers = tuple(dialect_parsers)
         self._layout = DataLayout()
-        # Opt-in memory-effect recording. The default NullRecorder makes this
-        # free: the funnel still calls record(), which returns immediately, and
-        # nothing is retained. Pass a CollectingRecorder to obtain the sidecar
-        # that interpreter.cobol.memory_dataflow consumes.
-        self._recorder: MemoryEffectRecorder = recorder
-        # Instruction ids key the recorder's sidecar, and the recorder outlives
-        # any one EmitContext (a fresh context is built per _lower_asg call).
-        # The id source is therefore owned HERE, so ids stay unique across
-        # every program this frontend lowers and program 2 cannot overwrite
-        # program 1's effects. See InstructionIdSource.
-        self._inst_ids = InstructionIdSource()
         self._ctx = EmitContext(
             dispatch_fn=dispatch_statement,
             observer=observer,
             extension_strategies=self._extension_strategies,
-            recorder=recorder,
-            inst_ids=self._inst_ids,
             tolerant=tolerant,
         )
 
@@ -248,8 +233,6 @@ class CobolFrontend(Frontend):
             condition_index=condition_index,
             extension_strategies=self._extension_strategies,
             asg=asg,
-            recorder=self._recorder,
-            inst_ids=self._inst_ids,
             tolerant=self._tolerant,
             addressing_mode=self._addressing_mode,
         )

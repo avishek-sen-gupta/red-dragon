@@ -16,7 +16,6 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import (
     Any,
-    NewType,
     Self,
     Union,  # noqa: F401 — Union used in Instruction type alias
     get_args,
@@ -106,9 +105,6 @@ def _as_register(val: Any) -> Register | Any:
 
 # ── Base ─────────────────────────────────────────────────────────
 
-InstructionId = NewType("InstructionId", int)
-NO_INSTRUCTION_ID = InstructionId(-1)
-
 
 @dataclass(frozen=True)
 class InstructionBase:
@@ -118,7 +114,6 @@ class InstructionBase:
     result_reg: Register = NO_REGISTER
     label: CodeLabel = NO_LABEL
     branch_targets: tuple[CodeLabel, ...] = ()
-    id: InstructionId = field(default=NO_INSTRUCTION_ID, compare=False)
 
     @property
     def opcode(self) -> Opcode:
