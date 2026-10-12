@@ -61,7 +61,6 @@ LinkedProgram
 |----------|--------|---------|
 | `compile_directory(directory, language)` | `compiler.py` | Full pipeline: scan → compile → link |
 | `run_project(entry_file, language, project_root?, ...)` | `api.py` | compile_directory + VM execution |
-| `handle_load_project(entry_file, language)` | `mcp_server/tools.py` | MCP tool wrapper |
 
 ---
 
@@ -434,8 +433,6 @@ interpreter/registry.py
 interpreter/api.py
     run_project()
 
-mcp_server/tools.py      handle_load_project()
-mcp_server/server.py      load_project MCP tool registration
 ```
 
 ---
@@ -458,4 +455,3 @@ Core tests, in `tests/unit/project/` and `tests/integration/project/` (counts ar
 | `test_fixture_projects.py` | 5 | On-disk fixture projects |
 | `test_all_languages_execution.py` | 21 | Multi-file execution for all 15 languages |
 | `test_api_integration.py` | 1 | run_project() |
-| `test_mcp_tool.py` | 5 | MCP load_project tool |

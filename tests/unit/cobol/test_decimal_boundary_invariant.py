@@ -17,7 +17,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 DECIMAL_USE = re.compile(
     r"^\s*(from\s+decimal\s+import|import\s+decimal)\b|\bDecimal\(", re.MULTILINE
 )
-SCANNED_ROOTS = ("interpreter", "cobol_asg", "cobol_memory", "mcp_server")
+SCANNED_ROOTS = ("interpreter", "cobol_asg", "cobol_memory")
 
 
 def _decimal_users() -> set[str]:
