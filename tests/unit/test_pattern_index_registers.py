@@ -24,10 +24,11 @@ from __future__ import annotations
 
 import pytest
 
-from interpreter.api import lower_source
 from interpreter.constants import Language
+from interpreter.frontend import get_frontend
 from interpreter.instructions import LoadIndex, StoreIndex
 from interpreter.register import Register
+from interpreter.run import run
 from tests.covers import NotLanguageFeature, covers
 
 # Exercises the sites that used to stringify: a fixed-length sequence pattern,
@@ -74,7 +75,7 @@ def _index_ops(ir):
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_every_index_operand_is_a_register(source, language):
     """No index operand may be a bare str, which is what str(i) produced."""
-    ir = lower_source(source, language)
+    ir = get_frontend(language).lower(source.encode("utf-8"))
     ops = _index_ops(ir)
     assert ops, "sample lowered no index instructions — the sample has drifted"
     offenders = [
@@ -95,7 +96,7 @@ def test_every_index_operand_is_written_by_some_instruction(source, language):
     `isinstance(idx_val, int)` fast path. A register loaded by `Const.int_`
     satisfies both.
     """
-    ir = lower_source(source, language)
+    ir = get_frontend(language).lower(source.encode("utf-8"))
     defined = {
         str(i.result_reg)
         for i in ir
@@ -112,13 +113,8 @@ def test_every_index_operand_is_written_by_some_instruction(source, language):
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_pattern_matching_still_computes_the_right_answers():
     """Behaviour guard for the change above: [3,4] -> 7, [2,5,9,9] -> 10."""
-    from interpreter.api import execute_traced
-
-    trace = execute_traced(PATTERN_SOURCE, Language.PYTHON, max_steps=5000)
-    assert trace.steps, "execution produced no steps"
-    local_vars = trace.steps[-1].vm_state.call_stack[0].local_vars
-    # keys are VarName, values are TypedValue
-    values = {str(name): tv.value for name, tv in local_vars.items()}
+    vm = run(PATTERN_SOURCE, language=Language.PYTHON, max_steps=5000)
+    values = {str(name): tv.value for name, tv in vm.call_stack[0].local_vars.items()}
     assert values["r1"] == 7, f"[3, 4] -> a + b should be 7, got {values['r1']!r}"
     assert (
         values["r2"] == 10

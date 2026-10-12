@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from interpreter.api import build_cfg_from_source
-from interpreter.cfg import build_cfg
+from interpreter.cfg import build_cfg, extract_function_instructions
 from interpreter.constants import Language
 from interpreter.frontend import get_frontend
 from interpreter.frontends.c import CFrontend
@@ -19,6 +18,11 @@ from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 from interpreter.types.typed_value import unwrap
 from interpreter.var_name import VarName
 from tests.covers import NotLanguageFeature, covers
+
+
+def _function_cfg(source: str, function_name: str):
+    instructions = get_frontend(Language.C).lower(source.encode("utf-8"))
+    return build_cfg(extract_function_instructions(instructions, function_name))
 
 
 def _parse_and_lower(source: str) -> list[InstructionBase]:
@@ -1147,7 +1151,7 @@ class TestCFrontendTernaryOperator:
             return result;
         }
         """
-        cfg = build_cfg_from_source(source, "c", function_name="test_func")
+        cfg = _function_cfg(source, "test_func")
 
         # Verify the structure: conditional branch and a merge point
         branch_block = cfg.blocks[cfg.entry]
@@ -1177,7 +1181,7 @@ class TestCFrontendTernaryOperator:
             return result;
         }
         """
-        cfg = build_cfg_from_source(source, "c", function_name="test_complex")
+        cfg = _function_cfg(source, "test_complex")
 
         # Verify we have multiple BranchIf instructions
         branch_ifs = [
