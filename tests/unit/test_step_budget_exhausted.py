@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import logging
 
-from interpreter.api import execute_traced
-from interpreter.run import run
+from interpreter.constants import Language
+from interpreter.project.entry_point import EntryPoint
+from interpreter.run import run, run_linked_traced
 from tests.covers import NotLanguageFeature, covers
+from tests.unit.test_run_linked_traced import _build_linked_program
 
 BUDGET_MESSAGE = "VM ran out of step budget"
 
@@ -41,11 +43,19 @@ class TestStepBudgetExhausted:
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_traced_execution_warns_when_budget_exhausted(self, caplog):
         with caplog.at_level(logging.WARNING, logger="interpreter.run"):
-            execute_traced(INFINITE_LOOP, language="python", max_steps=50)
+            run_linked_traced(
+                _build_linked_program(INFINITE_LOOP, Language.PYTHON),
+                entry_point=EntryPoint.top_level(),
+                max_steps=50,
+            )
         assert _budget_warned(caplog)
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_traced_execution_no_warning_when_program_ends(self, caplog):
         with caplog.at_level(logging.WARNING, logger="interpreter.run"):
-            execute_traced(TERMINATING, language="python", max_steps=500)
+            run_linked_traced(
+                _build_linked_program(TERMINATING, Language.PYTHON),
+                entry_point=EntryPoint.top_level(),
+                max_steps=500,
+            )
         assert not _budget_warned(caplog)
