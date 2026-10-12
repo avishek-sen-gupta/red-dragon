@@ -24,13 +24,16 @@ from __future__ import annotations
 
 from cobol_asg.source_span import SourceSpan
 from cobol_memory.region_id import RegionId
-from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.field_resolution import whole_field_extent
+from interpreter.cobol.run_unit import (
+    RUN_UNIT_LAYOUT,
+    RUN_UNIT_RETURN_CODE,
+    RUN_UNIT_VAR,
+)
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.cobol.special_registers import RETURN_CODE_NAME
-from interpreter.func_name import FuncName
-from interpreter.instructions import CallFunction, Return_
+from interpreter.instructions import LoadVar, Return_
 from interpreter.register import Register
 
 
@@ -61,19 +64,21 @@ def emit_publish_run_unit_return_code(
     *,
     span: SourceSpan | None,
 ) -> None:
-    """Record this program's RETURN-CODE as the run unit's, on the way out.
+    """Write this program's RETURN-CODE into the run-unit region on the way out.
 
     Every program exit publishes, and so does ``STOP RUN``, so the last program
-    to end is the one whose value survives — which is the value the operating
-    system receives. Without it the read-back has N per-program registers and no
-    way to tell which is the run unit's (red-dragon-cvwu).
+    to end is the one whose value survives -- which is the value the operating
+    system receives (red-dragon-cvwu).
     """
-    ctx.emit_inst(
-        CallFunction(
-            result_reg=ctx.fresh_reg(),
-            func_name=FuncName(BuiltinName.PUBLISH_RETURN_CODE),
-            args=(value_reg,),
-        ),
+    fl = RUN_UNIT_LAYOUT.lookup_or_raise(RUN_UNIT_RETURN_CODE)
+    region_reg = ctx.fresh_reg()
+    ctx.emit_inst(LoadVar(result_reg=region_reg, name=RUN_UNIT_VAR), span=span)
+    ctx._emit_write_region(
+        region_reg=region_reg,
+        offset_reg=ctx.const_to_reg(fl.offset, span=span),
+        value_reg=value_reg,
+        length=fl.byte_length,
+        extent=whole_field_extent(fl, RegionId.RUN_UNIT),
         span=span,
     )
 
