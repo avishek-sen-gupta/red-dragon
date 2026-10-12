@@ -1,4 +1,4 @@
-"""Tests for execute_cfg_traced and execute_traced — traced execution with step snapshots."""
+"""Tests for execute_cfg_traced — traced execution with step snapshots."""
 
 from interpreter.cfg import build_cfg
 from interpreter.func_name import FuncName

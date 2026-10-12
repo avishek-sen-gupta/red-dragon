@@ -168,12 +168,9 @@ export HUGGING_FACE_API_TOKEN=hf_...     # for HuggingFace Inference Endpoints
 
 ```bash
 uv run python interpreter.py myfile.py -v                 # run on a file
-uv run python interpreter.py myfile.py --ir-only          # print IR only
-uv run python interpreter.py myfile.py --cfg-only         # print CFG only
 uv run python interpreter.py example.js -l javascript     # non-Python source
 uv run python interpreter.py myfile.py -f llm -v          # LLM frontend
 uv run python interpreter.py myfile.py -f chunked_llm     # chunked LLM frontend
-uv run python interpreter.py myfile.py --mermaid --function foo  # Mermaid CFG for one function
 ```
 
 With no file argument, `interpreter.py` runs a built-in factorial demo.
@@ -186,10 +183,6 @@ With no file argument, `interpreter.py` runs a built-in factorial demo.
 | `-b` | LLM backend: `claude`, `openai`, `ollama`, `huggingface` (default: `claude`) |
 | `-n` | Maximum interpretation steps (default: 100) |
 | `-f` | Frontend: `deterministic`, `llm`, `chunked_llm` (default: `deterministic`) |
-| `--ir-only` | Print the IR and exit |
-| `--cfg-only` | Print the CFG and exit |
-| `--mermaid` | Output CFG as a Mermaid flowchart and exit |
-| `--function` | Restrict the CFG to one function (with `--mermaid` or `--cfg-only`) |
 
 ### Running COBOL
 
@@ -202,12 +195,8 @@ uv run python -m interpreter cobol/ --entry MAINPROG --max-steps 100000 --log-le
 
 ### Programmatic API
 
-All CLI pipelines are available as composable functions — no argparse required.
-
-#### Deterministic (no LLM calls)
-
 ```python
-from interpreter import lower_source, lower_and_infer, dump_ir, build_cfg_from_source, dump_cfg, dump_mermaid, extract_function_source, ir_stats, run
+from interpreter import run
 from interpreter.constants import Language
 
 source = """
@@ -218,117 +207,39 @@ def factorial(n):
 result = factorial(6)
 """
 
-# Parse and lower to IR via tree-sitter (0 LLM calls)
-instructions = lower_source(source, language=Language.PYTHON)
-instructions = lower_source(source, language="javascript")  # strings still accepted
-
-# Get IR as text
-ir_text = dump_ir(source, language=Language.PYTHON)
-
-# Build a CFG (optionally scoped to a single function)
-cfg = build_cfg_from_source(source, function_name="factorial")
-
-# Get CFG or Mermaid text
-cfg_text = dump_cfg(source)
-mermaid = dump_mermaid(source, function_name="factorial")
-
-# Extract raw source text of a named function (recursive — finds methods and nested functions)
-fn_source = extract_function_source(source, "factorial", language=Language.PYTHON)
-
-# Lower + type inference in one call (propagates frontend type seeds)
-instructions, env = lower_and_infer(source, language=Language.PYTHON)
-print(env.var_types)         # {"result": "Int", ...}
-print(env.get_func_signature("factorial"))  # FunctionSignature(params=(...), return_type="Int")
-
-# Get opcode frequency counts
-stats = ir_stats(source, language=Language.PYTHON)  # e.g. {"CONST": 3, "STORE_VAR": 2, ...}
-
-# Full pipeline: parse → lower → CFG → execute (deterministic, 0 LLM calls)
 vm = run(source, language=Language.PYTHON, verbose=True)
-frame = vm.call_stack[0]
-print(frame.local_vars["result"])  # 720
+print(vm.call_stack[0].local_vars["result"])  # 720
 ```
 
-#### With LLM calls
+With an LLM resolving external calls the deterministic frontend cannot:
 
 ```python
-from interpreter import lower_source, run
+from interpreter import run
 from interpreter.constants import Language
-from interpreter import constants
 from interpreter.run_types import UnresolvedCallStrategy
 
-# LLM frontend: the LLM acts as a compiler frontend, lowering source to IR
-# Works for any language, even those without a tree-sitter frontend
-instructions = lower_source(
-    "x = math.sqrt(16)\ny = x + 1\n",
-    language=Language.PYTHON,
-    frontend_type=constants.FRONTEND_LLM,       # or "chunked_llm" for large files
-    backend="claude",                            # or "openai", "ollama", "huggingface"
-)
-
-# LLM resolver: deterministic frontend + LLM resolves external/missing dependencies
-# math.sqrt and math.floor are external — the LLM provides plausible concrete values
 vm = run(
     "import math\nx = math.sqrt(16)\ny = math.floor(7.8)\n",
     language=Language.PYTHON,
     unresolved_call_strategy=UnresolvedCallStrategy.LLM,
     backend="claude",
 )
-frame = vm.call_stack[0]
-print(frame.local_vars["x"])  # 4.0 (resolved by LLM)
-print(frame.local_vars["y"])  # 7   (resolved by LLM)
-
-# LLM frontend for an unsupported language (no tree-sitter frontend needed)
-from interpreter.llm.llm_client import get_llm_client
-from interpreter.llm.llm_frontend import LLMFrontend
-from interpreter.constants import LLMProvider
-from interpreter.cfg import build_cfg
-from interpreter.registry import build_registry
-from interpreter import execute_cfg, VMConfig
-
-haskell_source = "factorial 0 = 1\nfactorial n = n * factorial (n - 1)\nx = factorial 5\n"
-llm_client = get_llm_client(provider=LLMProvider.CLAUDE)  # or "claude" (StrEnum)
-frontend = LLMFrontend(llm_client=llm_client, language="haskell")
-instructions = frontend.lower(haskell_source.encode("utf-8"))
-
-cfg = build_cfg(instructions)
-registry = build_registry(instructions, cfg)
-vm, stats = execute_cfg(cfg, cfg.entry, registry, VMConfig(max_steps=200))
 ```
 
-#### Standalone VM execution
-
-`execute_cfg` runs a pre-built CFG without re-running the full parse → lower → build pipeline — useful for programmatic use where you build/customize the CFG and registry independently:
+`execute_cfg` runs a pre-built CFG:
 
 ```python
-from interpreter import lower_source, execute_cfg, VMConfig
-from interpreter.constants import Language
+from interpreter import execute_cfg, VMConfig
 from interpreter.cfg import build_cfg
+from interpreter.constants import Language
+from interpreter.frontend import get_frontend
 from interpreter.registry import build_registry
 
-instructions = lower_source(source, language=Language.PYTHON)
+instructions = get_frontend(Language.PYTHON).lower(source.encode("utf-8"))
 cfg = build_cfg(instructions)
 registry = build_registry(instructions, cfg)
-
 vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=200))
-# stats.steps, stats.llm_calls, stats.final_heap_objects, ...
 ```
-
-| Function | Returns | Purpose |
-|---|---|---|
-| `lower_source(source, language, frontend_type, backend)` | `list[InstructionBase]` | Parse + lower source to IR |
-| `lower_and_infer(source, language, frontend_type, backend)` | `(list[InstructionBase], TypeEnvironment)` | Lower + type inference with frontend type seeds |
-| `dump_ir(source, language, frontend_type, backend)` | `str` | IR text output |
-| `build_cfg_from_source(source, language, frontend_type, backend, function_name)` | `CFG` | Parse → lower → optionally slice → build CFG |
-| `dump_cfg(source, language, frontend_type, backend, function_name)` | `str` | CFG text output |
-| `dump_mermaid(source, language, frontend_type, backend, function_name)` | `str` | Mermaid flowchart output |
-| `ir_stats(source, language, frontend_type, backend)` | `dict[str, int]` | Opcode frequency counts |
-| `extract_function_source(source, function_name, language)` | `str` | Raw source text of a named function (recursive AST walk) |
-| `execute_cfg(cfg, entry_point, registry, config)` | `(VMState, ExecutionStats)` | Execute a pre-built CFG from a given entry point |
-| `execute_traced(source, language, function_name, entry_point, frontend_type, backend, max_steps)` | `ExecutionTrace` | Parse → lower → CFG → execute with per-step VMState snapshots for replay |
-| `run_project(entry_file, language, project_root?, max_steps?, verbose?)` | `VMState` | Multi-file: discover → compile → link → execute |
-
-Functions compose hierarchically: `dump_ir` calls `lower_source`; `dump_cfg` and `dump_mermaid` call `build_cfg_from_source`, which calls `lower_source`. Full execution is available via `interpreter.run()`, via `execute_cfg()` for standalone VM execution with a pre-built CFG, or via `execute_traced()` for step-by-step replay with VMState snapshots at each instruction.
 
 ### Multi-file project support
 
@@ -337,12 +248,15 @@ RedDragon can execute real-world multi-file codebases. Given an entry file, it r
 **Supported across all 15 deterministic frontends + COBOL** — Python, JavaScript, TypeScript, Java, Go, Rust, C, C++, C#, Kotlin, Scala, Ruby, PHP, Lua, Pascal, COBOL.
 
 ```python
-from interpreter.api import run_project
-from interpreter.constants import Language
+from pathlib import Path
 
-vm = run_project("src/main.py", Language.PYTHON, max_steps=500)
-frame = vm.call_stack[0]
-print(frame.local_vars["result"])  # concrete value from cross-module execution
+from interpreter.constants import Language
+from interpreter.project.compiler import compile_directory
+from interpreter.project.entry_point import EntryPoint
+from interpreter.run import run_linked
+
+linked = compile_directory(Path("src"), Language.PYTHON)
+vm = run_linked(linked, EntryPoint.top_level(), max_steps=500)
 ```
 
 The pipeline:
@@ -543,11 +457,10 @@ The default run collects **15,387 tests**. It excludes 191 more marked `external
 - **Language frontends** — all 15 tree-sitter frontends, LLM frontend, chunked LLM frontend
 - **CFG** — CFG building
 - **Cross-language semantics** — closures (mutation persistence, accumulator semantics, nested-function and lambda forms), classes with method dispatch and overload resolution (12 languages), field access, exception handling, destructuring, variable scoping
-- **Multi-file projects** — import extraction (all 15 languages + COBOL), import resolution, topological sort, cycle detection, module compilation, linking (label namespacing, register rebasing, import stub dropping), namespace resolution (Java qualified references via `NamespaceTree`), multi-file VM execution for every language, API and MCP integration
+- **Multi-file projects** — import extraction (all 15 languages + COBOL), import resolution, topological sort, cycle detection, module compilation, linking (label namespacing, register rebasing, import stub dropping), namespace resolution (Java qualified references via `NamespaceTree`), multi-file VM execution for every language
 - **Frontend type extraction** — 13 statically-typed frontends verified to populate `TypeEnvironmentBuilder` with register types, variable types, function return types, parameter types, and this/self class typing from source-level annotations
 - **Static type inference** — type propagation across instruction types, builtin return types, RETURN backfill, UNOP refinement, class method/field tracking, region tagging, CALL_UNKNOWN resolution, array element tracking, function signatures across 13 languages; comprehensive cross-language integration tests covering BINOP (int+int, int+float, comparison→Bool), UNOP (not/!→Bool, Lua #→Int), return backfill, typed param seeding, field tracking, CALL_METHOD return types, and NEW_OBJECT typing across all 15 languages
 - **VM execution** — deterministic execution, write-time type coercion, factory routing
-- **Composable API** — `lower_source`, `lower_and_infer`, `dump_ir`, `build_cfg_from_source`, etc.
 
 ### Rosetta cross-language suite
 

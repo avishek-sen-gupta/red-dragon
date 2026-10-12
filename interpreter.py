@@ -7,11 +7,6 @@ import argparse
 import json
 
 from interpreter import constants
-from interpreter.api import (
-    dump_cfg,
-    dump_ir,
-    dump_mermaid,
-)
 from interpreter.cli_output import emit
 from interpreter.func_name import FuncName
 from interpreter.project.entry_point import EntryPoint
@@ -48,22 +43,6 @@ def main():
         help="Print IR, CFG, and step-by-step execution",
     )
     parser.add_argument(
-        "--ir-only", action="store_true", help="Only print the IR (no LLM execution)"
-    )
-    parser.add_argument(
-        "--cfg-only", action="store_true", help="Only print the CFG (no LLM execution)"
-    )
-    parser.add_argument(
-        "--mermaid",
-        action="store_true",
-        help="Output CFG as a Mermaid flowchart diagram",
-    )
-    parser.add_argument(
-        "--function",
-        default="",
-        help="Extract CFG for a single function (use with --mermaid or --cfg-only)",
-    )
-    parser.add_argument(
         "--frontend",
         "-f",
         default=constants.FRONTEND_DETERMINISTIC,
@@ -92,26 +71,6 @@ result = factorial(5)
     else:
         with open(args.file) as f:
             source = f.read()
-
-    if args.ir_only:
-        emit("═══ IR ═══")
-        emit(dump_ir(source, args.language, args.frontend, args.backend))
-        return
-
-    if args.mermaid:
-        emit(
-            dump_mermaid(
-                source, args.language, args.frontend, args.backend, args.function
-            )
-        )
-        return
-
-    if args.cfg_only:
-        emit("═══ CFG ═══")
-        emit(
-            dump_cfg(source, args.language, args.frontend, args.backend, args.function)
-        )
-        return
 
     # Full run
     entry = (

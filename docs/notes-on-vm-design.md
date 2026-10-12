@@ -561,7 +561,7 @@ def double(x):
 result = double(5)
 ```
 
-IR from the Python frontend (`dump_ir`), as CFG blocks:
+IR from the Python frontend, as CFG blocks:
 
 ```
 [entry]          succs=end_double_1
