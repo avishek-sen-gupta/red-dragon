@@ -1,6 +1,6 @@
 # RedDragon Frontend Design Document
 
-This document describes the design of the frontend subsystem — the pipeline stages that transform source code into the universal IR consumed by the VM, CFG builder, and dataflow analysis. It is intended for senior technical leads coming to the codebase from scratch.
+This document describes the design of the frontend subsystem — the pipeline stages that transform source code into the universal IR consumed by the VM and CFG builder. It is intended for senior technical leads coming to the codebase from scratch.
 
 For per-language frontend documentation (one document per language), see [frontend-design/](frontend-design/).
 
@@ -34,7 +34,7 @@ The frontend subsystem converts source code in any language into a universal fla
 | **LLM** | Raw source text | Prompt an LLM to emit IR as JSON | Seconds | Any language |
 | **Chunked LLM** | tree-sitter AST + raw source | Split into chunks via AST, LLM each chunk | Seconds × N | Any language |
 
-All three produce the same `list[InstructionBase]` output, making the downstream VM, CFG, and dataflow analysis completely frontend-agnostic.
+All three produce the same `list[InstructionBase]` output, making the downstream VM and CFG completely frontend-agnostic.
 
 ```mermaid
 flowchart TD

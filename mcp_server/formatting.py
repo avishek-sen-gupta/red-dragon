@@ -3,19 +3,10 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from interpreter.interprocedural.types import (
-    FieldEndpoint,
-    FlowEndpoint,
-    ReturnEndpoint,
-    VariableEndpoint,
-)
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.vm_types import StateUpdate
-
-if TYPE_CHECKING:
-    from viz.panels.dataflow_graph_panel import ChainNode
 
 
 def format_typed_value(
@@ -29,25 +20,6 @@ def format_typed_value(
     if isinstance(tv.value, (int, float, str, bool)):
         return tv.value
     return {"value": str(tv.value), "type": str(tv.type)}
-
-
-def format_flow_endpoint(ep: FlowEndpoint) -> dict[str, str]:
-    """Convert a FlowEndpoint to a JSON dict."""
-    if isinstance(ep, VariableEndpoint):
-        return {"name": ep.name, "type": "variable"}
-    if isinstance(ep, ReturnEndpoint):
-        return {"function": str(ep.function.label), "type": "return"}
-    if isinstance(ep, FieldEndpoint):
-        return {"base": ep.base.name, "field": str(ep.field), "type": "field"}
-    return {"value": str(ep), "type": "unknown"}
-
-
-def format_chain_node(node: ChainNode) -> dict[str, object]:
-    """Convert a ChainNode tree to nested JSON."""
-    return {
-        "label": node.label,
-        "children": [format_chain_node(c) for c in node.children],
-    }
 
 
 def format_state_update(update: StateUpdate) -> dict[str, Any]:

@@ -2,7 +2,7 @@
 
 How the RedDragon virtual machine works: state, step loop, calls, memory and the COBOL execution model. File references are relative to the repository root and cite a file and symbol, not line numbers. Decisions and their history live in [the ADR log](architectural-design-decisions.md); this document links to them instead of repeating them.
 
-Related: [IR reference](ir-reference.md) (every opcode's operands and semantics), [type system](type-system.md), [linker design](linker-design.md), [dataflow notes](notes-on-dataflow-design.md).
+Related: [IR reference](ir-reference.md) (every opcode's operands and semantics), [type system](type-system.md), [linker design](linker-design.md).
 
 ---
 
@@ -23,10 +23,9 @@ Related: [IR reference](ir-reference.md) (every opcode's operands and semantics)
 13. [Built-in functions](#13-built-in-functions)
 14. [LLM fallback](#14-llm-fallback)
 15. [Function and class registry](#15-function-and-class-registry)
-16. [Dataflow analysis](#16-dataflow-analysis)
-17. [Module map](#17-module-map)
-18. [Worked example](#18-worked-example)
-19. [Design principles](#19-design-principles)
+16. [Module map](#16-module-map)
+17. [Worked example](#17-worked-example)
+18. [Design principles](#18-design-principles)
 
 ---
 
@@ -473,7 +472,7 @@ COBOL arithmetic uses `CobolNumber` (`Decimal`) from `cobol_numeric`, a top-leve
 
 ### 12.7 cobol_memory
 
-`cobol_memory` is the static byte-extent algebra, also a leaf package (`cobol-memory-is-a-leaf`). The VM does not use it at run time; lowering and dataflow do.
+`cobol_memory` is the static byte-extent algebra, also a leaf package (`cobol-memory-is-a-leaf`). The VM does not use it at run time; lowering does.
 
 | Type | Role |
 |---|---|
@@ -515,11 +514,7 @@ All opcodes except `LABEL`, `SUSPEND` and `IMPORT_MODULE` have local handlers, s
 
 Use `lookup_methods`, `lookup_func`, `register_func`, `register_method`.
 
-## 16. Dataflow analysis
-
-`interpreter/dataflow.py`, `analyze(cfg)`: collect definitions, solve reaching definitions (worklist, capped by `DATAFLOW_MAX_ITERATIONS` worklist pops), extract def-use chains, build the raw dependency graph by tracing registers back from stores, then its transitive closure. `DataflowResult` holds both graphs. Definitions and uses are `StorageIdentifier`s from each instruction's `reads()`/`writes()`. Details: [notes-on-dataflow-design.md](notes-on-dataflow-design.md).
-
-## 17. Module map
+## 16. Module map
 
 ```
 interpreter/
@@ -550,7 +545,6 @@ interpreter/
 ├── project/              compiler, linker, LinkedProgram, EntryPoint, compile_cobol
 ├── frontends/            15 tree-sitter frontends
 ├── cobol/                COBOL lowering, byte builtins, call_arguments, return_code_readback
-└── dataflow.py           reaching definitions, def-use, dependency graphs
 cobol_numeric/            CobolNumber, exact arithmetic, IBM scale rules (leaf)
 cobol_memory/             RegionId, FieldExtent, AbstractLocation, StorageIdentifier (leaf)
 cobol_asg/                COBOL parse model (leaf)
@@ -558,7 +552,7 @@ cobol_asg/                COBOL parse model (leaf)
 
 Import contracts (`.importlinter`): `interpreter.vm` and `interpreter.handlers` must not import `interpreter.frontends` (one exception: `executor` → `frontends.symbol_table`); they must not import `interpreter.cobol` (one exception: `vm.builtins` → `cobol.byte_builtins`); `interpreter.ir` imports none of the VM; `interpreter.project` must not import VM internals.
 
-## 18. Worked example
+## 17. Worked example
 
 ```python
 def double(x):
@@ -614,7 +608,7 @@ step 12  end of end_double_1, no successors         stop
 
 `ExecutionStats.steps` is 13 and `llm_calls` is 0.
 
-## 19. Design principles
+## 18. Design principles
 
 | Principle | Where it shows |
 |---|---|

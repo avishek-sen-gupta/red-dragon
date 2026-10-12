@@ -14,7 +14,7 @@
 
 With complete source and all dependencies present, parse → lower → execute makes **0 LLM calls**. LLMs are used only where information is missing.
 
-**Scale:** 15 tree-sitter frontends + COBOL (139 enumerated features) + LLM frontends · 15,675 tests in the default run (`external` and `nist` markers excluded)
+**Scale:** 15 tree-sitter frontends + COBOL (139 enumerated features) + LLM frontends · 15,387 tests in the default run (`external` and `nist` markers excluded)
 
 RedDragon covers the main features of each language, not every feature. Some features are implemented in a simplified, cross-language way.
 
@@ -22,7 +22,6 @@ Also included:
 
 - **Type extraction and inference** — see [Type system](#type-system)
 - **CFG construction** from IR
-- **Dataflow analysis** — reaching definitions, def-use chains, dependency graphs. `interpreter/interprocedural/` adds call graphs (CHA), 1-CFA function summaries, field-sensitive heap flow, SCC fixpoint propagation, and impact, taint and slicing queries via `analyze_interprocedural(cfg, registry)`
 - **Multi-file projects** — discover imports, compile each module, link into one IR stream — see [Multi-file project support](#multi-file-project-support)
 
 ### Package layout
@@ -55,8 +54,6 @@ Three phases — extraction, inference, coercion — over `TypeExpr` algebraic d
 **TypeExpr ADT:** `ScalarType`, `ParameterizedType`, `UnionType`, `FunctionType`, `TypeVar`, `UnknownType`
 
 **Storage model:** All VM storage uses domain-typed keys (`Register`, `VarName`, `FieldName`, `Address`) and stores `TypedValue` exclusively. The heap uses accessor methods with a `NO_HEAP_OBJECT` null-object sentinel. `_resolve_reg()` preserves parameterized type information (e.g. `pointer(scalar("Dog"))`) through the full pipeline.
-
-**Dataflow:** Every IR instruction class implements `StorageIdentifier` with `reads()`/`writes()`.
 
 **Scoping:** 9 block-scoped frontends use LLVM-style name mangling for shadowed variables in nested blocks, loops, and catch clauses. Function-scoped languages (Python, JavaScript `var`, Ruby, etc.) bypass this.
 
@@ -114,7 +111,6 @@ flowchart TD
     CHUNK --> IR
 
     IR --> CFG[Control Flow Graph]
-    CFG --> DF["Dataflow Analysis<br>reaching defs · def-use chains · dependency graphs"]
     CFG --> VM[Deterministic VM Execution]
     VM -->|symbolic values only| ORACLE[LLM Oracle]
 ```
@@ -147,29 +143,24 @@ uv run python -m viz project tests/fixtures/projects/python_basic -l python
 uv run python -m viz project /path/to/java/project -l java -s 500
 ```
 
-Six synchronized panels: **Source** (span-highlighted), **AST** (collapsible tree, toggle `a`), **IR** (grouped by CFG block), **VM State** (heap/stack/registers with diff highlighting), **CFG** (box-drawing graph, toggle `g`), and **Step** (delta summary). Arrow keys step forward/backward, space toggles auto-play, `d` toggles **Dataflow mode** (replaces AST/VM/CFG with call-graph summaries and whole-program dependency graph, cross-highlights source and IR on function selection), `q` quits.
+Six synchronized panels: **Source** (span-highlighted), **AST** (collapsible tree, toggle `a`), **IR** (grouped by CFG block), **VM State** (heap/stack/registers with diff highlighting), **CFG** (box-drawing graph, toggle `g`), and **Step** (delta summary). Arrow keys step forward/backward, space toggles auto-play, `q` quits.
 
 **Project mode** (`viz project`) compiles a directory with `compile_directory()`. It first shows the import DAG and an entry-point picker. Execution then uses the standard panels, and the Source and AST panels follow execution across modules. `p` returns to the overview.
-
-When the source defines functions, the pipeline also runs interprocedural analysis. The **Dataflow Summary** panel (`viz/panels/dataflow_summary_panel.py`) shows each function's callers, callees and merged flow summaries. The **Dataflow Graph** panel (`viz/panels/dataflow_graph_panel.py`) shows a collapsible call-chain tree tracing each parameter to returns, field writes, or further calls.
 
 **Lowering trace** mode shows which frontend handler processed each AST node and the IR it emitted. **Coverage matrix** mode shows which AST node types each frontend handles: language-specific (`✓`) or shared (`✓*`).
 
 ### MCP Server
 
-An [MCP](https://modelcontextprotocol.io) server exposes compilation, VM execution and interprocedural analysis for the 15 tree-sitter languages.
+An [MCP](https://modelcontextprotocol.io) server exposes compilation and VM execution for the 15 tree-sitter languages.
 
-**10 tools:**
-- `analyze_program(source, language)` — full pipeline analysis: functions, call graph, flow counts
-- `get_function_summary(source, language, function_name)` — param→return/field flows for one function
-- `get_call_chain(source, language, function_name?)` — nested call-chain tree showing data flow through calls
+**7 tools:**
 - `list_opcodes()` — all IR opcodes with descriptions, categories, typed fields, and semantic notes
 - `load_program(source, language, max_steps?)` — load and execute a program, record step-by-step trace
 - `step(count?)` — advance through execution trace, get instructions and state deltas
 - `run_to_end()` — skip to final state with all variable values
 - `get_state()` — current VM state: call stack, variables, registers, heap
 - `get_ir(function_name?)` — IR instructions, optionally filtered to one function
-- `load_project(entry_file, language)` — discover imports from entry file, compile all modules, link, and analyze. Returns module count, import graph, functions, classes, and unresolved imports
+- `load_project(entry_file, language)` — discover imports from entry file, compile all modules and link them. Returns module count, import graph, functions, classes, and unresolved imports
 
 **3 resources:** `reddragon://source`, `reddragon://ir`, `reddragon://cfg`
 
@@ -399,28 +390,20 @@ vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=200))
 | `extract_function_source(source, function_name, language)` | `str` | Raw source text of a named function (recursive AST walk) |
 | `execute_cfg(cfg, entry_point, registry, config)` | `(VMState, ExecutionStats)` | Execute a pre-built CFG from a given entry point |
 | `execute_traced(source, language, function_name, entry_point, frontend_type, backend, max_steps)` | `ExecutionTrace` | Parse → lower → CFG → execute with per-step VMState snapshots for replay |
-| `analyze_project(entry_file, language, project_root?)` | `InterproceduralResult` | Multi-file: discover → compile → link → interprocedural analysis |
 | `run_project(entry_file, language, project_root?, max_steps?, verbose?)` | `VMState` | Multi-file: discover → compile → link → execute |
 
 Functions compose hierarchically: `dump_ir` calls `lower_source`; `dump_cfg` and `dump_mermaid` call `build_cfg_from_source`, which calls `lower_source`. Full execution is available via `interpreter.run()`, via `execute_cfg()` for standalone VM execution with a pre-built CFG, or via `execute_traced()` for step-by-step replay with VMState snapshots at each instruction.
 
 ### Multi-file project support
 
-RedDragon can analyze and execute real-world multi-file codebases. Given an entry file, it recursively discovers imports, resolves them to local files, compiles each module independently, links them into a single merged program, and runs execution or interprocedural analysis — all with the same deterministic pipeline.
+RedDragon can execute real-world multi-file codebases. Given an entry file, it recursively discovers imports, resolves them to local files, compiles each module independently, links them into a single merged program, and executes it with the same deterministic pipeline.
 
 **Supported across all 15 deterministic frontends + COBOL** — Python, JavaScript, TypeScript, Java, Go, Rust, C, C++, C#, Kotlin, Scala, Ruby, PHP, Lua, Pascal, COBOL.
 
 ```python
-from interpreter.api import analyze_project, run_project
+from interpreter.api import run_project
 from interpreter.constants import Language
 
-# Multi-file interprocedural analysis
-result = analyze_project("src/main.py", Language.PYTHON)
-# result.call_graph — cross-module call graph
-# result.summaries — per-function dataflow summaries
-# result.whole_program_graph — whole-program dependency graph
-
-# Multi-file execution
 vm = run_project("src/main.py", Language.PYTHON, max_steps=500)
 frame = vm.call_stack[0]
 print(frame.local_vars["result"])  # concrete value from cross-module execution
@@ -441,8 +424,7 @@ list[ModuleUnit]
     ▼                    concatenate deps-first → single IR stream
 LinkedProgram
     │
-    ├──► execute_cfg()             (no VM changes)
-    └──► analyze_interprocedural() (no analysis changes)
+    └──► execute_cfg()  (no VM changes)
 ```
 
 - **Import extraction** uses tree-sitter ASTs (not regex) for each language's import syntax
@@ -546,7 +528,7 @@ When the interpreter encounters incomplete information (missing imports, unknown
 - `sym_0 + 1` → `sym_N [sym_0 + 1]` (symbolic arithmetic with constraints)
 - `branch_if sym_0` → takes true branch, records path condition
 
-This means data flow through programs with missing dependencies is traced entirely deterministically with **0 LLM calls**.
+So programs with missing dependencies still run to completion deterministically, with **0 LLM calls**.
 
 ### Configurable unresolved call resolution
 
@@ -561,59 +543,6 @@ from interpreter.run_types import UnresolvedCallStrategy
 
 vm = run(source, language="python", unresolved_call_strategy=UnresolvedCallStrategy.LLM)
 ```
-
-## Dataflow analysis
-
-Iterative intraprocedural analysis on the CFG: **reaching definitions**, **def-use chains**, and **variable dependency graphs** (both direct and transitive closure). Covers all value-producing opcodes including byte-addressed memory region operations (`ALLOC_REGION`, `LOAD_REGION`, `WRITE_REGION`), ensuring complete dataflow tracking for COBOL programs.
-
-### Example: dependency graph
-
-```python
-a = 1
-b = 2
-c = a + b
-d = a * b
-e = c + d
-f = e - a
-
-def square(x):
-    return x * x
-
-g = square(c)
-h = g + f
-total = h + e + b
-```
-
-Diamond dependencies (`c` and `d` both depend on `a` and `b`), function calls (`g = square(c)`), and multi-operand expressions (`total = h + e + b`). The direct dependency graph ([docs/graph.md](docs/graph.md)):
-
-```mermaid
-flowchart BT
-    a["a"]
-    b["b"]
-    c["c"]
-    d["d"]
-    e["e"]
-    f["f"]
-    g["g"]
-    h["h"]
-    total["total"]
-    a --> c
-    b --> c
-    a --> d
-    b --> d
-    c --> e
-    d --> e
-    a --> f
-    e --> f
-    c --> g
-    f --> h
-    g --> h
-    b --> total
-    e --> total
-    h --> total
-```
-
-`total` directly depends on `h`, `e`, and `b`. The transitive closure adds `a`, `c`, `d`, `f`, and `g`. See [`scripts/demo_dataflow.py`](scripts/demo_dataflow.py) for the full pipeline (lowering → CFG → reaching definitions → dependency graph → Mermaid visualisation).
 
 ## LLM frontend
 
@@ -671,12 +600,12 @@ uv run pytest -m nist            # NIST-85 COBOL conformance suite
 
 Tests run in parallel via pytest-xdist. `tests/unit/` holds pure logic with no I/O; `tests/integration/` compiles and runs programs through the VM. LLMs are injected as fakes outside the `external` marker.
 
-The default run collects **15,675 tests**. It excludes 191 more marked `external` (live LLM APIs) or `nist` (NIST-85 COBOL suite).
+The default run collects **15,387 tests**. It excludes 191 more marked `external` (live LLM APIs) or `nist` (NIST-85 COBOL suite).
 
 **Coverage areas:**
 
 - **Language frontends** — all 15 tree-sitter frontends, LLM frontend, chunked LLM frontend
-- **CFG and dataflow** — CFG building, reaching definitions, def-use chains, dependency graphs
+- **CFG** — CFG building
 - **Cross-language semantics** — closures (mutation persistence, accumulator semantics, nested-function and lambda forms), classes with method dispatch and overload resolution (12 languages), field access, exception handling, destructuring, variable scoping
 - **Multi-file projects** — import extraction (all 15 languages + COBOL), import resolution, topological sort, cycle detection, module compilation, linking (label namespacing, register rebasing, import stub dropping), namespace resolution (Java qualified references via `NamespaceTree`), multi-file VM execution for every language, API and MCP integration
 - **Frontend type extraction** — 13 statically-typed frontends verified to populate `TypeEnvironmentBuilder` with register types, variable types, function return types, parameter types, and this/self class typing from source-level annotations
@@ -808,19 +737,18 @@ Import-linter enforces eight contracts:
 | `ir-is-leaf` | IR module must not import other interpreter modules |
 | `project-no-vm-internals` | Project module must not import VM or handler internals |
 | `frontend-independence` | Language frontends must not import each other |
-| `cobol-isolation` | VM, handlers, project, interprocedural and run layers must not import `interpreter.cobol` |
+| `cobol-isolation` | VM, handlers, project and run layers must not import `interpreter.cobol` |
 
 ## Documentation
 
 - **[IR Reference](docs/ir-reference.md)** — Complete specification of the 37-opcode instruction set: value producers, consumers, control flow, region operations, continuations, pointer operations, and the SYMBOLIC fallback
-- **[VM Design Document](docs/notes-on-vm-design.md)** — Comprehensive technical deep-dive into the VM architecture: IR design, CFG construction, state model, execution engine, call dispatch, best-effort execution, closures, LLM fallback, dataflow analysis, and end-to-end worked examples with code references
+- **[VM Design Document](docs/notes-on-vm-design.md)** — Comprehensive technical deep-dive into the VM architecture: IR design, CFG construction, state model, execution engine, call dispatch, best-effort execution, closures, LLM fallback, and end-to-end worked examples with code references
 - **[Frontend Design Document](docs/notes-on-frontend-design.md)** — Frontend subsystem overview: three frontend strategies (deterministic, LLM, chunked LLM), Frontend ABC contract, tree-sitter parser layer, LLM frontend with prompt engineering, chunked LLM frontend with register renumbering, factory routing, and end-to-end worked example
 - **[Per-Language Frontend Design](docs/frontend-design/)** — Exhaustive per-language documentation of all 15 deterministic frontends and the COBOL frontend: BaseFrontend context-mode architecture, GrammarConstants, TreeSitterEmitContext, common lowerers, dispatch tables, language-specific lowering methods, and worked examples for each language
 - **[COBOL Frontend Design](docs/frontend-design/cobol.md)** — ProLeap bridge architecture, PIC-driven encoding, 20-statement coverage matrix, PERFORM continuation semantics, SEARCH/STRING/INSPECT lowering patterns; 139-feature enumeration via `CobolFeature` enum (test-gated)
 - **[Linker & Multi-File Design](docs/linker-design.md)** — Multi-file project pipeline: import discovery, resolution, per-module compilation, linking (namespace, rebase, merge), worked example, and per-language import extraction reference
 - **[Type System Design Document](docs/type-system.md)** — Type system architecture: TypeGraph DAG with subtype/LUB queries, frontend type extraction and seeding, fixpoint inference algorithm with per-opcode dispatch, TypeConversionRules for operator coercion and assignment narrowing/widening, write-time coercion in the VM, and end-to-end worked examples with Mermaid diagrams
-- **[Dataflow Design Document](docs/notes-on-dataflow-design.md)** — Dataflow analysis architecture: reaching definitions via GEN/KILL worklist fixpoint, def-use chain extraction, variable dependency graph construction with transitive closure, integration with IR/CFG, worked examples, and complexity analysis
-- **[Architectural Decision Records](docs/architectural-design-decisions.md)** — Chronological log of key architectural decisions: IR design, deterministic VM, best-effort execution, closure semantics, LLM frontend strategy, dataflow analysis, modular package structure, and more
+- **[Architectural Decision Records](docs/architectural-design-decisions.md)** — Chronological log of key architectural decisions: IR design, deterministic VM, best-effort execution, closure semantics, LLM frontend strategy, modular package structure, and more
 
 ## Limitations
 

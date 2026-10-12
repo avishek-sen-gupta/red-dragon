@@ -10,7 +10,7 @@
 
 RedDragon's multi-file project support extends the single-file pipeline to real-world codebases. Given a project directory, it compiles each source file for the selected language independently, resolves imports between modules, then a **linker** merges them into a single IR stream that looks exactly like what the single-file pipeline would produce if all source files were concatenated in dependency order.
 
-**Design principle:** The linker's output is indistinguishable from single-file compilation. The VM, CFG builder, registry, and interprocedural analysis run completely unmodified.
+**Design principle:** The linker's output is indistinguishable from single-file compilation. The VM, CFG builder and registry run completely unmodified.
 
 **Supported:** All 15 tree-sitter frontends + COBOL (16 languages total).
 
@@ -52,8 +52,7 @@ Phase 3: Linking
     ▼
 LinkedProgram
     │
-    ├──► execute_cfg()              (no changes)
-    └──► analyze_interprocedural()  (no changes)
+    └──► execute_cfg()  (no changes)
 ```
 
 ### Entry points
@@ -61,7 +60,6 @@ LinkedProgram
 | Function | Module | Purpose |
 |----------|--------|---------|
 | `compile_directory(directory, language)` | `compiler.py` | Full pipeline: scan → compile → link |
-| `analyze_project(entry_file, language, project_root?)` | `api.py` | compile_directory + interprocedural analysis |
 | `run_project(entry_file, language, project_root?, ...)` | `api.py` | compile_directory + VM execution |
 | `handle_load_project(entry_file, language)` | `mcp_server/tools.py` | MCP tool wrapper |
 
@@ -434,7 +432,7 @@ interpreter/registry.py
     _is_func_label(), _is_class_label(), _is_end_class_label()
 
 interpreter/api.py
-    analyze_project(), run_project()
+    run_project()
 
 mcp_server/tools.py      handle_load_project()
 mcp_server/server.py      load_project MCP tool registration
@@ -459,5 +457,5 @@ Core tests, in `tests/unit/project/` and `tests/integration/project/` (counts ar
 | `test_project_pipeline.py` | 14 | Full compile→link pipeline (Python, JS, Java, C) |
 | `test_fixture_projects.py` | 5 | On-disk fixture projects |
 | `test_all_languages_execution.py` | 21 | Multi-file execution for all 15 languages |
-| `test_api_integration.py` | 3 | analyze_project(), run_project() |
+| `test_api_integration.py` | 1 | run_project() |
 | `test_mcp_tool.py` | 5 | MCP load_project tool |

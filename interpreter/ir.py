@@ -72,7 +72,6 @@ class Opcode(str, Enum):
 
 
 # Opcodes that define a named variable (declaration or assignment).
-# Used by dataflow analysis and interprocedural summary extraction.
 VAR_DEFINITION_OPCODES: frozenset[Opcode] = frozenset(
     {Opcode.DECL_VAR, Opcode.STORE_VAR}
 )

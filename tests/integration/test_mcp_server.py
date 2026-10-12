@@ -9,9 +9,6 @@ from mcp_server.resources import (
 )
 from mcp_server.session import clear_session
 from mcp_server.tools import (
-    handle_analyze_program,
-    handle_get_call_chain,
-    handle_get_function_summary,
     handle_get_ir,
     handle_get_state,
     handle_load_program,
@@ -46,11 +43,7 @@ class TestFullRoundTrip:
         assert end_result["done"] is True
         assert end_result["variables"]["result"] == 20
 
-    def test_analyze_then_load_and_step(self):
-        """Analysis tools work independently of execution session."""
-        analysis = handle_analyze_program(MULTI_FUNC_SOURCE, "python")
-        assert len(analysis["functions"]) >= 3
-
+    def test_load_then_step(self):
         handle_load_program(MULTI_FUNC_SOURCE, "python")
         step_result = handle_step(5)
         assert step_result["steps_executed"] == 5
@@ -58,37 +51,10 @@ class TestFullRoundTrip:
         state = handle_get_state()
         assert state["step_index"] == 5
 
-    def test_call_chain_matches_execution(self):
-        """Call chain shows quadruple -> double -> add, execution produces result == 20."""
-        chain = handle_get_call_chain(MULTI_FUNC_SOURCE, "python")
-        assert len(chain["chains"]) >= 1
-
-        # Verify the first chain shows quadruple -> double -> add structure
-        first_chain = chain["chains"][0]
-        assert "quadruple" in first_chain["root"]
-
-        # Verify call chain depth: quadruple -> double -> add
-        assert len(first_chain["children"]) >= 1
-        double_node = first_chain["children"][0]
-        assert "double" in double_node["label"]
-
-        assert len(double_node["children"]) >= 1
-        add_node = double_node["children"][0]
-        assert "add" in add_node["label"]
-
-        handle_load_program(MULTI_FUNC_SOURCE, "python")
-        end = handle_run_to_end()
-        assert end["variables"]["result"] == 20
-
-    def test_function_summary_for_add(self):
-        summary = handle_get_function_summary(MULTI_FUNC_SOURCE, "python", "add")
-        assert summary["params"] == ["a", "b"]
-        assert len(summary["flows"]) == 2
-
     def test_get_ir_for_function(self):
         handle_load_program(MULTI_FUNC_SOURCE, "python")
         ir = handle_get_ir("add")
-        assert len(ir["blocks"]) >= 1
+        assert [str(b["label"]) for b in ir["blocks"]] == ["func_add_0"]
 
     def test_resources_after_load(self):
         handle_load_program(MULTI_FUNC_SOURCE, "python")

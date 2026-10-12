@@ -52,7 +52,6 @@ RedDragon follows a **functional core, imperative shell** (ports-and-adapters) a
 - **Frontends** (`interpreter/frontends/`) parse source and emit IR. Each language is a package with pure lowering functions dispatched via a context object.
 - **IR** (`interpreter/ir.py`) is a flat list of three-address code instructions with 27 opcodes.
 - **CFG** (`interpreter/cfg.py`, `interpreter/cfg_types.py`) builds control flow graphs from IR.
-- **Dataflow** (`interpreter/dataflow/`) performs reaching definitions, def-use chains, and dependency analysis.
 - **VM** (`interpreter/run.py`) executes IR deterministically, with optional LLM fallback for symbolic values.
 
 ## Adding a New Language Frontend

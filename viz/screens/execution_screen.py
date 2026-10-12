@@ -13,8 +13,6 @@ from textual.widgets import Footer, Header, Static
 
 from viz.panels.ast_panel import ASTPanel
 from viz.panels.cfg_panel import CFGPanel
-from viz.panels.dataflow_graph_panel import DataflowGraphPanel
-from viz.panels.dataflow_summary_panel import DataflowSummaryPanel
 from viz.panels.ir_panel import IRPanel
 from viz.panels.source_panel import SourcePanel
 from viz.panels.step_panel import StepPanel
@@ -75,29 +73,6 @@ class ExecutionScreen(Screen):
     .hidden {
         display: none;
     }
-
-    #dataflow-summary-container {
-        border: solid rgb(80,120,140);
-        overflow-y: auto;
-        display: none;
-    }
-
-    #dataflow-graph-container {
-        border: solid rgb(140,80,140);
-        overflow-y: auto;
-        display: none;
-    }
-
-    ExecutionScreen.dataflow-mode #ast-container,
-    ExecutionScreen.dataflow-mode #vm-state-container,
-    ExecutionScreen.dataflow-mode #cfg-container {
-        display: none;
-    }
-
-    ExecutionScreen.dataflow-mode #dataflow-summary-container,
-    ExecutionScreen.dataflow-mode #dataflow-graph-container {
-        display: block;
-    }
     """
 
     BINDINGS = [
@@ -108,7 +83,6 @@ class ExecutionScreen(Screen):
         Binding("end", "step_last", "Last", show=True, priority=True),
         Binding("a", "toggle_ast", "AST", show=True, priority=True),
         Binding("g", "toggle_cfg", "CFG", show=True, priority=True),
-        Binding("d", "toggle_dataflow", "Dataflow", show=True, priority=True),
         Binding("p", "back_to_overview", "Overview", show=True, priority=True),
         Binding("q", "quit", "Quit", show=True, priority=True),
     ]
@@ -121,7 +95,6 @@ class ExecutionScreen(Screen):
         self._play_timer: Timer | None = None
         self._ast_visible = True
         self._cfg_visible = True
-        self._dataflow_mode = False
         self._current_module: Path | None = None
 
     @property
@@ -166,20 +139,6 @@ class ExecutionScreen(Screen):
             yield Static(" CFG  │  Step", classes="panel-title")
             yield CFGPanel(self._result.linked.merged_cfg, id="cfg-panel")
             yield StepPanel(id="step-panel")
-
-        with Vertical(id="dataflow-summary-container"):
-            yield Static(" Call Graph + Summaries", classes="panel-title")
-            yield DataflowSummaryPanel(
-                self._result.interprocedural, id="dataflow-summary-panel"
-            )
-
-        with Vertical(id="dataflow-graph-container"):
-            yield Static(" Whole-Program Graph", classes="panel-title")
-            yield DataflowGraphPanel(
-                self._result.interprocedural,
-                cfg=self._result.linked.merged_cfg,
-                id="dataflow-graph-panel",
-            )
 
         yield Footer()
 
@@ -270,10 +229,6 @@ class ExecutionScreen(Screen):
         cfg_container = self.query_one("#cfg-container")
         self._cfg_visible = not self._cfg_visible
         cfg_container.set_class(not self._cfg_visible, "hidden")
-
-    def action_toggle_dataflow(self) -> None:
-        self._dataflow_mode = not self._dataflow_mode
-        self.set_class(self._dataflow_mode, "dataflow-mode")
 
     def action_back_to_overview(self) -> None:
         if self._play_timer:
