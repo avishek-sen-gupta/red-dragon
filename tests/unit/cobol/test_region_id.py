@@ -30,7 +30,7 @@ _PROBE_SRC = b"""\
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_region_ids_are_the_six_section_buffers_and_the_call_argument_copy():
+def test_region_ids_are_the_section_buffers_the_call_argument_copy_and_the_run_unit():
     assert {r.value for r in RegionId} == {
         "working_storage",
         "linkage",
@@ -39,6 +39,7 @@ def test_region_ids_are_the_six_section_buffers_and_the_call_argument_copy():
         "special_registers",
         "indexes",
         "call_argument",
+        "run_unit",
     }
 
 

@@ -35,6 +35,7 @@ from interpreter.project.resolver import (
     topological_sort,
 )
 from interpreter.project.source_roots import MavenSourceRootDiscovery
+from interpreter.project.start_up import with_start_up
 from interpreter.project.types import ExportTable, LinkedProgram, ModuleUnit
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
@@ -166,6 +167,14 @@ def _collect_copybook_dirs(directory: Path) -> list[Path]:
     return [directory, *subdirs]
 
 
+def _frontend_type(language: Language) -> str:
+    return (
+        constants.FRONTEND_COBOL
+        if language == Language.COBOL
+        else constants.FRONTEND_DETERMINISTIC
+    )
+
+
 def compile_module(
     file_path: Path,
     language: Language,
@@ -182,14 +191,9 @@ def compile_module(
     if source is None:
         source = file_path.read_bytes()
 
-    resolved_frontend_type = (
-        constants.FRONTEND_COBOL
-        if language == Language.COBOL
-        else constants.FRONTEND_DETERMINISTIC
-    )
     frontend = get_frontend(
         language,
-        frontend_type=resolved_frontend_type,
+        frontend_type=_frontend_type(language),
         copybook_dirs=copybook_dirs,
     )
     ir = frontend.lower(source, namespace_resolver=namespace_resolver)
@@ -391,6 +395,10 @@ def compile_directory(
         # Create a new ModuleUnit with the patched IR
         modules[path] = dataclasses.replace(module, ir=patched_ir)
 
+    start_up = get_frontend(
+        language, frontend_type=_frontend_type(language)
+    ).start_up_ir()
+    modules, import_graph = with_start_up(start_up, language, modules, import_graph)
     topo_order = topological_sort(import_graph)
 
     return link_modules(

@@ -22,5 +22,6 @@ class RegionId(Enum):
     SPECIAL_REGISTERS = "special_registers"
     INDEXES = "indexes"
     CALL_ARGUMENT = "call_argument"
+    RUN_UNIT = "run_unit"
 
     __hash__ = object.__hash__

@@ -34,6 +34,7 @@ from interpreter.cobol.lower_program_init import (
     lower_program_init,
     lower_ws_from_singleton,
 )
+from interpreter.cobol.run_unit import run_unit_allocation
 from interpreter.cobol.sectioned_layout import (
     MaterialisedSectionedLayout,
     build_sectioned_layout,
@@ -86,6 +87,9 @@ class CobolFrontend(Frontend):
             extension_strategies=self._extension_strategies,
             tolerant=tolerant,
         )
+
+    def start_up_ir(self) -> tuple[InstructionBase, ...]:
+        return run_unit_allocation()
 
     @property
     def symbol_table(self) -> SymbolTable:

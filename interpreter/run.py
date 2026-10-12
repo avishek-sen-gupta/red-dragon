@@ -1349,26 +1349,11 @@ def run(
         )
 
     # For COBOL, when using the default top-level entry point, switch to
-    # function-entry mode so run_linked runs the init block first (phase 1)
-    # then dispatches into func_<pid>_0 (phase 2).  This is the correct
-    # execution model for the singleton WS pattern introduced in Task 5.
-    if (
-        lang == Language.COBOL
-        and entry_point.is_top_level
-        and frontend.func_symbol_table
-    ):
-        # Use the exact proc_label from func_symbol_table rather than string patterns
-        proc_label = next(
-            (
-                label
-                for label in frontend.func_symbol_table
-                if not str(label).startswith("func_init_params_")
-            ),
-            None,
-        )
-        if proc_label is not None:
-            _label = proc_label
-            entry_point = EntryPoint.function(lambda ref: ref.label == _label)
+    # function-entry mode so run_linked runs every module's init block first
+    # (phase 1) then dispatches into the main program's procedure (phase 2).
+    if lang == Language.COBOL and entry_point.is_top_level:
+        _label = linked.entry_func_label
+        entry_point = EntryPoint.function(lambda ref: ref.label == _label)
 
     # 5. Execute via run_linked
     exec_start = time.perf_counter()

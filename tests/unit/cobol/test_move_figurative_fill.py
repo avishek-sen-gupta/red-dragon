@@ -11,7 +11,9 @@ byte was written and the rest remained as space-padding from the encoder.
 
 from __future__ import annotations
 
+from interpreter.address import Address
 from interpreter.cobol.features import CobolFeature
+from interpreter.cobol.run_unit import RUN_UNIT_VAR
 from interpreter.run import run
 from tests.covers import covers
 
@@ -49,8 +51,9 @@ def _ws_bytes(vm, name: str) -> bytes:
         return b""
     info = layout[name]
     off, length = info["offset"], info["length"]
-    for key in vm.region_keys():
-        rgn = bytes(vm.region_get(key))
+    run_unit = Address(str(vm.call_stack[0].local_vars[RUN_UNIT_VAR].value))
+    for address in filter(run_unit.__ne__, vm.region_keys()):
+        rgn = bytes(vm.region_get(address))
         if len(rgn) >= off + length:
             return rgn[off : off + length]
     return b""

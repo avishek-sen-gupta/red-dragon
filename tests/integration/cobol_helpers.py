@@ -158,8 +158,12 @@ def return_code_of(vm, program_id: str) -> int:
 
 
 def first_region(vm):
-    """Return the first memory region from the VM state."""
-    return vm.region_get(list(vm.region_keys())[0])
+    """Return the first program region: the first one allocated after the run unit's."""
+    from interpreter.address import Address
+    from interpreter.cobol.run_unit import RUN_UNIT_VAR
+
+    run_unit = Address(str(vm.call_stack[0].local_vars[RUN_UNIT_VAR].value))
+    return vm.region_get(next(filter(run_unit.__ne__, vm.region_keys())))
 
 
 def all_field_names(fields) -> set[str]:
