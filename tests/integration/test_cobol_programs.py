@@ -25,6 +25,7 @@ from interpreter.var_name import VarName
 from interpreter.vm.vm_types import Pointer
 from tests.covers import NotLanguageFeature, covers
 from tests.integration.cobol_helpers import bridge_jar  # noqa: F401
+from tests.integration.cobol_helpers import first_region
 from tests.integration.cobol_helpers import (
     decode_zoned_unsigned as _decode_zoned_unsigned,
 )
@@ -49,10 +50,8 @@ def _run_cobol(lines: list[str], max_steps: int = 1000):
 
 
 def _first_region(vm) -> bytearray:
-    """Return the first memory region from the VM state."""
-    region = vm.region_get(list(vm.region_keys())[0])
-    assert region is not None
-    return region
+    """Return the first program region from the VM state."""
+    return first_region(vm)
 
 
 def _decode_alpha(region: bytearray, offset: int, length: int) -> str:

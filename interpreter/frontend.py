@@ -58,6 +58,13 @@ class Frontend(ABC):
         """
         return TypeEnvironmentBuilder()
 
+    def start_up_ir(self) -> tuple[InstructionBase, ...]:
+        """Top-level code a link runs once, before any module's own.
+
+        Override in frontends whose runtime keeps storage for the whole run.
+        """
+        return ()
+
     @property
     def func_symbol_table(self) -> dict[CodeLabel, FuncRef]:
         """Function reference symbol table accumulated during lowering."""

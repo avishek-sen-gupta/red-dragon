@@ -145,7 +145,7 @@ def test_a_spec_links_a_subprogram_no_static_call_scan_can_discover():
 
     _, linked = compile_program(_DATA_NAME_CALLER, make_cobol_parser(), [spec])
 
-    assert _linked_stems(linked) == ["DNCALLEE", "__main__"]
+    assert _linked_stems(linked) == ["DNCALLEE", "__main__", "__start_up__"]
 
 
 def test_the_caller_links_a_subprogram_no_static_call_scan_can_discover():
@@ -158,7 +158,7 @@ def test_the_caller_links_a_subprogram_no_static_call_scan_can_discover():
         linked_subprogram_sources={"DNCALLEE": _DATA_NAME_CALLEE},
     )
 
-    assert _linked_stems(linked) == ["DNCALLEE", "__main__"]
+    assert _linked_stems(linked) == ["DNCALLEE", "__main__", "__start_up__"]
 
 
 def test_specs_contributions_merge_and_a_default_spec_contributes_nothing():
@@ -182,4 +182,10 @@ def test_specs_contributions_merge_and_a_default_spec_contributes_nothing():
     )
 
     assert quiet.linked_subprogram_sources() == {}
-    assert _linked_stems(linked) == ["PGMONE", "PGMTWO", "PGMZERO", "__main__"]
+    assert _linked_stems(linked) == [
+        "PGMONE",
+        "PGMTWO",
+        "PGMZERO",
+        "__main__",
+        "__start_up__",
+    ]

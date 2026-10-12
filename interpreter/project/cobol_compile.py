@@ -26,7 +26,6 @@ from cobol_asg.lp import LP
 from cobol_asg.lp32 import LP32_MODE
 from cobol_asg.resolve_addressing_mode import addressing_mode
 from interpreter import constants
-from interpreter.cfg import build_cfg
 from interpreter.constants import Language
 from interpreter.frontend import get_frontend
 from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy
@@ -36,8 +35,8 @@ from interpreter.project.compiler import build_export_table
 from interpreter.project.imports import extract_imports
 from interpreter.project.linker import link_modules
 from interpreter.project.resolver import get_resolver, topological_sort
+from interpreter.project.start_up import with_start_up
 from interpreter.project.types import ImportKind, LinkedProgram, ModuleUnit
-from interpreter.registry import build_registry
 
 logger = logging.getLogger(__name__)
 
@@ -229,35 +228,15 @@ def compile_cobol(
                 continue
             modules[disk_path] = disk_module
 
-        if len(modules) == 1:
-            instructions = list(main_module.ir)
-            cfg = build_cfg(instructions)
-            registry = build_registry(
-                instructions,
-                cfg,
-                func_symbol_table=main_frontend.func_symbol_table,
-                class_symbol_table=main_frontend.class_symbol_table,
-            )
-            return main_frontend, LinkedProgram(
-                modules={},
-                merged_ir=instructions,
-                merged_cfg=cfg,
-                merged_registry=registry,
-                language=Language.COBOL,
-                import_graph={},
-                type_env_builder=main_frontend.type_env_builder,
-                symbol_table=main_frontend.symbol_table,
-                data_layout=main_frontend.data_layout,
-                func_symbol_table=main_frontend.func_symbol_table,
-                class_symbol_table=main_frontend.class_symbol_table,
-            )
-
         import_graph: dict[Path, list[Path]] = {p: [] for p in modules}
         import_graph[main_path] = [p for p in modules if p != main_path]
-        topo_order = topological_sort(import_graph)
+        linked_modules, linked_graph = with_start_up(
+            main_frontend.start_up_ir(), Language.COBOL, modules, import_graph
+        )
+        topo_order = topological_sort(linked_graph)
         linked = link_modules(
-            modules=modules,
-            import_graph=import_graph,
+            modules=linked_modules,
+            import_graph=linked_graph,
             project_root=Path("/"),
             topo_order=topo_order,
             language=Language.COBOL,

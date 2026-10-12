@@ -52,9 +52,7 @@ def test_return_code_does_not_corrupt_working_storage():
         ]
     )
 
-    # WS region is the first region (allocated in the program init block).
-    ws_region = vm.region_get(list(vm.region_keys())[0])
-    assert decode_zoned_unsigned(ws_region, 0, 4) == 1234
+    assert decode_zoned_unsigned(ws_region(vm, "RCISO"), 0, 4) == 1234
     assert read_return_code(vm) == 12
 
 
