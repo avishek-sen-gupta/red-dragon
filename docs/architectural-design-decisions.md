@@ -3140,3 +3140,22 @@ Because `Halt_` is a distinct type, it is naturally absent from `_infer_return`'
 **Decision:** Delete both packages, `analyze_project`, the MCP tools `analyze_program`, `get_function_summary` and `get_call_chain`, the TUI dataflow panels and `d` binding, and `scripts/demo_dataflow.py`. Supersedes the dataflow and interprocedural ADRs. `get_ir` and `load_project` take function lists from the registry, and per-function IR comes from `cfg.function_sub_cfg`, moved out of the summaries module.
 
 **Consequences:** RedDragon lowers, links and executes; it no longer analyses. Each instruction's `reads()`/`writes()` now has no production caller (red-dragon-zdeh).
+
+---
+
+### ADR-180: Remove the single-file surfaces (2026-10-13)
+
+**Context:** Non-COBOL code compiled two ways: `run()` hand-built a one-module `LinkedProgram` from one string, and `compile_directory` compiled and linked files. The same program got different labels from each. Six surfaces sat on the single-file side or wrapped it, and rewiring each onto one compile core was not worth it for code nothing outside this repo used.
+
+**Decision:** Delete them. To restore any of them, start from `bc0bd68e`, the last commit that has all six.
+
+| Surface | What it did |
+|---|---|
+| `interpreter/api.py` | `lower_source` (string → IR), `lower_and_infer` (IR plus type environment), `dump_ir`, `build_cfg_from_source` (CFG, optionally one function), `dump_cfg`, `dump_mermaid`, `ir_stats`, `execute_traced` (one-module traced run), `extract_function_source` (a function's source via tree-sitter), `run_project` (directory → `compile_directory` → `execute_cfg`); eight of them re-exported from `interpreter` |
+| `interpreter/ir_stats.py` | `count_opcodes`, used only by `api.ir_stats` |
+| `mcp_server/` | MCP tools `load_program`, `step`, `run_to_end`, `get_state`, `get_ir`, `load_project`, `list_opcodes`; resources for source, IR and CFG |
+| `viz/` | Textual TUI: single-file pipeline stepping, cross-language compare, lowering trace, frontend coverage matrix, project mode over `compile_directory` |
+| CLI `--ir-only`, `--cfg-only`, `--mermaid`, `--function` | Print one file's IR, CFG or Mermaid CFG and exit |
+| Demo scripts | `demo_type_inference_tier2/3.py`, `demo_multifile_project.py` |
+
+**Consequences:** The CLI only runs programs. `interpreter` exports `run`, `execute_cfg`, `VMConfig`, `ExecutionStats`. The `mcp` and `textual` dependencies are gone (`textual` stays in the lock through `mutmut`). IR, CFG and Mermaid dumps come back on the fully linked program only (red-dragon-m2n0).
