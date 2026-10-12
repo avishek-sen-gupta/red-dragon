@@ -149,36 +149,6 @@ Six synchronized panels: **Source** (span-highlighted), **AST** (collapsible tre
 
 **Lowering trace** mode shows which frontend handler processed each AST node and the IR it emitted. **Coverage matrix** mode shows which AST node types each frontend handles: language-specific (`✓`) or shared (`✓*`).
 
-### MCP Server
-
-An [MCP](https://modelcontextprotocol.io) server exposes compilation and VM execution for the 15 tree-sitter languages.
-
-**7 tools:**
-- `list_opcodes()` — all IR opcodes with descriptions, categories, typed fields, and semantic notes
-- `load_program(source, language, max_steps?)` — load and execute a program, record step-by-step trace
-- `step(count?)` — advance through execution trace, get instructions and state deltas
-- `run_to_end()` — skip to final state with all variable values
-- `get_state()` — current VM state: call stack, variables, registers, heap
-- `get_ir(function_name?)` — IR instructions, optionally filtered to one function
-- `load_project(entry_file, language)` — discover imports from entry file, compile all modules and link them. Returns module count, import graph, functions, classes, and unresolved imports
-
-**3 resources:** `reddragon://source`, `reddragon://ir`, `reddragon://cfg`
-
-**Run:** `uv run python -m mcp_server`
-
-**Configure in Claude Code** (`.claude/settings.json`):
-```json
-{
-  "mcpServers": {
-    "red-dragon": {
-      "command": "uv",
-      "args": ["run", "python", "-m", "mcp_server"],
-      "cwd": "/path/to/red-dragon"
-    }
-  }
-}
-```
-
 ## Setup
 
 ### Prerequisites

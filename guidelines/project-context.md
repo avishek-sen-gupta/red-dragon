@@ -5,7 +5,7 @@
 - **Package manager:** uv — `uv run` prefixes every Python command
 - **Test framework:** pytest with pytest-xdist, parallel by default. `addopts = "-n auto --dist=worksteal -m 'not external and not nist'"`, so the default run **excludes** two marker sets.
 - **Formatter:** Black
-- **Type checker:** Pyright, `pyrightconfig.json` — `typeCheckingMode: basic` over `interpreter`, `cobol_asg`, `mcp_server`, with per-file promotion to `standard` (see `project/workflow.md`)
+- **Type checker:** Pyright, `pyrightconfig.json` — `typeCheckingMode: basic` over `interpreter`, `cobol_asg`, with per-file promotion to `standard` (see `project/workflow.md`)
 - **Linter:** python-fp-lint, `fp.json`, with the ratchet baseline in `fp-baseline.json`
 - **Architecture contracts:** import-linter, `.importlinter`
 - **Secret detection:** Talisman, `.talismanrc`
