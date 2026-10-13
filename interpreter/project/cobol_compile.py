@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
-import tempfile
+import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -99,6 +99,14 @@ def compile_cobol_module(
     return frontend, module
 
 
+def _cache_dir(given: Path | None) -> Path:
+    match given:
+        case Path():
+            return given
+        case _:
+            return Path("/tmp") / uuid.uuid4().hex
+
+
 @dataclass(frozen=True)
 class _Lowering:
     """The arguments every program of one run unit is lowered with."""
@@ -164,75 +172,61 @@ def compile_cobol(
 
     Always uses the two-phase AST cache: Phase 1 parses all sources to
     ast_cache_dir in parallel; Phase 2 loads each JSON and lowers sequentially
-    (at most one ASG live at a time). When ast_cache_dir is None a TemporaryDirectory
-    is created and cleaned up before returning.
+    (at most one ASG live at a time). When ast_cache_dir is None the ASTs are
+    persisted to a new uuid-named directory under /tmp. The linked program's
+    ast_paths maps each compiled program's path to its AST file.
 
     Returns (main_frontend, linked).
     """
     mode = addressing_mode(lp)
     mode_parser = parser.with_addressing_mode(mode)
-    _owned_tmp: tempfile.TemporaryDirectory[str] | None = None
-    if ast_cache_dir is None:
-        _owned_tmp = tempfile.TemporaryDirectory()
-        cache_dir: Path = Path(_owned_tmp.name)
-    else:
-        cache_dir = ast_cache_dir
+    cache_dir = _cache_dir(ast_cache_dir)
+    main_path = Path("__main__.cbl")
+    all_sources: dict[Path, bytes] = {
+        main_path: source,
+        **{program.path: program.source for program in programs},
+    }
+    parallel_parse_to_cache(all_sources, mode_parser, cache_dir)
 
-    try:
-        main_path = Path("__main__.cbl")
-        all_sources: dict[Path, bytes] = {
-            main_path: source,
-            **{program.path: program.source for program in programs},
-        }
-        parallel_parse_to_cache(all_sources, mode_parser, cache_dir)
+    def _ast_path(src_path: Path) -> Path:
+        return cache_dir / f"{src_path.stem}-{_digest(src_path)}.ast.json"
 
-        def _ast_path(src_path: Path) -> Path:
-            return cache_dir / f"{src_path.stem}-{_digest(src_path)}.ast.json"
+    lowering = _Lowering(
+        parser=mode_parser,
+        copybook_dirs=copybook_dirs,
+        extension_strategies=extension_strategies,
+        dialect_parsers=dialect_parsers,
+        observer=observer,
+        tolerant=tolerant,
+        addressing_mode=mode,
+    )
+    main_frontend, main_module = lowering.lower(source, main_path, _ast_path(main_path))
+    modules: dict[Path, ModuleUnit] = {
+        main_path: main_module,
+        **dict(
+            pair
+            for path, text in all_sources.items()
+            if path != main_path
+            for pair in lowering.lower_or_skip(SourceFile(path, text), _ast_path(path))
+        ),
+    }
 
-        lowering = _Lowering(
-            parser=mode_parser,
-            copybook_dirs=copybook_dirs,
-            extension_strategies=extension_strategies,
-            dialect_parsers=dialect_parsers,
-            observer=observer,
-            tolerant=tolerant,
-            addressing_mode=mode,
-        )
-        main_frontend, main_module = lowering.lower(
-            source, main_path, _ast_path(main_path)
-        )
-        modules: dict[Path, ModuleUnit] = {
-            main_path: main_module,
-            **dict(
-                pair
-                for path, text in all_sources.items()
-                if path != main_path
-                for pair in lowering.lower_or_skip(
-                    SourceFile(path, text), _ast_path(path)
-                )
-            ),
-        }
-
-        import_graph: dict[Path, list[Path]] = {p: [] for p in modules}
-        import_graph[main_path] = [p for p in modules if p != main_path]
-        linked_modules, linked_graph = with_start_up(
-            main_frontend.start_up_ir(), Language.COBOL, modules, import_graph
-        )
-        topo_order = topological_sort(linked_graph)
-        linked = link_modules(
-            modules=linked_modules,
-            import_graph=linked_graph,
-            project_root=Path("/"),
-            topo_order=topo_order,
-            language=Language.COBOL,
-            type_env_builder=main_frontend.type_env_builder,
-            data_layout=main_frontend.data_layout,
-        )
-        main_program_id: str = main_frontend.program_id
-        linked.entry_func_label = CodeLabel(
-            f"__main__.func_{main_program_id.lower()}_0"
-        )
-        return main_frontend, linked
-    finally:
-        if _owned_tmp is not None:
-            _owned_tmp.cleanup()
+    import_graph: dict[Path, list[Path]] = {p: [] for p in modules}
+    import_graph[main_path] = [p for p in modules if p != main_path]
+    linked_modules, linked_graph = with_start_up(
+        main_frontend.start_up_ir(), Language.COBOL, modules, import_graph
+    )
+    topo_order = topological_sort(linked_graph)
+    linked = link_modules(
+        modules=linked_modules,
+        import_graph=linked_graph,
+        project_root=Path("/"),
+        topo_order=topo_order,
+        language=Language.COBOL,
+        type_env_builder=main_frontend.type_env_builder,
+        data_layout=main_frontend.data_layout,
+    )
+    main_program_id: str = main_frontend.program_id
+    linked.entry_func_label = CodeLabel(f"__main__.func_{main_program_id.lower()}_0")
+    linked.ast_paths = {path: _ast_path(path) for path in modules}
+    return main_frontend, linked
