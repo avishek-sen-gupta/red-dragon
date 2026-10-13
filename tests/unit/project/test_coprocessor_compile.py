@@ -246,7 +246,10 @@ def test_every_compiled_program_is_rewritten_by_every_spec(tmp_path, caplog):
     ]
 
 
-def test_a_linked_subprogram_wins_over_a_discovered_one_of_the_same_name(tmp_path):
+@pytest.mark.parametrize("linked_name", ["DISKCALL", "diskcall"])
+def test_a_linked_subprogram_wins_over_a_discovered_one_of_the_same_name(
+    tmp_path, linked_name
+):
     (tmp_path / "DISKCALL.cbl").write_bytes(_callee("DISKCALL"))
     _, linked = compile_program(
         _CALLS_BOTH_KINDS,
@@ -254,13 +257,13 @@ def test_a_linked_subprogram_wins_over_a_discovered_one_of_the_same_name(tmp_pat
         [],
         source_search_dirs=(tmp_path,),
         linked_subprogram_sources={
-            "DISKCALL": _callee("DISKCALL"),
+            linked_name: _callee("DISKCALL"),
             "DNCALLEE": _callee("DNCALLEE"),
         },
     )
-    assert sorted(str(p) for p in linked.modules) == [
-        "DISKCALL.cbl",
+    assert {str(p) for p in linked.modules} == {
+        f"{linked_name}.cbl",
         "DNCALLEE.cbl",
         "__main__.cbl",
         "__start_up__",
-    ]
+    }
