@@ -1,4 +1,5 @@
 import json
+import tempfile
 import logging
 from collections.abc import Mapping
 from pathlib import Path
@@ -216,7 +217,9 @@ def test_compile_cobol_maps_every_compiled_program_to_its_persisted_ast():
         str(source): json.loads(ast.read_text())["program_id"]
         for source, ast in linked.ast_paths.items()
     } == {"__main__.cbl": "CALLER", "CALLEE.cbl": "CALLEE"}
-    assert {ast.parent.parent for ast in linked.ast_paths.values()} == {Path("/tmp")}
+    assert {ast.parent.parent for ast in linked.ast_paths.values()} == {
+        Path(tempfile.gettempdir())
+    }
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

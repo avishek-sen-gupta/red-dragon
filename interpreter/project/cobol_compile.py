@@ -19,7 +19,7 @@ import dataclasses
 import hashlib
 import json
 import logging
-import uuid
+import tempfile
 from collections.abc import Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -101,9 +101,7 @@ def _cache_dir(given: Path | None) -> Path:
         case Path():
             return given
         case _:
-            created = Path("/tmp") / uuid.uuid4().hex
-            created.mkdir(mode=0o700)
-            return created
+            return Path(tempfile.mkdtemp())
 
 
 def _parse_one(program: SourceFile, parser: AsgJsonParser, target: Path) -> Path:
@@ -255,7 +253,7 @@ def compile_cobol(
     AstParseError, tolerant or not.
 
     Parse, lower and link each write files into *work_dir* (a new owner-only
-    directory under /tmp when None) and skip programs whose files already exist.
+    directory in the system temp location when None) and skip programs whose files already exist.
     The returned program is read back from the linked file; its ast_paths maps
     each compiled program's path to its AST file.
     """
