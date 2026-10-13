@@ -80,21 +80,50 @@ def _logging_factory(name: str) -> Callable[[], _FakeStrategy]:
     return make
 
 
-def test_every_specs_prepass_runs_before_any_make_strategy(caplog):
+_CALLS_BOTH_KINDS = b"""\
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. BOTHCALL.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01 WS-CALLEE PIC X(8) VALUE 'DNCALLEE'.
+       PROCEDURE DIVISION.
+           CALL 'DISKCALL'.
+           CALL WS-CALLEE.
+           GOBACK.
+"""
+
+
+_DATA_NAME_CALLEE = b"""\
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. DNCALLEE.
+       PROCEDURE DIVISION.
+           DISPLAY 'IN DNCALLEE'.
+           GOBACK.
+"""
+
+
+def _callee(program_id: str) -> bytes:
+    return _DATA_NAME_CALLEE.replace(b"DNCALLEE", program_id.encode())
+
+
+def test_every_specs_prepass_runs_before_any_make_strategy(tmp_path, caplog):
+    (tmp_path / "DISKCALL.cbl").write_bytes(_callee("DISKCALL"))
     specs = [
         CoprocessorSpec(name, _logging_factory(name), _logging_transform(name))
         for name in ("a", "b")
     ]
 
     with caplog.at_level(logging.INFO, logger=__name__):
-        compile_program(_TRIVIAL_PROGRAM, make_cobol_parser(), specs)
+        compile_program(
+            _CALLS_BOTH_KINDS,
+            make_cobol_parser(),
+            specs,
+            source_search_dirs=(tmp_path,),
+        )
 
-    assert [r.message for r in caplog.records if r.name == __name__] == [
-        "prepass_a",
-        "prepass_b",
-        "make_strategy_a",
-        "make_strategy_b",
-    ]
+    messages = [r.message for r in caplog.records if r.name == __name__]
+    assert messages[-2:] == ["make_strategy_a", "make_strategy_b"]
+    assert sorted(messages[:-2]) == sorted(["prepass_a", "prepass_b"] * 2)
 
 
 # A caller that names its callee by DATA-NAME, not by literal: the program name
@@ -113,21 +142,9 @@ _DATA_NAME_CALLER = b"""\
            GOBACK.
 """
 
-_DATA_NAME_CALLEE = b"""\
-       IDENTIFICATION DIVISION.
-       PROGRAM-ID. DNCALLEE.
-       PROCEDURE DIVISION.
-           DISPLAY 'IN DNCALLEE'.
-           GOBACK.
-"""
-
 
 def _linked_stems(linked: LinkedProgram) -> list[str]:
     return sorted(path.stem for path in linked.modules)
-
-
-def _callee(program_id: str) -> bytes:
-    return _DATA_NAME_CALLEE.replace(b"DNCALLEE", program_id.encode())
 
 
 def test_a_spec_links_a_subprogram_no_static_call_scan_can_discover():
@@ -191,19 +208,6 @@ def test_specs_contributions_merge_and_a_default_spec_contributes_nothing():
     ]
 
 
-_CALLS_BOTH_KINDS = b"""\
-       IDENTIFICATION DIVISION.
-       PROGRAM-ID. BOTHCALL.
-       DATA DIVISION.
-       WORKING-STORAGE SECTION.
-       01 WS-CALLEE PIC X(8) VALUE 'DNCALLEE'.
-       PROCEDURE DIVISION.
-           CALL 'DISKCALL'.
-           CALL WS-CALLEE.
-           GOBACK.
-"""
-
-
 def _program_id(source: str) -> str:
     line = next(text for text in source.splitlines() if "PROGRAM-ID." in text)
     return line.split("PROGRAM-ID.")[1].strip(" .")
@@ -239,4 +243,24 @@ def test_every_compiled_program_is_rewritten_by_every_spec(tmp_path, caplog):
         f"{spec}:{program}"
         for spec in "ab"
         for program in ("BOTHCALL", "DISKCALL", "DNCALLEE")
+    ]
+
+
+def test_a_linked_subprogram_wins_over_a_discovered_one_of_the_same_name(tmp_path):
+    (tmp_path / "DISKCALL.cbl").write_bytes(_callee("DISKCALL"))
+    _, linked = compile_program(
+        _CALLS_BOTH_KINDS,
+        make_cobol_parser(),
+        [],
+        source_search_dirs=(tmp_path,),
+        linked_subprogram_sources={
+            "DISKCALL": _callee("DISKCALL"),
+            "DNCALLEE": _callee("DNCALLEE"),
+        },
+    )
+    assert sorted(str(p) for p in linked.modules) == [
+        "DISKCALL.cbl",
+        "DNCALLEE.cbl",
+        "__main__.cbl",
+        "__start_up__",
     ]

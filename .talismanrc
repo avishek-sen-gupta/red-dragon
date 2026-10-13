@@ -204,4 +204,6 @@ fileignoreconfig:
   checksum: 723dacb21c29d9ba516a2aadfb0672994e813bd80455485b4180ef3a97cbb325
 - filename: docs/superpowers/plans/2026-10-13-cobol-only-through-compile-cobol.md
   checksum: 1ccf67dfc096b4a85587600f678201f03219536c010135bb3733691c221d8162
+- filename: tests/unit/project/test_coprocessor_compile.py
+  checksum: cf3dcc3c9f539303d52eac893423a91bc15c258857aa07006aa395e666b86bad
 version: "1.0"
