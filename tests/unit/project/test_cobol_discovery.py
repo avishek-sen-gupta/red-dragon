@@ -1,6 +1,7 @@
 """discover_callee_programs: the shell step that turns a main program and ordered
 search directories into the list of programs to compile."""
 
+import itertools
 from pathlib import Path
 
 from interpreter.project.cobol_discovery import discover_callee_programs
@@ -56,3 +57,17 @@ def test_discovery_follows_static_calls_through_ordered_directories(tmp_path: Pa
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_discovery_without_search_directories_finds_nothing():
     assert discover_callee_programs(_program("MAIN", "MID"), ()) == ()
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_discovery_follows_a_call_chain_longer_than_the_recursion_limit(
+    tmp_path: Path,
+):
+    names = tuple(f"P{i:05d}" for i in range(1200))
+    for name, callee in itertools.pairwise(names):
+        (tmp_path / f"{name}.cbl").write_bytes(_program(name, callee))
+    (tmp_path / f"{names[-1]}.cbl").write_bytes(_program(names[-1]))
+
+    found = discover_callee_programs(_program("MAIN", names[0]), (tmp_path,))
+
+    assert tuple(f.path.stem for f in found) == names
