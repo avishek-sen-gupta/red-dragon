@@ -1,6 +1,7 @@
 """discover_callee_programs: the shell step that turns a main program and ordered
 search directories into the list of programs to compile."""
 
+import contextlib
 import itertools
 from pathlib import Path
 
@@ -71,3 +72,54 @@ def test_discovery_follows_a_call_chain_longer_than_the_recursion_limit(
     found = discover_callee_programs(_program("MAIN", names[0]), (tmp_path,))
 
     assert tuple(f.path.stem for f in found) == names
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_a_callee_beside_its_caller_wins_over_every_search_directory(
+    tmp_path: Path,
+):
+    first, second = tmp_path / "first", tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+    (first / "LEAF.cbl").write_bytes(_program("FIRSTLEAF"))
+    (second / "MID.cbl").write_bytes(_program("MID", "LEAF"))
+    (second / "LEAF.cbl").write_bytes(_program("LEAF"))
+
+    found = discover_callee_programs(_program("MAIN", "MID"), (first, second))
+
+    assert {f.path for f in found} == {
+        (second / "MID.cbl").resolve(),
+        (second / "LEAF.cbl").resolve(),
+    }
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_a_search_directorys_src_subdirectory_is_searched_before_the_next_directory(
+    tmp_path: Path,
+):
+    first, second = tmp_path / "first", tmp_path / "second"
+    (first / "src").mkdir(parents=True)
+    second.mkdir()
+    (first / "src" / "MID.cbl").write_bytes(_program("MID"))
+    (second / "MID.cbl").write_bytes(_program("SHADOWED"))
+
+    found = discover_callee_programs(_program("MAIN", "MID"), (first, second))
+
+    assert found == (
+        SourceFile((first / "src" / "MID.cbl").resolve(), _program("MID")),
+    )
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_the_main_programs_callees_are_looked_up_in_the_working_directory_first(
+    tmp_path: Path,
+):
+    cwd, search = tmp_path / "cwd", tmp_path / "search"
+    cwd.mkdir()
+    search.mkdir()
+    (cwd / "MID.cbl").write_bytes(_program("MID"))
+    (search / "MID.cbl").write_bytes(_program("SHADOWED"))
+    with contextlib.chdir(cwd):
+        found = discover_callee_programs(_program("MAIN", "MID"), (search,))
+
+    assert found == (SourceFile((cwd / "MID.cbl").resolve(), _program("MID")),)

@@ -71,7 +71,9 @@ def discover_callee_programs(
     """Every program reachable from *source* by ``CALL 'LITERAL'``, transitively.
 
     Each target is looked up by program name in *search_dirs* in order; the first
-    directory that resolves it wins. *source_transform* is applied to every
+    directory that resolves it wins. Within each, the calling program's own
+    directory is tried first (the working directory, for the main program), then
+    the search directory, then its ``src/``. *source_transform* is applied to every
     program read. A ``CALL identifier`` names no program statically and is not
     followed.
     """
