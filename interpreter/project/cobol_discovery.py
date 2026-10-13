@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
@@ -40,27 +41,25 @@ def _callees(source: bytes, path: Path, roots: Sequence[Path]) -> tuple[Path, ..
     )
 
 
-def _walk(
-    pending: tuple[tuple[bytes, Path], ...],
-    found: Mapping[Path, bytes],
-    seen: frozenset[Path],
+_Walk = tuple[tuple[tuple[bytes, Path], ...], Mapping[Path, bytes], frozenset[Path]]
+
+
+def _step(
+    walk: _Walk,
     roots: Sequence[Path],
     source_transform: Callable[[str], str],
-) -> Mapping[Path, bytes]:
-    if not pending:
-        return found
+) -> _Walk:
+    pending, found, seen = walk
     (source, path), rest = pending[-1], pending[:-1]
     callees = _callees(source, path, roots)
     new = tuple(
         t for i, t in enumerate(callees) if t not in seen and t not in callees[:i]
     )
     sources = {t: source_transform(t.read_text()).encode() for t in new}
-    return _walk(
+    return (
         rest + tuple((sources[t], t) for t in new),
         {**found, **sources},
         seen | frozenset(new),
-        roots,
-        source_transform,
     )
 
 
@@ -76,11 +75,12 @@ def discover_callee_programs(
     program read. A ``CALL identifier`` names no program statically and is not
     followed.
     """
-    found = _walk(
-        ((source, _MAIN_PATH),),
-        {},
-        frozenset({_MAIN_PATH.resolve()}),
-        tuple(d.resolve() for d in search_dirs),
-        source_transform,
+    roots = tuple(d.resolve() for d in search_dirs)
+    start: _Walk = (((source, _MAIN_PATH),), {}, frozenset({_MAIN_PATH.resolve()}))
+    walks = itertools.accumulate(
+        itertools.count(),
+        lambda walk, _: _step(walk, roots, source_transform),
+        initial=start,
     )
+    found = next(found for pending, found, _ in walks if not pending)
     return tuple(SourceFile(path, text) for path, text in found.items())
