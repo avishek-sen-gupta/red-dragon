@@ -67,6 +67,8 @@ from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringSt
 
 
 class _ConformingStrategy:
+    name = "conforming"
+
     def handles(self, stmt):
         return True
 
@@ -85,6 +87,17 @@ class _MissingHandles:
     def lower(self, ctx, stmt, materialised): ...
 
 
+class _MissingName:
+    def handles(self, stmt):
+        return True
+
+    def preprocess_program_dict(self, data):
+        return data
+
+    def on_procedure_entry(self, ctx, materialised): ...
+    def lower(self, ctx, stmt, materialised): ...
+
+
 class TestExtensionStrategyProtocol:
     def test_conforming_class_is_instance(self):
         assert isinstance(_ConformingStrategy(), RedDragonExtensionLoweringStrategy)
@@ -92,12 +105,17 @@ class TestExtensionStrategyProtocol:
     def test_missing_handles_is_not_instance(self):
         assert not isinstance(_MissingHandles(), RedDragonExtensionLoweringStrategy)
 
+    def test_missing_name_is_not_instance(self):
+        assert not isinstance(_MissingName(), RedDragonExtensionLoweringStrategy)
+
 
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.statement_dispatch import dispatch_statement
 
 
 class _SpyStrategy:
+    name = "spy"
+
     def __init__(self, kind):
         self._kind = kind
         self.lowered = []
@@ -139,6 +157,8 @@ class TestArrayDispatch:
 
     def test_first_handler_wins_and_others_skipped(self):
         class _AlwaysHandles:
+            name = "always-handles"
+
             def __init__(self):
                 self.lowered = []
 
@@ -189,6 +209,8 @@ class TestFrontendExtensionArray:
         order = []
 
         class _OrderSpy:
+            name = "order-spy"
+
             def __init__(self, tag):
                 self._tag = tag
 

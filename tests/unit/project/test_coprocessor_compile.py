@@ -18,6 +18,8 @@ class _FakeStrategy:
     """A minimal RedDragonExtensionLoweringStrategy that handles nothing —
     proves compile_program's plumbing without needing real CICS/SQL lowering."""
 
+    name = "fake"
+
     def handles(self, stmt) -> bool:
         return False
 

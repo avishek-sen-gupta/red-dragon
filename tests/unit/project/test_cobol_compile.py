@@ -230,6 +230,8 @@ def _program(program_id: str) -> bytes:
 class _FailsToLower(RedDragonExtensionLoweringStrategy):
     """Raises while lowering the one program it names."""
 
+    name = "fails-to-lower"
+
     def __init__(self, program_id: str) -> None:
         self._program_id = program_id
 
