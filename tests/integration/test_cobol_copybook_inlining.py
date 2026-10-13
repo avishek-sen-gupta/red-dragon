@@ -6,15 +6,16 @@ import pytest
 
 from interpreter.address import Address
 from interpreter.cobol.features import CobolFeature
-from interpreter.constants import Language
 from interpreter.field_name import FieldName
-from interpreter.project.compiler import compile_directory
 from interpreter.project.entry_point import EntryPoint
 from interpreter.run import initial_vm_state, run_linked
 from interpreter.var_name import VarName
 from interpreter.vm.vm_types import Pointer
 from tests.covers import covers
-from tests.integration.cobol_helpers import bridge_jar  # noqa: F401
+from tests.integration.cobol_helpers import (
+    bridge_jar,  # noqa: F401
+    compile_programs_in,
+)
 from tests.integration.cobol_helpers import (
     decode_zoned_unsigned as _decode_zoned_unsigned,
 )
@@ -25,7 +26,7 @@ from tests.integration.cobol_helpers import (
 
 @pytest.fixture(autouse=True)
 def _require_bridge_jar(bridge_jar):
-    """Enforce the required PROLEAP_BRIDGE_JAR for run()/compile_directory-based
+    """Enforce the required PROLEAP_BRIDGE_JAR for run()/compile_cobol-based
     tests (fails loudly via bridge_jar if it's unset)."""
 
 
@@ -50,7 +51,7 @@ def test_copy_inlined_field_executes(tmp_path):
         )
     )
 
-    linked = compile_directory(tmp_path, Language.COBOL)
+    linked = compile_programs_in(tmp_path, "MAIN")
     vm = run_linked(
         linked,
         entry_point=EntryPoint.function(
@@ -93,7 +94,7 @@ def test_copy_of_library_inlined(tmp_path):
         )
     )
 
-    linked = compile_directory(tmp_path, Language.COBOL)
+    linked = compile_programs_in(tmp_path, "MAIN")
     vm = run_linked(
         linked,
         entry_point=EntryPoint.function(
@@ -119,8 +120,10 @@ def test_copy_of_library_inlined(tmp_path):
 
 @covers(CobolFeature.MULTI_FILE_IMPORTS)
 def test_missing_copybook_raises_clean_error(tmp_path):
-    """An unresolvable COPY surfaces a clean error naming the copybook."""
-    from cobol_asg.subprocess_runner import CobolParseError
+    """An unresolvable COPY surfaces a clean error naming the copybook. The AST
+    cache parses every program before lowering and reports a failure as
+    AstParseError, naming the program and the underlying parser error."""
+    from cobol_asg.ast_store import AstParseError
 
     (tmp_path / "MAIN.cbl").write_text(
         _to_fixed(
@@ -136,8 +139,8 @@ def test_missing_copybook_raises_clean_error(tmp_path):
         )
     )
 
-    with pytest.raises(CobolParseError) as excinfo:
-        compile_directory(tmp_path, Language.COBOL)
+    with pytest.raises(AstParseError) as excinfo:
+        compile_programs_in(tmp_path, "MAIN")
     assert "NOSUCHBOOK" in str(excinfo.value)
 
 
@@ -163,7 +166,7 @@ def test_multiple_copybooks_inlined(tmp_path):
         )
     )
 
-    linked = compile_directory(tmp_path, Language.COBOL)
+    linked = compile_programs_in(tmp_path, "MAIN")
     vm = run_linked(
         linked,
         entry_point=EntryPoint.function(
@@ -225,7 +228,7 @@ def test_copybook_with_a_high_byte_in_a_comment_is_inlined(tmp_path):
         )
     )
 
-    linked = compile_directory(tmp_path, Language.COBOL)
+    linked = compile_programs_in(tmp_path, "MAIN")
     vm = run_linked(
         linked,
         entry_point=EntryPoint.function(
@@ -305,7 +308,7 @@ def test_copy_shared_record_across_call(tmp_path):
         )
     )
 
-    linked = compile_directory(tmp_path, Language.COBOL)
+    linked = compile_programs_in(tmp_path, "MAINPROG")
     vm = run_linked(
         linked,
         entry_point=EntryPoint.function(

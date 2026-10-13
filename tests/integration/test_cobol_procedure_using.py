@@ -9,14 +9,13 @@ from cobol_asg.cobol_parser import make_cobol_parser
 from cobol_asg.cobol_statements import CallUsingParam
 from interpreter.address import Address
 from interpreter.cobol.features import CobolFeature
-from interpreter.constants import Language
 from interpreter.field_name import FieldName
-from interpreter.project.compiler import compile_directory
 from interpreter.project.entry_point import EntryPoint
 from interpreter.run import initial_vm_state, run_linked
 from interpreter.var_name import VarName
 from interpreter.vm.vm_types import Pointer
 from tests.covers import covers
+from tests.integration.cobol_helpers import compile_programs_in
 from tests.integration.cobol_helpers import (
     decode_zoned_unsigned as _decode_zoned_unsigned,
 )
@@ -64,7 +63,7 @@ def test_each_argument_lands_in_the_parameter_using_lists_at_its_position(
     (tmp_path / "SUB.cbl").write_text(SUB_SRC.replace("BY VALUE ", ""))
     (tmp_path / "MAIN.cbl").write_text(MAIN_SRC)
     vm = run_linked(
-        compile_directory(tmp_path, Language.COBOL),
+        compile_programs_in(tmp_path, "MAIN"),
         entry_point=EntryPoint.function(
             lambda ref: str(ref.label).endswith("func_main_0")
             and "init_params" not in str(ref.label)
