@@ -77,6 +77,16 @@ def from_literal(text: str) -> CobolNumber:
     return Decimal(stripped)
 
 
+def to_text(value: CobolNumber) -> str:
+    """The number's exact text, digits and exponent both: ``from_text`` reads it back unchanged."""
+    return str(value)
+
+
+def from_text(text: str) -> CobolNumber:
+    """The number ``to_text`` wrote."""
+    return Decimal(text)
+
+
 def from_float(value: float) -> CobolNumber:
     """The exact decimal of the float's shortest round-trip representation."""
     if not math.isfinite(value):
