@@ -29,6 +29,7 @@ from interpreter.cobol.lower_program_exit import (
     emit_return_code_store,
 )
 from interpreter.cobol.pointer_lowering import PointerLowering
+from interpreter.cobol.program_object import ENTRY_PREFIX, entry_var
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.field_name import FieldName
 from interpreter.func_name import FuncName
@@ -46,7 +47,7 @@ from interpreter.instructions import (
 )
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import resolve_binop
-from interpreter.register import NO_REGISTER, Register
+from interpreter.register import Register
 from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
@@ -130,6 +131,40 @@ def _emit_callee_name(
     return sliced_reg
 
 
+def _emit_entry_var_name(
+    ctx: EmitContext,
+    operand: RefModOperand,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> Register:
+    """The entry variable a ``CALL identifier`` names, computed in IR: the field's
+    text trimmed of spaces, upper-cased (COBOL program names ignore case) and
+    prefixed, so the VM looks it up as it is."""
+    name_reg = _emit_callee_name(ctx, operand, materialised, span=span)
+    trimmed = _emit_builtin(ctx, BuiltinName.TRIM, (name_reg,), span=span)
+    upper = _emit_builtin(ctx, BuiltinName.UPPER_CASE, (trimmed,), span=span)
+    prefix = ctx.const_to_reg(ENTRY_PREFIX, span=span)
+    return _emit_builtin(
+        ctx, BuiltinName.STRING_CONCAT_PAIR, (prefix, upper), span=span
+    )
+
+
+def _emit_builtin(
+    ctx: EmitContext,
+    name: str,
+    args: tuple[Register, ...],
+    *,
+    span: SourceSpan | None,
+) -> Register:
+    result = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(result_reg=result, func_name=FuncName(name), args=args),
+        span=span,
+    )
+    return result
+
+
 def lower_call(
     ctx: EmitContext,
     stmt: CallStatement,
@@ -147,10 +182,10 @@ def lower_call(
     args_reg = _argument_array(ctx, stmt.using, materialised, span=span)
 
     target = stmt.target
-    target_reg = (
-        _emit_callee_name(ctx, target.identifier, materialised, span=span)
+    location = (
+        _emit_entry_var_name(ctx, target.identifier, materialised, span=span)
         if target.identifier is not None
-        else NO_REGISTER
+        else entry_var(target.literal)
     )
 
     # The callee returns its RETURN-CODE in result_reg, and the copy-up below
@@ -162,12 +197,7 @@ def lower_call(
     # into RETURN-CODE as garbage.
     result_reg = emit_return_code_load(ctx, materialised, span=span)
     ctx.emit_inst(
-        CallWithMemory(
-            result_reg=result_reg,
-            func_name=FuncName(target.literal),
-            params_reg=args_reg,
-            target_reg=target_reg,
-        ),
+        CallWithMemory(result_reg=result_reg, location=location, memory=args_reg),
         span=span,
     )
 

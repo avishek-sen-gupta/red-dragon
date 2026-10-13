@@ -353,29 +353,29 @@ Emitted by the Java, C#, Scala, C++, Pascal and Go frontends for explicit constr
 
 ### CALL_WITH_MEMORY
 
-Call a COBOL subprogram, passing each argument by address.
+Call the function found at a location, giving it memory (an argument array).
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `result_reg` | `Register` | receives the callee's RETURN-CODE; also feeds `GIVING` |
-| `func_name` | `FuncName` | callee program name (static `CALL 'NAME'`) |
-| `params_reg` | `Register` | argument array |
-| `target_reg` | `Register` | callee name as a runtime string (`CALL identifier`); `NO_REGISTER` when static |
+| `location` | `VarName \| Register` | the variable holding the callee's function reference, or a register holding that variable's name |
+| `memory` | `Register` | argument array |
 
 Lowers `CALL ... USING` (ADR-150). The caller builds the argument array in plain IR: a `NEW_ARRAY` with a `count` field, and per argument a `NEW_OBJECT` with `region`, `offset` and `omitted`. BY REFERENCE passes the argument's own region and offset. BY CONTENT, BY VALUE and literals pass a fresh copy. OMITTED passes a marker.
 
-Dispatch goes through the callee's program singleton:
+Dispatch (ADR-182):
 
-1. Take the program id from `target_reg` (stripped, upper-cased) when present, else from `func_name` (upper-cased).
-2. Find `__prog_<PROGRAM-ID>` in the scope chain; it points to the singleton heap object.
-3. Load its `__init_params__` field, a `BoundFuncRef`.
-4. Push a frame for it with `__call_arguments` bound to the argument array, and branch to its label.
+1. Take the variable from `location`, or from the string its register holds.
+2. Find it in the scope chain; it holds a `BoundFuncRef`.
+3. Push a frame with the callee's first declared parameter bound to `memory`, and branch to its label.
 
-The callee binds each LINKAGE 01 from `__call_arguments` in plain IR. If the singleton, `__init_params__` or its label is missing, a static call goes to the configured unresolved-call resolver; a runtime-resolved call raises `UnresolvedProgramError`.
+COBOL's convention, owned by `interpreter/cobol/program_object.py`: each program's init block stores its entry function in `__entry_<PROGRAM-ID>`; the entry function declares `param:__call_arguments`; a literal CALL's location is `__entry_<NAME>`, and `CALL identifier` computes it in IR (TRIM, UPPER-CASE, prefix). The callee binds each LINKAGE 01 from `__call_arguments` in plain IR.
+
+If the variable is missing, holds no function reference, or its label is not in the CFG, a literal location goes to the configured unresolved-call resolver; a register location raises `UnresolvedProgramError`.
 
 ```
-%r9 = call_with_memory SUBPROG %r8
-%r9 = call_with_memory SUBPROG %r8 %r7     # target_reg present: name taken from %r7
+%r9 = call_with_memory __entry_SUBPROG %r8
+%r9 = call_with_memory %r7 %r8     # location computed: %r7 holds "__entry_SUBPROG"
 ```
 
 ---

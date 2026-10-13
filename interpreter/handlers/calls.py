@@ -35,6 +35,7 @@ from interpreter.overload.overload_resolver import (
 )
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import BoundFuncRef, FuncRef
+from interpreter.register import Register
 from interpreter.registry import FunctionRegistry
 from interpreter.type_name import TypeName
 from interpreter.types.type_environment import TypeEnvironment
@@ -61,7 +62,7 @@ logger = logging.getLogger(__name__)
 
 
 class UnresolvedProgramError(RuntimeError):
-    """A CALL whose callee was resolved at runtime named no linked program.
+    """A CALL whose location was computed at run time named nothing registered in the run unit.
 
     Raised only for ``CALL identifier`` (the program name comes from a data
     item's contents). A literal callee that is not linked is an ordinary
@@ -714,93 +715,65 @@ def _handle_call_with_memory(
     vm: VMState,
     ctx: HandlerContext,
 ) -> ExecutionResult:
-    """Handle CALL_WITH_MEMORY via singleton dispatch.
+    """Handle CALL_WITH_MEMORY: call the function found at a location.
 
-    Protocol:
-      1. Resolve __prog_<PROGRAMID> in scope chain → singleton HeapObject address
-      2. Load __init_params__ field → BoundFuncRef
-      3. Dispatch to __init_params__, injecting the argument array as
-         __call_arguments into the new call frame
+    The location names a variable -- directly, or as the string a register
+    holds. That variable holds the callee's function reference; its first
+    declared parameter is bound to the memory operand, and control enters the
+    callee in a new frame. A literal location that resolves to nothing goes to
+    the configured call resolver; a computed one raises UnresolvedProgramError.
     """
     t = inst
     assert isinstance(t, CallWithMemory)
-
-    params_tv = _resolve_reg(vm, t.params_reg)
-
-    # `CALL identifier` carries the callee in a register: the program name is
-    # whatever the data item held when control reached the CALL. Trailing blanks
-    # are padding in the holding field, not part of the name.
-    resolved_at_runtime = t.target_reg.is_present()
-    if resolved_at_runtime:
-        program_id = str(_resolve_reg(vm, t.target_reg).value).strip().upper()
-    else:
-        program_id = str(t.func_name).upper()
-    singleton_key = VarName(f"__prog_{program_id}")
-
-    def _unresolved() -> ExecutionResult:
-        """A callee the run unit does not contain.
-
-        For a literal this is ordinary: the module simply is not linked, and the
-        configured resolver produces a symbolic result so analysis can continue.
-        For a runtime-resolved name it is a defect — the program computed a name
-        and expects it to dispatch — and staying silent there is the bug this
-        exists to end (red-dragon-jgra).
-        """
-        if resolved_at_runtime:
+    target = _location_var(vm, t.location)
+    match _bound(vm, target):
+        case (TypedValue(value=BoundFuncRef() as entry), *_) if (
+            entry.func_ref.label in ctx.cfg.blocks
+        ):
+            return _enter(entry, _resolve_reg(vm, t.memory), t, ctx)
+        case _ if isinstance(t.location, Register):
             raise UnresolvedProgramError(
-                f"CALL resolved to program name {program_id!r} at run time, but no "
-                f"program named {program_id} is linked into this run unit"
+                f"CALL resolved at run time to {target}, but nothing in this run "
+                "unit is registered under it"
             )
-        return ctx.call_resolver.resolve_call(str(t.func_name), [], inst, vm)
+        case _:
+            return ctx.call_resolver.resolve_call(str(target), [], inst, vm)
 
-    # Walk scope chain to find singleton HeapObject address.
-    # NEW_OBJECT stores a Pointer(base=Address, offset=0); unwrap to base.
-    singleton_addr_val: Address | None = None
-    for frame in reversed(vm.call_stack):
-        if singleton_key in frame.local_vars:
-            val = frame.local_vars[singleton_key].value
-            if isinstance(val, Pointer):
-                singleton_addr_val = val.base
-            elif isinstance(val, Address):
-                singleton_addr_val = val
-            break
 
-    if singleton_addr_val is None or not vm.heap_contains(singleton_addr_val):
-        return _unresolved()
+def _location_var(vm: VMState, location: VarName | Register) -> VarName:
+    match location:
+        case Register():
+            return VarName(str(_resolve_reg(vm, location).value))
+        case _:
+            return location
 
-    singleton = vm.heap_get(singleton_addr_val)
-    init_params_tv = singleton.fields.get(FieldName("__init_params__"))
 
-    if init_params_tv is None or not isinstance(init_params_tv.value, BoundFuncRef):
-        return _unresolved()
+def _bound(vm: VMState, name: VarName) -> tuple[TypedValue, ...]:
+    return tuple(
+        frame.local_vars[name]
+        for frame in reversed(vm.call_stack)
+        if name in frame.local_vars
+    )
 
-    init_params_ref = init_params_tv.value
-    flabel = init_params_ref.func_ref.label
-    fname = init_params_ref.func_ref.name
 
-    if flabel not in ctx.cfg.blocks:
-        return _unresolved()
-
-    new_vars: dict[VarName, TypedValue] = {
-        VarName("__call_arguments"): params_tv,
-    }
-
+def _enter(
+    entry: BoundFuncRef,
+    memory: TypedValue,
+    inst: CallWithMemory,
+    ctx: HandlerContext,
+) -> ExecutionResult:
+    label = entry.func_ref.label
+    params = ctx.registry.func_params.get(label, [])
     return ExecutionResult.success(
         StateUpdate(
             call_push=StackFramePush(
-                function_name=fname,
+                function_name=entry.func_ref.name,
                 return_label=ctx.current_label,
                 return_ip=ctx.ip + 1,
-                # The callee returns its RETURN-CODE here; the COBOL CALL
-                # lowering copies it into the caller's (red-dragon-ltq6).
-                result_reg=t.result_reg,
+                result_reg=inst.result_reg,
             ),
-            next_label=flabel,
-            reasoning=(
-                f"call_with_memory {program_id},"
-                f" arguments={params_tv.value!r},"
-                f" dispatch to {flabel} via singleton __init_params__"
-            ),
-            var_writes=new_vars,
+            next_label=label,
+            reasoning=f"call_with_memory {inst.location} -> {label}",
+            var_writes={VarName(name): memory for name in params[:1]},
         )
     )

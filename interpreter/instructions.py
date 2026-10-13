@@ -579,21 +579,20 @@ class CallCtorFunction(InstructionBase):
 
 @dataclass(frozen=True)
 class CallWithMemory(InstructionBase):
-    """CALL_WITH_MEMORY: call a subprogram, passing its arguments by address.
+    """CALL_WITH_MEMORY: call the function found at a location, giving it memory.
 
-    params_reg: the argument array -- per CALL USING argument, by position, a
-        region and an offset into it (or an OMITTED marker), and a count. The
-        callee binds each LINKAGE 01 to its argument.
-    result_reg: inherited from InstructionBase — scalar return value for GIVING clause.
-    target_reg: when present, holds the callee's name as a runtime string and
-        supersedes func_name. COBOL's ``CALL identifier`` takes the program name
-        from a data item's contents, which no statically known func_name can
-        express (red-dragon-jgra).
+    location: a VarName naming the variable that holds the callee's function
+        reference, or a Register holding that variable's name as a string
+        computed at run time. Which variable is the lowering's convention; the
+        VM only looks it up.
+    memory: the argument array -- per argument, by position, a region and an
+        offset into it (or an OMITTED marker), and a count. It is bound to the
+        callee's first declared parameter.
+    result_reg: inherited from InstructionBase -- the callee's return value.
     """
 
-    func_name: FuncName = NO_FUNC_NAME
-    params_reg: Register = NO_REGISTER
-    target_reg: Register = NO_REGISTER
+    location: VarName | Register = NO_REGISTER
+    memory: Register = NO_REGISTER
 
     @property
     def opcode(self) -> Opcode:
@@ -601,21 +600,14 @@ class CallWithMemory(InstructionBase):
 
     @property
     def operands(self) -> list[Any]:
-        ops: list[Any] = [
-            str(self.func_name),
-            str(self.params_reg),
-        ]
-        if self.target_reg.is_present():
-            ops.append(str(self.target_reg))
-        return ops
+        return [str(self.location), str(self.memory)]
 
     def reads(self) -> list[StorageIdentifier]:
-        reads: list[StorageIdentifier] = []
-        if self.params_reg.is_present():
-            reads.append(self.params_reg)
-        if self.target_reg.is_present():
-            reads.append(self.target_reg)
-        return reads
+        return [
+            operand
+            for operand in (self.location, self.memory)
+            if isinstance(operand, Register) and operand.is_present()
+        ]
 
 
 # ── Memory — Fields ──────────────────────────────────────────────
@@ -1212,6 +1204,7 @@ Instruction = Union[
     Branch,
     BranchIf,
     Return_,
+    Halt_,
     Throw_,
     TryPush,
     TryPop,
@@ -1414,14 +1407,17 @@ def _call_ctor(inst: Any) -> CallCtorFunction:
 
 
 def _call_with_memory(inst: Any) -> CallWithMemory:
-    ops = inst.operands
+    ops = [str(op) for op in inst.operands]
     return CallWithMemory(
         result_reg=inst.result_reg,
-        func_name=FuncName(str(ops[0])) if len(ops) >= 1 else NO_FUNC_NAME,
-        params_reg=Register(str(ops[1])) if len(ops) >= 2 else NO_REGISTER,
-        target_reg=Register(str(ops[2])) if len(ops) >= 3 else NO_REGISTER,
+        location=_location(ops[0]) if ops else NO_REGISTER,
+        memory=Register(ops[1]) if len(ops) >= 2 else NO_REGISTER,
         source_location=inst.source_location,
     )
+
+
+def _location(operand: str) -> VarName | Register:
+    return Register(operand) if operand.startswith("%") else VarName(operand)
 
 
 def _load_field(inst: Any) -> LoadField:

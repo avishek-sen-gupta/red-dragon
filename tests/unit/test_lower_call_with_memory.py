@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from cobol_asg.asg_types import CobolASG, CobolField
 from cobol_asg.cobol_statements import CallStatement, CallTarget, CallUsingParam
+from cobol_asg.ref_mod import RefModOperand
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.lower_call import lower_call
@@ -13,7 +14,17 @@ from interpreter.cobol.sectioned_layout import (
     build_sectioned_layout,
 )
 from interpreter.cobol.statement_dispatch import dispatch_statement
+from interpreter.instructions import (
+    AllocRegion,
+    CallFunction,
+    CallWithMemory,
+    Const,
+    LoadRegion,
+    WriteRegion,
+)
+from interpreter.register import Register
 from interpreter.ir import Opcode
+from interpreter.var_name import VarName
 from tests.covers import NotLanguageFeature, covers
 
 
@@ -154,7 +165,7 @@ def test_lower_call_passes_an_argument_array_with_its_count():
     (call,) = [i for i in instructions if isinstance(i, CallWithMemory)]
 
     assert (
-        call.params_reg,
+        call.memory,
         [
             i.field_name.value
             for i in instructions
@@ -185,22 +196,24 @@ def _call_region_traffic(param_type: str) -> list[tuple[Opcode, str]]:
     emitted = list(ctx.instructions)[before:]
     _ws_layout, ws_reg = materialised.working_storage
     _sr_layout, sr_reg = materialised.special_registers
-    copies = {i.result_reg for i in emitted if i.opcode is Opcode.ALLOC_REGION}
+    copies = {i.result_reg for i in emitted if isinstance(i, AllocRegion)}
 
-    def owner(inst) -> str:
-        if inst.opcode is Opcode.ALLOC_REGION:
-            return "new"
-        if inst.region_reg == ws_reg:
-            return "argument"
-        if inst.region_reg in copies:
-            return "copy"
-        return "other"
+    def owner(inst: AllocRegion | LoadRegion | WriteRegion) -> str:
+        match inst:
+            case AllocRegion():
+                return "new"
+            case _ if inst.region_reg == ws_reg:
+                return "argument"
+            case _ if inst.region_reg in copies:
+                return "copy"
+            case _:
+                return "other"
 
     return [
         (inst.opcode, owner(inst))
         for inst in emitted
-        if inst.opcode in (Opcode.ALLOC_REGION, Opcode.LOAD_REGION, Opcode.WRITE_REGION)
-        and not (inst.opcode is not Opcode.ALLOC_REGION and inst.region_reg == sr_reg)
+        if isinstance(inst, AllocRegion)
+        or (isinstance(inst, (LoadRegion, WriteRegion)) and inst.region_reg != sr_reg)
     ]
 
 
@@ -216,18 +229,6 @@ def test_by_reference_copies_nothing_and_by_content_copies_once():
             (Opcode.LOAD_REGION, "argument"),
             (Opcode.WRITE_REGION, "copy"),
         ],
-    )
-
-
-def _materialised_with_sections() -> tuple[EmitContext, MaterialisedSectionedLayout]:
-    asg = CobolASG(
-        data_fields=[_make_field("WS-DECOY", "X(8)")],
-        linkage_fields=[_make_field("LK-ARG", "X(8)")],
-        local_storage_fields=[_make_field("LS-ARG", "X(8)")],
-    )
-    ctx = EmitContext(dispatch_fn=dispatch_statement)
-    return ctx, lower_sectioned_data_division(
-        ctx, build_sectioned_layout(asg), "SECPGM"
     )
 
 
@@ -262,3 +263,43 @@ def test_a_by_reference_argument_passes_its_own_sections_region():
         (True, False),
         (True, False),
     )
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_a_literal_call_looks_up_the_callee_entry_var():
+    ctx, materialised = _materialised_with_ws("WS-PARAM")
+    stmt = CallStatement(
+        target=CallTarget.of_literal("subprog"),
+        using=[CallUsingParam(name="WS-PARAM", param_type="REFERENCE")],
+        giving="",
+    )
+    lower_call(ctx, stmt, materialised)
+    (call,) = [i for i in ctx.instructions if isinstance(i, CallWithMemory)]
+    assert (call.location, call.operands) == (
+        VarName("__entry_SUBPROG"),
+        ["__entry_SUBPROG", str(call.memory)],
+    )
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_a_data_name_call_computes_the_entry_var_in_ir():
+    ctx, materialised = _materialised_with_ws("WS-PROG")
+    stmt = CallStatement(
+        target=CallTarget.of_identifier(RefModOperand(name="WS-PROG")),
+        using=[],
+        giving="",
+    )
+    lower_call(ctx, stmt, materialised)
+    calls = {i.result_reg: i for i in ctx.instructions if isinstance(i, CallFunction)}
+    consts = {i.result_reg: i for i in ctx.instructions if isinstance(i, Const)}
+    (call,) = [i for i in ctx.instructions if isinstance(i, CallWithMemory)]
+    concat = calls[Register(str(call.location))]
+    prefix_reg, upper_reg = (Register(str(a)) for a in concat.args)
+    prefix, upper = consts[prefix_reg], calls[upper_reg]
+    trim = calls[Register(str(upper.args[0]))]
+    assert (
+        str(concat.func_name),
+        prefix.value,
+        str(upper.func_name),
+        str(trim.func_name),
+    ) == ("__string_concat_pair", "__entry_", "__upper_case", "__cobol_trim")

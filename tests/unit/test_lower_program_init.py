@@ -1,3 +1,5 @@
+import pytest
+
 from cobol_asg.asg_types import CobolField
 from interpreter.cobol.data_layout import build_data_layout
 from interpreter.cobol.emit_context import EmitContext
@@ -14,6 +16,7 @@ from interpreter.instructions import (
     LoadField,
     LoadVar,
     NewObject,
+    StoreField,
     StoreVar,
     Symbolic,
 )
@@ -49,7 +52,7 @@ def test_lower_program_init_publishes_every_singleton_field():
     ctx = EmitContext(dispatch_fn=dispatch_statement)
     lower_program_init(ctx, "SUBPROG", _ws_layout_5bytes())
     published = [
-        str(i.field_name) for i in ctx.instructions if i.opcode == Opcode.STORE_FIELD
+        str(i.field_name) for i in ctx.instructions if isinstance(i, StoreField)
     ]
     # return_code_handle joins them because the special registers are allocated
     # once, with WORKING-STORAGE, rather than per call (red-dragon-ltq6).
@@ -57,7 +60,6 @@ def test_lower_program_init_publishes_every_singleton_field():
         "ws_handle",
         "return_code_handle",
         "run",
-        "__init_params__",
     ]
 
 
@@ -151,13 +153,11 @@ def test_the_entry_function_declares_the_call_arguments_parameter():
         for n, i in enumerate(ctx.instructions)
         if isinstance(i, Label_) and str(i.label) == "func_init_params_subprog_0"
     )
-    declaration, onward = ctx.instructions[start + 1], ctx.instructions[start + 2]
-    assert (
-        type(declaration),
-        declaration.hint,
-        type(onward),
-        str(onward.label),
-    ) == (Symbolic, "param:__call_arguments", Branch, "func_subprog_0")
+    match ctx.instructions[start + 1 : start + 3]:
+        case [Symbolic(hint=hint), Branch(label=label)]:
+            assert (hint, str(label)) == ("param:__call_arguments", "func_subprog_0")
+        case unexpected:
+            pytest.fail(f"expected the declaration, then the branch: {unexpected}")
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

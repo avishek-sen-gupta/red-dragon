@@ -2107,7 +2107,9 @@ class TestCallAlterEntryCancelLowering:
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         calls = _find_opcodes(instructions, Opcode.CALL_WITH_MEMORY)
-        subprog_calls = [c for c in calls if c.operands and c.operands[0] == "SUBPROG"]
+        subprog_calls = [
+            c for c in calls if c.operands and c.operands[0] == "__entry_SUBPROG"
+        ]
         assert len(subprog_calls) >= 1
 
     @covers(

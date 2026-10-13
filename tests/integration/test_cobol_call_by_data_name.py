@@ -194,3 +194,15 @@ def test_call_unresolvable_runtime_name_raises(tmp_path):
             ),
         )
     assert "DSNTIAC" in str(excinfo.value)
+
+
+@covers(CobolFeature.CALL_BY_IDENTIFIER, CobolFeature.CALL_USING)
+def test_call_data_name_is_matched_without_regard_to_case(tmp_path):
+    vm = _run(
+        tmp_path,
+        _main_src(
+            "       01 WS-PROG PIC X(8) VALUE 'helper'.\n",
+            "           CALL WS-PROG USING BY REFERENCE WS-TICKET.\n",
+        ),
+    )
+    assert _ticket(vm) == 77

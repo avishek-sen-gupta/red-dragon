@@ -47,6 +47,7 @@ from interpreter.path_name import NO_PATH_NAME
 from interpreter.project.types import LinkedProgram, ModuleUnit
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
+from interpreter.register import Register
 from interpreter.registry import build_registry
 from interpreter.symbol_name import SymbolName
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
@@ -412,7 +413,7 @@ def _calls_a_runtime_resolved_program(module: ModuleUnit) -> bool:
     (red-dragon-jgra).
     """
     return any(
-        isinstance(inst, CallWithMemory) and inst.target_reg.is_present()
+        isinstance(inst, CallWithMemory) and isinstance(inst.location, Register)
         for inst in module.ir
     )
 

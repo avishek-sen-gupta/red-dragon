@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from interpreter.func_name import NO_FUNC_NAME, FuncName
+import pytest
+
+from interpreter.func_name import FuncName
 from interpreter.ir import Opcode
-from interpreter.register import NO_REGISTER, Register
+from interpreter.register import Register
 from interpreter.var_name import VarName
 from tests.covers import NotLanguageFeature, covers
 
@@ -18,30 +20,30 @@ class TestCallWithMemoryOpcode:
 
 class TestCallWithMemoryInstruction:
     @covers(NotLanguageFeature.INFRASTRUCTURE)
-    def test_instruction_carries_the_callee_and_its_argument_array(self):
+    def test_instruction_carries_a_location_and_its_memory(self):
         from interpreter.instructions import CallWithMemory
 
-        inst = CallWithMemory(
-            func_name=FuncName("SUBPROG"),
-            params_reg=Register("%r1"),
-            target_reg=Register("%r3"),
+        by_name = CallWithMemory(
+            result_reg=Register("%r9"),
+            location=VarName("__entry_SUBPROG"),
+            memory=Register("%r1"),
         )
-        defaults = CallWithMemory()
+        by_register = CallWithMemory(location=Register("%r3"), memory=Register("%r1"))
 
         assert (
-            inst.opcode,
-            inst.operands,
-            inst.reads(),
-            defaults.func_name,
-            defaults.params_reg,
-            defaults.operands,
+            by_name.opcode,
+            by_name.operands,
+            by_name.reads(),
+            str(by_name),
+            by_register.operands,
+            by_register.reads(),
         ) == (
             Opcode.CALL_WITH_MEMORY,
-            ["SUBPROG", "%r1", "%r3"],
-            [Register("%r1"), Register("%r3")],
-            NO_FUNC_NAME,
-            NO_REGISTER,
-            [str(NO_FUNC_NAME), str(NO_REGISTER)],
+            ["__entry_SUBPROG", "%r1"],
+            [Register("%r1")],
+            "%r9 = call_with_memory __entry_SUBPROG %r1",
+            ["%r3", "%r1"],
+            [Register("%r3"), Register("%r1")],
         )
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
@@ -55,89 +57,134 @@ class TestCallWithMemoryInstruction:
         assert CallWithMemory in args
 
 
-# ── Handler tests ────────────────────────────────────────────────
-
-
-def _make_vm_with_func_ref(callee_label: str, func_name: str, params_val):
-    """Build a minimal VMState with a singleton HeapObject in scope and the
-    argument array in %r1.
-
-    Updated for singleton dispatch: stores __prog_<FUNCNAME> singleton with
-    __init_params__ BoundFuncRef pointing at callee_label.
-    """
-    from interpreter.address import Address
-    from interpreter.field_name import FieldName
+def _vm_with(bindings: dict, registers: dict):
     from interpreter.func_name import FuncName as FN
-    from interpreter.ir import CodeLabel
-    from interpreter.refs.func_ref import BoundFuncRef, FuncRef
-    from interpreter.register import Register as Reg
     from interpreter.types.typed_value import typed_from_runtime
-    from interpreter.var_name import VarName as VN
-    from interpreter.vm.vm_types import HeapObject, StackFrame, VMState
+    from interpreter.vm.vm_types import StackFrame, VMState
 
     vm = VMState()
-    frame = StackFrame(function_name=FN("CALLER"))
-
-    # Build singleton HeapObject with __init_params__ pointing at callee_label
-    init_params_ref = BoundFuncRef(
-        func_ref=FuncRef(name=FN(func_name), label=CodeLabel(callee_label))
+    vm.call_stack.append(
+        StackFrame(
+            function_name=FN("main"),
+            local_vars={name: typed_from_runtime(v) for name, v in bindings.items()},
+        )
     )
-    singleton = HeapObject(
-        fields={
-            FieldName("__init_params__"): typed_from_runtime(init_params_ref),
-        }
+    vm.current_frame.registers.update(
+        {reg: typed_from_runtime(v) for reg, v in registers.items()}
     )
-    singleton_addr = Address("obj_singleton")
-    vm._heap[singleton_addr] = singleton
-    frame.local_vars[VN(f"__prog_{func_name.upper()}")] = typed_from_runtime(
-        singleton_addr
-    )
-
-    frame.registers[Reg("%r1")] = typed_from_runtime(params_val)
-    vm.call_stack.append(frame)
     return vm
 
 
-def _make_handler_ctx(callee_label: str):
-    """Build a minimal HandlerContext with the callee block in the CFG."""
+def _ctx_with(label, params: list[str]):
     import dataclasses
 
     from interpreter.cfg import CFG, BasicBlock
-    from interpreter.ir import NO_LABEL, CodeLabel
+    from interpreter.ir import CodeLabel
+    from interpreter.registry import FunctionRegistry
     from interpreter.vm.executor import _default_handler_context
 
-    cfg = CFG()
-    lbl = CodeLabel(callee_label)
-    cfg.blocks[lbl] = BasicBlock(label=lbl)
-    ctx = _default_handler_context()
-    ctx = dataclasses.replace(ctx, cfg=cfg, current_label=NO_LABEL)
-    return ctx
+    return dataclasses.replace(
+        _default_handler_context(),
+        cfg=CFG(blocks={label: BasicBlock(label=label)}),
+        registry=FunctionRegistry(func_params={label: params}),
+        current_label=CodeLabel("caller"),
+        ip=4,
+    )
+
+
+def _entry(label):
+    from interpreter.refs.func_ref import BoundFuncRef, FuncRef
+
+    return BoundFuncRef(func_ref=FuncRef(name=FuncName("start"), label=label))
 
 
 class TestHandleCallWithMemory:
+    @pytest.mark.parametrize(
+        "location, registers",
+        [
+            (VarName("obj_start"), {}),
+            (Register("%n"), {Register("%n"): "obj_start"}),
+        ],
+    )
     @covers(NotLanguageFeature.INFRASTRUCTURE)
-    def test_handler_dispatches_to_the_callee_with_the_argument_array(self):
+    def test_handler_calls_the_function_registered_under_any_name(
+        self, location, registers
+    ):
         from interpreter.handlers.calls import _handle_call_with_memory
         from interpreter.instructions import CallWithMemory
+        from interpreter.ir import CodeLabel
+        from interpreter.vm.vm_types import StackFramePush
 
-        callee_label = "func_SUBPROG"
-        vm = _make_vm_with_func_ref(callee_label, "SUBPROG", "arr_7")
-        ctx = _make_handler_ctx(callee_label)
+        label = CodeLabel("func_start_0")
+        vm = _vm_with(
+            {VarName("obj_start"): _entry(label)},
+            {**registers, Register("%m"): "memory"},
+        )
 
         result = _handle_call_with_memory(
-            CallWithMemory(func_name=FuncName("SUBPROG"), params_reg=Register("%r1")),
+            CallWithMemory(
+                result_reg=Register("%r"), location=location, memory=Register("%m")
+            ),
             vm,
-            ctx,
+            _ctx_with(label, ["args"]),
+        )
+        assert (
+            result.update.next_label,
+            {name: tv.value for name, tv in result.update.var_writes.items()},
+            result.update.call_push,
+        ) == (
+            label,
+            {VarName("args"): "memory"},
+            StackFramePush(
+                function_name=FuncName("start"),
+                return_label=CodeLabel("caller"),
+                return_ip=5,
+                result_reg=Register("%r"),
+            ),
+        )
+
+    @pytest.mark.parametrize(
+        "bindings",
+        [{}, {VarName("obj_start"): "not a function"}],
+    )
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_an_unresolved_literal_location_is_left_to_the_call_resolver(
+        self, bindings
+    ):
+        from interpreter.handlers.calls import _handle_call_with_memory
+        from interpreter.instructions import CallWithMemory
+        from interpreter.ir import CodeLabel
+
+        vm = _vm_with(bindings, {Register("%m"): "memory"})
+        result = _handle_call_with_memory(
+            CallWithMemory(
+                result_reg=Register("%r"),
+                location=VarName("obj_start"),
+                memory=Register("%m"),
+            ),
+            vm,
+            _ctx_with(CodeLabel("func_start_0"), ["args"]),
         )
 
         assert (
-            result.handled,
-            result.update.next_label,
-            {name: tv.value for name, tv in result.update.var_writes.items()},
-            result.update.call_push.function_name,
-        ) == (
-            True,
-            callee_label,
-            {VarName("__call_arguments"): "arr_7"},
-            FuncName("SUBPROG"),
+            result.update.call_push,
+            result.update.register_writes[Register("%r")].value.constraints,
+        ) == (None, ["obj_start()"])
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_an_unresolved_runtime_location_raises_naming_the_variable(self):
+        from interpreter.handlers.calls import (
+            UnresolvedProgramError,
+            _handle_call_with_memory,
         )
+        from interpreter.instructions import CallWithMemory
+        from interpreter.ir import CodeLabel
+
+        vm = _vm_with({}, {Register("%n"): "obj_missing", Register("%m"): "memory"})
+
+        with pytest.raises(UnresolvedProgramError, match="obj_missing"):
+            _handle_call_with_memory(
+                CallWithMemory(location=Register("%n"), memory=Register("%m")),
+                vm,
+                _ctx_with(CodeLabel("func_start_0"), ["args"]),
+            )
