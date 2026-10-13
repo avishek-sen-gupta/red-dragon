@@ -188,3 +188,22 @@ class TestHandleCallWithMemory:
                 vm,
                 _ctx_with(CodeLabel("func_start_0"), ["args"]),
             )
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_a_callee_that_declares_no_parameter_cannot_receive_memory(self):
+        from interpreter.handlers.calls import (
+            MemoryNotReceivedError,
+            _handle_call_with_memory,
+        )
+        from interpreter.instructions import CallWithMemory
+        from interpreter.ir import CodeLabel
+
+        label = CodeLabel("func_start_0")
+        vm = _vm_with({VarName("obj_start"): _entry(label)}, {Register("%m"): "memory"})
+
+        with pytest.raises(MemoryNotReceivedError, match="func_start_0"):
+            _handle_call_with_memory(
+                CallWithMemory(location=VarName("obj_start"), memory=Register("%m")),
+                vm,
+                _ctx_with(label, []),
+            )
