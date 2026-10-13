@@ -542,7 +542,7 @@ interpreter/
 ├── llm/                  LLM backend, client, LLM frontends
 ├── types/                TypeExpr, type inference, coercion
 ├── overload/             overload resolution
-├── project/              compiler, linker, LinkedProgram, EntryPoint, compile_cobol
+├── project/              compiler, linker, LinkedProgram, EntryPoint, compile_cobol, unit/linked file codecs
 ├── frontends/            15 tree-sitter frontends
 ├── cobol/                COBOL lowering, byte builtins, call_arguments, return_code_readback
 cobol_numeric/            CobolNumber, exact arithmetic, IBM scale rules (leaf)
