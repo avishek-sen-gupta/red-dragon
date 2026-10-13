@@ -9,13 +9,11 @@ build_export_table(): IR + symbol tables → ExportTable
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Sequence
 from pathlib import Path
 
 from interpreter.class_name import ClassName
 from interpreter.constants import Language
-from interpreter.frontend import Frontend, get_frontend
-from interpreter.frontends import get_cobol_frontend
+from interpreter.frontend import get_frontend
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
     DeclVar,
@@ -161,25 +159,11 @@ def build_export_table(
     return ExportTable(functions=functions, classes=classes, variables=variables)
 
 
-def _collect_copybook_dirs(directory: Path) -> list[Path]:
-    """Project root plus every subdirectory, for copybook resolution."""
-    directory = directory.resolve()
-    subdirs = [p for p in directory.rglob("*") if p.is_dir()]
-    return [directory, *subdirs]
-
-
-def _module_frontend(language: Language, copybook_dirs: Sequence[Path]) -> Frontend:
-    if language == Language.COBOL:
-        return get_cobol_frontend(copybook_dirs=copybook_dirs)
-    return get_frontend(language)
-
-
 def compile_module(
     file_path: Path,
     language: Language,
     source: bytes | None = None,
     namespace_resolver: NamespaceResolver = NamespaceResolver(),
-    copybook_dirs: list[Path] = [],
 ) -> ModuleUnit:
     """Compile a single file into a ModuleUnit.
 
@@ -190,7 +174,7 @@ def compile_module(
     if source is None:
         source = file_path.read_bytes()
 
-    frontend = _module_frontend(language, copybook_dirs)
+    frontend = get_frontend(language)
     ir = frontend.lower(source, namespace_resolver=namespace_resolver)
 
     exports = build_export_table(
@@ -229,14 +213,6 @@ _LANGUAGE_EXTENSIONS: dict[Language, tuple[str, ...]] = {
     Language.PHP: (".php",),
     Language.LUA: (".lua",),
     Language.PASCAL: (".pas", ".pp"),
-    Language.COBOL: (".cbl", ".cob", ".cpy"),
-}
-
-# Extensions that are copybook *fragments*, not standalone compilation units.
-# They are resolved into the programs that COPY them (via copybook_dirs) and
-# must never be compiled on their own — they have no IDENTIFICATION DIVISION.
-_COPYBOOK_EXTENSIONS: dict[Language, frozenset[str]] = {
-    Language.COBOL: frozenset({".cpy"}),
 }
 
 
@@ -258,19 +234,17 @@ def compile_directory(
 
     Raises:
         FileNotFoundError: If the directory does not exist.
+        ValueError: If no source extensions are registered for *language*.
     """
     directory = directory.resolve()
     if not directory.is_dir():
         raise FileNotFoundError(f"Directory not found: {directory}")
+    if language not in _LANGUAGE_EXTENSIONS:
+        raise ValueError(f"no source extensions registered for {language.value}")
 
-    copybook_dirs = _collect_copybook_dirs(directory)
-
-    extensions = _LANGUAGE_EXTENSIONS.get(language, ())
-    copybook_exts = _COPYBOOK_EXTENSIONS.get(language, frozenset())
     source_files = sorted(
         f.resolve()
-        for ext in extensions
-        if ext not in copybook_exts
+        for ext in _LANGUAGE_EXTENSIONS[language]
         for f in directory.rglob(f"*{ext}")
         if f.is_file()
     )
@@ -295,7 +269,6 @@ def compile_directory(
             path,
             language,
             namespace_resolver=namespace_resolver,
-            copybook_dirs=copybook_dirs,
         )
         for path in source_files
     }
@@ -390,7 +363,7 @@ def compile_directory(
         # Create a new ModuleUnit with the patched IR
         modules[path] = dataclasses.replace(module, ir=patched_ir)
 
-    start_up = _module_frontend(language, copybook_dirs).start_up_ir()
+    start_up = get_frontend(language).start_up_ir()
     modules, import_graph = with_start_up(start_up, language, modules, import_graph)
     topo_order = topological_sort(import_graph)
 
