@@ -12,7 +12,7 @@ RedDragon's multi-file project support extends the single-file pipeline to real-
 
 **Design principle:** The linker's output is indistinguishable from single-file compilation. The VM, CFG builder and registry run completely unmodified.
 
-**Supported:** All 15 tree-sitter frontends + COBOL (16 languages total).
+**Supported:** All 15 tree-sitter frontends through `compile_directory`. COBOL links through `compile_cobol`: the main program plus a fixed list of other programs, which the caller finds — usually with `discover_callee_programs`, which follows `CALL 'LITERAL'` edges through ordered search directories (ADR-181).
 
 ---
 
@@ -423,8 +423,11 @@ interpreter/project/
     source_roots.py        SourceRootDiscovery — Maven-style src/main/java root discovery (Java multi-module)
     entry_point.py         EntryPoint — top_level()/function(predicate) execution-entry spec
     cobol_compile.py        compile_cobol()/compile_cobol_module() — COBOL-specific two-phase
-                            AST-cache pipeline (parallel parse-to-disk, sequential lower) with
-                            multi-program CALL linking (main + subprograms)
+                            AST-cache pipeline (parallel parse-to-disk, sequential lower) that
+                            links the main program with a fixed list of other programs
+    cobol_discovery.py      discover_callee_programs() — the CALL 'LITERAL' walk through ordered
+                            search directories that produces that list
+    source_file.py          SourceFile — a path and its bytes, already read
 
 interpreter/registry.py
     _is_func_label(), _is_class_label(), _is_end_class_label()

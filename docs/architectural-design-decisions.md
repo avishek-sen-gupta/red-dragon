@@ -3159,3 +3159,13 @@ Because `Halt_` is a distinct type, it is naturally absent from `_infer_return`'
 | Demo scripts | `demo_type_inference_tier2/3.py`, `demo_multifile_project.py` |
 
 **Consequences:** The CLI only runs programs. `interpreter` exports `run`, `execute_cfg`, `VMConfig`, `ExecutionStats`. The `mcp` and `textual` dependencies are gone (`textual` stays in the lock through `mutmut`). IR, CFG and Mermaid dumps come back on the fully linked program only (red-dragon-m2n0).
+
+---
+
+### ADR-181: COBOL compiles a fixed program list; discovery is a shell step (2026-10-13)
+
+**Context:** COBOL compiled two ways: `compile_cobol`, the path every forge runtime uses, and `compile_directory`, which compiled every `.cbl`/`.cob` under a tree without extensions, dialects, LP mode, data layout or entry label. `compile_cobol` also decided what to compile, by walking `CALL 'LITERAL'` edges through search directories. Production toolchains separate these: a build names the programs to compile, one per compile; the binder pulls statically called program objects from libraries by name, and the runtime loads dynamically called ones from load libraries — already compiled.
+
+**Decision:** `compile_cobol` takes the main program and a fixed list of `SourceFile`s and searches nothing. The CALL walk is `discover_callee_programs` (the spec's `discover_called_programs`), a shell step. `compile_program` rewrites, discovers and lists every program before making any strategy, so every coprocessor rewrite runs on every compiled program before any strategy exists; a linked subprogram wins over a discovered callee of the same name. `compile_directory` no longer accepts COBOL and raises for a language with no registered extensions. The COBOL CLI takes a main program and `--search-dir` directories.
+
+**Consequences:** `project/compiler.py` names no COBOL. A callee reached only by `CALL identifier` must be in the list (`linked_subprogram_sources`), as before. The AST cache reports a parse failure as `AstParseError`. Persisting lowered programs and linking them later is red-dragon-ajps.
