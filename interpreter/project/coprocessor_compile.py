@@ -21,7 +21,6 @@ from cobol_asg.frontend_extension import (
     DialectParser,
     NullDialectParser,
 )
-from interpreter.frontend import Frontend
 from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy
 from interpreter.project.cobol_compile import compile_cobol
 from interpreter.project.cobol_discovery import discover_callee_programs
@@ -113,7 +112,7 @@ def compile_program(
     source_search_dirs: Sequence[Path] = (),
     linked_subprogram_sources: Mapping[str, bytes] = {},
     tolerant: bool = False,
-) -> tuple[Frontend, LinkedProgram]:
+) -> LinkedProgram:
     """Compile ``source`` with every spec's prepass and strategy composed.
 
     The specs' source rewrites run, in order, on every program compiled, before

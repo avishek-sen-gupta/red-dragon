@@ -75,7 +75,7 @@ def _ws_zoned(vm, name: str) -> int:
 
 def _compile_and_run(source: bytes):
     parser = make_cobol_parser()
-    _, linked = compile_cobol(source, parser=parser)
+    linked = compile_cobol(source, parser=parser)
     ep = EntryPoint.function(lambda ref: ref.label == linked.entry_func_label)
     vm = run_linked(
         linked,

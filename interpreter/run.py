@@ -1232,7 +1232,7 @@ def run(
     observer: FrontendObserver = _StatsObserver(stats)
     if lang == Language.COBOL:
         # COBOL: compile via the shared compile_cobol API (behavior-preserving).
-        frontend, linked = compile_cobol(
+        linked = compile_cobol(
             source.encode("utf-8"),
             parser=make_cobol_parser(copybook_dirs=copybook_dirs),
             copybook_dirs=copybook_dirs,

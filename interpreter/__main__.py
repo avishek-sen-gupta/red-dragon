@@ -79,7 +79,7 @@ def main() -> int:
         return 1
 
     search_dirs = [d.resolve() for d in args.search_dir]
-    _, linked = compile_program(
+    linked = compile_program(
         target.read_bytes(),
         make_cobol_parser(copybook_dirs=search_dirs),
         [],

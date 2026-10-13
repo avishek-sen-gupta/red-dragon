@@ -61,6 +61,10 @@ language-neutral fields:
 - `data_layout` — the program's own layout. Link puts the main unit's on
   `LinkedProgram`, as today; callee layouts stay out of scope.
 
+- `start_up` — instructions the run unit runs once before any module (the
+  COBOL run-unit allocation, from the frontend's `start_up_ir()`). Link takes the
+  main unit's, so the project layer names nothing COBOL.
+
 `type_env_builder` is not stored: it is always empty for COBOL.
 
 ### 3. The codecs

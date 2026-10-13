@@ -12,7 +12,7 @@ RedDragon's multi-file project support extends the single-file pipeline to real-
 
 **Design principle:** The linker's output is indistinguishable from single-file compilation. The VM, CFG builder and registry run completely unmodified.
 
-**Supported:** All 15 tree-sitter frontends through `compile_directory`. COBOL links through `compile_cobol`: the main program plus a fixed list of other programs, which the caller finds — usually with `discover_callee_programs`, which follows `CALL 'LITERAL'` edges through ordered search directories (ADR-181).
+**Supported:** All 15 tree-sitter frontends through `compile_directory`. COBOL links through `compile_cobol`: the main program plus a fixed list of other programs, which the caller finds — usually with `discover_callee_programs`, which follows `CALL 'LITERAL'` edges through ordered search directories (ADR-181). The three stages — parse, lower, link — each write a file (`.ast.json`, `.unit.json`, `.linked.json`) into a work directory and skip a program whose file already exists; `compile_cobol` returns the `LinkedProgram` read back from the linked file (ADR-183).
 
 ---
 
@@ -422,9 +422,13 @@ interpreter/project/
     linker.py              link_modules() — strip, namespace, rebase, drop stubs, concatenate
     source_roots.py        SourceRootDiscovery — Maven-style src/main/java root discovery (Java multi-module)
     entry_point.py         EntryPoint — top_level()/function(predicate) execution-entry spec
-    cobol_compile.py        compile_cobol()/compile_cobol_module() — COBOL-specific two-phase
-                            AST-cache pipeline (parallel parse-to-disk, sequential lower) that
-                            links the main program with a fixed list of other programs
+    cobol_compile.py        compile_cobol()/compile_cobol_module(), parse_stage(), link_stage() —
+                            COBOL in three stages chained through files (AST, unit, linked)
+                            that links the main program with a fixed list of other programs
+    lowering_settings.py    LoweringSettings — the settings a compiled file's name digests
+    ir_codec.py             IrCodec — self-describing JSON for IR values
+    unit_codec.py           UnitCodec — ModuleUnit <-> .unit.json
+    linked_codec.py         LinkedCodec — LinkedProgram <-> .linked.json (CFG, registry rebuilt)
     cobol_discovery.py      discover_callee_programs() — the CALL 'LITERAL' walk through ordered
                             search directories that produces that list
     source_file.py          SourceFile — a path and its bytes, already read

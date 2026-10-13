@@ -1,4 +1,3 @@
-import hashlib
 import json
 import logging
 from collections.abc import Mapping
@@ -15,10 +14,12 @@ from interpreter.frontend_extension_lowering import (
 from interpreter.project.cobol_compile import (
     compile_cobol,
     compile_cobol_module,
-    parallel_parse_to_cache,
+    parse_stage,
 )
-from interpreter.ir import NO_LABEL
+from interpreter.ir import NO_LABEL, CodeLabel
 from interpreter.project.compiler import compile_directory
+from interpreter.project.lowering_settings import LoweringSettings
+from cobol_asg.lp import LP
 from interpreter.project.source_file import SourceFile
 from interpreter.project.types import LinkedProgram, ModuleUnit
 from interpreter.run import EntryPoint, initial_vm_state, run_linked
@@ -57,20 +58,21 @@ _CALLEE = b"""\
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_compile_cobol_module_returns_frontend_and_module(tmp_path):
+def test_compile_cobol_module_returns_a_unit_with_its_entry_label(tmp_path):
     parser = make_cobol_parser()
     ast_path = tmp_path / "prog.ast.json"
     parser.parse_to_file(_SRC, ast_path)
-    frontend, module = compile_cobol_module(_SRC, parser=parser, ast_path=ast_path)
-    assert isinstance(module, ModuleUnit)
-    assert len(module.ir) > 0
-    assert frontend.data_layout is not None
-    assert frontend.func_symbol_table is not None
+    module = compile_cobol_module(_SRC, parser=parser, ast_path=ast_path)
+    assert (type(module), len(module.ir) > 0, module.entry_label) == (
+        ModuleUnit,
+        True,
+        CodeLabel("func_hello_0"),
+    )
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_compile_cobol_single_module_runs():
-    _, linked = compile_cobol(_SRC, parser=make_cobol_parser())
+    linked = compile_cobol(_SRC, parser=make_cobol_parser())
     assert isinstance(linked, LinkedProgram)
     assert linked.merged_cfg is not None
     vm = run_linked(
@@ -96,7 +98,7 @@ def test_compile_cobol_links_extra_subprogram():
            DISPLAY 'IN CALLEE'.
            GOBACK.
 """
-    _, linked = compile_cobol(
+    linked = compile_cobol(
         caller,
         programs=(SourceFile(Path("CALLEE.cbl"), callee),),
         parser=make_cobol_parser(),
@@ -122,62 +124,68 @@ def test_compile_cobol_links_extra_subprogram():
     assert vm is not None
 
 
+_SETTINGS = LoweringSettings(LP.LP32, (), False, ())
+
+
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_parallel_parse_to_cache_writes_one_file_per_source(tmp_path):
-    sources = {
-        Path("prog_a.cbl"): _SRC,
-        Path("prog_b.cbl"): _SRC,
-        Path("prog_c.cbl"): _SRC,
+def test_parse_stage_writes_one_named_file_per_source(tmp_path):
+    programs = tuple(
+        SourceFile(Path(f"prog_{n}.cbl"), _SRC.replace(b"HELLO", f"HELLO{n}".encode()))
+        for n in "ABC"
+    )
+    result = parse_stage(programs, make_cobol_parser(), _SETTINGS, tmp_path)
+    assert {
+        source: (ast, json.loads(ast.read_text())["program_id"])
+        for source, ast in result.items()
+    } == {
+        p.path: (_SETTINGS.artifact(p, tmp_path, "ast"), f"HELLO{p.path.stem[-1]}")
+        for p in programs
     }
-    result = parallel_parse_to_cache(sources, make_cobol_parser(), tmp_path)
-    assert set(result.keys()) == set(sources.keys())
-    for src_path, ast_path in result.items():
-        path_hash = hashlib.md5(str(src_path).encode()).hexdigest()
-        assert ast_path == tmp_path / f"{src_path.stem}-{path_hash}.ast.json"
-        assert ast_path.exists()
-        assert json.loads(ast_path.read_text())["program_id"] is not None
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_parallel_parse_to_cache_creates_cache_dir(tmp_path):
-    cache_dir = tmp_path / "nested" / "cache"
-    assert not cache_dir.exists()
-    parallel_parse_to_cache({Path("x.cbl"): _SRC}, make_cobol_parser(), cache_dir)
-    assert cache_dir.is_dir()
+def test_parse_stage_creates_the_work_directory(tmp_path):
+    work = tmp_path / "nested" / "work"
+    parse_stage(
+        (SourceFile(Path("x.cbl"), _SRC),), make_cobol_parser(), _SETTINGS, work
+    )
+    assert work.is_dir()
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_parallel_parse_to_cache_empty_sources(tmp_path):
-    result = parallel_parse_to_cache({}, make_cobol_parser(), tmp_path)
-    assert result == {}
+def test_parse_stage_with_no_programs_writes_nothing(tmp_path):
+    assert (
+        parse_stage((), make_cobol_parser(), _SETTINGS, tmp_path),
+        list(tmp_path.iterdir()),
+    ) == ({}, [])
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_compile_cobol_ast_cache_dir_single_module_writes_json(tmp_path):
+def test_compile_cobol_work_dir_single_module_writes_json(tmp_path):
     cache = tmp_path / "ast-cache"
-    _, linked = compile_cobol(_HELLO, parser=make_cobol_parser(), ast_cache_dir=cache)
+    linked = compile_cobol(_HELLO, parser=make_cobol_parser(), work_dir=cache)
     assert isinstance(linked, LinkedProgram)
     assert cache.is_dir()
     assert len(list(cache.glob("*.ast.json"))) == 1
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_compile_cobol_ast_cache_dir_multi_module_writes_one_json_per_module(tmp_path):
+def test_compile_cobol_work_dir_multi_module_writes_one_json_per_module(tmp_path):
     cache = tmp_path / "ast-cache"
-    _, linked = compile_cobol(
+    linked = compile_cobol(
         _CALLER,
         parser=make_cobol_parser(),
         programs=(SourceFile(Path("CALLEE.cbl"), _CALLEE),),
-        ast_cache_dir=cache,
+        work_dir=cache,
     )
     assert isinstance(linked, LinkedProgram)
     assert len(list(cache.glob("*.ast.json"))) == 2
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_compile_cobol_ast_cache_dir_produces_runnable_program(tmp_path):
-    _, linked = compile_cobol(
-        _HELLO, parser=make_cobol_parser(), ast_cache_dir=tmp_path / "cache"
+def test_compile_cobol_work_dir_produces_runnable_program(tmp_path):
+    linked = compile_cobol(
+        _HELLO, parser=make_cobol_parser(), work_dir=tmp_path / "cache"
     )
     vm = run_linked(
         linked,
@@ -189,15 +197,15 @@ def test_compile_cobol_ast_cache_dir_produces_runnable_program(tmp_path):
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_compile_cobol_without_ast_cache_dir_uses_auto_temp():
-    _, linked = compile_cobol(_HELLO, parser=make_cobol_parser())
+def test_compile_cobol_without_work_dir_uses_auto_temp():
+    linked = compile_cobol(_HELLO, parser=make_cobol_parser())
     assert isinstance(linked, LinkedProgram)
     assert linked.merged_cfg is not None
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_compile_cobol_maps_every_compiled_program_to_its_persisted_ast():
-    _, linked = compile_cobol(
+    linked = compile_cobol(
         _CALLER,
         parser=make_cobol_parser(),
         programs=(SourceFile(Path("CALLEE.cbl"), _CALLEE),),
@@ -212,8 +220,8 @@ def test_compile_cobol_maps_every_compiled_program_to_its_persisted_ast():
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_the_default_ast_cache_is_readable_only_by_its_owner():
-    _, linked = compile_cobol(_HELLO, parser=make_cobol_parser())
+def test_the_default_work_dir_is_readable_only_by_its_owner():
+    linked = compile_cobol(_HELLO, parser=make_cobol_parser())
     (cache,) = {ast.parent for ast in linked.ast_paths.values()}
     assert cache.stat().st_mode & 0o777 == 0o700
 
@@ -253,7 +261,7 @@ class _FailsToLower(RedDragonExtensionLoweringStrategy):
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_a_program_that_fails_to_lower_is_skipped_with_a_warning(caplog):
     with caplog.at_level(logging.WARNING, logger="interpreter.project.cobol_compile"):
-        _, linked = compile_cobol(
+        linked = compile_cobol(
             _CALLER,
             parser=make_cobol_parser(),
             programs=(
@@ -276,7 +284,7 @@ def test_a_program_that_fails_to_lower_is_skipped_with_a_warning(caplog):
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_the_later_of_two_programs_with_the_same_path_is_compiled():
-    _, linked = compile_cobol(
+    linked = compile_cobol(
         _CALLER,
         parser=make_cobol_parser(),
         programs=(
@@ -309,3 +317,75 @@ def test_a_program_that_fails_to_parse_aborts_the_compile_even_when_tolerant():
 def test_a_program_without_an_entry_function_carries_the_null_label(tmp_path):
     (tmp_path / "main.py").write_text("x = 1\n")
     assert compile_directory(tmp_path, Language.PYTHON).entry_func_label is NO_LABEL
+
+
+class _CountingParser:
+    """The real parser, recording every program it is asked to parse."""
+
+    def __init__(self, inner, parsed: list[str]) -> None:
+        self._inner, self.parsed = inner, parsed
+
+    def with_addressing_mode(self, mode):
+        return _CountingParser(self._inner.with_addressing_mode(mode), self.parsed)
+
+    def parse_to_file(self, source: bytes, out):
+        self.parsed.append(out.name)
+        return self._inner.parse_to_file(source, out)
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_a_second_compile_in_the_same_work_directory_reuses_every_file(tmp_path):
+    parsed: list[str] = []
+    parser = _CountingParser(make_cobol_parser(), parsed)
+    programs = (SourceFile(Path("CALLEE.cbl"), _CALLEE),)
+    first = compile_cobol(_CALLER, parser=parser, programs=programs, work_dir=tmp_path)
+    files = {p.name: p.stat().st_mtime_ns for p in tmp_path.iterdir()}
+    second = compile_cobol(_CALLER, parser=parser, programs=programs, work_dir=tmp_path)
+    assert (
+        len(parsed),
+        sorted(p.name.split(".", 1)[1] for p in tmp_path.iterdir()),
+        {p.name: p.stat().st_mtime_ns for p in tmp_path.iterdir()} == files,
+        second.entry_func_label,
+        second.merged_ir == first.merged_ir,
+    ) == (
+        2,
+        ["ast.json", "ast.json", "linked.json", "unit.json", "unit.json"],
+        True,
+        CodeLabel("__main__.func_caller_0"),
+        True,
+    )
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_an_edited_source_or_new_settings_gets_new_files(tmp_path):
+    compile_cobol(_CALLER, parser=make_cobol_parser(), work_dir=tmp_path)
+    edited = _CALLER.replace(b"GOBACK", b"STOP RUN")
+    compile_cobol(edited, parser=make_cobol_parser(), work_dir=tmp_path)
+    compile_cobol(_CALLER, parser=make_cobol_parser(), work_dir=tmp_path, tolerant=True)
+    assert len(list(tmp_path.glob("__main__-*.unit.json"))) == 3
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_a_callee_that_fails_to_lower_has_no_unit_and_a_rerun_still_links(
+    tmp_path, caplog
+):
+    programs = (SourceFile(Path("CALLEE.cbl"), _CALLEE),)
+    strategies = [_FailsToLower("CALLEE")]
+    compile_cobol(
+        _CALLER,
+        parser=make_cobol_parser(),
+        programs=programs,
+        extension_strategies=strategies,
+        work_dir=tmp_path,
+    )
+    linked = compile_cobol(
+        _CALLER,
+        parser=make_cobol_parser(),
+        programs=programs,
+        extension_strategies=strategies,
+        work_dir=tmp_path,
+    )
+    assert (
+        sorted(p.name.split("-")[0] for p in tmp_path.glob("*.unit.json")),
+        sorted(str(path) for path in linked.modules),
+    ) == (["__main__"], ["__main__.cbl", "__start_up__"])

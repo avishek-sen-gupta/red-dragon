@@ -243,7 +243,7 @@ class TestExactLowering:
                 "    STOP RUN.",
             ]
         )
-        _, linked = compile_cobol(source.encode("utf-8"), parser=make_cobol_parser())
+        linked = compile_cobol(source.encode("utf-8"), parser=make_cobol_parser())
         called = {
             str(i.func_name) for i in linked.merged_ir if isinstance(i, CallFunction)
         }
