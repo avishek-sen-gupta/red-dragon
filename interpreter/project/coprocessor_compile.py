@@ -24,6 +24,8 @@ from cobol_asg.frontend_extension import (
 from interpreter.frontend import Frontend
 from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy
 from interpreter.project.cobol_compile import compile_cobol
+from interpreter.project.cobol_discovery import discover_callee_programs
+from interpreter.project.source_file import SourceFile
 from interpreter.project.types import LinkedProgram
 
 
@@ -53,12 +55,9 @@ class CoprocessorSpec:
     prepass computes (e.g. a dclgen field-metadata sidecar) closes over a
     private mutable one-element list shared between ``source_prepass`` and
     ``make_strategy`` — compile_program guarantees every spec's
-    ``source_prepass`` runs on the main program and every linked subprogram
-    before ANY spec's ``make_strategy`` is called, so that holder is always
-    populated in time. Callees discovered on the search path are found during
-    compilation, after the strategies exist, and are prepassed before any
-    program is lowered: state a prepass shares with its strategy must be read
-    at lowering time, not copied when the strategy is made.
+    ``source_prepass`` runs on every compiled program — the main program, each
+    discovered callee and each linked subprogram — before ANY spec's
+    ``make_strategy`` is called, so that holder is always populated in time.
 
     ``owns_execution`` marks the (at most one) coprocessor that imposes
     execution semantics on the compiled program (e.g. a dispatcher loop) —
@@ -70,8 +69,8 @@ class CoprocessorSpec:
     caller sets one (a real one, or the NullDialectParser default);
     compile_program collects them all unconditionally.
 
-    ``source_search_dirs`` threads compile_cobol's parameter of the same name
-    through the same way — a coprocessor whose CALLed subprograms are never on
+    ``source_search_dirs`` feeds callee discovery (discover_callee_programs)
+    — a coprocessor whose CALLed subprograms are never on
     disk under the caller's own directory (e.g. IBM Language Environment stubs)
     sets this to contribute that directory, without this module knowing what's
     in it or what any of it is for. Every spec's contribution is appended, in
@@ -86,13 +85,13 @@ class CoprocessorSpec:
     name is the variable's runtime contents and the only edge a text scan could
     report is the variable's own name. A coprocessor supplying such a callee
     returns ``{program_name: source_bytes}``; compile_program merges every
-    spec's mapping (later specs winning on a repeated name) and forwards it as
-    compile_cobol's ``extra_subprogram_sources``.
+    spec's mapping (later specs winning on a repeated name) and compiles each
+    entry as one of the programs it hands compile_cobol.
 
     That contribution is a mapping and not a directory on purpose:
-    compile_program threads arguments and does no filesystem work, so reading
-    files and discovering ``.cbl`` members stays with the coprocessor that
-    knows which of its own programs it means.
+    compile_program reads only what discovery finds on the search path, so
+    choosing which ``.cbl`` members to link unconditionally stays with the
+    coprocessor that knows which of its own programs it means.
     """
 
     name: str
@@ -117,10 +116,11 @@ def compile_program(
 ) -> tuple[Frontend, LinkedProgram]:
     """Compile ``source`` with every spec's prepass and strategy composed.
 
-    The specs' source rewrites run, in order, on every program compiled. On
-    the main program and the linked subprograms they run before ANY spec's
-    ``make_strategy`` is called; on discovered callees, before lowering (see
-    CoprocessorSpec's docstring).
+    The specs' source rewrites run, in order, on every program compiled, before
+    ANY spec's ``make_strategy`` is called (see CoprocessorSpec's docstring).
+    Callees are discovered here, through the merged search directories, so the
+    list handed to compile_cobol is fixed; a linked subprogram wins over a
+    discovered callee of the same name.
 
     ``source_search_dirs`` and ``linked_subprogram_sources`` are the caller's
     own contributions to the pairs of the same names on CoprocessorSpec; each
@@ -131,29 +131,36 @@ def compile_program(
         return functools.reduce(lambda t, spec: spec.source_prepass(t), specs, text)
 
     text = rewrite(source.decode("utf-8"))
-    all_subprogram_sources: dict[str, bytes] = {
-        name: rewrite(subprogram.decode("utf-8")).encode("utf-8")
+    all_source_search_dirs: tuple[Path, ...] = functools.reduce(
+        lambda dirs, spec: (*dirs, *spec.source_search_dirs()),
+        specs,
+        tuple(source_search_dirs),
+    )
+    linked = {
+        name: SourceFile(
+            Path(f"{name}.cbl"), rewrite(subprogram.decode("utf-8")).encode("utf-8")
+        )
         for name, subprogram in functools.reduce(
             lambda srcs, spec: {**srcs, **spec.linked_subprogram_sources()},
             specs,
             dict(linked_subprogram_sources),
         ).items()
     }
+    discovered = tuple(
+        found
+        for found in discover_callee_programs(
+            text.encode("utf-8"), all_source_search_dirs, rewrite
+        )
+        if found.path.stem.upper() not in linked
+    )
 
     strategies = [spec.make_strategy() for spec in specs]
     dialect_parsers = [spec.dialect_parser for spec in specs]
-    all_source_search_dirs: tuple[Path, ...] = functools.reduce(
-        lambda dirs, spec: (*dirs, *spec.source_search_dirs()),
-        specs,
-        tuple(source_search_dirs),
-    )
     return compile_cobol(
         text.encode("utf-8"),
         parser=parser,
+        programs=(*discovered, *linked.values()),
         extension_strategies=strategies,
         dialect_parsers=dialect_parsers,
-        source_search_dirs=all_source_search_dirs,
-        extra_subprogram_sources=all_subprogram_sources,
-        source_transform=rewrite,
         tolerant=tolerant,
     )

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 
@@ -84,15 +85,17 @@ def run_cobol_programs(
     """
     from cobol_asg.cobol_parser import make_cobol_parser
     from interpreter.project.cobol_compile import compile_cobol
+    from interpreter.project.source_file import SourceFile
     from interpreter.run import EntryPoint, initial_vm_state, run_linked
 
     main_id = _program_id(main)
     _, linked = compile_cobol(
         to_fixed(main).encode(),
         parser=make_cobol_parser(),
-        extra_subprogram_sources={
-            name: to_fixed(lines).encode() for name, lines in subprograms.items()
-        },
+        programs=tuple(
+            SourceFile(Path(f"{name}.cbl"), to_fixed(lines).encode())
+            for name, lines in subprograms.items()
+        ),
         lp=lp,
     )
     entry = f"func_{main_id.lower()}_0"

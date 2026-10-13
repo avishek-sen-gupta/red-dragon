@@ -2,11 +2,12 @@
 """Shared single-module COBOL compile core.
 
 compile_cobol_module(): bytes → (CobolFrontend, ModuleUnit)
-compile_cobol(): bytes → (CobolFrontend, LinkedProgram)
+compile_cobol(): main bytes + a fixed program list → (Frontend, LinkedProgram)
 
 This is the canonical entry point for compiling COBOL source.
 It knows about COBOL-specific injection points (parser, extension_strategies,
-dialect_parsers) abstractly — no CICS/SQL specifics live here.
+dialect_parsers) abstractly — no CICS/SQL specifics live here. It compiles the
+programs it is given and searches no directory.
 """
 
 from __future__ import annotations
@@ -14,7 +15,8 @@ from __future__ import annotations
 import json
 import logging
 import tempfile
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -25,15 +27,16 @@ from cobol_asg.lp import LP
 from cobol_asg.lp32 import LP32_MODE
 from cobol_asg.resolve_addressing_mode import addressing_mode
 from interpreter.constants import Language
+from interpreter.frontend import Frontend
 from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.frontends import get_cobol_frontend
 from interpreter.ir import CodeLabel
-from interpreter.project.cobol_discovery import discover_callee_programs
 from interpreter.project.compiler import build_export_table
 from interpreter.project.imports import extract_imports
 from interpreter.project.linker import link_modules
 from interpreter.project.resolver import topological_sort
+from interpreter.project.source_file import SourceFile
 from interpreter.project.start_up import with_start_up
 from interpreter.project.types import LinkedProgram, ModuleUnit
 
@@ -96,22 +99,68 @@ def compile_cobol_module(
     return frontend, module
 
 
+@dataclass(frozen=True)
+class _Lowering:
+    """The arguments every program of one run unit is lowered with."""
+
+    parser: Any
+    copybook_dirs: Sequence[Path]
+    extension_strategies: Sequence[RedDragonExtensionLoweringStrategy]
+    dialect_parsers: Sequence[DialectParser]
+    observer: FrontendObserver
+    tolerant: bool
+    addressing_mode: AddressingMode
+
+    def lower(
+        self, source: bytes, path: Path, ast_path: Path
+    ) -> tuple[Any, ModuleUnit]:
+        return compile_cobol_module(
+            source,
+            parser=self.parser,
+            copybook_dirs=list(self.copybook_dirs),
+            extension_strategies=self.extension_strategies,
+            dialect_parsers=self.dialect_parsers,
+            observer=self.observer,
+            path=path,
+            ast_path=ast_path,
+            tolerant=self.tolerant,
+            addressing_mode=self.addressing_mode,
+        )
+
+    def lower_or_skip(
+        self, program: SourceFile, ast_path: Path
+    ) -> tuple[tuple[Path, ModuleUnit], ...]:
+        try:
+            _, module = self.lower(program.source, program.path, ast_path)
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "compile_cobol: %s failed to lower — skipping",
+                program.path.stem,
+                exc_info=True,
+            )
+            return ()
+        return ((program.path, module),)
+
+
 def compile_cobol(
     source: bytes,
     *,
     parser: Any,
-    copybook_dirs: list[Path] = [],
+    programs: Sequence[SourceFile] = (),
+    copybook_dirs: Sequence[Path] = (),
     extension_strategies: Sequence[RedDragonExtensionLoweringStrategy] = (),
     dialect_parsers: Sequence[DialectParser] = (),
     observer: FrontendObserver = NullFrontendObserver(),
-    source_search_dirs: Sequence[Path] = (),
-    extra_subprogram_sources: dict[str, bytes] = {},
-    source_transform: Callable[[str], str] = lambda s: s,
     ast_cache_dir: Path | None = None,
     tolerant: bool = False,
     lp: LP = LP.LP32,
-) -> tuple[Any, LinkedProgram]:
-    """Compile a COBOL program (single or multi-module) into a LinkedProgram.
+) -> tuple[Frontend, LinkedProgram]:
+    """Compile a COBOL main program and the given programs into a LinkedProgram.
+
+    Compiles exactly *programs* besides the main one and searches no directory;
+    finding them is the caller's job (see cobol_discovery). Two programs with the
+    same path: the later one is compiled. A program that fails to lower is
+    skipped with a warning.
 
     Always uses the two-phase AST cache: Phase 1 parses all sources to
     ast_cache_dir in parallel; Phase 2 loads each JSON and lowers sequentially
@@ -130,94 +179,39 @@ def compile_cobol(
         cache_dir = ast_cache_dir
 
     try:
-        # Note: source_search_dirs disk resolution is intentionally excluded from
-        # the ast-cache path — only extra_subprogram_sources are cached. This is a
-        # known scope limitation: callers using source_search_dirs + ast_cache_dir
-        # together will get a LinkedProgram without disk-resolved callees.
         main_path = Path("__main__.cbl")
-        base = source_search_dirs[0] if source_search_dirs else Path(".")
-
-        sub_sources: dict[str, bytes] = dict(extra_subprogram_sources)
-
-        disk_sources: dict[Path, bytes] = {
-            found.path: found.source
-            for found in discover_callee_programs(
-                source, source_search_dirs, source_transform
-            )
+        all_sources: dict[Path, bytes] = {
+            main_path: source,
+            **{program.path: program.source for program in programs},
         }
-
-        all_sources: dict[Path, bytes] = {main_path: source}
-        for prog_name, prog_src in sub_sources.items():
-            all_sources[(base / f"{prog_name}.cbl").resolve()] = prog_src
-        all_sources.update(disk_sources)
-
         parallel_parse_to_cache(all_sources, mode_parser, cache_dir)
 
         def _ast_path(src_path: Path) -> Path:
             return cache_dir / f"{src_path.stem}-{_digest(src_path)}.ast.json"
 
-        main_frontend, main_module = compile_cobol_module(
-            source,
+        lowering = _Lowering(
             parser=mode_parser,
             copybook_dirs=copybook_dirs,
             extension_strategies=extension_strategies,
             dialect_parsers=dialect_parsers,
             observer=observer,
-            path=main_path,
             tolerant=tolerant,
             addressing_mode=mode,
-            ast_path=_ast_path(main_path),
         )
-        modules: dict[Path, ModuleUnit] = {main_path: main_module}
-
-        for prog_name, prog_src in sub_sources.items():
-            sub_path = (base / f"{prog_name}.cbl").resolve()
-            try:
-                _, sub_module = compile_cobol_module(
-                    prog_src,
-                    parser=mode_parser,
-                    copybook_dirs=copybook_dirs,
-                    extension_strategies=extension_strategies,
-                    dialect_parsers=dialect_parsers,
-                    observer=observer,
-                    tolerant=tolerant,
-                    addressing_mode=mode,
-                    path=sub_path,
-                    ast_path=_ast_path(sub_path),
+        main_frontend, main_module = lowering.lower(
+            source, main_path, _ast_path(main_path)
+        )
+        modules: dict[Path, ModuleUnit] = {
+            main_path: main_module,
+            **dict(
+                pair
+                for path, text in all_sources.items()
+                if path != main_path
+                for pair in lowering.lower_or_skip(
+                    SourceFile(path, text), _ast_path(path)
                 )
-            except Exception:  # noqa: BLE001
-                logger.warning(
-                    "compile_cobol ast-cache: subprogram %s failed — skipping",
-                    prog_name,
-                    exc_info=True,
-                )
-                continue
-            modules[sub_path] = sub_module
-
-        for disk_path, disk_src in disk_sources.items():
-            if disk_path in modules:
-                continue
-            try:
-                _, disk_module = compile_cobol_module(
-                    disk_src,
-                    parser=mode_parser,
-                    copybook_dirs=copybook_dirs,
-                    extension_strategies=extension_strategies,
-                    dialect_parsers=dialect_parsers,
-                    observer=observer,
-                    tolerant=tolerant,
-                    addressing_mode=mode,
-                    path=disk_path,
-                    ast_path=_ast_path(disk_path),
-                )
-            except Exception:  # noqa: BLE001
-                logger.warning(
-                    "compile_cobol ast-cache: disk callee %s failed — skipping",
-                    disk_path.stem,
-                    exc_info=True,
-                )
-                continue
-            modules[disk_path] = disk_module
+            ),
+        }
 
         import_graph: dict[Path, list[Path]] = {p: [] for p in modules}
         import_graph[main_path] = [p for p in modules if p != main_path]

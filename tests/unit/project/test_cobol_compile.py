@@ -8,6 +8,7 @@ from interpreter.project.cobol_compile import (
     compile_cobol_module,
     parallel_parse_to_cache,
 )
+from interpreter.project.source_file import SourceFile
 from interpreter.project.types import LinkedProgram, ModuleUnit
 from interpreter.run import EntryPoint, initial_vm_state, run_linked
 from tests.covers import NotLanguageFeature, covers
@@ -85,7 +86,9 @@ def test_compile_cobol_links_extra_subprogram():
            GOBACK.
 """
     _, linked = compile_cobol(
-        caller, extra_subprogram_sources={"CALLEE": callee}, parser=make_cobol_parser()
+        caller,
+        programs=(SourceFile(Path("CALLEE.cbl"), callee),),
+        parser=make_cobol_parser(),
     )
     # CALLEE linked as a second module — merged_ir must contain callee's prefixed
     # labels (e.g. "...func_callee_0"), proving the callee IR was linked in.
@@ -153,7 +156,7 @@ def test_compile_cobol_ast_cache_dir_multi_module_writes_one_json_per_module(tmp
     _, linked = compile_cobol(
         _CALLER,
         parser=make_cobol_parser(),
-        extra_subprogram_sources={"CALLEE": _CALLEE},
+        programs=(SourceFile(Path("CALLEE.cbl"), _CALLEE),),
         ast_cache_dir=cache,
     )
     assert isinstance(linked, LinkedProgram)
