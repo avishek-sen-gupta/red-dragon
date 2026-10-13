@@ -120,7 +120,7 @@ def compile_program(
     ANY spec's ``make_strategy`` is called (see CoprocessorSpec's docstring).
     Callees are discovered here, through the merged search directories, so the
     list handed to compile_cobol is fixed; a linked subprogram wins over a
-    discovered callee of the same name.
+    discovered callee of the same name, compared without regard to case.
 
     ``source_search_dirs`` and ``linked_subprogram_sources`` are the caller's
     own contributions to the pairs of the same names on CoprocessorSpec; each
@@ -146,12 +146,13 @@ def compile_program(
             dict(linked_subprogram_sources),
         ).items()
     }
+    linked_names = frozenset(name.upper() for name in linked)
     discovered = tuple(
         found
         for found in discover_callee_programs(
             text.encode("utf-8"), all_source_search_dirs, rewrite
         )
-        if found.path.stem.upper() not in linked
+        if found.path.stem.upper() not in linked_names
     )
 
     strategies = [spec.make_strategy() for spec in specs]
