@@ -4,11 +4,13 @@
 
 **Goal:** `compile_cobol` compiles a fixed list of programs; finding that list is a separate shell step; `compile_directory` and the COBOL CLI stop compiling COBOL directories.
 
-**Architecture:** Extract the CALL walk into `discover_called_programs` (shell), give `compile_cobol` a `programs: Sequence[SourceFile]` list in place of its three discovery parameters, have `compile_program` discover before making strategies, move COBOL's `compile_directory` callers onto `compile_cobol`, then remove COBOL from `compile_directory`. All work in `~/code/red-dragon`; the forge changes only by submodule bump.
+**Architecture:** Extract the CALL walk into `discover_callee_programs` (shell), give `compile_cobol` a `programs: Sequence[SourceFile]` list in place of its three discovery parameters, have `compile_program` discover before making strategies, move COBOL's `compile_directory` callers onto `compile_cobol`, then remove COBOL from `compile_directory`. All work in `~/code/red-dragon`; the forge changes only by submodule bump.
 
 **Tech Stack:** Python 3.13, uv, pytest (xdist), ProLeap bridge JAR, import-linter, python-fp-lint, Talisman, beads.
 
 **Spec:** `docs/superpowers/specs/2026-10-13-cobol-only-through-compile-cobol-design.md`
+
+The spec names the shell step `discover_called_programs`; it is `discover_callee_programs` here, at the user's request after the spec was written.
 
 ## Global Constraints
 
@@ -30,7 +32,7 @@
 
 ---
 
-### Task 1: `SourceFile` and `discover_called_programs` (shell step, behaviour unchanged)
+### Task 1: `SourceFile` and `discover_callee_programs` (shell step, behaviour unchanged)
 
 **Files:**
 - Create: `interpreter/project/source_file.py`
@@ -40,19 +42,19 @@
 - Modify: `tests/unit/project/test_cobol_compile.py` (move `test_source_transform_applied_to_on_disk_callees_only` out)
 
 **Interfaces:**
-- Produces: `SourceFile(path: Path, source: bytes)` (frozen dataclass); `discover_called_programs(source: bytes, search_dirs: Sequence[Path], source_transform: Callable[[str], str] = _identity) -> tuple[SourceFile, ...]`.
+- Produces: `SourceFile(path: Path, source: bytes)` (frozen dataclass); `discover_callee_programs(source: bytes, search_dirs: Sequence[Path], source_transform: Callable[[str], str] = _identity) -> tuple[SourceFile, ...]`.
 
 - [ ] **Step 1: Write the failing discovery tests**
 
 `tests/unit/project/test_cobol_discovery.py`:
 
 ```python
-"""discover_called_programs: the shell step that turns a main program and ordered
+"""discover_callee_programs: the shell step that turns a main program and ordered
 search directories into the list of programs to compile."""
 
 from pathlib import Path
 
-from interpreter.project.cobol_discovery import discover_called_programs
+from interpreter.project.cobol_discovery import discover_callee_programs
 from interpreter.project.source_file import SourceFile
 from tests.covers import NotLanguageFeature, covers
 
@@ -82,7 +84,7 @@ def test_discovery_follows_static_calls_through_ordered_directories(tmp_path: Pa
     (second / "LEAF.cbl").write_bytes(_program("LEAF"))
     (second / "DYNAMIC.cbl").write_bytes(_program("DYNAMIC"))
 
-    found = discover_called_programs(
+    found = discover_callee_programs(
         _program("MAIN", "MID"), (first, second), lambda s: s.replace("GOBACK", "EXIT PROGRAM")
     )
 
@@ -100,7 +102,7 @@ def test_discovery_follows_static_calls_through_ordered_directories(tmp_path: Pa
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_discovery_without_search_directories_finds_nothing():
-    assert discover_called_programs(_program("MAIN", "MID"), ()) == ()
+    assert discover_callee_programs(_program("MAIN", "MID"), ()) == ()
 ```
 
 One behaviour per test: the first pins transitivity, first-directory-wins, the transform on every program read, and that `CALL WS-NAME` is not followed (DYNAMIC is never returned); the second pins the empty search path.
@@ -131,12 +133,12 @@ class SourceFile:
 
 - [ ] **Step 4: Move the CALL walk**
 
-Create `interpreter/project/cobol_discovery.py` with a module header line, `_identity`, and `discover_called_programs`, whose body is today's `_resolve_call_sources` (in `interpreter/project/cobol_compile.py`) with `main_path = Path("__main__.cbl")`, the search dirs resolved (`[d.resolve() for d in search_dirs]`) and the result returned as `tuple(SourceFile(path, source) for path, source in resolved.items())`. It imports `extract_imports`, `get_resolver`, `ImportKind`, `Language` exactly as `cobol_compile.py` does today. Delete `_resolve_call_sources` from `cobol_compile.py`, and in `compile_cobol` replace the `disk_sources = _resolve_call_sources(...)` block with:
+Create `interpreter/project/cobol_discovery.py` with a module header line, `_identity`, and `discover_callee_programs`, whose body is today's `_resolve_call_sources` (in `interpreter/project/cobol_compile.py`) with `main_path = Path("__main__.cbl")`, the search dirs resolved (`[d.resolve() for d in search_dirs]`) and the result returned as `tuple(SourceFile(path, source) for path, source in resolved.items())`. It imports `extract_imports`, `get_resolver`, `ImportKind`, `Language` exactly as `cobol_compile.py` does today. Delete `_resolve_call_sources` from `cobol_compile.py`, and in `compile_cobol` replace the `disk_sources = _resolve_call_sources(...)` block with:
 
 ```python
         disk_sources: dict[Path, bytes] = {
             found.path: found.source
-            for found in discover_called_programs(
+            for found in discover_callee_programs(
                 source, source_search_dirs, source_transform
             )
         }
@@ -155,7 +157,7 @@ Expected: all green.
 
 - [ ] **Step 7: Mutation-check**
 
-Make `discover_called_programs` skip `source_transform` (read `target.read_text()` raw): the first test fails. Make it search only `search_dirs[-1:]`: the first test fails. Revert both.
+Make `discover_callee_programs` skip `source_transform` (read `target.read_text()` raw): the first test fails. Make it search only `search_dirs[-1:]`: the first test fails. Revert both.
 
 - [ ] **Step 8: Gate and commit**
 
@@ -164,7 +166,7 @@ Expected: `Contracts: 8 kept, 0 broken.`; suite green.
 
 ```bash
 git add interpreter/project/source_file.py interpreter/project/cobol_discovery.py interpreter/project/cobol_compile.py tests/unit/project/test_cobol_discovery.py tests/unit/project/test_cobol_compile.py
-git commit  # "refactor(cobol): the CALL walk becomes discover_called_programs"
+git commit  # "refactor(cobol): the CALL walk becomes discover_callee_programs"
 ```
 
 ---
@@ -178,7 +180,7 @@ git commit  # "refactor(cobol): the CALL walk becomes discover_called_programs"
 - Modify: `tests/unit/project/test_cobol_compile.py`, `tests/unit/project/test_cobol_compile_defaults.py`, `tests/integration/cobol_helpers.py`
 
 **Interfaces:**
-- Consumes: Task 1's `SourceFile`, `discover_called_programs`.
+- Consumes: Task 1's `SourceFile`, `discover_callee_programs`.
 - Produces: `compile_cobol(source: bytes, *, parser, programs: Sequence[SourceFile] = (), copybook_dirs: Sequence[Path] = (), extension_strategies=(), dialect_parsers=(), observer=NullFrontendObserver(), ast_cache_dir: Path | None = None, tolerant: bool = False, lp: LP = LP.LP32) -> tuple[Frontend, LinkedProgram]`. No `source_search_dirs`, `extra_subprogram_sources`, `source_transform`.
 
 - [ ] **Step 1: Strengthen the ordering test (failing)**
@@ -262,7 +264,7 @@ In `interpreter/project/coprocessor_compile.py`:
     }
     discovered = tuple(
         found
-        for found in discover_called_programs(
+        for found in discover_callee_programs(
             text.encode("utf-8"), all_source_search_dirs, rewrite
         )
         if found.path.stem.upper() not in linked
@@ -563,7 +565,7 @@ Rewrite each COBOL-related hit to the new shape (fixed program list; discovery a
 
 **Context:** COBOL compiled two ways: `compile_cobol`, the path every forge runtime uses, and `compile_directory`, which compiled every `.cbl`/`.cob` under a tree without extensions, dialects, LP mode, data layout or entry label. `compile_cobol` also decided what to compile, by walking `CALL 'LITERAL'` edges through search directories. Production toolchains separate these: a build names the programs to compile, one per compile; the binder pulls statically called program objects from libraries by name, and the runtime loads dynamically called ones from load libraries — already compiled.
 
-**Decision:** `compile_cobol` takes the main program and a fixed list of `SourceFile`s and searches nothing. The CALL walk is `discover_called_programs`, a shell step. `compile_program` rewrites, discovers and links before making any strategy, so every coprocessor rewrite runs on every compiled program before any strategy exists. `compile_directory` no longer accepts COBOL. The COBOL CLI takes a main program and `--search-dir` directories.
+**Decision:** `compile_cobol` takes the main program and a fixed list of `SourceFile`s and searches nothing. The CALL walk is `discover_callee_programs`, a shell step. `compile_program` rewrites, discovers and links before making any strategy, so every coprocessor rewrite runs on every compiled program before any strategy exists. `compile_directory` no longer accepts COBOL. The COBOL CLI takes a main program and `--search-dir` directories.
 
 **Consequences:** `project/compiler.py` names no COBOL. A callee reached only by `CALL identifier` must be in the list (`linked_subprogram_sources`), as before. Persisting lowered programs and linking them later is red-dragon-ajps.
 ```

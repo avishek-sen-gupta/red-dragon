@@ -203,5 +203,5 @@ fileignoreconfig:
 - filename: docs/superpowers/plans/2026-10-04-pointer-model.md
   checksum: 723dacb21c29d9ba516a2aadfb0672994e813bd80455485b4180ef3a97cbb325
 - filename: docs/superpowers/plans/2026-10-13-cobol-only-through-compile-cobol.md
-  checksum: 3072539c0613261555bce5f5326db887e042fcf75508ce07bf853570fd554778
+  checksum: 1ccf67dfc096b4a85587600f678201f03219536c010135bb3733691c221d8162
 version: "1.0"
