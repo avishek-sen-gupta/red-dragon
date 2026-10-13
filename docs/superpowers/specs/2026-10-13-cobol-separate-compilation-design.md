@@ -36,8 +36,9 @@ state is needed at run time. CICS IR already carried only primitive values.
 
 Every per-program file is `<stem>-<digest>.<kind>.json` in a work directory,
 where `stem` is the source file's stem and `digest` covers the source bytes and
-the lowering settings: addressing mode, extension strategy names, dialect parser
-names, tolerant mode and copybook directories. One naming function computes
+the lowering settings: addressing mode, extension strategy names, tolerant mode
+and copybook directories. Dialect parsers are not named separately: each comes
+paired with the extension that owns it. One naming function computes
 every name, so stages agree without a manifest, and a later process holding the
 sources and settings can compute where the files are.
 
@@ -81,7 +82,9 @@ Three language-neutral classes in `interpreter/project/`, one per file:
 - `UnitCodec` (`unit_codec.py`) — a `ModuleUnit` to and from its `.unit.json`
   file, with its own format version.
 - `LinkedCodec` (`linked_codec.py`) — a `LinkedProgram` to and from its
-  `.linked.json` file, with its own format version. Reading rebuilds
+  `.linked.json` file, with its own format version. The file holds every field
+  but the CFG and registry, `modules` included, so a run needs nothing but this
+  file. Reading rebuilds
   `merged_cfg` with `build_cfg(merged_ir)` and `merged_registry` with
   `build_registry(...)`: both are derived from the merged IR, and execution uses
   only the CFG's label lookup and program-order fall-through (red-dragon-dp2o).
