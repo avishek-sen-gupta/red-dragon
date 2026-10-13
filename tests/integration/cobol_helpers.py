@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from cobol_asg.lp import LP
+from interpreter.project.types import LinkedProgram
 from interpreter.run import run
 from interpreter.vm.null_access import NullAccess
 from interpreter.vm.warn_and_ignore import WARN_AND_IGNORE
@@ -187,3 +188,27 @@ def bridge_jar() -> str:
     returned path; run()/compile_directory read the same env var themselves.
     """
     return os.environ["PROLEAP_BRIDGE_JAR"]
+
+
+def compile_programs_in(directory: Path, main: str) -> LinkedProgram:
+    """Compile ``<directory>/<main>.cbl`` with every other program under the
+    directory, as an explicit list, and the directory tree as copybook path --
+    what a build names, not what a CALL walk finds."""
+    from cobol_asg.cobol_parser import make_cobol_parser
+    from interpreter.project.cobol_compile import compile_cobol
+    from interpreter.project.source_file import SourceFile
+
+    main_path = directory / f"{main}.cbl"
+    copybook_dirs = [directory, *sorted(p for p in directory.rglob("*") if p.is_dir())]
+    _, linked = compile_cobol(
+        main_path.read_bytes(),
+        parser=make_cobol_parser(copybook_dirs=copybook_dirs),
+        programs=tuple(
+            SourceFile(p, p.read_bytes())
+            for ext in (".cbl", ".cob")
+            for p in sorted(directory.rglob(f"*{ext}"))
+            if p != main_path
+        ),
+        copybook_dirs=copybook_dirs,
+    )
+    return linked

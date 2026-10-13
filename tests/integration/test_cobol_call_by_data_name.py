@@ -19,16 +19,17 @@ import pytest
 
 from interpreter.address import Address
 from interpreter.cobol.features import CobolFeature
-from interpreter.constants import Language
 from interpreter.field_name import FieldName
 from interpreter.handlers.calls import UnresolvedProgramError
-from interpreter.project.compiler import compile_directory
 from interpreter.project.entry_point import EntryPoint
 from interpreter.run import initial_vm_state, run_linked
 from interpreter.var_name import VarName
 from interpreter.vm.vm_types import Pointer
 from tests.covers import covers
-from tests.integration.cobol_helpers import bridge_jar  # noqa: F401
+from tests.integration.cobol_helpers import (
+    bridge_jar,  # noqa: F401
+    compile_programs_in,
+)
 from tests.integration.cobol_helpers import (
     decode_zoned_unsigned as _decode_zoned_unsigned,
 )
@@ -68,7 +69,7 @@ def _main_src(working_storage: str, body: str) -> str:
 def _run(tmp_path, main_src: str):
     (tmp_path / "HELPER.cbl").write_text(HELPER_SRC)
     (tmp_path / "MAIN.cbl").write_text(main_src)
-    linked = compile_directory(tmp_path, Language.COBOL)
+    linked = compile_programs_in(tmp_path, "MAIN")
     return run_linked(
         linked,
         entry_point=EntryPoint.function(

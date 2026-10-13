@@ -16,16 +16,17 @@ import pytest
 from interpreter.address import Address
 from interpreter.cobol.data_layout import CobolAmbiguousReferenceError
 from interpreter.cobol.features import CobolFeature
-from interpreter.constants import Language
 from interpreter.field_name import FieldName
-from interpreter.project.compiler import compile_directory
 from interpreter.project.entry_point import EntryPoint
 from interpreter.run import initial_vm_state, run, run_linked
 from interpreter.var_name import VarName
 from interpreter.vm.vm_types import Pointer
 from tests.covers import NotLanguageFeature, covers
-from tests.integration.cobol_helpers import bridge_jar  # noqa: F401
-from tests.integration.cobol_helpers import first_region
+from tests.integration.cobol_helpers import (
+    bridge_jar,  # noqa: F401
+    compile_programs_in,
+    first_region,
+)
 from tests.integration.cobol_helpers import (
     decode_zoned_unsigned as _decode_zoned_unsigned,
 )
@@ -39,7 +40,7 @@ from tests.integration.cobol_helpers import (
 
 @pytest.fixture(autouse=True)
 def _require_bridge_jar(bridge_jar):
-    """Enforce the required PROLEAP_BRIDGE_JAR for run()/compile_directory-based
+    """Enforce the required PROLEAP_BRIDGE_JAR for run()/compile_cobol-based
     tests (fails loudly via bridge_jar if it's unset)."""
 
 
@@ -5618,7 +5619,7 @@ class TestSubprogramWsPersistence:
             )
         )
 
-        linked = compile_directory(tmp_path, Language.COBOL)
+        linked = compile_programs_in(tmp_path, "MAIN")
 
         vm = run_linked(
             linked,
@@ -5703,7 +5704,7 @@ class TestSubprogramWsPersistence:
             )
         )
 
-        linked = compile_directory(tmp_path, Language.COBOL)
+        linked = compile_programs_in(tmp_path, "MAINCLR")
         # Two full CALL round-trips, each with zoned decode + encode (~80
         # instructions apiece) on both sides, comfortably exceed a 500-step
         # budget — a too-small budget halts mid-second-call and looks like a
@@ -5784,7 +5785,7 @@ class TestCallUsingByReference:
             )
         )
 
-        linked = compile_directory(tmp_path, Language.COBOL)
+        linked = compile_programs_in(tmp_path, "MAINPROG")
         vm = run_linked(
             linked,
             entry_point=EntryPoint.function(
@@ -5890,7 +5891,7 @@ class TestCallUsingByReference:
             )
         )
 
-        linked = compile_directory(tmp_path, Language.COBOL)
+        linked = compile_programs_in(tmp_path, "CHAINA")
         vm = run_linked(
             linked,
             entry_point=EntryPoint.function(
@@ -5980,7 +5981,7 @@ class TestCallUsingByReference:
             )
         )
 
-        linked = compile_directory(tmp_path, Language.COBOL)
+        linked = compile_programs_in(tmp_path, "MAINPROG")
         vm = run_linked(
             linked,
             entry_point=EntryPoint.function(
@@ -6052,7 +6053,7 @@ class TestCallUsingByValue:
             )
         )
 
-        linked = compile_directory(tmp_path, Language.COBOL)
+        linked = compile_programs_in(tmp_path, "MAINPROG")
         vm = run_linked(
             linked,
             entry_point=EntryPoint.function(
@@ -6138,7 +6139,7 @@ class TestCallUsingByValue:
             )
         )
 
-        linked = compile_directory(tmp_path, Language.COBOL)
+        linked = compile_programs_in(tmp_path, "MAINPROG")
         vm = run_linked(
             linked,
             entry_point=EntryPoint.function(
@@ -6227,7 +6228,7 @@ class TestCallUsingLinkageRead:
             )
         )
 
-        linked = compile_directory(tmp_path, Language.COBOL)
+        linked = compile_programs_in(tmp_path, "MAINPROG")
         vm = run_linked(
             linked,
             entry_point=EntryPoint.function(
@@ -6294,7 +6295,7 @@ class TestCallUsingLinkageRead:
             )
         )
 
-        linked = compile_directory(tmp_path, Language.COBOL)
+        linked = compile_programs_in(tmp_path, "MAINPROG")
         vm = run_linked(
             linked,
             entry_point=EntryPoint.function(
@@ -6363,7 +6364,7 @@ class TestCallUsingLinkageRead:
             )
         )
 
-        linked = compile_directory(tmp_path, Language.COBOL)
+        linked = compile_programs_in(tmp_path, "MAINPROG")
         vm = run_linked(
             linked,
             entry_point=EntryPoint.function(
@@ -6420,7 +6421,7 @@ class TestGobackExitProgram:
             )
         )
 
-        linked = compile_directory(tmp_path, Language.COBOL)
+        linked = compile_programs_in(tmp_path, "MAINPROG")
         vm = run_linked(
             linked,
             entry_point=EntryPoint.function(
@@ -6477,7 +6478,7 @@ class TestGobackExitProgram:
             )
         )
 
-        linked = compile_directory(tmp_path, Language.COBOL)
+        linked = compile_programs_in(tmp_path, "MAINPROG")
         vm = run_linked(
             linked,
             entry_point=EntryPoint.function(
@@ -6545,7 +6546,7 @@ class TestGobackExitProgram:
             )
         )
 
-        linked = compile_directory(tmp_path, Language.COBOL)
+        linked = compile_programs_in(tmp_path, "MAINPROG")
         vm = run_linked(
             linked,
             entry_point=EntryPoint.function(
@@ -6612,7 +6613,7 @@ class TestStopRunTerminatesRunUnit:
             )
         )
 
-        linked = compile_directory(tmp_path, Language.COBOL)
+        linked = compile_programs_in(tmp_path, "MAINPROG")
         vm = run_linked(
             linked,
             entry_point=EntryPoint.function(
@@ -6684,7 +6685,7 @@ class TestStopRunTerminatesRunUnit:
             )
         )
 
-        linked = compile_directory(tmp_path, Language.COBOL)
+        linked = compile_programs_in(tmp_path, "PROGA")
         vm = run_linked(
             linked,
             entry_point=EntryPoint.function(
@@ -6772,7 +6773,7 @@ class TestStopRunTerminatesRunUnit:
             )
         )
 
-        linked = compile_directory(tmp_path, Language.COBOL)
+        linked = compile_programs_in(tmp_path, "MAINPROG")
         vm = run_linked(
             linked,
             entry_point=EntryPoint.function(
@@ -8727,7 +8728,7 @@ class TestIndexItemAllocation:
             )
         )
 
-        linked = compile_directory(tmp_path, Language.COBOL)
+        linked = compile_programs_in(tmp_path, "MAINPROG")
         vm = run_linked(
             linked,
             entry_point=EntryPoint.function(

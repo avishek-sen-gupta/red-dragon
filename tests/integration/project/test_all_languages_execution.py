@@ -25,6 +25,7 @@ from interpreter.run_types import VMConfig
 from interpreter.types.typed_value import TypedValue
 from interpreter.var_name import VarName
 from interpreter.vm.vm_types import Pointer
+from tests.integration.cobol_helpers import compile_programs_in
 
 
 def _decode_zoned_unsigned(region: bytearray, offset: int, length: int) -> int:
@@ -568,7 +569,7 @@ class TestCobolMultiFile:
             "           COMPUTE WS-RESULT = 42.\n"
             "           STOP RUN.\n"
         )
-        linked = compile_directory(tmp_path, Language.COBOL)
+        linked = compile_programs_in(tmp_path, "MAIN")
         vm = run_linked(
             linked,
             entry_point=EntryPoint.function(
