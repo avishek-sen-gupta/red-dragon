@@ -1,4 +1,4 @@
-"""Unit test: _handle_call_with_memory dispatches via singleton __init_params__."""
+"""Unit test: _handle_call_with_memory dispatches via the entry function registered under __entry_<PID>."""
 
 from interpreter.address import Address
 from interpreter.cobol.features import CobolFeature
@@ -8,6 +8,7 @@ from interpreter.instructions import CallWithMemory
 from interpreter.ir import CodeLabel
 from interpreter.refs.func_ref import BoundFuncRef, FuncRef
 from interpreter.register import Register
+from interpreter.registry import FunctionRegistry
 from interpreter.types.typed_value import typed
 from interpreter.var_name import VarName
 from interpreter.vm.vm_types import HeapObject, VMState
@@ -30,7 +31,6 @@ def _make_vm_with_singleton(program_id: str) -> VMState:
 
     singleton = HeapObject(
         fields={
-            FieldName("__init_params__"): typed(init_params_ref),
             FieldName("ws_handle"): typed(Address("obj_0")),
             FieldName("run"): typed(
                 BoundFuncRef(
@@ -47,6 +47,9 @@ def _make_vm_with_singleton(program_id: str) -> VMState:
     vm.call_stack.append(StackFrame(function_name=FuncName("<main>")))
     vm._heap[singleton_addr] = singleton
     vm.call_stack[0].local_vars[singleton_var] = typed(singleton_addr)
+    vm.call_stack[0].local_vars[VarName(f"__entry_{pid_upper}")] = typed(
+        init_params_ref
+    )
 
     params_addr = Address("obj_2")
     vm.call_stack[0].local_vars[VarName("__ws_region")] = typed(params_addr)
@@ -82,9 +85,16 @@ def test_call_with_memory_dispatches_to_init_params():
     params_reg = Register("%r0")
     vm.current_frame.registers[params_reg] = typed(Address("arr_10"))
 
-    inst = CallWithMemory(func_name=FuncName(pid), params_reg=params_reg)
+    inst = CallWithMemory(location=VarName(f"__entry_{pid}"), memory=params_reg)
 
-    ctx = replace(_default_handler_context(), cfg=cfg, current_label=CodeLabel("entry"))
+    ctx = replace(
+        _default_handler_context(),
+        cfg=cfg,
+        registry=FunctionRegistry(
+            func_params={init_params_label: ["__call_arguments"]}
+        ),
+        current_label=CodeLabel("entry"),
+    )
     result = _handle_call_with_memory(inst, vm, ctx)
 
     assert result.handled
@@ -127,10 +137,17 @@ def test_call_with_memory_gives_the_callee_frame_the_caller_result_register():
 
     inst = CallWithMemory(
         result_reg=result_reg,
-        func_name=FuncName(pid),
-        params_reg=params_reg,
+        location=VarName(f"__entry_{pid}"),
+        memory=params_reg,
     )
-    ctx = replace(_default_handler_context(), cfg=cfg, current_label=CodeLabel("entry"))
+    ctx = replace(
+        _default_handler_context(),
+        cfg=cfg,
+        registry=FunctionRegistry(
+            func_params={init_params_label: ["__call_arguments"]}
+        ),
+        current_label=CodeLabel("entry"),
+    )
 
     result = _handle_call_with_memory(inst, vm, ctx)
 

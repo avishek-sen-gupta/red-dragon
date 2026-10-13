@@ -185,7 +185,7 @@ class TestCallFunctionToTyped:
             IRInstruction(
                 opcode=Opcode.CALL_FUNCTION,
                 result_reg=Register("%3"),
-                operands=["f", "%0", SpreadArguments(register="%1")],
+                operands=["f", "%0", SpreadArguments(register=Register("%1"))],
             )
         )
 
@@ -567,3 +567,34 @@ class TestTypedFieldAccess:
         inst = IRInstruction(opcode=Opcode.RETURN, operands=["%0"])
         typed = inst
         assert typed.value_reg == Register("%0")
+
+
+class TestCallWithMemoryToTyped:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_a_named_location_and_a_register_location(self):
+        from interpreter.instructions import CallWithMemory
+        from interpreter.var_name import VarName
+
+        named = IRInstruction(
+            opcode=Opcode.CALL_WITH_MEMORY,
+            result_reg=Register("%9"),
+            operands=["__entry_CALLEE", "%4"],
+        )
+        computed = IRInstruction(
+            opcode=Opcode.CALL_WITH_MEMORY,
+            result_reg=Register("%9"),
+            operands=["%7", "%4"],
+        )
+        assert (
+            type(named),
+            named.location,
+            named.memory,
+            computed.location,
+            str(computed),
+        ) == (
+            CallWithMemory,
+            VarName("__entry_CALLEE"),
+            Register("%4"),
+            Register("%7"),
+            "%9 = call_with_memory %7 %4",
+        )

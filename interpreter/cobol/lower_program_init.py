@@ -12,7 +12,6 @@ Emits (in order):
        CONST %run_reg, "func_<pid>_0"       → BoundFuncRef at runtime
        STORE_FIELD %ptr, run, %run_reg
        CONST %init_reg, "func_init_params_<pid>_0"  → BoundFuncRef
-       STORE_FIELD %ptr, __init_params__, %init_reg
        STORE_VAR __prog_<PID>, %ptr
        STORE_VAR __entry_<PID>, %init_reg
        BRANCH __after_<pid>_0            → skip over procedure body
@@ -110,11 +109,6 @@ def lower_program_init(
     init_reg = ctx.fresh_reg()
     ctx.emit_inst(
         Const.func_ref(init_reg, str(init_params_label), params=[], return_type=UNKNOWN)
-    )
-    ctx.emit_inst(
-        StoreField(
-            obj_reg=ptr_reg, field_name=FieldName("__init_params__"), value_reg=init_reg
-        )
     )
 
     ctx.emit_inst(StoreVar(name=singleton_var, value_reg=ptr_reg))

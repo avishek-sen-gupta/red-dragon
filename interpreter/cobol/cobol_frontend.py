@@ -248,7 +248,7 @@ class CobolFrontend(Frontend):
             self._ctx, self._program_id, sectioned.working_storage
         )
 
-        # Procedure division function — reachable only via __init_params__ dispatch
+        # Procedure division function — entered through the program's entry function
         proc_label = CodeLabel(f"func_{self._program_id.lower()}_0")
         self._ctx.emit_inst(Label_(label=proc_label))
 

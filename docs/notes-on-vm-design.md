@@ -435,14 +435,14 @@ address: 0 ........ 4095 | 4096 ......... 4096+a | 4096+a ......... | …
 
 ### 12.1 Program singletons
 
-Each program's lowering (`interpreter/cobol/lower_program_init.py`) emits an init block that runs once at load. It allocates WORKING-STORAGE and the special-registers region, and stores a singleton heap object in `__prog_<PID>` with fields `ws_handle`, `return_code_handle`, `run` (a `BoundFuncRef` to `func_<PID>_0`) and `__init_params__` (a `BoundFuncRef` to `func_init_params_<PID>_0`).
+Each program's lowering (`interpreter/cobol/lower_program_init.py`) emits an init block that runs once at load. It allocates WORKING-STORAGE and the special-registers region, and stores a singleton heap object in `__prog_<PID>` with fields `ws_handle`, `return_code_handle` and `run` (a `BoundFuncRef` to `func_<PID>_0`), and the init block registers the entry function `func_init_params_<PID>_0` under `__entry_<PID>`; that function declares `param:__call_arguments` and branches to the procedure.
 
 ### 12.2 CALL_WITH_MEMORY
 
 `CALL … USING` passes one address per argument ([ADR-150](architectural-design-decisions.md), replacing ADR-144's copy-in/copy-back):
 
 1. The caller builds an argument array in plain IR: `NEW_ARRAY` with a `count` field and, per argument, a `NEW_OBJECT` with `region`, `offset` and `omitted`. BY REFERENCE passes the argument's own region and offset. BY CONTENT, BY VALUE and literals pass a fresh `RegionId.CALL_ARGUMENT` copy.
-2. `_handle_call_with_memory` resolves the callee name (from `func_name`, or from `target_reg` for `CALL identifier`, trimmed and upper-cased), finds `__prog_<PID>` in scope, and dispatches to its `__init_params__`, binding the array as `__call_arguments` in the new frame.
+2. `_handle_call_with_memory` looks up the location's variable, binds the argument array to the callee's first declared parameter, and enters it; the COBOL lowering computes the location (`__entry_<NAME>`, trimmed and upper-cased in IR for `CALL identifier`) ([ADR-182](architectural-design-decisions.md)).
 3. The callee binds each LINKAGE 01 to its argument: a region and a shift from its static offset. An absent or OMITTED argument binds NULL ([ADR-152](architectural-design-decisions.md)).
 
 A literal callee that is not linked goes to `call_resolver` and stays symbolic. A runtime-resolved name that is not linked raises `UnresolvedProgramError`.
