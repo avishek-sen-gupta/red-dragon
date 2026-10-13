@@ -61,6 +61,10 @@ from interpreter.vm.vm_types import BuiltinResult
 logger = logging.getLogger(__name__)
 
 
+class MemoryNotReceivedError(RuntimeError):
+    """A CALL_WITH_MEMORY callee declares no parameter to bind the memory to."""
+
+
 class UnresolvedProgramError(RuntimeError):
     """A CALL whose location was computed at run time named nothing registered in the run unit.
 
@@ -763,7 +767,13 @@ def _enter(
     ctx: HandlerContext,
 ) -> ExecutionResult:
     label = entry.func_ref.label
-    params = ctx.registry.func_params.get(label, [])
+    match ctx.registry.func_params.get(label, []):
+        case [parameter, *_]:
+            receiver = VarName(parameter)
+        case _:
+            raise MemoryNotReceivedError(
+                f"{label} declares no parameter to receive the memory it is called with"
+            )
     return ExecutionResult.success(
         StateUpdate(
             call_push=StackFramePush(
@@ -774,6 +784,6 @@ def _enter(
             ),
             next_label=label,
             reasoning=f"call_with_memory {inst.location} -> {label}",
-            var_writes={VarName(name): memory for name in params[:1]},
+            var_writes={receiver: memory},
         )
     )
