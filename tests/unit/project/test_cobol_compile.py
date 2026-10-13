@@ -198,3 +198,10 @@ def test_compile_cobol_maps_every_compiled_program_to_its_persisted_ast():
         for source, ast in linked.ast_paths.items()
     } == {"__main__.cbl": "CALLER", "CALLEE.cbl": "CALLEE"}
     assert {ast.parent.parent for ast in linked.ast_paths.values()} == {Path("/tmp")}
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_the_default_ast_cache_is_readable_only_by_its_owner():
+    _, linked = compile_cobol(_HELLO, parser=make_cobol_parser())
+    (cache,) = {ast.parent for ast in linked.ast_paths.values()}
+    assert cache.stat().st_mode & 0o777 == 0o700
