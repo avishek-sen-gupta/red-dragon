@@ -10,6 +10,7 @@ from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.field_resolution import whole_field_extent
 from interpreter.cobol.linkage_binding import LinkageBinding
 from interpreter.cobol.linkage_record import LinkageRecord
+from interpreter.cobol.program_object import ARGUMENTS_PARAM, program_var
 from interpreter.cobol.sectioned_layout import (
     MaterialisedSectionedLayout,
     SectionedLayout,
@@ -91,9 +92,9 @@ def lower_sectioned_data_division(
     The WS region handle must already be stored in __ws_region by the caller
     (currently the inline shim in CobolFrontend; Task 5 will replace this
     with the program init block that loads it from the singleton HeapObject).
-    Each LINKAGE 01 is bound to its argument in __call_arguments, which
-    _handle_call_with_memory injects. LOCAL-STORAGE is freshly allocated on
-    every call.
+    Each LINKAGE 01 is bound to its argument in the entry function's
+    __call_arguments parameter. LOCAL-STORAGE is freshly allocated on every
+    call.
     """
     ws_reg = ctx.fresh_reg()
     ctx.emit_inst(LoadVar(result_reg=ws_reg, name=VarName("__ws_region")))
@@ -129,9 +130,7 @@ def lower_sectioned_data_division(
     # last-used state, and a callee's value has to outlive its own exit long
     # enough for the caller to copy it up (red-dragon-ltq6).
     singleton_reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        LoadVar(result_reg=singleton_reg, name=VarName(f"__prog_{program_id.upper()}"))
-    )
+    ctx.emit_inst(LoadVar(result_reg=singleton_reg, name=program_var(program_id)))
     sr_reg = ctx.fresh_reg()
     ctx.emit_inst(
         LoadField(
@@ -187,7 +186,7 @@ def _bind_parameter(
         ctx.fresh_label(f"lk_{tag}") for tag in ("present", "bind", "absent", "done")
     )
     args = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=args, name=VarName("__call_arguments")), span=None)
+    ctx.emit_inst(LoadVar(result_reg=args, name=ARGUMENTS_PARAM), span=None)
     count = _field(ctx, args, "count")
     index = ctx.const_to_reg(position, span=None)
     supplied = ctx.fresh_reg()

@@ -6,8 +6,19 @@ from interpreter.cobol.lower_program_init import (
     lower_ws_from_singleton,
 )
 from interpreter.cobol.statement_dispatch import dispatch_statement
-from interpreter.instructions import LoadField, LoadVar, StoreVar
-from interpreter.ir import Opcode
+from interpreter.frontend import make_cobol_parser
+from interpreter.instructions import (
+    Branch,
+    Const,
+    Label_,
+    LoadField,
+    LoadVar,
+    NewObject,
+    StoreVar,
+    Symbolic,
+)
+from interpreter.ir import CodeLabel, Opcode
+from interpreter.project.cobol_compile import compile_cobol
 from tests.covers import NotLanguageFeature, covers
 
 
@@ -108,3 +119,56 @@ def test_lower_ws_from_singleton_emits_store_var_ws_region():
     store_var_insts = [i for i in ctx.instructions if isinstance(i, StoreVar)]
     names = [str(i.name) for i in store_var_insts]
     assert "__ws_region" in names
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_lower_program_init_registers_the_program_and_its_entry_function():
+    ctx = EmitContext(dispatch_fn=dispatch_statement)
+    lower_program_init(ctx, "subprog", _ws_layout_5bytes())
+    program_object = next(i for i in ctx.instructions if isinstance(i, NewObject))
+    entry_ref = next(
+        i
+        for i in ctx.instructions
+        if isinstance(i, Const) and i.value == "func_init_params_subprog_0"
+    )
+    registered = {
+        str(i.name): i.value_reg
+        for i in ctx.instructions
+        if isinstance(i, StoreVar) and str(i.name).startswith(("__prog_", "__entry_"))
+    }
+    assert registered == {
+        "__prog_SUBPROG": program_object.result_reg,
+        "__entry_SUBPROG": entry_ref.result_reg,
+    }
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_the_entry_function_declares_the_call_arguments_parameter():
+    ctx = EmitContext(dispatch_fn=dispatch_statement)
+    lower_program_init(ctx, "SUBPROG", _ws_layout_5bytes())
+    start = next(
+        n
+        for n, i in enumerate(ctx.instructions)
+        if isinstance(i, Label_) and str(i.label) == "func_init_params_subprog_0"
+    )
+    declaration, onward = ctx.instructions[start + 1], ctx.instructions[start + 2]
+    assert (
+        type(declaration),
+        declaration.hint,
+        type(onward),
+        str(onward.label),
+    ) == (Symbolic, "param:__call_arguments", Branch, "func_subprog_0")
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_a_linked_entry_function_is_registered_with_its_parameter():
+    source = (
+        b"       IDENTIFICATION DIVISION.\n"
+        b"       PROGRAM-ID. CALLER.\n"
+        b"       PROCEDURE DIVISION.\n"
+        b"           GOBACK.\n"
+    )
+    _, linked = compile_cobol(source, parser=make_cobol_parser())
+    assert linked.merged_registry.func_params[
+        CodeLabel("__main__.func_init_params_caller_0")
+    ] == ["__call_arguments"]
