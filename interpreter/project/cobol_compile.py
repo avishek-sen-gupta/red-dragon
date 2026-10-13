@@ -104,7 +104,9 @@ def _cache_dir(given: Path | None) -> Path:
         case Path():
             return given
         case _:
-            return Path("/tmp") / uuid.uuid4().hex
+            created = Path("/tmp") / uuid.uuid4().hex
+            created.mkdir(mode=0o700)
+            return created
 
 
 @dataclass(frozen=True)
