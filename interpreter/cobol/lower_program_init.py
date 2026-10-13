@@ -14,12 +14,13 @@ Emits (in order):
        CONST %init_reg, "func_init_params_<pid>_0"  → BoundFuncRef
        STORE_FIELD %ptr, __init_params__, %init_reg
        STORE_VAR __prog_<PID>, %ptr
+       STORE_VAR __entry_<PID>, %init_reg
        BRANCH __after_<pid>_0            → skip over procedure body
 
   2. func_init_params function — called by _handle_call_with_memory:
        LABEL func_init_params_<pid>_0
-       BRANCH func_<pid>_0               → __call_arguments
-                                           already injected by handler
+       SYMBOLIC param:__call_arguments
+       BRANCH func_<pid>_0
 
 Returns the after_label (CodeLabel) that CobolFrontend must emit
 after the procedure body.
@@ -28,9 +29,16 @@ after the procedure body.
 from __future__ import annotations
 
 from cobol_memory.region_id import RegionId
+from interpreter import constants
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.lower_data_division import lower_data_division
+from interpreter.cobol.program_object import (
+    ARGUMENTS_PARAM,
+    WORKING_STORAGE_FIELD,
+    entry_var,
+    program_var,
+)
 from interpreter.cobol.special_registers import (
     RETURN_CODE_HANDLE,
     SPECIAL_REGISTERS_LAYOUT,
@@ -45,6 +53,7 @@ from interpreter.instructions import (
     NewObject,
     StoreField,
     StoreVar,
+    Symbolic,
 )
 from interpreter.ir import CodeLabel
 from interpreter.types.type_expr import UNKNOWN
@@ -62,12 +71,11 @@ def lower_program_init(
     after the procedure body.
     """
     pid_lower = program_id.lower()
-    pid_upper = program_id.upper()
 
     proc_label = CodeLabel(f"func_{pid_lower}_0")
     init_params_label = CodeLabel(f"func_init_params_{pid_lower}_0")
     after_label = CodeLabel(f"__after_{pid_lower}_0")
-    singleton_var = VarName(f"__prog_{pid_upper}")
+    singleton_var = program_var(program_id)
 
     # --- Init block ---
     ptr_reg = ctx.fresh_reg()
@@ -76,7 +84,7 @@ def lower_program_init(
     ws_reg = lower_data_division(ctx, ws_layout, RegionId.WORKING_STORAGE)
 
     ctx.emit_inst(
-        StoreField(obj_reg=ptr_reg, field_name=FieldName("ws_handle"), value_reg=ws_reg)
+        StoreField(obj_reg=ptr_reg, field_name=WORKING_STORAGE_FIELD, value_reg=ws_reg)
     )
 
     # RETURN-CODE (and future special registers) get their own region, isolated
@@ -110,11 +118,16 @@ def lower_program_init(
     )
 
     ctx.emit_inst(StoreVar(name=singleton_var, value_reg=ptr_reg))
+    ctx.emit_inst(StoreVar(name=entry_var(program_id), value_reg=init_reg))
     ctx.emit_inst(Branch(label=after_label))
 
-    # --- func_init_params function ---
-    # __call_arguments is injected by _handle_call_with_memory
     ctx.emit_inst(Label_(label=init_params_label))
+    ctx.emit_inst(
+        Symbolic(
+            result_reg=ctx.fresh_reg(),
+            hint=f"{constants.PARAM_PREFIX}{ARGUMENTS_PARAM}",
+        )
+    )
     ctx.emit_inst(Branch(label=proc_label))
 
     return after_label
@@ -126,16 +139,14 @@ def lower_ws_from_singleton(ctx: EmitContext, program_id: str) -> None:
     Must be called immediately after Label_(func_<pid>_0) and before
     lower_sectioned_data_division, so __ws_region is available.
     """
-    pid_upper = program_id.upper()
-
-    singleton_var = VarName(f"__prog_{pid_upper}")
+    singleton_var = program_var(program_id)
     singleton_reg = ctx.fresh_reg()
     ctx.emit_inst(LoadVar(result_reg=singleton_reg, name=singleton_var))
 
     ws_reg = ctx.fresh_reg()
     ctx.emit_inst(
         LoadField(
-            result_reg=ws_reg, obj_reg=singleton_reg, field_name=FieldName("ws_handle")
+            result_reg=ws_reg, obj_reg=singleton_reg, field_name=WORKING_STORAGE_FIELD
         )
     )
 
