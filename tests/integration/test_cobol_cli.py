@@ -4,6 +4,7 @@ through --search-dir."""
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 from tests.covers import NotLanguageFeature, covers
@@ -34,7 +35,7 @@ def _cli(*args: str) -> subprocess.CompletedProcess[str]:
         [sys.executable, "-m", "interpreter", *args],
         capture_output=True,
         text=True,
-        env=os.environ.copy(),
+        env={**os.environ, "TMPDIR": tempfile.gettempdir()},
         check=False,
     )
 
