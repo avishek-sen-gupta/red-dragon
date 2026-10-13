@@ -23,7 +23,7 @@ from interpreter.constants import Language
 from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.func_name import FuncName
 from interpreter.instructions import InstructionBase
-from interpreter.ir import CodeLabel
+from interpreter.ir import NO_LABEL, CodeLabel
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
 from interpreter.register import Register
@@ -135,7 +135,7 @@ class LinkedProgram:
     func_symbol_table: dict[CodeLabel, FuncRef] = field(default_factory=dict)
     class_symbol_table: dict[CodeLabel, ClassRef] = field(default_factory=dict)
     ast_paths: Mapping[Path, Path] = field(default_factory=dict)
-    entry_func_label: CodeLabel | None = None
+    entry_func_label: CodeLabel = NO_LABEL
     """Explicit entry function label.
 
     When several modules are linked (e.g. a COBOL main program plus the
@@ -143,7 +143,8 @@ class LinkedProgram:
     ``func_*`` entry predicate would be ambiguous. Callers that know which
     module is the entry point (the CICS region bootstrap) set this to the
     namespaced label of the main program's procedure-division function so
-    execution dispatches into it rather than a linked-in callee.
+    execution dispatches into it rather than a linked-in callee. NO_LABEL
+    when the compile records none.
     """
 
     def entry_points(

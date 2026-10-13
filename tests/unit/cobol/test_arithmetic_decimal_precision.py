@@ -76,17 +76,7 @@ def _ws_zoned(vm, name: str) -> int:
 def _compile_and_run(source: bytes):
     parser = make_cobol_parser()
     _, linked = compile_cobol(source, parser=parser)
-    # Entry point: the PROCEDURE DIVISION is lowered as func_<progid>_0.
-    # entry_func_label is None for single-module programs; fall back to the
-    # same func_* predicate that cicada's make_entry_point uses.
-    entry_label = getattr(linked, "entry_func_label", None)
-    if entry_label is not None:
-        ep = EntryPoint.function(lambda ref, _l=str(entry_label): str(ref.label) == _l)
-    else:
-        ep = EntryPoint.function(
-            lambda ref: str(ref.label).startswith("func_")
-            and not str(ref.label).startswith("func_init_params_")
-        )
+    ep = EntryPoint.function(lambda ref: ref.label == linked.entry_func_label)
     vm = run_linked(
         linked,
         entry_point=ep,

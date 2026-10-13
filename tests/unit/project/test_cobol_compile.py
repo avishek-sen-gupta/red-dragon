@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from cobol_asg.ast_store import AstParseError
+from interpreter.constants import Language
 from interpreter.frontend import make_cobol_parser
 from interpreter.frontend_extension_lowering import (
     RedDragonExtensionLoweringStrategy,
@@ -16,6 +17,8 @@ from interpreter.project.cobol_compile import (
     compile_cobol_module,
     parallel_parse_to_cache,
 )
+from interpreter.ir import NO_LABEL
+from interpreter.project.compiler import compile_directory
 from interpreter.project.source_file import SourceFile
 from interpreter.project.types import LinkedProgram, ModuleUnit
 from interpreter.run import EntryPoint, initial_vm_state, run_linked
@@ -298,3 +301,9 @@ def test_a_program_that_fails_to_parse_aborts_the_compile_even_when_tolerant():
             ),
             tolerant=True,
         )
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_a_program_without_an_entry_function_carries_the_null_label(tmp_path):
+    (tmp_path / "main.py").write_text("x = 1\n")
+    assert compile_directory(tmp_path, Language.PYTHON).entry_func_label is NO_LABEL
