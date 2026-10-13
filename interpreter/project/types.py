@@ -7,7 +7,7 @@ data model for the multi-file pipeline.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -134,6 +134,7 @@ class LinkedProgram:
     unresolved_imports: list[ImportRef] = field(default_factory=list)
     func_symbol_table: dict[CodeLabel, FuncRef] = field(default_factory=dict)
     class_symbol_table: dict[CodeLabel, ClassRef] = field(default_factory=dict)
+    ast_paths: Mapping[Path, Path] = field(default_factory=dict)
     entry_func_label: CodeLabel | None = None
     """Explicit entry function label.
 

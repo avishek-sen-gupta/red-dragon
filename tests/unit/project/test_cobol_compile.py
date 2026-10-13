@@ -182,3 +182,19 @@ def test_compile_cobol_without_ast_cache_dir_uses_auto_temp():
     _, linked = compile_cobol(_HELLO, parser=make_cobol_parser())
     assert isinstance(linked, LinkedProgram)
     assert linked.merged_cfg is not None
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_compile_cobol_maps_every_compiled_program_to_its_persisted_ast():
+    _, linked = compile_cobol(
+        _CALLER,
+        parser=make_cobol_parser(),
+        programs=(SourceFile(Path("CALLEE.cbl"), _CALLEE),),
+    )
+
+    assert sorted(str(p) for p in linked.ast_paths) == ["CALLEE.cbl", "__main__.cbl"]
+    assert {
+        str(source): json.loads(ast.read_text())["program_id"]
+        for source, ast in linked.ast_paths.items()
+    } == {"__main__.cbl": "CALLER", "CALLEE.cbl": "CALLEE"}
+    assert {ast.parent.parent for ast in linked.ast_paths.values()} == {Path("/tmp")}
