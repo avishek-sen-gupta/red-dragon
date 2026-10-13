@@ -53,6 +53,8 @@ def test_lower_from_ast_dict_applies_preprocessor():
     calls: list[dict] = []
 
     class _SpyStrategy:
+        name = "spy"
+
         def handles(self, stmt) -> bool:  # noqa: ARG002
             return False
 

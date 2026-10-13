@@ -42,6 +42,8 @@ class _FakeExecSqlDialectParser:
 
 
 class _SqlSpy:
+    name = "sql-spy"
+
     def __init__(self):
         self.lowered = []
 

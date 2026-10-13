@@ -21,6 +21,10 @@ if TYPE_CHECKING:
 class RedDragonExtensionLoweringStrategy(Protocol):
     """One injectable extension-lowering strategy (CICS, SQL, …)."""
 
+    name: str
+    """A stable name for this extension (``"cics"``, ``"sql"``): part of the
+    digest that names a program's compiled files."""
+
     def handles(self, stmt: Any) -> bool:
         """True if this strategy owns ``stmt`` (e.g. isinstance(stmt, YourDialectStatement))."""
         ...
