@@ -185,7 +185,8 @@ def bridge_jar() -> str:
     the required PROLEAP_BRIDGE_JAR env. No default, no skip: if it's unset, a test
     that needs the JAR fails loudly (KeyError) instead of silently skipping or
     guessing a path. Fixtures/tests that build a parser take this and use the
-    returned path; run()/compile_directory read the same env var themselves.
+    returned path; make_cobol_parser and get_cobol_frontend read the same env var
+    themselves.
     """
     return os.environ["PROLEAP_BRIDGE_JAR"]
 
