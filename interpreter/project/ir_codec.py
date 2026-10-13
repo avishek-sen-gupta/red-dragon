@@ -46,7 +46,7 @@ from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 from interpreter.types.var_scope_info import VarScopeInfo
 from interpreter.var_name import NO_VAR_NAME, NoVarName, VarName
 
-type _Wire = bool | int | float | str | list[_Wire] | dict[str, _Wire]
+type Wire = bool | int | float | str | list[Wire] | dict[str, Wire]
 
 _DATACLASSES: tuple[type, ...] = (
     *typing.get_args(Instruction),
@@ -109,7 +109,7 @@ class IrCodec:
         }
         self._enums: Mapping[str, type[enum.Enum]] = {e.__name__: e for e in _ENUMS}
         self._encoders: tuple[
-            tuple[type | tuple[type, ...], Callable[[object], _Wire]], ...
+            tuple[type | tuple[type, ...], Callable[[object], Wire]], ...
         ] = (
             (enum.Enum, self._enum),
             (type(None), lambda _v: self._tagged("none", 0)),
@@ -124,7 +124,7 @@ class IrCodec:
             (SourceLocation, self._loc),
             (te.UnknownType, lambda _v: self._tagged("unknown_type", 0)),
         )
-        self._decoders: Mapping[str, Callable[[_Wire], object]] = {
+        self._decoders: Mapping[str, Callable[[Wire], object]] = {
             "enum": self._decode_enum,
             "decimal": lambda v: from_text(str(v)),
             "bytes": lambda v: bytes.fromhex(str(v)),
@@ -138,14 +138,20 @@ class IrCodec:
             "dc": self._decode_dataclass,
         }
 
-    def encode(self, value: object) -> _Wire:
+    def encode(self, value: object) -> Wire:
         encoder = next(
             (enc for kind, enc in self._encoders if isinstance(value, kind)),
             self._dataclass,
         )
         return encoder(value)
 
-    def decode(self, wire: _Wire) -> object:
+    def decode_as[T](self, wire: Wire, cls: type[T]) -> T:
+        value = self.decode(wire)
+        if isinstance(value, cls):
+            return value
+        raise UnitFormatError(f"expected {cls.__name__}, found {type(value).__name__}")
+
+    def decode(self, wire: Wire) -> object:
         match wire:
             case list():
                 return [self.decode(item) for item in wire]
@@ -154,17 +160,17 @@ class IrCodec:
             case _:
                 return wire
 
-    def _tagged(self, kind: str, payload: _Wire) -> _Wire:
+    def _tagged(self, kind: str, payload: Wire) -> Wire:
         return {"$": kind, "v": payload}
 
-    def _native(self, value: object) -> _Wire:
+    def _native(self, value: object) -> Wire:
         match value:
             case bool() | int() | float() | str():
                 return value
             case _:
                 raise UnitFormatError(f"not a JSON value: {value!r}")
 
-    def _enum(self, value: object) -> _Wire:
+    def _enum(self, value: object) -> Wire:
         match value:
             case enum.Enum():
                 return self._tagged(
@@ -173,40 +179,40 @@ class IrCodec:
             case _:
                 raise UnitFormatError(f"not an enum: {value!r}")
 
-    def _number(self, value: object) -> _Wire:
+    def _number(self, value: object) -> Wire:
         match value:
             case CobolNumber():
                 return self._tagged("decimal", to_text(value))
             case _:
                 raise UnitFormatError(f"not a COBOL number: {value!r}")
 
-    def _bytes(self, value: object) -> _Wire:
+    def _bytes(self, value: object) -> Wire:
         match value:
             case bytes():
                 return self._tagged("bytes", value.hex())
             case _:
                 raise UnitFormatError(f"not bytes: {value!r}")
 
-    def _list(self, value: object) -> _Wire:
+    def _list(self, value: object) -> Wire:
         match value:
             case list() | tuple():
                 return [self.encode(item) for item in value]
             case _:
                 raise UnitFormatError(f"not a sequence: {value!r}")
 
-    def _frozenset(self, value: object) -> _Wire:
+    def _frozenset(self, value: object) -> Wire:
         match value:
             case frozenset():
                 by_text = {json.dumps(wire): wire for wire in map(self.encode, value)}
-                ordered: list[_Wire] = [by_text[text] for text in sorted(by_text)]
+                ordered: list[Wire] = [by_text[text] for text in sorted(by_text)]
                 return self._tagged("frozenset", ordered)
             case _:
                 raise UnitFormatError(f"not a frozenset: {value!r}")
 
-    def _dict(self, value: object) -> _Wire:
+    def _dict(self, value: object) -> Wire:
         match value:
             case dict():
-                pairs: list[_Wire] = [
+                pairs: list[Wire] = [
                     [self.encode(name), self.encode(item)]
                     for name, item in value.items()
                 ]
@@ -214,7 +220,7 @@ class IrCodec:
             case _:
                 raise UnitFormatError(f"not a dict: {value!r}")
 
-    def _loc(self, value: object) -> _Wire:
+    def _loc(self, value: object) -> Wire:
         match value:
             case SourceLocation():
                 return self._tagged(
@@ -224,7 +230,7 @@ class IrCodec:
             case _:
                 raise UnitFormatError(f"not a source location: {value!r}")
 
-    def _dataclass(self, value: object) -> _Wire:
+    def _dataclass(self, value: object) -> Wire:
         match value:
             case _ if dataclasses.is_dataclass(value) and not isinstance(value, type):
                 fields = {
@@ -235,42 +241,42 @@ class IrCodec:
             case _:
                 raise UnitFormatError(f"no codec for {type(value).__name__}: {value!r}")
 
-    def _decoder(self, kind: str) -> Callable[[_Wire], object]:
+    def _decoder(self, kind: str) -> Callable[[Wire], object]:
         match self._decoders.get(kind):
             case None:
                 raise UnitFormatError(f"unknown kind {kind!r}")
             case decoder:
                 return decoder
 
-    def _items(self, wire: _Wire) -> Sequence[object]:
+    def _items(self, wire: Wire) -> Sequence[object]:
         match wire:
             case list():
                 return [self.decode(item) for item in wire]
             case _:
                 raise UnitFormatError(f"expected a list, found {wire!r}")
 
-    def _decode_enum(self, wire: _Wire) -> object:
+    def _decode_enum(self, wire: Wire) -> object:
         match wire:
             case {"c": str(name), "v": value} if name in self._enums:
                 return self._enums[name](self.decode(value))
             case _:
                 raise UnitFormatError(f"unknown enum {wire!r}")
 
-    def _decode_dict(self, wire: _Wire) -> object:
+    def _decode_dict(self, wire: Wire) -> object:
         match wire:
             case list():
                 return dict(self._pair(item) for item in wire)
             case _:
                 raise UnitFormatError(f"expected dict pairs, found {wire!r}")
 
-    def _pair(self, wire: _Wire) -> tuple[object, object]:
+    def _pair(self, wire: Wire) -> tuple[object, object]:
         match wire:
             case [name, value]:
                 return self.decode(name), self.decode(value)
             case _:
                 raise UnitFormatError(f"expected a pair, found {wire!r}")
 
-    def _decode_loc(self, wire: _Wire) -> object:
+    def _decode_loc(self, wire: Wire) -> object:
         match wire:
             case [int(start_line), int(start_col), int(end_line), int(end_col)]:
                 return SourceLocation(
@@ -282,7 +288,7 @@ class IrCodec:
             case _:
                 raise UnitFormatError(f"expected a source location, found {wire!r}")
 
-    def _decode_dataclass(self, wire: _Wire) -> object:
+    def _decode_dataclass(self, wire: Wire) -> object:
         match wire:
             case {"c": str(name), "v": dict(fields)} if name in self._classes:
                 return self._construct(self._classes[name], fields)
@@ -291,7 +297,7 @@ class IrCodec:
             case _:
                 raise UnitFormatError(f"expected a dataclass, found {wire!r}")
 
-    def _construct(self, cls: type, fields: Mapping[str, _Wire]) -> object:
+    def _construct(self, cls: type, fields: Mapping[str, Wire]) -> object:
         match _SINGLETONS.get(cls):
             case None:
                 return cls(
