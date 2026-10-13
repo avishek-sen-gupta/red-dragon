@@ -162,7 +162,7 @@ def test_a_spec_links_a_subprogram_no_static_call_scan_can_discover():
         linked_subprogram_sources=lambda: {"DNCALLEE": _DATA_NAME_CALLEE},
     )
 
-    _, linked = compile_program(_DATA_NAME_CALLER, make_cobol_parser(), [spec])
+    linked = compile_program(_DATA_NAME_CALLER, make_cobol_parser(), [spec])
 
     assert _linked_stems(linked) == ["DNCALLEE", "__main__", "__start_up__"]
 
@@ -170,7 +170,7 @@ def test_a_spec_links_a_subprogram_no_static_call_scan_can_discover():
 def test_the_caller_links_a_subprogram_no_static_call_scan_can_discover():
     """A caller with no coprocessor links a data-name callee itself, as a link
     list names the members of a load module."""
-    _, linked = compile_program(
+    linked = compile_program(
         _DATA_NAME_CALLER,
         make_cobol_parser(),
         [],
@@ -193,7 +193,7 @@ def test_specs_contributions_merge_and_a_default_spec_contributes_nothing():
         linked_subprogram_sources=lambda: {"PGMTWO": _callee("PGMTWO")},
     )
 
-    _, linked = compile_program(
+    linked = compile_program(
         _TRIVIAL_PROGRAM,
         make_cobol_parser(),
         [quiet, first, second],
@@ -232,7 +232,7 @@ def test_every_compiled_program_is_rewritten_by_every_spec(tmp_path, caplog):
     specs = [CoprocessorSpec(n, _FakeStrategy, _logging_rewrite(n)) for n in "ab"]
 
     with caplog.at_level(logging.INFO, logger=__name__):
-        _, linked = compile_program(
+        linked = compile_program(
             _CALLS_BOTH_KINDS,
             make_cobol_parser(),
             specs,
@@ -253,7 +253,7 @@ def test_a_linked_subprogram_wins_over_a_discovered_one_of_the_same_name(
     tmp_path, linked_name
 ):
     (tmp_path / "DISKCALL.cbl").write_bytes(_callee("DISKCALL"))
-    _, linked = compile_program(
+    linked = compile_program(
         _CALLS_BOTH_KINDS,
         make_cobol_parser(),
         [],

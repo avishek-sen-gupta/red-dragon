@@ -25,8 +25,7 @@ _SOURCE = (
 
 
 def _linked():
-    _, linked = compile_cobol(_SOURCE, parser=make_cobol_parser())
-    return linked
+    return compile_cobol(_SOURCE, parser=make_cobol_parser())
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

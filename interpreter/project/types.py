@@ -100,6 +100,7 @@ class ModuleUnit:
     symbol_table: SymbolTable = field(default_factory=SymbolTable.empty)
     entry_label: CodeLabel = NO_LABEL
     data_layout: dict[str, dict] = field(default_factory=dict)
+    start_up: tuple[InstructionBase, ...] = ()
 
 
 NO_MODULE_UNIT = ModuleUnit(

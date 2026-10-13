@@ -90,7 +90,7 @@ def run_cobol_programs(
     from interpreter.run import EntryPoint, initial_vm_state, run_linked
 
     main_id = _program_id(main)
-    _, linked = compile_cobol(
+    linked = compile_cobol(
         to_fixed(main).encode(),
         parser=make_cobol_parser(),
         programs=tuple(
@@ -201,7 +201,7 @@ def compile_programs_in(directory: Path, main: str) -> LinkedProgram:
 
     main_path = directory / f"{main}.cbl"
     copybook_dirs = [directory, *sorted(p for p in directory.rglob("*") if p.is_dir())]
-    _, linked = compile_cobol(
+    linked = compile_cobol(
         main_path.read_bytes(),
         parser=make_cobol_parser(copybook_dirs=copybook_dirs),
         programs=tuple(

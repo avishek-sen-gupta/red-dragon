@@ -16,5 +16,5 @@ def test_compile_cobol_defaults_away_from_none():
     assert sig.parameters["copybook_dirs"].default == ()
     assert sig.parameters["programs"].default == ()
     assert "source_search_dirs" not in sig.parameters
-    # ast_cache_dir stays untouched — deferred, ephemeral-vs-owned lifecycle sentinel
-    assert sig.parameters["ast_cache_dir"].default is None
+    # work_dir stays None — deferred, ephemeral-vs-owned lifecycle sentinel
+    assert sig.parameters["work_dir"].default is None

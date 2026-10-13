@@ -168,7 +168,7 @@ def test_a_linked_entry_function_is_registered_with_its_parameter():
         b"       PROCEDURE DIVISION.\n"
         b"           GOBACK.\n"
     )
-    _, linked = compile_cobol(source, parser=make_cobol_parser())
+    linked = compile_cobol(source, parser=make_cobol_parser())
     assert linked.merged_registry.func_params[
         CodeLabel("__main__.func_init_params_caller_0")
     ] == ["__call_arguments"]
