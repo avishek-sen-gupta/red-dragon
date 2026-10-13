@@ -55,3 +55,13 @@ def test_literal_scale():
     assert literal_scale("2023") == Scale(4, 0)
     assert literal_scale("-0.007") == Scale(1, 3)
     assert literal_scale(".5") == Scale(1, 1)
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_text_round_trips_a_number_exactly():
+    from cobol_numeric.number import from_literal, from_text, to_text
+
+    values = (from_literal("12.50"), from_text("0E-7"), from_text("-1.5E+3"))
+    assert [
+        (from_text(to_text(v)), from_text(to_text(v)).as_tuple()) for v in values
+    ] == [(v, v.as_tuple()) for v in values]
