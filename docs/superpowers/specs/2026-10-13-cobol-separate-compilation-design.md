@@ -18,7 +18,8 @@ is linked into many run units, across processes.
   existing file is still good (copybook contents, lowering version, truncated
   files) is later work.
 - Stages are chained only through files, inside one `compile_cobol` call as well.
-- The unit format is typed JSON covering every instruction class.
+- The unit and linked formats are typed JSON covering every instruction class,
+  each with its own codec class over a shared instruction codec.
 - The serialiser uses one codec per field type, driven by the instruction
   dataclasses' own annotations; there are no mirror models.
 - File names carry a digest of the source bytes and the lowering settings.
@@ -61,29 +62,33 @@ language-neutral fields:
 
 `type_env_builder` is not stored: it is always empty for COBOL.
 
-### 3. The codec
+### 3. The codecs
 
-`interpreter/project/unit_codec.py`, language-neutral:
+Three language-neutral classes in `interpreter/project/`, one per file:
 
-- An instruction is `{"op": <class name>, <field>: <encoded value>, …}`. Encoding
-  walks the dataclass's fields; decoding looks the class up by `op` and
-  constructs it, so the result is the real instruction type.
-- One codec per field type: `Register`, `VarName`, `FieldName`, `FuncName`,
-  `ContinuationName`, `CodeLabel` and their null objects, `SourceLocation`,
-  enums, tuples, `SpreadArguments`, `PathName`, every `TypeExpr` variant, and a
-  tagged union for `Const.value` (int, float, str, bool, none, Decimal, bytes,
-  lists of those).
-- The tables a unit and a linked program carry: `ExportTable` (with `FuncRef`,
-  `ClassRef`), `ImportRef`, `SymbolTable` (`ClassInfo`, `FieldInfo`), the data
-  layout.
-- An unknown `op`, a field type with no codec, or a format version it does not
-  read raises `UnitFormatError` naming the file.
+- `IrCodec` (`ir_codec.py`) — instructions and the values in their fields, shared
+  by both file formats.
+  - An instruction is `{"op": <class name>, <field>: <encoded value>, …}`.
+    Encoding walks the dataclass's fields; decoding looks the class up by `op`
+    and constructs it, so the result is the real instruction type.
+  - One codec per field type: `Register`, `VarName`, `FieldName`, `FuncName`,
+    `ContinuationName`, `CodeLabel` and their null objects, `SourceLocation`,
+    enums, tuples, `SpreadArguments`, `PathName`, every `TypeExpr` variant, and a
+    tagged union for `Const.value` (int, float, str, bool, none, Decimal, bytes,
+    lists of those).
+  - The tables both formats carry: `ExportTable` (with `FuncRef`, `ClassRef`),
+    `ImportRef`, `SymbolTable` (`ClassInfo`, `FieldInfo`), the data layout.
+- `UnitCodec` (`unit_codec.py`) — a `ModuleUnit` to and from its `.unit.json`
+  file, with its own format version.
+- `LinkedCodec` (`linked_codec.py`) — a `LinkedProgram` to and from its
+  `.linked.json` file, with its own format version. Reading rebuilds
+  `merged_cfg` with `build_cfg(merged_ir)` and `merged_registry` with
+  `build_registry(...)`: both are derived from the merged IR, and execution uses
+  only the CFG's label lookup and program-order fall-through (red-dragon-dp2o).
 
-`write_unit` / `read_unit` and `write_linked` / `read_linked` are the file
-boundary. `read_linked` rebuilds `merged_cfg` with `build_cfg(merged_ir)` and
-`merged_registry` with `build_registry(...)`: both are derived from the merged
-IR, and execution uses only the CFG's label lookup and program-order fall-through
-(red-dragon-dp2o).
+`UnitCodec` and `LinkedCodec` take an `IrCodec` at construction, write and read
+their file, and raise `UnitFormatError` naming the file on an unknown `op`, a
+field type with no codec, or a format version they do not read.
 
 ### 4. The stages
 
@@ -100,7 +105,7 @@ In `interpreter/project/cobol_compile.py`:
   builds the star import graph from the main unit, prepends the COBOL run-unit
   allocation, calls `link_modules`, sets `entry_func_label`, and writes the
   linked file, unless it exists.
-- `compile_cobol(...)` runs parse, lower and link, then `read_linked`, and
+- `compile_cobol(...)` runs parse, lower and link, then reads the linked file with `LinkedCodec`, and
   returns the `LinkedProgram`. `ast_cache_dir` becomes `work_dir` (a new temp
   directory when omitted).
 
