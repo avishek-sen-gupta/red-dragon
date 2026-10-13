@@ -26,7 +26,7 @@ from tests.integration.cobol_helpers import (
 
 @pytest.fixture(autouse=True)
 def _require_bridge_jar(bridge_jar):
-    """Enforce the required PROLEAP_BRIDGE_JAR for run()/compile_directory-based
+    """Enforce the required PROLEAP_BRIDGE_JAR for run()/compile_cobol-based
     tests (fails loudly via bridge_jar if it's unset)."""
 
 
