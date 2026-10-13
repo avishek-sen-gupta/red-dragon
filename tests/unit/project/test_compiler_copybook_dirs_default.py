@@ -6,8 +6,8 @@ from tests.covers import NotLanguageFeature, covers
 
 class TestCompileCopybookDirsDefault:
     @covers(NotLanguageFeature.INFRASTRUCTURE)
-    def test_copybook_dirs_defaults_to_empty_list(self):
+    def test_compile_module_takes_no_copybook_dirs(self):
         sig = inspect.signature(compile_module)
-        assert sig.parameters["copybook_dirs"].default == []
+        assert "copybook_dirs" not in sig.parameters
         # source stays untouched — deferred, its None means "derive from file_path"
         assert sig.parameters["source"].default is None

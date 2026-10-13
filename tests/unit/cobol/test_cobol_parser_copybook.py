@@ -129,18 +129,3 @@ def test_get_cobol_frontend_builds_a_proleap_backed_frontend():
     assert type(frontend._parser) is ProLeapCobolParser
     assert frontend._parser._copybook_dirs == [Path("/proj/cpy")]
     assert frontend._tolerant is True
-
-
-@covers(CobolFeature.MULTI_FILE_IMPORTS)
-def test_collect_project_copybook_dirs(tmp_path):
-    from interpreter.project.compiler import _collect_copybook_dirs
-
-    root = tmp_path.resolve()
-    (root / "cbl").mkdir()
-    (root / "cpy").mkdir()
-    (root / "cpy-bms").mkdir()
-    dirs = _collect_copybook_dirs(root)
-    assert root in dirs
-    assert root / "cpy" in dirs
-    assert root / "cpy-bms" in dirs
-    assert root / "cbl" in dirs

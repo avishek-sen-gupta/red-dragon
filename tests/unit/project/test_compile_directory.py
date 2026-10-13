@@ -1,5 +1,7 @@
 """Tests for compile_directory — compile all source files in a directory tree."""
 
+import pytest
+
 from interpreter.constants import Language
 from interpreter.project.compiler import compile_directory
 from interpreter.project.types import LinkedProgram
@@ -57,3 +59,10 @@ class TestCompileDirectory:
 
         assert linked.merged_cfg.entry is not None
         assert linked.merged_cfg.entry in linked.merged_cfg.blocks
+
+    def test_rejects_a_language_with_no_source_extensions(self, tmp_path):
+        (tmp_path / "MAIN.cbl").write_text("       PROGRAM-ID. MAIN.\n")
+        with pytest.raises(
+            ValueError, match="no source extensions registered for cobol"
+        ):
+            compile_directory(tmp_path, Language.COBOL)
