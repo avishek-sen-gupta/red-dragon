@@ -188,10 +188,10 @@ With no file argument, `interpreter.py` runs a built-in factorial demo.
 
 ```bash
 uv run python -m interpreter myprogram.cbl
-uv run python -m interpreter cobol/ --entry MAINPROG --max-steps 100000 --log-level INFO
+uv run python -m interpreter cobol/MAINPROG.cbl --search-dir cobol/ --max-steps 100000 --log-level INFO
 ```
 
-`python -m interpreter <path> [--entry PROG]` compiles a COBOL file, or a directory of sources linked together, and runs it. Other flags: `--max-steps` (default 50000), `--log-level`, `--verbose`. Set `PROLEAP_BRIDGE_JAR` to use a bridge JAR other than the default build output.
+`python -m interpreter MAIN.cbl [--search-dir DIR]...` compiles the main program and every program it statically CALLs that is found in the search directories (searched in order), then runs it from the main program. The search directories are also the copybook path. Other flags: `--max-steps` (default 50000), `--log-level`, `--verbose`. Set `PROLEAP_BRIDGE_JAR` to use a bridge JAR other than the default build output.
 
 ### Programmatic API
 
