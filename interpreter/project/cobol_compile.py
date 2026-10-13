@@ -170,7 +170,8 @@ def compile_cobol(
     Compiles exactly *programs* besides the main one and searches no directory;
     finding them is the caller's job (see cobol_discovery). Two programs with the
     same path: the later one is compiled. A program that fails to lower is
-    skipped with a warning.
+    skipped with a warning; one that fails to parse aborts the compile with
+    AstParseError, tolerant or not.
 
     Always uses the two-phase AST cache: Phase 1 parses all sources to
     ast_cache_dir in parallel; Phase 2 loads each JSON and lowers sequentially

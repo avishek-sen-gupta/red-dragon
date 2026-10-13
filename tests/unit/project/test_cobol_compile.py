@@ -1,8 +1,16 @@
 import hashlib
 import json
+import logging
+from collections.abc import Mapping
 from pathlib import Path
 
+import pytest
+
+from cobol_asg.ast_store import AstParseError
 from interpreter.frontend import make_cobol_parser
+from interpreter.frontend_extension_lowering import (
+    RedDragonExtensionLoweringStrategy,
+)
 from interpreter.project.cobol_compile import (
     compile_cobol,
     compile_cobol_module,
@@ -205,3 +213,88 @@ def test_the_default_ast_cache_is_readable_only_by_its_owner():
     _, linked = compile_cobol(_HELLO, parser=make_cobol_parser())
     (cache,) = {ast.parent for ast in linked.ast_paths.values()}
     assert cache.stat().st_mode & 0o777 == 0o700
+
+
+def _program(program_id: str) -> bytes:
+    return (
+        "       IDENTIFICATION DIVISION.\n"
+        f"       PROGRAM-ID. {program_id}.\n"
+        "       PROCEDURE DIVISION.\n"
+        "           GOBACK.\n"
+    ).encode()
+
+
+class _FailsToLower(RedDragonExtensionLoweringStrategy):
+    """Raises while lowering the one program it names."""
+
+    def __init__(self, program_id: str) -> None:
+        self._program_id = program_id
+
+    def handles(self, stmt) -> bool:
+        return False
+
+    def preprocess_program_dict[V](self, data: Mapping[str, V]) -> dict[str, V]:
+        if data["program_id"] == self._program_id:
+            raise ValueError(f"cannot lower {self._program_id}")
+        return dict(data)
+
+    def on_procedure_entry(self, ctx, materialised) -> None:
+        return None
+
+    def lower(self, ctx, stmt, materialised) -> None:
+        return None
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_a_program_that_fails_to_lower_is_skipped_with_a_warning(caplog):
+    with caplog.at_level(logging.WARNING, logger="interpreter.project.cobol_compile"):
+        _, linked = compile_cobol(
+            _CALLER,
+            parser=make_cobol_parser(),
+            programs=(
+                SourceFile(Path("BROKEN.cbl"), _program("BROKEN")),
+                SourceFile(Path("CALLEE.cbl"), _CALLEE),
+            ),
+            extension_strategies=(_FailsToLower("BROKEN"),),
+        )
+
+    assert {str(p) for p in linked.modules} == {
+        "CALLEE.cbl",
+        "__main__.cbl",
+        "__start_up__",
+    }
+    assert {str(p) for p in linked.ast_paths} == {"CALLEE.cbl", "__main__.cbl"}
+    assert [r.getMessage() for r in caplog.records] == [
+        "compile_cobol: BROKEN failed to lower — skipping"
+    ]
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_the_later_of_two_programs_with_the_same_path_is_compiled():
+    _, linked = compile_cobol(
+        _CALLER,
+        parser=make_cobol_parser(),
+        programs=(
+            SourceFile(Path("CALLEE.cbl"), _program("FIRSTONE")),
+            SourceFile(Path("CALLEE.cbl"), _program("SECONDONE")),
+        ),
+    )
+
+    assert {
+        str(source): json.loads(ast.read_text())["program_id"]
+        for source, ast in linked.ast_paths.items()
+    } == {"__main__.cbl": "CALLER", "CALLEE.cbl": "SECONDONE"}
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_a_program_that_fails_to_parse_aborts_the_compile_even_when_tolerant():
+    with pytest.raises(AstParseError, match="BROKEN"):
+        compile_cobol(
+            _CALLER,
+            parser=make_cobol_parser(),
+            programs=(
+                SourceFile(Path("BROKEN.cbl"), b"THIS IS NOT COBOL AT ALL.\n"),
+                SourceFile(Path("CALLEE.cbl"), _CALLEE),
+            ),
+            tolerant=True,
+        )
