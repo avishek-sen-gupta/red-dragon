@@ -29,12 +29,13 @@ from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringSt
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.frontends import get_cobol_frontend
 from interpreter.ir import CodeLabel
+from interpreter.project.cobol_discovery import discover_callee_programs
 from interpreter.project.compiler import build_export_table
 from interpreter.project.imports import extract_imports
 from interpreter.project.linker import link_modules
-from interpreter.project.resolver import get_resolver, topological_sort
+from interpreter.project.resolver import topological_sort
 from interpreter.project.start_up import with_start_up
-from interpreter.project.types import ImportKind, LinkedProgram, ModuleUnit
+from interpreter.project.types import LinkedProgram, ModuleUnit
 
 logger = logging.getLogger(__name__)
 
@@ -138,18 +139,12 @@ def compile_cobol(
 
         sub_sources: dict[str, bytes] = dict(extra_subprogram_sources)
 
-        # Resolve on-disk callees by searching source_search_dirs in order (the
-        # first that resolves a given CALL target wins), applying source_transform
-        # to whatever's read. An empty sequence means no directories were given —
-        # disk resolution only runs when a caller opts in with at least one.
-        disk_sources: dict[Path, bytes] = {}
-        if source_search_dirs:
-            disk_sources = _resolve_call_sources(
-                source,
-                main_path,
-                [d.resolve() for d in source_search_dirs],
-                source_transform,
+        disk_sources: dict[Path, bytes] = {
+            found.path: found.source
+            for found in discover_callee_programs(
+                source, source_search_dirs, source_transform
             )
+        }
 
         all_sources: dict[Path, bytes] = {main_path: source}
         for prog_name, prog_src in sub_sources.items():
@@ -247,50 +242,3 @@ def compile_cobol(
     finally:
         if _owned_tmp is not None:
             _owned_tmp.cleanup()
-
-
-def _resolve_call_sources(
-    main_source: bytes,
-    main_path: Path,
-    source_search_dirs: Sequence[Path],
-    source_transform: Callable[[str], str],
-) -> dict[Path, bytes]:
-    """Transitively resolve CALL targets reachable from the main program on disk.
-
-    Walks CALL edges via extract_imports + CobolImportResolver, trying each of
-    source_search_dirs in order for a given CALL target (the first that
-    resolves it wins), reads the resolved program source, applies
-    source_transform, and returns {absolute_path: transformed_bytes} for every
-    callee found. Unresolvable CALL targets (no matching .cbl in any of the
-    directories) are skipped.
-    """
-    resolver = get_resolver(Language.COBOL)
-    resolved: dict[Path, bytes] = {}
-
-    pending: list[tuple[bytes, Path]] = [(main_source, main_path)]
-    seen_paths: set[Path] = {main_path.resolve()}
-
-    while pending:
-        src, path = pending.pop()
-        for ref in extract_imports(src, path, Language.COBOL):
-            if ref.kind != ImportKind.REQUIRE:
-                continue  # COPY (INCLUDE) is handled by the parser's copybook dirs
-            for source_search_dir in source_search_dirs:
-                hits = [
-                    hit
-                    for hit in resolver.resolve(ref, source_search_dir)
-                    if hit.is_resolved()
-                ]
-                if not hits:
-                    continue
-                for hit in hits:
-                    target = hit.resolved_path.resolve()
-                    if target in seen_paths:
-                        continue
-                    seen_paths.add(target)
-                    callee_src = source_transform(target.read_text()).encode()
-                    resolved[target] = callee_src
-                    pending.append((callee_src, target))
-                break  # first directory that resolves this ref wins
-
-    return resolved

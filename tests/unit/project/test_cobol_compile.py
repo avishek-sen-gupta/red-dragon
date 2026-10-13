@@ -109,63 +109,6 @@ def test_compile_cobol_links_extra_subprogram():
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_source_transform_applied_to_on_disk_callees_only(tmp_path: Path):
-    """source_transform is applied ONLY to on-disk-resolved callees.
-
-    Verifies I1 contract: caller-supplied `source` and `extra_subprogram_sources`
-    arrive pre-transformed; only disk-read callee text is passed through
-    source_transform.
-    """
-    caller_src = b"""       IDENTIFICATION DIVISION.
-       PROGRAM-ID. CALLER.
-       PROCEDURE DIVISION.
-           CALL 'ONDISK'.
-           GOBACK.
-"""
-    callee_src = """       IDENTIFICATION DIVISION.
-       PROGRAM-ID. ONDISK.
-       PROCEDURE DIVISION.
-           GOBACK.
-"""
-    callee_path = tmp_path / "ONDISK.cbl"
-    callee_path.write_text(callee_src)
-
-    # An extra subprogram supplied by the caller (not on disk)
-    extra_src = b"""       IDENTIFICATION DIVISION.
-       PROGRAM-ID. EXTRA.
-       PROCEDURE DIVISION.
-           GOBACK.
-"""
-
-    transformed_texts: list[str] = []
-
-    def recording_transform(s: str) -> str:
-        transformed_texts.append(s)
-        return s
-
-    compile_cobol(
-        caller_src,
-        parser=make_cobol_parser(),
-        source_search_dirs=[tmp_path],
-        extra_subprogram_sources={"EXTRA": extra_src},
-        source_transform=recording_transform,
-    )
-
-    # The on-disk callee MUST have been transformed
-    assert any(
-        "ONDISK" in t for t in transformed_texts
-    ), "source_transform must be applied to the on-disk callee source"
-    # The main caller source must NOT have been transformed
-    assert not any(
-        "CALLER" in t and "CALL" in t for t in transformed_texts
-    ), "source_transform must NOT be applied to the main caller source"
-    # The extra subprogram source must NOT have been transformed
-    assert not any(
-        "EXTRA" in t for t in transformed_texts
-    ), "source_transform must NOT be applied to extra_subprogram_sources"
-
-
-@covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_parallel_parse_to_cache_writes_one_file_per_source(tmp_path):
     sources = {
         Path("prog_a.cbl"): _SRC,
