@@ -12,7 +12,7 @@ RedDragon's multi-file project support extends the single-file pipeline to real-
 
 **Design principle:** The linker's output is indistinguishable from single-file compilation. The VM, CFG builder and registry run completely unmodified.
 
-**Supported:** All 15 tree-sitter frontends through `compile_directory`. COBOL links through `compile_cobol`: the main program plus a fixed list of other programs, which the caller finds — usually with `discover_callee_programs`, which follows `CALL 'LITERAL'` edges through ordered search directories (ADR-181). The three stages — parse, lower, link — each write a file (`.ast.json`, `.unit.json`, `.linked.json`) into a work directory and skip a program whose file already exists; `compile_cobol` returns the `LinkedProgram` read back from the linked file (ADR-183).
+**Supported:** All 15 tree-sitter frontends through `compile_directory`. COBOL links through `compile_cobol`: the main program plus a fixed list of other programs, which the caller finds — usually with `discover_callee_programs`, which follows `CALL 'LITERAL'` edges through ordered search directories (ADR-181). The three stages — parse, lower, link — each write a file (`.ast.json`, `.unit.json`, `.linked.json`) into a work directory and skip a program whose file already exists; `compile_cobol` returns the `LinkedProgram` read back from the linked file (ADR-183, §7.1).
 
 ---
 
@@ -337,6 +337,9 @@ class ModuleUnit:
     exports: ExportTable
     imports: tuple[ImportRef, ...]
     symbol_table: SymbolTable = field(default_factory=SymbolTable.empty)
+    entry_label: CodeLabel = NO_LABEL              # un-namespaced entry function
+    data_layout: dict[str, dict] = field(default_factory=dict)
+    start_up: tuple[InstructionBase, ...] = ()     # run once before any module
 
 @dataclass
 class LinkedProgram:
@@ -352,7 +355,8 @@ class LinkedProgram:
     unresolved_imports: list[ImportRef] = field(default_factory=list)
     func_symbol_table: dict[CodeLabel, FuncRef] = field(default_factory=dict)
     class_symbol_table: dict[CodeLabel, ClassRef] = field(default_factory=dict)
-    entry_func_label: CodeLabel | None = None
+    ast_paths: Mapping[Path, Path] = field(default_factory=dict)
+    entry_func_label: CodeLabel = NO_LABEL
     # Explicit entry function label. When several modules are linked (e.g. a
     # COBOL main program plus the subprograms it CALLs), multiple func_*
     # labels exist and a bare func_* entry predicate would be ambiguous;
@@ -366,6 +370,55 @@ class LinkedProgram:
 
 Note: `ExportTable` keys/values are typed domain objects (`FuncName`, `ClassName`,
 `VarName`, `CodeLabel`, `Register`), not bare strings — see §4 above.
+
+### 7.1 Persisted units and linked programs (COBOL)
+
+COBOL compiles in three stages chained only through files (ADR-183), so a
+program lowered once can be linked into any number of run units, by any later
+process:
+
+| Stage | Reads | Writes |
+|---|---|---|
+| `parse_stage` | source bytes | `<stem>-<digest>.ast.json` (bridge JSON) |
+| lowering (`_Lowering.lower`) | the AST file | `<stem>-<digest>.unit.json` (a `ModuleUnit`) |
+| `link_stage` | unit files | `<main stem>-<digest>.linked.json` (a `LinkedProgram`) |
+
+`compile_cobol` runs the three over a work directory and returns the
+`LinkedProgram` read back from the linked file; no frontend or in-memory unit
+crosses a stage. A stage skips a program whose output already exists, so a kept
+work directory reuses every stage's output.
+
+- **Names.** `<digest>` covers the source bytes and `LoweringSettings` (LP mode,
+  extension strategy names, tolerant mode, copybook directories), so an edited
+  source or different settings get new files. The linked file's digest covers
+  the unit files it is built from. Nothing checks whether an existing file is
+  still current beyond that: copybook contents and the lowering version are not
+  in the digest, and a work directory is deleted to rebuild.
+- **What a unit carries.** Everything link needs, so link reads nothing but unit
+  files: the IR, exports, imports, symbol table, `entry_label`, `data_layout` and
+  `start_up` (the COBOL run-unit allocation, from the frontend's `start_up_ir()`).
+- **What the linked file carries.** Every `LinkedProgram` field, the modules
+  included, except `merged_cfg` and `merged_registry`: `LinkedCodec.read`
+  rebuilds both from the merged IR with `build_cfg` and `build_registry`, which is
+  how `link_modules` produced them.
+- **Without a work directory**, `compile_cobol` uses a new owner-only directory
+  from `tempfile.mkdtemp()` and leaves it in place. Test suites point `tempfile`
+  at a session-scoped pytest directory (`tests/conftest.py`).
+
+### 7.2 The file formats
+
+`IrCodec` (`interpreter/project/ir_codec.py`) encodes values as self-describing
+JSON. JSON-native values stand for themselves; every other value is
+`{"$": <kind>, "v": <payload>}`: `enum`, `decimal` (through `cobol_numeric`'s
+exact `to_text`/`from_text`), `bytes`, `path`, `tuple`, `frozenset`, `dict` (a
+list of pairs, so any value can be a name), `loc`, `none`, `unknown_type`, and
+`dc` for a dataclass (`{"c": class name, "v": {field: value}}`, decoded by
+constructing the class, null-object classes to their singletons). An unknown
+kind or class raises `UnitFormatError`.
+
+`UnitCodec` and `LinkedCodec` write `{"format": 1, "unit" | "linked": …}` and
+raise `UnitFormatError` naming the file when it does not decode. The encoding is
+verbose (red-dragon-rfwv).
 
 ---
 
@@ -429,6 +482,7 @@ interpreter/project/
     ir_codec.py             IrCodec — self-describing JSON for IR values
     unit_codec.py           UnitCodec — ModuleUnit <-> .unit.json
     linked_codec.py         LinkedCodec — LinkedProgram <-> .linked.json (CFG, registry rebuilt)
+    unit_format_error.py    UnitFormatError — a unit or linked file that does not decode
     cobol_discovery.py      discover_callee_programs() — the CALL 'LITERAL' walk through ordered
                             search directories that produces that list
     source_file.py          SourceFile — a path and its bytes, already read
