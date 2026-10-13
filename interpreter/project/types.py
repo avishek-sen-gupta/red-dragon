@@ -98,6 +98,8 @@ class ModuleUnit:
     exports: ExportTable
     imports: tuple[ImportRef, ...]
     symbol_table: SymbolTable = field(default_factory=SymbolTable.empty)
+    entry_label: CodeLabel = NO_LABEL
+    data_layout: dict[str, dict] = field(default_factory=dict)
 
 
 NO_MODULE_UNIT = ModuleUnit(
