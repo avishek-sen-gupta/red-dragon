@@ -265,10 +265,10 @@ def compile_cobol(
         tolerant,
         tuple(copybook_dirs),
     )
-    work = _cache_dir(work_dir)
+    workspace = _cache_dir(work_dir)
     main = SourceFile(_MAIN_PATH, source)
     by_path = {program.path: program for program in (main, *programs)}
-    asts = parse_stage(tuple(by_path.values()), mode_parser, settings, work)
+    asts = parse_stage(tuple(by_path.values()), mode_parser, settings, workspace)
     lowering = _Lowering(
         parser=mode_parser,
         copybook_dirs=copybook_dirs,
@@ -280,11 +280,12 @@ def compile_cobol(
         settings=settings,
         units=UnitCodec(IrCodec()),
     )
-    main_unit = lowering.lower(main, asts[main.path], work)
-    callees = tuple(
+    main_unit = lowering.lower(main, asts[main.path], workspace)
+    callee_units = tuple(
         unit
         for path, program in by_path.items()
         if path != main.path
-        for unit in lowering.lower_or_skip(program, asts[path], work)
+        for unit in lowering.lower_or_skip(program, asts[path], workspace)
     )
-    return LinkedCodec(IrCodec()).read(link_stage(main_unit, callees, work))
+    linked_object = link_stage(main_unit, callee_units, workspace)
+    return LinkedCodec(IrCodec()).read(linked_object)
