@@ -50,6 +50,8 @@ def _str(record: DataRecord, name: str) -> str:
 
 def _int(record: DataRecord, name: str) -> int:
     match _value(record, name):
+        case DataScalar(value=bool()) as flag:
+            raise TypeError(f"layout field {name} is not an integer: {flag!r}")
         case DataScalar(value=int() as value):
             return value
         case other:

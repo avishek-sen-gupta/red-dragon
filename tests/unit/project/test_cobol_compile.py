@@ -2,7 +2,7 @@ import dataclasses
 import json
 import logging
 import tempfile
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
 import pytest
@@ -30,7 +30,15 @@ from interpreter.project.compiler import compile_directory
 from interpreter.project.lowering_settings import LoweringSettings
 from interpreter.project.source_file import SourceFile
 from interpreter.project.types import LinkedProgram, ModuleUnit
-from interpreter.run import EntryPoint, initial_vm_state, run_linked
+from interpreter.run import (
+    Completed,
+    EntryPoint,
+    initial_vm_state,
+    run_linked,
+    run_linked_resumable,
+    run_linked_traced,
+)
+from interpreter.vm.vm_types import VMState
 from tests.covers import NotLanguageFeature, covers
 
 _SRC = b"""       IDENTIFICATION DIVISION.
@@ -168,8 +176,36 @@ _FILE_CALLEE = b"""\
 """
 
 
+def _plain_run(linked: LinkedProgram, entry_point: EntryPoint) -> VMState:
+    return run_linked(
+        linked, entry_point=entry_point, max_steps=10_000, initial_vm=initial_vm_state()
+    )
+
+
+def _resumable_run(linked: LinkedProgram, entry_point: EntryPoint) -> VMState:
+    match run_linked_resumable(
+        linked, entry_point=entry_point, max_steps=10_000, initial_vm=initial_vm_state()
+    ):
+        case Completed(vm=vm):
+            return vm
+        case other:
+            raise AssertionError(f"the program suspended: {other!r}")
+
+
+def _traced_run(linked: LinkedProgram, entry_point: EntryPoint) -> VMState:
+    vm, _trace = run_linked_traced(linked, entry_point=entry_point, max_steps=10_000)
+    return vm
+
+
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_each_linked_program_declares_its_files_and_the_run_holds_the_mains():
+@pytest.mark.parametrize(
+    "run_program",
+    [_plain_run, _resumable_run, _traced_run],
+    ids=["run_linked", "run_linked_resumable", "run_linked_traced"],
+)
+def test_each_linked_program_declares_its_files_and_the_run_holds_the_mains(
+    run_program: Callable[[LinkedProgram, EntryPoint], VMState],
+):
     parser = make_cobol_parser()
     linked = compile_cobol(
         _FILE_CALLER,
@@ -180,11 +216,9 @@ def test_each_linked_program_declares_its_files_and_the_run_holds_the_mains():
     callee_files = file_definitions_data(parser.parse(_FILE_CALLEE))
     declared = [i for i in linked.merged_ir if isinstance(i, Data)]
     entry = linked.entry_func_label
-    vm = run_linked(
+    vm = run_program(
         dataclasses.replace(linked, modules=dict(reversed(linked.modules.items()))),
-        entry_point=EntryPoint.function(lambda ref: ref.label == entry),
-        max_steps=10_000,
-        initial_vm=initial_vm_state(),
+        EntryPoint.function(lambda ref: ref.label == entry),
     )
     assert (
         [d for d in declared if d.name == FILE_DEFINITIONS],
