@@ -36,8 +36,9 @@ from interpreter.overload.overload_resolver import (
     OverloadResolver,
 )
 from interpreter.overload.resolution_strategy import ArityThenTypeStrategy
-from interpreter.project.cobol_compile import compile_cobol
+from interpreter.project.cobol_compile import PROJECT_ROOT, compile_cobol
 from interpreter.project.entry_point import EntryPoint
+from interpreter.project.linker import module_prefix
 from interpreter.project.types import LinkedProgram
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import BoundFuncRef, FuncRef
@@ -927,6 +928,7 @@ def run_linked(
     # (e.g. CICS EIB-init and SEND/RECEIVE MAP read named fields via
     # vm.data_layout). Without this it would only be populated after the run.
     initial_vm.data_layout = linked.data_layout
+    initial_vm.declarations = main_declarations(linked)
 
     if entry_point.is_top_level:
         vm, _exec_stats = execute_cfg(
@@ -966,12 +968,26 @@ def run_linked(
         )
 
     vm.data_layout = linked.data_layout
+    vm.declarations = main_declarations(linked)
     return vm
+
+
+def main_declarations(linked: LinkedProgram) -> tuple[Data, ...]:
+    return next(
+        (
+            tuple(i for i in unit.ir if isinstance(i, Data))
+            for unit in linked.modules.values()
+            if unit.entry_label.namespace(module_prefix(unit.path, PROJECT_ROOT))
+            == linked.entry_func_label
+        ),
+        (),
+    )
 
 
 def _attach_layout(outcome: RunOutcome, linked: LinkedProgram) -> RunOutcome:
     out_vm = outcome.state.vm if isinstance(outcome, Suspended) else outcome.vm
     out_vm.data_layout = linked.data_layout
+    out_vm.declarations = main_declarations(linked)
     return outcome
 
 
@@ -1003,6 +1019,7 @@ def run_linked_resumable(
         io_provider=io_provider,
     )
     initial_vm.data_layout = linked.data_layout
+    initial_vm.declarations = main_declarations(linked)
 
     if entry_point.is_top_level:
         outcome = run_resumable(
@@ -1171,6 +1188,7 @@ def run_linked_traced(
         )
 
     vm.data_layout = linked.data_layout
+    vm.declarations = main_declarations(linked)
     return vm, trace
 
 

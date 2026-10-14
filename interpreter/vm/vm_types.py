@@ -18,6 +18,7 @@ from interpreter.constants import FoundationTypeName
 from interpreter.continuation_name import NO_CONTINUATION_NAME, ContinuationName
 from interpreter.field_name import FieldName
 from interpreter.func_name import FuncName
+from interpreter.instructions import Data
 from interpreter.ir import CodeLabel
 from interpreter.register import NO_REGISTER, Register
 from interpreter.types.type_expr import UNKNOWN, TypeExpr, scalar
@@ -175,6 +176,7 @@ class VMState:
     continuations: dict[ContinuationName, CodeLabel] = field(default_factory=dict)
     exception_stack: list[ExceptionHandler] = field(default_factory=list)
     data_layout: dict[str, dict] = field(default_factory=dict)
+    declarations: tuple[Data, ...] = ()
     io_provider: Any = (
         None  # Any: Optional CobolIOProvider — avoids COBOL import in core VM — see red-dragon-r32l
     )

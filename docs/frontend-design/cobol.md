@@ -53,6 +53,8 @@ Files are under `interpreter/cobol/` unless prefixed with `cobol_asg/`.
 | `cobol_asg/cobol_types.py` | `CobolDataCategory` enum, `CobolTypeDescriptor` |
 | `cobol_asg/pic_parser.py` | PIC clause parser (e.g., `9(5)V99` → type descriptor) |
 | `data_layout.py` | `DataLayout`, `FieldLayout`, `build_data_layout()` |
+| `file_definitions_data.py` | `FILE_DEFINITIONS`, `file_definitions_data()` — the program's SELECTs and FD formats as a `Data` directive |
+| `layout_data.py` | `DATA_LAYOUT`, `layout_data()`, and the reader `field_positions()` → `FieldPosition` per WORKING-STORAGE field |
 | `ir_encoders.py` | IR instruction builders for encode/decode (zoned, COMP-3, alphanumeric, string ops) |
 | `byte_builtins.py` | 19 low-level builtins for byte/nibble/list/string manipulation |
 | `ebcdic_table.py` | EBCDIC (CP037) ↔ Latin-1 translation tables, built from Python's `cp037` codec: a bijection, so every byte survives a decode and re-encode |
@@ -60,6 +62,15 @@ Files are under `interpreter/cobol/` unless prefixed with `cobol_asg/`.
 | `zoned_decimal.py` | Zoned decimal encoding/decoding reference |
 | `comp3.py` | COMP-3 (packed decimal) encoding/decoding reference |
 | `alphanumeric.py` | Alphanumeric/EBCDIC encoding reference |
+
+## Program Declarations
+
+Right after its `entry` label, each program's IR declares two `Data` directives, which the VM steps over:
+
+- `__cobol_file_definitions` — a record whose `files` list holds one record per SELECT, in FILE-CONTROL order: `file_name`, `assign_to`, `organization`, `access_mode`, `record_key`, `relative_key`, `file_status`, and `fd` — empty without an FD, else one record with `recording_mode`, `record_clause` (`kind` plus that clause's sizes and `depending_on`), `record_lengths` (one per 01 record) and `depending` (any 01 record contains OCCURS DEPENDING ON).
+- `__cobol_data_layout` — a record whose `fields` list holds each WORKING-STORAGE entry's `name`, `offset`, `length`, `category`, `total_digits`, `decimal_digits` and `signed`. `field_positions(declarations)` reads it back as a name → `FieldPosition` mapping.
+
+The linker namespaces labels only, so every linked module keeps both names. The loader copies the main module's `Data` into `VMState.declarations` (`main_declarations(linked)` in `run.py`) without looking inside.
 
 ## Data Division Lowering
 

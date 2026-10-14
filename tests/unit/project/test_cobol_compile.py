@@ -1,26 +1,33 @@
+import dataclasses
 import json
-import tempfile
 import logging
+import tempfile
 from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
 
 from cobol_asg.ast_store import AstParseError
+from cobol_asg.lp import LP
+from interpreter.cobol.file_definitions_data import (
+    FILE_DEFINITIONS,
+    file_definitions_data,
+)
+from interpreter.cobol.layout_data import DATA_LAYOUT, FieldPosition, field_positions
 from interpreter.constants import Language
 from interpreter.frontend import make_cobol_parser
 from interpreter.frontend_extension_lowering import (
     RedDragonExtensionLoweringStrategy,
 )
+from interpreter.instructions import Data
+from interpreter.ir import NO_LABEL, CodeLabel
 from interpreter.project.cobol_compile import (
     compile_cobol,
     compile_cobol_module,
     parse_stage,
 )
-from interpreter.ir import NO_LABEL, CodeLabel
 from interpreter.project.compiler import compile_directory
 from interpreter.project.lowering_settings import LoweringSettings
-from cobol_asg.lp import LP
 from interpreter.project.source_file import SourceFile
 from interpreter.project.types import LinkedProgram, ModuleUnit
 from interpreter.run import EntryPoint, initial_vm_state, run_linked
@@ -123,6 +130,75 @@ def test_compile_cobol_links_extra_subprogram():
         initial_vm=initial_vm_state(),
     )
     assert vm is not None
+
+
+_FILE_CALLER = b"""\
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. FCALLER.
+       ENVIRONMENT DIVISION.
+       INPUT-OUTPUT SECTION.
+       FILE-CONTROL.
+           SELECT MAIN-FILE ASSIGN TO MAINDD.
+       DATA DIVISION.
+       FILE SECTION.
+       FD  MAIN-FILE.
+       01  MAIN-REC PIC X(20).
+       WORKING-STORAGE SECTION.
+       01  WS-MAIN PIC X(4).
+       PROCEDURE DIVISION.
+           CALL 'FCALLEE'.
+           GOBACK.
+"""
+
+_FILE_CALLEE = b"""\
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. FCALLEE.
+       ENVIRONMENT DIVISION.
+       INPUT-OUTPUT SECTION.
+       FILE-CONTROL.
+           SELECT SUB-FILE ASSIGN TO SUBDD.
+       DATA DIVISION.
+       FILE SECTION.
+       FD  SUB-FILE.
+       01  SUB-REC PIC X(30).
+       WORKING-STORAGE SECTION.
+       01  WS-SUB PIC 9(3).
+       PROCEDURE DIVISION.
+           GOBACK.
+"""
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_each_linked_program_declares_its_files_and_the_run_holds_the_mains():
+    parser = make_cobol_parser()
+    linked = compile_cobol(
+        _FILE_CALLER,
+        programs=(SourceFile(Path("FCALLEE.cbl"), _FILE_CALLEE),),
+        parser=parser,
+    )
+    main_files = file_definitions_data(parser.parse(_FILE_CALLER))
+    callee_files = file_definitions_data(parser.parse(_FILE_CALLEE))
+    declared = [i for i in linked.merged_ir if isinstance(i, Data)]
+    entry = linked.entry_func_label
+    vm = run_linked(
+        dataclasses.replace(linked, modules=dict(reversed(linked.modules.items()))),
+        entry_point=EntryPoint.function(lambda ref: ref.label == entry),
+        max_steps=10_000,
+        initial_vm=initial_vm_state(),
+    )
+    assert (
+        [d for d in declared if d.name == FILE_DEFINITIONS],
+        [d.name for d in declared if d.name == DATA_LAYOUT],
+        vm.declarations[0],
+        field_positions(vm.declarations),
+        len(vm.declarations),
+    ) == (
+        [callee_files, main_files],
+        [DATA_LAYOUT, DATA_LAYOUT],
+        main_files,
+        {"WS-MAIN": FieldPosition(0, 4, "ALPHANUMERIC", 4, 0, False)},
+        2,
+    )
 
 
 _SETTINGS = LoweringSettings(LP.LP32, (), False, ())
