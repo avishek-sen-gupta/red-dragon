@@ -69,6 +69,8 @@ class Opcode(str, Enum):
     IMPORT_MODULE = "IMPORT_MODULE"
     # Labels (pseudo-instruction)
     LABEL = "LABEL"
+    # Named nested literal; a no-op the VM steps over
+    DATA = "DATA"
 
 
 # Opcodes that define a named variable (declaration or assignment).

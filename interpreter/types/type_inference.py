@@ -29,6 +29,7 @@ from interpreter.instructions import (
     CallMethod,
     CallUnknown,
     Const,
+    Data,
     DeclVar,
     InstructionBase,
     Label_,
@@ -982,6 +983,15 @@ def _infer_store_indirect(
     pass
 
 
+def _infer_data(
+    inst: Data,
+    ctx: _InferenceContext,
+    type_resolver: TypeResolver,
+) -> None:
+    """DATA — no type inference side effects."""
+    pass
+
+
 _DISPATCH: dict[type, Callable[..., None]] = {
     Label_: _infer_label,
     Symbolic: _infer_symbolic,
@@ -1006,6 +1016,7 @@ _DISPATCH: dict[type, Callable[..., None]] = {
     LoadIndex: _infer_load_index,
     LoadIndirect: _infer_load_indirect,
     StoreIndirect: _infer_store_indirect,
+    Data: _infer_data,
 }
 
 

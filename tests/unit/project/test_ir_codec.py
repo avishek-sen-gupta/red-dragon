@@ -8,7 +8,9 @@ from pathlib import Path
 import pytest
 
 from interpreter.class_name import NO_CLASS_NAME, ClassName
+from interpreter.constants import FoundationTypeName
 from interpreter.continuation_name import ContinuationName
+from interpreter.data_value import DataField, DataList, DataRecord, DataScalar
 from interpreter.field_name import NO_FIELD_NAME, FieldKind, FieldName
 from interpreter.frontends.symbol_table import (
     ClassInfo,
@@ -29,6 +31,7 @@ from interpreter.instructions import (
     CallUnknown,
     CallWithMemory,
     Const,
+    Data,
     DeclVar,
     Halt_,
     ImportModule,
@@ -74,6 +77,7 @@ from interpreter.refs.func_ref import FuncRef
 from interpreter.register import NO_REGISTER, NoRegister, Register
 from interpreter.type_name import TypeName
 from interpreter.types import type_expr as te
+from interpreter.types.type_expr import scalar
 from interpreter.var_name import NO_VAR_NAME, VarName
 from tests.covers import NotLanguageFeature, covers
 
@@ -152,6 +156,46 @@ _SAMPLES = (
     SetContinuation(name=ContinuationName("k"), target_label=_L("ret")),
     ResumeContinuation(name=ContinuationName("k")),
     Suspend(operand_reg=_R("%1")),
+    Data(
+        name=VarName("PROG"),
+        value=DataRecord(
+            (
+                DataField(
+                    FieldName("files"),
+                    DataList(
+                        (
+                            DataRecord(
+                                (
+                                    DataField(
+                                        FieldName("assign_to"),
+                                        DataScalar(
+                                            "IN1", scalar(FoundationTypeName.STRING)
+                                        ),
+                                    ),
+                                    DataField(
+                                        FieldName("depending"),
+                                        DataScalar(
+                                            False, scalar(FoundationTypeName.BOOL)
+                                        ),
+                                    ),
+                                    DataField(
+                                        FieldName("record_lengths"),
+                                        DataList(
+                                            (
+                                                DataScalar(
+                                                    80, scalar(FoundationTypeName.INT)
+                                                ),
+                                            )
+                                        ),
+                                    ),
+                                )
+                            ),
+                        )
+                    ),
+                ),
+            )
+        ),
+    ),
 )
 
 _TYPES = (

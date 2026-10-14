@@ -27,6 +27,7 @@ from cobol_memory.storage_identifier import StorageIdentifier
 from cobol_numeric.number import CobolNumber, from_literal
 from interpreter.constants import FoundationTypeName
 from interpreter.continuation_name import NO_CONTINUATION_NAME, ContinuationName
+from interpreter.data_value import DataList, DataValue
 from interpreter.field_name import NO_FIELD_NAME, FieldName
 from interpreter.func_name import NO_FUNC_NAME, FuncName
 from interpreter.ir import (
@@ -872,6 +873,25 @@ class Label_(InstructionBase):
 
 
 @dataclass(frozen=True)
+class Data(InstructionBase):
+    """DATA: a named nested literal the VM steps over."""
+
+    name: VarName = NO_VAR_NAME
+    value: DataValue = field(default_factory=lambda: DataList(()))
+
+    def writes(self) -> None:
+        return None
+
+    @property
+    def opcode(self) -> Opcode:
+        return Opcode.DATA
+
+    @property
+    def operands(self) -> list[str]:
+        return [str(self.name)]
+
+
+@dataclass(frozen=True)
 class Branch(InstructionBase):
     """BRANCH: unconditional jump to a label."""
 
@@ -1201,6 +1221,7 @@ Instruction = Union[
     NewObject,
     NewArray,
     Label_,
+    Data,
     Branch,
     BranchIf,
     Return_,
@@ -1524,6 +1545,13 @@ def _label(inst: Any) -> Label_:
     return Label_(label=inst.label, source_location=inst.source_location)
 
 
+def _data(inst: InstructionBase) -> Data:
+    return Data(
+        name=VarName(str(inst.operands[0])) if inst.operands else NO_VAR_NAME,
+        source_location=inst.source_location,
+    )
+
+
 def _branch(inst: Any) -> Branch:
     return Branch(label=inst.label, source_location=inst.source_location)
 
@@ -1671,6 +1699,7 @@ _TO_TYPED: dict[Opcode, Callable[[Any], Instruction]] = {
     Opcode.NEW_OBJECT: _new_object,
     Opcode.NEW_ARRAY: _new_array,
     Opcode.LABEL: _label,
+    Opcode.DATA: _data,
     Opcode.BRANCH: _branch,
     Opcode.BRANCH_IF: _branch_if,
     Opcode.RETURN: _return,

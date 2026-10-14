@@ -17,6 +17,7 @@ from interpreter.continuation_name import (
     ContinuationName,
     NoContinuationName,
 )
+from interpreter.data_value import DataField, DataList, DataRecord, DataScalar
 from interpreter.field_name import NO_FIELD_NAME, FieldKind, FieldName, NoFieldName
 from interpreter.frontends.symbol_table import (
     ClassInfo,
@@ -51,6 +52,10 @@ type Wire = bool | int | float | str | list[Wire] | dict[str, Wire]
 _DATACLASSES: tuple[type, ...] = (
     *typing.get_args(Instruction),
     SpreadArguments,
+    DataScalar,
+    DataField,
+    DataRecord,
+    DataList,
     Register,
     CodeLabel,
     VarName,

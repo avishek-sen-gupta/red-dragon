@@ -20,6 +20,7 @@ from interpreter.frontend_observer import FrontendObserver
 from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
+    Data,
     Halt_,
     InstructionBase,
     Label_,
@@ -383,7 +384,7 @@ def _run_loop(
         if config.verbose:
             logger.info("[step %d] %s:%d  %s", step, current_label, ip, instruction)
 
-        if isinstance(instruction, Label_):
+        if isinstance(instruction, (Label_, Data)):
             ip += 1
             continue
 
@@ -765,7 +766,7 @@ def execute_cfg_traced(
         if config.verbose:
             logger.info("[step %d] %s:%d  %s", step, current_label, ip, instruction)
 
-        if isinstance(instruction, Label_):
+        if isinstance(instruction, (Label_, Data)):
             ip += 1
             continue
 
