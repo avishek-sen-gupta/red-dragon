@@ -13,6 +13,7 @@ from enum import Enum
 
 class AccessCondition(Enum):
     OK = "OK"
+    DUPLICATES_FOLLOW = "DUPLICATES_FOLLOW"
     END_OF_FILE = "END_OF_FILE"
     NOT_FOUND = "NOT_FOUND"
     DUPLICATE_KEY = "DUPLICATE_KEY"

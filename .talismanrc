@@ -206,4 +206,8 @@ fileignoreconfig:
   checksum: 1ccf67dfc096b4a85587600f678201f03219536c010135bb3733691c221d8162
 - filename: tests/unit/project/test_coprocessor_compile.py
   checksum: cf3dcc3c9f539303d52eac893423a91bc15c258857aa07006aa395e666b86bad
+- filename: interpreter/cobol/alternate_index_driver.py
+  checksum: 240441d2833179ea7f9c01beb2e9b61ee4d584d205c34eade4b773ee14630c2c
+- filename: interpreter/cobol/real_file_provider.py
+  checksum: 1b6ec249a545ba6a6d7e0bd6613e73148b2a3ed1bee51f89789f0d00e013e3c0
 version: "1.0"
