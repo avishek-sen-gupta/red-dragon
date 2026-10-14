@@ -55,7 +55,7 @@ from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 logger = logging.getLogger(__name__)
 
 _MAIN_PATH = Path("__main__.cbl")
-_PROJECT_ROOT = Path("/")
+PROJECT_ROOT = Path("/")
 
 
 def compile_cobol_module(
@@ -213,7 +213,7 @@ def _link(main_unit: Path, units: Sequence[Path]) -> LinkedProgram:
     linked = link_modules(
         modules=linked_modules,
         import_graph=linked_graph,
-        project_root=_PROJECT_ROOT,
+        project_root=PROJECT_ROOT,
         topo_order=topological_sort(linked_graph),
         language=Language.COBOL,
         type_env_builder=TypeEnvironmentBuilder(),
@@ -222,7 +222,7 @@ def _link(main_unit: Path, units: Sequence[Path]) -> LinkedProgram:
     return dataclasses.replace(
         linked,
         entry_func_label=main.entry_label.namespace(
-            module_prefix(main.path, _PROJECT_ROOT)
+            module_prefix(main.path, PROJECT_ROOT)
         ),
         ast_paths={
             unit.path: f.with_name(f.name.replace(".unit.json", ".ast.json"))

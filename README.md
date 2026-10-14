@@ -371,7 +371,7 @@ Final state: result = 120  (67 steps, 0 LLM calls)
 Beyond the [VM features](#vm-features) table, the VM also:
 
 - **Allocates classes and arrays** on the heap via `Pointer(base, offset)` with parameterized types (`Pointer[ClassName]`, `Pointer[ElementType]`)
-- **Keeps COBOL data layout** — field names, offsets, lengths and type metadata — on `VMState.data_layout` after execution
+- **Keeps COBOL data layout** — field names, offsets, lengths and type metadata — on `VMState.data_layout` after execution, and the main program's `Data` declarations on `VMState.declarations`
 - **Keeps builtins pure** — each returns a `BuiltinResult(value, new_objects, heap_writes)`, applied through `StateUpdate`; no builtin mutates `vm.heap` directly
 
 ## Handling incomplete programs

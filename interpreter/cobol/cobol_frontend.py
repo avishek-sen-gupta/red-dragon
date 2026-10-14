@@ -26,6 +26,8 @@ from interpreter.cobol.condition_name_index import build_condition_index_over
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.field_resolution import ResolvedFieldRef
+from interpreter.cobol.file_definitions_data import file_definitions_data
+from interpreter.cobol.layout_data import layout_data
 from interpreter.cobol.lower_data_division import (
     lower_sectioned_data_division,
 )
@@ -242,6 +244,8 @@ class CobolFrontend(Frontend):
         )
 
         self._ctx.emit_inst(Label_(label=CodeLabel("entry")))
+        self._ctx.emit_inst(file_definitions_data(asg))
+        self._ctx.emit_inst(layout_data(sectioned.working_storage.all_fields()))
 
         # Emit singleton init block (ALLOC_REGION for WS lives here, runs once)
         after_label = lower_program_init(
