@@ -31,7 +31,7 @@ Related: [IR reference](ir-reference.md) (every opcode's operands and semantics)
 
 ## 1. Overview
 
-Every frontend lowers source to one IR of 37 opcodes. The VM executes that IR over a CFG. It runs as far as it can without an LLM: an unknown value becomes a `SymbolicValue` and execution continues. The LLM is a fallback for instructions with no local handler.
+Every frontend lowers source to one IR of 38 opcodes. The VM executes that IR over a CFG. It runs as far as it can without an LLM: an unknown value becomes a `SymbolicValue` and execution continues. The LLM is a fallback for instructions with no local handler.
 
 ```mermaid
 flowchart TD
@@ -39,7 +39,7 @@ flowchart TD
     ts["tree-sitter frontends"]
     cobol["COBOL frontend\n(ProLeap bridge → cobol_asg)"]
     llm["LLM / chunked LLM frontend"]
-    ir["IR\n(37 opcodes)"]
+    ir["IR\n(38 opcodes)"]
     linked["LinkedProgram\nCFG + registry + symbol tables"]
 
     src --> ts & cobol & llm
@@ -219,11 +219,12 @@ The LLM backend is created lazily on the first unhandled instruction. `step_call
 
 ### 6.2 Dispatch
 
-`LocalExecutor.DISPATCH` in `interpreter/vm/executor.py` is a `dict[Opcode, handler]` looked up by `inst.opcode`. It has 34 entries. The three opcodes without one:
+`LocalExecutor.DISPATCH` in `interpreter/vm/executor.py` is a `dict[Opcode, handler]` looked up by `inst.opcode`. It has 34 entries. The four opcodes without one:
 
 | Opcode | Handled by |
 |---|---|
 | `LABEL` | `build_cfg` strips labels from blocks; the loop also skips any it meets |
+| `DATA` | A declaration directive: both run loops step over it. The loader copies the main module's onto `VMState.declarations` |
 | `SUSPEND` | `_run_loop` intercepts it before dispatch |
 | `IMPORT_MODULE` | The linker removes resolved local imports. An unresolved import reaches the LLM fallback |
 
@@ -518,7 +519,7 @@ Use `lookup_methods`, `lookup_func`, `register_func`, `register_method`.
 
 ```
 interpreter/
-├── ir.py                 Opcode (37), CodeLabel, SourceLocation, SpreadArguments, IRInstruction factory
+├── ir.py                 Opcode (38), CodeLabel, SourceLocation, SpreadArguments, IRInstruction factory
 ├── instructions.py       InstructionBase and one frozen dataclass per opcode
 ├── register.py, var_name.py, field_name.py, func_name.py, class_name.py,
 │   address.py, closure_id.py, continuation_name.py, operator_kind.py   domain types

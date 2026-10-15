@@ -1,10 +1,10 @@
 # IR Reference
 
-RedDragon uses a flattened high-level three-address code IR. Every frontend lowers its program to a linear sequence of typed instruction dataclasses drawn from 37 opcodes (the `Opcode` enum in `interpreter/ir.py`).
+RedDragon uses a flattened high-level three-address code IR. Every frontend lowers its program to a linear sequence of typed instruction dataclasses drawn from 38 opcodes (the `Opcode` enum in `interpreter/ir.py`).
 
 ## Instruction format
 
-Each opcode has a frozen dataclass in `interpreter/instructions.py` (37 classes). All inherit from `InstructionBase`, which carries:
+Each opcode has a frozen dataclass in `interpreter/instructions.py` (38 classes). All inherit from `InstructionBase`, which carries:
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -580,6 +580,24 @@ Not executed — marks a position that `BRANCH`, `BRANCH_IF`, and call dispatch 
 entry:
 func_fib_0:
 if_true_3:
+```
+
+### DATA
+
+A named nested literal declared to the runtime (declaration directive).
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `VarName` | directive name |
+| `value` | `DataValue` | `DataScalar` (a `bool`, `int` or `str` with its `TypeExpr`), `DataRecord` (named `DataField`s) or `DataList` (items), from `interpreter/data_value.py` |
+
+Not executed: both run loops and type inference step over it, and it writes nothing. The loader copies the main module's `DATA` directives onto `VMState.declarations`, where language runtimes read them. The core never interprets `value`. The values are immutable, so a deepcopy of a `VMState` shares them rather than rebuilding them.
+
+The COBOL frontend emits two, right after `entry:`: `__cobol_file_definitions` (the FILE-CONTROL entries and their FDs) and `__cobol_data_layout` (the WORKING-STORAGE field layout).
+
+```
+data __cobol_file_definitions
+data __cobol_data_layout
 ```
 
 ---

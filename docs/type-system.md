@@ -777,7 +777,7 @@ flowchart TD
 
 ### Per-Opcode Inference Rules
 
-The inference walk dispatches each instruction to a handler via the `_DISPATCH` table (23 opcodes handled), keyed by **exact instruction type** (`type(inst)`, not `isinstance`/subclass matching) — an instruction whose type has no entry is silently skipped. Each handler has the signature `(inst: InstructionBase, ctx: _InferenceContext, type_resolver: TypeResolver) → None`.
+The inference walk dispatches each instruction to a handler via the `_DISPATCH` table (24 instruction types handled), keyed by **exact instruction type** (`type(inst)`, not `isinstance`/subclass matching) — an instruction whose type has no entry is silently skipped. Each handler has the signature `(inst: InstructionBase, ctx: _InferenceContext, type_resolver: TypeResolver) → None`.
 
 #### LABEL — Scope Tracking
 
@@ -903,6 +903,10 @@ Three-tier lookup:
 
 - `ALLOC_REGION` → result type `scalar("Region")`
 - `LOAD_REGION` → result type `scalar("Array")`
+
+#### DATA — Declaration Directive
+
+No effect. `DATA` has an entry so the walk visits it explicitly; it writes no register and types no variable.
 
 ### Post-Fixpoint Promotion
 

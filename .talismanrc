@@ -214,4 +214,6 @@ fileignoreconfig:
   checksum: c0d7df8480dccb1a333d9153c290f8f5532e008d01d4e82eb684e6e4d144b319
 - filename: tests/unit/cobol/test_file_definitions_data.py
   checksum: 4969efc4597748f46a20c5cc791be41f4cc044e9e8668df3cc645dd8d3b61e8a
+- filename: docs/type-system.md
+  checksum: 43b11cb1e16d7c15ca12f916af2d0bcd1008553ade8889a12134fba3510bf049
 version: "1.0"

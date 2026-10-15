@@ -9,7 +9,7 @@
 **RedDragon** lowers source in 15 tree-sitter languages and COBOL to one universal IR, and runs that IR on a VM. It is built for code that is often incomplete: legacy source, decompiled binaries, partial extracts, and codebases with missing dependencies.
 
 - **Frontends.** Tree-sitter frontends (15 languages) and a ProLeap bridge (COBOL) lower well-formed source deterministically. An optional LLM repair loop fixes malformed fragments and re-parses. For languages with no frontend, an LLM lowers the source to IR directly.
-- **IR.** One flattened three-address code IR with [37 opcodes](docs/ir-reference.md) and source locations. Every frontend emits it.
+- **IR.** One flattened three-address code IR with [38 opcodes](docs/ir-reference.md) and source locations. Every frontend emits it.
 - **VM.** Executes the IR deterministically. When a call or import cannot be resolved, it creates a symbolic placeholder, or optionally asks an LLM for a plausible value, and keeps going.
 
 With complete source and all dependencies present, parse → lower → execute makes **0 LLM calls**. LLMs are used only where information is missing.
@@ -92,7 +92,7 @@ The VM runs deterministically, including through missing imports and unknown ext
 
 </details>
 
-The VM lives in `interpreter/vm/`: `vm_types.py` (state model), `vm.py` (`apply_update`, operators, register resolution), `executor.py`, `builtins.py`, `unresolved_call.py` (symbolic/LLM call resolution), `field_fallback.py`, and `segment.py` plus the NULL-page strategies. `LocalExecutor.DISPATCH` in `executor.py` maps 34 opcodes to handlers in `interpreter/handlers/`. Of the other three, `LABEL` is a pseudo-instruction and the run loop handles `SUSPEND`. `IMPORT_MODULE` has no local handler: the linker rewrites resolved imports, and anything unhandled goes to the LLM backend. The 37 opcodes are frozen dataclasses in `interpreter/instructions.py` with domain-typed fields and `reads()`/`writes()`. COBOL lowering lives in `interpreter/cobol/`.
+The VM lives in `interpreter/vm/`: `vm_types.py` (state model), `vm.py` (`apply_update`, operators, register resolution), `executor.py`, `builtins.py`, `unresolved_call.py` (symbolic/LLM call resolution), `field_fallback.py`, and `segment.py` plus the NULL-page strategies. `LocalExecutor.DISPATCH` in `executor.py` maps 34 opcodes to handlers in `interpreter/handlers/`. Of the other four, `LABEL` is a pseudo-instruction, `DATA` is a declaration directive the run loop steps over, and the run loop handles `SUSPEND`. `IMPORT_MODULE` has no local handler: the linker rewrites resolved imports, and anything unhandled goes to the LLM backend. The 38 opcodes are frozen dataclasses in `interpreter/instructions.py` with domain-typed fields and `reads()`/`writes()`. COBOL lowering lives in `interpreter/cobol/`.
 
 ## How it works
 
@@ -596,7 +596,7 @@ Import-linter enforces eight contracts:
 
 ## Documentation
 
-- **[IR Reference](docs/ir-reference.md)** — Complete specification of the 37-opcode instruction set: value producers, consumers, control flow, region operations, continuations, pointer operations, and the SYMBOLIC fallback
+- **[IR Reference](docs/ir-reference.md)** — Complete specification of the 38-opcode instruction set: value producers, consumers, control flow, region operations, continuations, pointer operations, the DATA declaration directive, and the SYMBOLIC fallback
 - **[VM Design Document](docs/notes-on-vm-design.md)** — Comprehensive technical deep-dive into the VM architecture: IR design, CFG construction, state model, execution engine, call dispatch, best-effort execution, closures, LLM fallback, and end-to-end worked examples with code references
 - **[Frontend Design Document](docs/notes-on-frontend-design.md)** — Frontend subsystem overview: three frontend strategies (deterministic, LLM, chunked LLM), Frontend ABC contract, tree-sitter parser layer, LLM frontend with prompt engineering, chunked LLM frontend with register renumbering, factory routing, and end-to-end worked example
 - **[Per-Language Frontend Design](docs/frontend-design/)** — Exhaustive per-language documentation of all 15 deterministic frontends and the COBOL frontend: BaseFrontend context-mode architecture, GrammarConstants, TreeSitterEmitContext, common lowerers, dispatch tables, language-specific lowering methods, and worked examples for each language

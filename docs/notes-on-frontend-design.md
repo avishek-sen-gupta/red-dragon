@@ -26,7 +26,7 @@ For per-language frontend documentation (one document per language), see [fronte
 
 ## 1. Overview
 
-The frontend subsystem converts source code in any language into a universal flattened three-address code IR ([37 opcodes](ir-reference.md)). There are three frontend strategies:
+The frontend subsystem converts source code in any language into a universal flattened three-address code IR ([38 opcodes](ir-reference.md)). There are three frontend strategies:
 
 | Strategy | Input | How | Speed | Languages |
 |---|---|---|---|---|
@@ -83,7 +83,7 @@ Returns a flat list of IR instructions, always starting with `LABEL "entry"`. An
 
 ## 3. IR — The Target Format
 
-The IR is defined in `interpreter/ir.py` — 37 opcodes covering value producers, control flow, stores, and special operations. Every frontend, regardless of source language, targets this same instruction set.
+The IR is defined in `interpreter/ir.py` — 38 opcodes covering value producers, control flow, stores, and special operations, including the `DATA` declaration directive. Every frontend, regardless of source language, targets this same instruction set.
 
 See the [IR Reference](ir-reference.md) for the complete opcode specification, instruction format, and common IR patterns.
 
@@ -99,6 +99,7 @@ Key conventions:
 | **Class refs** | `<class:name@label>` |
 | **Parameters** | `SYMBOLIC "param:x"` followed by `DECL_VAR x %reg` |
 | **Source locations** | Deterministic frontends attach AST spans; LLM uses `NO_SOURCE_LOCATION` |
+| **Declarations** | `DATA name` carries a nested literal the VM steps over; the COBOL frontend emits `__cobol_file_definitions` and `__cobol_data_layout` after `entry:` |
 
 ---
 
@@ -553,7 +554,7 @@ Other languages can add their own `parse_pattern` function that maps their tree-
 
 | Principle | Manifestation |
 |---|---|
-| **Single IR for all languages** | 37 opcodes are enough to represent 15 languages + COBOL + LLM output |
+| **Single IR for all languages** | 38 opcodes are enough to represent 15 languages + COBOL + LLM output |
 | **Pure-function dispatch tables** | Extensible via dict lookup, not if/elif chains |
 | **GrammarConstants dataclass** | Same lowering logic handles different tree-sitter grammars |
 | **Graceful degradation** | Unknown constructs → `SYMBOLIC`, not crashes |
