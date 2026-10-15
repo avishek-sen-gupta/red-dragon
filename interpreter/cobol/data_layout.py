@@ -307,12 +307,6 @@ class DataLayout:
             yield from grp.all_group_conditions()
 
     def all_fields(self) -> Iterator[FieldLayout]:
-        """Yield all FieldLayouts (leaf and synthesized group storage) depth-first.
-
-        For groups, synthesizes alphanumeric FieldLayout with group's byte bounds
-        and VALUE. A group precedes its descendants.
-        Used by the layout Data the frontend declares.
-        """
         yield from self.fields.values()
         for name, grp in self.groups.items():
             # Synthesize storage layout for the group itself

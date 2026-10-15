@@ -22,7 +22,6 @@ from interpreter.frontend_extension_lowering import (
 from interpreter.instructions import Data
 from interpreter.ir import NO_LABEL, CodeLabel
 from interpreter.project.cobol_compile import (
-    _cache_dir,
     compile_cobol,
     compile_cobol_module,
     parse_stage,
@@ -261,6 +260,27 @@ def test_each_linked_program_declares_its_files_and_the_run_holds_the_mains(
     )
 
 
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_the_traced_run_starts_with_the_mains_declarations():
+    parser = make_cobol_parser()
+    linked = compile_cobol(
+        _FILE_CALLER,
+        programs=(SourceFile(Path("FCALLEE.cbl"), _FILE_CALLEE),),
+        parser=parser,
+    )
+    entry = linked.entry_func_label
+    _vm, trace = run_linked_traced(
+        linked,
+        entry_point=EntryPoint.function(lambda ref: ref.label == entry),
+        max_steps=10_000,
+    )
+    match trace.initial_state:
+        case VMState(declarations=(first, *_)):
+            assert first == file_definitions_data(parser.parse(_FILE_CALLER))
+        case other:
+            raise AssertionError(f"the trace starts without declarations: {other!r}")
+
+
 _SETTINGS = LoweringSettings(LP.LP32, (), False, ())
 
 
@@ -349,19 +369,19 @@ def test_compile_cobol_persists_an_ast_for_every_compiled_program(tmp_path):
         work_dir=tmp_path,
     )
 
-    assert {
-        ast.name.rpartition("-")[0]: json.loads(ast.read_text())["program_id"]
+    assert sorted(
+        (ast.name.rpartition("-")[0], json.loads(ast.read_text())["program_id"])
         for ast in tmp_path.glob("*.ast.json")
-    } == {"__main__": "CALLER", "CALLEE": "CALLEE"}
+    ) == [("CALLEE", "CALLEE"), ("__main__", "CALLER")]
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_the_default_work_dir_is_readable_only_by_its_owner():
-    cache = _cache_dir(None)
-    assert (cache.parent, cache.stat().st_mode & 0o777) == (
-        Path(tempfile.gettempdir()),
-        0o700,
-    )
+    temp_root = Path(tempfile.gettempdir())
+    before = set(temp_root.iterdir())
+    compile_cobol(_HELLO, parser=make_cobol_parser())
+    (cache,) = set(temp_root.iterdir()) - before
+    assert (cache.parent, cache.stat().st_mode & 0o777) == (temp_root, 0o700)
 
 
 def _program(program_id: str) -> bytes:
@@ -431,10 +451,10 @@ def test_the_later_of_two_programs_with_the_same_path_is_compiled(tmp_path):
         work_dir=tmp_path,
     )
 
-    assert {
-        ast.name.rpartition("-")[0]: json.loads(ast.read_text())["program_id"]
+    assert sorted(
+        (ast.name.rpartition("-")[0], json.loads(ast.read_text())["program_id"])
         for ast in tmp_path.glob("*.ast.json")
-    } == {"__main__": "CALLER", "CALLEE": "SECONDONE"}
+    ) == [("CALLEE", "SECONDONE"), ("__main__", "CALLER")]
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

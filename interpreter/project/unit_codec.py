@@ -9,7 +9,7 @@ from interpreter.project.ir_codec import IrCodec, Wire
 from interpreter.project.types import ModuleUnit
 from interpreter.project.unit_format_error import UnitFormatError
 
-_FORMAT = 1
+_FORMAT = 2
 
 
 class UnitCodec:
@@ -30,7 +30,7 @@ class UnitCodec:
 
     def _unit(self, wire: Wire) -> ModuleUnit:
         match wire:
-            case {"format": 1, "unit": body}:
+            case {"format": 2, "unit": body}:
                 return self._ir.decode_as(body, ModuleUnit)
             case _:
                 raise UnitFormatError(f"not a unit file of format {_FORMAT}")

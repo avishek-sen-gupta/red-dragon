@@ -3034,7 +3034,6 @@ class TestBareStatements:
 class TestDataLayout:
     @covers(CobolFeature.DATA_LAYOUT_ENGINE)
     def test_data_layout_present_after_execution(self):
-        """run() leaves the main program's layout declarations on VMState."""
         vm = _run_cobol(
             [
                 "IDENTIFICATION DIVISION.",

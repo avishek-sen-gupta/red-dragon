@@ -200,9 +200,9 @@ def link_stage(main_unit: Path, units: Sequence[Path], work_dir: Path) -> Path:
 
 def _link(main_unit: Path, units: Sequence[Path]) -> LinkedProgram:
     codec = UnitCodec(IrCodec())
-    read = tuple((codec.read(f), f) for f in (main_unit, *units))
-    main = read[0][0]
-    modules = {unit.path: unit for unit, _ in read}
+    read = tuple(codec.read(f) for f in (main_unit, *units))
+    main = read[0]
+    modules = {unit.path: unit for unit in read}
     graph = {path: [] for path in modules} | {
         main.path: [path for path in modules if path != main.path]
     }
@@ -238,18 +238,6 @@ def compile_cobol(
     tolerant: bool = False,
     lp: LP = LP.LP32,
 ) -> LinkedProgram:
-    """Compile a COBOL main program and the given programs into a LinkedProgram.
-
-    Compiles exactly *programs* besides the main one and searches no directory;
-    finding them is the caller's job (see cobol_discovery). Two programs with the
-    same path: the later one is compiled. A program that fails to lower is
-    skipped with a warning; one that fails to parse aborts the compile with
-    AstParseError, tolerant or not.
-
-    Parse, lower and link each write files into *work_dir* (a new owner-only
-    directory in the system temp location when None) and skip programs whose files already exist.
-    The returned program is read back from the linked file.
-    """
     mode = addressing_mode(lp)
     mode_parser = parser.with_addressing_mode(mode)
     settings = LoweringSettings(
