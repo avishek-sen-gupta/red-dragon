@@ -48,7 +48,7 @@ Three phases — extraction, inference, coercion — over `TypeExpr` algebraic d
 | Phase | What it does |
 |-------|-------------|
 | **Frontend extraction** | 13 statically-typed frontends extract type annotations during lowering |
-| **Static inference** | `infer_types()` propagates types to fixpoint over 23 instruction types — self/this typing, generics, union widening, overload resolution, interface hierarchies, 60+ builtin return types |
+| **Static inference** | `infer_types()` propagates types to fixpoint over 24 instruction types — self/this typing, generics, union widening, overload resolution, interface hierarchies, 60+ builtin return types |
 | **Runtime coercion** | Immutable `TypeEnvironment` drives write-time coercion via pluggable `TypeConversionRules` |
 
 **TypeExpr ADT:** `ScalarType`, `ParameterizedType`, `UnionType`, `FunctionType`, `TypeVar`, `UnknownType`
