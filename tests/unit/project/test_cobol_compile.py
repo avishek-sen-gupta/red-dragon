@@ -22,6 +22,7 @@ from interpreter.frontend_extension_lowering import (
 from interpreter.instructions import Data
 from interpreter.ir import NO_LABEL, CodeLabel
 from interpreter.project.cobol_compile import (
+    _cache_dir,
     compile_cobol,
     compile_cobol_module,
     parse_stage,
@@ -30,10 +31,13 @@ from interpreter.project.compiler import compile_directory
 from interpreter.project.lowering_settings import LoweringSettings
 from interpreter.project.source_file import SourceFile
 from interpreter.project.types import LinkedProgram, ModuleUnit
+from interpreter.register import NO_REGISTER
 from interpreter.run import (
     Completed,
     EntryPoint,
+    ExecutionState,
     initial_vm_state,
+    resume_linked,
     run_linked,
     run_linked_resumable,
     run_linked_traced,
@@ -197,11 +201,33 @@ def _traced_run(linked: LinkedProgram, entry_point: EntryPoint) -> VMState:
     return vm
 
 
+def _resumed_run(linked: LinkedProgram, entry_point: EntryPoint) -> VMState:
+    after_start_up = run_linked(
+        linked,
+        entry_point=EntryPoint.top_level(),
+        max_steps=10_000,
+        initial_vm=initial_vm_state(),
+    )
+    state = ExecutionState(
+        vm=dataclasses.replace(after_start_up, declarations=()),
+        current_label=entry_point.resolve(
+            list(linked.func_symbol_table.values())
+        ).label,
+        ip=0,
+        resume_reg=NO_REGISTER,
+    )
+    match resume_linked(linked, state, max_steps=10_000):
+        case Completed(vm=vm):
+            return vm
+        case other:
+            raise AssertionError(f"the resumed program did not complete: {other!r}")
+
+
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 @pytest.mark.parametrize(
     "run_program",
-    [_plain_run, _resumable_run, _traced_run],
-    ids=["run_linked", "run_linked_resumable", "run_linked_traced"],
+    [_plain_run, _resumable_run, _traced_run, _resumed_run],
+    ids=["run_linked", "run_linked_resumable", "run_linked_traced", "resume_linked"],
 )
 def test_each_linked_program_declares_its_files_and_the_run_holds_the_mains(
     run_program: Callable[[LinkedProgram, EntryPoint], VMState],
@@ -315,28 +341,27 @@ def test_compile_cobol_without_work_dir_uses_auto_temp():
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_compile_cobol_maps_every_compiled_program_to_its_persisted_ast():
-    linked = compile_cobol(
+def test_compile_cobol_persists_an_ast_for_every_compiled_program(tmp_path):
+    compile_cobol(
         _CALLER,
         parser=make_cobol_parser(),
         programs=(SourceFile(Path("CALLEE.cbl"), _CALLEE),),
+        work_dir=tmp_path,
     )
 
-    assert sorted(str(p) for p in linked.ast_paths) == ["CALLEE.cbl", "__main__.cbl"]
     assert {
-        str(source): json.loads(ast.read_text())["program_id"]
-        for source, ast in linked.ast_paths.items()
-    } == {"__main__.cbl": "CALLER", "CALLEE.cbl": "CALLEE"}
-    assert {ast.parent.parent for ast in linked.ast_paths.values()} == {
-        Path(tempfile.gettempdir())
-    }
+        ast.name.rpartition("-")[0]: json.loads(ast.read_text())["program_id"]
+        for ast in tmp_path.glob("*.ast.json")
+    } == {"__main__": "CALLER", "CALLEE": "CALLEE"}
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_the_default_work_dir_is_readable_only_by_its_owner():
-    linked = compile_cobol(_HELLO, parser=make_cobol_parser())
-    (cache,) = {ast.parent for ast in linked.ast_paths.values()}
-    assert cache.stat().st_mode & 0o777 == 0o700
+    cache = _cache_dir(None)
+    assert (cache.parent, cache.stat().st_mode & 0o777) == (
+        Path(tempfile.gettempdir()),
+        0o700,
+    )
 
 
 def _program(program_id: str) -> bytes:
@@ -389,27 +414,27 @@ def test_a_program_that_fails_to_lower_is_skipped_with_a_warning(caplog):
         "__main__.cbl",
         "__start_up__",
     }
-    assert {str(p) for p in linked.ast_paths} == {"CALLEE.cbl", "__main__.cbl"}
     assert [r.getMessage() for r in caplog.records] == [
         "compile_cobol: BROKEN failed to lower — skipping"
     ]
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_the_later_of_two_programs_with_the_same_path_is_compiled():
-    linked = compile_cobol(
+def test_the_later_of_two_programs_with_the_same_path_is_compiled(tmp_path):
+    compile_cobol(
         _CALLER,
         parser=make_cobol_parser(),
         programs=(
             SourceFile(Path("CALLEE.cbl"), _program("FIRSTONE")),
             SourceFile(Path("CALLEE.cbl"), _program("SECONDONE")),
         ),
+        work_dir=tmp_path,
     )
 
     assert {
-        str(source): json.loads(ast.read_text())["program_id"]
-        for source, ast in linked.ast_paths.items()
-    } == {"__main__.cbl": "CALLER", "CALLEE.cbl": "SECONDONE"}
+        ast.name.rpartition("-")[0]: json.loads(ast.read_text())["program_id"]
+        for ast in tmp_path.glob("*.ast.json")
+    } == {"__main__": "CALLER", "CALLEE": "SECONDONE"}
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

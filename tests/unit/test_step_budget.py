@@ -58,17 +58,13 @@ def _program(directory: Path, source: str) -> Path:
 def test_a_linked_program_that_never_ends_is_budget_exhausted(tmp_path: Path):
     def outcome(directory: Path):
         linked = compile_directory(directory, Language.PYTHON)
-        result = run_linked_resumable(
+        return run_linked_resumable(
             linked, EntryPoint.top_level(), max_steps=50, initial_vm=initial_vm_state()
         )
-        return linked, result
 
-    looping, runaway = outcome(
+    runaway = outcome(
         _program(tmp_path / "loops", "x = 0\nwhile True:\n    x = x + 1\n")
     )
-    _, ended = outcome(_program(tmp_path / "ends", "x = 1\n"))
+    ended = outcome(_program(tmp_path / "ends", "x = 1\n"))
     assert isinstance(runaway, BudgetExhausted)
-    assert (runaway.vm.data_layout is looping.data_layout, type(ended)) == (
-        True,
-        Completed,
-    )
+    assert type(ended) == Completed

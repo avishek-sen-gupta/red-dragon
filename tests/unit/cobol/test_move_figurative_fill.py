@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from interpreter.address import Address
 from interpreter.cobol.features import CobolFeature
+from interpreter.cobol.layout_data import field_positions
 from interpreter.cobol.run_unit import RUN_UNIT_VAR
 from interpreter.run import run
 from tests.covers import covers
@@ -46,11 +47,11 @@ _MOVE_SPACES = """\
 
 def _ws_bytes(vm, name: str) -> bytes:
     """Read raw bytes of a WS field by name from the VMState layout."""
-    layout = vm.data_layout
+    layout = field_positions(vm.declarations)
     if name not in layout:
         return b""
     info = layout[name]
-    off, length = info["offset"], info["length"]
+    off, length = info.offset, info.length
     run_unit = Address(str(vm.call_stack[0].local_vars[RUN_UNIT_VAR].value))
     for address in filter(run_unit.__ne__, vm.region_keys()):
         rgn = bytes(vm.region_get(address))

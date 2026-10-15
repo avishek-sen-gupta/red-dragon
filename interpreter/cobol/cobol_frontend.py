@@ -23,7 +23,6 @@ from cobol_asg.cobol_statements import dialect_parsers_in_scope
 from cobol_asg.frontend_extension import DialectParser
 from cobol_asg.lp32 import LP32_MODE
 from interpreter.cobol.condition_name_index import build_condition_index_over
-from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.field_resolution import ResolvedFieldRef
 from interpreter.cobol.file_definitions_data import file_definitions_data
@@ -82,7 +81,6 @@ class CobolFrontend(Frontend):
         self._observer = observer
         self._extension_strategies = tuple(extension_strategies)
         self._dialect_parsers = tuple(dialect_parsers)
-        self._layout = DataLayout()
         self._ctx = EmitContext(
             dispatch_fn=dispatch_statement,
             observer=observer,
@@ -138,25 +136,6 @@ class CobolFrontend(Frontend):
         return self._ctx.has_field(name, materialised)
 
     # ── Main entry point ──────────────────────────────────────────
-
-    @property
-    def data_layout(self) -> dict[str, dict]:
-        """Expose the COBOL data layout as a language-agnostic dict.
-
-        Available after lower() has been called. Maps field names to
-        offset, length, and type category info.
-        """
-        return {
-            fl.name: {
-                "offset": fl.offset,
-                "length": fl.byte_length,
-                "category": fl.type_descriptor.category.value,
-                "total_digits": fl.type_descriptor.total_digits,
-                "decimal_digits": fl.type_descriptor.decimal_digits,
-                "signed": fl.type_descriptor.signed,
-            }
-            for fl in self._layout.all_fields()
-        }
 
     @property
     def program_id(self) -> str:
@@ -222,7 +201,6 @@ class CobolFrontend(Frontend):
             len(asg.sections),
             len(asg.paragraphs),
         )
-        self._layout = sectioned.working_storage
         self._symbol_table = SymbolTable.from_data_layout(sectioned.working_storage)
         condition_index = build_condition_index_over(
             (

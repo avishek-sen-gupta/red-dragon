@@ -17,7 +17,7 @@ from interpreter.project.unit_format_error import UnitFormatError
 from interpreter.registry import build_registry
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 
-_FORMAT = 1
+_FORMAT = 2
 _DERIVED = frozenset({"merged_cfg", "merged_registry"})
 
 
@@ -43,7 +43,7 @@ class LinkedCodec:
 
     def _linked(self, wire: Wire) -> LinkedProgram:
         match wire:
-            case {"format": 1, "linked": dict(body)}:
+            case {"format": 2, "linked": dict(body)}:
                 return self._program(body)
             case _:
                 raise UnitFormatError(f"not a linked-program file of format {_FORMAT}")
@@ -67,10 +67,8 @@ class LinkedCodec:
                 body["type_env_builder"], TypeEnvironmentBuilder
             ),
             symbol_table=ir.decode_as(body["symbol_table"], SymbolTable),
-            data_layout=ir.decode_as(body["data_layout"], dict),
             unresolved_imports=ir.decode_as(body["unresolved_imports"], list),
             func_symbol_table=funcs,
             class_symbol_table=classes,
-            ast_paths=ir.decode_as(body["ast_paths"], dict),
             entry_func_label=ir.decode_as(body["entry_func_label"], CodeLabel),
         )

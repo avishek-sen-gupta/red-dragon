@@ -7,7 +7,7 @@ data model for the multi-file pipeline.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -99,7 +99,6 @@ class ModuleUnit:
     imports: tuple[ImportRef, ...]
     symbol_table: SymbolTable = field(default_factory=SymbolTable.empty)
     entry_label: CodeLabel = NO_LABEL
-    data_layout: dict[str, dict] = field(default_factory=dict)
     start_up: tuple[InstructionBase, ...] = ()
 
 
@@ -133,11 +132,9 @@ class LinkedProgram:
     import_graph: dict[Path, list[Path]]
     type_env_builder: TypeEnvironmentBuilder
     symbol_table: SymbolTable
-    data_layout: dict[str, dict] = field(default_factory=dict)
     unresolved_imports: list[ImportRef] = field(default_factory=list)
     func_symbol_table: dict[CodeLabel, FuncRef] = field(default_factory=dict)
     class_symbol_table: dict[CodeLabel, ClassRef] = field(default_factory=dict)
-    ast_paths: Mapping[Path, Path] = field(default_factory=dict)
     entry_func_label: CodeLabel = NO_LABEL
     """Explicit entry function label.
 

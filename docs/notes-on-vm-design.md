@@ -164,8 +164,7 @@ VMState
 ├── closures: dict[ClosureId, ClosureEnvironment]
 ├── continuations: dict[ContinuationName, CodeLabel]
 ├── exception_stack: list[ExceptionHandler]
-├── data_layout: dict[str, dict]              COBOL field layout, set by run_linked
-├── declarations: tuple[Data, ...]            the main module's Data directives, set by run_linked
+├── declarations: tuple[Data, ...]            the main module's Data directives, set by the loader
 └── io_provider
 ```
 

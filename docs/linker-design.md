@@ -338,7 +338,6 @@ class ModuleUnit:
     imports: tuple[ImportRef, ...]
     symbol_table: SymbolTable = field(default_factory=SymbolTable.empty)
     entry_label: CodeLabel = NO_LABEL              # un-namespaced entry function
-    data_layout: dict[str, dict] = field(default_factory=dict)
     start_up: tuple[InstructionBase, ...] = ()     # run once before any module
 
 @dataclass
@@ -351,11 +350,9 @@ class LinkedProgram:
     import_graph: dict[Path, list[Path]]
     type_env_builder: TypeEnvironmentBuilder
     symbol_table: SymbolTable
-    data_layout: dict[str, dict] = field(default_factory=dict)
     unresolved_imports: list[ImportRef] = field(default_factory=list)
     func_symbol_table: dict[CodeLabel, FuncRef] = field(default_factory=dict)
     class_symbol_table: dict[CodeLabel, ClassRef] = field(default_factory=dict)
-    ast_paths: Mapping[Path, Path] = field(default_factory=dict)
     entry_func_label: CodeLabel = NO_LABEL
     # Explicit entry function label. When several modules are linked (e.g. a
     # COBOL main program plus the subprograms it CALLs), multiple func_*
@@ -395,8 +392,8 @@ work directory reuses every stage's output.
   still current beyond that: copybook contents and the lowering version are not
   in the digest, and a work directory is deleted to rebuild.
 - **What a unit carries.** Everything link needs, so link reads nothing but unit
-  files: the IR, exports, imports, symbol table, `entry_label`, `data_layout` and
-  `start_up` (the COBOL run-unit allocation, from the frontend's `start_up_ir()`).
+  files: the IR (a COBOL unit's file definitions and data layout among it, as
+  `Data` directives), exports, imports, symbol table, `entry_label` and `start_up` (the COBOL run-unit allocation, from the frontend's `start_up_ir()`).
 - **What the linked file carries.** Every `LinkedProgram` field, the modules
   included, except `merged_cfg` and `merged_registry`: `LinkedCodec.read`
   rebuilds both from the merged IR with `build_cfg` and `build_registry`, which is
@@ -416,9 +413,10 @@ list of pairs, so any value can be a name), `loc`, `none`, `unknown_type`, and
 constructing the class, null-object classes to their singletons). An unknown
 kind or class raises `UnitFormatError`.
 
-`UnitCodec` and `LinkedCodec` write `{"format": 1, "unit" | "linked": …}` and
-raise `UnitFormatError` naming the file when it does not decode. The encoding is
-verbose (red-dragon-rfwv).
+`UnitCodec` writes `{"format": 1, "unit": …}` and `LinkedCodec`
+`{"format": 2, "linked": …}`; each raises `UnitFormatError` naming the file when it
+does not decode, a linked file of format 1 included. The encoding is verbose
+(red-dragon-rfwv).
 
 ---
 

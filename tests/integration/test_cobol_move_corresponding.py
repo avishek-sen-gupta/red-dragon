@@ -11,6 +11,7 @@ Tests skip gracefully when the JAR is absent.
 import pytest
 
 from interpreter.cobol.features import CobolFeature
+from interpreter.cobol.layout_data import field_positions
 from tests.covers import covers
 from tests.integration.cobol_helpers import bridge_jar  # noqa: F401
 from tests.integration.cobol_helpers import (
@@ -116,12 +117,12 @@ class TestMoveCorrespondingBasic:
             ]
         )
         region = _first_region(vm)
-        layout = vm.data_layout
+        layout = field_positions(vm.declarations)
 
         # Get field offsets from layout
-        matched_offset = layout["MATCHED"]["offset"]
-        source_only_offset = layout["SOURCE-ONLY"]["offset"]
-        target_only_offset = layout["TARGET-ONLY"]["offset"]
+        matched_offset = layout["MATCHED"].offset
+        source_only_offset = layout["SOURCE-ONLY"].offset
+        target_only_offset = layout["TARGET-ONLY"].offset
 
         # SOURCE-REC.SOURCE-ONLY should be unchanged: 77
         assert _decode_zoned_unsigned(region, source_only_offset, 3) == 77
@@ -172,12 +173,12 @@ class TestMoveCorrespondingMultipleTargets:
             ]
         )
         region = _first_region(vm)
-        layout = vm.data_layout
+        layout = field_positions(vm.declarations)
 
         # Get offsets from layout
-        item_offset = layout["ITEM"]["offset"]
-        field1_offset = layout["FIELD1"]["offset"]
-        field2_offset = layout["FIELD2"]["offset"]
+        item_offset = layout["ITEM"].offset
+        field1_offset = layout["FIELD1"].offset
+        field2_offset = layout["FIELD2"].offset
 
         # FIELD1 and FIELD2 should be unchanged
         assert _decode_zoned_unsigned(region, field1_offset, 3) == 11
@@ -220,11 +221,11 @@ class TestMoveCorrespondingNoMatches:
             ]
         )
         region = _first_region(vm)
-        layout = vm.data_layout
+        layout = field_positions(vm.declarations)
 
         # Get offsets from layout
-        alpha_offset = layout["ALPHA"]["offset"]
-        beta_offset = layout["BETA"]["offset"]
+        alpha_offset = layout["ALPHA"].offset
+        beta_offset = layout["BETA"].offset
 
         # Source should remain "TEST"
         assert _ebcdic_to_ascii(region, alpha_offset, 4) == "TEST"
@@ -268,12 +269,12 @@ class TestMoveCorrespondingPartialOverlap:
             ]
         )
         region = _first_region(vm)
-        layout = vm.data_layout
+        layout = field_positions(vm.declarations)
 
         # Get offsets from layout
-        state_offset = layout["STATE"]["offset"]
-        src_filler_offset = layout["SRC-FILLER"]["offset"]
-        tgt_filler_offset = layout["TGT-FILLER"]["offset"]
+        state_offset = layout["STATE"].offset
+        src_filler_offset = layout["SRC-FILLER"].offset
+        tgt_filler_offset = layout["TGT-FILLER"].offset
 
         # SRC-FILLER (no target match) should remain 77
         assert _decode_zoned_unsigned(region, src_filler_offset, 3) == 77

@@ -11,6 +11,7 @@ subsequent exact-equality balance check to fire incorrectly.
 
 from __future__ import annotations
 
+from interpreter.cobol.layout_data import field_positions
 from interpreter.frontend import make_cobol_parser
 from interpreter.project.cobol_compile import compile_cobol
 from interpreter.project.entry_point import EntryPoint
@@ -59,13 +60,8 @@ _MULTI_OPERAND_COMPUTE = b"""\
 
 def _ws_zoned(vm, name: str) -> int:
     """Return a WS zoned-decimal field's raw digit string as an integer."""
-    layout = vm.data_layout
-    if layout is None:
-        raise ValueError("no data_layout on vm")
-    field = layout.get(name)
-    if field is None:
-        raise KeyError(name)
-    off, sz = field["offset"], field["length"]
+    field = field_positions(vm.declarations)[name]
+    off, sz = field.offset, field.length
     for rk in vm.region_keys():
         rgn = bytes(vm.region_get(rk))
         if len(rgn) >= off + sz:

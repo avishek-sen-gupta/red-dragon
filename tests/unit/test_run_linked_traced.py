@@ -32,7 +32,6 @@ def _build_linked_program(source: str, language: Language) -> LinkedProgram:
         import_graph={},
         type_env_builder=frontend.type_env_builder,
         symbol_table=frontend.symbol_table,
-        data_layout=frontend.data_layout,
         func_symbol_table=frontend.func_symbol_table,
         class_symbol_table=frontend.class_symbol_table,
     )

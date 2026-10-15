@@ -36,14 +36,6 @@ class Frontend(ABC):
     ) -> list[InstructionBase]: ...
 
     @property
-    def data_layout(self) -> dict[str, dict]:
-        """Language-agnostic data layout mapping field names to offset/length/type info.
-
-        Override in language frontends that produce memory layouts (e.g. COBOL).
-        """
-        return {}
-
-    @property
     def type_env_builder(self) -> TypeEnvironmentBuilder:
         """Type seeds accumulated during lowering.
 
