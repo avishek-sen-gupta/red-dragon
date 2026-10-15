@@ -376,12 +376,19 @@ def test_compile_cobol_persists_an_ast_for_every_compiled_program(tmp_path):
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_the_default_work_dir_is_readable_only_by_its_owner():
+def test_each_compile_without_a_work_dir_gets_its_own_owner_only_directory():
     temp_root = Path(tempfile.gettempdir())
     before = set(temp_root.iterdir())
-    compile_cobol(_HELLO, parser=make_cobol_parser())
-    (cache,) = set(temp_root.iterdir()) - before
-    assert (cache.parent, cache.stat().st_mode & 0o777) == (temp_root, 0o700)
+    first = compile_cobol(_HELLO, parser=make_cobol_parser())
+    (first_dir,) = set(temp_root.iterdir()) - before
+    second = compile_cobol(_HELLO, parser=make_cobol_parser())
+    (second_dir,) = set(temp_root.iterdir()) - before - {first_dir}
+    assert (
+        first == second,
+        [d.parent for d in (first_dir, second_dir)],
+        [d.stat().st_mode & 0o777 for d in (first_dir, second_dir)],
+        len(list(first_dir.glob("*.ast.json"))),
+    ) == (True, [temp_root, temp_root], [0o700, 0o700], 1)
 
 
 def _program(program_id: str) -> bytes:

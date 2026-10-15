@@ -24,10 +24,9 @@ from cobol_asg.frontend_extension import (
 from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy
 from interpreter.project.cobol_compile import compile_cobol
 from interpreter.project.cobol_discovery import discover_callee_programs
+from interpreter.project.fresh_work_dir import FRESH_WORK_DIR, FreshWorkDir
 from interpreter.project.source_file import SourceFile
 from interpreter.project.types import LinkedProgram
-
-_FRESH = Path("<fresh work directory>")
 
 
 def _identity(source: str) -> str:
@@ -114,7 +113,7 @@ def compile_program(
     source_search_dirs: Sequence[Path] = (),
     linked_subprogram_sources: Mapping[str, bytes] = {},
     tolerant: bool = False,
-    work_dir: Path = _FRESH,
+    work_dir: Path | FreshWorkDir = FRESH_WORK_DIR,
 ) -> LinkedProgram:
     """Compile ``source`` with every spec's prepass and strategy composed.
 
@@ -169,5 +168,5 @@ def compile_program(
         extension_strategies=strategies,
         dialect_parsers=dialect_parsers,
         tolerant=tolerant,
-        work_dir=None if work_dir is _FRESH else work_dir,
+        work_dir=work_dir,
     )
