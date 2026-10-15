@@ -214,6 +214,7 @@ def _resumed_run(linked: LinkedProgram, entry_point: EntryPoint) -> VMState:
         ).label,
         ip=0,
         resume_reg=NO_REGISTER,
+        entered=linked.entry_func_label,
     )
     match resume_linked(linked, state, max_steps=10_000):
         case Completed(vm=vm):

@@ -81,19 +81,19 @@ class CobolIOProvider(ABC):
         method = getattr(self, method_name)
         return method(*[a.value for a in args])
 
-    def _io_status(self, raw: Any) -> Any:
+    def _io_status(self, raw: Any, program: str) -> Any:
         """Extract COBOL file status code from an IOResult."""
         if isinstance(raw, IOResult):
             return raw.status
         return _UNCOMPUTABLE
 
-    def _io_data(self, raw: Any) -> Any:
+    def _io_data(self, raw: Any, program: str) -> Any:
         """Extract record data from an IOResult (empty string if None)."""
         if isinstance(raw, IOResult):
             return raw.data or ""
         return _UNCOMPUTABLE
 
-    def _open_mode(self, filename: Any) -> Any:
+    def _open_mode(self, filename: Any, program: str) -> Any:
         """Current OPEN mode of a file ("INPUT"/"OUTPUT"/"I-O"/"EXTEND"), "" if closed."""
         return ""
 
@@ -113,39 +113,42 @@ class CobolIOProvider(ABC):
         organization: str,
         key_offset: int,
         key_length: int,
+        program: str,
     ) -> IOResult:
         """OPEN file in given mode (INPUT/OUTPUT/I-O/EXTEND)."""
         ...
 
     @abstractmethod
-    def _close_file(self, filename: str) -> IOResult:
+    def _close_file(self, filename: str, program: str) -> IOResult:
         """CLOSE file."""
         ...
 
     @abstractmethod
     def _read_record(
-        self, filename: str, key: str
+        self, filename: str, key: str, program: str
     ) -> Any:  # Any: IOResult | _Uncomputable
         """READ — get next record from file."""
         ...
 
     @abstractmethod
-    def _write_record(self, filename: str, data: str) -> IOResult:
+    def _write_record(self, filename: str, data: str, program: str) -> IOResult:
         """WRITE — write a record to file."""
         ...
 
     @abstractmethod
-    def _rewrite_record(self, filename: str, data: str) -> IOResult:
+    def _rewrite_record(self, filename: str, data: str, program: str) -> IOResult:
         """REWRITE — replace the last-read record in file."""
         ...
 
     @abstractmethod
-    def _start_file(self, filename: str, key: str, relop: str) -> IOResult:
+    def _start_file(
+        self, filename: str, key: str, relop: str, program: str
+    ) -> IOResult:
         """START — position file at key for sequential reading."""
         ...
 
     @abstractmethod
-    def _delete_record(self, filename: str) -> IOResult:
+    def _delete_record(self, filename: str, program: str) -> IOResult:
         """DELETE — remove the last-read record from file."""
         ...
 
@@ -173,25 +176,28 @@ class NullIOProvider(CobolIOProvider):
         organization: str,
         key_offset: int,
         key_length: int,
+        program: str,
     ) -> IOResult:
         return IOResult("00", None)
 
-    def _close_file(self, filename: str) -> IOResult:
+    def _close_file(self, filename: str, program: str) -> IOResult:
         return IOResult("00", None)
 
-    def _read_record(self, filename: str, key: str) -> Any:
+    def _read_record(self, filename: str, key: str, program: str) -> Any:
         return _UNCOMPUTABLE
 
-    def _write_record(self, filename: str, data: str) -> IOResult:
+    def _write_record(self, filename: str, data: str, program: str) -> IOResult:
         return IOResult("00", None)
 
-    def _rewrite_record(self, filename: str, data: str) -> IOResult:
+    def _rewrite_record(self, filename: str, data: str, program: str) -> IOResult:
         return IOResult("00", None)
 
-    def _start_file(self, filename: str, key: str, relop: str) -> IOResult:
+    def _start_file(
+        self, filename: str, key: str, relop: str, program: str
+    ) -> IOResult:
         return IOResult("00", None)
 
-    def _delete_record(self, filename: str) -> IOResult:
+    def _delete_record(self, filename: str, program: str) -> IOResult:
         return IOResult("00", None)
 
 
@@ -245,19 +251,20 @@ class StubIOProvider(CobolIOProvider):
         organization: str,
         key_offset: int,
         key_length: int,
+        program: str,
     ) -> IOResult:
         stub = self.get_file(filename)
         stub.is_open = True
         logger.info("StubIOProvider OPEN %s mode=%s", filename, mode)
         return IOResult("00", None)
 
-    def _close_file(self, filename: str) -> IOResult:
+    def _close_file(self, filename: str, program: str) -> IOResult:
         if filename in self._files:
             self._files[filename].is_open = False
         logger.info("StubIOProvider CLOSE %s", filename)
         return IOResult("00", None)
 
-    def _read_record(self, filename: str, key: str) -> Any:
+    def _read_record(self, filename: str, key: str, program: str) -> Any:
         stub = self._files.get(filename)
         if stub and stub.records:
             record = stub.records.pop(0)
@@ -266,13 +273,13 @@ class StubIOProvider(CobolIOProvider):
         logger.info("StubIOProvider READ %s → AT END", filename)
         return IOResult("10", None)
 
-    def _write_record(self, filename: str, data: str) -> IOResult:
+    def _write_record(self, filename: str, data: str, program: str) -> IOResult:
         stub = self.get_file(filename)
         stub.written.append(data)
         logger.info("StubIOProvider WRITE %s ← %r", filename, data)
         return IOResult("00", None)
 
-    def _rewrite_record(self, filename: str, data: str) -> IOResult:
+    def _rewrite_record(self, filename: str, data: str, program: str) -> IOResult:
         stub = self.get_file(filename)
         if stub.written:
             stub.written[-1] = data
@@ -281,13 +288,15 @@ class StubIOProvider(CobolIOProvider):
         logger.info("StubIOProvider REWRITE %s ← %r", filename, data)
         return IOResult("00", None)
 
-    def _start_file(self, filename: str, key: str, relop: str) -> IOResult:
+    def _start_file(
+        self, filename: str, key: str, relop: str, program: str
+    ) -> IOResult:
         logger.info(
             "StubIOProvider START %s key=%s relop=%s (no-op)", filename, key, relop
         )
         return IOResult("00", None)
 
-    def _delete_record(self, filename: str) -> IOResult:
+    def _delete_record(self, filename: str, program: str) -> IOResult:
         stub = self._files.get(filename)
         if stub and stub.records:
             removed = stub.records.pop(0)

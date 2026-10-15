@@ -67,10 +67,10 @@ Files are under `interpreter/cobol/` unless prefixed with `cobol_asg/`.
 
 Right after its `entry` label, each program's IR declares two `Data` directives, which the VM steps over:
 
-- `__cobol_file_definitions` — a record whose `files` list holds one record per SELECT, in FILE-CONTROL order: `file_name`, `assign_to`, `organization`, `access_mode`, `record_key`, `relative_key`, `file_status`, and `fd` — empty without an FD, else one record with `recording_mode`, `record_clause` (`kind` plus that clause's sizes and `depending_on`), `record_lengths` (one per 01 record) and `depending` (any 01 record contains OCCURS DEPENDING ON).
+- `__cobol_file_definitions` — a record whose `files` list holds one record per SELECT, in FILE-CONTROL order: `program` (the declaring program's PROGRAM-ID, upper-cased), `file_name`, `assign_to`, `organization`, `access_mode`, `record_key`, `relative_key`, `file_status`, and `fd` — empty without an FD, else one record with `recording_mode`, `record_clause` (`kind` plus that clause's sizes and `depending_on`), `record_lengths` (one per 01 record) and `depending` (any 01 record contains OCCURS DEPENDING ON).
 - `__cobol_data_layout` — a record whose `fields` list holds each WORKING-STORAGE entry's `name`, `offset`, `length`, `category`, `total_digits`, `decimal_digits` and `signed`. `field_positions(declarations)` reads it back as a name → `FieldPosition` mapping.
 
-The linker namespaces labels only, so every linked module keeps both names. The loader copies the main module's `Data` into `VMState.declarations` (`main_declarations(linked)` in `run.py`) without looking inside.
+The linker namespaces labels only, so every linked module keeps both names. The loader copies the entered program's `Data` into `VMState.declarations` (`declarations_of(linked, program)` in `run.py` for a `ProgramEntry` run; the program at `entry_func_label` for an `EntryPoint` run) without looking inside.
 
 ## Data Division Lowering
 
@@ -170,13 +170,15 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 | Statement | IR Pattern |
 |---|---|
 | `ACCEPT var` | `CALL_FUNCTION __cobol_accept(device)` → encode result → `WRITE_REGION` to target field |
-| `OPEN mode file` | `CALL_FUNCTION __cobol_open_file(filename, mode)` per file |
-| `CLOSE file` | `CALL_FUNCTION __cobol_close_file(filename)` per file |
-| `READ file INTO var` | `CALL_FUNCTION __cobol_read_record(filename)` → encode → `WRITE_REGION` to INTO target |
-| `WRITE rec FROM var` | Decode FROM field → `CALL_FUNCTION __cobol_write_record(filename, data)` |
-| `REWRITE rec FROM var` | Decode FROM field → `CALL_FUNCTION __cobol_rewrite_record(filename, data)` |
-| `START file KEY key` | `CALL_FUNCTION __cobol_start_file(filename, key)` |
-| `DELETE file` | `CALL_FUNCTION __cobol_delete_record(filename)` |
+| `OPEN mode file` | `CALL_FUNCTION __cobol_open_file(filename, mode, record_length, organization, key_offset, key_length, program)` per file |
+| `CLOSE file` | `CALL_FUNCTION __cobol_close_file(filename, program)` per file |
+| `READ file INTO var` | `CALL_FUNCTION __cobol_read_record(filename, key, program)` → `__cobol_io_data(result, program)` → encode → `WRITE_REGION` to INTO target |
+| `WRITE rec FROM var` | Decode FROM field → `CALL_FUNCTION __cobol_write_record(filename, data, program)` |
+| `REWRITE rec FROM var` | Decode FROM field → `CALL_FUNCTION __cobol_rewrite_record(filename, data, program)` |
+| `START file KEY key` | `CALL_FUNCTION __cobol_start_file(filename, key, relop, program)` |
+| `DELETE file` | `CALL_FUNCTION __cobol_delete_record(filename, program)` |
+
+Each file verb's status is `__cobol_io_status(result, program)`; a USE declarative scoped by open mode asks `__cobol_file_open_mode(filename, program)`. `program` is the calling program's PROGRAM-ID, upper-cased, a constant the lowering emits as the last argument of every file call, and each `CobolIOProvider` method takes it as its last parameter; red-dragon's providers accept and ignore it (ADR-185).
 
 I/O statements dispatch to an injectable `CobolIOProvider` (ABC in `io_provider.py`). `NullIOProvider` returns `UNCOMPUTABLE` (symbolic fallthrough). `StubIOProvider` returns queued test data for concrete execution without real files or console. Provider is injected via `VMConfig(io_provider=stub)`.
 

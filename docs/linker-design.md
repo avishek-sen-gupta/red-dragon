@@ -12,7 +12,7 @@ RedDragon's multi-file project support extends the single-file pipeline to real-
 
 **Design principle:** The linker's output is indistinguishable from single-file compilation. The VM, CFG builder and registry run completely unmodified.
 
-**Supported:** All 15 tree-sitter frontends through `compile_directory`. COBOL links through `compile_cobol`: the main program plus a fixed list of other programs, which the caller finds — usually with `discover_callee_programs`, which follows `CALL 'LITERAL'` edges through ordered search directories (ADR-181). The three stages — parse, lower, link — each write a file (`.ast.json`, `.unit.json`, `.linked.json`) into a work directory and skip a program whose file already exists; `compile_cobol` returns the `LinkedProgram` read back from the linked file (ADR-183, §7.1).
+**Supported:** All 15 tree-sitter frontends through `compile_directory`. COBOL links through `compile_cobol`: the main program plus a fixed list of other programs, which the caller finds — usually with `discover_callee_programs`, which follows `CALL 'LITERAL'` edges through ordered search directories (ADR-181). The three stages — parse, lower, link — each write a file (`.ast.json`, `.unit.json`, `.linked.json`) into a work directory and skip a program whose file already exists; `compile_cobol` returns the `LinkedProgram` read back from the linked file (ADR-183, §7.1). A build that lowers each program once uses `lower_program` and `link_units` instead: one image, no main, entered by program name (ADR-185, §7.3).
 
 ---
 
@@ -338,7 +338,7 @@ class ModuleUnit:
     imports: tuple[ImportRef, ...]
     symbol_table: SymbolTable = field(default_factory=SymbolTable.empty)
     entry_label: CodeLabel = NO_LABEL              # un-namespaced entry function
-    start_up: tuple[InstructionBase, ...] = ()     # run once before any module
+    program: str = NO_PROGRAM                      # COBOL PROGRAM-ID, upper-cased
 
 @dataclass
 class LinkedProgram:
@@ -359,6 +359,8 @@ class LinkedProgram:
     # labels exist and a bare func_* entry predicate would be ambiguous;
     # callers that know the entry module set this to dispatch execution
     # into it rather than into a linked-in callee.
+    programs: dict[str, CodeLabel] = field(default_factory=dict)
+    # Each linked COBOL program's name to its namespaced entry label.
 
     def entry_points(self, predicate=lambda _: True) -> list[FuncRef]:
         """Query func_symbol_table values matching predicate (default: all)."""
@@ -378,10 +380,12 @@ process:
 |---|---|---|
 | `parse_stage` | source bytes | `<stem>-<digest>.ast.json` (bridge JSON) |
 | lowering (`_Lowering.lower`) | the AST file | `<stem>-<digest>.unit.json` (a `ModuleUnit`) |
-| `link_stage` | unit files | `<main stem>-<digest>.linked.json` (a `LinkedProgram`) |
+| `link_units` | unit files | `image-<digest>.linked.json` (a `LinkedProgram`, no main) |
 
-`compile_cobol` runs the three over a work directory and returns the
-`LinkedProgram` read back from the linked file; no frontend or in-memory unit
+`compile_cobol` runs the three over a work directory, links its units (callees
+first, the main last) into `<main stem>-<digest>.linked.json` with
+`entry_func_label` at the main program, and returns the `LinkedProgram` read back
+from the linked file; no frontend or in-memory unit
 crosses a stage. A stage skips a program whose output already exists, so a kept
 work directory reuses every stage's output.
 `compile_program` takes the same `work_dir` and passes it through, so a coprocessor
@@ -395,7 +399,9 @@ compile keeps and reuses its files the same way.
   in the digest, and a work directory is deleted to rebuild.
 - **What a unit carries.** Everything link needs, so link reads nothing but unit
   files: the IR (a COBOL unit's file definitions and data layout among it, as
-  `Data` directives), exports, imports, symbol table, `entry_label` and `start_up` (the COBOL run-unit allocation, from the frontend's `start_up_ir()`).
+  `Data` directives), exports, imports, symbol table, `entry_label` and `program`, the PROGRAM-ID.
+  A unit carries no start-up: link adds the COBOL run-unit allocation once, from the
+  frontend's `start_up_ir()`, the same for every program.
 - **What the linked file carries.** Every `LinkedProgram` field, the modules
   included, except `merged_cfg` and `merged_registry`: `LinkedCodec.read`
   rebuilds both from the merged IR with `build_cfg` and `build_registry`, which is
@@ -415,10 +421,39 @@ list of pairs, so any value can be a name), `loc`, `none`, `unknown_type`, and
 constructing the class, null-object classes to their singletons). An unknown
 kind or class raises `UnitFormatError`.
 
-`UnitCodec` and `LinkedCodec` write `{"format": 2, "unit" | "linked": …}` and raise
-`UnitFormatError` naming the file when it does not decode, a file of format 1
+`UnitCodec` and `LinkedCodec` write `{"format": 3, "unit" | "linked": …}` and raise
+`UnitFormatError` naming the file when it does not decode, a file of format 2
 included. The encoding is verbose
 (red-dragon-rfwv).
+
+### 7.3 One image, entered by program (COBOL)
+
+A build that lowers each program once and links a chosen list keeps lowering and
+linking apart (ADR-185):
+
+- `lower_program(source, *, parser, specs, copybook_dirs, work_dir, tolerant) -> Path`
+  (`coprocessor_compile.py`) runs every spec's `source_prepass`, makes each
+  spec's strategy and dialect parser, parses and lowers the one program, and
+  returns its unit file. The unit's path is `<PROGRAM-ID>.cbl`, so each program's
+  labels are namespaced by its own name. It discovers nothing.
+- `link_units(units, work_dir) -> LinkedProgram` (`cobol_compile.py`) links the
+  unit files in the order given, after the COBOL run-unit allocation, which is
+  the same for every program. No unit is main: `link_every_module` keeps every
+  unit rather than pruning to what an entry reaches, and `entry_func_label` is
+  `NO_LABEL`. `programs` maps each unit's `program` to its namespaced
+  `entry_label`. Two units of one `program` (or one unit file listed twice) are
+  refused before linking with `DuplicateProgramInImage`, naming both unit files.
+- A run enters the image with `ProgramEntry(name)` (`run_linked`,
+  `run_linked_resumable`, `run_linked_traced`); a name not in `programs` raises
+  `ProgramNotInImage`, whose message is `program <name> is not in the image`.
+  The name is matched exactly, case included.
+  `VMState.declarations` are `declarations_of(linked, name)`, that program's
+  `Data`. CALLs, literal or by identifier, resolve at run time through
+  `__entry_<PROGRAM-ID>` against every program in the image.
+- A suspended run's `ExecutionState.entered` is the entry label whose
+  declarations it holds; `resume_linked` restores them from it.
+- An `EntryPoint` run still takes the declarations of the program at
+  `entry_func_label`, which `compile_cobol` sets to its main program.
 
 ---
 
@@ -472,12 +507,19 @@ interpreter/project/
     imports.py             extract_imports() — tree-sitter walkers for 15 languages + Lark grammar for COBOL
     resolver.py            ImportResolver protocol + 13 language resolvers + topological_sort()
     compiler.py            compile_module(), compile_directory(), build_export_table()
-    linker.py              link_modules() — strip, namespace, rebase, drop stubs, concatenate
+    linker.py              link_modules() — prune to what the entry reaches, then link_every_module():
+                           strip, namespace, rebase, drop stubs, concatenate
     source_roots.py        SourceRootDiscovery — Maven-style src/main/java root discovery (Java multi-module)
     entry_point.py         EntryPoint — top_level()/function(predicate) execution-entry spec
-    cobol_compile.py        compile_cobol()/compile_cobol_module(), parse_stage(), link_stage() —
-                            COBOL in three stages chained through files (AST, unit, linked)
-                            that links the main program with a fixed list of other programs
+    program_entry.py       ProgramEntry — enter a linked image at the program of a name
+    program_not_in_image.py ProgramNotInImage — the image holds no program of that name
+    duplicate_program_in_image.py DuplicateProgramInImage — two units of one program in an image
+    cobol_compile.py        compile_cobol()/compile_cobol_module(), parse_stage(),
+                            lower_cobol_program(), link_units() — COBOL in three stages
+                            chained through files (AST, unit, linked); compile_cobol links
+                            the main program with a fixed list of other programs
+    coprocessor_compile.py  CoprocessorSpec, compile_program(), lower_program() — one program
+                            lowered with every spec's prepass, strategy and dialect parser
     lowering_settings.py    LoweringSettings — the settings a compiled file's name digests
     ir_codec.py             IrCodec — self-describing JSON for IR values
     unit_codec.py           UnitCodec — ModuleUnit <-> .unit.json
@@ -508,6 +550,7 @@ Core tests, in `tests/unit/project/` and `tests/integration/project/` (counts ar
 | `test_resolver.py` | 23 | Python resolver + protocol |
 | `test_topo_sort.py` | 10 | Topological sort, cycles, edge cases |
 | `test_linker.py` | 20 | Namespace, rebase, register helpers |
+| `test_lower_and_link.py` | 6 | Lowering one program at a time, linking an image, entering it by program, resuming with the entered program's declarations |
 | `test_project_pipeline.py` | 14 | Full compile→link pipeline (Python, JS, Java, C) |
 | `test_fixture_projects.py` | 5 | On-disk fixture projects |
 | `test_all_languages_execution.py` | 21 | Multi-file execution for all 15 languages |

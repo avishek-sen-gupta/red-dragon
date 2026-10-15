@@ -22,7 +22,7 @@ from cobol_asg.frontend_extension import (
     NullDialectParser,
 )
 from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy
-from interpreter.project.cobol_compile import compile_cobol
+from interpreter.project.cobol_compile import compile_cobol, lower_cobol_program
 from interpreter.project.cobol_discovery import discover_callee_programs
 from interpreter.project.fresh_work_dir import FRESH_WORK_DIR, FreshWorkDir
 from interpreter.project.source_file import SourceFile
@@ -58,6 +58,10 @@ class CoprocessorSpec:
     ``source_prepass`` runs on every compiled program — the main program, each
     discovered callee and each linked subprogram — before ANY spec's
     ``make_strategy`` is called, so that holder is always populated in time.
+    ``lower_program`` lowers one program at a time: it runs that program's
+    prepasses, then makes each spec's strategy for that program alone, so a
+    holder there sees only that program's prepass; ``compile_program`` still
+    runs every program's prepass before any ``make_strategy``.
 
     ``owns_execution`` marks the (at most one) coprocessor that imposes
     execution semantics on the compiled program (e.g. a dispatcher loop) —
@@ -169,4 +173,27 @@ def compile_program(
         dialect_parsers=dialect_parsers,
         tolerant=tolerant,
         work_dir=work_dir,
+    )
+
+
+def lower_program(
+    source: bytes,
+    *,
+    parser: ProLeapCobolParser,
+    specs: Sequence[CoprocessorSpec],
+    copybook_dirs: Sequence[Path],
+    work_dir: Path,
+    tolerant: bool,
+) -> Path:
+    text = functools.reduce(
+        lambda t, spec: spec.source_prepass(t), specs, source.decode("utf-8")
+    )
+    return lower_cobol_program(
+        text.encode("utf-8"),
+        parser=parser,
+        copybook_dirs=copybook_dirs,
+        extension_strategies=[spec.make_strategy() for spec in specs],
+        dialect_parsers=[spec.dialect_parser for spec in specs],
+        work_dir=work_dir,
+        tolerant=tolerant,
     )

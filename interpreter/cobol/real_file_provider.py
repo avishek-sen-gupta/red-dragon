@@ -134,6 +134,7 @@ class RealFileIOProvider(CobolIOProvider):
         organization: str,
         key_offset: int,
         key_length: int,
+        program: str,
     ) -> IOResult:
         org = _organization_of(organization)
         path = self._resolve_path(filename, self._assign_to(filename))
@@ -168,7 +169,7 @@ class RealFileIOProvider(CobolIOProvider):
         logger.info("OPEN %s mode=%s org=%s path=%s", filename, mode, org.value, path)
         return to_ioresult(AccessResult(AccessCondition.OK))
 
-    def _close_file(self, filename: str) -> IOResult:
+    def _close_file(self, filename: str, program: str) -> IOResult:
         drv = self._drivers.pop(filename, None)
         if drv:
             drv.close()
@@ -176,7 +177,7 @@ class RealFileIOProvider(CobolIOProvider):
         logger.info("CLOSE %s", filename)
         return to_ioresult(AccessResult(AccessCondition.OK))
 
-    def _open_mode(self, filename: str) -> str:
+    def _open_mode(self, filename: str, program: str) -> str:
         return self._open_modes.get(str(filename).upper(), "")
 
     def _with_driver(
@@ -188,27 +189,29 @@ class RealFileIOProvider(CobolIOProvider):
             return _NOT_OPEN
         return to_ioresult(action(self._drivers[filename]))
 
-    def _read_record(self, filename: str, key: str) -> IOResult:
+    def _read_record(self, filename: str, key: str, program: str) -> IOResult:
         return self._with_driver(
             filename,
             lambda drv: drv.read_key(key.encode("latin-1")) if key else drv.read_seq(),
         )
 
-    def _write_record(self, filename: str, data: str) -> IOResult:
+    def _write_record(self, filename: str, data: str, program: str) -> IOResult:
         return self._with_driver(
             filename, lambda drv: drv.write(data.encode("latin-1"))
         )
 
-    def _rewrite_record(self, filename: str, data: str) -> IOResult:
+    def _rewrite_record(self, filename: str, data: str, program: str) -> IOResult:
         return self._with_driver(
             filename, lambda drv: drv.rewrite(data.encode("latin-1"))
         )
 
-    def _start_file(self, filename: str, key: str, relop: str) -> IOResult:
+    def _start_file(
+        self, filename: str, key: str, relop: str, program: str
+    ) -> IOResult:
         return self._with_driver(
             filename,
             lambda drv: drv.start(key.encode("latin-1") if key else b"", relop or ">="),
         )
 
-    def _delete_record(self, filename: str) -> IOResult:
+    def _delete_record(self, filename: str, program: str) -> IOResult:
         return self._with_driver(filename, lambda drv: drv.delete())

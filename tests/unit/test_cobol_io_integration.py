@@ -90,7 +90,7 @@ class TestExecutorIOProviderDispatch:
     def test_stub_read_returns_record(self):
         from interpreter.cobol.io_provider import IOResult
 
-        ir = _build_call_function_ir("__cobol_read_record", "CUST-FILE", "")
+        ir = _build_call_function_ir("__cobol_read_record", "CUST-FILE", "", "PGM")
         provider = StubIOProvider(files={"CUST-FILE": {"records": ["RECORD-DATA"]}})
         vm = _execute_with_provider(ir, provider)
 
@@ -99,7 +99,7 @@ class TestExecutorIOProviderDispatch:
 
     @covers(CobolFeature.IO_PROVIDER, CobolFeature.WRITE)
     def test_stub_write_captures_data(self):
-        ir = _build_call_function_ir("__cobol_write_record", "OUT-FILE", "DATA1")
+        ir = _build_call_function_ir("__cobol_write_record", "OUT-FILE", "DATA1", "PGM")
         provider = StubIOProvider()
         _execute_with_provider(ir, provider)
 
@@ -108,7 +108,12 @@ class TestExecutorIOProviderDispatch:
     @covers(CobolFeature.IO_PROVIDER, CobolFeature.OPEN, CobolFeature.CLOSE)
     def test_stub_open_close_lifecycle(self):
         # Build IR: OPEN (with all 6 args), then CLOSE
-        instructions = [IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry"))]
+        instructions = [
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
+            IRInstruction(
+                opcode=Opcode.CONST, result_reg=Register("%p"), operands=["PGM"]
+            ),
+        ]
 
         instructions.append(
             IRInstruction(
@@ -142,14 +147,23 @@ class TestExecutorIOProviderDispatch:
             IRInstruction(
                 opcode=Opcode.CALL_FUNCTION,
                 result_reg=Register("%r1"),
-                operands=["__cobol_open_file", "%f", "%m", "%rl", "%org", "%ko", "%kl"],
+                operands=[
+                    "__cobol_open_file",
+                    "%f",
+                    "%m",
+                    "%rl",
+                    "%org",
+                    "%ko",
+                    "%kl",
+                    "%p",
+                ],
             )
         )
         instructions.append(
             IRInstruction(
                 opcode=Opcode.CALL_FUNCTION,
                 result_reg=Register("%r2"),
-                operands=["__cobol_close_file", "%f"],
+                operands=["__cobol_close_file", "%f", "%p"],
             )
         )
 

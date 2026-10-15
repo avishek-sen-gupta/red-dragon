@@ -17,6 +17,7 @@ from cobol_asg.cobol_statements import (
 )
 from interpreter.cobol.data_layout import record_length
 from interpreter.cobol.data_literals import boolean, integer, named, text
+from interpreter.cobol.program_object import program_name
 from interpreter.data_value import DataList, DataRecord
 from interpreter.instructions import Data
 from interpreter.var_name import VarName
@@ -104,6 +105,7 @@ def _fds(asg: CobolASG, entry: FileControlEntry) -> DataList:
 def _file(asg: CobolASG, entry: FileControlEntry) -> DataRecord:
     return DataRecord(
         (
+            named("program", text(program_name(asg))),
             named("file_name", text(entry.file_name)),
             named("assign_to", text(entry.assign_to)),
             named("organization", text(entry.organization.value)),

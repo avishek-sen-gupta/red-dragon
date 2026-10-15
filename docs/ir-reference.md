@@ -591,7 +591,7 @@ A named nested literal declared to the runtime (declaration directive).
 | `name` | `VarName` | directive name |
 | `value` | `DataValue` | `DataScalar` (a `bool`, `int` or `str` with its `TypeExpr`), `DataRecord` (named `DataField`s) or `DataList` (items), from `interpreter/data_value.py` |
 
-Not executed: both run loops and type inference step over it, and it writes nothing. The loader copies the main module's `DATA` directives onto `VMState.declarations`, where language runtimes read them. The core never interprets `value`. The values are immutable, so a deepcopy of a `VMState` shares them rather than rebuilding them.
+Not executed: both run loops and type inference step over it, and it writes nothing. The loader copies the entered program's `DATA` directives onto `VMState.declarations`, where language runtimes read them. The core never interprets `value`. The values are immutable, so a deepcopy of a `VMState` shares them rather than rebuilding them.
 
 The COBOL frontend emits two, right after `entry:`: `__cobol_file_definitions` (the FILE-CONTROL entries and their FDs) and `__cobol_data_layout` (the WORKING-STORAGE field layout).
 
