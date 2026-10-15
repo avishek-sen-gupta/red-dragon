@@ -13,6 +13,7 @@ from interpreter.vm.vm import Operators
 from tests.covers import covers
 
 _UNCOMPUTABLE = Operators.UNCOMPUTABLE
+_PROGRAM = typed_from_runtime("PGM")
 
 # Helpers for building typed args for _open_file (filename, mode, record_length, organization, key_offset, key_length)
 _OPEN_ARGS = [
@@ -22,16 +23,18 @@ _OPEN_ARGS = [
     typed_from_runtime("SEQUENTIAL"),
     typed_from_runtime(0),
     typed_from_runtime(0),
+    _PROGRAM,
 ]
 
 # _read_record now takes (filename, key)
-_READ_ARGS_F1 = [typed_from_runtime("F1"), typed_from_runtime("")]
+_READ_ARGS_F1 = [typed_from_runtime("F1"), typed_from_runtime(""), _PROGRAM]
 
 # _start_file now takes (filename, key, relop)
 _START_ARGS_F1 = [
     typed_from_runtime("F1"),
     typed_from_runtime("KEY1"),
     typed_from_runtime(">="),
+    _PROGRAM,
 ]
 
 
@@ -56,7 +59,7 @@ class TestNullIOProvider:
     def test_close_returns_io_result_ok(self):
         provider = NullIOProvider()
         result = provider.handle_call(
-            FuncName("__cobol_close_file"), [typed_from_runtime("F1")]
+            FuncName("__cobol_close_file"), [typed_from_runtime("F1"), _PROGRAM]
         )
         assert result == IOResult("00", None)
 
@@ -73,7 +76,7 @@ class TestNullIOProvider:
         provider = NullIOProvider()
         result = provider.handle_call(
             FuncName("__cobol_write_record"),
-            [typed_from_runtime("F1"), typed_from_runtime("DATA")],
+            [typed_from_runtime("F1"), typed_from_runtime("DATA"), _PROGRAM],
         )
         assert result == IOResult("00", None)
 
@@ -82,7 +85,7 @@ class TestNullIOProvider:
         provider = NullIOProvider()
         result = provider.handle_call(
             FuncName("__cobol_rewrite_record"),
-            [typed_from_runtime("F1"), typed_from_runtime("DATA")],
+            [typed_from_runtime("F1"), typed_from_runtime("DATA"), _PROGRAM],
         )
         assert result == IOResult("00", None)
 
@@ -96,7 +99,7 @@ class TestNullIOProvider:
     def test_delete_returns_io_result_ok(self):
         provider = NullIOProvider()
         result = provider.handle_call(
-            FuncName("__cobol_delete_record"), [typed_from_runtime("F1")]
+            FuncName("__cobol_delete_record"), [typed_from_runtime("F1"), _PROGRAM]
         )
         assert result == IOResult("00", None)
 
@@ -144,12 +147,12 @@ class TestStubIOProvider:
         provider = StubIOProvider(files={"CUST-FILE": {"records": ["REC1", "REC2"]}})
         result1 = provider.handle_call(
             FuncName("__cobol_read_record"),
-            [typed_from_runtime("CUST-FILE"), typed_from_runtime("")],
+            [typed_from_runtime("CUST-FILE"), typed_from_runtime(""), _PROGRAM],
         )
         assert result1 == IOResult("00", "REC1")
         result2 = provider.handle_call(
             FuncName("__cobol_read_record"),
-            [typed_from_runtime("CUST-FILE"), typed_from_runtime("")],
+            [typed_from_runtime("CUST-FILE"), typed_from_runtime(""), _PROGRAM],
         )
         assert result2 == IOResult("00", "REC2")
 
@@ -158,11 +161,11 @@ class TestStubIOProvider:
         provider = StubIOProvider(files={"CUST-FILE": {"records": ["ONLY"]}})
         assert provider.handle_call(
             FuncName("__cobol_read_record"),
-            [typed_from_runtime("CUST-FILE"), typed_from_runtime("")],
+            [typed_from_runtime("CUST-FILE"), typed_from_runtime(""), _PROGRAM],
         ) == IOResult("00", "ONLY")
         assert provider.handle_call(
             FuncName("__cobol_read_record"),
-            [typed_from_runtime("CUST-FILE"), typed_from_runtime("")],
+            [typed_from_runtime("CUST-FILE"), typed_from_runtime(""), _PROGRAM],
         ) == IOResult("10", None)
 
     @covers(CobolFeature.IO_PROVIDER, CobolFeature.READ)
@@ -170,7 +173,7 @@ class TestStubIOProvider:
         provider = StubIOProvider()
         result = provider.handle_call(
             FuncName("__cobol_read_record"),
-            [typed_from_runtime("NONEXISTENT"), typed_from_runtime("")],
+            [typed_from_runtime("NONEXISTENT"), typed_from_runtime(""), _PROGRAM],
         )
         assert result == IOResult("10", None)
 
@@ -179,12 +182,12 @@ class TestStubIOProvider:
         provider = StubIOProvider()
         result = provider.handle_call(
             FuncName("__cobol_write_record"),
-            [typed_from_runtime("OUT-FILE"), typed_from_runtime("DATA1")],
+            [typed_from_runtime("OUT-FILE"), typed_from_runtime("DATA1"), _PROGRAM],
         )
         assert result == IOResult("00", None)
         result = provider.handle_call(
             FuncName("__cobol_write_record"),
-            [typed_from_runtime("OUT-FILE"), typed_from_runtime("DATA2")],
+            [typed_from_runtime("OUT-FILE"), typed_from_runtime("DATA2"), _PROGRAM],
         )
         assert result == IOResult("00", None)
         assert provider.get_file("OUT-FILE").written == ["DATA1", "DATA2"]
@@ -201,6 +204,7 @@ class TestStubIOProvider:
                 typed_from_runtime("SEQUENTIAL"),
                 typed_from_runtime(0),
                 typed_from_runtime(0),
+                _PROGRAM,
             ],
         )
         assert result == IOResult("00", None)
@@ -218,17 +222,20 @@ class TestStubIOProvider:
                 typed_from_runtime("SEQUENTIAL"),
                 typed_from_runtime(0),
                 typed_from_runtime(0),
+                _PROGRAM,
             ],
         )
         assert provider.get_file("F1").is_open is True
-        provider.handle_call(FuncName("__cobol_close_file"), [typed_from_runtime("F1")])
+        provider.handle_call(
+            FuncName("__cobol_close_file"), [typed_from_runtime("F1"), _PROGRAM]
+        )
         assert provider.get_file("F1").is_open is False
 
     @covers(CobolFeature.IO_PROVIDER, CobolFeature.CLOSE)
     def test_close_nonexistent_file_is_noop(self):
         provider = StubIOProvider()
         result = provider.handle_call(
-            FuncName("__cobol_close_file"), [typed_from_runtime("NOPE")]
+            FuncName("__cobol_close_file"), [typed_from_runtime("NOPE"), _PROGRAM]
         )
         assert result == IOResult("00", None)
 
@@ -242,11 +249,11 @@ class TestStubIOProvider:
         provider = StubIOProvider()
         provider.handle_call(
             FuncName("__cobol_write_record"),
-            [typed_from_runtime("F1"), typed_from_runtime("OLD")],
+            [typed_from_runtime("F1"), typed_from_runtime("OLD"), _PROGRAM],
         )
         result = provider.handle_call(
             FuncName("__cobol_rewrite_record"),
-            [typed_from_runtime("F1"), typed_from_runtime("NEW")],
+            [typed_from_runtime("F1"), typed_from_runtime("NEW"), _PROGRAM],
         )
         assert result == IOResult("00", None)
         assert provider.get_file("F1").written == ["NEW"]
@@ -256,7 +263,7 @@ class TestStubIOProvider:
         provider = StubIOProvider()
         result = provider.handle_call(
             FuncName("__cobol_rewrite_record"),
-            [typed_from_runtime("F1"), typed_from_runtime("DATA")],
+            [typed_from_runtime("F1"), typed_from_runtime("DATA"), _PROGRAM],
         )
         assert result == IOResult("00", None)
         assert provider.get_file("F1").written == ["DATA"]
@@ -270,6 +277,7 @@ class TestStubIOProvider:
                 typed_from_runtime("F1"),
                 typed_from_runtime("KEY1"),
                 typed_from_runtime(">="),
+                _PROGRAM,
             ],
         )
         assert result == IOResult("00", None)
@@ -278,7 +286,7 @@ class TestStubIOProvider:
     def test_delete_removes_first_record(self):
         provider = StubIOProvider(files={"F1": {"records": ["REC1", "REC2"]}})
         result = provider.handle_call(
-            FuncName("__cobol_delete_record"), [typed_from_runtime("F1")]
+            FuncName("__cobol_delete_record"), [typed_from_runtime("F1"), _PROGRAM]
         )
         assert result == IOResult("00", None)
         assert provider.get_file("F1").records == ["REC2"]
@@ -287,7 +295,7 @@ class TestStubIOProvider:
     def test_delete_returns_io_result_ok_when_no_records(self):
         provider = StubIOProvider(files={"F1": {"records": []}})
         result = provider.handle_call(
-            FuncName("__cobol_delete_record"), [typed_from_runtime("F1")]
+            FuncName("__cobol_delete_record"), [typed_from_runtime("F1"), _PROGRAM]
         )
         assert result == IOResult("00", None)
 
@@ -324,31 +332,31 @@ class TestIOStatusAndDataMethods:
     @covers(CobolFeature.IO_PROVIDER)
     def test_io_status_extracts_from_io_result(self):
         provider = NullIOProvider()
-        result = provider._io_status(IOResult("00", "rec"))
+        result = provider._io_status(IOResult("00", "rec"), "PGM")
         assert result == "00"
 
     @covers(CobolFeature.IO_PROVIDER)
     def test_io_data_extracts_from_io_result(self):
         provider = NullIOProvider()
-        result = provider._io_data(IOResult("00", "mydata"))
+        result = provider._io_data(IOResult("00", "mydata"), "PGM")
         assert result == "mydata"
 
     @covers(CobolFeature.IO_PROVIDER)
     def test_io_data_none_returns_empty_string(self):
         provider = NullIOProvider()
-        result = provider._io_data(IOResult("00", None))
+        result = provider._io_data(IOResult("00", None), "PGM")
         assert result == ""
 
     @covers(CobolFeature.IO_PROVIDER)
     def test_io_status_uncomputable_for_non_io_result(self):
         provider = NullIOProvider()
-        result = provider._io_status("plain string")
+        result = provider._io_status("plain string", "PGM")
         assert result is _UNCOMPUTABLE
 
     @covers(CobolFeature.IO_PROVIDER)
     def test_io_data_uncomputable_for_non_io_result(self):
         provider = NullIOProvider()
-        result = provider._io_data(42)
+        result = provider._io_data(42, "PGM")
         assert result is _UNCOMPUTABLE
 
     @covers(CobolFeature.IO_PROVIDER)
@@ -356,7 +364,7 @@ class TestIOStatusAndDataMethods:
         provider = NullIOProvider()
         io_result = IOResult("10", None)
         result = provider.handle_call(
-            FuncName("__cobol_io_status"), [typed_from_runtime(io_result)]
+            FuncName("__cobol_io_status"), [typed_from_runtime(io_result), _PROGRAM]
         )
         assert result == "10"
 
@@ -365,7 +373,7 @@ class TestIOStatusAndDataMethods:
         provider = NullIOProvider()
         io_result = IOResult("00", "record content")
         result = provider.handle_call(
-            FuncName("__cobol_io_data"), [typed_from_runtime(io_result)]
+            FuncName("__cobol_io_data"), [typed_from_runtime(io_result), _PROGRAM]
         )
         assert result == "record content"
 

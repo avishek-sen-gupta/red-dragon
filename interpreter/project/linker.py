@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import dataclasses
 import re
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -494,9 +495,6 @@ def link_modules(
     if symbol_table is None:
         symbol_table = SymbolTable.empty()
 
-    prefixes = {path: module_prefix(path, project_root) for path in modules}
-    resolved = _collect_resolved_imports(modules, import_graph)
-
     # Processing order: topo_order already has deps first, entry last
     processing_order = [p for p in topo_order if p in modules]
 
@@ -506,17 +504,38 @@ def link_modules(
         modules, import_graph = _filter_reachable_modules(
             modules, import_graph, entry_path
         )
-        # Recompute prefixes and resolved for the filtered modules
-        prefixes = {path: module_prefix(path, project_root) for path in modules}
-        resolved = _collect_resolved_imports(modules, import_graph)
-        processing_order = [p for p in processing_order if p in modules]
+    return link_every_module(
+        modules=modules,
+        import_graph=import_graph,
+        project_root=project_root,
+        topo_order=topo_order,
+        language=language,
+        type_env_builder=type_env_builder,
+        symbol_table=symbol_table,
+    )
+
+
+def link_every_module(
+    modules: Mapping[Path, ModuleUnit],
+    import_graph: Mapping[Path, Sequence[Path]],
+    project_root: Path,
+    topo_order: Sequence[Path],
+    language: Language,
+    type_env_builder: TypeEnvironmentBuilder,
+    symbol_table: SymbolTable,
+) -> LinkedProgram:
+    every_module = dict(modules)
+    graph = {path: list(deps) for path, deps in import_graph.items()}
+    prefixes = {path: module_prefix(path, project_root) for path in every_module}
+    resolved = _collect_resolved_imports(every_module, graph)
+    processing_order = [p for p in topo_order if p in every_module]
 
     # Build merged IR with a single entry label
     all_ir: list[InstructionBase] = [Label_(label=CodeLabel("entry"))]
     reg_offset = 0
 
     for file_path in processing_order:
-        module = modules[file_path]
+        module = every_module[file_path]
         prefix = prefixes[file_path]
         module_resolved = resolved.get(file_path, set())
 
@@ -525,8 +544,8 @@ def link_modules(
             prefix,
             reg_offset,
             module_resolved,
-            modules,
-            import_graph,
+            every_module,
+            graph,
             file_path,
             prefixes,
         )
@@ -534,8 +553,10 @@ def link_modules(
         reg_offset += max_register_number(module.ir) + 1
 
     # Build merged symbol tables, CFG, and registry
-    merged_func_symbols, merged_class_symbols = _merge_symbol_tables(modules, prefixes)
-    for module in modules.values():
+    merged_func_symbols, merged_class_symbols = _merge_symbol_tables(
+        every_module, prefixes
+    )
+    for module in every_module.values():
         symbol_table.classes.update(module.symbol_table.classes)
     merged_cfg = build_cfg(all_ir)
     merged_registry = build_registry(
@@ -546,12 +567,12 @@ def link_modules(
     )
 
     return LinkedProgram(
-        modules=modules,
+        modules=every_module,
         merged_ir=all_ir,
         merged_cfg=merged_cfg,
         merged_registry=merged_registry,
         language=language,
-        import_graph=import_graph,
+        import_graph=graph,
         type_env_builder=type_env_builder,
         symbol_table=symbol_table,
         func_symbol_table=merged_func_symbols,

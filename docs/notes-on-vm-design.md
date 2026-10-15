@@ -63,10 +63,10 @@ All in `interpreter/run.py`.
 | Function | Does |
 |---|---|
 | `run(source, language, …, null_access=)` | Lower, build a single-module `LinkedProgram` (COBOL goes through `compile_cobol`), then call `run_linked`. Returns the final `VMState`. |
-| `run_linked(linked, entry_point, …, initial_vm=)` | Run a linked program. A top-level entry runs `merged_cfg.entry`. A function entry runs in two phases: the module preamble, then the chosen function, sharing the step budget. |
+| `run_linked(linked, entry_point, …, initial_vm=)` | Run a linked program. A top-level entry runs `merged_cfg.entry`. A function entry runs in two phases: the module preamble, then the chosen function, sharing the step budget. `ProgramEntry(name)` is a function entry at the image's program of that name; `ProgramNotInImage` if it has none. |
 | `execute_cfg(cfg, entry, registry, config, strategies, vm=)` | Run one CFG against a caller-supplied `VMState`. Raises if it reaches `SUSPEND`. |
 | `run_resumable` / `resume` | As `execute_cfg`, but return `Suspended`, `Completed` or `BudgetExhausted` (see [6.5](#65-suspend-and-resume)). |
-| `run_linked_resumable` / `resume_linked` | The `LinkedProgram` versions. The preamble runs non-resumably. |
+| `run_linked_resumable` / `resume_linked` | The `LinkedProgram` versions. The preamble runs non-resumably. A suspension's `ExecutionState.entered` names the program whose declarations the run holds; `resume_linked` restores them from it. |
 | `execute_cfg_traced` / `run_linked_traced` | Deep-copy `VMState` after every step into an `ExecutionTrace` (`interpreter/trace_types.py`). A separate loop, not `_run_loop` (see [6.6](#66-the-traced-loop)). |
 | `initial_vm_state(io_provider=, null_access=)` | A fresh `VMState` with one `<main>` frame. `vm`/`initial_vm` arguments are required; this is how callers get one. |
 
@@ -164,7 +164,7 @@ VMState
 ├── closures: dict[ClosureId, ClosureEnvironment]
 ├── continuations: dict[ContinuationName, CodeLabel]
 ├── exception_stack: list[ExceptionHandler]
-├── declarations: tuple[Data, ...]            the main module's Data directives, set by the loader
+├── declarations: tuple[Data, ...]            the entered program's Data directives, set by the loader
 └── io_provider
 ```
 
@@ -224,7 +224,7 @@ The LLM backend is created lazily on the first unhandled instruction. `step_call
 | Opcode | Handled by |
 |---|---|
 | `LABEL` | `build_cfg` strips labels from blocks; the loop also skips any it meets |
-| `DATA` | A declaration directive: both run loops step over it. The loader copies the main module's onto `VMState.declarations` |
+| `DATA` | A declaration directive: both run loops step over it. The loader copies the entered program's onto `VMState.declarations` |
 | `SUSPEND` | `_run_loop` intercepts it before dispatch |
 | `IMPORT_MODULE` | The linker removes resolved local imports. An unresolved import reaches the LLM fallback |
 

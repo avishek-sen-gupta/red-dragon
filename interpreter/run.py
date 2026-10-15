@@ -39,6 +39,8 @@ from interpreter.overload.resolution_strategy import ArityThenTypeStrategy
 from interpreter.project.cobol_compile import PROJECT_ROOT, compile_cobol
 from interpreter.project.entry_point import EntryPoint
 from interpreter.project.linker import module_prefix
+from interpreter.project.program_entry import ProgramEntry
+from interpreter.project.program_not_in_image import ProgramNotInImage
 from interpreter.project.types import LinkedProgram
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import BoundFuncRef, FuncRef
@@ -574,6 +576,7 @@ class ExecutionState:
     current_label: CodeLabel
     ip: int
     resume_reg: Register
+    entered: CodeLabel
 
 
 @dataclass
@@ -603,7 +606,9 @@ class BudgetExhausted:
 RunOutcome = Union[Suspended, Completed, BudgetExhausted]
 
 
-def _wrap_outcome(loop: _LoopResult, vm: VMState, call_resolver: Any) -> RunOutcome:
+def _wrap_outcome(
+    loop: _LoopResult, vm: VMState, call_resolver: Any, entered: CodeLabel
+) -> RunOutcome:
     if loop.suspended:
         assert loop.susp_label is not None and loop.susp_ip is not None
         assert loop.susp_reg is not None
@@ -613,6 +618,7 @@ def _wrap_outcome(loop: _LoopResult, vm: VMState, call_resolver: Any) -> RunOutc
                 current_label=loop.susp_label,
                 ip=loop.susp_ip,
                 resume_reg=loop.susp_reg,
+                entered=entered,
             ),
             value=loop.susp_value,
         )
@@ -651,7 +657,7 @@ def run_resumable(
         type_env=strategies.type_env,
         conversion_rules=strategies.conversion_rules,
     )
-    return _wrap_outcome(loop, vm, call_resolver)
+    return _wrap_outcome(loop, vm, call_resolver, NO_LABEL)
 
 
 def resume(
@@ -686,7 +692,7 @@ def resume(
         type_env=strategies.type_env,
         conversion_rules=strategies.conversion_rules,
     )
-    return _wrap_outcome(loop, vm, call_resolver)
+    return _wrap_outcome(loop, vm, call_resolver, state.entered)
 
 
 def execute_cfg_traced(
@@ -884,7 +890,7 @@ def _build_strategies_from_linked(linked: LinkedProgram) -> ExecutionStrategies:
 
 def run_linked(
     linked: LinkedProgram,
-    entry_point: EntryPoint,
+    entry_point: EntryPoint | ProgramEntry,
     max_steps: int = 100,
     verbose: bool = False,
     backend: str = LLMProvider.CLAUDE,
@@ -899,7 +905,8 @@ def run_linked(
 
     Args:
         linked: Pre-compiled program (single-module or multi-module).
-        entry_point: How to enter — EntryPoint.top_level() or EntryPoint.function(pred).
+        entry_point: How to enter — EntryPoint.top_level(), EntryPoint.function(pred),
+            or ProgramEntry(name), the image's program of that name.
         max_steps: Maximum interpretation steps.
         verbose: Print IR, CFG, and step-by-step info.
         backend: LLM backend for interpreter fallback.
@@ -924,9 +931,10 @@ def run_linked(
         step_callback_interval=step_callback_interval,
     )
 
-    initial_vm.declarations = main_declarations(linked)
+    dispatch, entered = _entering(linked, entry_point)
+    initial_vm.declarations = _declarations_at(linked, entered)
 
-    if entry_point.is_top_level:
+    if dispatch.is_top_level:
         vm, _exec_stats = execute_cfg(
             linked.merged_cfg,
             linked.merged_cfg.entry,
@@ -948,7 +956,7 @@ def run_linked(
         )
 
         # Resolve entry point function via predicate
-        func_ref = entry_point.resolve(list(linked.func_symbol_table.values()))
+        func_ref = dispatch.resolve(list(linked.func_symbol_table.values()))
         func_label = _resolve_entry_function(vm, str(func_ref.name), linked.merged_cfg)
 
         # Phase 2: dispatch into target function
@@ -966,21 +974,50 @@ def run_linked(
     return vm
 
 
-def main_declarations(linked: LinkedProgram) -> tuple[Data, ...]:
+def _entering(
+    linked: LinkedProgram, entry_point: EntryPoint | ProgramEntry
+) -> tuple[EntryPoint, CodeLabel]:
+    match entry_point:
+        case ProgramEntry(name=name):
+            label = _program_label(linked, name)
+            return EntryPoint.function(lambda ref: ref.label == label), label
+        case EntryPoint():
+            return entry_point, linked.entry_func_label
+
+
+def _program_label(linked: LinkedProgram, program: str) -> CodeLabel:
+    if program not in linked.programs:
+        raise ProgramNotInImage(program)
+    return linked.programs[program]
+
+
+def declarations_of(linked: LinkedProgram, program: str) -> tuple[Data, ...]:
+    return _declarations_at(linked, _program_label(linked, program))
+
+
+def _declarations_at(linked: LinkedProgram, entered: CodeLabel) -> tuple[Data, ...]:
     return next(
         (
             tuple(i for i in unit.ir if isinstance(i, Data))
             for unit in linked.modules.values()
             if unit.entry_label.namespace(module_prefix(unit.path, PROJECT_ROOT))
-            == linked.entry_func_label
+            == entered
         ),
         (),
     )
 
 
+def _carrying(outcome: RunOutcome, entered: CodeLabel) -> RunOutcome:
+    match outcome:
+        case Suspended(state=state):
+            return replace(outcome, state=replace(state, entered=entered))
+        case _:
+            return outcome
+
+
 def run_linked_resumable(
     linked: LinkedProgram,
-    entry_point: EntryPoint,
+    entry_point: EntryPoint | ProgramEntry,
     max_steps: int = 100,
     verbose: bool = False,
     backend: str = LLMProvider.CLAUDE,
@@ -1005,9 +1042,10 @@ def run_linked_resumable(
         unresolved_call_strategy=unresolved_call_strategy,
         io_provider=io_provider,
     )
-    initial_vm.declarations = main_declarations(linked)
+    dispatch, entered = _entering(linked, entry_point)
+    initial_vm.declarations = _declarations_at(linked, entered)
 
-    if entry_point.is_top_level:
+    if dispatch.is_top_level:
         outcome = run_resumable(
             linked.merged_cfg,
             linked.merged_cfg.entry,
@@ -1025,7 +1063,7 @@ def run_linked_resumable(
             strategies,
             vm=initial_vm,
         )
-        func_ref = entry_point.resolve(list(linked.func_symbol_table.values()))
+        func_ref = dispatch.resolve(list(linked.func_symbol_table.values()))
         func_label = _resolve_entry_function(vm, str(func_ref.name), linked.merged_cfg)
         phase2_config = replace(
             vm_config, max_steps=max(max_steps - preamble_stats.steps, 0)
@@ -1038,7 +1076,7 @@ def run_linked_resumable(
             strategies,
             vm=vm,
         )
-    return outcome
+    return _carrying(outcome, entered)
 
 
 def resume_linked(
@@ -1064,7 +1102,7 @@ def resume_linked(
     )
     if io_provider is not None:
         state.vm.io_provider = io_provider
-    state.vm.declarations = main_declarations(linked)
+    state.vm.declarations = _declarations_at(linked, state.entered)
     outcome = resume(
         linked.merged_cfg,
         linked.merged_registry,
@@ -1078,7 +1116,7 @@ def resume_linked(
 
 def run_linked_traced(
     linked: LinkedProgram,
-    entry_point: EntryPoint,
+    entry_point: EntryPoint | ProgramEntry,
     max_steps: int = 100,
     verbose: bool = False,
     backend: str = LLMProvider.CLAUDE,
@@ -1094,7 +1132,8 @@ def run_linked_traced(
 
     Args:
         linked: Pre-compiled program (single-module or multi-module).
-        entry_point: How to enter — EntryPoint.top_level() or EntryPoint.function(pred).
+        entry_point: How to enter — EntryPoint.top_level(), EntryPoint.function(pred),
+            or ProgramEntry(name), the image's program of that name.
         max_steps: Maximum interpretation steps.
         verbose: Print IR, CFG, and step-by-step info.
         backend: LLM backend for interpreter fallback.
@@ -1113,9 +1152,10 @@ def run_linked_traced(
         unresolved_call_strategy=unresolved_call_strategy,
     )
     initial_vm = initial_vm_state()
-    initial_vm.declarations = main_declarations(linked)
+    dispatch, entered = _entering(linked, entry_point)
+    initial_vm.declarations = _declarations_at(linked, entered)
 
-    if entry_point.is_top_level:
+    if dispatch.is_top_level:
         vm, trace = execute_cfg_traced(
             linked.merged_cfg,
             linked.merged_cfg.entry,
@@ -1137,7 +1177,7 @@ def run_linked_traced(
         )
 
         # Resolve entry point function via predicate
-        func_ref = entry_point.resolve(list(linked.func_symbol_table.values()))
+        func_ref = dispatch.resolve(list(linked.func_symbol_table.values()))
         func_label = _resolve_entry_function(vm, str(func_ref.name), linked.merged_cfg)
 
         # Phase 2: dispatch into target function

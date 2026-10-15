@@ -249,7 +249,7 @@ vm, stats = execute_cfg(
 
 RedDragon can execute real-world multi-file codebases. Given an entry file, it recursively discovers imports, resolves them to local files, compiles each module independently, links them into a single merged program, and executes it with the same deterministic pipeline.
 
-**Supported across all 15 deterministic frontends** — Python, JavaScript, TypeScript, Java, Go, Rust, C, C++, C#, Kotlin, Scala, Ruby, PHP, Lua, Pascal. COBOL links its main program with the programs it calls through `compile_cobol` (see [Running COBOL](#running-cobol)), which parses, lowers and links through files in a work directory and returns the `LinkedProgram` read back from disk; a kept work directory reuses every compiled program ([linker design §7.1](docs/linker-design.md)).
+**Supported across all 15 deterministic frontends** — Python, JavaScript, TypeScript, Java, Go, Rust, C, C++, C#, Kotlin, Scala, Ruby, PHP, Lua, Pascal. COBOL links its main program with the programs it calls through `compile_cobol` (see [Running COBOL](#running-cobol)), which parses, lowers and links through files in a work directory and returns the `LinkedProgram` read back from disk; a kept work directory reuses every compiled program ([linker design §7.1](docs/linker-design.md)). A build can instead lower each program once (`lower_program`), link a list of them into one image with no main (`link_units`), and enter it by name (`ProgramEntry`) ([linker design §7.3](docs/linker-design.md)).
 
 ```python
 from pathlib import Path
@@ -371,7 +371,7 @@ Final state: result = 120  (67 steps, 0 LLM calls)
 Beyond the [VM features](#vm-features) table, the VM also:
 
 - **Allocates classes and arrays** on the heap via `Pointer(base, offset)` with parameterized types (`Pointer[ClassName]`, `Pointer[ElementType]`)
-- **Hands a COBOL program its declarations** — the main program's `Data` directives, its file definitions and WORKING-STORAGE layout, on `VMState.declarations`; `field_positions` reads field offsets, lengths and type metadata from them
+- **Hands a COBOL program its declarations** — the entered program's `Data` directives, its file definitions and WORKING-STORAGE layout, on `VMState.declarations` (`declarations_of`); `field_positions` reads field offsets, lengths and type metadata from them
 - **Keeps builtins pure** — each returns a `BuiltinResult(value, new_objects, heap_writes)`, applied through `StateUpdate`; no builtin mutates `vm.heap` directly
 
 ## Handling incomplete programs

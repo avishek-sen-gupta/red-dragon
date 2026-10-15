@@ -18,6 +18,7 @@ from cobol_asg.source_span import SourceSpan
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.field_resolution import whole_field_extent
+from interpreter.cobol.program_object import program_name
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.continuation_name import ContinuationName
 from interpreter.func_name import FuncName
@@ -34,6 +35,10 @@ from interpreter.operator_kind import resolve_binop
 from interpreter.register import NO_REGISTER, Register
 
 logger = logging.getLogger(__name__)
+
+
+def _program(ctx: EmitContext, *, span: SourceSpan | None) -> Register:
+    return Register(str(ctx.const_to_reg(program_name(ctx._asg), span=span)))
 
 
 def _select_to_record(ctx: EmitContext) -> dict[str, str]:
@@ -126,7 +131,10 @@ def emit_use_trigger(
         CallFunction(
             result_reg=mode_reg,
             func_name=FuncName("__cobol_file_open_mode"),
-            args=(Register(str(ctx.const_to_reg(file_name, span=span))),),
+            args=(
+                Register(str(ctx.const_to_reg(file_name, span=span))),
+                _program(ctx, span=span),
+            ),
         ),
         span=span,
     )
@@ -242,6 +250,7 @@ def lower_open(
                         Register(str(org_reg)),
                         Register(str(koff_reg)),
                         Register(str(klen_reg)),
+                        _program(ctx, span=span),
                     ),
                 ),
                 span=span,
@@ -251,7 +260,10 @@ def lower_open(
                 CallFunction(
                     result_reg=status_reg,
                     func_name=FuncName("__cobol_io_status"),
-                    args=(Register(str(raw_reg)),),
+                    args=(
+                        Register(str(raw_reg)),
+                        _program(ctx, span=span),
+                    ),
                 ),
                 span=span,
             )
@@ -274,7 +286,10 @@ def lower_close(
             CallFunction(
                 result_reg=raw_reg,
                 func_name=FuncName("__cobol_close_file"),
-                args=(Register(str(fn_reg)),),
+                args=(
+                    Register(str(fn_reg)),
+                    _program(ctx, span=span),
+                ),
             ),
             span=span,
         )
@@ -283,7 +298,10 @@ def lower_close(
             CallFunction(
                 result_reg=status_reg,
                 func_name=FuncName("__cobol_io_status"),
-                args=(Register(str(raw_reg)),),
+                args=(
+                    Register(str(raw_reg)),
+                    _program(ctx, span=span),
+                ),
             ),
             span=span,
         )
@@ -318,7 +336,11 @@ def lower_read(
         CallFunction(
             result_reg=raw_reg,
             func_name=FuncName("__cobol_read_record"),
-            args=(Register(str(fn_reg)), Register(str(key_str_reg))),
+            args=(
+                Register(str(fn_reg)),
+                Register(str(key_str_reg)),
+                _program(ctx, span=span),
+            ),
         ),
         span=span,
     )
@@ -328,7 +350,10 @@ def lower_read(
         CallFunction(
             result_reg=status_reg,
             func_name=FuncName("__cobol_io_status"),
-            args=(Register(str(raw_reg)),),
+            args=(
+                Register(str(raw_reg)),
+                _program(ctx, span=span),
+            ),
         ),
         span=span,
     )
@@ -349,7 +374,10 @@ def lower_read(
         CallFunction(
             result_reg=data_reg,
             func_name=FuncName("__cobol_io_data"),
-            args=(Register(str(raw_reg)),),
+            args=(
+                Register(str(raw_reg)),
+                _program(ctx, span=span),
+            ),
         ),
         span=span,
     )
@@ -555,7 +583,11 @@ def lower_write(
         CallFunction(
             result_reg=raw_reg,
             func_name=FuncName("__cobol_write_record"),
-            args=(Register(str(fn_reg)), Register(str(data_reg))),
+            args=(
+                Register(str(fn_reg)),
+                Register(str(data_reg)),
+                _program(ctx, span=span),
+            ),
         ),
         span=span,
     )
@@ -564,7 +596,10 @@ def lower_write(
         CallFunction(
             result_reg=status_reg,
             func_name=FuncName("__cobol_io_status"),
-            args=(Register(str(raw_reg)),),
+            args=(
+                Register(str(raw_reg)),
+                _program(ctx, span=span),
+            ),
         ),
         span=span,
     )
@@ -611,7 +646,11 @@ def lower_rewrite(
         CallFunction(
             result_reg=raw_reg,
             func_name=FuncName("__cobol_rewrite_record"),
-            args=(Register(str(fn_reg)), Register(str(data_reg))),
+            args=(
+                Register(str(fn_reg)),
+                Register(str(data_reg)),
+                _program(ctx, span=span),
+            ),
         ),
         span=span,
     )
@@ -620,7 +659,10 @@ def lower_rewrite(
         CallFunction(
             result_reg=status_reg,
             func_name=FuncName("__cobol_io_status"),
-            args=(Register(str(raw_reg)),),
+            args=(
+                Register(str(raw_reg)),
+                _program(ctx, span=span),
+            ),
         ),
         span=span,
     )
@@ -667,6 +709,7 @@ def lower_start(
                 Register(str(fn_reg)),
                 Register(str(key_reg)),
                 Register(str(relop_reg)),
+                _program(ctx, span=span),
             ),
         ),
         span=span,
@@ -676,7 +719,10 @@ def lower_start(
         CallFunction(
             result_reg=status_reg,
             func_name=FuncName("__cobol_io_status"),
-            args=(Register(str(raw_reg)),),
+            args=(
+                Register(str(raw_reg)),
+                _program(ctx, span=span),
+            ),
         ),
         span=span,
     )
@@ -717,7 +763,10 @@ def lower_delete(
         CallFunction(
             result_reg=raw_reg,
             func_name=FuncName("__cobol_delete_record"),
-            args=(Register(str(fn_reg)),),
+            args=(
+                Register(str(fn_reg)),
+                _program(ctx, span=span),
+            ),
         ),
         span=span,
     )
@@ -726,7 +775,10 @@ def lower_delete(
         CallFunction(
             result_reg=status_reg,
             func_name=FuncName("__cobol_io_status"),
-            args=(Register(str(raw_reg)),),
+            args=(
+                Register(str(raw_reg)),
+                _program(ctx, span=span),
+            ),
         ),
         span=span,
     )

@@ -83,6 +83,8 @@ class ExportTable:
 
 # ── ModuleUnit ───────────────────────────────────────────────────
 
+NO_PROGRAM = ""
+
 
 @dataclass(frozen=True)
 class ModuleUnit:
@@ -99,7 +101,7 @@ class ModuleUnit:
     imports: tuple[ImportRef, ...]
     symbol_table: SymbolTable = field(default_factory=SymbolTable.empty)
     entry_label: CodeLabel = NO_LABEL
-    start_up: tuple[InstructionBase, ...] = ()
+    program: str = NO_PROGRAM
 
 
 NO_MODULE_UNIT = ModuleUnit(
@@ -146,6 +148,7 @@ class LinkedProgram:
     execution dispatches into it rather than a linked-in callee. NO_LABEL
     when the compile records none.
     """
+    programs: dict[str, CodeLabel] = field(default_factory=dict)
 
     def entry_points(
         self,

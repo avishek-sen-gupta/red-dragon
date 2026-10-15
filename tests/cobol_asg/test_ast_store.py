@@ -80,7 +80,7 @@ def test_parse_failure_names_the_member(tmp_path):
     from cobol_asg.ast_store import AstParseError
 
     class _Exploding:
-        def parse_to_file(self, source: bytes, out: Path) -> None:
+        def parse_to_file(self, source: bytes, out_path: Path) -> Path:
             raise RuntimeError("bridge said no")
 
     store = AstStore(tmp_path)

@@ -31,6 +31,7 @@ from interpreter.cobol.lower_data_division import (
     lower_sectioned_data_division,
 )
 from interpreter.cobol.lower_procedure import lower_procedure_division
+from interpreter.cobol.program_object import UNNAMED_PROGRAM, program_name
 from interpreter.cobol.lower_program_init import (
     lower_program_init,
     lower_ws_from_singleton,
@@ -140,7 +141,7 @@ class CobolFrontend(Frontend):
     @property
     def program_id(self) -> str:
         """COBOL PROGRAM-ID value. Available after lower() has been called."""
-        return getattr(self, "_program_id", "MAIN")
+        return getattr(self, "_program_id", UNNAMED_PROGRAM)
 
     @property
     def func_symbol_table(self) -> dict[CodeLabel, FuncRef]:
@@ -194,7 +195,7 @@ class CobolFrontend(Frontend):
     def _lower_asg(self, asg: CobolASG) -> list[InstructionBase]:
         """Shared lowering core: ASG → IR. Called by lower() and lower_from_ast_dict()."""
         sectioned = build_sectioned_layout(asg)
-        self._program_id = asg.program_id or "MAIN"
+        self._program_id = program_name(asg)
         logger.debug(
             "lowering %s: %d sections, %d paragraphs",
             self._program_id,

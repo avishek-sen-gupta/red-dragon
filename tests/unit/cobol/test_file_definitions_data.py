@@ -96,6 +96,7 @@ def test_each_select_is_declared_with_its_fd_format():
         (
             DataRecord(
                 (
+                    _field("program", _text("FILEDEFS")),
                     _field("file_name", _text("IN-FILE")),
                     _field("assign_to", _text("INDD")),
                     _field("organization", _text("SEQUENTIAL")),
@@ -108,6 +109,7 @@ def test_each_select_is_declared_with_its_fd_format():
             ),
             DataRecord(
                 (
+                    _field("program", _text("FILEDEFS")),
                     _field("file_name", _text("KS-FILE")),
                     _field("assign_to", _text("KSDD")),
                     _field("organization", _text("INDEXED")),
@@ -120,6 +122,7 @@ def test_each_select_is_declared_with_its_fd_format():
             ),
             DataRecord(
                 (
+                    _field("program", _text("FILEDEFS")),
                     _field("file_name", _text("NOFD-FILE")),
                     _field("assign_to", _text("NFDD")),
                     _field("organization", _text("SEQUENTIAL")),

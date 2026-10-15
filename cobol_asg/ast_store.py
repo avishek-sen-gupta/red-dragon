@@ -35,12 +35,12 @@ _IDENTITY: Callable[[dict], dict] = lambda d: d  # noqa: E731
 class AsgJsonParser(Protocol):
     """The one thing the store needs of a bridge: JSON for a program, on disk.
 
-    ``parse_to_file`` rather than a return value because the raw JSON is large and
-    is freed as soon as it is written — that is what keeps peak memory at one
-    program rather than the whole corpus.
+    ``parse_to_file`` writes the raw JSON to ``out_path`` and returns that path,
+    never the JSON: it is large and is freed as soon as it is written — that is
+    what keeps peak memory at one program rather than the whole corpus.
     """
 
-    def parse_to_file(self, source: bytes, out: Path) -> None: ...
+    def parse_to_file(self, source: bytes, out_path: Path) -> Path: ...
 
 
 class AstParseError(Exception):
