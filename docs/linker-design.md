@@ -400,7 +400,7 @@ compile keeps and reuses its files the same way.
   included, except `merged_cfg` and `merged_registry`: `LinkedCodec.read`
   rebuilds both from the merged IR with `build_cfg` and `build_registry`, which is
   how `link_modules` produced them.
-- **Without a work directory**, `compile_cobol` uses a new owner-only directory
+- **Without a work directory** (the default `FRESH_WORK_DIR`), `compile_cobol` uses a new owner-only directory
   from `tempfile.mkdtemp()` and leaves it in place. Test suites point `tempfile`
   at a session-scoped pytest directory (`tests/conftest.py`).
 

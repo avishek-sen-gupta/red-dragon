@@ -40,6 +40,7 @@ from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.frontends import get_cobol_frontend
 from interpreter.ir import CodeLabel
 from interpreter.project.compiler import build_export_table
+from interpreter.project.fresh_work_dir import FRESH_WORK_DIR, FreshWorkDir
 from interpreter.project.imports import extract_imports
 from interpreter.project.ir_codec import IrCodec
 from interpreter.project.linked_codec import LinkedCodec
@@ -95,11 +96,11 @@ def compile_cobol_module(
     )
 
 
-def _cache_dir(given: Path | None) -> Path:
+def _cache_dir(given: Path | FreshWorkDir) -> Path:
     match given:
         case Path():
             return given
-        case _:
+        case FreshWorkDir():
             return Path(tempfile.mkdtemp())
 
 
@@ -234,7 +235,7 @@ def compile_cobol(
     extension_strategies: Sequence[RedDragonExtensionLoweringStrategy] = (),
     dialect_parsers: Sequence[DialectParser] = (),
     observer: FrontendObserver = NullFrontendObserver(),
-    work_dir: Path | None = None,
+    work_dir: Path | FreshWorkDir = FRESH_WORK_DIR,
     tolerant: bool = False,
     lp: LP = LP.LP32,
 ) -> LinkedProgram:
