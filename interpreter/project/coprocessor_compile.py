@@ -27,6 +27,8 @@ from interpreter.project.cobol_discovery import discover_callee_programs
 from interpreter.project.source_file import SourceFile
 from interpreter.project.types import LinkedProgram
 
+_FRESH = Path("<fresh work directory>")
+
 
 def _identity(source: str) -> str:
     return source
@@ -112,6 +114,7 @@ def compile_program(
     source_search_dirs: Sequence[Path] = (),
     linked_subprogram_sources: Mapping[str, bytes] = {},
     tolerant: bool = False,
+    work_dir: Path = _FRESH,
 ) -> LinkedProgram:
     """Compile ``source`` with every spec's prepass and strategy composed.
 
@@ -124,6 +127,9 @@ def compile_program(
     ``source_search_dirs`` and ``linked_subprogram_sources`` are the caller's
     own contributions to the pairs of the same names on CoprocessorSpec; each
     spec's are added after them.
+
+    ``work_dir`` is handed to compile_cobol: a kept directory reuses every
+    stage's output on the next compile; omitted, a new temporary one is made.
     """
 
     def rewrite(text: str) -> str:
@@ -163,4 +169,5 @@ def compile_program(
         extension_strategies=strategies,
         dialect_parsers=dialect_parsers,
         tolerant=tolerant,
+        work_dir=None if work_dir is _FRESH else work_dir,
     )

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import dataclasses
+import json
 import logging
 from collections.abc import Callable, Mapping
 
@@ -269,3 +270,37 @@ def test_a_linked_subprogram_wins_over_a_discovered_one_of_the_same_name(
         "__main__.cbl",
         "__start_up__",
     }
+
+
+_WORK_DIR_CALLER = b"""\
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. WDCALLER.
+       PROCEDURE DIVISION.
+           CALL 'WDCALLEE'.
+           GOBACK.
+"""
+
+
+def test_compile_program_keeps_and_reuses_its_work_directory(tmp_path):
+    work = tmp_path / "work"
+
+    def compile_once() -> LinkedProgram:
+        return compile_program(
+            _WORK_DIR_CALLER,
+            make_cobol_parser(),
+            [],
+            linked_subprogram_sources={"WDCALLEE": _callee("WDCALLEE")},
+            work_dir=work,
+        )
+
+    first = compile_once()
+    asts = sorted(work.glob("*.ast.json"))
+    stamps = [ast.stat().st_mtime_ns for ast in asts]
+    second = compile_once()
+
+    assert sorted(
+        (ast.name.rpartition("-")[0], json.loads(ast.read_text())["program_id"])
+        for ast in asts
+    ) == [("WDCALLEE", "WDCALLEE"), ("__main__", "WDCALLER")]
+    assert second == first
+    assert [ast.stat().st_mtime_ns for ast in asts] == stamps
