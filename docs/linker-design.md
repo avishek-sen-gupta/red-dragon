@@ -413,9 +413,9 @@ list of pairs, so any value can be a name), `loc`, `none`, `unknown_type`, and
 constructing the class, null-object classes to their singletons). An unknown
 kind or class raises `UnitFormatError`.
 
-`UnitCodec` writes `{"format": 1, "unit": …}` and `LinkedCodec`
-`{"format": 2, "linked": …}`; each raises `UnitFormatError` naming the file when it
-does not decode, a linked file of format 1 included. The encoding is verbose
+`UnitCodec` and `LinkedCodec` write `{"format": 2, "unit" | "linked": …}` and raise
+`UnitFormatError` naming the file when it does not decode, a file of format 1
+included. The encoding is verbose
 (red-dragon-rfwv).
 
 ---

@@ -2587,7 +2587,6 @@ class TestDataLayout:
         CobolFeature.USAGE_DISPLAY,
     )
     def test_data_layout_after_lower(self):
-        """The lowered layout Data declares each field's metadata."""
         data = CobolASG(
             data_fields=[
                 CobolField(

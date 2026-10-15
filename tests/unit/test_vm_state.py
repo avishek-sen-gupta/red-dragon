@@ -8,12 +8,10 @@ from interpreter.vm.vm_types import VMState
 
 class TestVMStateDeclarations:
     def test_declarations_default_empty(self):
-        """VMState holds no declarations by default."""
         vm = VMState()
         assert vm.declarations == ()
 
     def test_declarations_in_to_dict_when_populated(self):
-        """to_dict() lists each declaration's rendering when there are any."""
         vm = VMState()
         vm.declarations = (
             Data(name=VarName("__first"), value=DataList(())),
@@ -22,7 +20,6 @@ class TestVMStateDeclarations:
         assert vm.to_dict()["declarations"] == ["data __first", "data __second"]
 
     def test_declarations_omitted_from_to_dict_when_empty(self):
-        """to_dict() omits declarations when empty (sparse serialization)."""
         vm = VMState()
         result = vm.to_dict()
         assert "declarations" not in result

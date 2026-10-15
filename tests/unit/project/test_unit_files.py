@@ -69,3 +69,15 @@ def test_a_linked_file_of_format_1_is_refused_naming_itself(tmp_path):
     with pytest.raises(UnitFormatError) as refused:
         LinkedCodec(IrCodec()).read(path)
     assert str(refused.value) == f"{path}: not a linked-program file of format 2"
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_a_unit_file_of_format_1_is_refused_naming_itself(tmp_path):
+    path = tmp_path / "old.unit.json"
+    UnitCodec(IrCodec()).write(next(iter(_linked().modules.values())), path)
+    path.write_text(
+        json.dumps({**json.loads(path.read_text()), "format": 1}), encoding="utf-8"
+    )
+    with pytest.raises(UnitFormatError) as refused:
+        UnitCodec(IrCodec()).read(path)
+    assert str(refused.value) == f"{path}: not a unit file of format 2"
