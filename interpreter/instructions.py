@@ -41,6 +41,7 @@ from interpreter.ir import (
 from interpreter.operator_kind import BinopKind, UnopKind, resolve_binop, resolve_unop
 from interpreter.path_name import NO_PATH_NAME, NoPathName, PathName
 from interpreter.register import NO_REGISTER, Register
+from interpreter.shared_on_deepcopy import SharedOnDeepcopy
 from interpreter.type_name import TypeName
 from interpreter.types.type_expr import (
     NULL,
@@ -873,7 +874,7 @@ class Label_(InstructionBase):
 
 
 @dataclass(frozen=True)
-class Data(InstructionBase):
+class Data(InstructionBase, SharedOnDeepcopy):
     """DATA: a named nested literal the VM steps over."""
 
     name: VarName = NO_VAR_NAME
