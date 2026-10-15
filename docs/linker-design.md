@@ -384,6 +384,8 @@ process:
 `LinkedProgram` read back from the linked file; no frontend or in-memory unit
 crosses a stage. A stage skips a program whose output already exists, so a kept
 work directory reuses every stage's output.
+`compile_program` takes the same `work_dir` and passes it through, so a coprocessor
+compile keeps and reuses its files the same way.
 
 - **Names.** `<digest>` covers the source bytes and `LoweringSettings` (LP mode,
   extension strategy names, tolerant mode, copybook directories), so an edited
