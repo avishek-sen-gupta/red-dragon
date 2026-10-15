@@ -924,10 +924,6 @@ def run_linked(
         step_callback_interval=step_callback_interval,
     )
 
-    # Make the data layout visible to builtins that run *during* execution
-    # (e.g. CICS EIB-init and SEND/RECEIVE MAP read named fields via
-    # vm.data_layout). Without this it would only be populated after the run.
-    initial_vm.data_layout = linked.data_layout
     initial_vm.declarations = main_declarations(linked)
 
     if entry_point.is_top_level:
@@ -967,8 +963,6 @@ def run_linked(
             vm=vm,
         )
 
-    vm.data_layout = linked.data_layout
-    vm.declarations = main_declarations(linked)
     return vm
 
 
@@ -982,13 +976,6 @@ def main_declarations(linked: LinkedProgram) -> tuple[Data, ...]:
         ),
         (),
     )
-
-
-def _attach_layout(outcome: RunOutcome, linked: LinkedProgram) -> RunOutcome:
-    out_vm = outcome.state.vm if isinstance(outcome, Suspended) else outcome.vm
-    out_vm.data_layout = linked.data_layout
-    out_vm.declarations = main_declarations(linked)
-    return outcome
 
 
 def run_linked_resumable(
@@ -1018,7 +1005,6 @@ def run_linked_resumable(
         unresolved_call_strategy=unresolved_call_strategy,
         io_provider=io_provider,
     )
-    initial_vm.data_layout = linked.data_layout
     initial_vm.declarations = main_declarations(linked)
 
     if entry_point.is_top_level:
@@ -1052,7 +1038,7 @@ def run_linked_resumable(
             strategies,
             vm=vm,
         )
-    return _attach_layout(outcome, linked)
+    return outcome
 
 
 def resume_linked(
@@ -1078,6 +1064,7 @@ def resume_linked(
     )
     if io_provider is not None:
         state.vm.io_provider = io_provider
+    state.vm.declarations = main_declarations(linked)
     outcome = resume(
         linked.merged_cfg,
         linked.merged_registry,
@@ -1086,7 +1073,7 @@ def resume_linked(
         vm_config,
         strategies,
     )
-    return _attach_layout(outcome, linked)
+    return outcome
 
 
 def run_linked_traced(
@@ -1125,6 +1112,8 @@ def run_linked_traced(
         source_language=linked.language,
         unresolved_call_strategy=unresolved_call_strategy,
     )
+    initial_vm = initial_vm_state()
+    initial_vm.declarations = main_declarations(linked)
 
     if entry_point.is_top_level:
         vm, trace = execute_cfg_traced(
@@ -1133,7 +1122,7 @@ def run_linked_traced(
             linked.merged_registry,
             vm_config,
             strategies,
-            vm=initial_vm_state(),
+            vm=initial_vm,
         )
     else:
         # Phase 1: preamble
@@ -1144,7 +1133,7 @@ def run_linked_traced(
             linked.merged_registry,
             vm_config,
             strategies,
-            vm=initial_vm_state(),
+            vm=initial_vm,
         )
 
         # Resolve entry point function via predicate
@@ -1187,8 +1176,6 @@ def run_linked_traced(
             initial_state=preamble_trace.initial_state,
         )
 
-    vm.data_layout = linked.data_layout
-    vm.declarations = main_declarations(linked)
     return vm, trace
 
 
@@ -1318,7 +1305,6 @@ def run(
             import_graph={},
             type_env_builder=frontend.type_env_builder,
             symbol_table=frontend.symbol_table,
-            data_layout=frontend.data_layout,
             func_symbol_table=frontend.func_symbol_table,
             class_symbol_table=frontend.class_symbol_table,
         )

@@ -175,7 +175,6 @@ class VMState:
     null_access: NullAccess = field(default_factory=WarnAndIgnore)
     continuations: dict[ContinuationName, CodeLabel] = field(default_factory=dict)
     exception_stack: list[ExceptionHandler] = field(default_factory=list)
-    data_layout: dict[str, dict] = field(default_factory=dict)
     declarations: tuple[Data, ...] = ()
     io_provider: Any = (
         None  # Any: Optional CobolIOProvider — avoids COBOL import in core VM — see red-dragon-r32l
@@ -371,8 +370,8 @@ class VMState:
             result["continuations"] = {
                 str(k): str(v) for k, v in self.continuations.items()
             }
-        if self.data_layout:
-            result["data_layout"] = dict(self.data_layout)
+        if self.declarations:
+            result["declarations"] = [str(d) for d in self.declarations]
         return result
 
 

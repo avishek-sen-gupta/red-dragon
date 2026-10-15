@@ -25,7 +25,9 @@ from pathlib import Path
 
 from interpreter.cli_output import emit
 from interpreter.cobol.ebcdic_table import EbcdicTable
+from interpreter.cobol.layout_data import field_positions
 from interpreter.frontends import get_cobol_frontend
+from interpreter.instructions import Data
 from tests.nist.conftest import NIST_DIR, make_provider
 
 _runmod = importlib.import_module("interpreter.run")
@@ -44,8 +46,8 @@ def trace(prog: str, max_steps: int = 400_000) -> list[dict] | None:
     """Return one snapshot dict per failing assertion, or None if not traceable."""
     src = (NIST_DIR / f"{prog}.CBL").read_text()
     fe = get_cobol_frontend()
-    fe.lower(src.encode())
-    layout = fe.data_layout
+    instructions = fe.lower(src.encode())
+    layout = field_positions(tuple(i for i in instructions if isinstance(i, Data)))
     ec = layout.get("ERROR-COUNTER")
     if not ec:
         return None
@@ -61,15 +63,13 @@ def trace(prog: str, max_steps: int = 400_000) -> list[dict] | None:
             hits = [
                 data
                 for addr, data in vm.region_items()
-                if rw.address - vm.segment_of(addr).base == ec["offset"]
+                if rw.address - vm.segment_of(addr).base == ec.offset
                 and rw.address < vm.segment_of(addr).end
             ]
             if not hits:
                 continue
             reg = hits[0]
-            snap = {
-                n: _alpha(reg, layout[n]["offset"], layout[n]["length"]) for n in alpha
-            }
+            snap = {n: _alpha(reg, layout[n].offset, layout[n].length) for n in alpha}
             # Skip the ERROR-COUNTER initialization write (all work fields blank).
             if any(snap.get(n) for n in alpha):
                 fails.append(snap)

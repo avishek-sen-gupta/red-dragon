@@ -91,7 +91,6 @@ def compile_cobol_module(
         imports=tuple(extract_imports(source, path, Language.COBOL)),
         symbol_table=frontend.symbol_table,
         entry_label=CodeLabel(f"func_{frontend.program_id.lower()}_0"),
-        data_layout=frontend.data_layout,
         start_up=tuple(frontend.start_up_ir()),
     )
 
@@ -217,17 +216,12 @@ def _link(main_unit: Path, units: Sequence[Path]) -> LinkedProgram:
         topo_order=topological_sort(linked_graph),
         language=Language.COBOL,
         type_env_builder=TypeEnvironmentBuilder(),
-        data_layout=main.data_layout,
     )
     return dataclasses.replace(
         linked,
         entry_func_label=main.entry_label.namespace(
             module_prefix(main.path, PROJECT_ROOT)
         ),
-        ast_paths={
-            unit.path: f.with_name(f.name.replace(".unit.json", ".ast.json"))
-            for unit, f in read
-        },
     )
 
 
@@ -254,8 +248,7 @@ def compile_cobol(
 
     Parse, lower and link each write files into *work_dir* (a new owner-only
     directory in the system temp location when None) and skip programs whose files already exist.
-    The returned program is read back from the linked file; its ast_paths maps
-    each compiled program's path to its AST file.
+    The returned program is read back from the linked file.
     """
     mode = addressing_mode(lp)
     mode_parser = parser.with_addressing_mode(mode)

@@ -311,7 +311,7 @@ class DataLayout:
 
         For groups, synthesizes alphanumeric FieldLayout with group's byte bounds
         and VALUE. A group precedes its descendants.
-        Used by the data_layout property to maintain backward compatibility.
+        Used by the layout Data the frontend declares.
         """
         yield from self.fields.values()
         for name, grp in self.groups.items():

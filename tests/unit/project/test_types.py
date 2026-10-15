@@ -311,22 +311,6 @@ class TestLinkedProgram:
         )
         assert lp.unresolved_imports == []
 
-    def test_data_layout_default_empty(self):
-        from interpreter.cfg_types import CFG
-        from interpreter.registry import FunctionRegistry
-
-        lp = LinkedProgram(
-            modules={},
-            merged_ir=[],
-            merged_cfg=CFG(),
-            merged_registry=FunctionRegistry(),
-            language=Language.PYTHON,
-            import_graph={},
-            type_env_builder=TypeEnvironmentBuilder(),
-            symbol_table=SymbolTable.empty(),
-        )
-        assert lp.data_layout == {}
-
     def test_type_env_builder_and_symbol_table_stored(self):
         from interpreter.cfg_types import CFG
         from interpreter.registry import FunctionRegistry

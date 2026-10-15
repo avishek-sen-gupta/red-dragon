@@ -12,6 +12,7 @@ Tests skip gracefully when the JAR is absent.
 import pytest
 
 from interpreter.cobol.features import CobolFeature
+from interpreter.cobol.layout_data import field_positions
 from tests.covers import covers
 from tests.integration.cobol_helpers import bridge_jar  # noqa: F401
 from tests.integration.cobol_helpers import (
@@ -115,11 +116,11 @@ class TestRedefinesWriteOriginalReadAlias:
             ]
         )
         region = _first_region(vm)
-        layout = vm.data_layout
+        layout = field_positions(vm.declarations)
 
         # Both fields should be at the same offset (one redefines the other)
-        original_offset = layout["WS-ORIGINAL"]["offset"]
-        alias_offset = layout["WS-ALIAS"]["offset"]
+        original_offset = layout["WS-ORIGINAL"].offset
+        alias_offset = layout["WS-ALIAS"].offset
         assert original_offset == alias_offset, "REDEFINES should be at same offset"
 
         # Read via alias and verify we see "ABCD"
@@ -154,11 +155,11 @@ class TestRedefinesMultipleAliases:
             ]
         )
         region = _first_region(vm)
-        layout = vm.data_layout
+        layout = field_positions(vm.declarations)
 
-        base_offset = layout["WS-BASE"]["offset"]
-        alias1_offset = layout["WS-ALIAS1"]["offset"]
-        alias2_offset = layout["WS-ALIAS2"]["offset"]
+        base_offset = layout["WS-BASE"].offset
+        alias1_offset = layout["WS-ALIAS1"].offset
+        alias2_offset = layout["WS-ALIAS2"].offset
 
         # All three should be at the same offset
         assert base_offset == alias1_offset, "ALIAS1 should redefine BASE"
@@ -196,10 +197,10 @@ class TestRedefinesWriteAliasReadOriginal:
             ]
         )
         region = _first_region(vm)
-        layout = vm.data_layout
+        layout = field_positions(vm.declarations)
 
-        original_offset = layout["WS-ORIGINAL"]["offset"]
-        alias_offset = layout["WS-ALIAS"]["offset"]
+        original_offset = layout["WS-ORIGINAL"].offset
+        alias_offset = layout["WS-ALIAS"].offset
         assert original_offset == alias_offset
 
         # Read via original and verify we see "XYZ"
@@ -232,10 +233,10 @@ class TestRedefinesNumericOverAlphanumeric:
             ]
         )
         region = _first_region(vm)
-        layout = vm.data_layout
+        layout = field_positions(vm.declarations)
 
-        str_offset = layout["WS-STR"]["offset"]
-        num_offset = layout["WS-NUM"]["offset"]
+        str_offset = layout["WS-STR"].offset
+        num_offset = layout["WS-NUM"].offset
         assert str_offset == num_offset
 
         # When numeric 123 is moved to zoned decimal, each digit becomes 0xFX

@@ -61,11 +61,14 @@ from cobol_asg.ref_mod import RefModOperand
 from cobol_asg.set_operand import SetOperand
 from interpreter.cobol.cobol_frontend import CobolFrontend
 from interpreter.cobol.features import CobolFeature
+from interpreter.cobol.field_position import FieldPosition
+from interpreter.cobol.layout_data import field_positions
 from interpreter.cobol.run_unit import RUN_UNIT_VAR
 from interpreter.continuation_name import ContinuationName
 from interpreter.instructions import (
     AllocRegion,
     Const,
+    Data,
     InstructionBase,
     LoadVar,
     WriteRegion,
@@ -2578,19 +2581,13 @@ class TestBareStatements:
 
 
 class TestDataLayout:
-    @covers(CobolFeature.DATA_LAYOUT_ENGINE)
-    def test_data_layout_empty_before_lower(self):
-        """data_layout returns empty dict before lower() is called."""
-        frontend = CobolFrontend(make_cobol_parser())
-        assert frontend.data_layout == {}
-
     @covers(
         CobolFeature.DATA_LAYOUT_ENGINE,
         CobolFeature.PIC_CLAUSE,
         CobolFeature.USAGE_DISPLAY,
     )
     def test_data_layout_after_lower(self):
-        """data_layout exposes correct field metadata after lower()."""
+        """The lowered layout Data declares each field's metadata."""
         data = CobolASG(
             data_fields=[
                 CobolField(
@@ -2606,21 +2603,14 @@ class TestDataLayout:
             ],
         ).to_dict()
         frontend = CobolFrontend(make_cobol_parser())
-        frontend.lower_from_ast_dict(data)
+        instructions = frontend.lower_from_ast_dict(data)
 
-        layout = frontend.data_layout
-        assert "WS-A" in layout
-        assert layout["WS-A"]["offset"] == 0
-        assert layout["WS-A"]["length"] == 3
-        assert layout["WS-A"]["category"] == "ZONED_DECIMAL"
-        assert layout["WS-A"]["total_digits"] == 3
-        assert layout["WS-A"]["decimal_digits"] == 0
-        assert layout["WS-A"]["signed"] is False
-
-        assert "WS-B" in layout
-        assert layout["WS-B"]["offset"] == 3
-        assert layout["WS-B"]["length"] == 5
-        assert layout["WS-B"]["category"] == "ALPHANUMERIC"
+        assert field_positions(
+            tuple(i for i in instructions if isinstance(i, Data))
+        ) == {
+            "WS-A": FieldPosition(0, 3, "ZONED_DECIMAL", 3, 0, False),
+            "WS-B": FieldPosition(3, 5, "ALPHANUMERIC", 5, 0, False),
+        }
 
 
 class TestMoveCorrespondingLowering:

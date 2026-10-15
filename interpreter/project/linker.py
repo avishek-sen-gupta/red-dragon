@@ -479,7 +479,6 @@ def link_modules(
     language: Language,
     type_env_builder: TypeEnvironmentBuilder = TypeEnvironmentBuilder(),
     symbol_table: SymbolTable | None = None,
-    data_layout: dict[str, dict] = {},
 ) -> LinkedProgram:
     """Link compiled modules into a single program.
 
@@ -555,7 +554,6 @@ def link_modules(
         import_graph=import_graph,
         type_env_builder=type_env_builder,
         symbol_table=symbol_table,
-        data_layout=data_layout,
         func_symbol_table=merged_func_symbols,
         class_symbol_table=merged_class_symbols,
     )

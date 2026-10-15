@@ -38,10 +38,6 @@ class RepairingFrontendDecorator(Frontend):
         self._last_lowered_source: bytes = b""
 
     @property
-    def data_layout(self) -> dict[str, dict]:
-        return self._inner_frontend.data_layout
-
-    @property
     def type_env_builder(self) -> TypeEnvironmentBuilder:
         return self._inner_frontend.type_env_builder
 

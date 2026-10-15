@@ -1,34 +1,28 @@
-"""Tests for VMState — data_layout field and serialization."""
+"""Tests for VMState — declarations field and serialization."""
 
+from interpreter.data_value import DataList
+from interpreter.instructions import Data
+from interpreter.var_name import VarName
 from interpreter.vm.vm_types import VMState
 
 
-class TestVMStateDataLayout:
-    def test_data_layout_default_empty(self):
-        """VMState has empty data_layout by default."""
+class TestVMStateDeclarations:
+    def test_declarations_default_empty(self):
+        """VMState holds no declarations by default."""
         vm = VMState()
-        assert vm.data_layout == {}
+        assert vm.declarations == ()
 
-    def test_data_layout_in_to_dict_when_populated(self):
-        """to_dict() includes data_layout when it contains entries."""
+    def test_declarations_in_to_dict_when_populated(self):
+        """to_dict() lists each declaration's rendering when there are any."""
         vm = VMState()
-        vm.data_layout = {
-            "WS-A": {
-                "offset": 0,
-                "length": 3,
-                "category": "ZONED_DECIMAL",
-                "total_digits": 3,
-                "decimal_digits": 0,
-                "signed": False,
-            }
-        }
-        result = vm.to_dict()
-        assert "data_layout" in result
-        assert result["data_layout"]["WS-A"]["offset"] == 0
-        assert result["data_layout"]["WS-A"]["length"] == 3
+        vm.declarations = (
+            Data(name=VarName("__first"), value=DataList(())),
+            Data(name=VarName("__second"), value=DataList(())),
+        )
+        assert vm.to_dict()["declarations"] == ["data __first", "data __second"]
 
-    def test_data_layout_omitted_from_to_dict_when_empty(self):
-        """to_dict() omits data_layout when empty (sparse serialization)."""
+    def test_declarations_omitted_from_to_dict_when_empty(self):
+        """to_dict() omits declarations when empty (sparse serialization)."""
         vm = VMState()
         result = vm.to_dict()
-        assert "data_layout" not in result
+        assert "declarations" not in result

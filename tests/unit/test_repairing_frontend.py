@@ -167,16 +167,6 @@ class TestMaxRetriesRespected:
         assert len(llm.calls) == 4
 
 
-class TestDataLayoutDelegation:
-    def test_data_layout_delegates_to_inner(self):
-        inner = RecordingFrontend(ENTRY_IR)
-        llm = FakeLLMClient()
-        decorator = RepairingFrontendDecorator(
-            inner, llm, TreeSitterParserFactory(), Language.PYTHON
-        )
-        assert decorator.data_layout == inner.data_layout
-
-
 class TestLastLoweredSource:
     def test_no_error_records_original_source(self):
         inner = RecordingFrontend(ENTRY_IR)

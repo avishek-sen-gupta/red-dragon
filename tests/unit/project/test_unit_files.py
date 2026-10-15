@@ -1,5 +1,7 @@
 """Unit and linked-program files round-trip; a bad file names itself."""
 
+import json
+
 import pytest
 
 from interpreter.cfg import build_cfg
@@ -32,11 +34,7 @@ def _linked():
 def test_a_unit_round_trips_through_its_file(tmp_path):
     module = next(iter(_linked().modules.values()))
     unit = module.__class__(
-        **{
-            **vars(module),
-            "entry_label": CodeLabel("func_caller_0"),
-            "data_layout": {"WS-N": {"offset": 0, "length": 4}},
-        }
+        **{**vars(module), "entry_label": CodeLabel("func_caller_0")}
     )
     codec = UnitCodec(IrCodec())
     codec.write(unit, tmp_path / "caller.unit.json")
@@ -59,3 +57,15 @@ def test_a_file_that_does_not_decode_names_itself(tmp_path, text):
     bad.write_text(text)
     with pytest.raises(UnitFormatError, match=r"bad\.unit\.json"):
         UnitCodec(IrCodec()).read(bad)
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_a_linked_file_of_format_1_is_refused_naming_itself(tmp_path):
+    path = tmp_path / "old.linked.json"
+    LinkedCodec(IrCodec()).write(_linked(), path)
+    path.write_text(
+        json.dumps({**json.loads(path.read_text()), "format": 1}), encoding="utf-8"
+    )
+    with pytest.raises(UnitFormatError) as refused:
+        LinkedCodec(IrCodec()).read(path)
+    assert str(refused.value) == f"{path}: not a linked-program file of format 2"

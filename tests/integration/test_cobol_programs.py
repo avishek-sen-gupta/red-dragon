@@ -16,6 +16,8 @@ import pytest
 from interpreter.address import Address
 from interpreter.cobol.data_layout import CobolAmbiguousReferenceError
 from interpreter.cobol.features import CobolFeature
+from interpreter.cobol.field_position import FieldPosition
+from interpreter.cobol.layout_data import field_positions
 from interpreter.field_name import FieldName
 from interpreter.project.entry_point import EntryPoint
 from interpreter.run import initial_vm_state, run, run_linked
@@ -1685,9 +1687,9 @@ class TestInitialize:
             ]
         )
         region = _first_region(vm)
-        layout = vm.data_layout
-        wa_offset = layout["WS-A"]["offset"]
-        wb_offset = layout["WS-B"]["offset"]
+        layout = field_positions(vm.declarations)
+        wa_offset = layout["WS-A"].offset
+        wb_offset = layout["WS-B"].offset
         assert _decode_zoned_unsigned(region, wa_offset, 3) == 0
         assert list(region[wb_offset : wb_offset + 3]) == [0x40] * 3
 
@@ -3032,7 +3034,7 @@ class TestBareStatements:
 class TestDataLayout:
     @covers(CobolFeature.DATA_LAYOUT_ENGINE)
     def test_data_layout_present_after_execution(self):
-        """run() attaches data_layout with correct field entries to VMState."""
+        """run() leaves the main program's layout declarations on VMState."""
         vm = _run_cobol(
             [
                 "IDENTIFICATION DIVISION.",
@@ -3044,13 +3046,9 @@ class TestDataLayout:
                 "    STOP RUN.",
             ]
         )
-        assert vm.data_layout, "data_layout should not be empty after execution"
-        assert "WS-A" in vm.data_layout
-        ws_a = vm.data_layout["WS-A"]
-        assert ws_a["offset"] == 0
-        assert ws_a["length"] == 3
-        assert ws_a["category"] == "ZONED_DECIMAL"
-        assert ws_a["total_digits"] == 3
+        assert field_positions(vm.declarations) == {
+            "WS-A": FieldPosition(0, 3, "ZONED_DECIMAL", 3, 0, False)
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -3101,8 +3099,8 @@ class TestRedefines:
             ]
         )
         # Both fields should share offset 0 and the region should be 4 bytes.
-        assert vm.data_layout["WS-NUM"]["offset"] == 0
-        assert vm.data_layout["WS-NUM-X"]["offset"] == 0
+        assert field_positions(vm.declarations)["WS-NUM"].offset == 0
+        assert field_positions(vm.declarations)["WS-NUM-X"].offset == 0
         region = _first_region(vm)
         assert len(region) == 4
 
@@ -3234,9 +3232,9 @@ class TestRedefines:
             ]
         )
         # All three names should share offset 0.
-        assert vm.data_layout["WS-DATA"]["offset"] == 0
-        assert vm.data_layout["WS-DATA-N"]["offset"] == 0
-        assert vm.data_layout["WS-DATA-P"]["offset"] == 0
+        assert field_positions(vm.declarations)["WS-DATA"].offset == 0
+        assert field_positions(vm.declarations)["WS-DATA-N"].offset == 0
+        assert field_positions(vm.declarations)["WS-DATA-P"].offset == 0
         # Region is only 8 bytes — REDEFINES do not allocate additional space.
         region = _first_region(vm)
         assert len(region) == 8
