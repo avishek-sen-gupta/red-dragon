@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
 
 from cobol_asg.cobol_expression import FieldRefNode
 from cobol_asg.cobol_statements import (
@@ -17,6 +16,7 @@ from cobol_asg.source_span import SourceSpan
 from interpreter.cobol.condition_lowering import lower_expr_node
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
+from interpreter.cobol.varying_labels import VaryingLabels, fresh_varying_labels
 from interpreter.continuation_name import ContinuationName
 from interpreter.instructions import (
     Binop,
@@ -270,169 +270,95 @@ def _store_varying_var(
     )
 
 
-def _lower_perform_varying_single(
+def _emit_until_test(
     ctx: EmitContext,
-    stmt: PerformStatement,
     spec: PerformVaryingSpec,
-    materialised: MaterialisedSectionedLayout,
-) -> None:
-    """Original single-variable PERFORM VARYING lowering — unchanged."""
-    span = stmt.span
-    loop_label = ctx.fresh_label("perform_varying_loop")
-    body_label = ctx.fresh_label("perform_varying_body")
-    exit_label = ctx.fresh_label("perform_varying_exit")
-
-    _init_varying_var(ctx, spec, materialised, span=span)
-
-    if spec.test_before:
-        ctx.emit_inst(Label_(label=loop_label), span=span)
-        cond_reg = ctx.lower_condition(spec.condition, materialised, span=span)
-        ctx.emit_inst(
-            BranchIf(
-                cond_reg=Register(str(cond_reg)),
-                branch_targets=(exit_label, body_label),
-            ),
-            span=span,
-        )
-        ctx.emit_inst(Label_(label=body_label), span=span)
-        lower_perform_body(ctx, stmt, materialised)
-        emit_varying_increment(ctx, spec, materialised, span=span)
-        ctx.emit_inst(Branch(label=loop_label), span=span)
-        ctx.emit_inst(Label_(label=exit_label), span=span)
-    else:
-        ctx.emit_inst(Label_(label=loop_label), span=span)
-        lower_perform_body(ctx, stmt, materialised)
-        emit_varying_increment(ctx, spec, materialised, span=span)
-        cond_reg = ctx.lower_condition(spec.condition, materialised, span=span)
-        ctx.emit_inst(
-            BranchIf(
-                cond_reg=Register(str(cond_reg)),
-                branch_targets=(exit_label, loop_label),
-            ),
-            span=span,
-        )
-        ctx.emit_inst(Label_(label=exit_label), span=span)
-
-
-def _emit_test_before_level(
-    ctx: EmitContext,
-    specs: tuple[PerformVaryingSpec, ...],
-    body_fn: Callable[[], None],
-    when_done_label: CodeLabel,
+    label: CodeLabel,
+    targets: tuple[CodeLabel, CodeLabel],
     materialised: MaterialisedSectionedLayout,
     *,
-    span: SourceSpan | None = None,
+    span: SourceSpan | None,
 ) -> None:
-    """Emit one level of a TEST BEFORE VARYING … AFTER … nested loop.
-
-    specs[0] is the current level's variable; specs[1:] are inner AFTER variables.
-    when_done_label is where to jump when this level's UNTIL fires — the caller
-    passes either the whole-loop exit (outermost call) or the parent's incr label
-    (inner calls), so a fired inner UNTIL cascades to the parent increment rather
-    than exiting the whole PERFORM.
-    """
-    spec = specs[0]
-    loop_label = ctx.fresh_label("pv_loop")
-    body_label = ctx.fresh_label("pv_body")
-    incr_label = ctx.fresh_label("pv_incr")
-
-    _init_varying_var(ctx, spec, materialised, span=span)
-
-    ctx.emit_inst(Label_(label=loop_label), span=span)
+    """At ``label``, go to targets[0] when the level's UNTIL holds, else targets[1]."""
+    ctx.emit_inst(Label_(label=label), span=span)
     cond_reg = ctx.lower_condition(spec.condition, materialised, span=span)
-    ctx.emit_inst(
-        BranchIf(
-            cond_reg=Register(str(cond_reg)),
-            branch_targets=(when_done_label, body_label),
-        ),
-        span=span,
-    )
-    ctx.emit_inst(Label_(label=body_label), span=span)
+    ctx.emit_inst(BranchIf(cond_reg=cond_reg, branch_targets=targets), span=span)
 
-    if specs[1:]:
-        _emit_test_before_level(
-            ctx, specs[1:], body_fn, incr_label, materialised, span=span
+
+def _emit_step(
+    ctx: EmitContext,
+    specs: tuple[PerformVaryingSpec, ...],
+    level: int,
+    labels: VaryingLabels,
+    then: CodeLabel,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> None:
+    """Augment one level, reset every level inside it to its FROM value, go on."""
+    ctx.emit_inst(Label_(label=labels.steps[level]), span=span)
+    emit_varying_increment(ctx, specs[level], materialised, span=span)
+    for inner in specs[level + 1 :]:
+        _init_varying_var(ctx, inner, materialised, span=span)
+    ctx.emit_inst(Branch(label=then), span=span)
+
+
+def _emit_test_before_varying(
+    ctx: EmitContext,
+    stmt: PerformStatement,
+    specs: tuple[PerformVaryingSpec, ...],
+    materialised: MaterialisedSectionedLayout,
+) -> None:
+    """TEST BEFORE: each level's UNTIL is tested outermost first before the body;
+    a level whose UNTIL holds steps the level outside it, and the outermost one
+    ends the PERFORM."""
+    span = stmt.span
+    labels = fresh_varying_labels(ctx, len(specs))
+    when_done = (labels.exit, *labels.steps[:-1])
+    when_not = (*labels.tests[1:], labels.body)
+    for level, spec in enumerate(specs):
+        _emit_until_test(
+            ctx,
+            spec,
+            labels.tests[level],
+            (when_done[level], when_not[level]),
+            materialised,
+            span=span,
         )
-    else:
-        body_fn()
-
-    ctx.emit_inst(Label_(label=incr_label), span=span)
-    emit_varying_increment(ctx, spec, materialised, span=span)
-    ctx.emit_inst(Branch(label=loop_label), span=span)
+    ctx.emit_inst(Label_(label=labels.body), span=span)
+    lower_perform_body(ctx, stmt, materialised)
+    for stepped in reversed(range(len(specs))):
+        _emit_step(
+            ctx, specs, stepped, labels, labels.tests[stepped], materialised, span=span
+        )
+    ctx.emit_inst(Label_(label=labels.exit), span=span)
 
 
 def _emit_test_after_varying(
     ctx: EmitContext,
+    stmt: PerformStatement,
     specs: tuple[PerformVaryingSpec, ...],
-    body_fn: Callable[[], None],
     materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None = None,
 ) -> None:
-    """Emit a TEST AFTER VARYING … AFTER … nested loop.
-
-    specs[0] is the outermost (primary VARYING); specs[-1] is the innermost
-    (last AFTER). All variables are initialized before the body. After the
-    body, increments cascade from innermost to outermost. When an outer UNTIL
-    does not fire (loop continues), all exhausted inner variables are reset.
-
-    IR shape (2-level example, I outer, J inner):
-        init I; init J
-        body_label:
-          [body]
-          # fall through to innermost incr
-        incr_J:
-          J += BY_J; if UNTIL_J → incr_I; else → body_label
-        incr_I:
-          I += BY_I; if UNTIL_I → exit; else → continue_I
-        continue_I:
-          J = FROM_J; → body_label
-        exit_label:
-    """
-    n = len(specs)
-    body_label = ctx.fresh_label("pv_body")
-    exit_label = ctx.fresh_label("pv_exit")
-    incr_labels = tuple(ctx.fresh_label("pv_incr") for _ in range(n))
-    # continue_labels[i]: reset specs[i+1..n-1] to FROM, then jump to body.
-    # Only needed for levels 0..n-2; the innermost (i=n-1) loops back to body directly.
-    continue_labels = tuple(ctx.fresh_label("pv_continue") for _ in range(n - 1))
-
-    # Initialise all variables (outermost first)
-    for spec in specs:
-        _init_varying_var(ctx, spec, materialised, span=span)
-
-    # Body block
-    ctx.emit_inst(Label_(label=body_label), span=span)
-    body_fn()
-    # Falls through to innermost increment (incr_labels[n-1])
-
-    # Increment cascade: innermost (n-1) → outermost (0)
-    for i in range(n - 1, -1, -1):
-        spec = specs[i]
-        ctx.emit_inst(Label_(label=incr_labels[i]), span=span)
-        emit_varying_increment(ctx, spec, materialised, span=span)
-        cond_reg = ctx.lower_condition(spec.condition, materialised, span=span)
-
-        true_target = exit_label if i == 0 else incr_labels[i - 1]
-        # Innermost (i == n-1): false → body directly (no inner vars to reset)
-        false_target = body_label if i == n - 1 else continue_labels[i]
-
-        ctx.emit_inst(
-            BranchIf(
-                cond_reg=Register(str(cond_reg)),
-                branch_targets=(true_target, false_target),
-            ),
+    """TEST AFTER: after the body each level's UNTIL is tested innermost first;
+    a level whose UNTIL does not hold is stepped and the body runs again, and
+    the outermost one holding ends the PERFORM."""
+    span = stmt.span
+    labels = fresh_varying_labels(ctx, len(specs))
+    when_done = (labels.exit, *labels.tests[:-1])
+    ctx.emit_inst(Label_(label=labels.body), span=span)
+    lower_perform_body(ctx, stmt, materialised)
+    for level in reversed(range(len(specs))):
+        _emit_until_test(
+            ctx,
+            specs[level],
+            labels.tests[level],
+            (when_done[level], labels.steps[level]),
+            materialised,
             span=span,
         )
-
-    # Continue blocks: reset exhausted inner variables, re-enter body
-    for i in range(n - 2, -1, -1):
-        ctx.emit_inst(Label_(label=continue_labels[i]), span=span)
-        for j in range(i + 1, n):
-            _init_varying_var(ctx, specs[j], materialised, span=span)
-        ctx.emit_inst(Branch(label=body_label), span=span)
-
-    ctx.emit_inst(Label_(label=exit_label), span=span)
+        _emit_step(ctx, specs, level, labels, labels.body, materialised, span=span)
+    ctx.emit_inst(Label_(label=labels.exit), span=span)
 
 
 def lower_perform_varying(
@@ -440,33 +366,17 @@ def lower_perform_varying(
     stmt: PerformStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """PERFORM ... VARYING — counter variable loop with FROM/BY/UNTIL."""
+    """PERFORM ... VARYING ... [AFTER ...]: every identifier is set to its FROM
+    value, outermost first, before any UNTIL is tested."""
     spec = stmt.spec
     assert isinstance(spec, PerformVaryingSpec)
-    span = stmt.span
-
-    all_specs: tuple[PerformVaryingSpec, ...] = (spec, *spec.after_specs)
-
-    if len(all_specs) == 1:
-        _lower_perform_varying_single(ctx, stmt, spec, materialised)
-    elif spec.test_before:
-        exit_label = ctx.fresh_label("pv_exit")
-
-        def body_fn():
-            return lower_perform_body(ctx, stmt, materialised)
-
-        _emit_test_before_level(
-            ctx, all_specs, body_fn, exit_label, materialised, span=span
-        )
-        ctx.emit_inst(Label_(label=exit_label), span=span)
-    else:
-        _emit_test_after_varying(
-            ctx,
-            all_specs,
-            lambda: lower_perform_body(ctx, stmt, materialised),
-            materialised,
-            span=span,
-        )
+    specs: tuple[PerformVaryingSpec, ...] = (spec, *spec.after_specs)
+    for level in specs:
+        _init_varying_var(ctx, level, materialised, span=stmt.span)
+    if spec.test_before:
+        _emit_test_before_varying(ctx, stmt, specs, materialised)
+        return
+    _emit_test_after_varying(ctx, stmt, specs, materialised)
 
 
 def emit_varying_increment(
