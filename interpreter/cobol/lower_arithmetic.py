@@ -57,7 +57,11 @@ from cobol_numeric.scale import (
     mul_scale,
 )
 from interpreter.cobol.arithmetic_receiver import ArithmeticReceiver
-from interpreter.cobol.arithmetic_scale import field_scale, is_floating_type
+from interpreter.cobol.arithmetic_scale import (
+    field_scale,
+    is_floating_type,
+    receiver_capacity,
+)
 from interpreter.cobol.arithmetic_scale import receiver_decimals as _receiver_decimals
 from interpreter.cobol.arithmetic_value import ArithmeticValue
 from interpreter.cobol.cobol_constants import BuiltinName
@@ -270,72 +274,40 @@ def _compute_overflow_flag(
     *,
     span: SourceSpan | None = None,
 ) -> Register:
-    """Emit CONST/BINOP sequence to compute overflow bool register.
-
-    Returns the register holding True iff result_reg overflows td's bounds.
-    Does NOT emit a branch — caller decides what to branch on.
-    """
-    # result_reg holds the unscaled value (e.g. 999.99, not 99999), so the
-    # overflow threshold must be sized by integer-digit capacity only —
-    # td.total_digits includes decimal positions and would otherwise be off
-    # by a factor of 10**decimal_digits (red-dragon-oiec).
-    integer_digits = td.total_digits - td.decimal_digits
-    max_val = 10**integer_digits - 1
-    max_reg = ctx.const_to_reg(max_val, span=span)
+    capacity = receiver_capacity(td)
     over_max = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
             result_reg=over_max,
-            operator=resolve_binop(">"),
+            operator=resolve_binop(">="),
             left=result_reg,
-            right=max_reg,
+            right=ctx.const_to_reg(capacity, span=span),
         ),
         span=span,
     )
-    if td.signed:
-        min_reg = ctx.const_to_reg(-max_val, span=span)
-        under_min = ctx.fresh_reg()
-        ctx.emit_inst(
-            Binop(
-                result_reg=under_min,
-                operator=resolve_binop("<"),
-                left=result_reg,
-                right=min_reg,
-            ),
-            span=span,
-        )
-        overflow_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Binop(
-                result_reg=overflow_reg,
-                operator=resolve_binop("or"),
-                left=over_max,
-                right=under_min,
-            ),
-            span=span,
-        )
-        return overflow_reg
-    return over_max
-
-
-def emit_overflow_check(
-    ctx: EmitContext,
-    result_reg: Register,
-    td: CobolTypeDescriptor,
-    on_size_err_label: CodeLabel,
-    not_on_size_err_label: CodeLabel,
-    *,
-    span: SourceSpan | None = None,
-) -> None:
-    """Emit overflow detection and BRANCH_IF to the supplied labels."""
-    overflow_reg = _compute_overflow_flag(ctx, result_reg, td, span=span)
+    if not td.signed:
+        return over_max
+    under_min = ctx.fresh_reg()
     ctx.emit_inst(
-        BranchIf(
-            cond_reg=overflow_reg,
-            branch_targets=(on_size_err_label, not_on_size_err_label),
+        Binop(
+            result_reg=under_min,
+            operator=resolve_binop("<="),
+            left=result_reg,
+            right=ctx.const_to_reg(-capacity, span=span),
         ),
         span=span,
     )
+    overflow_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        Binop(
+            result_reg=overflow_reg,
+            operator=resolve_binop("or"),
+            left=over_max,
+            right=under_min,
+        ),
+        span=span,
+    )
+    return overflow_reg
 
 
 def eval_ref_mod_expr(
