@@ -6,6 +6,7 @@ from cobol_asg.asg_types import (
     CobolParagraph,
     CobolSection,
 )
+from cobol_asg.ref_mod import RefModOperand
 from cobol_asg.cobol_statements import (
     ArithmeticStatement,
     DisplayStatement,
@@ -273,11 +274,13 @@ class TestCobolField:
             "pic": "",
             "usage": "DISPLAY",
             "offset": 0,
-            "renames_from": "WS-FIRST",
+            "renames_from": {"name": "WS-FIRST", "qualifiers": ["WS-REC"]},
         }
         field = CobolField.from_dict(data)
-        assert field.renames_from == "WS-FIRST"
-        assert field.renames_thru == ""
+        assert field.renames_from == RefModOperand(
+            name="WS-FIRST", qualifiers=("WS-REC",)
+        )
+        assert field.renames_thru == RefModOperand(name="")
         assert CobolField.from_dict(field.to_dict()) == field
 
     def test_field_with_renames_thru(self):
@@ -287,12 +290,12 @@ class TestCobolField:
             "pic": "",
             "usage": "DISPLAY",
             "offset": 0,
-            "renames_from": "WS-FIRST",
-            "renames_thru": "WS-LAST",
+            "renames_from": {"name": "WS-FIRST"},
+            "renames_thru": {"name": "WS-LAST"},
         }
         field = CobolField.from_dict(data)
-        assert field.renames_from == "WS-FIRST"
-        assert field.renames_thru == "WS-LAST"
+        assert field.renames_from == RefModOperand(name="WS-FIRST")
+        assert field.renames_thru == RefModOperand(name="WS-LAST")
         assert CobolField.from_dict(field.to_dict()) == field
 
     def test_field_without_renames_defaults(self):
@@ -303,8 +306,8 @@ class TestCobolField:
             "offset": 0,
         }
         field = CobolField.from_dict(data)
-        assert field.renames_from == ""
-        assert field.renames_thru == ""
+        assert field.renames_from == RefModOperand(name="")
+        assert field.renames_thru == RefModOperand(name="")
         assert "renames_from" not in field.to_dict()
         assert "renames_thru" not in field.to_dict()
 

@@ -19,6 +19,7 @@ from cobol_asg.asg_types import CobolField
 from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from cobol_asg.condition_name import ConditionName, ConditionValue
 from cobol_asg.pic_parser import parse_pic
+from cobol_asg.ref_mod import RefModOperand
 from cobol_asg.source_span import SourceSpan
 
 logger = logging.getLogger(__name__)
@@ -155,6 +156,7 @@ class DataLayout:
     span: SourceSpan | None = None
     value: str = ""
     value_is_figurative: bool = False
+    renames: dict[str, FieldLayout] = field(default_factory=dict)
 
     def lookup(self, name: str) -> FieldLayout | None:
         """Search for a leaf field by bare name within this subtree.
@@ -187,22 +189,10 @@ class DataLayout:
         return results
 
     def exists(self, name: str) -> bool:
-        """True if ``name`` resolves to at least one leaf field or group here.
-
-        A pure existence check that never raises on ambiguity — for callers
-        that only need to know whether a bare name is a real field/group at
-        all (e.g. distinguishing a MOVE target from an unmodelled special
-        register, or picking which DATA DIVISION section owns a name), not
-        callers that need to resolve it to one specific location. Use
-        :meth:`lookup`/:meth:`lookup_qualified` for the latter.
-        """
-        if self._find_all(name):
-            return True
-        try:
-            self.lookup_group(name)
-            return True
-        except KeyError:
-            return False
+        """True if ``name`` names at least one item here, elementary, group or
+        level-66 — a pure existence check that never raises on ambiguity. Use
+        :meth:`qualified_matches` to resolve a reference to one item."""
+        return any(match.name.upper() == name.upper() for match in self.items())
 
     def first_index_for(self, table_name: str) -> str | None:
         """Return the first ``INDEXED BY`` name declared on ``table_name``, or None.
@@ -258,6 +248,10 @@ class DataLayout:
             for match in chain(
                 (DataItemMatch(name, group, ancestors),),
                 group._items((*ancestors, (name, group))),
+                (
+                    DataItemMatch(alias, renamed, (*ancestors, (name, group)))
+                    for alias, renamed in group.renames.items()
+                ),
             )
         )
 
@@ -539,43 +533,67 @@ def _compute_group_length(cobol_field: CobolField) -> int:
 
 def _resolve_renames(
     renames_field: CobolField,
-    layout: DataLayout,
+    record_name: str,
+    record: DataLayout,
 ) -> FieldLayout:
     """Resolve a level-66 RENAMES field into a FieldLayout.
 
-    RENAMES creates a read-only alias over a contiguous range of fields.
-    Offset = from_field.offset. Byte length = span from from_field through
-    thru_field (or from_field itself if no THRU).
+    RENAMES creates an alias over a contiguous range of the items of the 01
+    record it follows: offset = from item's offset, byte length = span from the
+    from item through the thru item (or the from item alone if no THRU). Either
+    item may be elementary or a group, and is qualified as written, with the
+    record itself a valid qualifier.
     """
-    from_name = renames_field.renames_from
-    thru_name = renames_field.renames_thru if renames_field.renames_thru else from_name
-
-    from_layout = layout.lookup_or_raise(from_name)
-    thru_layout = layout.lookup_or_raise(thru_name)
-
-    offset = from_layout.offset
-    byte_length = (thru_layout.offset + thru_layout.byte_length) - from_layout.offset
-
-    type_desc = _RENAMES_TYPE_DESCRIPTOR  # RENAMES is always ALPHANUMERIC
+    scope = DataLayout(groups={record_name: record})
+    thru = renames_field.renames_thru
+    from_storage = _renamed_storage(scope, renames_field.renames_from)
+    thru_storage = _renamed_storage(
+        scope, thru if thru.name else renames_field.renames_from
+    )
+    offset = from_storage.offset
+    byte_length = (thru_storage.offset + thru_storage.byte_length) - offset
 
     logger.debug(
         "RENAMES %s: from=%s thru=%s offset=%d length=%d",
         renames_field.name,
-        from_name,
-        thru_name,
+        renames_field.renames_from.name,
+        thru.name,
         offset,
         byte_length,
     )
 
     return FieldLayout(
         name=renames_field.name,
-        type_descriptor=type_desc,
+        type_descriptor=_RENAMES_TYPE_DESCRIPTOR,
         offset=offset,
         byte_length=byte_length,
-        renames_from=renames_field.renames_from,
-        renames_thru=renames_field.renames_thru,
+        renames_from=renames_field.renames_from.name,
+        renames_thru=thru.name,
         span=renames_field.span,
     )
+
+
+def _renamed_storage(scope: DataLayout, operand: RefModOperand) -> FieldLayout:
+    found = scope.qualified_matches(operand.name, operand.qualifiers)
+    if not found:
+        raise KeyError(f"RENAMES operand not found in its record: {operand.name!r}")
+    return found[0].storage
+
+
+def _owned_renames(fields: Sequence[CobolField]) -> list[tuple[CobolField, str]]:
+    """Each level-66 item with the 01 record immediately preceding it."""
+    return [
+        (
+            f,
+            next(
+                record.name
+                for record in reversed(fields[:position])
+                if not record.renames_from.name
+            ),
+        )
+        for position, f in enumerate(fields)
+        if f.renames_from.name
+    ]
 
 
 def laid_end_to_end(fields: Sequence[CobolField]) -> list[CobolField]:
@@ -590,7 +608,7 @@ def laid_end_to_end(fields: Sequence[CobolField]) -> list[CobolField]:
 
 
 def _positioned_by_name(f: CobolField) -> bool:
-    return bool(f.redefines or f.renames_from)
+    return bool(f.redefines or f.renames_from.name)
 
 
 def build_data_layout(fields: list[CobolField]) -> DataLayout:
@@ -602,7 +620,7 @@ def build_data_layout(fields: list[CobolField]) -> DataLayout:
     Returns:
         A DataLayout with fields/groups split and total_bytes computed.
     """
-    non_renames_fields = [f for f in fields if not f.renames_from]
+    non_renames_fields = [f for f in fields if not f.renames_from.name]
     top_fields: dict[str, FieldLayout] = {}
     top_groups: dict[str, DataLayout] = {}
     for f in non_renames_fields:
@@ -612,12 +630,18 @@ def build_data_layout(fields: list[CobolField]) -> DataLayout:
         else:
             top_fields[name] = result
 
-    # RENAMES fields (level 66) — resolved against the partial layout
-    renames_fields = [f for f in fields if f.renames_from]
-    if renames_fields:
-        temp_layout = DataLayout(fields=top_fields, groups=top_groups)
-        for rf in renames_fields:
-            top_fields[rf.name] = _resolve_renames(rf, temp_layout)
+    owned = _owned_renames(fields)
+    renamed_groups = {
+        name: replace(
+            group,
+            renames={
+                f.name: _resolve_renames(f, name, group)
+                for f, owner in owned
+                if owner == name
+            },
+        )
+        for name, group in top_groups.items()
+    }
 
     non_redefines_top = [f for f in non_renames_fields if not f.redefines]
     total = sum(_compute_group_length(f) for f in non_redefines_top)
@@ -629,7 +653,7 @@ def build_data_layout(fields: list[CobolField]) -> DataLayout:
         total,
     )
 
-    return DataLayout(fields=top_fields, groups=top_groups, total_bytes=total)
+    return DataLayout(fields=top_fields, groups=renamed_groups, total_bytes=total)
 
 
 _INDEX_ITEM_TYPE = CobolTypeDescriptor(

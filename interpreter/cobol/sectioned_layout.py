@@ -170,7 +170,7 @@ def build_sectioned_layout(asg: CobolASG) -> SectionedLayout:
     records = tuple(
         LinkageRecord(item.name.upper(), item.offset, record_length(item))
         for item in linkage_fields
-        if not item.redefines and not item.renames_from
+        if not item.redefines and not item.renames_from.name
     )
     named = [param.name.upper() for param in asg.procedure_using] or [
         record.name for record in records
@@ -202,7 +202,7 @@ def _linkage_owners(
     return {
         _field_identity(fl): owner.name.upper()
         for item in linkage_fields
-        if not item.renames_from
+        if not item.renames_from.name
         for owner in (by_name.get(item.redefines.upper(), item),)
         for fl in build_data_layout(
             [replace(item, redefines="", offset=owner.offset)]

@@ -4,6 +4,7 @@ import pytest
 
 from cobol_asg.asg_types import CobolField
 from cobol_asg.cobol_types import CobolDataCategory
+from cobol_asg.ref_mod import RefModOperand
 from interpreter.cobol.data_layout import (
     CobolAmbiguousReferenceError,
     DataLayout,
@@ -738,11 +739,11 @@ class TestBuildDataLayoutRenames:
                 pic="",
                 usage="DISPLAY",
                 offset=0,
-                renames_from="WS-FIRST",
+                renames_from=RefModOperand(name="WS-FIRST"),
             ),
         ]
         layout = build_data_layout(fields)
-        fl = layout.lookup("WS-ALIAS")
+        fl = layout.lookup_as_storage("WS-ALIAS", ("WS-REC",))
         assert fl is not None
         assert fl.offset == 0
         assert fl.byte_length == 10
@@ -791,12 +792,12 @@ class TestBuildDataLayoutRenames:
                 pic="",
                 usage="DISPLAY",
                 offset=0,
-                renames_from="WS-A",
-                renames_thru="WS-C",
+                renames_from=RefModOperand(name="WS-A"),
+                renames_thru=RefModOperand(name="WS-C"),
             ),
         ]
         layout = build_data_layout(fields)
-        fl = layout.lookup("WS-SPAN")
+        fl = layout.lookup_as_storage("WS-SPAN")
         assert fl is not None
         assert fl.offset == 0  # WS-A offset
         assert fl.byte_length == 15  # 0 + 5 + 3 + 7 = 15 (through end of WS-C)
@@ -804,6 +805,37 @@ class TestBuildDataLayoutRenames:
         assert fl.renames_thru == "WS-C"
         # RENAMES does not increase total_bytes
         assert layout.total_bytes == 15
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_renames_belongs_to_and_resolves_within_its_preceding_record(self):
+        def renames(name: str, start: str, *qualifiers: str) -> CobolField:
+            return CobolField(
+                name=name,
+                level=66,
+                pic="",
+                usage="DISPLAY",
+                offset=0,
+                renames_from=RefModOperand(name=start, qualifiers=qualifiers),
+            )
+
+        layout = build_data_layout(
+            [
+                _group(
+                    "R1", 0, _leaf("A", 0, "XX"), _group("G", 2, _leaf("B", 0, "X(3)"))
+                ),
+                renames("ALIAS", "G"),
+                _group("R2", 5, _leaf("A", 0, "X(4)"), _group("G", 4, _leaf("B", 0))),
+                renames("ALIAS", "A", "R2"),
+            ]
+        )
+
+        def extent(*qualifiers: str) -> tuple[int, int]:
+            (match,) = layout.qualified_matches("ALIAS", qualifiers)
+            return match.storage.offset, match.storage.byte_length
+
+        assert (extent("R1"), extent("R2")) == ((2, 3), (5, 4))
+        with pytest.raises(CobolAmbiguousReferenceError, match="'ALIAS'"):
+            layout.qualified_matches("ALIAS", ())
 
 
 class TestBuildDataLayoutBlankWhenZero:

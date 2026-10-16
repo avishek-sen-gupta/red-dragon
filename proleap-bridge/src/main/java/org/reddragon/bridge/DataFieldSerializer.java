@@ -245,6 +245,7 @@ public final class DataFieldSerializer {
     /**
      * Serializes a level-66 RENAMES entry to a CobolField JSON object.
      * RENAMES does not allocate storage — offset is set to 0 (resolved in Python).
+     * The renamed items are structured references, OF/IN qualifiers included.
      */
     private JsonObject serializeRename(DataDescriptionEntryRename rename) {
         JsonObject obj = new JsonObject();
@@ -258,12 +259,12 @@ public final class DataFieldSerializer {
 
         if (rename.getRenamesClause() != null) {
             if (rename.getRenamesClause().getFrom() != null) {
-                obj.addProperty("renames_from",
-                        rename.getRenamesClause().getFrom().getName());
+                obj.add("renames_from",
+                        StatementSerializer.serializeRef(rename.getRenamesClause().getFrom()));
             }
             if (rename.getRenamesClause().getTo() != null) {
-                obj.addProperty("renames_thru",
-                        rename.getRenamesClause().getTo().getName());
+                obj.add("renames_thru",
+                        StatementSerializer.serializeRef(rename.getRenamesClause().getTo()));
             }
         }
 

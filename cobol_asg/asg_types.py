@@ -27,6 +27,7 @@ from cobol_asg.edit_picture import (
 from cobol_asg.lp32 import LP32_MODE
 from cobol_asg.pic_parser import parse_pic
 from cobol_asg.pointer_types import FULLWORD_POINTER
+from cobol_asg.ref_mod import RefModOperand
 from cobol_asg.source_span import SourceSpan
 
 
@@ -58,6 +59,9 @@ def _currency_from_special_names(data: dict) -> str:
             f"literal, which changes field widths."
         )
     return sign
+
+
+NOT_RENAMED = RefModOperand(name="")
 
 
 @dataclass(frozen=True)
@@ -97,8 +101,8 @@ class CobolField:
     # Compiler-allocated index names from OCCURS ... INDEXED BY, in declaration
     # order. Order is load-bearing: a Format 1 SEARCH advances the first one.
     indexed_by: list[str] = field(default_factory=list)
-    renames_from: str = ""
-    renames_thru: str = ""
+    renames_from: RefModOperand = NOT_RENAMED
+    renames_thru: RefModOperand = NOT_RENAMED
     blank_when_zero: bool = False
     # The program's currency symbol at the time this field was ingested — '$'
     # unless SPECIAL-NAMES declared CURRENCY SIGN IS otherwise. It is
@@ -166,8 +170,8 @@ class CobolField:
             occurs_depending_on=data.get("occurs_depending_on", ""),
             occurs_min=data.get("occurs_min", 0),
             indexed_by=list(data.get("indexed_by", [])),
-            renames_from=data.get("renames_from", ""),
-            renames_thru=data.get("renames_thru", ""),
+            renames_from=RefModOperand.from_dict(data.get("renames_from", {})),
+            renames_thru=RefModOperand.from_dict(data.get("renames_thru", {})),
             blank_when_zero=data.get("blank_when_zero", False),
             currency_symbol=currency,
             pointer_type=pointer_type,
@@ -215,10 +219,10 @@ class CobolField:
             result["occurs_min"] = self.occurs_min
         if self.indexed_by:
             result["indexed_by"] = list(self.indexed_by)
-        if self.renames_from:
-            result["renames_from"] = self.renames_from
-        if self.renames_thru:
-            result["renames_thru"] = self.renames_thru
+        if self.renames_from.name:
+            result["renames_from"] = self.renames_from.to_dict()
+        if self.renames_thru.name:
+            result["renames_thru"] = self.renames_thru.to_dict()
         if self.blank_when_zero:
             result["blank_when_zero"] = True
         return result
