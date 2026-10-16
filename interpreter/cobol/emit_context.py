@@ -1,8 +1,8 @@
 """EmitContext — shared mutable state and emit primitives for COBOL lowering.
 
 All lowering functions receive an EmitContext and operate on it.  The context
-holds the instruction buffer, register/label counters, section→paragraph
-lookup, and convenience methods for emitting IR.
+holds the instruction buffer, register/label counters, the procedure
+labels, and convenience methods for emitting IR.
 
 Circular dependency between lowering functions and the statement dispatcher
 is broken by injecting a *dispatch callback* at construction time.
@@ -50,6 +50,7 @@ from interpreter.cobol.ir_encoders import (
     build_encode_zoned_separate_ir,
 )
 from interpreter.cobol.pic_scale import encode_digits
+from interpreter.cobol.procedure_labels import ProcedureLabels
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.cobol.source_spans import to_source_location
 from interpreter.constants import FoundationTypeName
@@ -124,7 +125,7 @@ class EmitContext:
         self._instructions: list[InstructionBase] = []
         self._reg_counter: int = 0
         self._label_counter: int = 0
-        self._section_paragraphs: dict[str, list[str]] = {}
+        self._procedures: ProcedureLabels = ProcedureLabels()
         self.use_by_file: dict[str, str] = {}
         self.use_by_mode: dict[str, str] = {}
         self.use_global: str | None = None
@@ -143,17 +144,15 @@ class EmitContext:
         return self._instructions
 
     @property
-    def section_paragraphs(self) -> dict[str, list[str]]:
-        return self._section_paragraphs
+    def procedures(self) -> ProcedureLabels:
+        return self._procedures
 
-    @section_paragraphs.setter
-    def section_paragraphs(self, value: dict[str, list[str]]) -> None:
-        self._section_paragraphs = value
+    @procedures.setter
+    def procedures(self, value: ProcedureLabels) -> None:
+        self._procedures = value
 
     def procedure_label(self, name: str) -> CodeLabel:
-        if name in self._section_paragraphs:
-            return CodeLabel(f"section_{name}")
-        return CodeLabel(f"para_{name}")
+        return self._procedures.procedure(name)
 
     @property
     def extension_strategies(self) -> tuple[RedDragonExtensionLoweringStrategy, ...]:
@@ -238,13 +237,13 @@ class EmitContext:
         """The label EXIT PARAGRAPH branches to, recorded so the paragraph emits it."""
         if not self._paragraph:
             raise NotImplementedError("EXIT PARAGRAPH outside a named paragraph")
-        return self._request_exit(CodeLabel(f"para_{self._paragraph}_exit"))
+        return self._request_exit(self._procedures.paragraph_exit(self._paragraph))
 
     def section_exit(self) -> CodeLabel:
         """The label EXIT SECTION branches to, recorded so the section emits it."""
         if not self._section:
             raise NotImplementedError("EXIT SECTION outside a section")
-        return self._request_exit(CodeLabel(f"section_{self._section}_exit"))
+        return self._request_exit(self._procedures.section_exit(self._section))
 
     def exit_requested(self, label: CodeLabel) -> bool:
         return label in self._requested_exits

@@ -232,4 +232,8 @@ fileignoreconfig:
   checksum: f74457ef3ece3bc6a72bbf97238e1b3d06aa84c99bdc07473b104a24aa1d4df0
 - filename: tests/nist/conftest.py
   checksum: a73b4fc1feb6688c8aebf45def23e392dc87346ed77d52694f6a335ed3216f55
+- filename: interpreter/cobol/lower_perform.py
+  checksum: e6cac512f59e64b0eb6ef613edfd1a76df82a116b8d4d50f6c8a28fa45c4c04a
+- filename: tests/unit/cobol/test_procedure_labels.py
+  checksum: 24c989197c91ad7ebec777da9532a3e246a93ce883e8ea85345516b397cccb6a
 version: "1.0"

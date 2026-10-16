@@ -12,9 +12,8 @@ from cobol_asg.source_span import SourceSpan
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.lower_program_exit import lower_program_exit
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
-from interpreter.continuation_name import ContinuationName
+from interpreter.cobol.procedure_labels import procedure_labels
 from interpreter.instructions import Label_, ResumeContinuation
-from interpreter.ir import CodeLabel
 
 logger = logging.getLogger(__name__)
 
@@ -27,12 +26,7 @@ def lower_procedure_division(
     """Lower division-level bare statements, standalone paragraphs, and sections."""
     for strat in ctx.extension_strategies:
         strat.on_procedure_entry(ctx, materialised)
-    ctx.section_paragraphs = {
-        section.name: [p.name for p in section.paragraphs] for section in asg.sections
-    }
-    # Declaratives sections are PERFORM-able within declaratives; register them too.
-    for section in asg.declaratives:
-        ctx.section_paragraphs[section.name] = [p.name for p in section.paragraphs]
+    ctx.procedures = procedure_labels([*asg.sections, *asg.declaratives])
 
     # Build the USE-declarative registry: map each registered USE to its
     # declarative SECTION NAME so I/O verbs can fire the matching procedure on an
@@ -99,14 +93,15 @@ def lower_section(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     span = section.span
-    ctx.emit_inst(Label_(label=CodeLabel(f"section_{section.name}")), span=span)
+    labels = ctx.procedures
+    ctx.emit_inst(Label_(label=labels.section(section.name)), span=span)
     with ctx.in_section(section.name):
         _lower_section_body(ctx, section, materialised)
-    exit_label = CodeLabel(f"section_{section.name}_exit")
+    exit_label = labels.section_exit(section.name)
     if ctx.exit_requested(exit_label):
         ctx.emit_inst(Label_(label=exit_label), span=span)
     ctx.emit_inst(
-        ResumeContinuation(name=ContinuationName(f"section_{section.name}_end")),
+        ResumeContinuation(name=labels.section_end(section.name)),
         span=span,
     )
 
@@ -128,16 +123,15 @@ def lower_paragraph(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     span = para.span
-    ctx.emit_inst(Label_(label=CodeLabel(f"para_{para.name}")), span=span)
+    labels = ctx.procedures
+    ctx.emit_inst(Label_(label=labels.paragraph(para.name)), span=span)
     with ctx.in_paragraph(para.name):
         for position, sentence in enumerate(_sentences(para)):
             _lower_sentence(ctx, para, position, sentence, materialised)
-    exit_label = CodeLabel(f"para_{para.name}_exit")
+    exit_label = labels.paragraph_exit(para.name)
     if ctx.exit_requested(exit_label):
         ctx.emit_inst(Label_(label=exit_label), span=span)
-    ctx.emit_inst(
-        ResumeContinuation(name=ContinuationName(f"para_{para.name}_end")), span=span
-    )
+    ctx.emit_inst(ResumeContinuation(name=labels.paragraph_end(para.name)), span=span)
 
 
 def _sentences(para: CobolParagraph) -> list[list[CobolStatementType]]:
@@ -160,7 +154,7 @@ def _lower_sentence(
 ) -> None:
     """A sentence's statements, then the landing a NEXT SENTENCE in them branched
     to -- only if one did, so a program without one lowers unchanged."""
-    exit_label = CodeLabel(f"para_{para.name}_sentence_{position}_exit")
+    exit_label = ctx.procedures.sentence_exit(para.name, position)
     with ctx.in_sentence(exit_label):
         for stmt in statements:
             ctx.lower_statement(stmt, materialised)
