@@ -429,7 +429,7 @@ def lower_alter(
     """ALTER para-1 TO PROCEED TO para-2."""
     span = stmt.span
     for pt in stmt.proceed_tos:
-        target_reg = ctx.const_to_reg(f"para_{pt.target}", span=span)
+        target_reg = ctx.const_to_reg(str(ctx.procedure_label(pt.target)), span=span)
         ctx.emit_inst(
             StoreVar(
                 name=VarName(f"__alter_{pt.source}"),
