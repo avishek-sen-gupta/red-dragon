@@ -84,3 +84,23 @@ class TestQualifiedReferenceResolution:
             ],
         )
         assert shown == "324ABZ-----Z"
+
+
+class TestQualifiedStatementOperands:
+    @covers(CobolFeature.DISPLAY)
+    def test_display_shows_the_qualified_items(self, capsys):
+        shown = _shown(
+            capsys,
+            [
+                "01 REC.",
+                '   02 G1. 03 E1 PIC X VALUE "A". 03 E2 PIC X VALUE "B".',
+                '   02 G2. 03 E1 PIC X VALUE "C". 03 E2 PIC X VALUE "D".',
+                "01 TB.",
+                '   02 G1 OCCURS 2. 03 E1 PIC X VALUE "-".',
+            ],
+            [
+                '    MOVE "Q" TO E1 OF TB (2).',
+                "    DISPLAY E1 OF G1 OF REC E2 IN G2 E1 OF TB (2) E1 IN G2 (1:1).",
+            ],
+        )
+        assert shown == "ADQC"
