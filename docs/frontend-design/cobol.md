@@ -117,7 +117,7 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 |---|---|
 | `IF / ELSE` | `_lower_condition()` → `BRANCH_IF` → true/false blocks |
 | `EVALUATE / WHEN` | Chain of `BRANCH_IF` per WHEN, `WHEN OTHER` as fallthrough. Primary (non-`ALSO`) `WHEN ANY` short-circuits to an always-true wildcard match. `ALSO` (`EVALUATE a ALSO b WHEN x ALSO y`) ANDs each subject=condition pair together via `BINOP &&`; `ANY` in a WHEN position skips that dimension's comparison. Stacked WHENs (`WHEN c1 WHEN c2 <body>`) are one `WhenStatement` with one body: the first condition on the WHEN itself, the rest in `alternatives`, ORed via `BINOP or`. |
-| `PERFORM` | Simple: `SET_CONTINUATION` + `BRANCH` to paragraph. TIMES/UNTIL/VARYING: loop with counter/condition. Each VARYING/AFTER identifier, FROM and BY operand is a structured expression node, so an identifier contributes its value and a subscripted one addresses its occurrence. THRU: range of procedures; control returns at the end of the THRU procedure, which for a section is the end of its last paragraph. Section-level: all paragraphs in section. |
+| `PERFORM` | Simple: `SET_CONTINUATION` + `BRANCH` to paragraph. TIMES/UNTIL/VARYING: loop with counter/condition. The TIMES count and each VARYING/AFTER identifier, FROM and BY operand is a structured expression node, so an identifier contributes its value and a subscripted one addresses its occurrence. THRU: range of procedures; control returns at the end of the THRU procedure, which for a section is the end of its last paragraph. Section-level: all paragraphs in section. |
 | `GO TO` | `BRANCH` to paragraph label |
 | `STOP RUN` | `HALT` — unconditionally terminates the entire run unit. Emitted by `lower_stop_run` as a dedicated `Halt_` IR instruction (`interpreter/instructions.py`), distinct from `RETURN`/`Return_`. Previously (fixed red-dragon-mjin) STOP RUN lowered to the same `Return_` as GOBACK/EXIT PROGRAM, so a callee's STOP RUN incorrectly returned control to the caller instead of halting the whole program. |
 | `GOBACK` | `RETURN` — returns control to the caller (subprogram) or terminates (main program). No longer the same IR as STOP RUN (see above). |
@@ -138,7 +138,7 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 | Statement | IR Pattern |
 |---|---|
 | `INITIALIZE` | Reset fields to type-appropriate defaults (SPACES for alphanumeric, ZEROS for numeric) |
-| `SET` | TO: encode value → write. UP/DOWN BY: decode → `BINOP +/-` → encode → write. |
+| `SET` | TO: encode value → write. UP/DOWN BY: decode → `BINOP +/-` → encode → write. A subscripted or qualified target or value resolves to the occurrence it names. |
 | `SET p TO ADDRESS OF x \| NULL \| q` | A POINTER target: the address — x's region register `BINOP +` its offset, 0 for NULL, or q's contents — written as the addressing mode's binary (`INT_TO_BINARY_BYTES`, signed, 4 bytes under LP(32), 8 under LP(64)). |
 | `SET ADDRESS OF lk TO …` | A LINKAGE 01 or 77 item only: its region register becomes the address and its shift moves its static start there (`STORE_VAR` into its binding variables, then `LOAD_VAR` into its binding registers, so every later access follows). A subordinate item is rejected at lowering. |
 | `SET p UP/DOWN BY n` | A POINTER target: decode → `BINOP +/-` n bytes → write the address back. |

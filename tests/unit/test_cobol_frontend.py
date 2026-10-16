@@ -935,7 +935,7 @@ class TestPerformLoopLowering:
         stmts = [
             PerformStatement(
                 children=[DisplayStatement(operands=(RefModOperand(name="IN-LOOP"),))],
-                spec=PerformTimesSpec(times="3"),
+                spec=PerformTimesSpec(times=LiteralNode(value="3")),
             ),
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
@@ -968,7 +968,7 @@ class TestPerformLoopLowering:
         stmts = [
             PerformStatement(
                 target="WORK-PARA",
-                spec=PerformTimesSpec(times="2"),
+                spec=PerformTimesSpec(times=LiteralNode(value="2")),
             ),
         ]
         paragraphs = [

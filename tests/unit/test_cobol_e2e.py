@@ -628,7 +628,7 @@ class TestPerformTimesExecution:
                         {
                             "type": "PERFORM",
                             "perform_type": "TIMES",
-                            "times": "3",
+                            "times": {"kind": "lit", "value": "3"},
                             "children": [
                                 {
                                     "type": "ADD",
@@ -1013,7 +1013,7 @@ class TestNumericValueVerification:
                         {
                             "type": "PERFORM",
                             "perform_type": "TIMES",
-                            "times": "3",
+                            "times": {"kind": "lit", "value": "3"},
                             "children": [
                                 {
                                     "type": "ADD",
@@ -1148,7 +1148,7 @@ class TestNumericValueVerification:
                         {
                             "type": "PERFORM",
                             "perform_type": "TIMES",
-                            "times": "3",
+                            "times": {"kind": "lit", "value": "3"},
                             "operands": ["ADD-PARA"],
                         },
                         {"type": "STOP_RUN"},
@@ -1206,7 +1206,7 @@ class TestNumericValueVerification:
                         {
                             "type": "PERFORM",
                             "perform_type": "TIMES",
-                            "times": "3",
+                            "times": {"kind": "lit", "value": "3"},
                             "operands": ["ADD-PARA"],
                         },
                         {"type": "STOP_RUN"},
@@ -1384,7 +1384,7 @@ class TestNestedPerformNumericValues:
                         {
                             "type": "PERFORM",
                             "perform_type": "TIMES",
-                            "times": "2",
+                            "times": {"kind": "lit", "value": "2"},
                             "operands": ["OUTER-PARA"],
                         },
                         {"type": "STOP_RUN"},
@@ -1396,7 +1396,7 @@ class TestNestedPerformNumericValues:
                         {
                             "type": "PERFORM",
                             "perform_type": "TIMES",
-                            "times": "3",
+                            "times": {"kind": "lit", "value": "3"},
                             "operands": ["INNER-PARA"],
                         },
                     ],

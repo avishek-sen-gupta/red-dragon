@@ -61,7 +61,7 @@ def dialect_parsers_in_scope(parsers: Sequence[DialectParser]) -> Iterator[None]
 class PerformTimesSpec:
     """PERFORM ... TIMES loop specification."""
 
-    times: str  # count literal or field name
+    times: ExprNode
 
 
 @dataclass(frozen=True)
@@ -1783,7 +1783,7 @@ def _parse_perform_spec(
     """Parse the perform_type field into a typed spec, or None if absent."""
     perform_type = data.get("perform_type", "")
     if perform_type == "TIMES":
-        return PerformTimesSpec(times=data.get("times", ""))
+        return PerformTimesSpec(times=expr_from_dict(data["times"]))
     if perform_type == "UNTIL":
         return PerformUntilSpec(
             condition=data.get("until", {}),
@@ -1818,7 +1818,7 @@ def _spec_to_dict(
     if spec is None:
         return {}
     if isinstance(spec, PerformTimesSpec):
-        return {"perform_type": "TIMES", "times": spec.times}
+        return {"perform_type": "TIMES", "times": expr_to_dict(spec.times)}
     if isinstance(spec, PerformUntilSpec):
         return {
             "perform_type": "UNTIL",

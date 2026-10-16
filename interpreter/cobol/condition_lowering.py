@@ -431,7 +431,11 @@ def _field_byte_length(
         name = expr.get("name", "")
         if ctx.has_field(name, materialised):
             ref, _ = ctx.resolve_field_ref(
-                name, materialised, tuple(expr.get("qualifiers", ())), span=span
+                name,
+                materialised,
+                tuple(expr.get("qualifiers", ())),
+                tuple(expr_from_dict(s) for s in expr.get("subscripts", [])),
+                span=span,
             )
             return ref.fl.byte_length
     return None

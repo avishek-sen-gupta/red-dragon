@@ -766,12 +766,18 @@ class TestPerformSpecs:
                 "type": "PERFORM",
                 "operands": ["WORK-PARA"],
                 "perform_type": "TIMES",
-                "times": "5",
+                "times": {
+                    "kind": "ref",
+                    "name": "WS-T",
+                    "subscripts": [{"kind": "ref", "name": "WS-IX"}],
+                },
             }
         )
         assert isinstance(stmt, PerformStatement)
         assert isinstance(stmt.spec, PerformTimesSpec)
-        assert stmt.spec.times == "5"
+        assert stmt.spec.times == FieldRefNode(
+            name="WS-T", subscripts=(FieldRefNode(name="WS-IX"),)
+        )
 
     @covers(
         CobolFeature.PERFORM,
@@ -1125,7 +1131,7 @@ class TestRoundTrip:
             "type": "PERFORM",
             "operands": ["WORK"],
             "perform_type": "TIMES",
-            "times": "5",
+            "times": {"kind": "lit", "value": "5"},
         }
         assert self._round_trip(data) == data
 

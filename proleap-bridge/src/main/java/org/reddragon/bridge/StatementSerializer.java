@@ -804,7 +804,7 @@ public final class StatementSerializer {
                 obj.addProperty("perform_type", "TIMES");
                 Times times = pt.getTimes();
                 if (times != null && times.getTimesValueStmt() != null) {
-                    obj.addProperty("times", extractValueStmtText(times.getTimesValueStmt()));
+                    obj.add("times", serializeFromValue(times.getTimesValueStmt()));
                 }
             } else if (typeType == PerformType.PerformTypeType.UNTIL) {
                 obj.addProperty("perform_type", "UNTIL");
@@ -2475,6 +2475,9 @@ public final class StatementSerializer {
         }
         if (ctx instanceof CobolParser.LiteralContext) {
             return serializeLiteralCtx((CobolParser.LiteralContext) ctx);
+        }
+        if (ctx instanceof CobolParser.IntegerLiteralContext) {
+            return litNode(ctx.getText());
         }
         String text = (ctx != null) ? ctx.getText() : extractValueStmtText(vs);
         JsonObject ref = new JsonObject();
