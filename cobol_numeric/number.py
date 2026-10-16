@@ -114,9 +114,9 @@ def truncate_to(value: NumberLike, decimal_places: int) -> CobolNumber:
 def round_half_up(value: NumberLike, decimal_places: int) -> CobolNumber:
     """Round to ``decimal_places``, ties away from zero (COBOL ROUNDED)."""
     numerator, denominator = _ratio(value)
-    magnitude = (2 * abs(numerator) * 10**decimal_places + denominator) // (
-        2 * denominator
-    )
+    shifted = abs(numerator) * 10 ** max(decimal_places, 0)
+    divisor = denominator * 10 ** max(-decimal_places, 0)
+    magnitude = (2 * shifted + divisor) // (2 * divisor)
     return _from_scaled_int(-magnitude if numerator < 0 else magnitude, decimal_places)
 
 

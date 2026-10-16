@@ -62,6 +62,7 @@ from interpreter.cobol.arithmetic_scale import (
     field_scale,
     is_floating_type,
     receiver_capacity,
+    receiver_rounding_places,
 )
 from interpreter.cobol.arithmetic_scale import receiver_decimals as _receiver_decimals
 from interpreter.cobol.arithmetic_value import ArithmeticValue
@@ -1338,7 +1339,8 @@ def _stored_value(
             args=(
                 result,
                 ctx.const_to_reg(
-                    receiver.ref.fl.type_descriptor.decimal_digits, span=span
+                    receiver_rounding_places(receiver.ref.fl.type_descriptor),
+                    span=span,
                 ),
             ),
         ),

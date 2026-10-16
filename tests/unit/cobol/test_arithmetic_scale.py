@@ -11,6 +11,7 @@ from cobol_asg.cobol_expression import (
     LiteralNode,
 )
 from cobol_asg.cobol_types import CobolDataCategory
+from cobol_numeric.number import from_literal
 from cobol_numeric.scale import Scale
 from interpreter.cobol.arithmetic_scale import (
     expression_is_floating,
@@ -19,6 +20,7 @@ from interpreter.cobol.arithmetic_scale import (
     operand_dmax,
     receiver_capacity,
     receiver_decimals,
+    receiver_rounding_places,
 )
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
@@ -63,6 +65,15 @@ def test_receiver_capacity_is_the_first_magnitude_its_integer_digits_cannot_hold
     assert receiver_capacity(_td(2, 0)) == 100
     assert receiver_capacity(_td(3, 3)) == 1
     assert receiver_capacity(_td(12, 12)) == 1
+
+
+@covers(CobolFeature.ON_SIZE_ERROR, CobolFeature.ROUNDED_CLAUSE)
+def test_p_scaling_moves_the_capacity_and_the_rounding_position():
+    assert receiver_capacity(_td(2, 0, scale=1)) == 1000
+    assert receiver_capacity(_td(1, 0, scale=-3)) == from_literal(".01")
+    assert receiver_rounding_places(_td(2, 0, scale=1)) == -1
+    assert receiver_rounding_places(_td(1, 0, scale=-3)) == 3
+    assert receiver_rounding_places(_td(4, 2)) == 2
 
 
 @covers(CobolFeature.ARITHMETIC_EXPRESSION)
