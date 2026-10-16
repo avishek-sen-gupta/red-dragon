@@ -821,13 +821,13 @@ public final class StatementSerializer {
                     if (vc != null && vc.getVaryingPhrase() != null) {
                         VaryingPhrase vp = vc.getVaryingPhrase();
                         if (vp.getVaryingValueStmt() != null) {
-                            obj.addProperty("varying_var", extractValueStmtText(vp.getVaryingValueStmt()));
+                            obj.add("varying_var", serializeFromValue(vp.getVaryingValueStmt()));
                         }
                         if (vp.getFrom() != null && vp.getFrom().getFromValueStmt() != null) {
                             obj.add("varying_from", serializeFromValue(vp.getFrom().getFromValueStmt()));
                         }
                         if (vp.getBy() != null && vp.getBy().getByValueStmt() != null) {
-                            obj.addProperty("varying_by", extractValueStmtText(vp.getBy().getByValueStmt()));
+                            obj.add("varying_by", serializeFromValue(vp.getBy().getByValueStmt()));
                         }
                         if (vp.getUntil() != null) {
                             serializeUntilFields(vp.getUntil(), obj);
@@ -842,16 +842,16 @@ public final class StatementSerializer {
                             if (ap == null) continue;
                             JsonObject aObj = new JsonObject();
                             if (ap.getVaryingValueStmt() != null) {
-                                aObj.addProperty("varying_var",
-                                    extractValueStmtText(ap.getVaryingValueStmt()));
+                                aObj.add("varying_var",
+                                    serializeFromValue(ap.getVaryingValueStmt()));
                             }
                             if (ap.getFrom() != null && ap.getFrom().getFromValueStmt() != null) {
                                 aObj.add("varying_from",
                                     serializeFromValue(ap.getFrom().getFromValueStmt()));
                             }
                             if (ap.getBy() != null && ap.getBy().getByValueStmt() != null) {
-                                aObj.addProperty("varying_by",
-                                    extractValueStmtText(ap.getBy().getByValueStmt()));
+                                aObj.add("varying_by",
+                                    serializeFromValue(ap.getBy().getByValueStmt()));
                             }
                             if (ap.getUntil() != null) {
                                 serializeUntilFields(ap.getUntil(), aObj);
@@ -2466,32 +2466,19 @@ public final class StatementSerializer {
         if (vs instanceof ArithmeticValueStmt) {
             return serializeArithmeticExpr((ArithmeticValueStmt) vs);
         }
-        // A ref-modified operand — PERFORM VARYING I FROM NUMF(1:LENGTH OF N) —
-        // must keep its base field and both bounds structured; the flat text
-        // below would glue them into the unresolvable name "NUMF(1:LENGTHOFN)".
-        // (red-dragon-twfl)
-        JsonObject sliced = serializeRefModIdentifier(wholeOperandIdentifier(ctx));
-        if (sliced != null) {
-            return sliced;
+        // An identifier keeps its subscripts, slice and qualifiers structured:
+        // flat text glued them into unresolvable names such as "EL(S1)",
+        // "NUMF(1:LENGTHOFN)" or "FBOFGB" (red-dragon-sl30.9, -twfl, -2afo).
+        CobolParser.IdentifierContext id = wholeOperandIdentifier(ctx);
+        if (id != null) {
+            return serializeIdentifierCtx(id);
         }
-        // Bare field reference / literal — keep structured so the Python side can
-        // decide between field decode and literal parse.
+        if (ctx instanceof CobolParser.LiteralContext) {
+            return serializeLiteralCtx((CobolParser.LiteralContext) ctx);
+        }
         String text = (ctx != null) ? ctx.getText() : extractValueStmtText(vs);
         JsonObject ref = new JsonObject();
         ref.addProperty("kind", "ref");
-        JsonArray qualifiers = new JsonArray();
-        if (ctx != null) {
-            collectInDataQualifiers(ctx, qualifiers);
-        }
-        if (qualifiers.size() > 0) {
-            // A qualified operand's flat text glues to the unresolvable
-            // "FBOFGB"; the leaf plus its qualifiers is the resolvable pair
-            // (red-dragon-2afo).
-            CobolParser.IdentifierContext id = wholeOperandIdentifier(ctx);
-            ref.addProperty("name", id != null ? baseDataName(id) : text);
-            ref.add("qualifiers", qualifiers);
-            return ref;
-        }
         ref.addProperty("name", text);
         return ref;
     }
@@ -3794,6 +3781,17 @@ public final class StatementSerializer {
             return serializeArithExprCtx(ctx.arithmeticExpression());
         }
         CobolParser.IdentifierContext id = ctx.identifier();
+        if (id != null) {
+            return serializeIdentifierCtx(id);
+        }
+        return serializeLiteralCtx(ctx.literal());
+    }
+
+    /**
+     * An identifier operand as a structured expression node: a FUNCTION call,
+     * {@code LENGTH OF}, or a ref carrying its subscripts, slice and qualifiers.
+     */
+    private static JsonElement serializeIdentifierCtx(CobolParser.IdentifierContext id) {
         // Nested intrinsic FUNCTION as a basis (e.g. FUNCTION UPPER-CASE(FUNCTION
         // TRIM(x))). ProLeap surfaces the inner function as an identifier whose
         // subtree holds the functionCall rule; without this probe it serializes
@@ -3849,7 +3847,11 @@ public final class StatementSerializer {
             addCtxQualifiers(ref, id);
             return ref;
         }
-        CobolParser.LiteralContext lit = ctx.literal();
+        return litNode("");
+    }
+
+    /** A literal operand as a {@code lit} node, or a {@code figurative} one. */
+    private static JsonElement serializeLiteralCtx(CobolParser.LiteralContext lit) {
         if (lit != null && lit.figurativeConstant() != null) {
             String canonical = canonicalFigurativeCtx(lit.figurativeConstant());
             if (canonical != null) {

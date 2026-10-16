@@ -48,6 +48,7 @@ from cobol_asg.cobol_statements import (
     XmlGenerateStatement,
     parse_statement,
 )
+from cobol_asg.cobol_expression import BinOpNode, FieldRefNode, LiteralNode
 from cobol_asg.operand_kind import OperandKind
 from cobol_asg.ref_mod import RefModOperand
 from cobol_asg.set_operand import SetOperand
@@ -842,9 +843,24 @@ class TestPerformSpecs:
                 "type": "PERFORM",
                 "children": [{"type": "DISPLAY", "operands": [{"name": "LOOP"}]}],
                 "perform_type": "VARYING",
-                "varying_var": "WS-IDX",
-                "varying_from": "1",
-                "varying_by": "1",
+                "varying_var": {
+                    "kind": "ref",
+                    "name": "WS-EL",
+                    "subscripts": [{"kind": "ref", "name": "WS-S"}],
+                },
+                "varying_from": {"kind": "lit", "value": "1"},
+                "varying_by": {
+                    "kind": "ref",
+                    "name": "WS-EL",
+                    "subscripts": [
+                        {
+                            "kind": "binop",
+                            "op": "+",
+                            "left": {"kind": "ref", "name": "WS-S"},
+                            "right": {"kind": "lit", "value": "1"},
+                        }
+                    ],
+                },
                 "until": {
                     "not": False,
                     "relation": {
@@ -857,9 +873,18 @@ class TestPerformSpecs:
             }
         )
         assert isinstance(stmt.spec, PerformVaryingSpec)
-        assert stmt.spec.varying_var == "WS-IDX"
-        assert stmt.spec.varying_from == "1"
-        assert stmt.spec.varying_by == "1"
+        assert stmt.spec.varying_var == FieldRefNode(
+            name="WS-EL", subscripts=(FieldRefNode(name="WS-S"),)
+        )
+        assert stmt.spec.varying_from == LiteralNode(value="1")
+        assert stmt.spec.varying_by == FieldRefNode(
+            name="WS-EL",
+            subscripts=(
+                BinOpNode(
+                    op="+", left=FieldRefNode(name="WS-S"), right=LiteralNode("1")
+                ),
+            ),
+        )
         assert stmt.spec.condition == {
             "not": False,
             "relation": {
@@ -881,9 +906,9 @@ class TestPerformSpecs:
             {
                 "type": "PERFORM",
                 "perform_type": "VARYING",
-                "varying_var": "WS-I",
-                "varying_from": "1",
-                "varying_by": "1",
+                "varying_var": {"kind": "ref", "name": "WS-I"},
+                "varying_from": {"kind": "lit", "value": "1"},
+                "varying_by": {"kind": "lit", "value": "1"},
                 "until": {
                     "not": False,
                     "relation": {
@@ -895,9 +920,9 @@ class TestPerformSpecs:
                 "test_before": True,
                 "after_specs": [
                     {
-                        "varying_var": "WS-J",
-                        "varying_from": "1",
-                        "varying_by": "1",
+                        "varying_var": {"kind": "ref", "name": "WS-J"},
+                        "varying_from": {"kind": "ref", "name": "WS-K"},
+                        "varying_by": {"kind": "ref", "name": "WS-STEP"},
                         "until": {
                             "not": False,
                             "relation": {
@@ -913,9 +938,9 @@ class TestPerformSpecs:
         assert isinstance(stmt.spec, PerformVaryingSpec)
         assert len(stmt.spec.after_specs) == 1
         inner = stmt.spec.after_specs[0]
-        assert inner.varying_var == "WS-J"
-        assert inner.varying_from == "1"
-        assert inner.varying_by == "1"
+        assert inner.varying_var == FieldRefNode(name="WS-J")
+        assert inner.varying_from == FieldRefNode(name="WS-K")
+        assert inner.varying_by == FieldRefNode(name="WS-STEP")
 
 
 class TestRoundTrip:
@@ -1136,9 +1161,13 @@ class TestRoundTrip:
             "type": "PERFORM",
             "operands": ["WORK"],
             "perform_type": "VARYING",
-            "varying_var": "WS-IDX",
-            "varying_from": "1",
-            "varying_by": "1",
+            "varying_var": {
+                "kind": "ref",
+                "name": "WS-EL",
+                "subscripts": [{"kind": "ref", "name": "WS-S"}],
+            },
+            "varying_from": {"kind": "lit", "value": "1"},
+            "varying_by": {"kind": "ref", "name": "WS-STEP"},
             "until": {
                 "not": False,
                 "relation": {
@@ -1157,9 +1186,9 @@ class TestRoundTrip:
         data = {
             "type": "PERFORM",
             "perform_type": "VARYING",
-            "varying_var": "WS-I",
-            "varying_from": "1",
-            "varying_by": "1",
+            "varying_var": {"kind": "ref", "name": "WS-I"},
+            "varying_from": {"kind": "lit", "value": "1"},
+            "varying_by": {"kind": "lit", "value": "1"},
             "until": {
                 "not": False,
                 "relation": {
@@ -1171,9 +1200,9 @@ class TestRoundTrip:
             "test_before": True,
             "after_specs": [
                 {
-                    "varying_var": "WS-J",
-                    "varying_from": "1",
-                    "varying_by": "1",
+                    "varying_var": {"kind": "ref", "name": "WS-J"},
+                    "varying_from": {"kind": "lit", "value": "1"},
+                    "varying_by": {"kind": "ref", "name": "WS-STEP"},
                     "until": {
                         "not": False,
                         "relation": {
@@ -1185,13 +1214,7 @@ class TestRoundTrip:
                 }
             ],
         }
-        stmt = parse_statement(data)
-        assert isinstance(stmt, PerformStatement)
-        from cobol_asg.cobol_statements import _spec_to_dict
-
-        result = _spec_to_dict(stmt.spec)
-        assert result["after_specs"][0]["varying_var"] == "WS-J"
-        assert result["after_specs"][0]["varying_by"] == "1"
+        assert self._round_trip(data) == data
 
     @covers(CobolFeature.EVALUATE, CobolFeature.EVALUATE_WHEN_OTHER)
     def test_evaluate_round_trip(self):

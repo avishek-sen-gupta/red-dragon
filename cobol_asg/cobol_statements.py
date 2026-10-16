@@ -16,7 +16,13 @@ from dataclasses import dataclass, field
 from typing import Union
 
 from cobol_asg.call_target import CallTarget
-from cobol_asg.cobol_expression import ExprNode, expr_from_dict, expr_to_dict
+from cobol_asg.cobol_expression import (
+    ExprNode,
+    FieldRefNode,
+    expr_from_dict,
+    expr_to_dict,
+    field_ref_from_dict,
+)
 from cobol_asg.exit_kind import ExitKind
 from cobol_asg.file_enums import AccessMode, FileOrganization, OpenMode, RecordingMode
 from cobol_asg.frontend_extension import DialectParser
@@ -70,9 +76,9 @@ class PerformUntilSpec:
 class PerformVaryingSpec:
     """PERFORM ... VARYING loop specification."""
 
-    varying_var: str  # loop variable name
-    varying_from: str | dict  # FROM value (structured expr dict, or legacy text)
-    varying_by: str  # BY step value
+    varying_var: FieldRefNode
+    varying_from: ExprNode
+    varying_by: ExprNode
     condition: dict
     test_before: bool = True
     after_specs: tuple[PerformVaryingSpec, ...] = field(default_factory=tuple)
@@ -1787,17 +1793,17 @@ def _parse_perform_spec(
         raw_afters = data.get("after_specs", [])
         after_specs: tuple[PerformVaryingSpec, ...] = tuple(
             PerformVaryingSpec(
-                varying_var=a.get("varying_var", ""),
-                varying_from=a.get("varying_from", ""),
-                varying_by=a.get("varying_by", ""),
+                varying_var=field_ref_from_dict(a["varying_var"]),
+                varying_from=expr_from_dict(a["varying_from"]),
+                varying_by=expr_from_dict(a["varying_by"]),
                 condition=a.get("until", {}),
             )
             for a in raw_afters
         )
         return PerformVaryingSpec(
-            varying_var=data.get("varying_var", ""),
-            varying_from=data.get("varying_from", ""),
-            varying_by=data.get("varying_by", ""),
+            varying_var=field_ref_from_dict(data["varying_var"]),
+            varying_from=expr_from_dict(data["varying_from"]),
+            varying_by=expr_from_dict(data["varying_by"]),
             condition=data.get("until", {}),
             test_before=data.get("test_before", True),
             after_specs=after_specs,
@@ -1822,18 +1828,18 @@ def _spec_to_dict(
     if isinstance(spec, PerformVaryingSpec):
         d: dict = {
             "perform_type": "VARYING",
-            "varying_var": spec.varying_var,
-            "varying_from": spec.varying_from,
-            "varying_by": spec.varying_by,
+            "varying_var": expr_to_dict(spec.varying_var),
+            "varying_from": expr_to_dict(spec.varying_from),
+            "varying_by": expr_to_dict(spec.varying_by),
             "until": spec.condition,
             "test_before": spec.test_before,
         }
         if spec.after_specs:
             d["after_specs"] = [
                 {
-                    "varying_var": a.varying_var,
-                    "varying_from": a.varying_from,
-                    "varying_by": a.varying_by,
+                    "varying_var": expr_to_dict(a.varying_var),
+                    "varying_from": expr_to_dict(a.varying_from),
+                    "varying_by": expr_to_dict(a.varying_by),
                     "until": a.condition,
                 }
                 for a in spec.after_specs

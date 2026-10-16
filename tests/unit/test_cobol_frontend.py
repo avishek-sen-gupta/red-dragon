@@ -8,7 +8,7 @@ from cobol_asg.asg_types import (
     CobolParagraph,
     CobolSection,
 )
-from cobol_asg.cobol_expression import expr_from_dict
+from cobol_asg.cobol_expression import FieldRefNode, LiteralNode, expr_from_dict
 from cobol_asg.cobol_parser import make_cobol_parser
 from cobol_asg.cobol_statements import (
     AcceptStatement,
@@ -1136,9 +1136,9 @@ class TestPerformLoopLowering:
                     DisplayStatement(operands=(RefModOperand(name="VARYING-LOOP"),))
                 ],
                 spec=PerformVaryingSpec(
-                    varying_var="WS-IDX",
-                    varying_from="1",
-                    varying_by="1",
+                    varying_var=FieldRefNode(name="WS-IDX"),
+                    varying_from=LiteralNode(value="1"),
+                    varying_by=LiteralNode(value="1"),
                     condition={
                         "not": False,
                         "relation": {
@@ -1199,16 +1199,16 @@ class TestPerformLoopLowering:
             PerformStatement(
                 children=[DisplayStatement(operands=(RefModOperand(name="BODY"),))],
                 spec=PerformVaryingSpec(
-                    varying_var="WS-I",
-                    varying_from="1",
-                    varying_by="1",
+                    varying_var=FieldRefNode(name="WS-I"),
+                    varying_from=LiteralNode(value="1"),
+                    varying_by=LiteralNode(value="1"),
                     condition=until_i,
                     test_before=True,
                     after_specs=(
                         PerformVaryingSpec(
-                            varying_var="WS-J",
-                            varying_from="1",
-                            varying_by="1",
+                            varying_var=FieldRefNode(name="WS-J"),
+                            varying_from=LiteralNode(value="1"),
+                            varying_by=LiteralNode(value="1"),
                             condition=until_j,
                         ),
                     ),
@@ -1273,16 +1273,16 @@ class TestPerformLoopLowering:
             PerformStatement(
                 children=[DisplayStatement(operands=(RefModOperand(name="BODY"),))],
                 spec=PerformVaryingSpec(
-                    varying_var="WS-I",
-                    varying_from="1",
-                    varying_by="1",
+                    varying_var=FieldRefNode(name="WS-I"),
+                    varying_from=LiteralNode(value="1"),
+                    varying_by=LiteralNode(value="1"),
                     condition=until_i,
                     test_before=False,
                     after_specs=(
                         PerformVaryingSpec(
-                            varying_var="WS-J",
-                            varying_from="1",
-                            varying_by="1",
+                            varying_var=FieldRefNode(name="WS-J"),
+                            varying_from=LiteralNode(value="1"),
+                            varying_by=LiteralNode(value="1"),
                             condition=until_j,
                         ),
                     ),

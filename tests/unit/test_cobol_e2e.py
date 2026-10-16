@@ -759,9 +759,9 @@ class TestPerformVaryingExecution:
                         {
                             "type": "PERFORM",
                             "perform_type": "VARYING",
-                            "varying_var": "WS-IDX",
-                            "varying_from": "1",
-                            "varying_by": "1",
+                            "varying_var": {"kind": "ref", "name": "WS-IDX"},
+                            "varying_from": {"kind": "lit", "value": "1"},
+                            "varying_by": {"kind": "lit", "value": "1"},
                             "until": {
                                 "not": False,
                                 "relation": {
