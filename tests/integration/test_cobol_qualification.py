@@ -157,3 +157,23 @@ class TestQualifiedStatementOperands:
             ],
         )
         assert shown == "YYN36"
+
+    @covers(CobolFeature.RENAMES_CLAUSE)
+    def test_renames_resolves_its_operands_within_its_own_record(self, capsys):
+        shown = _shown(
+            capsys,
+            [
+                '01 R1. 02 AL PIC XX VALUE "AA". 02 BOB PIC XXX VALUE "BBB".',
+                '01 R2. 02 AL PIC XX VALUE "CC".',
+                '   02 MID. 03 M1 PIC X VALUE "M".',
+                '   02 BOB PIC XXX VALUE "DDD".',
+                "66 AL-BOB RENAMES AL OF R2 THRU BOB OF R2.",
+                "66 MIDR RENAMES MID.",
+                '01 R3. 02 X PIC X VALUE "X". 02 Y PIC X VALUE "Y".',
+                "66 MIDR RENAMES X THRU Y.",
+                '01 R4. 02 X PIC X VALUE "Q".',
+                "66 XR RENAMES X.",
+            ],
+            ["    DISPLAY AL-BOB MIDR OF R2 MIDR IN R3 XR."],
+        )
+        assert shown == "CCMDDDMXYQ"

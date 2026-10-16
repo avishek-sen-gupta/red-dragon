@@ -2250,7 +2250,7 @@ public final class StatementSerializer {
      * are present only when non-empty. The single serializer for any subscriptable
      * data reference. (red-dragon-6ddr)
      */
-    private static JsonObject serializeRef(Call call) {
+    static JsonObject serializeRef(Call call) {
         JsonObject obj = new JsonObject();
         obj.addProperty("name", extractCallName(call));
         JsonArray subs = extractSubscripts(call);
