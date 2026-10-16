@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field, replace
-from itertools import accumulate
+from itertools import accumulate, chain
 from typing import TypeVar
 
 from cobol_asg.asg_types import CobolField
@@ -163,10 +163,8 @@ class DataLayout:
         if the bare name resolves to more than one field at different
         nesting levels, that is a genuine program error and raises
         :class:`CobolAmbiguousReferenceError` (real COBOL compilers reject
-        this at compile time, requiring IN/OF qualification). Callers that
-        already resolved a qualifier should call ``lookup()`` on the
-        narrowed subgroup (see :meth:`lookup_qualified`), so ambiguity is
-        evaluated only within that subgroup's own subtree.
+        this at compile time, requiring IN/OF qualification); a qualified
+        reference resolves through :meth:`qualified_matches`.
 
         COBOL identifiers are case-insensitive: a field declared ``Vstring-length``
         (e.g. CardDemo CSUTLDTC) is referenced as ``VSTRING-LENGTH`` from the
@@ -227,57 +225,38 @@ class DataLayout:
             raise KeyError(f"Field not found in layout: {name!r}")
         return result
 
-    def lookup_qualified(
-        self, name: str, qualifiers: tuple[str, ...]
-    ) -> FieldLayout | None:
-        """Resolve a leaf ``name`` qualified by ``OF``/``IN`` ancestor groups.
+    def qualified_matches(
+        self, name: str, qualifiers: Sequence[str]
+    ) -> tuple[DataItemMatch, ...]:
+        """Every data item, elementary or group, that ``name`` qualified by
+        ``qualifiers`` (innermost first, as written) can denote: empty when none,
+        one when the reference is unique; more than one raises
+        :class:`CobolAmbiguousReferenceError`."""
+        found = tuple(
+            match
+            for match in self._named(name.upper(), ())
+            if match.qualified_by(qualifiers)
+        )
+        if len(found) > 1:
+            raise CobolAmbiguousReferenceError(name)
+        return found
 
-        ``qualifiers`` lists the enclosing group names in the order written
-        (immediate parent first), e.g. ``VSTRING-LENGTH OF WS-DATE-TO-TEST`` ->
-        ``("WS-DATE-TO-TEST",)``. COBOL allows duplicate elementary names
-        disambiguated by qualification (CardDemo CSUTLDTC's two Vstring groups).
-        The OUTERMOST qualifier is resolved first (case-insensitively), then the
-        leaf is looked up WITHIN that group's subtree, so the right occurrence of
-        a duplicated name is selected. Falls back to a plain (first-match) lookup
-        when no qualifier resolves. red-dragon-p7qe.
-        """
-        if not qualifiers:
-            return self.lookup(name)
-        # The outermost qualifier names the largest enclosing group; resolve it,
-        # then descend to the leaf within that group's subtree. (Intermediate
-        # qualifiers are honoured implicitly: the leaf name is unique within the
-        # outermost group in well-formed COBOL.)
-        for qualifier in reversed(qualifiers):
-            try:
-                group = self.lookup_group(qualifier)
-            except KeyError:
-                continue
-            found = group.lookup(name)
-            if found is not None:
-                return found
-        return self.lookup(name)
-
-    def lookup_group_qualified(
-        self, name: str, qualifiers: tuple[str, ...]
-    ) -> DataLayout | None:
-        """Like :meth:`lookup_qualified` but for a group ``name``.
-
-        Returns the nested group ``name`` within the resolved qualifier group, or
-        falls back to a plain group lookup. Returns None if neither resolves."""
-        if qualifiers:
-            for qualifier in reversed(qualifiers):
-                try:
-                    outer = self.lookup_group(qualifier)
-                except KeyError:
-                    continue
-                try:
-                    return outer.lookup_group(name)
-                except KeyError:
-                    continue
-        try:
-            return self.lookup_group(name)
-        except KeyError:
-            return None
+    def _named(
+        self, upper: str, ancestors: tuple[tuple[str, DataLayout], ...]
+    ) -> Iterator[DataItemMatch]:
+        yield from (
+            DataItemMatch(key, leaf, ancestors)
+            for key, leaf in self.fields.items()
+            if key.upper() == upper
+        )
+        yield from (
+            match
+            for key, group in self.groups.items()
+            for match in chain(
+                (DataItemMatch(key, group, ancestors),) if key.upper() == upper else (),
+                group._named(upper, (*ancestors, (key, group))),
+            )
+        )
 
     def lookup_group(self, name: str) -> DataLayout:
         """Return a nested DataLayout by group name; raises KeyError if not found.
@@ -329,177 +308,62 @@ class DataLayout:
             # Recurse into group's children
             yield from grp.all_fields()
 
-    def enclosing_occurs_element_size(self, name: str) -> int:
-        """Return the subscript stride for ``name``: the element_size of the
-        nearest ancestor (or self) OCCURS group/field.
-
-        When a leaf is nested inside an OCCURS group, COBOL subscripting strides
-        by the OCCURS *element* size, not by the leaf's own byte_length. Returns
-        0 if ``name`` is not under (and is not itself) an OCCURS table.
-        """
-        result = self._enclosing_occurs_element_size(name, enclosing=0)
-        return result if result is not None else 0
-
-    def _enclosing_occurs_element_size(self, name: str, enclosing: int) -> int | None:
-        """Walk the tree tracking the nearest enclosing OCCURS element_size.
-
-        ``enclosing`` is the element_size of the closest OCCURS ancestor seen so
-        far (0 if none). Returns the stride for ``name`` once found, else None.
-        """
-        leaf = _ci_get(self.fields, name)
-        if leaf is not None:
-            # A leaf that itself has OCCURS strides by its own element_size;
-            # otherwise it inherits the enclosing OCCURS group's element_size.
-            if leaf.occurs_count > 0 and leaf.element_size > 0:
-                return leaf.element_size
-            return enclosing
-        grp = _ci_get(self.groups, name)
-        if grp is not None:
-            return grp.element_size if grp.occurs_count > 0 else enclosing
-        for grp in self.groups.values():
-            next_enclosing = grp.element_size if grp.occurs_count > 0 else enclosing
-            found = grp._enclosing_occurs_element_size(name, next_enclosing)
-            if found is not None:
-                return found
-        return None
-
-    def all_enclosing_occurs_strides(self, name: str) -> list[int]:
-        """Return all OCCURS element_sizes from outermost to innermost for ``name``.
-
-        For a leaf CELL nested inside ROW(OCCURS 5, stride=12) then
-        COL(OCCURS 3, stride=4), returns [12, 4].  The length equals the number
-        of subscript dimensions required.  Returns [] if ``name`` is not found or
-        has no enclosing OCCURS.
-        """
-        strides: list[int] = []
-        self._collect_occurs_strides(name, strides)
-        return strides
-
-    def _collect_occurs_strides(self, name: str, strides: list[int]) -> bool:
-        """DFS to find ``name``; appends each OCCURS element_size on the path.
-
-        Appends in outermost-first order.  Returns True when ``name`` is found
-        (whether or not any strides were appended).
-        """
-        leaf = _ci_get(self.fields, name)
-        if leaf is not None:
-            if leaf.occurs_count > 0 and leaf.element_size > 0:
-                strides.append(leaf.element_size)
-            return True
-        grp = _ci_get(self.groups, name)
-        if grp is not None:
-            if grp.occurs_count > 0 and grp.element_size > 0:
-                strides.append(grp.element_size)
-            return True
-        for child_grp in self.groups.values():
-            if child_grp.occurs_count > 0 and child_grp.element_size > 0:
-                strides.append(child_grp.element_size)
-            found = child_grp._collect_occurs_strides(name, strides)
-            if found:
-                return True
-            if child_grp.occurs_count > 0 and child_grp.element_size > 0:
-                strides.pop()
-        return False
-
-    def all_enclosing_occurs_tables(self, name: str) -> list[OccursTable]:
-        """Return the OCCURS constructs enclosing ``name``, outermost first.
-
-        The positional counterpart of :meth:`all_enclosing_occurs_strides` —
-        same tables in the same order, but carrying each table's offset and
-        occurrence count as well as its stride, which is what bounding a
-        computed-subscript access needs. Returns [] if ``name`` is not found
-        or has no enclosing OCCURS.
-        """
-        tables: list[OccursTable] = []
-        self._collect_occurs_tables(name, tables)
-        return tables
-
-    def _collect_occurs_tables(self, name: str, tables: list[OccursTable]) -> bool:
-        """DFS mirroring :meth:`_collect_occurs_strides`, collecting whole tables."""
-        leaf = _ci_get(self.fields, name)
-        if leaf is not None:
-            if leaf.occurs_count > 0 and leaf.element_size > 0:
-                tables.append(
-                    OccursTable(leaf.offset, leaf.element_size, leaf.occurs_count)
-                )
-            return True
-        grp = _ci_get(self.groups, name)
-        if grp is not None:
-            if grp.occurs_count > 0 and grp.element_size > 0:
-                tables.append(
-                    OccursTable(grp.offset, grp.element_size, grp.occurs_count)
-                )
-            return True
-        for child_grp in self.groups.values():
-            pushed = child_grp.occurs_count > 0 and child_grp.element_size > 0
-            if pushed:
-                tables.append(
-                    OccursTable(
-                        child_grp.offset,
-                        child_grp.element_size,
-                        child_grp.occurs_count,
-                    )
-                )
-            if child_grp._collect_occurs_tables(name, tables):
-                return True
-            if pushed:
-                tables.pop()
-        return False
-
-    def enclosing_record_extent(self, name: str) -> tuple[int, int] | None:
-        """Return ``(offset, byte_length)`` of the top-level 01/77 holding ``name``.
-
-        Called on a *section root* layout, whose ``fields`` are the level-01/77
-        elementary items and whose ``groups`` are the level-01 records. This is
-        the fallback bound for an access no OCCURS construct can bound: a 01
-        record is still a declared construct, so clamping to it keeps the
-        "never widens beyond a declared construct" invariant while staying far
-        away from a region-wide extent. Returns None if ``name`` is absent.
-        """
-        leaf = _ci_get(self.fields, name)
-        if leaf is not None:
-            return (leaf.offset, leaf.byte_length)
-        grp = _ci_get(self.groups, name)
-        if grp is not None:
-            return (grp.offset, grp.total_bytes)
-        for record in self.groups.values():
-            if record.exists(name):
-                return (record.offset, record.total_bytes)
-        return None
-
     def lookup_as_storage(
         self, name: str, qualifiers: tuple[str, ...] = ()
     ) -> FieldLayout | None:
-        """Return a FieldLayout for name, synthesizing one for groups.
+        """The storage ``name`` qualified by ``qualifiers`` denotes — an elementary
+        item's own FieldLayout, or an alphanumeric one synthesised over a group —
+        or None when nothing here matches."""
+        found = self.qualified_matches(name, qualifiers)
+        return found[0].storage if found else None
 
-        For elementary fields, returns the real FieldLayout.
-        For group names, synthesizes an alphanumeric FieldLayout whose
-        byte_length, offset, occurs_count, and element_size match the group.
-        Returns None if name is not found anywhere in the layout.
 
-        ``qualifiers`` (``OF``/``IN`` ancestor group names) disambiguate a
-        duplicated name; an empty tuple is a plain first-match lookup.
-        """
-        leaf = self.lookup_qualified(name, qualifiers)
-        if leaf is not None:
-            return leaf
-        grp = self.lookup_group_qualified(name, qualifiers)
-        if grp is None:
-            return None
-        type_desc = CobolTypeDescriptor(
-            category=CobolDataCategory.ALPHANUMERIC,
-            total_digits=grp.total_bytes,
+@dataclass(frozen=True)
+class DataItemMatch:
+    """A data item found by name, with the groups containing it, outermost first."""
+
+    name: str
+    item: FieldLayout | DataLayout
+    ancestors: tuple[tuple[str, DataLayout], ...]
+
+    def qualified_by(self, qualifiers: Sequence[str]) -> bool:
+        enclosing = iter(key.upper() for key, _ in reversed(self.ancestors))
+        return all(qualifier.upper() in enclosing for qualifier in qualifiers)
+
+    @property
+    def storage(self) -> FieldLayout:
+        if isinstance(self.item, FieldLayout):
+            return self.item
+        return _group_storage(self.name, self.item)
+
+    @property
+    def tables(self) -> tuple[OccursTable, ...]:
+        return tuple(
+            OccursTable(group.offset, group.element_size, group.occurs_count)
+            for group in (*(group for _, group in self.ancestors), self.item)
+            if group.occurs_count > 0 and group.element_size > 0
         )
-        elem_size = grp.element_size if grp.element_size > 0 else grp.total_bytes
-        return FieldLayout(
-            name=name,
-            type_descriptor=type_desc,
-            offset=grp.offset,
-            byte_length=grp.total_bytes,
-            occurs_count=grp.occurs_count,
-            element_size=elem_size,
-            span=grp.span,
-        )
+
+    @property
+    def record_extent(self) -> tuple[int, int]:
+        record = _group_storage(*self.ancestors[0]) if self.ancestors else self.storage
+        return record.offset, record.byte_length
+
+
+def _group_storage(name: str, group: DataLayout) -> FieldLayout:
+    return FieldLayout(
+        name=name,
+        type_descriptor=CobolTypeDescriptor(
+            category=CobolDataCategory.ALPHANUMERIC, total_digits=group.total_bytes
+        ),
+        offset=group.offset,
+        byte_length=group.total_bytes,
+        occurs_count=group.occurs_count,
+        element_size=(
+            group.element_size if group.element_size > 0 else group.total_bytes
+        ),
+        span=group.span,
+    )
 
 
 def _placed_child_extent(

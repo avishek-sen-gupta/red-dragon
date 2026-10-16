@@ -315,37 +315,14 @@ def test_computed_subscript_without_occurs_clamps_to_the_01_record(probe):
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_occurs_tables_and_subscript_strides_stay_in_lockstep(probe):
-    """The two mirrored DFS walks must never drift apart.
-
-    ``all_enclosing_occurs_tables`` duplicates ``all_enclosing_occurs_strides``
-    so that subscript k pairs with table k. Nothing but this test reconciles
-    them, and two functions computing the same thing by different code with no
-    reconciliation is exactly how red-dragon-ilb6, r9s9, qhtv and bqds shipped.
-    """
+def test_strides_and_bounds_come_from_the_resolved_item_s_own_tables(probe):
+    """Subscript k strides by, and is bounded by, table k of the one item the
+    reference resolved to; there is no second walk that could drift apart."""
     materialised = probe.materialised
-    names = (
-        "WS-CELL",
-        "WS-RLABEL",
-        "WS-COL",
-        "WS-ROW",
-        "WS-QTY",
-        "WS-CODE",
-        "WS-ENT",
-        "WS-NAME",
-        "WS-TRAIL",
-        "LK-MID",
-    )
-    for name in names:
-        tables = materialised.occurs_tables(name)
-        assert materialised.subscript_strides(name) == [
-            table.element_size for table in tables
-        ], f"strides and tables disagree for {name}"
-
-    # Guard against the assertion above going vacuous: the fixture really does
-    # exercise a nested table and a table-free field.
-    assert len(materialised.occurs_tables("WS-CELL")) == 2
-    assert materialised.occurs_tables("WS-NAME") == []
+    cell, _, _ = materialised.resolve_match("WS-CELL")
+    name, _, _ = materialised.resolve_match("WS-NAME")
+    assert len(cell.tables) == 2
+    assert name.tables == ()
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

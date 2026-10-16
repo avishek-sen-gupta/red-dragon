@@ -2315,7 +2315,7 @@ public final class StatementSerializer {
      * first node {@code accepts} matches.
      *
      * <p>The containment rules of an operand's subtree live here and nowhere
-     * else. Two of them:
+     * else. Three of them:
      *
      * <ul>
      *   <li>The walk starts AT the operand, so a referenceModifier <em>enclosing</em>
@@ -2332,6 +2332,9 @@ public final class StatementSerializer {
      *       (red-dragon-jscx, -nwm5, -pe45, -35do, -twfl, -64s4) were one
      *       traversal at a time forgetting this; a probe built on this walker
      *       cannot forget it, because it does not state it.</li>
+     *   <li>Likewise it never descends below a {@link CobolParser.SubscriptContext}:
+     *       {@code AX-2 IN AX (CX-SUB OF CX)} is qualified by AX alone, CX qualifies
+     *       the subscript's own operand (red-dragon-sl30.34).</li>
      * </ul>
      *
      * @return the first accepted node, or {@code null} when none was accepted —
@@ -2354,7 +2357,9 @@ public final class StatementSerializer {
         if (accepts.test(node)) {
             return node;
         }
-        if (node != operand && node instanceof CobolParser.ReferenceModifierContext) {
+        if (node != operand
+                && (node instanceof CobolParser.ReferenceModifierContext
+                        || node instanceof CobolParser.SubscriptContext)) {
             return null;
         }
         for (int i = 0; i < node.getChildCount(); i++) {
