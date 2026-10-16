@@ -96,6 +96,7 @@ class BuiltinName:
     COBOL_SCALE_BY = "__cobol_scale_by"
     COBOL_PARSE_NUMBER = "__cobol_parse_number"
     COBOL_BINARY_UNSCALED = "__cobol_binary_unscaled"
+    COBOL_SIZE_ERROR = "__cobol_size_error"
     COBOL_APPLY_EDIT_PICTURE = "__cobol_apply_edit_picture"
     COBOL_APPLY_ALPHANUMERIC_EDIT = "__cobol_apply_alphanumeric_edit"
     STRING_SLICE = "__string_slice"

@@ -16,6 +16,7 @@ from cobol_numeric.number import (
     from_float,
     is_cobol_number,
     multiply,
+    reaches_magnitude,
     scale_by,
     subtract,
     to_float,
@@ -151,6 +152,16 @@ def _builtin_cobol_binary_unscaled(
     return BuiltinResult(value=_UNCOMPUTABLE if unscaled is None else unscaled)
 
 
+def _builtin_cobol_size_error(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    if len(args) < 2 or any(_is_symbolic(a.value) for a in args):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    try:
+        exceeded = reaches_magnitude(to_number(args[0].value), to_number(args[1].value))
+    except (ValueError, TypeError):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=exceeded)
+
+
 NUMERIC_BUILTINS: Mapping[FuncName, Builtin] = MappingProxyType(
     {
         FuncName(BuiltinName.COBOL_TO_TEXT): _builtin_cobol_to_text,
@@ -163,5 +174,6 @@ NUMERIC_BUILTINS: Mapping[FuncName, Builtin] = MappingProxyType(
         FuncName(BuiltinName.COBOL_SCALE_BY): _builtin_cobol_scale_by,
         FuncName(BuiltinName.COBOL_PARSE_NUMBER): _builtin_cobol_parse_number,
         FuncName(BuiltinName.COBOL_BINARY_UNSCALED): _builtin_cobol_binary_unscaled,
+        FuncName(BuiltinName.COBOL_SIZE_ERROR): _builtin_cobol_size_error,
     }
 )
