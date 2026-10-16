@@ -7,10 +7,12 @@ from collections.abc import Sequence
 import pytest
 
 from interpreter.cobol.features import CobolFeature
+from interpreter.cobol.io_provider import StubIOProvider
+from interpreter.run import run
 from tests.covers import covers
 from tests.integration.cobol_helpers import (
     bridge_jar,  # noqa: F401
-    run_cobol,
+    to_fixed,
 )
 
 pytestmark = pytest.mark.usefixtures("bridge_jar")
@@ -20,8 +22,9 @@ def _shown(
     capsys: pytest.CaptureFixture[str],
     working_storage: Sequence[str],
     procedure: Sequence[str],
+    accepted: Sequence[str] = (),
 ) -> str:
-    run_cobol(
+    source = to_fixed(
         [
             "IDENTIFICATION DIVISION.",
             "PROGRAM-ID. QUALIF.",
@@ -32,8 +35,13 @@ def _shown(
             "MAIN-PARA.",
             *procedure,
             "    STOP RUN.",
-        ],
+        ]
+    )
+    run(
+        source=source,
+        language="cobol",
         max_steps=5000,
+        io_provider=StubIOProvider(accept_values=list(accepted)),
     )
     return capsys.readouterr().out
 
@@ -104,3 +112,23 @@ class TestQualifiedStatementOperands:
             ],
         )
         assert shown == "ADQC"
+
+    @covers(CobolFeature.ACCEPT)
+    def test_accept_stores_into_the_qualified_occurrence(self, capsys):
+        shown = _shown(
+            capsys,
+            [
+                "01 R1. 02 A PIC XX VALUE SPACES.",
+                "01 R2. 02 A PIC XX VALUE SPACES.",
+                '01 T1. 02 A PIC X OCCURS 3 VALUE "-".',
+                "01 SUB PIC 9 VALUE 3.",
+            ],
+            [
+                '    MOVE "---" TO T1.',
+                "    ACCEPT A OF R2.",
+                "    ACCEPT A IN T1 (SUB).",
+                "    DISPLAY R1 R2 T1.",
+            ],
+            ["XY", "Z"],
+        )
+        assert shown == "  XY--Z"

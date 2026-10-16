@@ -2228,7 +2228,11 @@ class TestCallAlterEntryCancelLowering:
                 name="WS-INPUT", level=77, pic="X(10)", usage="DISPLAY", offset=0
             ),
         ]
-        stmts = [AcceptStatement(target="WS-INPUT", from_device="CONSOLE")]
+        stmts = [
+            AcceptStatement(
+                target=RefModOperand(name="WS-INPUT"), from_device="CONSOLE"
+            )
+        ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
@@ -2250,7 +2254,7 @@ class TestCallAlterEntryCancelLowering:
                 name="WS-INPUT", level=77, pic="X(10)", usage="DISPLAY", offset=0
             ),
         ]
-        stmts = [AcceptStatement(target="WS-INPUT")]
+        stmts = [AcceptStatement(target=RefModOperand(name="WS-INPUT"))]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)

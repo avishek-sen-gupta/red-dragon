@@ -1354,20 +1354,20 @@ class CancelStatement:
 class AcceptStatement:
     """ACCEPT target [FROM device]."""
 
-    target: str = ""
+    target: RefModOperand
     from_device: str = "CONSOLE"
     span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> AcceptStatement:
         return cls(
-            target=data.get("target", ""),
+            target=RefModOperand.from_dict(data["target"]),
             from_device=data.get("from_device", "CONSOLE"),
             span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
-        result: dict = {"type": "ACCEPT", "target": self.target}
+        result: dict = {"type": "ACCEPT", "target": self.target.to_dict()}
         if self.from_device != "CONSOLE":
             result["from_device"] = self.from_device
         if self.span is not None:

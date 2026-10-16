@@ -245,7 +245,7 @@ class TestLowerArithmeticWithMaterialised:
 class TestLowerIoWithMaterialised:
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_lower_accept_emits_call_function(self):
-        from cobol_asg.cobol_statements import AcceptStatement
+        from cobol_asg.cobol_statements import AcceptStatement, RefModOperand
         from interpreter.cobol.lower_io import lower_accept
 
         asg = CobolASG(data_fields=[_make_field("WS-A")])
@@ -253,7 +253,7 @@ class TestLowerIoWithMaterialised:
         ctx = EmitContext(dispatch_fn=dispatch_statement)
         materialised = lower_sectioned_data_division(ctx, sl, "TESTPGM")
 
-        stmt = AcceptStatement(target="WS-A", from_device="SYSIN")
+        stmt = AcceptStatement(target=RefModOperand(name="WS-A"), from_device="SYSIN")
         lower_accept(ctx, stmt, materialised)
 
         opcodes = [i.opcode for i in ctx.instructions]

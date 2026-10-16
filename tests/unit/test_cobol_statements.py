@@ -613,15 +613,15 @@ class TestParseStatementDispatch:
 
     @covers(CobolFeature.ACCEPT)
     def test_accept_basic(self):
-        stmt = parse_statement({"type": "ACCEPT", "target": "WS-INPUT"})
+        stmt = parse_statement({"type": "ACCEPT", "target": {"name": "WS-INPUT"}})
         assert isinstance(stmt, AcceptStatement)
-        assert stmt.target == "WS-INPUT"
+        assert stmt.target == RefModOperand(name="WS-INPUT")
         assert stmt.from_device == "CONSOLE"
 
     @covers(CobolFeature.ACCEPT)
     def test_accept_with_device(self):
         stmt = parse_statement(
-            {"type": "ACCEPT", "target": "WS-DATE", "from_device": "DATE"}
+            {"type": "ACCEPT", "target": {"name": "WS-DATE"}, "from_device": "DATE"}
         )
         assert isinstance(stmt, AcceptStatement)
         assert stmt.from_device == "DATE"
@@ -1451,12 +1451,12 @@ class TestRoundTrip:
 
     @covers(CobolFeature.ACCEPT)
     def test_accept_round_trip(self):
-        data = {"type": "ACCEPT", "target": "WS-INPUT"}
+        data = {"type": "ACCEPT", "target": {"name": "WS-INPUT"}}
         assert self._round_trip(data) == data
 
     @covers(CobolFeature.ACCEPT)
     def test_accept_with_device_round_trip(self):
-        data = {"type": "ACCEPT", "target": "WS-DATE", "from_device": "DATE"}
+        data = {"type": "ACCEPT", "target": {"name": "WS-DATE"}, "from_device": "DATE"}
         assert self._round_trip(data) == data
 
     @covers(CobolFeature.OPEN)

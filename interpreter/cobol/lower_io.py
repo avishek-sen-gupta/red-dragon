@@ -173,9 +173,13 @@ def lower_accept(
         ),
         span=span,
     )
-    if stmt.target and ctx.has_field(stmt.target, materialised):
+    if ctx.has_field(stmt.target.name, materialised):
         target_ref, target_rr = ctx.resolve_field_ref(
-            stmt.target, materialised, span=span
+            stmt.target.name,
+            materialised,
+            stmt.target.qualifiers,
+            subscripts=stmt.target.subscripts,
+            span=span,
         )
         str_reg = ctx.emit_to_string(result_reg, span=span)
         ctx.emit_encode_and_write(
@@ -186,7 +190,7 @@ def lower_accept(
             extent=target_ref.extent,
             span=span,
         )
-    logger.info("ACCEPT %s FROM %s", stmt.target, stmt.from_device)
+    logger.info("ACCEPT %s FROM %s", stmt.target.name, stmt.from_device)
 
 
 def lower_open(
