@@ -48,7 +48,6 @@ from interpreter.cobol.lower_arithmetic import (
     lower_compute,
     lower_continue,
     lower_display,
-    lower_evaluate,
     lower_exit,
     lower_exit_program,
     lower_goback,
@@ -61,6 +60,7 @@ from interpreter.cobol.lower_arithmetic import (
     lower_set,
     lower_stop_run,
 )
+from interpreter.cobol.lower_evaluate import lower_evaluate
 from interpreter.cobol.lower_call import (
     lower_alter,
     lower_call,

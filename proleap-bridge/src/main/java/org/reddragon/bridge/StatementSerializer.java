@@ -102,6 +102,8 @@ import io.proleap.cobol.asg.metamodel.procedure.execcics.ExecCicsStatement;
 import io.proleap.cobol.asg.metamodel.procedure.execsql.ExecSqlStatement;
 import io.proleap.cobol.asg.metamodel.procedure.xml.XmlGenerateStatement;
 import io.proleap.cobol.asg.metamodel.call.Call;
+import io.proleap.cobol.asg.metamodel.call.DataDescriptionEntryCall;
+import io.proleap.cobol.asg.metamodel.data.datadescription.DataDescriptionEntryCondition;
 import io.proleap.cobol.asg.metamodel.call.SpecialRegisterCall;
 import io.proleap.cobol.asg.metamodel.call.TableCall;
 import io.proleap.cobol.asg.metamodel.valuestmt.ArithmeticValueStmt;
@@ -988,198 +990,183 @@ public final class StatementSerializer {
 
     private static JsonObject serializeEvaluate(EvaluateStatement stmt) {
         JsonObject obj = newStatement("EVALUATE");
+        JsonArray subjects = new JsonArray();
+        subjects.add(serializeSelectionSubject(stmt.getSelect().getSelectValueStmt()));
+        for (AlsoSelect alsoSelect : stmt.getAlsoSelects()) {
+            subjects.add(serializeSelectionSubject(alsoSelect.getSelect().getSelectValueStmt()));
+        }
+        obj.add("subjects", subjects);
+
         JsonArray children = new JsonArray();
-
-        try {
-            // Extract the EVALUATE subject (e.g., WS-A in EVALUATE WS-A)
-            io.proleap.cobol.asg.metamodel.procedure.evaluate.Select select = stmt.getSelect();
-            if (select != null && select.getSelectValueStmt() != null) {
-                // For a qualified subject (e.g. CONFIRMI OF COTRN2AI) the flat
-                // text glues to "CONFIRMIOFCOTRN2AI"; insertSpaces only spaces
-                // operators, not OF/IN. Use the LEAF data name so the frontend
-                // resolves the field (it is unique within its scope here). Falls
-                // back to the spaced flat text for non-qualified subjects. (red-dragon)
-                String subject = qualifiedSubjectLeaf(select.getSelectValueStmt());
-                if (subject == null) {
-                    subject = insertSpaces(extractValueStmtText(select.getSelectValueStmt()));
+        // Each WhenPhrase is "WHEN c1 [WHEN c2 ...] statements": one or more
+        // stacked WHENs sharing a single body. Emit ONE WHEN per phrase: the
+        // first WHEN's objects on the WHEN itself, the rest as body-less WHENs
+        // under "alternatives", and the body once.
+        for (WhenPhrase whenPhrase : stmt.getWhenPhrases()) {
+            JsonObject phraseObj = null;
+            JsonArray alternatives = new JsonArray();
+            for (io.proleap.cobol.asg.metamodel.procedure.evaluate.When when : whenPhrase.getWhens()) {
+                JsonObject whenObj = newStatement("WHEN");
+                JsonArray objects = new JsonArray();
+                objects.add(serializeSelectionObject(when.getCondition()));
+                for (AlsoCondition alsoCond : when.getAlsoConditions()) {
+                    objects.add(serializeSelectionObject(alsoCond.getCondition()));
                 }
-                obj.addProperty("subject", subject);
-                JsonObject subjectRef = structuredSubjectRef(select.getSelectValueStmt());
-                if (subjectRef != null) {
-                    obj.add("subject_ref", subjectRef);
+                whenObj.add("objects", objects);
+                if (phraseObj == null) {
+                    phraseObj = whenObj;
+                } else {
+                    alternatives.add(whenObj);
                 }
             }
-
-            // EVALUATE subject ALSO also_subject ... (multi-subject form)
-            List<AlsoSelect> alsoSelects = stmt.getAlsoSelects();
-            if (alsoSelects != null && !alsoSelects.isEmpty()) {
-                JsonArray alsoSubjectsArr = new JsonArray();
-                // An ALSO subject is a subject: it takes the same structured ref the
-                // first one does, or the leaf name alone would resolve the WHOLE field
-                // where the source sliced or qualified it (red-dragon-ba1). Positional,
-                // so a subject that is only a name holds its slot with null.
-                JsonArray alsoSubjectRefsArr = new JsonArray();
-                boolean anyAlsoSubjectRef = false;
-                for (AlsoSelect alsoSelect : alsoSelects) {
-                    io.proleap.cobol.asg.metamodel.procedure.evaluate.Select alsoSel = alsoSelect.getSelect();
-                    if (alsoSel != null && alsoSel.getSelectValueStmt() != null) {
-                        String alsoSubject = qualifiedSubjectLeaf(alsoSel.getSelectValueStmt());
-                        if (alsoSubject == null) {
-                            alsoSubject = insertSpaces(extractValueStmtText(alsoSel.getSelectValueStmt()));
-                        }
-                        alsoSubjectsArr.add(alsoSubject);
-                        JsonObject alsoRef = structuredSubjectRef(alsoSel.getSelectValueStmt());
-                        if (alsoRef == null) {
-                            alsoSubjectRefsArr.add(JsonNull.INSTANCE);
-                        } else {
-                            alsoSubjectRefsArr.add(alsoRef);
-                            anyAlsoSubjectRef = true;
-                        }
-                    }
-                }
-                if (alsoSubjectsArr.size() > 0) obj.add("also_subjects", alsoSubjectsArr);
-                if (anyAlsoSubjectRef) obj.add("also_subject_refs", alsoSubjectRefsArr);
+            if (phraseObj == null) {
+                continue;
             }
-
-            // Each WhenPhrase is "WHEN c1 [WHEN c2 ...] statements": one or more
-            // stacked conditions sharing a single body. Emit ONE WHEN per phrase:
-            // the first condition on the WHEN itself, the rest as body-less WHENs
-            // under "alternatives", and the body once. A copy of the body per
-            // condition lowered every statement in it once per copy.
-            for (WhenPhrase whenPhrase : stmt.getWhenPhrases()) {
-                List<io.proleap.cobol.asg.metamodel.procedure.evaluate.When> whens = whenPhrase.getWhens();
-                boolean hasBody = whenPhrase.getStatements() != null
-                        && !whenPhrase.getStatements().isEmpty();
-
-                if (whens == null || whens.isEmpty()) {
-                    JsonObject whenObj = newStatement("WHEN");
-                    if (hasBody) {
-                        JsonArray whenStmts = serializeStatements(whenPhrase.getStatements());
-                        if (whenStmts.size() > 0) whenObj.add("children", whenStmts);
-                    }
-                    children.add(whenObj);
-                    continue;
-                }
-
-                JsonObject phraseObj = null;
-                JsonArray alternatives = new JsonArray();
-                for (io.proleap.cobol.asg.metamodel.procedure.evaluate.When when : whens) {
-                    JsonObject whenObj = newStatement("WHEN");
-                    io.proleap.cobol.asg.metamodel.procedure.evaluate.Condition cond = when.getCondition();
-                    if (cond != null) {
-                        io.proleap.cobol.asg.metamodel.procedure.evaluate.Condition.ConditionType ct = cond.getConditionType();
-                        ValueStmt cvs = cond.getConditionValueStmt();
-                        if (ct == io.proleap.cobol.asg.metamodel.procedure.evaluate.Condition.ConditionType.CONDITION
-                                && cvs instanceof ConditionValueStmt) {
-                            // Full conditional expression (e.g. EVALUATE TRUE WHEN A = SPACES OR ...):
-                            // route through the SAME structured serializer the IF path uses so
-                            // figurative / OF-qualified / abbreviated conditions lower correctly.
-                            whenObj.add("condition", serializeConditionNode((ConditionValueStmt) cvs));
-                        } else if (ct == io.proleap.cobol.asg.metamodel.procedure.evaluate.Condition.ConditionType.ANY) {
-                            // WHEN ANY — leave condition absent (always-match handled downstream).
-                            whenObj.addProperty("condition", "ANY");
-                        } else if (cond.getValue() != null && cond.getValue().getValueStmt() != null) {
-                            ValueStmt whenVs = cond.getValue().getValueStmt();
-                            JsonObject dfh = serializeDfhrespFromVS(whenVs);
-                            if (dfh != null) {
-                                // WHEN DFHRESP(X) — emit structured node; Python lower_evaluate
-                                // detects kind=dfhresp and builds the subject comparison.
-                                whenObj.add("condition", dfh);
-                            } else {
-                                // WHEN <value> against an EVALUATE subject — keep the value as text;
-                                // the Python side prefixes it with "subject = ".
-                                whenObj.addProperty("condition",
-                                        insertSpaces(extractValueStmtText(whenVs)));
-                            }
-                            // WHEN <value> THRU <value2> range — emit the upper bound separately.
-                            if (cond.getThrough() != null && cond.getThrough().getValue() != null
-                                    && cond.getThrough().getValue().getValueStmt() != null) {
-                                whenObj.addProperty("condition_thru",
-                                        insertSpaces(extractValueStmtText(
-                                                cond.getThrough().getValue().getValueStmt())));
-                            }
-                        } else if (cvs != null) {
-                            whenObj.addProperty("condition", insertSpaces(extractValueStmtText(cvs)));
-                        } else if (cond.getCtx() != null) {
-                            whenObj.addProperty("condition", insertSpaces(cond.getCtx().getText()));
-                        }
-                    }
-
-                    // WHEN val ALSO val ... (multi-subject form per-when conditions)
-                    List<AlsoCondition> alsoConditions = when.getAlsoConditions();
-                    if (alsoConditions != null && !alsoConditions.isEmpty()) {
-                        JsonArray alsoCondsArr = new JsonArray();
-                        for (AlsoCondition alsoCond : alsoConditions) {
-                            io.proleap.cobol.asg.metamodel.procedure.evaluate.Condition aCond = alsoCond.getCondition();
-                            if (aCond != null) {
-                                io.proleap.cobol.asg.metamodel.procedure.evaluate.Condition.ConditionType act = aCond.getConditionType();
-                                ValueStmt acvs = aCond.getConditionValueStmt();
-                                if (act == io.proleap.cobol.asg.metamodel.procedure.evaluate.Condition.ConditionType.CONDITION
-                                        && acvs instanceof ConditionValueStmt) {
-                                    alsoCondsArr.add(serializeConditionNode((ConditionValueStmt) acvs));
-                                } else if (act == io.proleap.cobol.asg.metamodel.procedure.evaluate.Condition.ConditionType.ANY) {
-                                    alsoCondsArr.add(new JsonPrimitive("ANY"));
-                                } else if (aCond.getValue() != null && aCond.getValue().getValueStmt() != null) {
-                                    ValueStmt alsoVs = aCond.getValue().getValueStmt();
-                                    JsonObject dfhAlso = serializeDfhrespFromVS(alsoVs);
-                                    if (dfhAlso != null) {
-                                        alsoCondsArr.add(dfhAlso);
-                                    } else if (aCond.getThrough() != null && aCond.getThrough().getValue() != null
-                                            && aCond.getThrough().getValue().getValueStmt() != null) {
-                                        // WHEN ... ALSO <from> THRU <to>
-                                        JsonObject rangeObj = new JsonObject();
-                                        rangeObj.addProperty("from", insertSpaces(extractValueStmtText(alsoVs)));
-                                        rangeObj.addProperty("thru", insertSpaces(extractValueStmtText(
-                                                aCond.getThrough().getValue().getValueStmt())));
-                                        alsoCondsArr.add(rangeObj);
-                                    } else {
-                                        alsoCondsArr.add(new JsonPrimitive(insertSpaces(extractValueStmtText(alsoVs))));
-                                    }
-                                } else if (acvs != null) {
-                                    alsoCondsArr.add(new JsonPrimitive(insertSpaces(extractValueStmtText(acvs))));
-                                } else if (aCond.getCtx() != null) {
-                                    alsoCondsArr.add(new JsonPrimitive(insertSpaces(aCond.getCtx().getText())));
-                                }
-                            }
-                        }
-                        if (alsoCondsArr.size() > 0) whenObj.add("also_conditions", alsoCondsArr);
-                    }
-
-                    if (phraseObj == null) {
-                        phraseObj = whenObj;
-                    } else {
-                        alternatives.add(whenObj);
-                    }
-                }
-                if (alternatives.size() > 0) {
-                    phraseObj.add("alternatives", alternatives);
-                }
-                if (hasBody) {
-                    JsonArray whenStmts = serializeStatements(whenPhrase.getStatements());
-                    if (whenStmts.size() > 0) phraseObj.add("children", whenStmts);
-                }
-                children.add(phraseObj);
+            if (alternatives.size() > 0) {
+                phraseObj.add("alternatives", alternatives);
             }
+            JsonArray whenStmts = serializeStatements(whenPhrase.getStatements());
+            if (whenStmts.size() > 0) phraseObj.add("children", whenStmts);
+            children.add(phraseObj);
+        }
 
-            // WHEN OTHER
-            io.proleap.cobol.asg.metamodel.procedure.evaluate.WhenOther whenOther = stmt.getWhenOther();
-            if (whenOther != null && whenOther.getStatements() != null && !whenOther.getStatements().isEmpty()) {
-                JsonObject whenOtherObj = newStatement("WHEN_OTHER");
-                JsonArray otherStmts = serializeStatements(whenOther.getStatements());
-                if (otherStmts.size() > 0) {
-                    whenOtherObj.add("children", otherStmts);
-                }
-                children.add(whenOtherObj);
+        io.proleap.cobol.asg.metamodel.procedure.evaluate.WhenOther whenOther = stmt.getWhenOther();
+        if (whenOther != null && whenOther.getStatements() != null && !whenOther.getStatements().isEmpty()) {
+            JsonObject whenOtherObj = newStatement("WHEN_OTHER");
+            JsonArray otherStmts = serializeStatements(whenOther.getStatements());
+            if (otherStmts.size() > 0) {
+                whenOtherObj.add("children", otherStmts);
             }
-        } catch (Exception e) {
-            LOG.fine("Could not extract EVALUATE children: " + e.getMessage());
+            children.add(whenOtherObj);
         }
 
         if (children.size() > 0) {
             obj.add("children", children);
         }
-
         return obj;
+    }
+
+    /**
+     * An EVALUATE selection subject: a truth value (TRUE / FALSE), a
+     * condition, or an identifier / literal / arithmetic expression, each kept
+     * structured so a subscript, a qualifier, a slice or an operator survives.
+     */
+    private static JsonObject serializeSelectionSubject(ValueStmt vs) {
+        JsonObject subject = new JsonObject();
+        if (vs instanceof ConditionValueStmt) {
+            subject.addProperty("kind", "condition");
+            subject.add("condition", serializeConditionNode((ConditionValueStmt) vs));
+            return subject;
+        }
+        JsonObject conditionName = conditionNameOf(vs, false);
+        if (conditionName != null) {
+            subject.addProperty("kind", "condition");
+            subject.add("condition", conditionName);
+            return subject;
+        }
+        CobolParser.BooleanLiteralContext truth = booleanLiteralOf(vs.getCtx());
+        if (truth != null) {
+            subject.addProperty("kind", "boolean");
+            subject.addProperty("value", truth.TRUE() != null);
+            return subject;
+        }
+        subject.addProperty("kind", "expr");
+        subject.add("expr", serializeFromValue(vs));
+        return subject;
+    }
+
+    /**
+     * An EVALUATE selection object: ANY, a truth value, a condition, or a
+     * [NOT] value [THRU value] whose operands are structured expressions.
+     */
+    private static JsonObject serializeSelectionObject(
+            io.proleap.cobol.asg.metamodel.procedure.evaluate.Condition cond) {
+        JsonObject object = new JsonObject();
+        io.proleap.cobol.asg.metamodel.procedure.evaluate.Condition.ConditionType ct = cond.getConditionType();
+        if (ct == io.proleap.cobol.asg.metamodel.procedure.evaluate.Condition.ConditionType.ANY) {
+            object.addProperty("kind", "any");
+            return object;
+        }
+        if (ct == io.proleap.cobol.asg.metamodel.procedure.evaluate.Condition.ConditionType.CONDITION) {
+            object.addProperty("kind", "condition");
+            object.add("condition", serializeConditionNode((ConditionValueStmt) cond.getConditionValueStmt()));
+            return object;
+        }
+        if (ct == io.proleap.cobol.asg.metamodel.procedure.evaluate.Condition.ConditionType.BOOLEAN) {
+            object.addProperty("kind", "boolean");
+            object.addProperty("value", booleanLiteralOf(cond.getConditionValueStmt().getCtx()).TRUE() != null);
+            return object;
+        }
+        ValueStmt value = cond.getValue().getValueStmt();
+        CobolParser.BooleanLiteralContext truth = booleanLiteralOf(value.getCtx());
+        if (truth != null) {
+            object.addProperty("kind", "boolean");
+            object.addProperty("value", (truth.TRUE() != null) != cond.isNot());
+            return object;
+        }
+        JsonObject conditionName = conditionNameOf(value, cond.isNot());
+        if (conditionName != null) {
+            object.addProperty("kind", "condition");
+            object.add("condition", conditionName);
+            return object;
+        }
+        object.addProperty("not", cond.isNot());
+        if (ct == io.proleap.cobol.asg.metamodel.procedure.evaluate.Condition.ConditionType.VALUE_THROUGH) {
+            object.addProperty("kind", "range");
+            object.add("from", serializeSelectionValue(value));
+            object.add("thru", serializeSelectionValue(cond.getThrough().getValue().getValueStmt()));
+            return object;
+        }
+        object.addProperty("kind", "value");
+        object.add("value", serializeSelectionValue(value));
+        return object;
+    }
+
+    /** A selection value: DFHRESP(x) as its own node, anything else as an expression. */
+    private static JsonElement serializeSelectionValue(ValueStmt vs) {
+        JsonObject dfh = serializeDfhrespFromVS(vs);
+        return dfh != null ? dfh : serializeFromValue(vs);
+    }
+
+    /**
+     * An identifier naming a condition-name (a level-88 entry) is that
+     * condition, wherever an EVALUATE subject or object stands: the grammar
+     * reads it as an identifier, so only name resolution tells the two apart.
+     * Null for any other value.
+     */
+    private static JsonObject conditionNameOf(ValueStmt vs, boolean not) {
+        if (!(vs instanceof CallValueStmt)) {
+            return null;
+        }
+        Call call = ((CallValueStmt) vs).getCall();
+        if (!(call.unwrap() instanceof DataDescriptionEntryCall entryCall)
+                || !(entryCall.getDataDescriptionEntry() instanceof DataDescriptionEntryCondition)) {
+            return null;
+        }
+        JsonObject condition = new JsonObject();
+        condition.addProperty("not", not);
+        condition.addProperty("condition_name", extractCallName(call));
+        JsonArray subscripts = extractSubscripts(call);
+        if (subscripts.size() > 0) {
+            condition.add("condition_subscripts", subscripts);
+        }
+        JsonArray qualifiers = new JsonArray();
+        collectInDataQualifiers(vs.getCtx(), qualifiers);
+        if (qualifiers.size() > 0) {
+            condition.add("condition_qualifiers", qualifiers);
+        }
+        return condition;
+    }
+
+    /** The TRUE / FALSE literal a context consists of, or null when it is anything else. */
+    private static CobolParser.BooleanLiteralContext booleanLiteralOf(ParserRuleContext ctx) {
+        if (ctx instanceof CobolParser.BooleanLiteralContext) {
+            return (CobolParser.BooleanLiteralContext) ctx;
+        }
+        if (ctx instanceof CobolParser.LiteralContext) {
+            return ((CobolParser.LiteralContext) ctx).booleanLiteral();
+        }
+        return null;
     }
 
     private static JsonObject serializeContinue(ContinueStatement stmt) {
@@ -3619,85 +3606,6 @@ public final class StatementSerializer {
      * "FLD-AOFGRP-B" that getText() would produce. Falls back to getText() for
      * non-qualifiedDataName identifiers (tableCall / functionCall / specialRegister).
      */
-    /**
-     * If the EVALUATE select ValueStmt is a QUALIFIED data name (carries an
-     * {@code OF}/{@code IN} qualifier), returns its LEAF data name; otherwise
-     * returns {@code null} so the caller keeps the existing flat-text subject.
-     * The leaf alone resolves the field here because the qualified subject names
-     * a unique field (CardDemo COTRN02C: {@code CONFIRMI OF COTRN2AI}). Structural
-     * — walks the parse tree, no text parsing. (red-dragon)
-     */
-    private static String qualifiedSubjectLeaf(ValueStmt vs) {
-        if (vs == null) {
-            return null;
-        }
-        ParserRuleContext ctx;
-        try {
-            ctx = vs.getCtx();
-        } catch (Exception e) {
-            return null;
-        }
-        if (ctx == null) {
-            return null;
-        }
-        // Only rewrite when an OF/IN qualifier is actually present, so simple
-        // subjects keep their existing serialization untouched.
-        JsonArray quals = new JsonArray();
-        collectInDataQualifiers(ctx, quals);
-        if (quals.size() == 0) {
-            return null;
-        }
-        CobolParser.QualifiedDataNameFormat1Context f1 =
-                findQualifiedDataNameFormat1(ctx);
-        if (f1 != null && f1.dataName() != null) {
-            return f1.dataName().getText();
-        }
-        return null;
-    }
-
-    /**
-     * The EVALUATE subject as the structured ref node an operand would get, or
-     * {@code null} when the subject is nothing a name cannot carry.
-     *
-     * <p>A subject crossed as a flat string, so a reference-modified one could
-     * not survive it: {@code EVALUATE FA(1:2)} arrived as the name "FA(1:2)",
-     * which resolves to no field and was compared as a literal, and
-     * {@code EVALUATE FA OF GA(1:2)} arrived as the leaf "FA", which resolves the
-     * WHOLE field (red-dragon-sfih). A slice, a subscript and a qualifier are
-     * exactly what a name cannot carry, so the node is emitted for those and
-     * only those: a subject that IS a plain name keeps the string alone and no
-     * existing program's lowering moves.
-     */
-    private static JsonObject structuredSubjectRef(ValueStmt vs) {
-        if (vs == null) {
-            return null;
-        }
-        ParserRuleContext ctx;
-        try {
-            ctx = vs.getCtx();
-        } catch (Exception e) {
-            return null;
-        }
-        CobolParser.IdentifierContext id = wholeOperandIdentifier(ctx);
-        if (id == null) {
-            return null;
-        }
-        JsonObject ref = serializeRefModIdentifier(id);
-        if (ref == null) {
-            ref = new JsonObject();
-            ref.addProperty("kind", "ref");
-            ref.addProperty("name", baseDataName(id));
-            addCtxQualifiers(ref, id);
-        }
-        JsonArray subscripts = serializeIdentifierSubscripts(id);
-        if (subscripts.size() > 0) {
-            ref.add("subscripts", subscripts);
-        }
-        boolean carriesMoreThanAName =
-                ref.has("ref_mod_start") || ref.has("subscripts") || ref.has("qualifiers");
-        return carriesMoreThanAName ? ref : null;
-    }
-
     private static CobolParser.QualifiedDataNameFormat1Context
             findQualifiedDataNameFormat1(org.antlr.v4.runtime.tree.ParseTree node) {
         return (CobolParser.QualifiedDataNameFormat1Context)

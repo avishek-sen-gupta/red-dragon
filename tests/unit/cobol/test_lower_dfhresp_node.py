@@ -9,10 +9,13 @@ These tests verify that lower_evaluate handles that resolved lit-kind dict corre
 from __future__ import annotations
 
 from cobol_asg.asg_types import CobolASG, CobolField
+from cobol_asg.cobol_expression import FieldRefNode, LiteralNode
 from cobol_asg.cobol_statements import EvaluateStatement, WhenStatement
+from cobol_asg.expression_subject import ExpressionSubject
+from cobol_asg.value_object import ValueObject
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.features import CobolFeature
-from interpreter.cobol.lower_arithmetic import lower_evaluate
+from interpreter.cobol.lower_evaluate import lower_evaluate
 from interpreter.cobol.lower_data_division import lower_sectioned_data_division
 from interpreter.cobol.sectioned_layout import (
     MaterialisedSectionedLayout,
@@ -48,15 +51,14 @@ def test_lower_evaluate_when_dfhresp_prepass_lit_emits_comparison() -> None:
 
     The CICS dfhresp prepass has already replaced {"kind":"dfhresp","condition":"NOTFND"}
     with {"kind":"lit","value":"13"} before we reach lower_evaluate.  The generic
-    EVALUATE lowering must detect the expression-kind dict (via "kind" in cond_dict),
-    evaluate it as a LiteralNode(13), and emit a Binop comparing EIBRESP against 13
-    (red-dragon-kieo).
+    EVALUATE lowering compares the subject with the WHEN value LiteralNode(13)
+    and emits a Binop comparing EIBRESP against 13 (red-dragon-kieo).
     """
     ctx, materialised = _eibresp_ctx()
     stmt = EvaluateStatement(
-        subject="EIBRESP",
+        subjects=(ExpressionSubject(expr=FieldRefNode(name="EIBRESP")),),
         children=[
-            WhenStatement(condition={"kind": "lit", "value": "13"}, children=[]),
+            WhenStatement(objects=(ValueObject(value=LiteralNode(value="13")),)),
         ],
     )
     n_before = len(ctx.instructions)
@@ -72,12 +74,12 @@ def test_lower_evaluate_when_dfhresp_prepass_lit_emits_comparison() -> None:
 
 @covers(CobolFeature.EXEC_CICS)
 def test_lower_evaluate_when_lit_27_emits_comparison() -> None:
-    """EVALUATE WHEN {"kind":"lit","value":"27"} — same path, different value."""
+    """EVALUATE WHEN LiteralNode(27) — same path, different value."""
     ctx, materialised = _eibresp_ctx()
     stmt = EvaluateStatement(
-        subject="EIBRESP",
+        subjects=(ExpressionSubject(expr=FieldRefNode(name="EIBRESP")),),
         children=[
-            WhenStatement(condition={"kind": "lit", "value": "27"}, children=[]),
+            WhenStatement(objects=(ValueObject(value=LiteralNode(value="27")),)),
         ],
     )
     n_before = len(ctx.instructions)

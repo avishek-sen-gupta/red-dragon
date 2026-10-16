@@ -95,13 +95,16 @@ def test_a_sliced_also_subject_travels_as_a_structured_ref(bridge_jar):  # noqa:
     """The bridge shape: what the first subject gets, every ALSO subject gets."""
     stmt = _statement(bridge_jar, *_SLICED_ALSO)
 
-    assert stmt["also_subject_refs"] == [
+    assert stmt["subjects"][1:] == [
         {
-            "kind": "ref",
-            "name": "FA",
-            "ref_mod_start": {"kind": "lit", "value": "1"},
-            "ref_mod_length": {"kind": "lit", "value": "2"},
-            "qualifiers": ["GA"],
+            "kind": "expr",
+            "expr": {
+                "kind": "ref",
+                "name": "FA",
+                "ref_mod_start": {"kind": "lit", "value": "1"},
+                "ref_mod_length": {"kind": "lit", "value": "2"},
+                "qualifiers": ["GA"],
+            },
         }
     ]
 
@@ -131,8 +134,7 @@ def test_a_qualified_also_subject_resolves_through_its_qualifier():
 
 
 @covers(CobolFeature.EVALUATE)
-def test_a_plain_also_subject_needs_no_ref(bridge_jar):  # noqa: F811
-    """A name that is only a name keeps the string alone, so nothing else moves."""
+def test_a_plain_also_subject_is_a_bare_ref(bridge_jar):  # noqa: F811
     stmt = _statement(
         bridge_jar,
         "EVALUATE WS-A ALSO WS-FLAG",
@@ -140,8 +142,9 @@ def test_a_plain_also_subject_needs_no_ref(bridge_jar):  # noqa: F811
         "END-EVALUATE.",
     )
 
-    assert stmt["also_subjects"] == ["WS-FLAG"]
-    assert "also_subject_refs" not in stmt
+    assert stmt["subjects"][1:] == [
+        {"kind": "expr", "expr": {"kind": "ref", "name": "WS-FLAG"}}
+    ]
 
 
 # -- red-dragon-c7p: TRUE in ALSO position is the condition form --------------

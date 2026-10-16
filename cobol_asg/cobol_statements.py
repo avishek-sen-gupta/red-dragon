@@ -23,6 +23,12 @@ from cobol_asg.cobol_expression import (
     expr_to_dict,
     field_ref_from_dict,
 )
+from cobol_asg.evaluate_selection import (
+    SelectionObject,
+    SelectionSubject,
+    selection_object_from_dict,
+    selection_subject_from_dict,
+)
 from cobol_asg.exit_kind import ExitKind
 from cobol_asg.file_enums import AccessMode, FileOrganization, OpenMode, RecordingMode
 from cobol_asg.frontend_extension import DialectParser
@@ -415,36 +421,23 @@ class IfStatement:
 
 @dataclass(frozen=True)
 class WhenStatement:
-    """EVALUATE / SEARCH WHEN branch.
+    """One WHEN of an EVALUATE: a selection object per subject, first then ALSO.
 
-    ``condition`` is a structured condition dict (from ``serializeConditionNode``)
-    for full conditional expressions (e.g. ``EVALUATE TRUE WHEN A = SPACES``), or a
-    plain string for ``EVALUATE <subject> WHEN <value>`` (the value is prefixed
-    with ``subject = `` during lowering) and ``WHEN ANY``.
-
-    ``also_conditions`` holds additional ALSO conditions from multi-subject
-    EVALUATE (e.g. ``WHEN x ALSO y`` → condition="x", also_conditions=("y",)).
-
-    ``alternatives`` are the further conditions of a stacked ``WHEN c1 WHEN c2
-    <body>``, each a body-less WHEN; any one of them, or this WHEN's own
-    condition, selects ``children``.
+    ``alternatives`` are the further WHENs of a stacked ``WHEN o1 WHEN o2
+    <body>``, each body-less; any one of them, or this WHEN's own objects,
+    selects ``children``.
     """
 
-    condition: dict | str
-    also_conditions: tuple[dict | str, ...] = ()
+    objects: tuple[SelectionObject, ...]
     children: list[CobolStatementType] = field(default_factory=list)
-    condition_thru: str | None = None
     span: SourceSpan | None = None
     alternatives: list[WhenStatement] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict) -> WhenStatement:
-        raw_also = data.get("also_conditions", [])
         return cls(
-            condition=data.get("condition", ""),
-            also_conditions=tuple(raw_also),
+            objects=tuple(selection_object_from_dict(o) for o in data["objects"]),
             children=[parse_statement(c) for c in data.get("children", [])],
-            condition_thru=data.get("condition_thru"),
             span=SourceSpan.from_dict(data),
             alternatives=[
                 WhenStatement.from_dict(a) for a in data.get("alternatives", [])
@@ -452,11 +445,10 @@ class WhenStatement:
         )
 
     def to_dict(self) -> dict:
-        result: dict = {"type": "WHEN", "condition": self.condition}
-        if self.condition_thru is not None:
-            result["condition_thru"] = self.condition_thru
-        if self.also_conditions:
-            result["also_conditions"] = list(self.also_conditions)
+        result: dict = {
+            "type": "WHEN",
+            "objects": [o.to_dict() for o in self.objects],
+        }
         if self.children:
             result["children"] = [c.to_dict() for c in self.children]
         if self.span is not None:
@@ -493,50 +485,29 @@ class WhenOtherStatement:
 
 @dataclass(frozen=True)
 class EvaluateStatement:
-    """EVALUATE subject [ALSO also_subject ...] WHEN ... END-EVALUATE.
+    """EVALUATE subject [ALSO subject ...] WHEN ... END-EVALUATE.
 
-    ``also_subjects`` holds additional ALSO subjects for multi-subject EVALUATE
-    (e.g. ``EVALUATE a ALSO b`` → subject="a", also_subjects=("b",)).
-
-    ``subject_ref`` is the subject as a structured ref node, present only when
-    the subject carries a slice, a subscript or a qualifier -- what a name
-    cannot carry. A plain name travels in ``subject`` alone, as it always did
-    (red-dragon-sfih).
-
-    ``also_subject_refs`` is the same for the ALSO subjects, positional against
-    ``also_subjects``: a subject that is only a name holds its slot with an empty
-    mapping, never None. It is empty when no ALSO subject carries more than a
-    name (red-dragon-ba1).
+    ``subjects`` are the selection subjects, the first then each ALSO one; a
+    WHEN's objects answer them position by position.
     """
 
-    subject: str = ""
-    subject_ref: dict | None = None
-    also_subjects: tuple[str, ...] = ()
-    also_subject_refs: tuple[dict, ...] = ()
+    subjects: tuple[SelectionSubject, ...]
     children: list[CobolStatementType] = field(default_factory=list)
     span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> EvaluateStatement:
         return cls(
-            subject=data.get("subject", ""),
-            subject_ref=data.get("subject_ref"),
-            also_subjects=tuple(data.get("also_subjects", [])),
-            also_subject_refs=tuple(
-                ref or {} for ref in data.get("also_subject_refs", [])
-            ),
+            subjects=tuple(selection_subject_from_dict(s) for s in data["subjects"]),
             children=[parse_statement(c) for c in data.get("children", [])],
             span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
-        result: dict = {"type": "EVALUATE"}
-        if self.subject:
-            result["subject"] = self.subject
-        if self.subject_ref is not None:
-            result["subject_ref"] = self.subject_ref
-        if self.also_subjects:
-            result["also_subjects"] = list(self.also_subjects)
+        result: dict = {
+            "type": "EVALUATE",
+            "subjects": [s.to_dict() for s in self.subjects],
+        }
         if self.children:
             result["children"] = [c.to_dict() for c in self.children]
         if self.span is not None:

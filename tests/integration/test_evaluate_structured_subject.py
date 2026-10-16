@@ -6,11 +6,10 @@ arrived as the name ``"FA(1:2)"``, which resolves to no field and was compared
 as a literal, and ``EVALUATE FA OF GA(1:2)`` arrived as the leaf ``"FA"``,
 which resolves the WHOLE field rather than the slice. Both silent.
 
-The subject now also travels as ``subject_ref`` -- the structured ref node the
-operands already get -- whenever it carries a slice, a subscript or a
-qualifier, and the Python side reads that node instead of the name. A subject
-that IS a plain name keeps the string alone, so nothing else moves. This is the
-move red-dragon-74qu made for expression operands.
+The subject now travels as a selection subject whose expression is the
+structured ref node the operands already get, so a slice, a subscript or a
+qualifier survives (red-dragon-sl30.10 extended this to every subject). This is
+the move red-dragon-74qu made for expression operands.
 """
 
 from __future__ import annotations
@@ -95,12 +94,17 @@ _SHAPE = (
 @covers(CobolFeature.EVALUATE, CobolFeature.REFERENCE_MODIFICATION)
 def test_a_sliced_subject_travels_as_a_structured_ref(bridge_jar):
     stmt = _statement(bridge_jar, *_SHAPE)
-    assert stmt["subject_ref"] == {
-        "kind": "ref",
-        "name": "WS-T",
-        "ref_mod_start": {"kind": "lit", "value": "1"},
-        "ref_mod_length": {"kind": "lit", "value": "2"},
-    }
+    assert stmt["subjects"] == [
+        {
+            "kind": "expr",
+            "expr": {
+                "kind": "ref",
+                "name": "WS-T",
+                "ref_mod_start": {"kind": "lit", "value": "1"},
+                "ref_mod_length": {"kind": "lit", "value": "2"},
+            },
+        }
+    ]
 
 
 @covers(CobolFeature.EVALUATE, CobolFeature.GROUP_ITEM)
@@ -111,13 +115,18 @@ def test_a_qualified_sliced_subject_keeps_both_qualifier_and_slice(bridge_jar):
         "   WHEN 'AB' MOVE 1 TO D",
         "END-EVALUATE.",
     )
-    assert stmt["subject_ref"] == {
-        "kind": "ref",
-        "name": "FA",
-        "ref_mod_start": {"kind": "lit", "value": "1"},
-        "ref_mod_length": {"kind": "lit", "value": "2"},
-        "qualifiers": ["GA"],
-    }
+    assert stmt["subjects"] == [
+        {
+            "kind": "expr",
+            "expr": {
+                "kind": "ref",
+                "name": "FA",
+                "ref_mod_start": {"kind": "lit", "value": "1"},
+                "ref_mod_length": {"kind": "lit", "value": "2"},
+                "qualifiers": ["GA"],
+            },
+        }
+    ]
 
 
 @covers(CobolFeature.EVALUATE, CobolFeature.SUBSCRIPT_ACCESS)
@@ -128,38 +137,41 @@ def test_a_subscripted_subject_keeps_its_subscript(bridge_jar):
         "   WHEN 'AB' MOVE 1 TO D",
         "END-EVALUATE.",
     )
-    assert stmt["subject_ref"] == {
-        "kind": "ref",
-        "name": "TB",
-        "subscripts": [{"kind": "ref", "name": "I"}],
-        "qualifiers": ["HT"],
-    }
+    assert stmt["subjects"] == [
+        {
+            "kind": "expr",
+            "expr": {
+                "kind": "ref",
+                "name": "TB",
+                "subscripts": [{"kind": "ref", "name": "I"}],
+                "qualifiers": ["HT"],
+            },
+        }
+    ]
 
 
 @covers(CobolFeature.EVALUATE)
-def test_a_plain_name_subject_stays_a_name(bridge_jar):
-    """Nothing a name cannot carry: the string subject is untouched and no
-    structured node is emitted, so no existing program's lowering moves."""
+def test_a_plain_name_subject_is_a_bare_ref(bridge_jar):
     stmt = _statement(
         bridge_jar,
         "EVALUATE WS-A",
         "   WHEN 'AB' MOVE 1 TO D",
         "END-EVALUATE.",
     )
-    assert stmt["subject"] == "WS-A"
-    assert "subject_ref" not in stmt
+    assert stmt["subjects"] == [
+        {"kind": "expr", "expr": {"kind": "ref", "name": "WS-A"}}
+    ]
 
 
 @covers(CobolFeature.EVALUATE)
-def test_an_evaluate_true_subject_stays_a_name(bridge_jar):
+def test_an_evaluate_true_subject_is_a_truth_value(bridge_jar):
     stmt = _statement(
         bridge_jar,
         "EVALUATE TRUE",
         "   WHEN WS-A = 'AB' MOVE 1 TO D",
         "END-EVALUATE.",
     )
-    assert stmt["subject"] == "TRUE"
-    assert "subject_ref" not in stmt
+    assert stmt["subjects"] == [{"kind": "boolean", "value": True}]
 
 
 # -- The branch the program actually takes -----------------------------------

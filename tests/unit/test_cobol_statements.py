@@ -48,10 +48,16 @@ from cobol_asg.cobol_statements import (
     XmlGenerateStatement,
     parse_statement,
 )
+from cobol_asg.any_object import AnyObject
 from cobol_asg.cobol_expression import BinOpNode, FieldRefNode, LiteralNode
+from cobol_asg.expression_subject import ExpressionSubject
 from cobol_asg.operand_kind import OperandKind
+from cobol_asg.range_object import RangeObject
 from cobol_asg.ref_mod import RefModOperand
+from cobol_asg.selection_condition import SelectionCondition
 from cobol_asg.set_operand import SetOperand
+from cobol_asg.truth_value import TruthValue
+from cobol_asg.value_object import ValueObject
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
 
@@ -244,15 +250,59 @@ class TestParseStatementDispatch:
         assert isinstance(stmt, IfStatement)
         assert stmt.else_children == []
 
-    @covers(CobolFeature.EVALUATE, CobolFeature.EVALUATE_WHEN_OTHER)
-    def test_evaluate(self):
+    @covers(
+        CobolFeature.EVALUATE,
+        CobolFeature.EVALUATE_WHEN_THRU,
+        CobolFeature.EVALUATE_WHEN_OTHER,
+    )
+    def test_evaluate_reads_typed_subjects_and_objects(self):
+        relation = {
+            "relation": {
+                "left": {"kind": "ref", "name": "WS-A"},
+                "op": ">",
+                "right": {"kind": "lit", "value": "1"},
+            }
+        }
+        product = {
+            "kind": "binop",
+            "op": "*",
+            "left": {"kind": "ref", "name": "D8"},
+            "right": {"kind": "lit", "value": "9"},
+        }
         stmt = parse_statement(
             {
                 "type": "EVALUATE",
+                "subjects": [
+                    {"kind": "expr", "expr": product},
+                    {"kind": "condition", "condition": relation},
+                    {"kind": "boolean", "value": False},
+                ],
                 "children": [
                     {
                         "type": "WHEN",
-                        "condition": "WS-A = 1",
+                        "objects": [
+                            {
+                                "kind": "range",
+                                "from": {"kind": "lit", "value": "1"},
+                                "thru": {"kind": "ref", "name": "X2"},
+                                "not": True,
+                            },
+                            {"kind": "boolean", "value": True},
+                            {"kind": "condition", "condition": relation},
+                        ],
+                        "alternatives": [
+                            {
+                                "type": "WHEN",
+                                "objects": [
+                                    {
+                                        "kind": "value",
+                                        "value": {"kind": "lit", "value": "81"},
+                                        "not": False,
+                                    },
+                                    {"kind": "any"},
+                                ],
+                            }
+                        ],
                         "children": [
                             {"type": "DISPLAY", "operands": [{"name": "ONE"}]}
                         ],
@@ -267,9 +317,28 @@ class TestParseStatementDispatch:
             }
         )
         assert isinstance(stmt, EvaluateStatement)
-        assert len(stmt.children) == 2
-        assert isinstance(stmt.children[0], WhenStatement)
-        assert isinstance(stmt.children[1], WhenOtherStatement)
+        assert stmt.subjects == (
+            ExpressionSubject(
+                expr=BinOpNode(
+                    op="*", left=FieldRefNode(name="D8"), right=LiteralNode(value="9")
+                )
+            ),
+            SelectionCondition(condition=relation),
+            TruthValue(value=False),
+        )
+        when, other = stmt.children
+        assert isinstance(when, WhenStatement)
+        assert isinstance(other, WhenOtherStatement)
+        assert when.objects == (
+            RangeObject(
+                low=LiteralNode(value="1"), high=FieldRefNode(name="X2"), negated=True
+            ),
+            TruthValue(value=True),
+            SelectionCondition(condition=relation),
+        )
+        assert [alt.objects for alt in when.alternatives] == [
+            (ValueObject(value=LiteralNode(value="81")), AnyObject())
+        ]
 
     @covers(CobolFeature.DISPLAY)
     def test_display(self):
@@ -1226,11 +1295,30 @@ class TestRoundTrip:
     def test_evaluate_round_trip(self):
         data = {
             "type": "EVALUATE",
+            "subjects": [
+                {"kind": "expr", "expr": {"kind": "ref", "name": "WS-A"}},
+                {"kind": "boolean", "value": True},
+            ],
             "children": [
                 {
                     "type": "WHEN",
-                    "condition": "WS-A = 1",
+                    "objects": [
+                        {
+                            "kind": "range",
+                            "from": {"kind": "lit", "value": "1"},
+                            "thru": {"kind": "lit", "value": "9"},
+                            "not": True,
+                        },
+                        {
+                            "kind": "value",
+                            "value": {"kind": "ref", "name": "FLAG-ON"},
+                            "not": False,
+                        },
+                    ],
                     "children": [{"type": "DISPLAY", "operands": [{"name": "ONE"}]}],
+                    "alternatives": [
+                        {"type": "WHEN", "objects": [{"kind": "any"}]},
+                    ],
                 },
                 {
                     "type": "WHEN_OTHER",
