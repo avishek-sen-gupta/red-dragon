@@ -124,3 +124,56 @@ class TestUnsignedReceiver:
             ["U", "C", "W", "X", "F1", "F2", "F3", "F4"],
         )
         assert shown == ["4", "111", "9", "10", "E", "E", "P", "P"]
+
+
+class TestRoundedSizeError:
+    @covers(
+        CobolFeature.MULTIPLY,
+        CobolFeature.DIVIDE,
+        CobolFeature.COMPUTE,
+        CobolFeature.ROUNDED_CLAUSE,
+        CobolFeature.ON_SIZE_ERROR,
+    )
+    def test_the_size_error_is_judged_on_the_rounded_value(self, capsys):
+        shown = _display_after(
+            capsys,
+            [
+                "01 S PIC S99 VALUE -1.",
+                "01 T PIC S99 VALUE -1.",
+                "01 G PIC 99 VALUE 7.",
+                "01 C1 PIC 999 VALUE 0.",
+                "01 C2 PIC 99 VALUE 7.",
+                "01 C3 PIC 99 VALUE 7.",
+                "01 F1 PIC X VALUE 'P'.",
+                "01 F2 PIC X VALUE 'P'.",
+                "01 F3 PIC X VALUE 'P'.",
+                "01 F4 PIC X VALUE 'P'.",
+                "01 F5 PIC X VALUE 'P'.",
+            ],
+            [
+                "    MULTIPLY 99.4 BY S ROUNDED",
+                "        ON SIZE ERROR MOVE 'E' TO F1.",
+                "    MULTIPLY 99.5 BY T ROUNDED",
+                "        ON SIZE ERROR MOVE 'E' TO F2.",
+                "    DIVIDE 1.0051 INTO 100.50 GIVING G ROUNDED",
+                "        ON SIZE ERROR MOVE 'E' TO F3.",
+                "    COMPUTE C1 C2 ROUNDED = 99.6",
+                "        ON SIZE ERROR MOVE 'E' TO F4.",
+                "    COMPUTE C3 ROUNDED = 99.4",
+                "        ON SIZE ERROR MOVE 'E' TO F5.",
+            ],
+            ["S", "T", "G", "C1", "C2", "C3", "F1", "F2", "F3", "F4", "F5"],
+        )
+        assert shown == [
+            "-99",
+            "-1",
+            "07",
+            "099",
+            "07",
+            "99",
+            "P",
+            "E",
+            "E",
+            "E",
+            "P",
+        ]

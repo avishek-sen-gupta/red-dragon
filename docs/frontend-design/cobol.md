@@ -104,12 +104,12 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 | `MULTIPLY X BY Y Z` | Each receiver in turn becomes receiver × X. |
 | `DIVIDE X INTO Y Z` | Each receiver in turn becomes receiver ÷ X. |
 | `... GIVING G H` | The result is computed once as `operands[0] <op> (sum of the remaining operands)` — ADD sums every operand, `SUBTRACT X W FROM Y GIVING G` is Y − (X + W) — and written to every GIVING receiver, each with its own ROUNDED. |
-| Size error condition | A result is a size error when it reaches 10^(the receiver's integer digit positions) — e.g. 100 for `PIC 99V9`, 1 for `PIC V999`. Digits past the receiver's decimal places are truncated and never cause one: 99.95 into `PIC 99V9` stores 99.9. The magnitude decides, not the sign (`__cobol_size_error`): −4.57 into an unsigned `PIC V999` is a size error, while −3 into an unsigned `PIC 9` stores 3. |
+| Size error condition | A result is a size error when it reaches 10^(the receiver's integer digit positions) — e.g. 100 for `PIC 99V9`, 1 for `PIC V999`. Digits past the receiver's decimal places are truncated and never cause one: 99.95 into `PIC 99V9` stores 99.9. The magnitude decides, not the sign (`__cobol_size_error`): −4.57 into an unsigned `PIC V999` is a size error, while −3 into an unsigned `PIC 9` stores 3. A ROUNDED receiver is rounded first and the rounded value is tested and stored: −99.4 ROUNDED into `PIC S99` stores −99, −99.5 ROUNDED is a size error. |
 | `ON SIZE ERROR` with several receivers | Per receiver: one whose result does not fit is left unchanged while the others are written; ON SIZE ERROR runs once afterwards if any receiver failed, NOT ON SIZE ERROR otherwise. DIVIDE by zero is a size error for every receiver. |
 | `DIVIDE ... GIVING ... REMAINDER r` | `remainder = dividend - trunc(quotient) * divisor`, using the same operands the GIVING quotient was computed from, written back alongside the quotient. `DIVIDE X INTO Y GIVING Z` computes `Z = Y / X` (dividend/divisor); `DIVIDE X BY Y GIVING Z` computes `Z = X / Y` — the bridge normalizes both forms to a `[dividend, divisor]` operand order before lowering. |
 | `MOVE CORRESPONDING A TO B ...` | For each direct leaf name present in both groups: decode A.field → encode → write to B.field. Each group is found in whichever section declares it (WORKING-STORAGE, LOCAL-STORAGE, LINKAGE, FILE); a LINKAGE group reads and writes its caller's argument. |
 | `ADD/SUBTRACT CORRESPONDING A TO/FROM B` | For each leaf name present in both groups: decode B.field and A.field → `BINOP +/-` → encode → write back to B.field. Non-matching fields untouched. |
-| `COMPUTE Y = expr` | Recursive expression lowering → encode → write |
+| `COMPUTE Y Z = expr` | Recursive expression lowering, then stored in every receiver as for GIVING: each with its own ROUNDED and its own size error test. |
 
 ### Control Flow (7 types)
 

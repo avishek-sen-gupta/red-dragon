@@ -15,6 +15,7 @@ from cobol_asg.cobol_statements import (
     CobolStatementType,
     ComputedGoto,
     ComputeStatement,
+    ComputeTarget,
     ContinueStatement,
     DisplayStatement,
     EvaluateStatement,
@@ -1154,20 +1155,6 @@ def _emit_arithmetic_writeback(
             target_rr, fl, spliced_reg, offset_reg, extent=target_ref.extent, span=span
         )
     else:
-        if target_op.rounded:
-            dec_digits_reg = ctx.const_to_reg(
-                fl.type_descriptor.decimal_digits, span=span
-            )
-            rounded_reg = ctx.fresh_reg()
-            ctx.emit_inst(
-                CallFunction(
-                    result_reg=rounded_reg,
-                    func_name=FuncName(BuiltinName.COBOL_ROUND),
-                    args=(result_str_reg, dec_digits_reg),
-                ),
-                span=span,
-            )
-            result_str_reg = rounded_reg
         ctx.emit_encode_and_write(
             target_rr,
             fl,
@@ -1334,16 +1321,43 @@ def _write_result(
     )
 
 
+def _stored_value(
+    ctx: EmitContext,
+    receiver: ArithmeticReceiver,
+    result: Register,
+    *,
+    span: SourceSpan | None = None,
+) -> Register:
+    if not receiver.operand.rounded:
+        return result
+    rounded = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=rounded,
+            func_name=FuncName(BuiltinName.COBOL_ROUND),
+            args=(
+                result,
+                ctx.const_to_reg(
+                    receiver.ref.fl.type_descriptor.decimal_digits, span=span
+                ),
+            ),
+        ),
+        span=span,
+    )
+    return rounded
+
+
 def _write_unless_size_error(
     ctx: EmitContext,
     receiver: ArithmeticReceiver,
-    result: ArithmeticValue,
+    result: Register,
     materialised: MaterialisedSectionedLayout,
     *,
     span: SourceSpan | None = None,
 ) -> Register:
+    stored = _stored_value(ctx, receiver, result, span=span)
     overflow = _compute_overflow_flag(
-        ctx, result.register, receiver.ref.fl.type_descriptor, span=span
+        ctx, stored, receiver.ref.fl.type_descriptor, span=span
     )
     write_label = ctx.fresh_label("size_ok")
     skip_label = ctx.fresh_label("size_err_skip")
@@ -1352,7 +1366,7 @@ def _write_unless_size_error(
         span=span,
     )
     ctx.emit_inst(Label_(label=write_label), span=span)
-    _write_result(ctx, receiver, result.register, materialised, span=span)
+    _write_result(ctx, receiver, stored, materialised, span=span)
     ctx.emit_inst(Branch(label=skip_label), span=span)
     ctx.emit_inst(Label_(label=skip_label), span=span)
     return overflow
@@ -1422,13 +1436,15 @@ def _emit_size_error_arm(
     ctx.emit_inst(Branch(label=end_label), span=span)
 
 
-ReceiverStep = Callable[[RefModOperand], tuple[ArithmeticReceiver, ArithmeticValue]]
+ReceiverStep = Callable[[RefModOperand], tuple[ArithmeticReceiver, Register]]
+SizeErrorGuard = Callable[[CodeLabel], None]
+SizeErrorPhrases = ArithmeticStatement | ComputeStatement
 
 
 def _store_guarded(
     ctx: EmitContext,
-    stmt: ArithmeticStatement,
-    divisor: ArithmeticValue,
+    stmt: SizeErrorPhrases,
+    guard: SizeErrorGuard,
     receivers: Sequence[RefModOperand],
     step: ReceiverStep,
     follow_up: Callable[[], None],
@@ -1438,7 +1454,7 @@ def _store_guarded(
     on_label = ctx.fresh_label("on_size_err")
     not_on_label = ctx.fresh_label("not_on_size_err")
     end_label = ctx.fresh_label("size_err_end")
-    _emit_zero_divisor_guard(ctx, stmt.op, divisor, on_label, span=span)
+    guard(on_label)
     flags = [
         _write_unless_size_error(ctx, *step(target), materialised, span=span)
         for target in receivers
@@ -1471,22 +1487,43 @@ def _store_guarded(
     ctx.emit_inst(Label_(label=end_label), span=span)
 
 
+def _store_unguarded(
+    ctx: EmitContext,
+    target: RefModOperand,
+    step: ReceiverStep,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None = None,
+) -> None:
+    receiver, result = step(target)
+    _write_result(
+        ctx,
+        receiver,
+        _stored_value(ctx, receiver, result, span=span),
+        materialised,
+        span=span,
+    )
+
+
 def _store(
     ctx: EmitContext,
-    stmt: ArithmeticStatement,
-    divisor: ArithmeticValue,
+    stmt: SizeErrorPhrases,
+    guard: SizeErrorGuard,
     receivers: Sequence[RefModOperand],
     step: ReceiverStep,
     follow_up: Callable[[], None],
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     if stmt.on_size_error or stmt.not_on_size_error:
-        _store_guarded(ctx, stmt, divisor, receivers, step, follow_up, materialised)
+        _store_guarded(ctx, stmt, guard, receivers, step, follow_up, materialised)
         return
     for target in receivers:
-        receiver, result = step(target)
-        _write_result(ctx, receiver, result.register, materialised, span=stmt.span)
+        _store_unguarded(ctx, target, step, materialised, span=stmt.span)
     follow_up()
+
+
+def _no_size_error_guard(_on_label: CodeLabel) -> None:
+    return None
 
 
 def _no_follow_up() -> None:
@@ -1500,7 +1537,7 @@ def _in_place_step(
     materialised: MaterialisedSectionedLayout,
     span: SourceSpan | None,
     target: RefModOperand,
-) -> tuple[ArithmeticReceiver, ArithmeticValue]:
+) -> tuple[ArithmeticReceiver, Register]:
     receiver = _resolve_receiver(ctx, target, materialised, span=span)
     current = _operand_value(
         ctx,
@@ -1508,18 +1545,21 @@ def _in_place_step(
         _read_receiver(ctx, receiver, materialised, span=span),
         materialised,
     )
-    return receiver, _emit_verb_operation(
-        ctx, op, current, sending, (target,), materialised, span=span
+    return (
+        receiver,
+        _emit_verb_operation(
+            ctx, op, current, sending, (target,), materialised, span=span
+        ).register,
     )
 
 
 def _giving_step(
     ctx: EmitContext,
-    result: ArithmeticValue,
+    result: Register,
     materialised: MaterialisedSectionedLayout,
     span: SourceSpan | None,
     target: RefModOperand,
-) -> tuple[ArithmeticReceiver, ArithmeticValue]:
+) -> tuple[ArithmeticReceiver, Register]:
     return _resolve_receiver(ctx, target, materialised, span=span), result
 
 
@@ -1592,6 +1632,12 @@ def _write_remainder(
     )
 
 
+def _divisor_guard(
+    ctx: EmitContext, stmt: ArithmeticStatement, divisor: ArithmeticValue
+) -> SizeErrorGuard:
+    return partial(_emit_zero_divisor_guard, ctx, stmt.op, divisor, span=stmt.span)
+
+
 def lower_arithmetic(
     ctx: EmitContext,
     stmt: ArithmeticStatement,
@@ -1605,7 +1651,8 @@ def lower_arithmetic(
         ctx, stmt.operands, stmt.targets, materialised, span=stmt.span
     )
     step = partial(_in_place_step, ctx, stmt.op, sending, materialised, stmt.span)
-    _store(ctx, stmt, sending, stmt.targets, step, _no_follow_up, materialised)
+    guard = _divisor_guard(ctx, stmt, sending)
+    _store(ctx, stmt, guard, stmt.targets, step, _no_follow_up, materialised)
 
 
 def _lower_arithmetic_giving(
@@ -1619,9 +1666,28 @@ def _lower_arithmetic_giving(
     result = _emit_verb_operation(
         ctx, stmt.op, first, rest, stmt.giving, materialised, span=span
     )
-    step = partial(_giving_step, ctx, result, materialised, span)
+    step = partial(_giving_step, ctx, result.register, materialised, span)
     remainder = partial(_emit_remainder, ctx, stmt, first, rest, result, materialised)
-    _store(ctx, stmt, rest, stmt.giving, step, remainder, materialised)
+    guard = _divisor_guard(ctx, stmt, rest)
+    _store(ctx, stmt, guard, stmt.giving, step, remainder, materialised)
+
+
+def _compute_operand(target: ComputeTarget) -> RefModOperand:
+    return RefModOperand(
+        name=target.name,
+        qualifiers=target.qualifiers,
+        subscripts=target.subscripts,
+        rounded=target.rounded,
+    )
+
+
+def _known_compute_target(
+    ctx: EmitContext, target: ComputeTarget, materialised: MaterialisedSectionedLayout
+) -> bool:
+    if ctx.has_field(target.name, materialised):
+        return True
+    logger.warning("COMPUTE target %s not found in layout", target.name)
+    return False
 
 
 def lower_compute(
@@ -1631,15 +1697,14 @@ def lower_compute(
 ) -> None:
     """COMPUTE target(s) = arithmetic-expression."""
     span = stmt.span
-    # IBM ARITH(COMPAT): receivers (+1 for ROUNDED) size the division fraction.
-    # This supersedes the unconditional force_division_float of red-dragon-vaxz:
-    # a fraction mid-expression now survives because dmax takes it from the
-    # receiver (1 / (1 + R) ** N into PIC 9V9(8) carries 8 decimal places),
-    # while integer-only expressions still truncate (red-dragon-apoq).
+    targets = [
+        _compute_operand(t)
+        for t in stmt.targets
+        if _known_compute_target(ctx, t, materialised)
+    ]
     target_types = [
         (materialised.resolve(t.name, t.qualifiers)[0].type_descriptor, t.rounded)
-        for t in stmt.targets
-        if ctx.has_field(t.name, materialised)
+        for t in targets
     ]
     result_reg = lower_expr_node(
         ctx,
@@ -1651,129 +1716,10 @@ def lower_compute(
         floating_receiver=any(is_floating_type(td) for td, _ in target_types),
         span=span,
     )
-
-    has_clause = bool(stmt.on_size_error or stmt.not_on_size_error)
-
-    if not has_clause:
-        result_str_reg = ctx.emit_to_string(result_reg, span=span)
-        for target in stmt.targets:
-            if not ctx.has_field(target.name, materialised):
-                logger.warning("COMPUTE target %s not found in layout", target.name)
-                continue
-            target_ref, target_rr = ctx.resolve_field_ref(
-                target.name,
-                materialised,
-                target.qualifiers,
-                subscripts=target.subscripts,
-                span=span,
-            )
-            write_reg = result_str_reg
-            if target.rounded:
-                dec_digits_reg = ctx.const_to_reg(
-                    target_ref.fl.type_descriptor.decimal_digits, span=span
-                )
-                rounded_reg = ctx.fresh_reg()
-                ctx.emit_inst(
-                    CallFunction(
-                        result_reg=rounded_reg,
-                        func_name=FuncName(BuiltinName.COBOL_ROUND),
-                        args=(write_reg, dec_digits_reg),
-                    ),
-                    span=span,
-                )
-                write_reg = rounded_reg
-            ctx.emit_encode_and_write(
-                target_rr,
-                target_ref.fl,
-                write_reg,
-                target_ref.offset_reg,
-                extent=target_ref.extent,
-                span=span,
-            )
+    if not targets:
         return
-
-    on_size_err_label = ctx.fresh_label("on_size_err")
-    not_on_size_err_label = ctx.fresh_label("not_on_size_err")
-    end_label = ctx.fresh_label("size_err_end")
-
-    # Resolve all valid targets up front
-    target_triples: list[tuple] = []
-    for target in stmt.targets:
-        if not ctx.has_field(target.name, materialised):
-            logger.warning("COMPUTE target %s not found in layout", target.name)
-            continue
-        ref, rr = ctx.resolve_field_ref(
-            target.name,
-            materialised,
-            target.qualifiers,
-            subscripts=target.subscripts,
-            span=span,
-        )
-        target_triples.append((ref, rr, target))
-
-    # Guard: no valid targets means no writes and no overflow check — execute
-    # not_on_size_error path (same as fast path: silent skip).
-    if not target_triples:
-        return
-
-    # OR overflow flags across all targets (all-or-nothing semantics)
-    overflow_flags = [
-        _compute_overflow_flag(ctx, result_reg, ref.fl.type_descriptor, span=span)
-        for ref, rr, _ in target_triples
-    ]
-    combined_flag = overflow_flags[0]
-    for flag in overflow_flags[1:]:
-        new_combined = ctx.fresh_reg()
-        ctx.emit_inst(
-            Binop(
-                result_reg=new_combined,
-                operator=resolve_binop("or"),
-                left=combined_flag,
-                right=flag,
-            ),
-            span=span,
-        )
-        combined_flag = new_combined
-
-    ctx.emit_inst(
-        BranchIf(
-            cond_reg=combined_flag,
-            branch_targets=(on_size_err_label, not_on_size_err_label),
-        ),
-        span=span,
-    )
-
-    ctx.emit_inst(Label_(label=on_size_err_label), span=span)
-    for child in stmt.on_size_error:
-        ctx.lower_statement(child, materialised)
-    ctx.emit_inst(Branch(label=end_label), span=span)
-
-    ctx.emit_inst(Label_(label=not_on_size_err_label), span=span)
-    result_str_reg = ctx.emit_to_string(result_reg, span=span)
-    for ref, rr, target in target_triples:
-        write_reg = result_str_reg
-        if target.rounded:
-            dec_digits_reg = ctx.const_to_reg(
-                ref.fl.type_descriptor.decimal_digits, span=span
-            )
-            rounded_reg = ctx.fresh_reg()
-            ctx.emit_inst(
-                CallFunction(
-                    result_reg=rounded_reg,
-                    func_name=FuncName(BuiltinName.COBOL_ROUND),
-                    args=(write_reg, dec_digits_reg),
-                ),
-                span=span,
-            )
-            write_reg = rounded_reg
-        ctx.emit_encode_and_write(
-            rr, ref.fl, write_reg, ref.offset_reg, extent=ref.extent, span=span
-        )
-    for child in stmt.not_on_size_error:
-        ctx.lower_statement(child, materialised)
-    ctx.emit_inst(Branch(label=end_label), span=span)
-
-    ctx.emit_inst(Label_(label=end_label), span=span)
+    step = partial(_giving_step, ctx, result_reg, materialised, span)
+    _store(ctx, stmt, _no_size_error_guard, targets, step, _no_follow_up, materialised)
 
 
 def lower_if(
@@ -2234,20 +2180,17 @@ def _leaf_fields_of(target_fl: FieldLayout, layout: DataLayout) -> list[FieldLay
     if not contained:
         return [target_fl]
 
-    leaves = []
-    for fl in contained:
-        fl_start = fl.offset
-        fl_end = fl.offset + fl.byte_length
-        is_leaf = not any(
-            other.name != fl.name
-            and other.offset >= fl_start
-            and other.offset + other.byte_length <= fl_end
-            for other in contained
-        )
-        if is_leaf:
-            leaves.append(fl)
+    return [fl for fl in contained if _is_leaf_among(fl, contained)]
 
-    return leaves
+
+def _is_leaf_among(fl: FieldLayout, contained: Sequence[FieldLayout]) -> bool:
+    fl_end = fl.offset + fl.byte_length
+    return not any(
+        other.name != fl.name
+        and other.offset >= fl.offset
+        and other.offset + other.byte_length <= fl_end
+        for other in contained
+    )
 
 
 def lower_initialize(
