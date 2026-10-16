@@ -163,7 +163,7 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 
 | Statement | IR Pattern |
 |---|---|
-| `SEARCH` | Loop with bound check, WHEN condition chain (`BRANCH_IF` per clause), VARYING index increment, AT END fallthrough |
+| `SEARCH` | Loop with bound check against the current occurrence count (OCCURS DEPENDING ON honoured), WHEN condition chain (`BRANCH_IF` per clause), the table's index advanced with any VARYING operand in step, AT END fallthrough; `SEARCH ALL` starts from occurrence 1 |
 
 ### Inter-program (4 types)
 
@@ -236,13 +236,20 @@ These are composed into IR instruction sequences via builders in `ir_encoders.py
 
 ## SEARCH Lowering
 
-SEARCH implements a linear table search with the following IR structure:
+SEARCH implements a linear table search. The search index is the VARYING
+operand when it is one of the table's own `INDEXED BY` names, otherwise the
+table's first `INDEXED BY` name; a VARYING operand that is another table's index
+or a data item is incremented in step with it. The loop ends once the search
+index exceeds the table's current occurrence count, which is the value of the
+OCCURS DEPENDING ON object for a variable table and the OCCURS count otherwise. `SEARCH ALL`
+sets the search index to 1 first and scans the whole table, which finds the same
+entry a binary search would in a correctly ordered table.
 
 ```
-STORE_VAR counter = 0
+  [SEARCH ALL: search index = 1]
+  bound = ODO object value | OCCURS count
 LABEL search_loop:
-  LOAD_VAR counter
-  BINOP >= counter, 256        (safety bound)
+  BINOP > search index, bound
   BRANCH_IF → at_end, body
 LABEL body:
   ; For each WHEN clause:
@@ -253,16 +260,17 @@ LABEL body:
     BRANCH → search_end
   LABEL when_next:
   ; ... next WHEN ...
-  ; No match — increment varying index + counter, loop
   BRANCH → search_incr
 LABEL search_incr:
-  decode varying → BINOP + 1 → encode → write
-  counter += 1
+  search index += 1; VARYING companion += 1
   BRANCH → search_loop
 LABEL at_end:
   lower_statement(at_end children)
 LABEL search_end:
 ```
+
+A table whose occurrence count is unknown falls back to an iteration counter
+bounded by a runaway guard.
 
 ## Condition Lowering
 
@@ -280,7 +288,7 @@ Conditions are serialized by the Java bridge as recursive JSON trees (not raw so
 - **Exponentiation (`**`) is not parsed or lowered** (red-dragon-wxur). Fixed-point arithmetic itself is exact: values, IBM `ARITH(COMPAT)` intermediate scales and every conversion live behind the `cobol_numeric` boundary (ADR-148, ADR-149), and only COMP-1/COMP-2 fields and floating intrinsics use IEEE floats.
 - **SORT/MERGE/RELEASE/RETURN are entirely unlowered** (red-dragon-429q).
 - **CANCEL is a no-op** — doesn't reset the cancelled subprogram's WORKING-STORAGE on next CALL (red-dragon-8dpn).
-- **SEARCH is lowered as a linear scan**, not true binary search, even for `SEARCH ALL` (red-dragon-c32s).
+- **SEARCH ALL is lowered as a whole-table linear scan**, not a binary search (red-dragon-c32s); for a correctly ordered table the result is the same.
 - **`USAGE IS INDEX` / `INDEXED BY` are not modeled** as a distinct type (red-dragon-zm9w).
 - **Most intrinsic `FUNCTION`s fall back to their first argument** instead of being implemented (red-dragon-clpn, deprioritized — `MOD` and `DATE-OF-INTEGER` are implemented, the only ones observed in real corpora so far).
 
