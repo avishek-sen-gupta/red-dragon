@@ -274,36 +274,12 @@ def _compute_overflow_flag(
     *,
     span: SourceSpan | None = None,
 ) -> Register:
-    capacity = receiver_capacity(td)
-    over_max = ctx.fresh_reg()
-    ctx.emit_inst(
-        Binop(
-            result_reg=over_max,
-            operator=resolve_binop(">="),
-            left=result_reg,
-            right=ctx.const_to_reg(capacity, span=span),
-        ),
-        span=span,
-    )
-    if not td.signed:
-        return over_max
-    under_min = ctx.fresh_reg()
-    ctx.emit_inst(
-        Binop(
-            result_reg=under_min,
-            operator=resolve_binop("<="),
-            left=result_reg,
-            right=ctx.const_to_reg(-capacity, span=span),
-        ),
-        span=span,
-    )
     overflow_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        Binop(
+        CallFunction(
             result_reg=overflow_reg,
-            operator=resolve_binop("or"),
-            left=over_max,
-            right=under_min,
+            func_name=FuncName(BuiltinName.COBOL_SIZE_ERROR),
+            args=(result_reg, ctx.const_to_reg(receiver_capacity(td), span=span)),
         ),
         span=span,
     )

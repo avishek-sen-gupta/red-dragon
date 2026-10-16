@@ -90,3 +90,37 @@ class TestSizeErrorThreshold:
             "E",
             "E",
         ]
+
+
+class TestUnsignedReceiver:
+    @covers(CobolFeature.MULTIPLY, CobolFeature.DIVIDE, CobolFeature.ON_SIZE_ERROR)
+    def test_a_negative_result_is_judged_by_its_magnitude_not_its_sign(self, capsys):
+        shown = _display_after(
+            capsys,
+            [
+                "01 M4 PIC S99 VALUE -56.",
+                "01 M1 PIC 99V99 VALUE 80.12.",
+                "01 U PIC 9 VALUE 4.",
+                "01 A PIC 99V9 VALUE 44.1.",
+                "01 B PIC S9V999 VALUE -9.642.",
+                "01 C PIC V999 VALUE .111.",
+                "01 W PIC 9 VALUE 4.",
+                "01 X PIC V99 VALUE .11.",
+                "01 F1 PIC X VALUE 'P'.",
+                "01 F2 PIC X VALUE 'P'.",
+                "01 F3 PIC X VALUE 'P'.",
+                "01 F4 PIC X VALUE 'P'.",
+            ],
+            [
+                "    MULTIPLY M4 BY M1 GIVING U",
+                "        ON SIZE ERROR MOVE 'E' TO F1.",
+                "    DIVIDE B INTO A GIVING C",
+                "        ON SIZE ERROR MOVE 'E' TO F2.",
+                "    MULTIPLY -3 BY 3 GIVING W",
+                "        ON SIZE ERROR MOVE 'E' TO F3.",
+                "    DIVIDE -9.9 INTO 1 GIVING X",
+                "        ON SIZE ERROR MOVE 'E' TO F4.",
+            ],
+            ["U", "C", "W", "X", "F1", "F2", "F3", "F4"],
+        )
+        assert shown == ["4", "111", "9", "10", "E", "E", "P", "P"]
