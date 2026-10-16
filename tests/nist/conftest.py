@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from interpreter.cobol.ebcdic_table import EbcdicTable
 from interpreter.cobol.real_file_provider import RealFileIOProvider
 
 NIST_DIR = (
@@ -20,16 +21,16 @@ _SELECT_ASSIGN_RE = re.compile(
 )
 
 _PRINT_RECORD_LEN = 120
+_NO_PRINT_FILE = "no-print-file.dat"
 
 
 def _cobol_content(src: str) -> str:
     """Return COBOL source with sequence numbers and comments stripped."""
-    lines = []
-    for line in src.splitlines():
-        if len(line) > 6 and line[6] in ("*", "/"):
-            continue
-        lines.append(line[7:72] if len(line) > 7 else "")
-    return " ".join(lines)
+    return " ".join(
+        line[7:72] if len(line) > 7 else ""
+        for line in src.splitlines()
+        if not (len(line) > 6 and line[6] in ("*", "/"))
+    )
 
 
 def extract_file_controls(src: str) -> list[tuple[str, str]]:
@@ -41,16 +42,19 @@ def extract_file_controls(src: str) -> list[tuple[str, str]]:
     ]
 
 
-def make_provider(src: str, tmp_path: Path) -> tuple[RealFileIOProvider, Path | None]:
-    """Build RealFileIOProvider; return (provider, print_file_path)."""
-    file_controls = extract_file_controls(src)
-    overrides: dict[str, Path] = {}
-    print_path: Path | None = None
-    for file_name, assign_to in file_controls:
-        p = tmp_path / f"{assign_to.lower()}.dat"
-        overrides[file_name] = p
-        if "PRINT" in file_name:
-            print_path = p
+def make_provider(src: str, tmp_path: Path) -> tuple[RealFileIOProvider, Path]:
+    """Build RealFileIOProvider; return (provider, print_file_path).
+
+    A program with no PRINT file gets a path that is never written.
+    """
+    overrides = {
+        file_name: tmp_path / f"{assign_to.lower()}.dat"
+        for file_name, assign_to in extract_file_controls(src)
+    }
+    print_path = next(
+        (path for file_name, path in overrides.items() if "PRINT" in file_name),
+        tmp_path / _NO_PRINT_FILE,
+    )
     provider = RealFileIOProvider(
         base_dir=tmp_path, file_control=[], path_overrides=overrides
     )
@@ -67,19 +71,19 @@ _END_OF_TEST = "END OF TEST"
 _TESTS_FAILED_RE = re.compile(r"(\d+|NO)\s+TEST\(S\)\s+FAILED", re.IGNORECASE)
 
 
-def assert_nist_pass(print_path: Path | None, prog: str) -> None:
+def assert_nist_pass(print_path: Path, prog: str) -> None:
     """Assert a NIST CCVS program ran to completion and reported zero failures.
 
     Skips only when no PRINT-FILE was produced at all (the program could not
     start — e.g. an M-stub awaiting external input). Any program that does write
     output must complete and report a clean summary, or this fails.
     """
-    if print_path is None or not print_path.exists():
+    if not print_path.exists():
         pytest.skip(f"{prog}: PRINT-FILE not written — program did not produce output")
 
     data = print_path.read_bytes()
     records = [
-        data[i : i + _PRINT_RECORD_LEN].decode("latin-1", errors="replace")
+        EbcdicTable.ebcdic_to_ascii(data[i : i + _PRINT_RECORD_LEN]).decode("latin-1")
         for i in range(0, len(data), _PRINT_RECORD_LEN)
         if data[i : i + _PRINT_RECORD_LEN].strip(b"\x00")
     ]
@@ -92,12 +96,12 @@ def assert_nist_pass(print_path: Path | None, prog: str) -> None:
     )
 
     # (2) Summary failure count must be zero.
-    m = _TESTS_FAILED_RE.search(text)
-    assert m is not None, (
+    counts = _TESTS_FAILED_RE.findall(text)
+    assert counts != [], (
         f"{prog}: completion banner present but no 'TEST(S) FAILED' summary line "
         f"found — cannot confirm a clean run."
     )
-    n_failed = 0 if m.group(1).upper() == "NO" else int(m.group(1))
+    n_failed = 0 if counts[0].upper() == "NO" else int(counts[0])
     assert n_failed == 0, f"{prog}: CCVS summary reports {n_failed} failed test(s)."
 
     # (3) No inline failure markers in the detail lines.
