@@ -91,6 +91,7 @@ from interpreter.vm.function_scoping import (
     LocalFunctionScopingStrategy,
 )
 from interpreter.vm.null_access import NullAccess
+from interpreter.vm.unknown_branch_target_error import UnknownBranchTargetError
 from interpreter.vm.unresolved_call import (
     LLMPlausibleResolver,
     SymbolicResolver,
@@ -452,8 +453,8 @@ def _run_loop(
                 break
             current_label, ip = flow
 
-        elif update.next_label and update.next_label in cfg.blocks:
-            current_label = update.next_label
+        elif (target := _branch_target(cfg, current_label, update)).is_present():
+            current_label = target
             ip = 0
         else:
             ip += 1
@@ -467,6 +468,13 @@ def _run_loop(
         )
 
     return _LoopResult(suspended=False, steps=step + 1, llm_calls=llm_calls)
+
+
+def _branch_target(cfg: CFG, source: CodeLabel, update: StateUpdate) -> CodeLabel:
+    target = update.next_label or NO_LABEL
+    if target.is_present() and target not in cfg.blocks:
+        raise UnknownBranchTargetError(source, target)
+    return target
 
 
 def _warn_step_budget_exhausted(max_steps: int, label: CodeLabel, ip: int) -> None:
@@ -832,8 +840,8 @@ def execute_cfg_traced(
                 break
             current_label, ip = flow
 
-        elif update.next_label and update.next_label in cfg.blocks:
-            current_label = update.next_label
+        elif (target := _branch_target(cfg, current_label, update)).is_present():
+            current_label = target
             ip = 0
         else:
             ip += 1

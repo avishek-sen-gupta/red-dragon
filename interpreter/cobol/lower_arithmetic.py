@@ -2720,7 +2720,7 @@ def _lower_computed_goto(
             span=span,
         )
         ctx.emit_inst(Label_(label=match_lbl), span=span)
-        ctx.emit_inst(Branch(label=CodeLabel(f"para_{target.paragraph}")), span=span)
+        ctx.emit_inst(Branch(label=ctx.procedure_label(target.paragraph)), span=span)
         ctx.emit_inst(Label_(label=next_lbl), span=span)
 
 
@@ -2734,7 +2734,7 @@ def lower_goto(
     form = stmt.form
     if isinstance(form, SimpleGoto):
         ctx.emit_inst(
-            Branch(label=CodeLabel(f"para_{form.target.paragraph}")), span=span
+            Branch(label=ctx.procedure_label(form.target.paragraph)), span=span
         )
     elif isinstance(form, ComputedGoto):
         _lower_computed_goto(ctx, form, materialised, span=span)

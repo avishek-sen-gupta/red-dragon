@@ -150,6 +150,11 @@ class EmitContext:
     def section_paragraphs(self, value: dict[str, list[str]]) -> None:
         self._section_paragraphs = value
 
+    def procedure_label(self, name: str) -> CodeLabel:
+        if name in self._section_paragraphs:
+            return CodeLabel(f"section_{name}")
+        return CodeLabel(f"para_{name}")
+
     @property
     def extension_strategies(self) -> tuple[RedDragonExtensionLoweringStrategy, ...]:
         return self._extension_strategies

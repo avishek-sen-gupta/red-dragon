@@ -8,9 +8,16 @@ from interpreter.cfg import build_cfg
 from interpreter.ir import CodeLabel, Opcode
 from interpreter.register import Register
 from interpreter.registry import FunctionRegistry, build_registry
-from interpreter.run import ExecutionStats, VMConfig, execute_cfg, initial_vm_state
+from interpreter.run import (
+    ExecutionStats,
+    VMConfig,
+    execute_cfg,
+    execute_cfg_traced,
+    initial_vm_state,
+)
 from interpreter.types.typed_value import unwrap
 from interpreter.var_name import VarName
+from interpreter.vm.unknown_branch_target_error import UnknownBranchTargetError
 from tests.unit.cfg_helpers import (
     build_simple_cfg as _build_simple_cfg,
 )
@@ -165,6 +172,26 @@ class TestExecuteCfgBasic:
         )
 
         assert unwrap(vm.current_frame.local_vars[VarName("result")]) == 42
+
+    @pytest.mark.parametrize("execute", [execute_cfg, execute_cfg_traced])
+    def test_branch_to_unknown_label_fails_loudly(self, execute):
+        instructions = _make_instructions(
+            (Opcode.LABEL, {"label": CodeLabel("entry")}),
+            (Opcode.CONST, {"result_reg": Register("%0"), "operands": [1]}),
+            (Opcode.STORE_VAR, {"operands": ["before", "%0"]}),
+            (Opcode.BRANCH, {"label": CodeLabel("nowhere")}),
+            (Opcode.CONST, {"result_reg": Register("%1"), "operands": [2]}),
+            (Opcode.STORE_VAR, {"operands": ["after", "%1"]}),
+            (Opcode.RETURN, {"operands": ["%1"]}),
+        )
+        cfg, registry = _build_simple_cfg(instructions)
+
+        with pytest.raises(UnknownBranchTargetError) as raised:
+            execute(cfg, "entry", registry, vm=initial_vm_state())
+
+        assert raised.value.target == CodeLabel("nowhere")
+        assert raised.value.source == CodeLabel("entry")
+        assert str(raised.value) == "branch from entry to unknown label nowhere"
 
     def test_conditional_branch_takes_true_path(self):
         instructions = _make_instructions(
