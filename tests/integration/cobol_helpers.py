@@ -16,6 +16,7 @@ import pytest
 from cobol_asg.lp import LP
 from interpreter.project.types import LinkedProgram
 from interpreter.run import run
+from interpreter.vm.builtins import core_builtins
 from interpreter.vm.null_access import NullAccess
 from interpreter.vm.warn_and_ignore import WARN_AND_IGNORE
 
@@ -105,6 +106,7 @@ def run_cobol_programs(
         entry_point=EntryPoint.function(lambda f: str(f.name) == entry),
         max_steps=max_steps,
         initial_vm=initial_vm_state(null_access=null_access),
+        builtins=core_builtins(),
     )
 
 

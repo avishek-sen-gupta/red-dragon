@@ -258,10 +258,15 @@ from interpreter.constants import Language
 from interpreter.project.compiler import compile_directory
 from interpreter.project.entry_point import EntryPoint
 from interpreter.run import initial_vm_state, run_linked
+from interpreter.vm.builtins import core_builtins
 
 linked = compile_directory(Path("src"), Language.PYTHON)
 vm = run_linked(
-    linked, EntryPoint.top_level(), max_steps=500, initial_vm=initial_vm_state()
+    linked,
+    EntryPoint.top_level(),
+    max_steps=500,
+    builtins=core_builtins(),
+    initial_vm=initial_vm_state(),
 )
 ```
 

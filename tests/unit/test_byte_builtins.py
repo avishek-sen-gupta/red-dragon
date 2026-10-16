@@ -524,10 +524,10 @@ class TestByteBuiltinsRegistration:
         )
 
     def test_builtins_merged_into_table(self):
-        from interpreter.vm.builtins import Builtins
+        from interpreter.vm.builtins import core_builtins
 
         for name in BYTE_BUILTINS:
-            assert name in Builtins.TABLE, f"{name} not in Builtins.TABLE"
+            assert name in core_builtins(), f"{name} not in core_builtins()"
 
 
 class TestCobolPrepareDigits:

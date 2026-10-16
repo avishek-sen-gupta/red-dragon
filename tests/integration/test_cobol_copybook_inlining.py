@@ -10,6 +10,7 @@ from interpreter.field_name import FieldName
 from interpreter.project.entry_point import EntryPoint
 from interpreter.run import initial_vm_state, run_linked
 from interpreter.var_name import VarName
+from interpreter.vm.builtins import core_builtins
 from interpreter.vm.vm_types import Pointer
 from tests.covers import covers
 from tests.integration.cobol_helpers import (
@@ -60,6 +61,7 @@ def test_copy_inlined_field_executes(tmp_path):
         ),
         max_steps=500,
         initial_vm=initial_vm_state(),
+        builtins=core_builtins(),
     )
 
     ptr = None
@@ -103,6 +105,7 @@ def test_copy_of_library_inlined(tmp_path):
         ),
         max_steps=500,
         initial_vm=initial_vm_state(),
+        builtins=core_builtins(),
     )
 
     ptr = None
@@ -175,6 +178,7 @@ def test_multiple_copybooks_inlined(tmp_path):
         ),
         max_steps=500,
         initial_vm=initial_vm_state(),
+        builtins=core_builtins(),
     )
     ptr = None
     for frame in reversed(vm.call_stack):
@@ -237,6 +241,7 @@ def test_copybook_with_a_high_byte_in_a_comment_is_inlined(tmp_path):
         ),
         max_steps=500,
         initial_vm=initial_vm_state(),
+        builtins=core_builtins(),
     )
 
     ptr = None
@@ -317,6 +322,7 @@ def test_copy_shared_record_across_call(tmp_path):
         ),
         max_steps=500,
         initial_vm=initial_vm_state(),
+        builtins=core_builtins(),
     )
 
     ptr = None

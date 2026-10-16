@@ -4,7 +4,8 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
+from types import MappingProxyType
 from typing import Any
 
 from cobol_numeric.number import (
@@ -25,6 +26,7 @@ from cobol_numeric.number import (
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.func_name import FuncName
 from interpreter.types.typed_value import TypedValue
+from interpreter.vm.builtin import Builtin
 from interpreter.vm.vm import Operators, VMState, _is_symbolic
 from interpreter.vm.vm_types import BuiltinResult
 
@@ -149,8 +151,8 @@ def _builtin_cobol_binary_unscaled(
     return BuiltinResult(value=_UNCOMPUTABLE if unscaled is None else unscaled)
 
 
-NUMERIC_BUILTINS: dict[FuncName, Any] = (
-    {  # Any: Callable[(list[TypedValue], VMState) -> BuiltinResult] — builtin boundary
+NUMERIC_BUILTINS: Mapping[FuncName, Builtin] = MappingProxyType(
+    {
         FuncName(BuiltinName.COBOL_TO_TEXT): _builtin_cobol_to_text,
         FuncName(BuiltinName.COBOL_ADD): _exact_operation(add),
         FuncName(BuiltinName.COBOL_SUBTRACT): _exact_operation(subtract),

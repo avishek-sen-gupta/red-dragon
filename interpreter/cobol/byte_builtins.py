@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import math
 import struct
+from collections.abc import Mapping
 from datetime import UTC
+from types import MappingProxyType
 
 from cobol_numeric.intrinsics import (
     absolute,
@@ -56,6 +58,7 @@ from interpreter.cobol.numeric_builtins import NUMERIC_BUILTINS
 from interpreter.cobol.run_unit import advanced, restarted, value_of
 from interpreter.func_name import FuncName
 from interpreter.types.typed_value import TypedValue
+from interpreter.vm.builtin import Builtin
 from interpreter.vm.vm import Operators, VMState, _is_symbolic
 from interpreter.vm.vm_types import BuiltinResult
 
@@ -1789,10 +1792,8 @@ def _builtin_year_to_yyyy(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     return BuiltinResult(value=_expand_two_digit_year(yy, cutoff))
 
 
-from typing import Any
-
-BYTE_BUILTINS: dict[FuncName, Any] = (
-    {  # Any: Callable[(list[TypedValue], VMState) -> BuiltinResult] — builtin boundary
+BYTE_BUILTINS: Mapping[FuncName, Builtin] = MappingProxyType(
+    {
         FuncName(BuiltinName.NIBBLE_GET): _builtin_nibble_get,
         FuncName(BuiltinName.NIBBLE_SET): _builtin_nibble_set,
         FuncName(BuiltinName.BYTE_FROM_INT): _builtin_byte_from_int,

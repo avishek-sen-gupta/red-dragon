@@ -64,39 +64,37 @@ class TestRegistryLookupMethods:
 
 class TestBuiltinsLookupBuiltin:
     def test_lookup_builtin_found(self):
-        from interpreter.vm.builtins import Builtins
+        from interpreter.vm.builtins import _builtin_len, core_builtins
 
-        result = Builtins.lookup_builtin(FuncName("len"))
-        assert result is not None
+        assert core_builtins()[FuncName("len")] is _builtin_len
 
     def test_lookup_builtin_not_found(self):
-        from interpreter.vm.builtins import Builtins
+        from interpreter.vm.builtins import core_builtins
 
-        assert Builtins.lookup_builtin(FuncName("nonexistent_func")) is None
+        assert FuncName("nonexistent_func") not in core_builtins()
 
     def test_table_keys_are_func_name(self):
-        from interpreter.vm.builtins import Builtins
+        from interpreter.vm.builtins import core_builtins
 
-        for key in Builtins.TABLE:
+        for key in core_builtins():
             assert isinstance(key, FuncName), f"TABLE key {key!r} should be FuncName"
 
 
 class TestBuiltinsLookupMethodBuiltin:
     def test_lookup_method_builtin_found(self):
-        from interpreter.vm.builtins import Builtins
+        from interpreter.vm.builtins import METHOD_TABLE, _method_to_string
 
-        result = Builtins.lookup_method_builtin(FuncName("toString"))
-        assert result is not None
+        assert METHOD_TABLE[FuncName("toString")] is _method_to_string
 
     def test_lookup_method_builtin_not_found(self):
-        from interpreter.vm.builtins import Builtins
+        from interpreter.vm.builtins import METHOD_TABLE
 
-        assert Builtins.lookup_method_builtin(FuncName("nonexistent_method")) is None
+        assert FuncName("nonexistent_method") not in METHOD_TABLE
 
     def test_method_table_keys_are_func_name(self):
-        from interpreter.vm.builtins import Builtins
+        from interpreter.vm.builtins import METHOD_TABLE
 
-        for key in Builtins.METHOD_TABLE:
+        for key in METHOD_TABLE:
             assert isinstance(
                 key, FuncName
             ), f"METHOD_TABLE key {key!r} should be FuncName"

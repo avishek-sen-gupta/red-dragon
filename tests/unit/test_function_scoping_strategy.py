@@ -103,6 +103,7 @@ class TestWriteVarToFrameDelegation:
             symbol_table=default_ctx.symbol_table,
             function_scoping=GlobalLeakFunctionScopingStrategy(),
             permit_unresolved_call_targets=default_ctx.permit_unresolved_call_targets,
+            builtins=default_ctx.builtins,
         )
         _write_var_to_frame(vm, frame, NAME, value, ctx)
         assert vm.call_stack[0].local_vars[NAME] == value

@@ -27,8 +27,9 @@ from interpreter.project.ir_codec import IrCodec
 from interpreter.project.linked_codec import LinkedCodec
 from interpreter.project.entry_point import EntryPoint
 from interpreter.run import initial_vm_state, run_linked
+from interpreter.vm.builtins import core_builtins
 linked = LinkedCodec(IrCodec()).read(Path(sys.argv[1]))
-run_linked(linked, EntryPoint.function(lambda ref: ref.label == linked.entry_func_label), initial_vm=initial_vm_state(), max_steps=10_000)
+run_linked(linked, EntryPoint.function(lambda ref: ref.label == linked.entry_func_label), builtins=core_builtins(), initial_vm=initial_vm_state(), max_steps=10_000)
 """
 
 

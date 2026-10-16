@@ -1288,7 +1288,7 @@ class SymbolicValue:
     </div>
     <div>
       <h3>10 Builtins</h3>
-      <pre><code class="language-python">Builtins.TABLE = {
+      <pre><code class="language-python">_GENERAL_BUILTINS = {  # core_builtins(), one per run
   "len":   _builtin_len,
   "range": _builtin_range,
   "print": _builtin_print,
@@ -1592,11 +1592,12 @@ class InstructionBase:          # 37 per-opcode frozen subclasses
 from interpreter.constants import Language
 from interpreter.project.compiler import compile_directory
 from interpreter.run import initial_vm_state, run_linked
+from interpreter.vm.builtins import core_builtins
 
 vm           = run(source, language="python")
 vm, ex_stats = execute_cfg(cfg, "entry", registry, VMConfig(), vm=initial_vm_state())
 vm           = run_linked(compile_directory(root, Language.JAVA), entry_point,
-                          initial_vm=initial_vm_state())</code></pre>
+                          builtins=core_builtins(), initial_vm=initial_vm_state())</code></pre>
   <div class="fragment" style="margin-top: 15px;">
     <table style="font-size: 0.7em;">
       <tr><th>Function</th><th>Returns</th></tr>

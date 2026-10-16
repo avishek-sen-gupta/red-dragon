@@ -13,7 +13,7 @@ from interpreter.func_name import FuncName
 from interpreter.type_name import TypeName
 from interpreter.types.type_expr import scalar
 from interpreter.types.typed_value import TypedValue, typed_from_runtime
-from interpreter.vm.builtins import Builtins, _builtin_len
+from interpreter.vm.builtins import _builtin_len, core_builtins
 from interpreter.vm.vm import VMState, apply_update
 from interpreter.vm.vm_types import (
     BuiltinResult,
@@ -48,8 +48,8 @@ def _apply_builtin_result(vm: VMState, result: BuiltinResult) -> None:
 class TestBuiltinKeysRegistered:
     def test_keys_in_builtins_table(self):
         assert (
-            FuncName("keys") in Builtins.TABLE
-        ), "keys not registered in Builtins.TABLE"
+            FuncName("keys") in core_builtins()
+        ), "keys not registered in core_builtins()"
 
 
 class TestBuiltinKeysProducesConcreteArray:
@@ -66,7 +66,7 @@ class TestBuiltinKeysProducesConcreteArray:
                 },
             ),
         )
-        result = Builtins.TABLE[FuncName("keys")]([typed_from_runtime("obj_0")], vm)
+        result = core_builtins()[FuncName("keys")]([typed_from_runtime("obj_0")], vm)
         _apply_builtin_result(vm, result)
         assert isinstance(result.value, TypedValue)
         assert isinstance(result.value.value, Pointer)
@@ -86,7 +86,7 @@ class TestBuiltinKeysProducesConcreteArray:
             Address("obj_0"),
             HeapObject(type_hint=scalar(TypeName("object")), fields={}),
         )
-        result = Builtins.TABLE[FuncName("keys")]([typed_from_runtime("obj_0")], vm)
+        result = core_builtins()[FuncName("keys")]([typed_from_runtime("obj_0")], vm)
         _apply_builtin_result(vm, result)
         assert vm.heap_contains(_result_addr(result))
         assert (
@@ -114,7 +114,7 @@ class TestBuiltinKeysProducesConcreteArray:
                 },
             ),
         )
-        result = Builtins.TABLE[FuncName("keys")]([typed_from_runtime("arr_0")], vm)
+        result = core_builtins()[FuncName("keys")]([typed_from_runtime("arr_0")], vm)
         _apply_builtin_result(vm, result)
         keys_obj = vm.heap_get(_result_addr(result))
         assert keys_obj.fields[FieldName("length", FieldKind.SPECIAL)].value == 2
@@ -142,7 +142,7 @@ class TestBuiltinKeysProducesConcreteArray:
                 },
             ),
         )
-        keys_result = Builtins.TABLE[FuncName("keys")](
+        keys_result = core_builtins()[FuncName("keys")](
             [typed_from_runtime("obj_0")], vm
         )
         _apply_builtin_result(vm, keys_result)

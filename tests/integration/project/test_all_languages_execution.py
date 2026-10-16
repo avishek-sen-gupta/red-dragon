@@ -24,6 +24,7 @@ from interpreter.run import (
 from interpreter.run_types import VMConfig
 from interpreter.types.typed_value import TypedValue
 from interpreter.var_name import VarName
+from interpreter.vm.builtins import core_builtins
 from interpreter.vm.vm_types import Pointer
 from tests.integration.cobol_helpers import compile_programs_in
 
@@ -81,6 +82,7 @@ def _run_project_vm(tmp_path, files, entry, language):
                 ),
                 max_steps=200,
                 initial_vm=initial_vm_state(),
+                builtins=core_builtins(),
             )
 
     strategies = ExecutionStrategies(
@@ -578,6 +580,7 @@ class TestCobolMultiFile:
             ),
             max_steps=500,
             initial_vm=initial_vm_state(),
+            builtins=core_builtins(),
         )
 
         # Locate MAIN's WS via its program singleton (region ordering is unstable

@@ -10,6 +10,7 @@ from interpreter.registry import build_registry
 from interpreter.run import run_linked_traced
 from interpreter.trace_types import ExecutionTrace
 from interpreter.var_name import VarName
+from interpreter.vm.builtins import core_builtins
 
 
 def _build_linked_program(source: str, language: Language) -> LinkedProgram:
@@ -49,6 +50,7 @@ class TestRunLinkedTraced:
             linked,
             entry_point=EntryPoint.top_level(),
             max_steps=100,
+            builtins=core_builtins(),
         )
 
         # Verify trace is returned
@@ -75,6 +77,7 @@ def main():
             linked,
             entry_point=EntryPoint.function(lambda f: f.name == FuncName("main")),
             max_steps=100,
+            builtins=core_builtins(),
         )
 
         # Verify trace is returned
@@ -101,6 +104,7 @@ def test():
             linked,
             entry_point=EntryPoint.function(lambda f: f.name == FuncName("test")),
             max_steps=200,
+            builtins=core_builtins(),
         )
 
         # Verify trace is returned
