@@ -1123,18 +1123,24 @@ class SearchWhen:
 
 @dataclass(frozen=True)
 class SearchStatement:
-    """SEARCH table [VARYING index] WHEN condition ... [AT END ...]."""
+    """SEARCH [ALL] table [VARYING index] WHEN condition ... [AT END ...].
+
+    ``search_all`` is SEARCH ALL: the whole table is searched, whatever its
+    index holds on entry.
+    """
 
     table: str = ""
     varying: str = ""
     whens: list[SearchWhen] = field(default_factory=list)
     at_end: list[CobolStatementType] = field(default_factory=list)
     span: SourceSpan | None = None
+    search_all: bool = False
 
     @classmethod
     def from_dict(cls, data: dict) -> SearchStatement:
         return cls(
             table=data.get("table", ""),
+            search_all=data.get("all", False),
             varying=data.get("varying", ""),
             whens=[SearchWhen.from_dict(w) for w in data.get("whens", [])],
             at_end=[parse_statement(c) for c in data.get("at_end", [])],
@@ -1142,7 +1148,9 @@ class SearchStatement:
         )
 
     def to_dict(self) -> dict:
-        result: dict = {"type": "SEARCH", "table": self.table}
+        result: dict = {"type": "SEARCH", "table": self.table} | (
+            {"all": True} if self.search_all else {}
+        )
         if self.varying:
             result["varying"] = self.varying
         result["whens"] = [w.to_dict() for w in self.whens]

@@ -143,6 +143,8 @@ class DataLayout:
             Format 1 SEARCH names only the table, so this is how its implicit
             index is found. Query it via :meth:`first_index_for`, never by
             exact-match dict access.
+        occurs_depending_on: The OCCURS DEPENDING ON object of a variable
+            table; empty for a fixed one.
     """
 
     fields: dict[str, FieldLayout] = field(default_factory=dict)
@@ -156,6 +158,7 @@ class DataLayout:
     span: SourceSpan | None = None
     value: str = ""
     value_is_figurative: bool = False
+    occurs_depending_on: str = ""
     renames: dict[str, FieldLayout] = field(default_factory=dict)
 
     def lookup(self, name: str) -> FieldLayout | None:
@@ -193,6 +196,14 @@ class DataLayout:
         level-66 — a pure existence check that never raises on ambiguity. Use
         :meth:`qualified_matches` to resolve a reference to one item."""
         return any(match.name.upper() == name.upper() for match in self.items())
+
+    def is_index_of(self, index_name: str, table_name: str) -> bool:
+        """Whether ``index_name`` is one of the ``INDEXED BY`` names of ``table_name``,
+        compared case-insensitively as :meth:`first_index_for` does."""
+        return any(
+            name.upper() == index_name.upper() and owner.upper() == table_name.upper()
+            for name, owner in self.index_owner.items()
+        )
 
     def first_index_for(self, table_name: str) -> str | None:
         """Return the first ``INDEXED BY`` name declared on ``table_name``, or None.
@@ -294,6 +305,7 @@ class DataLayout:
                 span=grp.span,
                 value=grp.value,
                 value_is_figurative=grp.value_is_figurative,
+                occurs_depending_on=grp.occurs_depending_on,
             )
             # Recurse into group's children
             yield from grp.all_fields()
@@ -353,6 +365,7 @@ def _group_storage(name: str, group: DataLayout) -> FieldLayout:
             group.element_size if group.element_size > 0 else group.total_bytes
         ),
         span=group.span,
+        occurs_depending_on=group.occurs_depending_on,
     )
 
 
@@ -460,6 +473,7 @@ def _flatten_field(
             span=cobol_field.span,
             value=cobol_field.value,
             value_is_figurative=cobol_field.value_is_figurative,
+            occurs_depending_on=cobol_field.occurs_depending_on,
         )
         return cobol_field.name, group_layout
 

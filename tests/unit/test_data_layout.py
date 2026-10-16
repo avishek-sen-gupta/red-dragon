@@ -357,6 +357,37 @@ class TestBuildDataLayoutOccursDependingOnMixedCase:
         assert after.offset == 258
 
     @covers(CobolFeature.OCCURS_DEPENDING_ON)
+    def test_a_group_tables_storage_carries_its_depending_on_object(self):
+        table = CobolField(
+            name="ENT",
+            level=5,
+            pic="",
+            usage="DISPLAY",
+            offset=2,
+            occurs=6,
+            element_size=2,
+            occurs_depending_on="LEN",
+            children=[_leaf("KY", 0, pic="99")],
+        )
+        layout = build_data_layout(
+            [
+                CobolField(name="LEN", level=1, pic="99", usage="DISPLAY", offset=0),
+                CobolField(
+                    name="TBL",
+                    level=1,
+                    pic="",
+                    usage="DISPLAY",
+                    offset=2,
+                    children=[table],
+                ),
+            ]
+        )
+        storage = layout.lookup_as_storage("ENT")
+        assert storage is not None
+        assert (storage.occurs_count, storage.occurs_depending_on) == (6, "LEN")
+        assert layout.lookup_as_storage("TBL").occurs_depending_on == ""
+
+    @covers(CobolFeature.OCCURS_DEPENDING_ON)
     def test_odo_group_lookup_case_insensitive(self):
         """The enclosing ODO group resolves under an upper-case query too."""
         layout = self._vstring_layout()
@@ -1206,6 +1237,21 @@ class TestIndexItemLayout:
         )
         assert layout.first_index_for("TBL-ROW") == "Tbl-Ix"
         assert layout.first_index_for("NO-SUCH-TABLE") is None
+
+    @covers(CobolFeature.SEARCH_VARYING)
+    def test_is_index_of_names_only_the_tables_own_indexes(self):
+        layout = build_index_layout(
+            [
+                _indexed_table(table_name="Tbl-Row", index_names=["Tbl-Ix", "Tbl-Jx"]),
+                _indexed_table(table_name="Oth-Row", index_names=["Oth-Ix"]),
+            ]
+        )
+        assert [
+            layout.is_index_of("TBL-JX", "tbl-row"),
+            layout.is_index_of("Tbl-Ix", "TBL-ROW"),
+            layout.is_index_of("OTH-IX", "TBL-ROW"),
+            layout.is_index_of("NO-SUCH-IX", "TBL-ROW"),
+        ] == [True, True, False, False]
 
 
 def _group(

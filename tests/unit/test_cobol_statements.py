@@ -1478,6 +1478,18 @@ class TestRoundTrip:
         }
         assert self._round_trip(data) == data
 
+    @covers(CobolFeature.SEARCH_BINARY, CobolFeature.SEARCH_AT_END)
+    def test_search_all_round_trip(self):
+        data = {
+            "type": "SEARCH",
+            "table": "WS-TABLE",
+            "all": True,
+            "whens": [{"condition": "WS-A = 1"}],
+            "at_end": [{"type": "DISPLAY", "operands": [{"name": "NOT FOUND"}]}],
+        }
+        assert self._round_trip(data) == data
+        assert parse_statement(data).search_all is True
+
     @covers(CobolFeature.SEARCH_LINEAR, CobolFeature.SEARCH_AT_END)
     def test_search_with_at_end_round_trip(self):
         data = {

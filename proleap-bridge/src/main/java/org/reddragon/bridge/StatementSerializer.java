@@ -1567,6 +1567,11 @@ public final class StatementSerializer {
                 obj.addProperty("table", extractCallName(stmt.getDataCall()));
             }
 
+            // SEARCH ALL: the whole table is searched, whatever its index holds.
+            if (((CobolParser.SearchStatementContext) stmt.getCtx()).ALL() != null) {
+                obj.addProperty("all", true);
+            }
+
             // VARYING index variable (optional)
             if (stmt.getVaryingPhrase() != null && stmt.getVaryingPhrase().getDataCall() != null) {
                 obj.addProperty("varying", extractCallName(stmt.getVaryingPhrase().getDataCall()));
