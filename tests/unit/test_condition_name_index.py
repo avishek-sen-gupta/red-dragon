@@ -1,13 +1,20 @@
 """Tests for ConditionNameIndex and build_condition_index."""
 
+import pytest
+
 from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from cobol_asg.condition_name import ConditionName, ConditionValue
+from cobol_asg.ref_mod import RefModOperand
 from interpreter.cobol.condition_name_index import (
     ConditionEntry,
     ConditionNameIndex,
     build_condition_index,
 )
-from interpreter.cobol.data_layout import DataLayout, FieldLayout
+from interpreter.cobol.data_layout import (
+    CobolAmbiguousReferenceError,
+    DataLayout,
+    FieldLayout,
+)
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
 
@@ -33,29 +40,33 @@ class TestConditionNameIndex:
     @covers(CobolFeature.LEVEL_88_CONDITION)
     def test_lookup_existing(self):
         entries = {
-            "STATUS-ACTIVE": ConditionEntry(
-                parent_field_name="WS-STATUS",
-                values=[ConditionValue(from_val="A")],
+            "STATUS-ACTIVE": (
+                ConditionEntry(
+                    parent=RefModOperand(name="WS-STATUS"),
+                    values=[ConditionValue(from_val="A")],
+                ),
             ),
         }
         index = ConditionNameIndex(entries)
         entry = index.lookup("STATUS-ACTIVE")
-        assert entry.parent_field_name == "WS-STATUS"
+        assert entry.parent == RefModOperand(name="WS-STATUS")
         assert len(entry.values) == 1
 
     @covers(CobolFeature.LEVEL_88_CONDITION)
     def test_lookup_missing(self):
         index = ConditionNameIndex({})
         entry = index.lookup("NONEXISTENT")
-        assert entry.parent_field_name == ""
+        assert entry.parent == RefModOperand(name="")
         assert entry.values == []
 
     @covers(CobolFeature.LEVEL_88_CONDITION)
     def test_has_condition(self):
         entries = {
-            "IS-ACTIVE": ConditionEntry(
-                parent_field_name="WS-FLAG",
-                values=[ConditionValue(from_val="1")],
+            "IS-ACTIVE": (
+                ConditionEntry(
+                    parent=RefModOperand(name="WS-FLAG"),
+                    values=[ConditionValue(from_val="1")],
+                ),
             ),
         }
         index = ConditionNameIndex(entries)
@@ -91,7 +102,7 @@ class TestBuildConditionIndex:
         index = build_condition_index(layout)
         assert index.has_condition("STATUS-ACTIVE")
         assert index.has_condition("STATUS-INACTIVE")
-        assert index.lookup("STATUS-ACTIVE").parent_field_name == "WS-STATUS"
+        assert index.lookup("STATUS-ACTIVE").parent == RefModOperand(name="WS-STATUS")
 
     @covers(CobolFeature.LEVEL_88_CONDITION)
     def test_builds_from_multiple_parent_fields(self):
@@ -117,8 +128,8 @@ class TestBuildConditionIndex:
         }
         layout = DataLayout(fields=fields, groups={})
         index = build_condition_index(layout)
-        assert index.lookup("IS-ACTIVE").parent_field_name == "WS-STATUS"
-        assert index.lookup("IS-CREDIT").parent_field_name == "WS-TYPE"
+        assert index.lookup("IS-ACTIVE").parent == RefModOperand(name="WS-STATUS")
+        assert index.lookup("IS-CREDIT").parent == RefModOperand(name="WS-TYPE")
 
     @covers(CobolFeature.LEVEL_88_CONDITION)
     def test_builds_empty_from_fields_without_conditions(self):
@@ -161,8 +172,12 @@ class TestBuildConditionIndex:
         index = build_condition_index(layout)
         assert index.has_condition("WS-PHONE-IS-VALID")
         assert index.has_condition("WS-PHONE-IS-INVALID")
-        assert index.lookup("WS-PHONE-IS-VALID").parent_field_name == "WS-PHONE-FLGS"
-        assert index.lookup("WS-PHONE-IS-INVALID").parent_field_name == "WS-PHONE-FLGS"
+        assert index.lookup("WS-PHONE-IS-VALID").parent == RefModOperand(
+            name="WS-PHONE-FLGS"
+        )
+        assert index.lookup("WS-PHONE-IS-INVALID").parent == RefModOperand(
+            name="WS-PHONE-FLGS"
+        )
 
     @covers(CobolFeature.LEVEL_88_CONDITION)
     def test_preserves_multi_values(self):
@@ -186,3 +201,44 @@ class TestBuildConditionIndex:
         entry = index.lookup("VALID-CODE")
         assert len(entry.values) == 3
         assert entry.values[2].is_range
+
+
+class TestQualifiedConditionNames:
+    @covers(CobolFeature.LEVEL_88_CONDITION)
+    def test_parents_are_fully_qualified_and_qualifiers_select_the_declaration(self):
+        def leaf(name: str, *conditions: str) -> FieldLayout:
+            return _make_field_layout(
+                name, [ConditionName(c, values=[ConditionValue(c)]) for c in conditions]
+            )
+
+        layout = DataLayout(
+            groups={
+                "R": DataLayout(
+                    groups={
+                        "G1": DataLayout(fields={"F": leaf("F", "OK1")}),
+                        "G2": DataLayout(fields={"F": leaf("F")}),
+                        "D32": DataLayout(
+                            fields={"X": leaf("X")},
+                            conditions=[
+                                ConditionName("B", values=[ConditionValue("1")])
+                            ],
+                        ),
+                    },
+                    fields={"D33": leaf("D33", "B")},
+                )
+            }
+        )
+        index = build_condition_index(layout)
+        assert index.lookup("ok1") == ConditionEntry(
+            parent=RefModOperand(name="F", qualifiers=("G1", "R")),
+            values=[ConditionValue("OK1")],
+        )
+        assert index.lookup("B", ("D32",)).parent == RefModOperand(
+            name="D32", qualifiers=("R",)
+        )
+        assert index.lookup("B", ("D33", "R")).parent == RefModOperand(
+            name="D33", qualifiers=("R",)
+        )
+        assert index.lookup("B", ("G1",)).parent == RefModOperand(name="")
+        with pytest.raises(CobolAmbiguousReferenceError, match="'B'"):
+            index.lookup("B", ("R",))

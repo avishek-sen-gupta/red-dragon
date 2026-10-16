@@ -132,3 +132,28 @@ class TestQualifiedStatementOperands:
             ["XY", "Z"],
         )
         assert shown == "  XY--Z"
+
+    @covers(CobolFeature.LEVEL_88_CONDITION)
+    def test_condition_names_test_and_set_their_own_qualified_parent(self, capsys):
+        shown = _shown(
+            capsys,
+            [
+                "01 R.",
+                "   02 G1. 03 F PIC 9 VALUE 1. 88 OK1 VALUE 1.",
+                "   02 G2. 03 F PIC 9 VALUE 2.",
+                "01 D32 PIC 9 VALUE 0. 88 B VALUE 3. 88 C VALUE 4.",
+                "01 D33 PIC 9 VALUE 0. 88 B VALUE 5. 88 C VALUE 6.",
+                '01 R1 PIC X VALUE "N".',
+                '01 R2 PIC X VALUE "N".',
+                '01 R3 PIC X VALUE "N".',
+            ],
+            [
+                '    IF OK1 MOVE "Y" TO R1.',
+                "    MOVE 3 TO D32.",
+                '    IF B OF D32 MOVE "Y" TO R2.',
+                '    IF B OF D33 OR C IN D32 MOVE "Y" TO R3.',
+                "    SET C OF D33 TO TRUE.",
+                "    DISPLAY R1 R2 R3 D32 D33.",
+            ],
+        )
+        assert shown == "YYN36"

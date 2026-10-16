@@ -3112,7 +3112,9 @@ public final class StatementSerializer {
      *
      * <p>Result shapes:
      * <ul>
-     *   <li>{@code {"not": bool, "condition_name": "IS-MINOR"}} for 88-level references</li>
+     *   <li>{@code {"not": bool, "condition_name": "IS-MINOR"}} for 88-level references,
+     *       with {@code condition_qualifiers} for its OF/IN qualifiers and
+     *       {@code condition_subscripts} for its subscripts when written</li>
      *   <li>{@code {"not": bool, "relation": {"left": <expr>, "op": "...", "right": <expr>}}} for relation conditions</li>
      *   <li>{@code {"not": bool, "text": "..."}} fallback for class/sign/unknown conditions</li>
      *   <li>{@code {"not": bool, "condition": {...}}} for nested parenthesised conditions</li>
@@ -3141,6 +3143,11 @@ public final class StatementSerializer {
                 JsonArray conditionSubscripts = extractConditionSubscripts(ref);
                 if (conditionSubscripts.size() > 0) {
                     obj.add("condition_subscripts", conditionSubscripts);
+                }
+                JsonArray conditionQualifiers = new JsonArray();
+                collectInDataQualifiers(ref.getCtx(), conditionQualifiers);
+                if (conditionQualifiers.size() > 0) {
+                    obj.add("condition_qualifiers", conditionQualifiers);
                 }
             } else {
                 obj.addProperty("text", insertSpaces(sc.getCtx().getText()));

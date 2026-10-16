@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import replace
 from functools import partial, reduce
 
 from cobol_asg.cobol_expression import expr_from_dict
@@ -2249,7 +2250,7 @@ def lower_initialize(
 
 def _set_condition_name(
     ctx: EmitContext,
-    condition_name: str,
+    target: SetOperand,
     value_str: str,
     materialised: MaterialisedSectionedLayout,
     *,
@@ -2263,17 +2264,17 @@ def _set_condition_name(
     rather than guessing (never silently behave as TRUE).
     """
     truth = str(value_str).strip().upper()
-    entry = ctx._condition_index.lookup(condition_name)
+    condition_name = target.name
+    entry = ctx._condition_index.lookup(condition_name, target.qualifiers)
+    parent = replace(target, name=entry.parent.name, qualifiers=entry.parent.qualifiers)
 
     if truth == "FALSE":
-        if not entry.parent_field_name:
+        if not entry.parent.name:
             logger.warning(
                 "SET %s TO FALSE: condition not in index — skipping", condition_name
             )
             return
-        parent_ref, parent_rr = ctx.resolve_field_ref(
-            entry.parent_field_name, materialised, span=span
-        )
+        parent_ref, parent_rr = _set_operand_ref(ctx, parent, materialised, span=span)
         if parent_ref.fl.type_descriptor.holds_characters:
             # WHEN SET TO FALSE IS not in scope — write SPACES (field-length fill)
             false_val: object = " " * max(parent_ref.fl.byte_length, 1)
@@ -2306,9 +2307,7 @@ def _set_condition_name(
 
     # First discrete value / range-low is what makes the condition true.
     cv = entry.values[0]
-    parent_ref, parent_rr = ctx.resolve_field_ref(
-        entry.parent_field_name, materialised, span=span
-    )
+    parent_ref, parent_rr = _set_operand_ref(ctx, parent, materialised, span=span)
 
     # For an ALPHANUMERIC (PIC X) parent, the 88 VALUE is a character literal —
     # write its characters verbatim. It must reach the alphanumeric encoder as a
@@ -2395,9 +2394,7 @@ def lower_set(
         for target in stmt.targets:
             target_name = target.text
             if condition_index.has_condition(target_name):
-                _set_condition_name(
-                    ctx, target_name, value_str, materialised, span=span
-                )
+                _set_condition_name(ctx, target, value_str, materialised, span=span)
                 continue
             if not ctx.has_field(target_name, materialised):
                 logger.warning("SET target %s not found in layout", target_name)
