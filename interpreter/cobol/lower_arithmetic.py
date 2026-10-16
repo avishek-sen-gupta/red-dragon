@@ -2727,7 +2727,7 @@ def _lower_computed_goto(
             span=span,
         )
         ctx.emit_inst(Label_(label=match_lbl), span=span)
-        ctx.emit_inst(Branch(label=ctx.procedure_label(target.paragraph)), span=span)
+        ctx.emit_inst(Branch(label=ctx.procedure_label(target)), span=span)
         ctx.emit_inst(Label_(label=next_lbl), span=span)
 
 
@@ -2740,9 +2740,7 @@ def lower_goto(
     span = stmt.span
     form = stmt.form
     if isinstance(form, SimpleGoto):
-        ctx.emit_inst(
-            Branch(label=ctx.procedure_label(form.target.paragraph)), span=span
-        )
+        ctx.emit_inst(Branch(label=ctx.procedure_label(form.target)), span=span)
     elif isinstance(form, ComputedGoto):
         _lower_computed_goto(ctx, form, materialised, span=span)
     # AlteredGoto: GO TO. with target supplied by ALTER — no-op, behavior

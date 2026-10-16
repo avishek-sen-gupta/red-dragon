@@ -1844,13 +1844,15 @@ def _spec_to_dict(
 
 @dataclass(frozen=True)
 class PerformStatement:
-    """PERFORM [target] [THRU target] [TIMES|UNTIL|VARYING] [inline body]."""
+    """PERFORM [p [OF s]] [THRU p [OF s]] [TIMES|UNTIL|VARYING] [inline body]."""
 
     target: str = ""
     thru: str = ""
     children: list[CobolStatementType] = field(default_factory=list)
     spec: PerformTimesSpec | PerformUntilSpec | PerformVaryingSpec | None = None
     span: SourceSpan | None = None
+    target_section: str = ""
+    thru_section: str = ""
 
     @classmethod
     def from_dict(cls, data: dict) -> PerformStatement:
@@ -1861,17 +1863,23 @@ class PerformStatement:
             children=[parse_statement(c) for c in data.get("children", [])],
             spec=_parse_perform_spec(data),
             span=SourceSpan.from_dict(data),
+            target_section=data.get("target_section", ""),
+            thru_section=data.get("thru_section", ""),
         )
 
     def to_dict(self) -> dict:
-        result: dict = {"type": "PERFORM"}
-        if self.target:
-            result["operands"] = [self.target]
-        if self.thru:
-            result["thru"] = self.thru
-        if self.children:
-            result["children"] = [c.to_dict() for c in self.children]
-        result.update(_spec_to_dict(self.spec))
+        present = {
+            name: value
+            for name, value, written in (
+                ("operands", [self.target], self.target),
+                ("thru", self.thru, self.thru),
+                ("target_section", self.target_section, self.target_section),
+                ("thru_section", self.thru_section, self.thru_section),
+                ("children", [c.to_dict() for c in self.children], self.children),
+            )
+            if written
+        }
+        result: dict = {"type": "PERFORM", **present, **_spec_to_dict(self.spec)}
         if self.span is not None:
             self.span.write_into(result)
         return result
