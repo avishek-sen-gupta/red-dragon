@@ -2478,7 +2478,11 @@ def _lower_display_operand(
     """Lower one DISPLAY operand to a register holding its display string."""
     if ctx.has_field(operand.name, materialised):
         ref, rr = ctx.resolve_field_ref(
-            operand.name, materialised, subscripts=operand.subscripts, span=span
+            operand.name,
+            materialised,
+            operand.qualifiers,
+            subscripts=operand.subscripts,
+            span=span,
         )
         display_reg = ctx.emit_decode_field_characters(
             rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
