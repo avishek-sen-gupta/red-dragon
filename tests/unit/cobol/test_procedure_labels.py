@@ -93,6 +93,27 @@ class TestProcedureLabels:
         ]
 
     @covers(CobolFeature.PERFORM, CobolFeature.PERFORM_THRU)
+    def test_a_procedure_ends_where_its_section_or_paragraph_resumes(self):
+        labels = procedure_labels(
+            [_section("S1", "INIT", "WORK"), _section("S2", "INIT")], []
+        )
+
+        assert [
+            labels.procedure_end(name, qualifier, current)
+            for name, qualifier, current in (
+                ("s2", "", "S1"),
+                ("WORK", "", "S2"),
+                ("INIT", "", "S2"),
+                ("INIT", "S1", "S2"),
+            )
+        ] == [
+            ContinuationName("section_S2_end"),
+            ContinuationName("para_WORK_end"),
+            ContinuationName("para_S2_INIT_end"),
+            ContinuationName("para_S1_INIT_end"),
+        ]
+
+    @covers(CobolFeature.PERFORM, CobolFeature.PERFORM_THRU)
     def test_perform_of_section_reaches_that_sections_paragraph(self):
         work = {"name": "WORK", "statements": [{"type": "CONTINUE"}]}
         instructions = CobolFrontend(make_cobol_parser()).lower_from_ast_dict(

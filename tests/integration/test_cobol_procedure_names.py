@@ -110,3 +110,37 @@ class TestProcedureNames:
             )
             == 13121234
         )
+
+    @pytest.mark.parametrize(
+        "perform,expected",
+        [
+            ("PERFORM B1 THRU C1", 1231),
+            ("PERFORM B1 THRU C1 2 TIMES", 123231),
+        ],
+    )
+    @covers(CobolFeature.PERFORM_THRU, CobolFeature.PERFORM_TIMES)
+    def test_perform_thru_a_section_returns_after_its_last_paragraph(
+        self, perform: str, expected: int
+    ):
+        assert (
+            _trace(
+                [
+                    "T SECTION.",
+                    "T1.",
+                    _step(1),
+                    f"    {perform}.",
+                    _step(1),
+                    "    GO TO Z2.",
+                    "A1 SECTION.",
+                    "B1.",
+                    _step(2),
+                    "C1 SECTION.",
+                    "D1.",
+                    _step(3),
+                    "Z1 SECTION.",
+                    "Z2.",
+                    "    STOP RUN.",
+                ]
+            )
+            == expected
+        )

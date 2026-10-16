@@ -55,6 +55,7 @@ from interpreter.cobol.procedure_labels import ProcedureLabels
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.cobol.source_spans import to_source_location
 from interpreter.constants import FoundationTypeName
+from interpreter.continuation_name import ContinuationName
 from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.func_name import FuncName
@@ -154,6 +155,9 @@ class EmitContext:
 
     def procedure_label(self, ref: ProcedureRef) -> CodeLabel:
         return self._procedures.procedure(ref.paragraph, ref.section, self._section)
+
+    def procedure_end(self, ref: ProcedureRef) -> ContinuationName:
+        return self._procedures.procedure_end(ref.paragraph, ref.section, self._section)
 
     @property
     def section(self) -> str:

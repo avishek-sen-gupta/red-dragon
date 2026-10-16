@@ -38,6 +38,13 @@ class ProcedureLabels:
             return self.section(name)
         return self.paragraph(name, self.owner(name, qualifier, current))
 
+    def procedure_end(
+        self, name: str, qualifier: str, current: str
+    ) -> ContinuationName:
+        if not qualifier and self.is_section(name):
+            return self.section_end(name)
+        return self.paragraph_end(name, self.owner(name, qualifier, current))
+
     def section(self, name: str) -> CodeLabel:
         return CodeLabel(f"section_{name.upper()}")
 
