@@ -214,3 +214,22 @@ class TestQualifiedStatementOperands:
             ],
         )
         assert shown == "X7 0 "
+
+    @covers(CobolFeature.RENAMES_CLAUSE)
+    def test_renames_takes_the_whole_span_or_the_renamed_item_s_attributes(
+        self, capsys
+    ):
+        shown = _shown(
+            capsys,
+            [
+                "01 W. 02 W1 PIC 9 VALUE 5. 02 W3 PIC XXXX. 02 W4 PIC 9(4).",
+                "66 RX RENAMES W3 THRU W4.",
+                "66 RN RENAMES W4.",
+            ],
+            [
+                '    MOVE "ABCD1234" TO RX.',
+                "    MOVE 77 TO RN.",
+                "    DISPLAY W.",
+            ],
+        )
+        assert shown == "5ABCD0077"

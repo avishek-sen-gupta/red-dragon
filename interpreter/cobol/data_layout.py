@@ -4,7 +4,7 @@
 Pure function: takes a list of CobolField trees and produces a recursive
 DataLayout with computed type descriptors and byte lengths.
 The ProLeap bridge provides byte offsets; this module validates them
-and attaches CobolTypeDescriptor via parse_pic.
+and attaches each field's CobolTypeDescriptor.
 """
 
 from __future__ import annotations
@@ -18,14 +18,10 @@ from typing import TypeVar
 from cobol_asg.asg_types import CobolField
 from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from cobol_asg.condition_name import ConditionName, ConditionValue
-from cobol_asg.pic_parser import parse_pic
 from cobol_asg.ref_mod import RefModOperand
 from cobol_asg.source_span import SourceSpan
 
 logger = logging.getLogger(__name__)
-
-# RENAMES (level-66) is always treated as ALPHANUMERIC; its descriptor is fixed.
-_RENAMES_TYPE_DESCRIPTOR = parse_pic("X")
 
 
 class CobolAmbiguousReferenceError(Exception):
@@ -553,20 +549,25 @@ def _resolve_renames(
     """Resolve a level-66 RENAMES field into a FieldLayout.
 
     RENAMES creates an alias over a contiguous range of the items of the 01
-    record it follows: offset = from item's offset, byte length = span from the
-    from item through the thru item (or the from item alone if no THRU). Either
-    item may be elementary or a group, and is qualified as written, with the
-    record itself a valid qualifier.
+    record it follows. Either renamed item may be elementary or a group, and is
+    qualified as written, with the record itself a valid qualifier. Renaming one
+    elementary item gives the alias that item's attributes; renaming a group, or
+    a range FROM THRU, gives an alphanumeric group item spanning from the start
+    of the first through the end of the second.
     """
     scope = DataLayout(groups={record_name: record})
+    start = _renamed(scope, renames_field.renames_from)
     thru = renames_field.renames_thru
-    from_storage = _renamed_storage(scope, renames_field.renames_from)
-    thru_storage = _renamed_storage(
-        scope, thru if thru.name else renames_field.renames_from
-    )
-    offset = from_storage.offset
-    byte_length = (thru_storage.offset + thru_storage.byte_length) - offset
-
+    if not thru.name and isinstance(start.item, FieldLayout):
+        return replace(
+            start.item,
+            name=renames_field.name,
+            renames_from=renames_field.renames_from.name,
+            span=renames_field.span,
+        )
+    end = _renamed(scope, thru).storage if thru.name else start.storage
+    offset = start.storage.offset
+    byte_length = end.offset + end.byte_length - offset
     logger.debug(
         "RENAMES %s: from=%s thru=%s offset=%d length=%d",
         renames_field.name,
@@ -575,10 +576,11 @@ def _resolve_renames(
         offset,
         byte_length,
     )
-
     return FieldLayout(
         name=renames_field.name,
-        type_descriptor=_RENAMES_TYPE_DESCRIPTOR,
+        type_descriptor=CobolTypeDescriptor(
+            category=CobolDataCategory.ALPHANUMERIC, total_digits=byte_length
+        ),
         offset=offset,
         byte_length=byte_length,
         renames_from=renames_field.renames_from.name,
@@ -587,11 +589,11 @@ def _resolve_renames(
     )
 
 
-def _renamed_storage(scope: DataLayout, operand: RefModOperand) -> FieldLayout:
+def _renamed(scope: DataLayout, operand: RefModOperand) -> DataItemMatch:
     found = scope.qualified_matches(operand.name, operand.qualifiers)
     if not found:
         raise KeyError(f"RENAMES operand not found in its record: {operand.name!r}")
-    return found[0].storage
+    return found[0]
 
 
 def _owned_renames(fields: Sequence[CobolField]) -> list[tuple[CobolField, str]]:

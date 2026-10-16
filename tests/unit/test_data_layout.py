@@ -3,7 +3,7 @@
 import pytest
 
 from cobol_asg.asg_types import CobolField
-from cobol_asg.cobol_types import CobolDataCategory
+from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from cobol_asg.ref_mod import RefModOperand
 from interpreter.cobol.data_layout import (
     CobolAmbiguousReferenceError,
@@ -867,6 +867,37 @@ class TestBuildDataLayoutRenames:
         assert (extent("R1"), extent("R2")) == ((2, 3), (5, 4))
         with pytest.raises(CobolAmbiguousReferenceError, match="'ALIAS'"):
             layout.qualified_matches("ALIAS", ())
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_renames_of_one_elementary_item_keeps_its_attributes(self):
+        def renames(name: str, start: str, thru: str = "") -> CobolField:
+            return CobolField(
+                name=name,
+                level=66,
+                pic="",
+                usage="DISPLAY",
+                offset=0,
+                renames_from=RefModOperand(name=start),
+                renames_thru=RefModOperand(name=thru),
+            )
+
+        layout = build_data_layout(
+            [
+                _group("R", 0, _leaf("N", 0, "S9(3)V9"), _leaf("X", 4, "X(3)")),
+                renames("ONE", "N"),
+                renames("SPAN", "N", "X"),
+            ]
+        )
+        (one,) = layout.qualified_matches("ONE", ())
+        (span,) = layout.qualified_matches("SPAN", ())
+        (renamed,) = layout.qualified_matches("N", ())
+        assert (one.storage.type_descriptor, one.storage.byte_length) == (
+            renamed.storage.type_descriptor,
+            4,
+        )
+        assert span.storage.type_descriptor == CobolTypeDescriptor(
+            category=CobolDataCategory.ALPHANUMERIC, total_digits=7
+        )
 
 
 class TestBuildDataLayoutBlankWhenZero:
