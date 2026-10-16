@@ -74,16 +74,16 @@ def _lower_perform_form(
 
 def resolve_perform_target(
     ctx: EmitContext, stmt: PerformStatement
-) -> tuple[CodeLabel, CodeLabel]:
-    """Resolve branch-target label and continuation-key label for PERFORM."""
+) -> tuple[CodeLabel, ContinuationName]:
+    """Resolve branch-target label and continuation-key name for PERFORM."""
     target = stmt.target
-    section_paras = ctx.section_paragraphs
+    labels = ctx.procedures
 
-    if target in section_paras:
-        branch_label = CodeLabel(f"section_{target}")
+    if labels.is_section(target):
+        branch_label = labels.section(target)
         thru = stmt.thru
-        if thru and thru in section_paras:
-            continuation_key = CodeLabel(f"section_{thru}_end")
+        if thru and labels.is_section(thru):
+            continuation_key = labels.section_end(thru)
         elif thru:
             # THRU target is a paragraph, not a section. The perform range ends
             # *after that paragraph*, so the return continuation must be keyed on
@@ -91,15 +91,13 @@ def resolve_perform_target(
             # section end mismatches the `resume_continuation para_{thru}_end`
             # that the paragraph emits, so control falls through to whatever
             # paragraph follows the THRU target instead of returning to PERFORM.
-            continuation_key = CodeLabel(f"para_{thru}_end")
+            continuation_key = labels.paragraph_end(thru)
         else:
-            continuation_key = CodeLabel(f"section_{target}_end")
+            continuation_key = labels.section_end(target)
         return branch_label, continuation_key
 
     thru_name = stmt.thru if stmt.thru else target
-    branch_label = CodeLabel(f"para_{target}")
-    continuation_key = CodeLabel(f"para_{thru_name}_end")
-    return branch_label, continuation_key
+    return labels.paragraph(target), labels.paragraph_end(thru_name)
 
 
 def emit_perform_branch(
@@ -112,9 +110,7 @@ def emit_perform_branch(
     branch_label, continuation_key = resolve_perform_target(ctx, stmt)
     return_label = ctx.fresh_label("perform_return")
     ctx.emit_inst(
-        SetContinuation(
-            name=ContinuationName(str(continuation_key)), target_label=return_label
-        ),
+        SetContinuation(name=continuation_key, target_label=return_label),
         span=span,
     )
     ctx.emit_inst(Branch(label=branch_label), span=span)

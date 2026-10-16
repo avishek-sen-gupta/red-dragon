@@ -91,4 +91,4 @@ class TestDeclarativesLoweringOrder:
         # The real section label must appear before the declaratives section label.
         assert labels.index("section_MAIN") < labels.index("section_ERR-SECTION")
         # Declaratives paragraphs registered for PERFORM THRU resolution.
-        assert ctx.section_paragraphs["ERR-SECTION"] == ["ERR-PARA"]
+        assert ctx.procedures.sections["ERR-SECTION"] == ("ERR-PARA",)

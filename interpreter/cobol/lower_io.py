@@ -20,7 +20,6 @@ from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.field_resolution import whole_field_extent
 from interpreter.cobol.program_object import program_name
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
-from interpreter.continuation_name import ContinuationName
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Binop,
@@ -30,7 +29,6 @@ from interpreter.instructions import (
     Label_,
     SetContinuation,
 )
-from interpreter.ir import CodeLabel
 from interpreter.operator_kind import resolve_binop
 from interpreter.register import NO_REGISTER, Register
 
@@ -93,12 +91,10 @@ def _emit_conditional_use_perform(
     ctx.emit_inst(Label_(label=use_lbl), span=span)
     ret_lbl = ctx.fresh_label("use_return")
     ctx.emit_inst(
-        SetContinuation(
-            name=ContinuationName(f"section_{section}_end"), target_label=ret_lbl
-        ),
+        SetContinuation(name=ctx.procedures.section_end(section), target_label=ret_lbl),
         span=span,
     )
-    ctx.emit_inst(Branch(label=CodeLabel(f"section_{section}")), span=span)
+    ctx.emit_inst(Branch(label=ctx.procedures.section(section)), span=span)
     ctx.emit_inst(Label_(label=ret_lbl), span=span)
     ctx.emit_inst(Branch(label=skip_lbl), span=span)
     ctx.emit_inst(Label_(label=skip_lbl), span=span)

@@ -207,6 +207,8 @@ At the end of each paragraph, `RESUME_CONTINUATION "para_WORK_end"` returns to t
 - Section-level PERFORM (call all paragraphs in a section)
 - PERFORM TIMES/UNTIL/VARYING (loops wrapping the continuation-based call)
 
+Every section and paragraph label, its `_end` continuation and its `_exit` landing is built by `ProcedureLabels` (`interpreter/cobol/procedure_labels.py`) from the upper-cased procedure-name. Procedure-names are COBOL words and case-insensitive, so `perform pass` reaches a paragraph declared `PASS.`
+
 ## String Operation Builtins
 
 String operations use 7 low-level builtins registered in `byte_builtins.py`:
