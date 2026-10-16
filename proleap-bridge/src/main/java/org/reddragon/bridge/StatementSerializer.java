@@ -1789,7 +1789,7 @@ public final class StatementSerializer {
         JsonObject obj = newStatement("ACCEPT");
         try {
             if (stmt.getAcceptCall() != null) {
-                obj.addProperty("target", extractCallName(stmt.getAcceptCall()));
+                obj.add("target", serializeRef(stmt.getAcceptCall()));
             }
             // FROM device — AcceptStatement.AcceptType distinguishes
             // DATE/DAY/TIME vs. environment name vs. mnemonic.
