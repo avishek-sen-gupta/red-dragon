@@ -177,3 +177,24 @@ class TestQualifiedStatementOperands:
             ["    DISPLAY AL-BOB MIDR OF R2 MIDR IN R3 XR."],
         )
         assert shown == "CCMDDDMXYQ"
+
+    @covers(CobolFeature.MOVE_CORRESPONDING, CobolFeature.ADD, CobolFeature.SUBTRACT)
+    def test_corresponding_operands_are_the_qualified_groups(self, capsys):
+        shown = _shown(
+            capsys,
+            [
+                '01 R1. 02 B. 03 TOM PIC XXX VALUE "R1R".',
+                '01 R2. 02 B. 03 TOM PIC XXX VALUE "R2R".',
+                "01 DST. 02 TOM PIC XXX VALUE SPACES.",
+                "01 A1. 02 SUBG. 03 C1 PIC 99 VALUE 11.",
+                "01 A2. 02 SUBG. 03 C1 PIC 99 VALUE 22.",
+                "01 T. 02 SUBG. 03 C1 PIC 99 VALUE 1.",
+            ],
+            [
+                "    MOVE CORRESPONDING B OF R2 TO DST.",
+                "    ADD CORRESPONDING SUBG OF A2 TO SUBG IN T.",
+                "    SUBTRACT CORRESPONDING SUBG OF A1 FROM SUBG OF T.",
+                "    DISPLAY DST T.",
+            ],
+        )
+        assert shown == "R2R12"

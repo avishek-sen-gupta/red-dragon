@@ -212,22 +212,25 @@ class MoveStatement:
 class MoveCorrespondingStatement:
     """MOVE CORRESPONDING source TO target1 [TO target2 ...]."""
 
-    source: str
-    targets: list[str] = field(default_factory=list)
+    source: RefModOperand
+    targets: list[RefModOperand] = field(default_factory=list)
     span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> MoveCorrespondingStatement:
         return cls(
-            source=data.get("source", ""),
-            targets=data.get("targets", []),
+            source=RefModOperand.from_dict(data["source"]),
+            targets=[RefModOperand.from_dict(t) for t in data.get("targets", [])],
             span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
-        result: dict = {"type": "MOVE_CORRESPONDING", "source": self.source}
+        result: dict = {
+            "type": "MOVE_CORRESPONDING",
+            "source": self.source.to_dict(),
+        }
         if self.targets:
-            result["targets"] = list(self.targets)
+            result["targets"] = [target.to_dict() for target in self.targets]
         if self.span is not None:
             self.span.write_into(result)
         return result
@@ -238,8 +241,8 @@ class ArithmeticCorrespondingStatement:
     """ADD/SUBTRACT CORRESPONDING src TO/FROM dst."""
 
     op: str  # "ADD" | "SUBTRACT"
-    source: str  # source group name
-    target: str  # target group name
+    source: RefModOperand
+    target: RefModOperand
     span: SourceSpan | None = None
 
     @classmethod
@@ -247,16 +250,16 @@ class ArithmeticCorrespondingStatement:
         op = "ADD" if data.get("type") == "ADD_CORRESPONDING" else "SUBTRACT"
         return cls(
             op=op,
-            source=data.get("source", ""),
-            target=data.get("target", ""),
+            source=RefModOperand.from_dict(data["source"]),
+            target=RefModOperand.from_dict(data["target"]),
             span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
         result = {
             "type": f"{self.op}_CORRESPONDING",
-            "source": self.source,
-            "target": self.target,
+            "source": self.source.to_dict(),
+            "target": self.target.to_dict(),
         }
         if self.span is not None:
             self.span.write_into(result)

@@ -932,8 +932,8 @@ def lower_move_corresponding(
     span = stmt.span
     src_group, src_rr, src_region = _require_group(stmt.source, materialised)
 
-    for target_name in stmt.targets:
-        dst_group, dst_rr, dst_region = _require_group(target_name, materialised)
+    for target in stmt.targets:
+        dst_group, dst_rr, dst_region = _require_group(target, materialised)
         for name in src_group.fields.keys() & dst_group.fields.keys():
             src_fl = src_group.fields[name]
             dst_fl = dst_group.fields[name]
@@ -957,48 +957,15 @@ def lower_move_corresponding(
 
 
 def _require_group(
-    name: str, materialised: MaterialisedSectionedLayout
+    operand: RefModOperand, materialised: MaterialisedSectionedLayout
 ) -> tuple[DataLayout, Register, RegionId]:
-    found = _find_group_and_reg(name, materialised)
-    if found is None:
-        raise LookupError(f"Group not found in any section: {name!r}")
-    return found
-
-
-def _find_group_and_reg(
-    name: str, materialised: MaterialisedSectionedLayout
-) -> tuple[DataLayout, Register, RegionId] | None:
-    """Return (group DataLayout, region Register, RegionId) for the group, or None.
-
-    The RegionId is carried out alongside the register because the caller
-    builds field extents from the group's FieldLayouts, and an extent is only
-    comparable against another within the same region buffer.
-    """
-    for layout, reg, region in (
-        (*materialised.local_storage, RegionId.LOCAL_STORAGE),
-        (*materialised.working_storage, RegionId.WORKING_STORAGE),
-        (*materialised.linkage, RegionId.LINKAGE),
-        (*materialised.file, RegionId.FILE),
-    ):
-        try:
-            grp = layout.lookup_group(name)
-            return grp, _group_region(grp, reg, region, materialised), region
-        except KeyError:
-            pass
-    return None
-
-
-def _group_region(
-    grp: DataLayout,
-    section_reg: Register,
-    region: RegionId,
-    materialised: MaterialisedSectionedLayout,
-) -> Register:
-    """A LINKAGE group lives in its own 01's argument, not one section region. A
-    group with no leaf of its own has nothing CORRESPONDING reads or writes."""
-    if region is not RegionId.LINKAGE or not grp.fields:
-        return section_reg
-    return materialised.linkage_binding(next(iter(grp.fields.values()))).region_reg
+    """The group a CORRESPONDING operand qualifies to, with its region register
+    and RegionId — carried out together because the caller builds field extents
+    from the group's FieldLayouts, comparable only within one region buffer."""
+    match, reg, region = materialised.resolve_match(operand.name, operand.qualifiers)
+    if not isinstance(match.item, DataLayout):
+        raise LookupError(f"CORRESPONDING operand is not a group: {operand.name!r}")
+    return match.item, reg, region
 
 
 def lower_arithmetic_corresponding(
@@ -1014,14 +981,8 @@ def lower_arithmetic_corresponding(
     span = stmt.span
     op_str = "+" if stmt.op == "ADD" else "-"
 
-    src_result = _find_group_and_reg(stmt.source, materialised)
-    dst_result = _find_group_and_reg(stmt.target, materialised)
-
-    if src_result is None or dst_result is None:
-        return
-
-    src_group, src_rr, src_region = src_result
-    dst_group, dst_rr, dst_region = dst_result
+    src_group, src_rr, src_region = _require_group(stmt.source, materialised)
+    dst_group, dst_rr, dst_region = _require_group(stmt.target, materialised)
 
     matching_names = src_group.fields.keys() & dst_group.fields.keys()
     for name in matching_names:

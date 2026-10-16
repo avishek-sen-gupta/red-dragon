@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 
 from cobol_asg.asg_types import CobolField
 from cobol_asg.cobol_statements import MoveCorrespondingStatement
+from cobol_asg.ref_mod import RefModOperand
 from interpreter.cobol.data_layout import DataLayout, build_data_layout
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.lower_arithmetic import lower_move_corresponding
@@ -71,7 +72,10 @@ class TestLowerMoveCorresponding:
             MagicMock(offset_reg="src_off"),
             MagicMock(offset_reg="dst_off"),
         ]
-        stmt = MoveCorrespondingStatement(source="WS-SRC", targets=["WS-DST"])
+        stmt = MoveCorrespondingStatement(
+            source=RefModOperand(name="WS-SRC"),
+            targets=[RefModOperand(name="WS-DST")],
+        )
 
         lower_move_corresponding(ctx, stmt, _materialised(layout))
 
@@ -86,7 +90,10 @@ class TestLowerMoveCorresponding:
         ctx.resolve_field_ref_from.return_value = MagicMock(offset_reg="off")
         ctx.emit_decode_field.return_value = "d"
         ctx.emit_to_string.return_value = "s"
-        stmt = MoveCorrespondingStatement(source="WS-SRC", targets=["WS-DST"])
+        stmt = MoveCorrespondingStatement(
+            source=RefModOperand(name="WS-SRC"),
+            targets=[RefModOperand(name="WS-DST")],
+        )
 
         lower_move_corresponding(ctx, stmt, _materialised(layout))
 
@@ -153,7 +160,8 @@ class TestLowerMoveCorresponding:
         ctx.emit_decode_field.return_value = "d"
         ctx.emit_to_string.return_value = "s"
         stmt = MoveCorrespondingStatement(
-            source="WS-SRC", targets=["WS-DST1", "WS-DST2"]
+            source=RefModOperand(name="WS-SRC"),
+            targets=[RefModOperand(name="WS-DST1"), RefModOperand(name="WS-DST2")],
         )
 
         lower_move_corresponding(ctx, stmt, _materialised(layout))
@@ -199,7 +207,10 @@ class TestLowerMoveCorresponding:
             ]
         )
         ctx = MagicMock()
-        stmt = MoveCorrespondingStatement(source="WS-SRC", targets=["WS-DST"])
+        stmt = MoveCorrespondingStatement(
+            source=RefModOperand(name="WS-SRC"),
+            targets=[RefModOperand(name="WS-DST")],
+        )
 
         lower_move_corresponding(ctx, stmt, _materialised(layout))
 
