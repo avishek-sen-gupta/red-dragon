@@ -8,6 +8,7 @@ each stacked condition still selects it.
 
 from collections.abc import Sequence
 
+from cobol_asg.cobol_expression import LiteralNode
 from cobol_asg.cobol_parser import make_cobol_parser
 from cobol_asg.cobol_statements import (
     CobolStatementType,
@@ -15,6 +16,8 @@ from cobol_asg.cobol_statements import (
     WhenOtherStatement,
     WhenStatement,
 )
+from cobol_asg.range_object import RangeObject
+from cobol_asg.value_object import ValueObject
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
 from tests.integration.cobol_helpers import (
@@ -84,6 +87,10 @@ def _whens(statement: CobolStatementType) -> list[WhenStatement]:
     return [when for when in whens if isinstance(when, WhenStatement)]
 
 
+def _value(literal: str) -> ValueObject:
+    return ValueObject(value=LiteralNode(value=literal))
+
+
 @covers(CobolFeature.EVALUATE)
 def test_a_stacked_when_is_one_when_with_one_body() -> None:
     source = "".join("       " + line + "\n" for line in _PROGRAM).encode()
@@ -91,16 +98,16 @@ def test_a_stacked_when_is_one_when_with_one_body() -> None:
     (first, second), (true_when,) = _whens(statements[1]), _whens(statements[9])
 
     assert (
-        (first.condition, [alt.condition for alt in first.alternatives]),
-        (second.condition, second.condition_thru),
-        [(alt.condition, alt.condition_thru) for alt in second.alternatives],
+        (first.objects, [alt.objects for alt in first.alternatives]),
+        second.objects,
+        [alt.objects for alt in second.alternatives],
         (len(first.children), len(second.children)),
         len(true_when.alternatives),
         [alt.children for alt in (*first.alternatives, *second.alternatives)],
     ) == (
-        ("1", ["2"]),
-        ("3", "4"),
-        [("7", None)],
+        ((_value("1"),), [(_value("2"),)]),
+        (RangeObject(low=LiteralNode(value="3"), high=LiteralNode(value="4")),),
+        [(_value("7"),)],
         (1, 1),
         1,
         [[], []],
