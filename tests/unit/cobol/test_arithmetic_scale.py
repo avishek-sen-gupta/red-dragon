@@ -17,6 +17,7 @@ from interpreter.cobol.arithmetic_scale import (
     field_scale,
     node_scale,
     operand_dmax,
+    receiver_capacity,
     receiver_decimals,
 )
 from interpreter.cobol.features import CobolFeature
@@ -54,6 +55,14 @@ def test_receiver_decimals_adds_one_for_rounded():
     assert receiver_decimals(_td(3, 0), rounded=False) == 0
     assert receiver_decimals(_td(3, 0), rounded=True) == 1
     assert receiver_decimals(_td(4, 2), rounded=True) == 3
+
+
+@covers(CobolFeature.ON_SIZE_ERROR)
+def test_receiver_capacity_is_the_first_magnitude_its_integer_digits_cannot_hold():
+    assert receiver_capacity(_td(3, 1)) == 100
+    assert receiver_capacity(_td(2, 0)) == 100
+    assert receiver_capacity(_td(3, 3)) == 1
+    assert receiver_capacity(_td(12, 12)) == 1
 
 
 @covers(CobolFeature.ARITHMETIC_EXPRESSION)

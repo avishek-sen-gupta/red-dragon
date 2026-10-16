@@ -113,6 +113,10 @@ def receiver_decimals(td: CobolTypeDescriptor, rounded: bool) -> int:
     return field_scale(td).decimal_places + (1 if rounded else 0)
 
 
+def receiver_capacity(td: CobolTypeDescriptor) -> int:
+    return 10 ** (td.total_digits - td.decimal_digits)
+
+
 def _numeric_literal_scale(text: str) -> Scale | None:
     try:
         from_literal(text)
@@ -178,6 +182,26 @@ def operand_dmax(node: ExprNode, field_types: FieldTypes) -> int:
     return 0
 
 
+def _combined_scale(op: str, left: Scale, right: Scale, dmax: int) -> Scale:
+    match op:
+        case "+" | "-":
+            return add_scale(left, right)
+        case "*":
+            return mul_scale(left, right)
+        case _:
+            return div_scale(left, right, dmax)
+
+
+def _function_scale(node: FunctionNode, dmax: int, field_types: FieldTypes) -> Scale:
+    if node.name.upper() not in ARGUMENT_SCALED_INTRINSICS:
+        return Scale(_FUNCTION_INTEGER_PLACES, 0)
+    decimals = max(
+        (node_scale(arg, dmax, field_types).decimal_places for arg in node.args),
+        default=0,
+    )
+    return Scale(_FUNCTION_INTEGER_PLACES, decimals)
+
+
 def node_scale(node: ExprNode, dmax: int, field_types: FieldTypes) -> Scale:
     if isinstance(node, (FieldRefNode, RefModNode)):
         td = field_types(node.name, node.qualifiers)
@@ -187,25 +211,13 @@ def node_scale(node: ExprNode, dmax: int, field_types: FieldTypes) -> Scale:
     if isinstance(node, LengthOfNode):
         return Scale(9, 0)
     if isinstance(node, BinOpNode):
-        left = node_scale(node.left, dmax, field_types)
-        right = node_scale(node.right, dmax, field_types)
-        if node.op in ("+", "-"):
-            combined = add_scale(left, right)
-        elif node.op == "*":
-            combined = mul_scale(left, right)
-        else:
-            combined = div_scale(left, right, dmax)
+        combined = _combined_scale(
+            node.op,
+            node_scale(node.left, dmax, field_types),
+            node_scale(node.right, dmax, field_types),
+            dmax,
+        )
         return carry(combined, dmax)
     if isinstance(node, FunctionNode):
-        name = node.name.upper()
-        if name in ARGUMENT_SCALED_INTRINSICS:
-            decimals = max(
-                (
-                    node_scale(arg, dmax, field_types).decimal_places
-                    for arg in node.args
-                ),
-                default=0,
-            )
-            return Scale(_FUNCTION_INTEGER_PLACES, decimals)
-        return Scale(_FUNCTION_INTEGER_PLACES, 0)
+        return _function_scale(node, dmax, field_types)
     return Scale(1, 0)
