@@ -301,12 +301,12 @@ public final class StatementSerializer {
                 if (sendingArea != null) {
                     Call sourceCall = sendingArea.getSendingAreaCall();
                     if (sourceCall != null) {
-                        obj.addProperty("source", extractCallName(sourceCall));
+                        obj.add("source", serializeRef(sourceCall));
                     }
                 }
                 JsonArray targets = new JsonArray();
                 for (Call receivingCall : corr.getReceivingAreaCalls()) {
-                    targets.add(extractCallName(receivingCall));
+                    targets.add(serializeRef(receivingCall));
                 }
                 obj.add("targets", targets);
             }
@@ -376,10 +376,10 @@ public final class StatementSerializer {
             stmt.getAddCorrespondingStatement();
         if (addCorr != null) {
             JsonObject obj = newStatement("ADD_CORRESPONDING");
-            obj.addProperty("source", extractCallName(addCorr.getFromCall()));
+            obj.add("source", serializeRef(addCorr.getFromCall()));
             io.proleap.cobol.asg.metamodel.procedure.add.To corrTo = addCorr.getTo();
             if (corrTo != null) {
-                obj.addProperty("target", extractCallName(corrTo.getToCall()));
+                obj.add("target", serializeRef(corrTo.getToCall()));
             }
             return obj;
         }
@@ -439,11 +439,11 @@ public final class StatementSerializer {
             stmt.getSubtractCorrespondingStatement();
         if (subCorr != null) {
             JsonObject obj = newStatement("SUBTRACT_CORRESPONDING");
-            obj.addProperty("source", extractCallName(subCorr.getSubtrahendCall()));
+            obj.add("source", serializeRef(subCorr.getSubtrahendCall()));
             io.proleap.cobol.asg.metamodel.procedure.subtract.MinuendCorresponding minCorr =
                 subCorr.getMinuend();
             if (minCorr != null) {
-                obj.addProperty("target", extractCallName(minCorr.getMinuendCall()));
+                obj.add("target", serializeRef(minCorr.getMinuendCall()));
             }
             return obj;
         }

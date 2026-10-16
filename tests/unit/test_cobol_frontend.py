@@ -2668,7 +2668,12 @@ class TestMoveCorrespondingLowering:
                 ],
             ),
         ]
-        stmts = [MoveCorrespondingStatement(source="WS-SOURCE", targets=["WS-TARGET"])]
+        stmts = [
+            MoveCorrespondingStatement(
+                source=RefModOperand(name="WS-SOURCE"),
+                targets=[RefModOperand(name="WS-TARGET")],
+            )
+        ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         # Should emit WRITE_REGION instructions for moved fields
@@ -2722,7 +2727,11 @@ class TestMoveCorrespondingLowering:
         ]
         stmts = [
             MoveCorrespondingStatement(
-                source="WS-SOURCE", targets=["WS-TARGET1", "WS-TARGET2"]
+                source=RefModOperand(name="WS-SOURCE"),
+                targets=[
+                    RefModOperand(name="WS-TARGET1"),
+                    RefModOperand(name="WS-TARGET2"),
+                ],
             )
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
@@ -2770,7 +2779,12 @@ class TestMoveCorrespondingLowering:
                 ],
             ),
         ]
-        stmts = [MoveCorrespondingStatement(source="WS-SOURCE", targets=["WS-TARGET"])]
+        stmts = [
+            MoveCorrespondingStatement(
+                source=RefModOperand(name="WS-SOURCE"),
+                targets=[RefModOperand(name="WS-TARGET")],
+            )
+        ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         # Should emit WRITE_REGION for matching field (FIELD-X) but not non-matching ones

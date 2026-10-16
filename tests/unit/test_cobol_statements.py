@@ -1523,13 +1523,16 @@ class TestRoundTrip:
 
         data = {
             "type": "MOVE_CORRESPONDING",
-            "source": "WS-SRC",
-            "targets": ["WS-DST1", "WS-DST2"],
+            "source": {"name": "WS-SRC", "qualifiers": ["WS-REC"]},
+            "targets": [{"name": "WS-DST1"}, {"name": "WS-DST2"}],
         }
         stmt = parse_statement(data)
         assert isinstance(stmt, MoveCorrespondingStatement)
-        assert stmt.source == "WS-SRC"
-        assert stmt.targets == ["WS-DST1", "WS-DST2"]
+        assert stmt.source == RefModOperand(name="WS-SRC", qualifiers=("WS-REC",))
+        assert stmt.targets == [
+            RefModOperand(name="WS-DST1"),
+            RefModOperand(name="WS-DST2"),
+        ]
 
 
 class TestStringRefModAst:
