@@ -76,30 +76,11 @@ def _lower_perform_form(
 def resolve_perform_target(
     ctx: EmitContext, stmt: PerformStatement
 ) -> tuple[CodeLabel, ContinuationName]:
-    """Resolve branch-target label and continuation-key name for PERFORM."""
-    if not stmt.target_section and ctx.procedures.is_section(stmt.target):
-        return ctx.procedures.section(stmt.target), _section_range_end(ctx, stmt)
-    branch_label = ctx.procedure_label(
-        ProcedureRef(paragraph=stmt.target, section=stmt.target_section)
-    )
-    if stmt.thru:
-        return branch_label, _paragraph_end(ctx, stmt.thru, stmt.thru_section)
-    return branch_label, _paragraph_end(ctx, stmt.target, stmt.target_section)
-
-
-def _section_range_end(ctx: EmitContext, stmt: PerformStatement) -> ContinuationName:
-    """Where a PERFORM that starts at a section returns: the end of its THRU
-    procedure, which may be a paragraph, or else of the section itself."""
-    if not stmt.thru:
-        return ctx.procedures.section_end(stmt.target)
-    if not stmt.thru_section and ctx.procedures.is_section(stmt.thru):
-        return ctx.procedures.section_end(stmt.thru)
-    return _paragraph_end(ctx, stmt.thru, stmt.thru_section)
-
-
-def _paragraph_end(ctx: EmitContext, name: str, qualifier: str) -> ContinuationName:
-    section = ctx.procedures.owner(name, qualifier, ctx.section)
-    return ctx.procedures.paragraph_end(name, section)
+    """The label PERFORM branches to, and the end of the last procedure in its
+    range, where control returns."""
+    first = ProcedureRef(paragraph=stmt.target, section=stmt.target_section)
+    last = ProcedureRef(paragraph=stmt.thru, section=stmt.thru_section)
+    return ctx.procedure_label(first), ctx.procedure_end(last if stmt.thru else first)
 
 
 def emit_perform_branch(
