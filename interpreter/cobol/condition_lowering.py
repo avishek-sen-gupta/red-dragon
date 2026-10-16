@@ -20,7 +20,7 @@ from cobol_asg.cobol_expression import (
 )
 from cobol_asg.cobol_types import CobolDataCategory
 from cobol_asg.condition_name import ConditionValue
-from cobol_asg.ref_mod import FunctionCallOperand
+from cobol_asg.ref_mod import FunctionCallOperand, RefModOperand
 from cobol_asg.source_span import SourceSpan
 from interpreter.cobol.arithmetic_scale import (
     expression_is_floating,
@@ -86,7 +86,7 @@ def _emit_single_value_test(
     ctx: EmitContext,
     cv: ConditionValue,
     materialised: MaterialisedSectionedLayout,
-    parent_field_name: str,
+    parent: RefModOperand,
     subscripts: tuple = (),
     *,
     span: SourceSpan | None = None,
@@ -100,7 +100,11 @@ def _emit_single_value_test(
     table item and referenced with a subscript (e.g. ``SEL-OK(I)``).
     """
     parent_ref, parent_rr = ctx.resolve_field_ref(
-        parent_field_name, materialised, subscripts=subscripts, span=span
+        parent.name,
+        materialised,
+        parent.qualifiers,
+        subscripts=subscripts,
+        span=span,
     )
     parent_is_alpha = parent_ref.fl.type_descriptor.holds_characters
     parent_reg = ctx.emit_decode_field(
@@ -129,7 +133,11 @@ def _emit_single_value_test(
         )
 
         parent_ref2, parent_rr2 = ctx.resolve_field_ref(
-            parent_field_name, materialised, subscripts=subscripts, span=span
+            parent.name,
+            materialised,
+            parent.qualifiers,
+            subscripts=subscripts,
+            span=span,
         )
         parent_reg2 = ctx.emit_decode_field(
             parent_rr2,
@@ -218,6 +226,7 @@ def _expand_condition_name(
     condition_index: ConditionNameIndex,
     materialised: MaterialisedSectionedLayout,
     subscripts: tuple = (),
+    qualifiers: tuple[str, ...] = (),
     *,
     span: SourceSpan | None = None,
 ) -> Register:
@@ -231,13 +240,13 @@ def _expand_condition_name(
     ``subscripts`` selects the OCCURS element for a table-defined 88
     (e.g. ``SEL-OK(I)``).
     """
-    entry = condition_index.lookup(condition_name)
+    entry = condition_index.lookup(condition_name, qualifiers)
     value_regs = [
         _emit_single_value_test(
             ctx,
             cv,
             materialised,
-            entry.parent_field_name,
+            entry.parent,
             subscripts=subscripts,
             span=span,
         )
@@ -354,6 +363,7 @@ def _lower_condition_node(
                 condition_index,
                 materialised,
                 subscripts=subscripts,
+                qualifiers=tuple(node.get("condition_qualifiers", ())),
                 span=span,
             )
         else:

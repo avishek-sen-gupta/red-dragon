@@ -234,27 +234,30 @@ class DataLayout:
         :class:`CobolAmbiguousReferenceError`."""
         found = tuple(
             match
-            for match in self._named(name.upper(), ())
-            if match.qualified_by(qualifiers)
+            for match in self.items()
+            if match.name.upper() == name.upper() and match.qualified_by(qualifiers)
         )
         if len(found) > 1:
             raise CobolAmbiguousReferenceError(name)
         return found
 
-    def _named(
-        self, upper: str, ancestors: tuple[tuple[str, DataLayout], ...]
+    def items(self) -> Iterator[DataItemMatch]:
+        """Every elementary and group item in this subtree, depth-first, each
+        with the groups enclosing it."""
+        return self._items(())
+
+    def _items(
+        self, ancestors: tuple[tuple[str, DataLayout], ...]
     ) -> Iterator[DataItemMatch]:
         yield from (
-            DataItemMatch(key, leaf, ancestors)
-            for key, leaf in self.fields.items()
-            if key.upper() == upper
+            DataItemMatch(name, leaf, ancestors) for name, leaf in self.fields.items()
         )
         yield from (
             match
-            for key, group in self.groups.items()
+            for name, group in self.groups.items()
             for match in chain(
-                (DataItemMatch(key, group, ancestors),) if key.upper() == upper else (),
-                group._named(upper, (*ancestors, (key, group))),
+                (DataItemMatch(name, group, ancestors),),
+                group._items((*ancestors, (name, group))),
             )
         )
 
@@ -277,13 +280,6 @@ class DataLayout:
         yield from self.fields.values()
         for sub in self.groups.values():
             yield from sub.all_leaves()
-
-    def all_group_conditions(self) -> Iterator[tuple[str, ConditionName]]:
-        """Yield (group_name, condition) for every group node that carries 88-level conditions."""
-        for name, grp in self.groups.items():
-            for cond in grp.conditions:
-                yield name, cond
-            yield from grp.all_group_conditions()
 
     def all_fields(self) -> Iterator[FieldLayout]:
         yield from self.fields.values()
