@@ -102,6 +102,7 @@ class TestWriteVarToFrameDelegation:
             field_fallback=default_ctx.field_fallback,
             symbol_table=default_ctx.symbol_table,
             function_scoping=GlobalLeakFunctionScopingStrategy(),
+            permit_unresolved_call_targets=default_ctx.permit_unresolved_call_targets,
         )
         _write_var_to_frame(vm, frame, NAME, value, ctx)
         assert vm.call_stack[0].local_vars[NAME] == value

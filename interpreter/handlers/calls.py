@@ -68,8 +68,9 @@ class MemoryNotReceivedError(RuntimeError):
 class UnresolvedProgramError(RuntimeError):
     """A CALL whose location was computed at run time named nothing registered in the run unit.
 
-    Raised only for ``CALL identifier`` (the program name comes from a data
-    item's contents). A literal callee that is not linked is an ordinary
+    Always raised for ``CALL identifier`` (the program name comes from a data
+    item's contents). A literal callee that is not linked raises only when the
+    run refuses unresolved call targets; by default it is an ordinary
     analysis-mode situation — the run unit simply does not contain that module
     — and stays symbolic. A runtime-resolved name is different: the program
     computed it and expects it to dispatch, so a miss is a real defect in the
@@ -724,8 +725,10 @@ def _handle_call_with_memory(
     The location names a variable -- directly, or as the string a register
     holds. That variable holds the callee's function reference; its first
     declared parameter is bound to the memory operand, and control enters the
-    callee in a new frame. A literal location that resolves to nothing goes to
-    the configured call resolver; a computed one raises UnresolvedProgramError.
+    callee in a new frame. A computed location that resolves to nothing raises
+    UnresolvedProgramError; a literal one does too unless the run permits
+    unresolved call targets, in which case it goes to the configured call
+    resolver.
     """
     t = inst
     assert isinstance(t, CallWithMemory)
@@ -735,10 +738,23 @@ def _handle_call_with_memory(
             entry.func_ref.label in ctx.cfg.blocks
         ):
             return _enter(entry, _resolve_reg(vm, t.memory), t, ctx)
-        case _ if isinstance(t.location, Register):
+        case _:
+            return _call_to_nothing(t, target, vm, ctx)
+
+
+def _call_to_nothing(
+    inst: CallWithMemory, target: VarName, vm: VMState, ctx: HandlerContext
+) -> ExecutionResult:
+    match inst.location:
+        case Register():
             raise UnresolvedProgramError(
                 f"CALL resolved at run time to {target}, but nothing in this run "
                 "unit is registered under it"
+            )
+        case _ if not ctx.permit_unresolved_call_targets:
+            raise UnresolvedProgramError(
+                f"CALL to {target}, but nothing in this run unit is registered "
+                "under it"
             )
         case _:
             return ctx.call_resolver.resolve_call(str(target), [], inst, vm)

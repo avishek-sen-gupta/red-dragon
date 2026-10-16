@@ -77,6 +77,7 @@ class HandlerContext:
     field_fallback: FieldFallbackStrategy
     function_scoping: FunctionScopingStrategy
     symbol_table: SymbolTable
+    permit_unresolved_call_targets: bool
 
 
 def _default_handler_context() -> HandlerContext:
@@ -96,6 +97,7 @@ def _default_handler_context() -> HandlerContext:
         field_fallback=_NO_FIELD_FALLBACK,
         function_scoping=LocalFunctionScopingStrategy(),
         symbol_table=SymbolTable.empty(),
+        permit_unresolved_call_targets=True,
     )
 
 
