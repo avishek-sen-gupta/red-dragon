@@ -469,7 +469,8 @@ class EmitContext:
         from interpreter.cobol.condition_lowering import lower_expr_node
 
         base_name = name
-        fl, region_reg, region = materialised.resolve_with_region(base_name, qualifiers)
+        match, region_reg, region = materialised.resolve_match(base_name, qualifiers)
+        fl = match.storage
 
         if not subscripts:
             offset_reg = self._field_offset(fl, region, materialised, span=span)
@@ -501,16 +502,11 @@ class EmitContext:
         else:
             access_len = fl.byte_length
 
+        tables = match.tables
         if len(subscripts) == 1:
-            # Single subscript — fast path: derive stride from fl or enclosing group.
-            if fl.occurs_count > 0 and fl.element_size > 0:
-                strides = [fl.element_size]
-            else:
-                group_stride = materialised.subscript_stride(base_name)
-                strides = [group_stride if group_stride > 0 else fl.byte_length]
+            strides = [tables[-1].element_size if tables else fl.byte_length]
         else:
-            # Multi-dimensional subscript: collect all OCCURS strides for this field.
-            strides = materialised.subscript_strides(base_name)
+            strides = [table.element_size for table in tables]
             if len(subscripts) > len(strides):
                 raise ValueError(
                     f"subscript count {len(subscripts)} exceeds OCCURS dimensions "
@@ -623,8 +619,8 @@ class EmitContext:
             fl=fl,
             region=region,
             subscripts=subscripts,
-            tables=materialised.occurs_tables(base_name),
-            record=materialised.enclosing_record_extent(base_name),
+            tables=tables,
+            record=match.record_extent,
             access_len=access_len,
         )
         return (

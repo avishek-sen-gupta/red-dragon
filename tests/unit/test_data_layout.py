@@ -6,8 +6,11 @@ from cobol_asg.asg_types import CobolField
 from cobol_asg.cobol_types import CobolDataCategory
 from interpreter.cobol.data_layout import (
     CobolAmbiguousReferenceError,
+    DataLayout,
+    OccursTable,
     build_data_layout,
     build_index_layout,
+    record_length,
 )
 from interpreter.cobol.features import CobolFeature
 from tests.covers import NotLanguageFeature, covers
@@ -255,9 +258,9 @@ class TestEnclosingOccursElementSize:
         layout = self._menu_layout()
         # PGM lives inside ENTRY OCCURS (element_size 11), so subscripting PGM
         # must stride by 11, not by PGM's own 8 bytes.
-        assert layout.enclosing_occurs_element_size("PGM") == 11
-        assert layout.enclosing_occurs_element_size("NUM") == 11
-        assert layout.enclosing_occurs_element_size("USR") == 11
+        assert _innermost_stride(layout, "PGM") == 11
+        assert _innermost_stride(layout, "NUM") == 11
+        assert _innermost_stride(layout, "USR") == 11
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_field_not_in_occurs_returns_zero(self):
@@ -265,12 +268,12 @@ class TestEnclosingOccursElementSize:
             CobolField(name="WS-A", level=77, pic="X(5)", usage="DISPLAY", offset=0),
         ]
         layout = build_data_layout(fields)
-        assert layout.enclosing_occurs_element_size("WS-A") == 0
+        assert layout.qualified_matches("WS-A", ())[0].tables == ()
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_occurs_group_itself_returns_its_element_size(self):
         layout = self._menu_layout()
-        assert layout.enclosing_occurs_element_size("ENTRY") == 11
+        assert _innermost_stride(layout, "ENTRY") == 11
 
 
 class TestBuildDataLayoutOccursDependingOnMixedCase:
@@ -1171,3 +1174,98 @@ class TestIndexItemLayout:
         )
         assert layout.first_index_for("TBL-ROW") == "Tbl-Ix"
         assert layout.first_index_for("NO-SUCH-TABLE") is None
+
+
+def _group(
+    name: str, offset: int, *children: CobolField, occurs: int = 0
+) -> CobolField:
+    size = sum(record_length(child) for child in children)
+    return CobolField(
+        name=name,
+        level=2,
+        pic="",
+        usage="DISPLAY",
+        offset=offset,
+        children=list(children),
+        occurs=occurs,
+        element_size=size if occurs else 0,
+    )
+
+
+def _leaf(name: str, offset: int, pic: str = "X") -> CobolField:
+    return CobolField(name=name, level=3, pic=pic, usage="DISPLAY", offset=offset)
+
+
+def _innermost_stride(layout: DataLayout, name: str) -> int:
+    (match,) = layout.qualified_matches(name, ())
+    return match.tables[-1].element_size
+
+
+class TestQualifiedResolution:
+    """ISO 1989 qualification: each qualifier names a group containing the item
+    named before it, intermediate levels may be skipped, and a reference is in
+    error only when the qualifiers given still leave more than one candidate."""
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_every_qualifier_narrows_and_only_true_ambiguity_raises(self):
+        layout = build_data_layout(
+            [
+                _group(
+                    "REC",
+                    0,
+                    _group(
+                        "L2A",
+                        0,
+                        _group("L1A", 0, _leaf("T", 0)),
+                        _group("L1B", 1, _leaf("T", 0)),
+                    ),
+                    _group(
+                        "L2B",
+                        2,
+                        _group("L1A", 0, _leaf("T", 0)),
+                        _group("L1B", 1, _leaf("T", 0)),
+                    ),
+                    _group("G10", 4, _group("D3", 0, _leaf("X1", 0), _leaf("X2", 1))),
+                    _group("G20", 6, _leaf("D3", 0, "99")),
+                )
+            ]
+        )
+
+        def offset(name: str, *qualifiers: str) -> int:
+            (match,) = layout.qualified_matches(name, qualifiers)
+            return match.storage.offset
+
+        assert offset("T", "L1A", "L2B") == 2
+        assert offset("T", "L1B", "L2A") == 1
+        assert offset("t", "l1a", "l2a") == 0
+        assert offset("T", "L1B", "L2B") == 3
+        assert offset("T", "L1A", "L2B", "REC") == 2
+        assert layout.qualified_matches("T", ("L2B", "L1A")) == ()
+        assert offset("D3", "G10") == 4
+        assert layout.qualified_matches("D3", ("G10",))[0].storage.byte_length == 2
+        assert offset("D3", "G20") == 6
+        assert layout.qualified_matches("T", ("NOWHERE",)) == ()
+        with pytest.raises(CobolAmbiguousReferenceError, match="'T'"):
+            layout.qualified_matches("T", ("L1A",))
+        with pytest.raises(CobolAmbiguousReferenceError, match="'D3'"):
+            layout.qualified_matches("D3", ("REC",))
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_a_qualified_match_carries_its_own_occurs_tables(self):
+        layout = build_data_layout(
+            [
+                _group("G1", 0, _group("L2", 0, _leaf("ITM", 0, "X(2)"), occurs=2)),
+                _group(
+                    "G2",
+                    4,
+                    _group(
+                        "L2", 0, _group("L3", 0, _leaf("ITM", 0), occurs=3), occurs=2
+                    ),
+                ),
+            ]
+        )
+        (first,) = layout.qualified_matches("ITM", ("G1",))
+        (second,) = layout.qualified_matches("ITM", ("L3", "L2", "G2"))
+        assert first.tables == (OccursTable(0, 2, 2),)
+        assert second.tables == (OccursTable(4, 3, 2), OccursTable(4, 1, 3))
+        assert (first.record_extent, second.record_extent) == ((0, 4), (4, 6))

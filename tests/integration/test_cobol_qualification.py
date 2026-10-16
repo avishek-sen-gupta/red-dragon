@@ -1,0 +1,86 @@
+"""End-to-end: a data reference qualified by OF/IN denotes the one item its qualifiers select."""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+
+import pytest
+
+from interpreter.cobol.features import CobolFeature
+from tests.covers import covers
+from tests.integration.cobol_helpers import (
+    bridge_jar,  # noqa: F401
+    run_cobol,
+)
+
+pytestmark = pytest.mark.usefixtures("bridge_jar")
+
+
+def _shown(
+    capsys: pytest.CaptureFixture[str],
+    working_storage: Sequence[str],
+    procedure: Sequence[str],
+) -> str:
+    run_cobol(
+        [
+            "IDENTIFICATION DIVISION.",
+            "PROGRAM-ID. QUALIF.",
+            "DATA DIVISION.",
+            "WORKING-STORAGE SECTION.",
+            *working_storage,
+            "PROCEDURE DIVISION.",
+            "MAIN-PARA.",
+            *procedure,
+            "    STOP RUN.",
+        ],
+        max_steps=5000,
+    )
+    return capsys.readouterr().out
+
+
+class TestQualifiedReferenceResolution:
+    @covers(CobolFeature.MOVE)
+    def test_every_qualifier_selects_and_subscripts_stride_the_selected_item(
+        self, capsys
+    ):
+        shown = _shown(
+            capsys,
+            [
+                "01 R1 PIC X.",
+                "01 R2 PIC X.",
+                "01 R3 PIC X.",
+                "01 R4 PIC XX.",
+                "01 R5 PIC X.",
+                "01 REC.",
+                "   02 L2A.",
+                '      03 L1A. 04 T PIC X VALUE "1".',
+                '      03 L1B. 04 T PIC X VALUE "2".',
+                "   02 L2B.",
+                '      03 L1A. 04 T PIC X VALUE "3".',
+                '      03 L1B. 04 T PIC X VALUE "4".',
+                "01 G10.",
+                '   02 D3. 03 D3A PIC X VALUE "A". 03 D3B PIC X VALUE "B".',
+                "01 G20.",
+                "   02 D3 PIC 99 VALUE 45.",
+                "01 H1.",
+                '   02 L2. 03 L3 OCCURS 2. 04 ITM PIC X VALUE "-".',
+                "01 G1.",
+                "   02 L2 OCCURS 2.",
+                "      03 L3 OCCURS 3. 04 ITM PIC X.",
+                "01 CX.",
+                "   02 CX-SUB PIC 9 VALUE 3.",
+                "01 DX.",
+                "   02 CX-SUB PIC 9 VALUE 1.",
+            ],
+            [
+                "    MOVE T OF L1A OF L2B TO R1.",
+                "    MOVE T OF L1B IN L2A TO R2.",
+                "    MOVE T IN L1B OF L2B OF REC TO R3.",
+                "    MOVE D3 IN G10 TO R4.",
+                '    MOVE "------" TO G1.',
+                '    MOVE "Z" TO ITM OF L3 OF L2 OF G1 (2, CX-SUB OF CX).',
+                "    MOVE ITM OF G1 (2, 3) TO R5.",
+                "    DISPLAY R1 R2 R3 R4 R5 G1.",
+            ],
+        )
+        assert shown == "324ABZ-----Z"

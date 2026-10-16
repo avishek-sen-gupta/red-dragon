@@ -80,6 +80,10 @@ The DATA DIVISION is lowered to byte-addressed memory regions:
 2. `ALLOC_REGION` allocates a contiguous byte array sized to `layout.total_bytes`
 3. Each field with a VALUE clause is encoded per its PIC type and written via `WRITE_REGION`; a group's VALUE is encoded as alphanumeric over the whole group, before its descendants'
 
+### Data-name qualification
+
+A reference `N OF Q1 OF Q2 ...` (or `IN`) is resolved by `DataLayout.qualified_matches`: every elementary or group item named N whose enclosing groups, read outward, contain Q1, Q2, ... in that order (intermediate levels may be skipped). One survivor is the item; more than one raises `CobolAmbiguousReferenceError`; none falls through to the next DATA DIVISION section. A subscripted reference strides by, and is bounded by, the OCCURS tables enclosing that one match (`DataItemMatch.tables`), never another item of the same name.
+
 ### PIC-Driven Encoding
 
 | PIC Category | Encoding | Bytes | Example |

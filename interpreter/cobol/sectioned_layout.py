@@ -6,13 +6,14 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
+from itertools import islice
 
 from cobol_asg.asg_types import CobolASG, CobolField
 from cobol_memory.region_id import RegionId
 from interpreter.cobol.data_layout import (
+    DataItemMatch,
     DataLayout,
     FieldLayout,
-    OccursTable,
     build_data_layout,
     build_index_layout,
     laid_end_to_end,
@@ -80,119 +81,52 @@ class MaterialisedSectionedLayout:
     def resolve_with_region(
         self, name: str, qualifiers: tuple[str, ...] = ()
     ) -> tuple[FieldLayout, Register, RegionId]:
-        """Return (FieldLayout, region_register, RegionId).
+        """Return (FieldLayout, region_register, RegionId) — see :meth:`resolve_match`."""
+        match, reg, region = self.resolve_match(name, qualifiers)
+        return match.storage, reg, region
+
+    def resolve_match(
+        self, name: str, qualifiers: tuple[str, ...] = ()
+    ) -> tuple[DataItemMatch, Register, RegionId]:
+        """Return the data item ``name`` qualified by ``qualifiers`` denotes, with
+        its region register and RegionId.
 
         Precedence: LOCAL-STORAGE > WORKING-STORAGE > LINKAGE > FILE >
-        SPECIAL-REGISTERS > INDEXES. See resolve()'s docstring for the
-        ``qualifiers`` semantics; this is the sole place that precedence
-        logic lives — resolve() delegates here."""
-        ls_layout, ls_reg = self.local_storage
-        ls_fl = ls_layout.lookup_as_storage(name, qualifiers)
-        if ls_fl is not None:
-            ws_layout, _ = self.working_storage
-            if ws_layout.lookup_as_storage(name, qualifiers) is not None:
-                logger.warning(
-                    "Field %r found in both LOCAL-STORAGE and WORKING-STORAGE — LOCAL-STORAGE wins (collision)",
-                    name,
-                )
-            return ls_fl, ls_reg, RegionId.LOCAL_STORAGE
+        SPECIAL-REGISTERS > INDEXES; the first section holding a match wins, and
+        this is the sole place that precedence lives."""
+        found = tuple(
+            islice(
+                (
+                    (match, reg, region)
+                    for layout, reg, region in self._sections()
+                    for match in layout.qualified_matches(name, qualifiers)
+                ),
+                1,
+            )
+        )
+        if not found:
+            raise KeyError(f"Field {name!r} not found in any DATA DIVISION section")
+        match, reg, region = found[0]
+        if region is RegionId.LOCAL_STORAGE and self.working_storage[
+            0
+        ].qualified_matches(name, qualifiers):
+            logger.warning(
+                "Field %r found in both LOCAL-STORAGE and WORKING-STORAGE — LOCAL-STORAGE wins (collision)",
+                name,
+            )
+        if region is RegionId.LINKAGE:
+            return match, self.linkage_binding(match.storage).region_reg, region
+        return match, reg, region
 
-        ws_layout, ws_reg = self.working_storage
-        ws_fl = ws_layout.lookup_as_storage(name, qualifiers)
-        if ws_fl is not None:
-            return ws_fl, ws_reg, RegionId.WORKING_STORAGE
-
-        lk_layout, _ = self.linkage
-        lk_fl = lk_layout.lookup_as_storage(name, qualifiers)
-        if lk_fl is not None:
-            return lk_fl, self.linkage_binding(lk_fl).region_reg, RegionId.LINKAGE
-
-        file_layout, file_reg = self.file
-        file_fl = file_layout.lookup_as_storage(name, qualifiers)
-        if file_fl is not None:
-            return file_fl, file_reg, RegionId.FILE
-
-        sr_layout, sr_reg = self.special_registers
-        sr_fl = sr_layout.lookup_as_storage(name, qualifiers)
-        if sr_fl is not None:
-            return sr_fl, sr_reg, RegionId.SPECIAL_REGISTERS
-
-        ix_layout, ix_reg = self.indexes
-        ix_fl = ix_layout.lookup_as_storage(name, qualifiers)
-        if ix_fl is not None:
-            return ix_fl, ix_reg, RegionId.INDEXES
-
-        raise KeyError(f"Field {name!r} not found in any DATA DIVISION section")
-
-    def subscript_stride(self, name: str) -> int:
-        """Return the subscript stride (enclosing OCCURS element_size) for a
-        leaf field, searched across sections with resolve()'s precedence.
-
-        A leaf nested inside an OCCURS group strides by the group's element_size,
-        not by the leaf's own byte_length. Returns 0 if not under an OCCURS table.
-        """
-        for layout, _reg in (
-            self.local_storage,
-            self.working_storage,
-            self.linkage,
-            self.file,
-        ):
-            if layout.exists(name):
-                return layout.enclosing_occurs_element_size(name)
-        return 0
-
-    def subscript_strides(self, name: str) -> list[int]:
-        """Return all OCCURS element_sizes from outermost to innermost for ``name``.
-
-        len() equals the number of subscript dimensions the field supports.
-        """
-        for layout, _reg in (
-            self.local_storage,
-            self.working_storage,
-            self.linkage,
-            self.file,
-        ):
-            if layout.exists(name):
-                return layout.all_enclosing_occurs_strides(name)
-        return []
-
-    def occurs_tables(self, name: str) -> list[OccursTable]:
-        """Return the OCCURS constructs enclosing ``name``, outermost first.
-
-        Positionally aligned with :meth:`subscript_strides` (same sections,
-        same precedence, same walk), so subscript *k* belongs to table *k*.
-        Used to bound a computed-subscript access to a declared table rather
-        than to the whole region.
-        """
-        for layout, _reg in (
-            self.local_storage,
-            self.working_storage,
-            self.linkage,
-            self.file,
-        ):
-            if layout.exists(name):
-                return layout.all_enclosing_occurs_tables(name)
-        return []
-
-    def enclosing_record_extent(self, name: str) -> tuple[int, int] | None:
-        """Return ``(offset, byte_length)`` of the 01/77 record holding ``name``.
-
-        Searches all six sections, not the four that carry OCCURS tables: this
-        is the last-resort bound for an access nothing else can bound, so it
-        must not come up empty for a field that resolved successfully.
-        """
-        for layout, _reg in (
-            self.local_storage,
-            self.working_storage,
-            self.linkage,
-            self.file,
-            self.special_registers,
-            self.indexes,
-        ):
-            found = layout.enclosing_record_extent(name)
-            if found is not None:
-                return found
-        return None
+    def _sections(self) -> tuple[tuple[DataLayout, Register, RegionId], ...]:
+        return (
+            (*self.local_storage, RegionId.LOCAL_STORAGE),
+            (*self.working_storage, RegionId.WORKING_STORAGE),
+            (*self.linkage, RegionId.LINKAGE),
+            (*self.file, RegionId.FILE),
+            (*self.special_registers, RegionId.SPECIAL_REGISTERS),
+            (*self.indexes, RegionId.INDEXES),
+        )
 
     def has_field(self, name: str) -> bool:
         ls_layout, _ = self.local_storage
