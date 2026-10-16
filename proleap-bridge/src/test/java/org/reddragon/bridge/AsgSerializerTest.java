@@ -152,7 +152,11 @@ public class AsgSerializerTest {
 
         assertTrue("ADD should have operands", addStmt.has("operands"));
         JsonArray operands = addStmt.getAsJsonArray("operands");
-        assertEquals("ADD should have 2 operands (from + to)", 2, operands.size());
+        assertEquals("ADD should have 1 sending operand", 1, operands.size());
+        assertEquals("50", operands.get(0).getAsString());
+        JsonArray targets = addStmt.getAsJsonArray("targets");
+        assertEquals("ADD should have 1 receiver", 1, targets.size());
+        assertEquals("WS-TOTAL", targets.get(0).getAsJsonObject().get("name").getAsString());
     }
 
     // ── Bare Statements (division-level) ───────────────────────────────

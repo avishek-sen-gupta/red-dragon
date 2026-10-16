@@ -630,7 +630,11 @@ class TestPerformTimesExecution:
                             "perform_type": "TIMES",
                             "times": "3",
                             "children": [
-                                {"type": "ADD", "operands": ["1", "WS-CTR"]},
+                                {
+                                    "type": "ADD",
+                                    "operands": ["1"],
+                                    "targets": ["WS-CTR"],
+                                },
                             ],
                         },
                         {"type": "STOP_RUN"},
@@ -694,7 +698,7 @@ class TestPerformUntilExecution:
                             },
                             "test_before": True,
                             "children": [
-                                {"type": "ADD", "operands": ["1", "WS-A"]},
+                                {"type": "ADD", "operands": ["1"], "targets": ["WS-A"]},
                             ],
                         },
                         {"type": "STOP_RUN"},
@@ -770,7 +774,8 @@ class TestPerformVaryingExecution:
                             "children": [
                                 {
                                     "type": "ADD",
-                                    "operands": ["WS-IDX", "WS-SUM"],
+                                    "operands": ["WS-IDX"],
+                                    "targets": ["WS-SUM"],
                                 },
                             ],
                         },
@@ -877,7 +882,7 @@ class TestNumericValueVerification:
                 {
                     "name": "MAIN-PARA",
                     "statements": [
-                        {"type": "ADD", "operands": ["WS-A", "WS-B"]},
+                        {"type": "ADD", "operands": ["WS-A"], "targets": ["WS-B"]},
                         {"type": "STOP_RUN"},
                     ],
                 },
@@ -925,7 +930,7 @@ class TestNumericValueVerification:
                 {
                     "name": "MAIN-PARA",
                     "statements": [
-                        {"type": "SUBTRACT", "operands": ["WS-B", "WS-A"]},
+                        {"type": "SUBTRACT", "operands": ["WS-B"], "targets": ["WS-A"]},
                         {"type": "STOP_RUN"},
                     ],
                 },
@@ -964,7 +969,7 @@ class TestNumericValueVerification:
                 {
                     "name": "MAIN-PARA",
                     "statements": [
-                        {"type": "ADD", "operands": ["25", "WS-A"]},
+                        {"type": "ADD", "operands": ["25"], "targets": ["WS-A"]},
                         {"type": "STOP_RUN"},
                     ],
                 },
@@ -1010,7 +1015,11 @@ class TestNumericValueVerification:
                             "perform_type": "TIMES",
                             "times": "3",
                             "children": [
-                                {"type": "ADD", "operands": ["1", "WS-CTR"]},
+                                {
+                                    "type": "ADD",
+                                    "operands": ["1"],
+                                    "targets": ["WS-CTR"],
+                                },
                             ],
                         },
                         {"type": "STOP_RUN"},
@@ -1090,8 +1099,8 @@ class TestNumericValueVerification:
                 {
                     "name": "MAIN-PARA",
                     "statements": [
-                        {"type": "ADD", "operands": ["10", "WS-R"]},
-                        {"type": "ADD", "operands": ["5", "WS-R"]},
+                        {"type": "ADD", "operands": ["10"], "targets": ["WS-R"]},
+                        {"type": "ADD", "operands": ["5"], "targets": ["WS-R"]},
                         {"type": "STOP_RUN"},
                     ],
                 },
@@ -1148,7 +1157,7 @@ class TestNumericValueVerification:
                 {
                     "name": "ADD-PARA",
                     "statements": [
-                        {"type": "ADD", "operands": ["10", "WS-SUM"]},
+                        {"type": "ADD", "operands": ["10"], "targets": ["WS-SUM"]},
                     ],
                 },
             ],
@@ -1206,7 +1215,7 @@ class TestNumericValueVerification:
                 {
                     "name": "ADD-PARA",
                     "statements": [
-                        {"type": "ADD", "operands": ["10", "WS-SUM"]},
+                        {"type": "ADD", "operands": ["10"], "targets": ["WS-SUM"]},
                     ],
                 },
             ],
@@ -1319,15 +1328,15 @@ class TestNestedPerformNumericValues:
                 {
                     "name": "OUTER-PARA",
                     "statements": [
-                        {"type": "ADD", "operands": ["100", "WS-SUM"]},
+                        {"type": "ADD", "operands": ["100"], "targets": ["WS-SUM"]},
                         {"type": "PERFORM", "operands": ["INNER-PARA"]},
-                        {"type": "ADD", "operands": ["1", "WS-SUM"]},
+                        {"type": "ADD", "operands": ["1"], "targets": ["WS-SUM"]},
                     ],
                 },
                 {
                     "name": "INNER-PARA",
                     "statements": [
-                        {"type": "ADD", "operands": ["10", "WS-SUM"]},
+                        {"type": "ADD", "operands": ["10"], "targets": ["WS-SUM"]},
                     ],
                 },
             ],
@@ -1395,7 +1404,7 @@ class TestNestedPerformNumericValues:
                 {
                     "name": "INNER-PARA",
                     "statements": [
-                        {"type": "ADD", "operands": ["1", "WS-CTR"]},
+                        {"type": "ADD", "operands": ["1"], "targets": ["WS-CTR"]},
                     ],
                 },
             ],
@@ -1443,19 +1452,19 @@ class TestGotoInsidePerform:
                 {
                     "name": "MAIN-PARA",
                     "statements": [
-                        {"type": "ADD", "operands": ["10", "WS-VAL"]},
+                        {"type": "ADD", "operands": ["10"], "targets": ["WS-VAL"]},
                         {
                             "type": "GOTO",
                             "form": "simple",
                             "target": {"paragraph": "SKIP-PARA", "section": ""},
                         },
-                        {"type": "ADD", "operands": ["999", "WS-VAL"]},
+                        {"type": "ADD", "operands": ["999"], "targets": ["WS-VAL"]},
                     ],
                 },
                 {
                     "name": "SKIP-PARA",
                     "statements": [
-                        {"type": "ADD", "operands": ["1", "WS-VAL"]},
+                        {"type": "ADD", "operands": ["1"], "targets": ["WS-VAL"]},
                         {"type": "STOP_RUN"},
                     ],
                 },
@@ -1501,7 +1510,7 @@ class TestGotoInsidePerform:
                 {
                     "name": "PARA-A",
                     "statements": [
-                        {"type": "ADD", "operands": ["1", "WS-VAL"]},
+                        {"type": "ADD", "operands": ["1"], "targets": ["WS-VAL"]},
                         {
                             "type": "GOTO",
                             "form": "simple",
@@ -1512,13 +1521,13 @@ class TestGotoInsidePerform:
                 {
                     "name": "PARA-B",
                     "statements": [
-                        {"type": "ADD", "operands": ["100", "WS-VAL"]},
+                        {"type": "ADD", "operands": ["100"], "targets": ["WS-VAL"]},
                     ],
                 },
                 {
                     "name": "PARA-C",
                     "statements": [
-                        {"type": "ADD", "operands": ["10", "WS-VAL"]},
+                        {"type": "ADD", "operands": ["10"], "targets": ["WS-VAL"]},
                         {"type": "STOP_RUN"},
                     ],
                 },
@@ -1570,14 +1579,14 @@ class TestGotoInsidePerform:
                     "name": "MAIN-PARA",
                     "statements": [
                         {"type": "PERFORM", "operands": ["WORK-PARA"]},
-                        {"type": "ADD", "operands": ["1", "WS-VAL"]},
+                        {"type": "ADD", "operands": ["1"], "targets": ["WS-VAL"]},
                         {"type": "STOP_RUN"},
                     ],
                 },
                 {
                     "name": "WORK-PARA",
                     "statements": [
-                        {"type": "ADD", "operands": ["10", "WS-VAL"]},
+                        {"type": "ADD", "operands": ["10"], "targets": ["WS-VAL"]},
                         {
                             "type": "GOTO",
                             "form": "simple",
@@ -1588,7 +1597,7 @@ class TestGotoInsidePerform:
                 {
                     "name": "EXIT-PARA",
                     "statements": [
-                        {"type": "ADD", "operands": ["100", "WS-VAL"]},
+                        {"type": "ADD", "operands": ["100"], "targets": ["WS-VAL"]},
                     ],
                 },
             ],

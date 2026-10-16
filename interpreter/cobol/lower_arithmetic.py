@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Mapping, Sequence
-from functools import reduce
+from functools import partial, reduce
 
 from cobol_asg.cobol_expression import expr_from_dict
 from cobol_asg.cobol_statements import (
@@ -56,8 +56,10 @@ from cobol_numeric.scale import (
     literal_scale,
     mul_scale,
 )
+from interpreter.cobol.arithmetic_receiver import ArithmeticReceiver
 from interpreter.cobol.arithmetic_scale import field_scale, is_floating_type
 from interpreter.cobol.arithmetic_scale import receiver_decimals as _receiver_decimals
+from interpreter.cobol.arithmetic_value import ArithmeticValue
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.condition_lowering import (
     _float_operand,
@@ -152,73 +154,113 @@ def _operand_scale(
     return literal_scale(translate_cobol_figurative(name))
 
 
-def _emit_verb_operation(
+_VERB_SCALES: Mapping[str, Callable[[Scale, Scale, int], Scale]] = {
+    "ADD": lambda left, right, _dmax: add_scale(left, right),
+    "SUBTRACT": lambda left, right, _dmax: add_scale(left, right),
+    "MULTIPLY": lambda left, right, _dmax: mul_scale(left, right),
+    "DIVIDE": div_scale,
+}
+
+
+def _is_floating_operand(
+    ctx: EmitContext, operand: RefModOperand, materialised: MaterialisedSectionedLayout
+) -> bool:
+    return ctx.has_field(operand.name, materialised) and is_floating_type(
+        materialised.resolve(operand.name, operand.qualifiers)[0].type_descriptor
+    )
+
+
+def _receiver_places(
     ctx: EmitContext,
-    op: str,
-    left_reg: Register,
-    right_reg: Register,
-    left_operand: RefModOperand,
-    right_operand: RefModOperand,
-    receivers: list[RefModOperand],
+    receivers: Sequence[RefModOperand],
     materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None = None,
-) -> Register:
-    """Emit ``left <op> right`` for an arithmetic verb, exact unless IBM's
-    floating-point rule applies (a COMP-1/COMP-2 operand or receiver)."""
-    result_reg = ctx.fresh_reg()
-    types = [
-        _operand_type(ctx, operand, materialised)
-        for operand in (left_operand, right_operand, *receivers)
-    ]
-    if any(td is not None and is_floating_type(td) for td in types):
-        # Convert BOTH operands first, exactly as the expression path does.
-        # One side is a COMP-1/COMP-2 float while the other may be an exact
-        # fixed-point value, and Python raises TypeError for Decimal + float:
-        # the VM turns that into UNCOMPUTABLE and the receiver silently
-        # stores zeros (e.g. ADD 0.5 TO WS-COMP2).
-        ctx.emit_inst(
-            Binop(
-                result_reg=result_reg,
-                operator=resolve_binop(ARITHMETIC_OPS[op]),
-                left=_float_operand(ctx, left_reg, True, span=span),
-                right=_float_operand(ctx, right_reg, True, span=span),
-            ),
-            span=span,
-        )
-        return result_reg
-    left_scale = _operand_scale(ctx, left_operand, materialised)
-    right_scale = _operand_scale(ctx, right_operand, materialised)
-    receiver_places = max(
+) -> int:
+    return max(
         (
-            _receiver_decimals(td, receiver.rounded)
-            for receiver, td in zip(receivers, types[2:])
-            if td is not None
+            _receiver_decimals(
+                materialised.resolve(r.name, r.qualifiers)[0].type_descriptor,
+                r.rounded,
+            )
+            for r in receivers
+            if ctx.has_field(r.name, materialised)
         ),
         default=0,
     )
-    operand_places = (
-        left_scale.decimal_places
-        if op == "DIVIDE"
-        else max(left_scale.decimal_places, right_scale.decimal_places)
+
+
+def _operand_value(
+    ctx: EmitContext,
+    operand: RefModOperand,
+    register: Register,
+    materialised: MaterialisedSectionedLayout,
+) -> ArithmeticValue:
+    return ArithmeticValue(
+        register=register,
+        scale=_operand_scale(ctx, operand, materialised),
+        floating=_is_floating_operand(ctx, operand, materialised),
     )
-    dmax = max(receiver_places, operand_places)
-    if op in ("ADD", "SUBTRACT"):
-        combined = add_scale(left_scale, right_scale)
-    elif op == "MULTIPLY":
-        combined = mul_scale(left_scale, right_scale)
-    else:
-        combined = div_scale(left_scale, right_scale, dmax)
-    decimals_reg = ctx.const_to_reg(carry(combined, dmax).decimal_places, span=span)
+
+
+def _emit_float_operation(
+    ctx: EmitContext,
+    op: str,
+    left: ArithmeticValue,
+    right: ArithmeticValue,
+    scale: Scale,
+    *,
+    span: SourceSpan | None = None,
+) -> ArithmeticValue:
+    result_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        Binop(
+            result_reg=result_reg,
+            operator=resolve_binop(ARITHMETIC_OPS[op]),
+            left=_float_operand(ctx, left.register, True, span=span),
+            right=_float_operand(ctx, right.register, True, span=span),
+        ),
+        span=span,
+    )
+    return ArithmeticValue(register=result_reg, scale=scale, floating=True)
+
+
+def _emit_verb_operation(
+    ctx: EmitContext,
+    op: str,
+    left: ArithmeticValue,
+    right: ArithmeticValue,
+    receivers: Sequence[RefModOperand],
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None = None,
+) -> ArithmeticValue:
+    """Emit ``left <op> right``, exact unless IBM's floating-point rule applies."""
+    operand_places = (
+        left.scale.decimal_places
+        if op == "DIVIDE"
+        else max(left.scale.decimal_places, right.scale.decimal_places)
+    )
+    dmax = max(_receiver_places(ctx, receivers, materialised), operand_places)
+    scale = carry(_VERB_SCALES[op](left.scale, right.scale, dmax), dmax)
+    if (
+        left.floating
+        or right.floating
+        or any(_is_floating_operand(ctx, r, materialised) for r in receivers)
+    ):
+        return _emit_float_operation(ctx, op, left, right, scale, span=span)
+    result_reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(
             result_reg=result_reg,
             func_name=FuncName(_EXACT_VERB_BUILTINS[op]),
-            args=(left_reg, right_reg, decimals_reg),
+            args=(
+                left.register,
+                right.register,
+                ctx.const_to_reg(scale.decimal_places, span=span),
+            ),
         ),
         span=span,
     )
-    return result_reg
+    return ArithmeticValue(register=result_reg, scale=scale, floating=False)
 
 
 def _compute_overflow_flag(
@@ -1188,485 +1230,450 @@ def _emit_arithmetic_writeback(
         )
 
 
+def _ref_mod_length(
+    ctx: EmitContext,
+    operand: RefModOperand,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None = None,
+) -> Register:
+    match operand.ref_mod_length:
+        case None:
+            return ctx.const_to_reg(999999, span=span)
+        case length:
+            return eval_ref_mod_expr(ctx, length, materialised, span=span)
+
+
+def _ref_mod_number(
+    ctx: EmitContext,
+    decoded: Register,
+    operand: RefModOperand,
+    start: RefModExpr,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None = None,
+) -> Register:
+    start_0indexed = ctx.fresh_reg()
+    ctx.emit_inst(
+        Binop(
+            operator=BinopKind.SUB,
+            left=eval_ref_mod_expr(ctx, start, materialised, span=span),
+            right=ctx.const_to_reg(1, span=span),
+            result_reg=start_0indexed,
+        ),
+        span=span,
+    )
+    sliced = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=sliced,
+            func_name=FuncName(BuiltinName.STRING_SLICE),
+            args=(
+                ctx.emit_to_string(decoded, span=span),
+                start_0indexed,
+                _ref_mod_length(ctx, operand, materialised, span=span),
+            ),
+        ),
+        span=span,
+    )
+    number = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=number,
+            func_name=FuncName(BuiltinName.COBOL_PARSE_NUMBER),
+            args=(sliced,),
+        ),
+        span=span,
+    )
+    return number
+
+
+def _read_receiver(
+    ctx: EmitContext,
+    receiver: ArithmeticReceiver,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None = None,
+) -> Register:
+    decoded = ctx.emit_decode_field(
+        receiver.region,
+        receiver.ref.fl,
+        receiver.ref.offset_reg,
+        extent=receiver.ref.extent,
+        span=span,
+    )
+    match receiver.operand.ref_mod_start:
+        case None:
+            return decoded
+        case start:
+            return _ref_mod_number(
+                ctx, decoded, receiver.operand, start, materialised, span=span
+            )
+
+
+def _resolve_receiver(
+    ctx: EmitContext,
+    operand: RefModOperand,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None = None,
+) -> ArithmeticReceiver:
+    ref, region = ctx.resolve_field_ref(
+        operand.name,
+        materialised,
+        operand.qualifiers,
+        subscripts=operand.subscripts,
+        span=span,
+    )
+    return ArithmeticReceiver(operand=operand, ref=ref, region=region)
+
+
+def _decode_operand(
+    ctx: EmitContext,
+    operand: RefModOperand,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None = None,
+) -> ArithmeticValue:
+    if not ctx.has_field(operand.name, materialised):
+        literal = ctx.parse_literal(translate_cobol_figurative(operand.name))
+        return _operand_value(
+            ctx, operand, ctx.const_to_reg(literal, span=span), materialised
+        )
+    receiver = _resolve_receiver(ctx, operand, materialised, span=span)
+    return _operand_value(
+        ctx,
+        operand,
+        _read_receiver(ctx, receiver, materialised, span=span),
+        materialised,
+    )
+
+
+def _sum_operands(
+    ctx: EmitContext,
+    operands: Sequence[RefModOperand],
+    receivers: Sequence[RefModOperand],
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None = None,
+) -> ArithmeticValue:
+    values = [_decode_operand(ctx, o, materialised, span=span) for o in operands]
+    return reduce(
+        lambda total, value: _emit_verb_operation(
+            ctx, "ADD", total, value, receivers, materialised, span=span
+        ),
+        values[1:],
+        values[0],
+    )
+
+
+def _write_result(
+    ctx: EmitContext,
+    receiver: ArithmeticReceiver,
+    result: Register,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None = None,
+) -> None:
+    _emit_arithmetic_writeback(
+        ctx,
+        receiver.operand,
+        receiver.ref,
+        receiver.region,
+        ctx.emit_to_string(result, span=span),
+        materialised,
+        span=span,
+    )
+
+
+def _write_unless_size_error(
+    ctx: EmitContext,
+    receiver: ArithmeticReceiver,
+    result: ArithmeticValue,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None = None,
+) -> Register:
+    overflow = _compute_overflow_flag(
+        ctx, result.register, receiver.ref.fl.type_descriptor, span=span
+    )
+    write_label = ctx.fresh_label("size_ok")
+    skip_label = ctx.fresh_label("size_err_skip")
+    ctx.emit_inst(
+        BranchIf(cond_reg=overflow, branch_targets=(skip_label, write_label)),
+        span=span,
+    )
+    ctx.emit_inst(Label_(label=write_label), span=span)
+    _write_result(ctx, receiver, result.register, materialised, span=span)
+    ctx.emit_inst(Branch(label=skip_label), span=span)
+    ctx.emit_inst(Label_(label=skip_label), span=span)
+    return overflow
+
+
+def _any_flag(
+    ctx: EmitContext, flags: Sequence[Register], *, span: SourceSpan | None = None
+) -> Register:
+    def _or(left: Register, right: Register) -> Register:
+        combined = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                result_reg=combined,
+                operator=resolve_binop("or"),
+                left=left,
+                right=right,
+            ),
+            span=span,
+        )
+        return combined
+
+    return reduce(_or, flags[1:], flags[0])
+
+
+def _emit_zero_divisor_guard(
+    ctx: EmitContext,
+    op: str,
+    divisor: ArithmeticValue,
+    on_size_err_label: CodeLabel,
+    *,
+    span: SourceSpan | None = None,
+) -> None:
+    if op != "DIVIDE":
+        return
+    is_zero = ctx.fresh_reg()
+    ctx.emit_inst(
+        Binop(
+            result_reg=is_zero,
+            operator=resolve_binop("=="),
+            left=divisor.register,
+            right=ctx.const_to_reg(0, span=span),
+        ),
+        span=span,
+    )
+    compute_label = ctx.fresh_label("divide_compute")
+    ctx.emit_inst(
+        BranchIf(cond_reg=is_zero, branch_targets=(on_size_err_label, compute_label)),
+        span=span,
+    )
+    ctx.emit_inst(Label_(label=compute_label), span=span)
+
+
+def _emit_size_error_arm(
+    ctx: EmitContext,
+    label: CodeLabel,
+    body: Sequence[CobolStatementType],
+    follow_up: Callable[[], None],
+    end_label: CodeLabel,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None = None,
+) -> None:
+    ctx.emit_inst(Label_(label=label), span=span)
+    follow_up()
+    for child in body:
+        ctx.lower_statement(child, materialised)
+    ctx.emit_inst(Branch(label=end_label), span=span)
+
+
+ReceiverStep = Callable[[RefModOperand], tuple[ArithmeticReceiver, ArithmeticValue]]
+
+
+def _store_guarded(
+    ctx: EmitContext,
+    stmt: ArithmeticStatement,
+    divisor: ArithmeticValue,
+    receivers: Sequence[RefModOperand],
+    step: ReceiverStep,
+    follow_up: Callable[[], None],
+    materialised: MaterialisedSectionedLayout,
+) -> None:
+    span = stmt.span
+    on_label = ctx.fresh_label("on_size_err")
+    not_on_label = ctx.fresh_label("not_on_size_err")
+    end_label = ctx.fresh_label("size_err_end")
+    _emit_zero_divisor_guard(ctx, stmt.op, divisor, on_label, span=span)
+    flags = [
+        _write_unless_size_error(ctx, *step(target), materialised, span=span)
+        for target in receivers
+    ]
+    ctx.emit_inst(
+        BranchIf(
+            cond_reg=_any_flag(ctx, flags, span=span),
+            branch_targets=(on_label, not_on_label),
+        ),
+        span=span,
+    )
+    _emit_size_error_arm(
+        ctx,
+        on_label,
+        stmt.on_size_error,
+        _no_follow_up,
+        end_label,
+        materialised,
+        span=span,
+    )
+    _emit_size_error_arm(
+        ctx,
+        not_on_label,
+        stmt.not_on_size_error,
+        follow_up,
+        end_label,
+        materialised,
+        span=span,
+    )
+    ctx.emit_inst(Label_(label=end_label), span=span)
+
+
+def _store(
+    ctx: EmitContext,
+    stmt: ArithmeticStatement,
+    divisor: ArithmeticValue,
+    receivers: Sequence[RefModOperand],
+    step: ReceiverStep,
+    follow_up: Callable[[], None],
+    materialised: MaterialisedSectionedLayout,
+) -> None:
+    if stmt.on_size_error or stmt.not_on_size_error:
+        _store_guarded(ctx, stmt, divisor, receivers, step, follow_up, materialised)
+        return
+    for target in receivers:
+        receiver, result = step(target)
+        _write_result(ctx, receiver, result.register, materialised, span=stmt.span)
+    follow_up()
+
+
+def _no_follow_up() -> None:
+    return None
+
+
+def _in_place_step(
+    ctx: EmitContext,
+    op: str,
+    sending: ArithmeticValue,
+    materialised: MaterialisedSectionedLayout,
+    span: SourceSpan | None,
+    target: RefModOperand,
+) -> tuple[ArithmeticReceiver, ArithmeticValue]:
+    receiver = _resolve_receiver(ctx, target, materialised, span=span)
+    current = _operand_value(
+        ctx,
+        target,
+        _read_receiver(ctx, receiver, materialised, span=span),
+        materialised,
+    )
+    return receiver, _emit_verb_operation(
+        ctx, op, current, sending, (target,), materialised, span=span
+    )
+
+
+def _giving_step(
+    ctx: EmitContext,
+    result: ArithmeticValue,
+    materialised: MaterialisedSectionedLayout,
+    span: SourceSpan | None,
+    target: RefModOperand,
+) -> tuple[ArithmeticReceiver, ArithmeticValue]:
+    return _resolve_receiver(ctx, target, materialised, span=span), result
+
+
+def _emit_remainder(
+    ctx: EmitContext,
+    stmt: ArithmeticStatement,
+    dividend: ArithmeticValue,
+    divisor: ArithmeticValue,
+    quotient: ArithmeticValue,
+    materialised: MaterialisedSectionedLayout,
+) -> None:
+    match stmt.remainder:
+        case None:
+            return
+        case remainder_op:
+            _write_remainder(
+                ctx,
+                remainder_op,
+                dividend,
+                divisor,
+                quotient,
+                materialised,
+                span=stmt.span,
+            )
+
+
+def _write_remainder(
+    ctx: EmitContext,
+    remainder_op: RefModOperand,
+    dividend: ArithmeticValue,
+    divisor: ArithmeticValue,
+    quotient: ArithmeticValue,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None = None,
+) -> None:
+    truncated = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=truncated, func_name=FuncName("int"), args=(quotient.register,)
+        ),
+        span=span,
+    )
+    product = ctx.fresh_reg()
+    ctx.emit_inst(
+        Binop(
+            result_reg=product,
+            operator=resolve_binop("*"),
+            left=truncated,
+            right=divisor.register,
+        ),
+        span=span,
+    )
+    remainder = ctx.fresh_reg()
+    ctx.emit_inst(
+        Binop(
+            result_reg=remainder,
+            operator=resolve_binop("-"),
+            left=dividend.register,
+            right=product,
+        ),
+        span=span,
+    )
+    _write_result(
+        ctx,
+        _resolve_receiver(ctx, remainder_op, materialised, span=span),
+        remainder,
+        materialised,
+        span=span,
+    )
+
+
 def lower_arithmetic(
     ctx: EmitContext,
     stmt: ArithmeticStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """ADD/SUBTRACT/MULTIPLY/DIVIDE X TO/FROM/BY/INTO Y [GIVING Z]."""
-    span = stmt.span
+    """ADD/SUBTRACT/MULTIPLY/DIVIDE with every sending operand applied to every receiver."""
     if stmt.giving:
-        lower_arithmetic_giving(ctx, stmt, materialised)
+        _lower_arithmetic_giving(ctx, stmt, materialised)
         return
-
-    target_ref, target_rr = ctx.resolve_field_ref(
-        stmt.target.name,
-        materialised,
-        stmt.target.qualifiers,
-        subscripts=stmt.target.subscripts,
-        span=span,
+    sending = _sum_operands(
+        ctx, stmt.operands, stmt.targets, materialised, span=stmt.span
     )
-
-    # Decode source operand
-    if ctx.has_field(stmt.source.name, materialised):
-        source_ref, source_rr = ctx.resolve_field_ref(
-            stmt.source.name, materialised, subscripts=stmt.source.subscripts, span=span
-        )
-        src_decoded = ctx.emit_decode_field(
-            source_rr,
-            source_ref.fl,
-            source_ref.offset_reg,
-            extent=source_ref.extent,
-            span=span,
-        )
-
-        # Handle reference modification on source
-        if stmt.source.ref_mod_start is not None:
-            # Convert to string first
-            src_str_reg = ctx.emit_to_string(src_decoded, span=span)
-
-            # Evaluate start and length
-            start_reg = eval_ref_mod_expr(
-                ctx, stmt.source.ref_mod_start, materialised, span=span
-            )
-            # Convert 1-indexed to 0-indexed
-            one_reg = ctx.const_to_reg(1, span=span)
-            start_0indexed_reg = ctx.fresh_reg()
-            ctx.emit_inst(
-                Binop(
-                    operator=BinopKind.SUB,
-                    left=start_reg,
-                    right=one_reg,
-                    result_reg=start_0indexed_reg,
-                ),
-                span=span,
-            )
-
-            # Perform slice
-            if stmt.source.ref_mod_length is not None:
-                length_reg = eval_ref_mod_expr(
-                    ctx, stmt.source.ref_mod_length, materialised, span=span
-                )
-            else:
-                length_reg = ctx.const_to_reg(999999, span=span)
-
-            sliced_reg = ctx.fresh_reg()
-            ctx.emit_inst(
-                CallFunction(
-                    result_reg=sliced_reg,
-                    func_name=FuncName(BuiltinName.STRING_SLICE),
-                    args=(src_str_reg, start_0indexed_reg, length_reg),
-                ),
-                span=span,
-            )
-
-            # Parse the text as an exact number for arithmetic
-            src_decoded = ctx.fresh_reg()
-            ctx.emit_inst(
-                CallFunction(
-                    result_reg=src_decoded,
-                    func_name=FuncName(BuiltinName.COBOL_PARSE_NUMBER),
-                    args=(sliced_reg,),
-                ),
-                span=span,
-            )
-    else:
-        src_decoded = ctx.const_to_reg(
-            ctx.parse_literal(translate_cobol_figurative(stmt.source.name)), span=span
-        )
-
-    tgt_decoded = ctx.emit_decode_field(
-        target_rr,
-        target_ref.fl,
-        target_ref.offset_reg,
-        extent=target_ref.extent,
-        span=span,
-    )
-
-    # Apply target ref-mod on the READ side: ADD 5 TO Y(4:3) should add to
-    # the Y(4:3) substring value, not to the entire Y field.
-    if stmt.target.ref_mod_start is not None:
-        tgt_str = ctx.emit_to_string(tgt_decoded, span=span)
-        tgt_rm_start = eval_ref_mod_expr(
-            ctx, stmt.target.ref_mod_start, materialised, span=span
-        )
-        one_reg2 = ctx.const_to_reg(1, span=span)
-        tgt_rm_start_0idx = ctx.fresh_reg()
-        ctx.emit_inst(
-            Binop(
-                operator=BinopKind.SUB,
-                left=tgt_rm_start,
-                right=one_reg2,
-                result_reg=tgt_rm_start_0idx,
-            ),
-            span=span,
-        )
-        tgt_rm_len = (
-            eval_ref_mod_expr(ctx, stmt.target.ref_mod_length, materialised, span=span)
-            if stmt.target.ref_mod_length is not None
-            else ctx.const_to_reg(999999, span=span)
-        )
-        tgt_sliced = ctx.fresh_reg()
-        ctx.emit_inst(
-            CallFunction(
-                result_reg=tgt_sliced,
-                func_name=FuncName(BuiltinName.STRING_SLICE),
-                args=(tgt_str, tgt_rm_start_0idx, tgt_rm_len),
-            ),
-            span=span,
-        )
-        tgt_decoded_as_num = ctx.fresh_reg()
-        ctx.emit_inst(
-            CallFunction(
-                result_reg=tgt_decoded_as_num,
-                func_name=FuncName("int"),
-                args=(tgt_sliced,),
-            ),
-            span=span,
-        )
-        tgt_decoded = tgt_decoded_as_num
-
-    has_clause = bool(stmt.on_size_error or stmt.not_on_size_error)
-
-    if not has_clause:
-        result_reg = _emit_verb_operation(
-            ctx,
-            stmt.op,
-            tgt_decoded,
-            src_decoded,
-            stmt.target,
-            stmt.source,
-            [stmt.target],
-            materialised,
-            span=span,
-        )
-        result_str_reg = ctx.emit_to_string(result_reg, span=span)
-        _emit_arithmetic_writeback(
-            ctx,
-            stmt.target,
-            target_ref,
-            target_rr,
-            result_str_reg,
-            materialised,
-            span=span,
-        )
-        return
-
-    # ON SIZE ERROR / NOT ON SIZE ERROR path
-    on_size_err_label = ctx.fresh_label("on_size_err")
-    not_on_size_err_label = ctx.fresh_label("not_on_size_err")
-    end_label = ctx.fresh_label("size_err_end")
-
-    # DIVIDE only: pre-Binop division-by-zero guard
-    if stmt.op == "DIVIDE":
-        zero_reg = ctx.const_to_reg(0, span=span)
-        divzero_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Binop(
-                result_reg=divzero_reg,
-                operator=resolve_binop("=="),
-                left=src_decoded,
-                right=zero_reg,
-            ),
-            span=span,
-        )
-        compute_label = ctx.fresh_label("divide_compute")
-        ctx.emit_inst(
-            BranchIf(
-                cond_reg=divzero_reg,
-                branch_targets=(on_size_err_label, compute_label),
-            ),
-            span=span,
-        )
-        ctx.emit_inst(Label_(label=compute_label), span=span)
-
-    result_reg = _emit_verb_operation(
-        ctx,
-        stmt.op,
-        tgt_decoded,
-        src_decoded,
-        stmt.target,
-        stmt.source,
-        [stmt.target],
-        materialised,
-        span=span,
-    )
-
-    emit_overflow_check(
-        ctx,
-        result_reg,
-        target_ref.fl.type_descriptor,
-        on_size_err_label,
-        not_on_size_err_label,
-        span=span,
-    )
-
-    ctx.emit_inst(Label_(label=on_size_err_label), span=span)
-    for child in stmt.on_size_error:
-        ctx.lower_statement(child, materialised)
-    ctx.emit_inst(Branch(label=end_label), span=span)
-
-    ctx.emit_inst(Label_(label=not_on_size_err_label), span=span)
-    result_str_reg = ctx.emit_to_string(result_reg, span=span)
-    _emit_arithmetic_writeback(
-        ctx, stmt.target, target_ref, target_rr, result_str_reg, materialised, span=span
-    )
-    for child in stmt.not_on_size_error:
-        ctx.lower_statement(child, materialised)
-    ctx.emit_inst(Branch(label=end_label), span=span)
-
-    ctx.emit_inst(Label_(label=end_label), span=span)
+    step = partial(_in_place_step, ctx, stmt.op, sending, materialised, stmt.span)
+    _store(ctx, stmt, sending, stmt.targets, step, _no_follow_up, materialised)
 
 
-def lower_arithmetic_giving(
+def _lower_arithmetic_giving(
     ctx: EmitContext,
     stmt: ArithmeticStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """MULTIPLY/DIVIDE X BY/INTO Y GIVING Z."""
     span = stmt.span
-
-    def _decode_operand(operand: RefModOperand) -> Register:
-        field_name = operand.name
-        if ctx.has_field(field_name, materialised):
-            ref, rr = ctx.resolve_field_ref(
-                field_name, materialised, subscripts=operand.subscripts, span=span
-            )
-            decoded = ctx.emit_decode_field(
-                rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
-            )
-
-            # Apply ref_mod if present
-            if operand.ref_mod_start is not None:
-                src_str = ctx.emit_to_string(decoded, span=span)
-                start_reg = eval_ref_mod_expr(
-                    ctx, operand.ref_mod_start, materialised, span=span
-                )
-                # Convert 1-indexed to 0-indexed
-                one_reg = ctx.const_to_reg(1, span=span)
-                zero_indexed_start = ctx.fresh_reg()
-                ctx.emit_inst(
-                    Binop(
-                        result_reg=zero_indexed_start,
-                        operator=resolve_binop("-"),
-                        left=start_reg,
-                        right=one_reg,
-                    ),
-                    span=span,
-                )
-
-                length_reg = (
-                    eval_ref_mod_expr(
-                        ctx, operand.ref_mod_length, materialised, span=span
-                    )
-                    if operand.ref_mod_length is not None
-                    else ctx.const_to_reg(999999, span=span)
-                )
-
-                # Emit STRING_SLICE
-                sliced = ctx.fresh_reg()
-                ctx.emit_inst(
-                    CallFunction(
-                        result_reg=sliced,
-                        func_name=FuncName("STRING_SLICE"),
-                        args=(src_str, zero_indexed_start, length_reg),
-                    ),
-                    span=span,
-                )
-
-                # Parse the sliced text as an exact number
-                result = ctx.fresh_reg()
-                ctx.emit_inst(
-                    CallFunction(
-                        result_reg=result,
-                        func_name=FuncName(BuiltinName.COBOL_PARSE_NUMBER),
-                        args=(sliced,),
-                    ),
-                    span=span,
-                )
-                return result
-
-            return decoded
-        return ctx.const_to_reg(
-            ctx.parse_literal(translate_cobol_figurative(field_name)), span=span
-        )
-
-    left_reg = _decode_operand(stmt.source)
-    right_reg = _decode_operand(stmt.target)
-
-    has_clause = bool(stmt.on_size_error or stmt.not_on_size_error)
-
-    if has_clause and stmt.op == "DIVIDE":
-        on_size_err_label = ctx.fresh_label("on_size_err")
-        not_on_size_err_label = ctx.fresh_label("not_on_size_err")
-        end_label = ctx.fresh_label("size_err_end")
-        zero_reg = ctx.const_to_reg(0, span=span)
-        divzero_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Binop(
-                result_reg=divzero_reg,
-                operator=resolve_binop("=="),
-                left=right_reg,
-                right=zero_reg,
-            ),
-            span=span,
-        )
-        compute_label = ctx.fresh_label("divide_compute")
-        ctx.emit_inst(
-            BranchIf(
-                cond_reg=divzero_reg,
-                branch_targets=(on_size_err_label, compute_label),
-            ),
-            span=span,
-        )
-        ctx.emit_inst(Label_(label=compute_label), span=span)
-    elif has_clause:
-        on_size_err_label = ctx.fresh_label("on_size_err")
-        not_on_size_err_label = ctx.fresh_label("not_on_size_err")
-        end_label = ctx.fresh_label("size_err_end")
-
-    result_reg = _emit_verb_operation(
-        ctx,
-        stmt.op,
-        left_reg,
-        right_reg,
-        stmt.source,
-        stmt.target,
-        list(stmt.giving),
-        materialised,
-        span=span,
+    first = _decode_operand(ctx, stmt.operands[0], materialised, span=span)
+    rest = _sum_operands(ctx, stmt.operands[1:], stmt.giving, materialised, span=span)
+    result = _emit_verb_operation(
+        ctx, stmt.op, first, rest, stmt.giving, materialised, span=span
     )
-
-    def _emit_remainder_writeback() -> None:
-        # DIVIDE ... GIVING ... REMAINDER r: r = dividend - trunc(quotient) * divisor,
-        # using the SAME left_reg/right_reg the quotient (result_reg) was computed
-        # from, so REMAINDER stays consistent with whatever value GIVING writes
-        # (red-dragon-w0wp).
-        if stmt.op != "DIVIDE" or stmt.remainder is None:
-            return
-        trunc_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            CallFunction(
-                result_reg=trunc_reg, func_name=FuncName("int"), args=(result_reg,)
-            ),
-            span=span,
-        )
-        product_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Binop(
-                result_reg=product_reg,
-                operator=resolve_binop("*"),
-                left=trunc_reg,
-                right=right_reg,
-            ),
-            span=span,
-        )
-        remainder_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Binop(
-                result_reg=remainder_reg,
-                operator=resolve_binop("-"),
-                left=left_reg,
-                right=product_reg,
-            ),
-            span=span,
-        )
-        remainder_op = stmt.remainder
-        remainder_ref, remainder_rr = ctx.resolve_field_ref(
-            remainder_op.name,
-            materialised,
-            remainder_op.qualifiers,
-            subscripts=remainder_op.subscripts,
-            span=span,
-        )
-        remainder_str_reg = ctx.emit_to_string(remainder_reg, span=span)
-        _emit_arithmetic_writeback(
-            ctx,
-            remainder_op,
-            remainder_ref,
-            remainder_rr,
-            remainder_str_reg,
-            materialised,
-            span=span,
-        )
-
-    if not has_clause:
-        for giving_op in stmt.giving:
-            giving_ref, giving_rr = ctx.resolve_field_ref(
-                giving_op.name,
-                materialised,
-                giving_op.qualifiers,
-                subscripts=giving_op.subscripts,
-                span=span,
-            )
-            result_str_reg = ctx.emit_to_string(result_reg, span=span)
-            _emit_arithmetic_writeback(
-                ctx,
-                giving_op,
-                giving_ref,
-                giving_rr,
-                result_str_reg,
-                materialised,
-                span=span,
-            )
-        _emit_remainder_writeback()
-        return
-
-    # Compute combined overflow flag across all GIVING fields.
-    # Keep the giving_op alongside (ref, rr) so ref-mod write-back has it.
-    giving_triples = [
-        (
-            g,
-            *ctx.resolve_field_ref(
-                g.name, materialised, g.qualifiers, subscripts=g.subscripts, span=span
-            ),
-        )
-        for g in stmt.giving
-    ]
-    giving_pairs = [(ref, rr) for (_, ref, rr) in giving_triples]
-    overflow_flags = [
-        _compute_overflow_flag(ctx, result_reg, ref.fl.type_descriptor, span=span)
-        for ref, _ in giving_pairs
-    ]
-    combined_flag = overflow_flags[0]
-    for flag in overflow_flags[1:]:
-        new_combined = ctx.fresh_reg()
-        ctx.emit_inst(
-            Binop(
-                result_reg=new_combined,
-                operator=resolve_binop("or"),
-                left=combined_flag,
-                right=flag,
-            ),
-            span=span,
-        )
-        combined_flag = new_combined
-
-    ctx.emit_inst(
-        BranchIf(
-            cond_reg=combined_flag,
-            branch_targets=(on_size_err_label, not_on_size_err_label),
-        ),
-        span=span,
-    )
-
-    ctx.emit_inst(Label_(label=on_size_err_label), span=span)
-    for child in stmt.on_size_error:
-        ctx.lower_statement(child, materialised)
-    ctx.emit_inst(Branch(label=end_label), span=span)
-
-    ctx.emit_inst(Label_(label=not_on_size_err_label), span=span)
-    for g_op, ref, rr in giving_triples:
-        result_str_reg = ctx.emit_to_string(result_reg, span=span)
-        _emit_arithmetic_writeback(
-            ctx, g_op, ref, rr, result_str_reg, materialised, span=span
-        )
-    _emit_remainder_writeback()
-    for child in stmt.not_on_size_error:
-        ctx.lower_statement(child, materialised)
-    ctx.emit_inst(Branch(label=end_label), span=span)
-
-    ctx.emit_inst(Label_(label=end_label), span=span)
+    step = partial(_giving_step, ctx, result, materialised, span)
+    remainder = partial(_emit_remainder, ctx, stmt, first, rest, result, materialised)
+    _store(ctx, stmt, rest, stmt.giving, step, remainder, materialised)
 
 
 def lower_compute(

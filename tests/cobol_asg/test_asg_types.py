@@ -372,7 +372,7 @@ class TestCobolStatement:
         assert parse_statement(stmt.to_dict()) == stmt
 
     def test_add_statement(self):
-        data = {"type": "ADD", "operands": ["WS-X", "WS-Y"]}
+        data = {"type": "ADD", "operands": ["WS-X"], "targets": ["WS-Y"]}
         stmt = parse_statement(data)
         assert isinstance(stmt, ArithmeticStatement)
         assert stmt.op == "ADD"

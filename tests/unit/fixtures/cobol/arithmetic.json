@@ -13,8 +13,8 @@
         {
             "name": "MAIN-PARA",
             "statements": [
-                {"type": "ADD", "operands": ["50", "WS-TOTAL"]},
-                {"type": "SUBTRACT", "operands": ["25", "WS-TOTAL"]},
+                {"type": "ADD", "operands": ["50"], "targets": ["WS-TOTAL"]},
+                {"type": "SUBTRACT", "operands": ["25"], "targets": ["WS-TOTAL"]},
                 {"type": "STOP_RUN"}
             ]
         }
