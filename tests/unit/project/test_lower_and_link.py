@@ -34,6 +34,7 @@ from interpreter.run import (
 )
 from interpreter.trace_types import ExecutionTrace
 from interpreter.types.type_expr import UNKNOWN
+from interpreter.vm.builtins import core_builtins
 from interpreter.vm.vm_types import VMState
 from tests.covers import NotLanguageFeature, covers
 from tests.integration.cobol_helpers import ws_region
@@ -116,7 +117,11 @@ def _image(sources: tuple[bytes, ...], work_dir: Path) -> LinkedProgram:
 
 def _entered(image: LinkedProgram, name: str) -> VMState:
     return run_linked(
-        image, ProgramEntry(name), max_steps=20_000, initial_vm=initial_vm_state()
+        image,
+        ProgramEntry(name),
+        max_steps=20_000,
+        initial_vm=initial_vm_state(),
+        builtins=core_builtins(),
     )
 
 
@@ -146,6 +151,7 @@ def test_lowered_then_linked_equals_compile(tmp_path):
         EntryPoint.function(lambda ref: ref.label == entry),
         max_steps=20_000,
         initial_vm=initial_vm_state(),
+        builtins=core_builtins(),
     )
     assert (
         _ws_bytes(entered, "MAIN", declarations_of(image, "MAIN")),
@@ -180,7 +186,9 @@ def test_image_runs_each_program_entered_by_name(tmp_path, capsys):
             tuple(field_positions(vm.declarations)),
         )
 
-    traced, trace = run_linked_traced(image, ProgramEntry("C"), max_steps=20_000)
+    traced, trace = run_linked_traced(
+        image, ProgramEntry("C"), max_steps=20_000, builtins=core_builtins()
+    )
     capsys.readouterr()
     assert (
         [entered(n) for n in ("B", "C", "A")],
@@ -205,7 +213,9 @@ def test_entering_an_absent_program_names_it(tmp_path):
     with pytest.raises(ProgramNotInImage) as absent:
         _entered(image, "Z")
     with pytest.raises(ProgramNotInImage) as traced:
-        run_linked_traced(image, ProgramEntry("Z"), max_steps=20_000)
+        run_linked_traced(
+            image, ProgramEntry("Z"), max_steps=20_000, builtins=core_builtins()
+        )
     with pytest.raises(ProgramNotInImage) as declared:
         declarations_of(image, "Z")
     assert (
@@ -310,7 +320,11 @@ def _suspending_at_entry(unit_file: Path) -> Path:
 
 def _suspended(image: LinkedProgram, name: str) -> ExecutionState:
     match run_linked_resumable(
-        image, ProgramEntry(name), max_steps=20_000, initial_vm=initial_vm_state()
+        image,
+        ProgramEntry(name),
+        max_steps=20_000,
+        initial_vm=initial_vm_state(),
+        builtins=core_builtins(),
     ):
         case Suspended(state=state):
             return state
@@ -319,7 +333,7 @@ def _suspended(image: LinkedProgram, name: str) -> ExecutionState:
 
 
 def _resumed(image: LinkedProgram, state: ExecutionState) -> VMState:
-    match resume_linked(image, state, max_steps=20_000):
+    match resume_linked(image, state, max_steps=20_000, builtins=core_builtins()):
         case Completed(vm=vm):
             return vm
         case other:

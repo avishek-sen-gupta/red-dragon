@@ -13,6 +13,7 @@ from interpreter.field_name import FieldName
 from interpreter.project.entry_point import EntryPoint
 from interpreter.run import initial_vm_state, run_linked
 from interpreter.var_name import VarName
+from interpreter.vm.builtins import core_builtins
 from interpreter.vm.vm_types import Pointer
 from tests.covers import covers
 from tests.integration.cobol_helpers import compile_programs_in
@@ -70,6 +71,7 @@ def test_each_argument_lands_in_the_parameter_using_lists_at_its_position(
         ),
         max_steps=3000,
         initial_vm=initial_vm_state(),
+        builtins=core_builtins(),
     )
 
     ws = _main_working_storage(vm)

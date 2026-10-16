@@ -17,6 +17,7 @@ from interpreter.run import (
     run_resumable,
 )
 from interpreter.run_types import VMConfig
+from interpreter.vm.builtins import core_builtins
 from tests.covers import NotLanguageFeature, covers
 from tests.unit.cfg_helpers import build_simple_cfg, make_instructions
 
@@ -59,7 +60,11 @@ def test_a_linked_program_that_never_ends_is_budget_exhausted(tmp_path: Path):
     def outcome(directory: Path):
         linked = compile_directory(directory, Language.PYTHON)
         return run_linked_resumable(
-            linked, EntryPoint.top_level(), max_steps=50, initial_vm=initial_vm_state()
+            linked,
+            EntryPoint.top_level(),
+            max_steps=50,
+            initial_vm=initial_vm_state(),
+            builtins=core_builtins(),
         )
 
     runaway = outcome(

@@ -5,7 +5,7 @@ from __future__ import annotations
 import copy
 import logging
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from dataclasses import field as dataclass_field
 from pathlib import Path
@@ -52,6 +52,8 @@ from interpreter.run_types import (
     UnresolvedCallStrategy,
     VMConfig,
 )  # noqa: F401 — re-exported for backwards compatibility
+from interpreter.vm.builtin import Builtin
+from interpreter.vm.builtins import core_builtins
 from interpreter.trace_types import ExecutionTrace, TraceStep
 from interpreter.type_name import TypeName
 from interpreter.types.coercion.binop_coercion import (
@@ -340,6 +342,7 @@ def _make_base_ctx(
         function_scoping=strategies.function_scoping,
         symbol_table=strategies.symbol_table,
         permit_unresolved_call_targets=config.permit_unresolved_call_targets,
+        builtins=config.builtins,
     )
 
 
@@ -753,6 +756,7 @@ def execute_cfg_traced(
         function_scoping=strategies.function_scoping,
         symbol_table=strategies.symbol_table,
         permit_unresolved_call_targets=config.permit_unresolved_call_targets,
+        builtins=config.builtins,
     )
 
     for step in range(config.max_steps):
@@ -900,6 +904,7 @@ def run_linked(
     unresolved_call_strategy: UnresolvedCallStrategy = UnresolvedCallStrategy.SYMBOLIC,
     io_provider: Any = None,  # Any: CobolIOProvider — optional COBOL I/O injection
     *,
+    builtins: Mapping[FuncName, Builtin],
     initial_vm: VMState,
     permit_unresolved_call_targets: bool = True,
     step_callback: Callable[[int, str], None] | None = None,
@@ -916,6 +921,7 @@ def run_linked(
         backend: LLM backend for interpreter fallback.
         unresolved_call_strategy: Resolution strategy for unknown calls.
         io_provider: Optional COBOL I/O provider (e.g. StubIOProvider for testing).
+        builtins: The builtins table this run resolves builtin calls through.
         initial_vm: VM state to execute against. Use ``initial_vm_state()`` for a
             fresh one.
         permit_unresolved_call_targets: When False, a CALL_WITH_MEMORY to a
@@ -934,6 +940,7 @@ def run_linked(
         source_language=linked.language,
         unresolved_call_strategy=unresolved_call_strategy,
         permit_unresolved_call_targets=permit_unresolved_call_targets,
+        builtins=builtins,
         io_provider=io_provider,
         step_callback=step_callback,
         step_callback_interval=step_callback_interval,
@@ -1032,6 +1039,7 @@ def run_linked_resumable(
     unresolved_call_strategy: UnresolvedCallStrategy = UnresolvedCallStrategy.SYMBOLIC,
     io_provider: Any = None,
     *,
+    builtins: Mapping[FuncName, Builtin],
     initial_vm: VMState,
     permit_unresolved_call_targets: bool = True,
 ) -> RunOutcome:
@@ -1050,6 +1058,7 @@ def run_linked_resumable(
         source_language=linked.language,
         unresolved_call_strategy=unresolved_call_strategy,
         permit_unresolved_call_targets=permit_unresolved_call_targets,
+        builtins=builtins,
         io_provider=io_provider,
     )
     dispatch, entered = _entering(linked, entry_point)
@@ -1099,6 +1108,8 @@ def resume_linked(
     unresolved_call_strategy: UnresolvedCallStrategy = UnresolvedCallStrategy.SYMBOLIC,
     io_provider: Any = None,
     permit_unresolved_call_targets: bool = True,
+    *,
+    builtins: Mapping[FuncName, Builtin],
 ) -> RunOutcome:
     """Resume a ``run_linked_resumable`` continuation, injecting ``value`` at the
     suspension point, and run to the next suspension or to termination."""
@@ -1110,6 +1121,7 @@ def resume_linked(
         source_language=linked.language,
         unresolved_call_strategy=unresolved_call_strategy,
         permit_unresolved_call_targets=permit_unresolved_call_targets,
+        builtins=builtins,
         io_provider=io_provider,
     )
     if io_provider is not None:
@@ -1134,6 +1146,8 @@ def run_linked_traced(
     backend: str = LLMProvider.CLAUDE,
     unresolved_call_strategy: UnresolvedCallStrategy = UnresolvedCallStrategy.SYMBOLIC,
     permit_unresolved_call_targets: bool = True,
+    *,
+    builtins: Mapping[FuncName, Builtin],
 ) -> tuple[VMState, ExecutionTrace]:
     """Execute a LinkedProgram and return a trace of execution steps.
 
@@ -1164,6 +1178,7 @@ def run_linked_traced(
         source_language=linked.language,
         unresolved_call_strategy=unresolved_call_strategy,
         permit_unresolved_call_targets=permit_unresolved_call_targets,
+        builtins=builtins,
     )
     initial_vm = initial_vm_state()
     dispatch, entered = _entering(linked, entry_point)
@@ -1380,6 +1395,7 @@ def run(
         backend=backend,
         unresolved_call_strategy=unresolved_call_strategy,
         io_provider=io_provider,
+        builtins=core_builtins(),
         initial_vm=initial_vm_state(io_provider=io_provider, null_access=null_access),
     )
     stats.execution_time = time.perf_counter() - exec_start

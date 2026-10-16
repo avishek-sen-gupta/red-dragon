@@ -63,7 +63,7 @@ All in `interpreter/run.py`.
 | Function | Does |
 |---|---|
 | `run(source, language, …, null_access=)` | Lower, build a single-module `LinkedProgram` (COBOL goes through `compile_cobol`), then call `run_linked`. Returns the final `VMState`. |
-| `run_linked(linked, entry_point, …, initial_vm=)` | Run a linked program. A top-level entry runs `merged_cfg.entry`. A function entry runs in two phases: the module preamble, then the chosen function, sharing the step budget. `ProgramEntry(name)` is a function entry at the image's program of that name; `ProgramNotInImage` if it has none. |
+| `run_linked(linked, entry_point, …, builtins=, initial_vm=)` | Run a linked program with the builtins table it is given (`run_linked_resumable`, `resume_linked` and `run_linked_traced` take it too; `run` passes `core_builtins()`). A top-level entry runs `merged_cfg.entry`. A function entry runs in two phases: the module preamble, then the chosen function, sharing the step budget. `ProgramEntry(name)` is a function entry at the image's program of that name; `ProgramNotInImage` if it has none. |
 | `execute_cfg(cfg, entry, registry, config, strategies, vm=)` | Run one CFG against a caller-supplied `VMState`. Raises if it reaches `SUSPEND`. |
 | `run_resumable` / `resume` | As `execute_cfg`, but return `Suspended`, `Completed` or `BudgetExhausted` (see [6.5](#65-suspend-and-resume)). |
 | `run_linked_resumable` / `resume_linked` | The `LinkedProgram` versions. The preamble runs non-resumably. A suspension's `ExecutionState.entered` names the program whose declarations the run holds; `resume_linked` restores them from it. |
@@ -286,7 +286,7 @@ A function definition lowers to `CONST` with a `FunctionType` and the function's
 
 ```
 0. io_provider        __cobol_* names the injected COBOL I/O provider recognises
-1. builtin            Builtins.TABLE (§13)
+1. builtin            the run's table, HandlerContext.builtins (§13)
 2. scope lookup       walk call_stack innermost-out for the name; not found → call_resolver
 2b. heap call-index   f(i) on a heap array (Scala apply)
 2c. native index      s(i) on a Python str or list
@@ -304,7 +304,7 @@ A function definition lowers to `CONST` with a `FunctionType` and the function's
 ```
 1. receiver is a BoundFuncRef  → call it
 2. receiver is a ClassRef      → static method from registry.class_methods, no self
-3. method builtin              Builtins.METHOD_TABLE
+3. method builtin              METHOD_TABLE
 4. receiver type not in the registry:
      heap field holding a BoundFuncRef → call it with the receiver as first arg (Lua tables, JS objects)
      else                              → call_resolver.resolve_method
@@ -484,12 +484,14 @@ COBOL arithmetic uses `CobolNumber` (`Decimal`) from `cobol_numeric`, a top-leve
 
 ## 13. Built-in functions
 
-`Builtins` in `interpreter/vm/builtins.py`:
+`interpreter/vm/builtins.py`. No table is global: each run is given one (`VMConfig.builtins`, then `HandlerContext.builtins`).
 
-- `TABLE: dict[FuncName, builtin]` — `len`, `strlen`, `range`, `print`, `println`, `int`, `float`, `str`, `bool`, `abs`, `max`, `min`, `keys`, `arrayOf` and its aliases, `slice`, `clone`, `isinstance`, `object_rest`, `str_upper`, `str_lower`, `str_strip`, `list_append`, `dict_contains_key`, `__py_contains__`, plus the COBOL `BYTE_BUILTINS` from `interpreter/cobol/byte_builtins.py`.
-- `METHOD_TABLE` — `subList`, `substring`, `slice`, `to_string`, `toString`, `length`, `size`, `Length`.
+- `core_builtins()` — a fresh table holding `len`, `strlen`, `range`, `print`, `println`, `int`, `float`, `str`, `bool`, `abs`, `max`, `min`, `keys`, `arrayOf` and its aliases, `slice`, `clone`, `isinstance`, `object_rest`, `str_upper`, `str_lower`, `str_strip`, `list_append`, `dict_contains_key`, `__py_contains__`, plus the COBOL `BYTE_BUILTINS` from `interpreter/cobol/byte_builtins.py`.
+- `compose_builtins(*tables)` — one read-only table from several; a name defined in two raises `DuplicateBuiltinError` naming it. A coprocessor runtime adds its entries this way, never by overwriting.
+- `METHOD_TABLE` — a read-only module constant, the same for every run:
+  `subList`, `substring`, `slice`, `to_string`, `toString`, `length`, `size`, `Length`.
 
-A builtin takes `(args: list[TypedValue], vm)` and returns `BuiltinResult(value, new_objects, heap_writes)`; heap effects travel in the result. `UNCOMPUTABLE` becomes a symbolic. Language-specific helpers use mangled names (`__py_contains__`) so they cannot clash with user functions.
+A builtin satisfies the `Builtin` protocol (`interpreter/vm/builtin.py`): it takes `(args: list[TypedValue], vm)` and returns `BuiltinResult(value, new_objects, heap_writes)`; heap effects travel in the result. `UNCOMPUTABLE` becomes a symbolic. Language-specific helpers use mangled names (`__py_contains__`) so they cannot clash with user functions.
 
 `__py_contains__` exists because Python list literals are heap objects, which `BINOP_TABLE`'s `in` cannot see. The Python frontend lowers `x in c` to it and adds `UNOP not` for `not in`.
 
@@ -535,7 +537,7 @@ interpreter/
 │   ├── executor.py       HandlerContext, LocalExecutor.DISPATCH
 │   ├── segment.py        Segment, FIRST_ADDRESS
 │   ├── null_access.py, warn_and_ignore.py, halt_on_null.py, null_address_access.py   NULL-page strategies
-│   ├── builtins.py       Builtins.TABLE, METHOD_TABLE
+│   ├── builtins.py       core_builtins, compose_builtins, METHOD_TABLE
 │   ├── unresolved_call.py  SymbolicResolver, LLMPlausibleResolver
 │   ├── field_fallback.py   NoFieldFallback, ImplicitThisFieldFallback
 │   └── function_scoping.py Local / GlobalLeak function scoping

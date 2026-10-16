@@ -4,6 +4,9 @@
 from __future__ import annotations
 
 import logging
+from collections import Counter
+from collections.abc import Mapping
+from types import MappingProxyType
 from typing import Any
 
 from interpreter.address import Address
@@ -15,6 +18,9 @@ from interpreter.func_name import FuncName
 from interpreter.type_name import TypeName
 from interpreter.types.type_expr import pointer, scalar
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
+from interpreter.vm.builtin import Builtin
+from interpreter.vm.duplicate_builtin_error import DuplicateBuiltinError
+from interpreter.vm.method_builtin import MethodBuiltin
 from interpreter.vm.vm import Operators, VMState, _heap_addr, _is_symbolic
 from interpreter.vm.vm_types import (
     BuiltinResult,
@@ -491,62 +497,65 @@ def _builtin_isinstance(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     return BuiltinResult(value=typed(False, scalar(TypeName("Boolean"))))
 
 
-class Builtins:
-    """Table of built-in function implementations."""
+_GENERAL_BUILTINS: Mapping[FuncName, Builtin] = MappingProxyType(
+    {
+        FuncName("len"): _builtin_len,
+        FuncName("strlen"): _builtin_len,
+        FuncName("range"): _builtin_range,
+        FuncName("print"): _builtin_print,
+        FuncName("println"): _builtin_println,
+        FuncName("int"): _builtin_int,
+        FuncName("float"): _builtin_float,
+        FuncName("str"): _builtin_str,
+        FuncName("bool"): _builtin_bool,
+        FuncName("abs"): _builtin_abs,
+        FuncName("max"): _builtin_max,
+        FuncName("min"): _builtin_min,
+        FuncName("keys"): _builtin_keys,
+        FuncName("arrayOf"): _builtin_array_of,
+        FuncName("intArrayOf"): _builtin_array_of,
+        FuncName("listOf"): _builtin_array_of,
+        FuncName("mutableListOf"): _builtin_array_of,
+        FuncName("Array"): _builtin_array_of,
+        FuncName("slice"): _builtin_slice,
+        FuncName("clone"): _builtin_clone,
+        FuncName("isinstance"): _builtin_isinstance,
+        FuncName("object_rest"): _builtin_object_rest,
+        FuncName("str_upper"): _builtin_str_upper,
+        FuncName("str_lower"): _builtin_str_lower,
+        FuncName("str_strip"): _builtin_str_strip,
+        FuncName("list_append"): _builtin_list_append,
+        FuncName("dict_contains_key"): _builtin_dict_contains_key,
+        FuncName("__py_contains__"): _builtin_py_contains,
+    }
+)
 
-    TABLE: dict[FuncName, Any] = (
-        {  # Any: Callable[(list[TypedValue], VMState) -> BuiltinResult] — display boundary
-            FuncName("len"): _builtin_len,
-            FuncName("strlen"): _builtin_len,
-            FuncName("range"): _builtin_range,
-            FuncName("print"): _builtin_print,
-            FuncName("println"): _builtin_println,
-            FuncName("int"): _builtin_int,
-            FuncName("float"): _builtin_float,
-            FuncName("str"): _builtin_str,
-            FuncName("bool"): _builtin_bool,
-            FuncName("abs"): _builtin_abs,
-            FuncName("max"): _builtin_max,
-            FuncName("min"): _builtin_min,
-            FuncName("keys"): _builtin_keys,
-            FuncName("arrayOf"): _builtin_array_of,
-            FuncName("intArrayOf"): _builtin_array_of,
-            FuncName("listOf"): _builtin_array_of,
-            FuncName("mutableListOf"): _builtin_array_of,
-            FuncName("Array"): _builtin_array_of,
-            FuncName("slice"): _builtin_slice,
-            FuncName("clone"): _builtin_clone,
-            FuncName("isinstance"): _builtin_isinstance,
-            FuncName("object_rest"): _builtin_object_rest,
-            FuncName("str_upper"): _builtin_str_upper,
-            FuncName("str_lower"): _builtin_str_lower,
-            FuncName("str_strip"): _builtin_str_strip,
-            FuncName("list_append"): _builtin_list_append,
-            FuncName("dict_contains_key"): _builtin_dict_contains_key,
-            FuncName("__py_contains__"): _builtin_py_contains,
-            **BYTE_BUILTINS,
-        }
+
+def compose_builtins(
+    *tables: Mapping[FuncName, Builtin],
+) -> Mapping[FuncName, Builtin]:
+    counts = Counter(name for table in tables for name in table)
+    duplicates = [name for name, count in counts.items() if count > 1]
+    if duplicates:
+        raise DuplicateBuiltinError(duplicates[0])
+    return MappingProxyType(
+        {name: fn for table in tables for name, fn in table.items()}
     )
 
-    @classmethod
-    def lookup_builtin(cls, name: FuncName) -> Any | None:
-        return cls.TABLE.get(name)
 
-    @classmethod
-    def lookup_method_builtin(cls, name: FuncName) -> Any | None:
-        return cls.METHOD_TABLE.get(name)
+def core_builtins() -> Mapping[FuncName, Builtin]:
+    return compose_builtins(_GENERAL_BUILTINS, BYTE_BUILTINS)
 
-    # Method builtins: obj.method(args) → builtin(obj, *args)
-    # Signature: (obj, args: list, vm) -> Any
-    METHOD_TABLE: dict[FuncName, Any] = (
-        {  # Any: Callable[(TypedValue, list[TypedValue], VMState) -> BuiltinResult] — display boundary
-            FuncName("subList"): _method_slice,
-            FuncName("substring"): _method_slice,
-            FuncName("slice"): _method_slice,
-            FuncName("to_string"): _method_to_string,
-            FuncName("toString"): _method_to_string,
-            FuncName("length"): _method_length,
-            FuncName("size"): _method_length,
-            FuncName("Length"): _method_length,
-        }
-    )
+
+METHOD_TABLE: Mapping[FuncName, MethodBuiltin] = MappingProxyType(
+    {
+        FuncName("subList"): _method_slice,
+        FuncName("substring"): _method_slice,
+        FuncName("slice"): _method_slice,
+        FuncName("to_string"): _method_to_string,
+        FuncName("toString"): _method_to_string,
+        FuncName("length"): _method_length,
+        FuncName("size"): _method_length,
+        FuncName("Length"): _method_length,
+    }
+)

@@ -7,6 +7,7 @@ import logging
 from interpreter.constants import Language
 from interpreter.project.entry_point import EntryPoint
 from interpreter.run import run, run_linked_traced
+from interpreter.vm.builtins import core_builtins
 from tests.covers import NotLanguageFeature, covers
 from tests.unit.test_run_linked_traced import _build_linked_program
 
@@ -47,6 +48,7 @@ class TestStepBudgetExhausted:
                 _build_linked_program(INFINITE_LOOP, Language.PYTHON),
                 entry_point=EntryPoint.top_level(),
                 max_steps=50,
+                builtins=core_builtins(),
             )
         assert _budget_warned(caplog)
 
@@ -57,5 +59,6 @@ class TestStepBudgetExhausted:
                 _build_linked_program(TERMINATING, Language.PYTHON),
                 entry_point=EntryPoint.top_level(),
                 max_steps=500,
+                builtins=core_builtins(),
             )
         assert not _budget_warned(caplog)

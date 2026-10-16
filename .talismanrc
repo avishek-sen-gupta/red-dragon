@@ -1,5 +1,9 @@
 threshold: low
 fileignoreconfig:
+- filename: tests/unit/test_builtin_keys.py
+  checksum: ab2b3d3d790fb1f9495a81a502b80af641887d71b09042ddba13cbc7bc7805fd
+- filename: interpreter/vm/builtins.py
+  checksum: 36c9f6664e15176af9d8902cd0409b9bddc4936db11c695f7effa4800af498d0
 - filename: interpreter/vm/vm_types.py
   checksum: 3974d55425bdf94d6a89c2b8eb0e66b31775a072b8a4bf6209df76d28374a7e2
 - filename: interpreter/vm/vm.py
@@ -7,7 +11,7 @@ fileignoreconfig:
 - filename: interpreter.py
   checksum: 5337b3918a4bbf320a088669079fbe7fe525cb45bf947a62ad3f5f15de093eec
 - filename: docs/notes-on-vm-design.md
-  checksum: 4dd93945c821ee9608b4fa7cd8084f4c75e83176b48b3161b9afa867bb252040
+  checksum: 8eec207a444b807fc084f83ac389009b25c4715701023a60ea224d58c84e6cc5
 - filename: docs/architectural-design-decisions.md
   checksum: 8ffbed22526c252853a26b81ae425ef59f49d69ee637f189302c7d8bcb0ede02
 - filename: docs/ir-reference.md

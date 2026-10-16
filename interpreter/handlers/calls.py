@@ -42,7 +42,7 @@ from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_expr import UNKNOWN, TypeExpr, parse_type, pointer, scalar
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter.var_name import VarName
-from interpreter.vm.builtins import Builtins, _builtin_array_of
+from interpreter.vm.builtins import METHOD_TABLE, _builtin_array_of
 from interpreter.vm.vm import (
     ClosureEnvironment,
     ExecutionResult,
@@ -118,14 +118,13 @@ def _try_builtin_call(
     args: list[TypedValue],
     inst: InstructionBase,
     vm: VMState,
+    ctx: HandlerContext,
 ) -> ExecutionResult:
-    """Attempt to handle a call via the builtin table."""
-    builtin_fn = Builtins.lookup_builtin(
-        func_name if isinstance(func_name, FuncName) else FuncName(func_name)
-    )
-    if builtin_fn is None:
+    """Attempt to handle a call via the run's builtin table."""
+    name = func_name if isinstance(func_name, FuncName) else FuncName(func_name)
+    if name not in ctx.builtins:
         return ExecutionResult.not_handled()
-    result = builtin_fn(args, vm)
+    result = ctx.builtins[name](args, vm)
     if result.value is Operators.UNCOMPUTABLE:
         args_desc = ", ".join(_symbolic_name(a.value) for a in args)
         sym = vm.fresh_symbolic(hint=f"{func_name}({args_desc})")
@@ -344,7 +343,7 @@ def _handle_call_function(
         )
 
     # 1. Try builtins
-    builtin_result = _try_builtin_call(str(base_name), args, inst, vm)
+    builtin_result = _try_builtin_call(str(base_name), args, inst, vm, ctx)
     if builtin_result.handled:
         return builtin_result
 
@@ -539,9 +538,8 @@ def _handle_call_method(
             )
 
     # Method builtins: subList, substring, slice, etc.
-    method_fn = Builtins.lookup_method_builtin(method_name)
-    if method_fn is not None:
-        result = method_fn(obj_val, args, vm)
+    if method_name in METHOD_TABLE:
+        result = METHOD_TABLE[method_name](obj_val, args, vm)
         if result.value is not Operators.UNCOMPUTABLE:
             return ExecutionResult.success(
                 StateUpdate(

@@ -21,6 +21,7 @@ from interpreter.cli_output import emit_err
 from interpreter.project.coprocessor_compile import compile_program
 from interpreter.project.entry_point import EntryPoint
 from interpreter.run import initial_vm_state, run_linked
+from interpreter.vm.builtins import core_builtins
 
 
 def _configure_logging(level: str) -> None:
@@ -91,6 +92,7 @@ def main() -> int:
         max_steps=args.max_steps,
         verbose=args.verbose,
         initial_vm=initial_vm_state(),
+        builtins=core_builtins(),
     )
     return 0
 

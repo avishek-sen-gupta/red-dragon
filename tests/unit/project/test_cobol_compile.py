@@ -41,6 +41,7 @@ from interpreter.run import (
     run_linked_resumable,
     run_linked_traced,
 )
+from interpreter.vm.builtins import core_builtins
 from interpreter.vm.vm_types import VMState
 from tests.covers import NotLanguageFeature, covers
 
@@ -99,6 +100,7 @@ def test_compile_cobol_single_module_runs():
         entry_point=EntryPoint.top_level(),
         max_steps=10_000,
         initial_vm=initial_vm_state(),
+        builtins=core_builtins(),
     )
     assert vm is not None
 
@@ -139,6 +141,7 @@ def test_compile_cobol_links_extra_subprogram():
         entry_point=EntryPoint.top_level(),
         max_steps=10_000,
         initial_vm=initial_vm_state(),
+        builtins=core_builtins(),
     )
     assert vm is not None
 
@@ -181,13 +184,21 @@ _FILE_CALLEE = b"""\
 
 def _plain_run(linked: LinkedProgram, entry_point: EntryPoint) -> VMState:
     return run_linked(
-        linked, entry_point=entry_point, max_steps=10_000, initial_vm=initial_vm_state()
+        linked,
+        entry_point=entry_point,
+        max_steps=10_000,
+        initial_vm=initial_vm_state(),
+        builtins=core_builtins(),
     )
 
 
 def _resumable_run(linked: LinkedProgram, entry_point: EntryPoint) -> VMState:
     match run_linked_resumable(
-        linked, entry_point=entry_point, max_steps=10_000, initial_vm=initial_vm_state()
+        linked,
+        entry_point=entry_point,
+        max_steps=10_000,
+        initial_vm=initial_vm_state(),
+        builtins=core_builtins(),
     ):
         case Completed(vm=vm):
             return vm
@@ -196,7 +207,9 @@ def _resumable_run(linked: LinkedProgram, entry_point: EntryPoint) -> VMState:
 
 
 def _traced_run(linked: LinkedProgram, entry_point: EntryPoint) -> VMState:
-    vm, _trace = run_linked_traced(linked, entry_point=entry_point, max_steps=10_000)
+    vm, _trace = run_linked_traced(
+        linked, entry_point=entry_point, max_steps=10_000, builtins=core_builtins()
+    )
     return vm
 
 
@@ -206,6 +219,7 @@ def _resumed_run(linked: LinkedProgram, entry_point: EntryPoint) -> VMState:
         entry_point=EntryPoint.top_level(),
         max_steps=10_000,
         initial_vm=initial_vm_state(),
+        builtins=core_builtins(),
     )
     state = ExecutionState(
         vm=dataclasses.replace(after_start_up, declarations=()),
@@ -216,7 +230,7 @@ def _resumed_run(linked: LinkedProgram, entry_point: EntryPoint) -> VMState:
         resume_reg=NO_REGISTER,
         entered=linked.entry_func_label,
     )
-    match resume_linked(linked, state, max_steps=10_000):
+    match resume_linked(linked, state, max_steps=10_000, builtins=core_builtins()):
         case Completed(vm=vm):
             return vm
         case other:
@@ -274,6 +288,7 @@ def test_the_traced_run_starts_with_the_mains_declarations():
         linked,
         entry_point=EntryPoint.function(lambda ref: ref.label == entry),
         max_steps=10_000,
+        builtins=core_builtins(),
     )
     match trace.initial_state:
         case VMState(declarations=(first, *_)):
@@ -350,6 +365,7 @@ def test_compile_cobol_work_dir_produces_runnable_program(tmp_path):
         entry_point=EntryPoint.top_level(),
         max_steps=10_000,
         initial_vm=initial_vm_state(),
+        builtins=core_builtins(),
     )
     assert vm is not None
 

@@ -24,6 +24,7 @@ from interpreter.handlers.calls import UnresolvedProgramError
 from interpreter.project.entry_point import EntryPoint
 from interpreter.run import initial_vm_state, run_linked
 from interpreter.var_name import VarName
+from interpreter.vm.builtins import core_builtins
 from interpreter.vm.vm_types import Pointer
 from tests.covers import covers
 from tests.integration.cobol_helpers import (
@@ -84,6 +85,7 @@ def _run(tmp_path, main_src: str):
         entry_point=_MAIN_ENTRY,
         max_steps=3000,
         initial_vm=initial_vm_state(),
+        builtins=core_builtins(),
     )
 
 
@@ -227,6 +229,7 @@ def test_call_literal_to_nothing_raises_only_when_unresolved_targets_are_refused
             max_steps=3000,
             initial_vm=initial_vm_state(),
             permit_unresolved_call_targets=False,
+            builtins=core_builtins(),
         )
     assert (_ticket(permitted), str(refused.value)) == (
         0,

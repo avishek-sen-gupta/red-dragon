@@ -22,6 +22,7 @@ from interpreter.field_name import FieldName
 from interpreter.project.entry_point import EntryPoint
 from interpreter.run import initial_vm_state, run, run_linked
 from interpreter.var_name import VarName
+from interpreter.vm.builtins import core_builtins
 from interpreter.vm.vm_types import Pointer
 from tests.covers import NotLanguageFeature, covers
 from tests.integration.cobol_helpers import (
@@ -5626,6 +5627,7 @@ class TestSubprogramWsPersistence:
             ),
             max_steps=500,
             initial_vm=initial_vm_state(),
+            builtins=core_builtins(),
         )
 
         # Find SUBPROG's singleton and read WS-COUNTER.
@@ -5714,6 +5716,7 @@ class TestSubprogramWsPersistence:
             ),
             max_steps=5000,
             initial_vm=initial_vm_state(),
+            builtins=core_builtins(),
         )
 
         key = VarName("__prog_MAINCLR")
@@ -5791,6 +5794,7 @@ class TestCallUsingByReference:
             ),
             max_steps=500,
             initial_vm=initial_vm_state(),
+            builtins=core_builtins(),
         )
 
         def _ws(prog_name: str) -> bytearray:
@@ -5897,6 +5901,7 @@ class TestCallUsingByReference:
             ),
             max_steps=2000,
             initial_vm=initial_vm_state(),
+            builtins=core_builtins(),
         )
 
         def _ws(prog_name: str) -> bytearray:
@@ -5987,6 +5992,7 @@ class TestCallUsingByReference:
             ),
             max_steps=500,
             initial_vm=initial_vm_state(),
+            builtins=core_builtins(),
         )
 
         key = VarName("__prog_MAINPROG")
@@ -6059,6 +6065,7 @@ class TestCallUsingByValue:
             ),
             max_steps=500,
             initial_vm=initial_vm_state(),
+            builtins=core_builtins(),
         )
 
         def _ws(prog_name: str) -> bytearray:
@@ -6145,6 +6152,7 @@ class TestCallUsingByValue:
             ),
             max_steps=500,
             initial_vm=initial_vm_state(),
+            builtins=core_builtins(),
         )
 
         def _ws(prog_name: str) -> bytearray:
@@ -6234,6 +6242,7 @@ class TestCallUsingLinkageRead:
             ),
             max_steps=500,
             initial_vm=initial_vm_state(),
+            builtins=core_builtins(),
         )
 
         singleton_ptr = None
@@ -6301,6 +6310,7 @@ class TestCallUsingLinkageRead:
             ),
             max_steps=1000,
             initial_vm=initial_vm_state(),
+            builtins=core_builtins(),
         )
 
         singleton_ptr = None
@@ -6370,6 +6380,7 @@ class TestCallUsingLinkageRead:
             ),
             max_steps=1000,
             initial_vm=initial_vm_state(),
+            builtins=core_builtins(),
         )
 
         singleton_ptr = None
@@ -6427,6 +6438,7 @@ class TestGobackExitProgram:
             ),
             max_steps=500,
             initial_vm=initial_vm_state(),
+            builtins=core_builtins(),
         )
 
         singleton_ptr = None
@@ -6484,6 +6496,7 @@ class TestGobackExitProgram:
             ),
             max_steps=500,
             initial_vm=initial_vm_state(),
+            builtins=core_builtins(),
         )
 
         singleton_ptr = None
@@ -6552,6 +6565,7 @@ class TestGobackExitProgram:
             ),
             max_steps=500,
             initial_vm=initial_vm_state(),
+            builtins=core_builtins(),
         )
 
         singleton_ptr = None
@@ -6619,6 +6633,7 @@ class TestStopRunTerminatesRunUnit:
             ),
             max_steps=500,
             initial_vm=initial_vm_state(),
+            builtins=core_builtins(),
         )
 
         singleton_ptr = None
@@ -6691,6 +6706,7 @@ class TestStopRunTerminatesRunUnit:
             ),
             max_steps=500,
             initial_vm=initial_vm_state(),
+            builtins=core_builtins(),
         )
 
         singleton_ptr = None
@@ -6779,6 +6795,7 @@ class TestStopRunTerminatesRunUnit:
             ),
             max_steps=500,
             initial_vm=initial_vm_state(),
+            builtins=core_builtins(),
         )
 
         singleton_ptr = None
@@ -8734,6 +8751,7 @@ class TestIndexItemAllocation:
             ),
             max_steps=2000,
             initial_vm=initial_vm_state(),
+            builtins=core_builtins(),
         )
 
         key = VarName("__prog_MAINPROG")

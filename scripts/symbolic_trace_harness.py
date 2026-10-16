@@ -41,6 +41,7 @@ from interpreter.project.compiler import compile_directory
 from interpreter.project.entry_point import EntryPoint
 from interpreter.run import run_linked_traced
 from interpreter.types.typed_value import TypedValue
+from interpreter.vm.builtins import core_builtins
 from interpreter.vm.vm_types import SymbolicValue
 
 
@@ -130,7 +131,9 @@ def execute_and_trace(linked, label: str, max_steps: int) -> None:
     entry = EntryPoint.function(lambda f, _lbl=label: str(f.label) == _lbl)
 
     try:
-        _vm, trace = run_linked_traced(linked, entry, max_steps=max_steps)
+        _vm, trace = run_linked_traced(
+            linked, entry, max_steps=max_steps, builtins=core_builtins()
+        )
     except Exception as e:
         emit(f"\nExecution failed: {type(e).__name__}: {e}")
         traceback.print_exc()

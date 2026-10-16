@@ -16,6 +16,7 @@ from interpreter.frontend import make_cobol_parser
 from interpreter.project.cobol_compile import compile_cobol
 from interpreter.project.entry_point import EntryPoint
 from interpreter.run import initial_vm_state, run_linked
+from interpreter.vm.builtins import core_builtins
 from tests.covers import NotLanguageFeature, covers
 
 # Two fields each holding 38.30 (PIC 9(5)V99); COMPUTE adds them into a
@@ -78,6 +79,7 @@ def _compile_and_run(source: bytes):
         entry_point=ep,
         max_steps=500_000,
         initial_vm=initial_vm_state(),
+        builtins=core_builtins(),
     )
     return vm, linked
 

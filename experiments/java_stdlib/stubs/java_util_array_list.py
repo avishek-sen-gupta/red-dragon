@@ -119,7 +119,7 @@ ARRAY_LIST_IR = (
     Const.func_ref(Register("%23"), _GET_F),
     DeclVar(name=VarName("get"), value_reg=Register("%23")),
     # ── size(this) → len(elements) via this.length (set by add) ──────────────
-    # This stub is DEAD CODE at runtime — `_method_length` in Builtins.METHOD_TABLE
+    # This stub is DEAD CODE at runtime — `_method_length` in METHOD_TABLE
     # intercepts all `size` method calls before the IR stub is reached.
     # Kept for export completeness only.
     Branch(label=CodeLabel(_SIZE_END)),

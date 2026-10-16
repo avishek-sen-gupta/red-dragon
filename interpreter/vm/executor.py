@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any
 
 from interpreter.cfg import CFG
 from interpreter.frontends.symbol_table import SymbolTable
+from interpreter.func_name import FuncName
 from interpreter.handlers._common import _resolve_call_args  # noqa: F401
 from interpreter.instructions import InstructionBase
 from interpreter.ir import (
@@ -32,6 +34,8 @@ from interpreter.types.coercion.unop_coercion import (
     UnopCoercionStrategy,
 )
 from interpreter.types.type_environment import TypeEnvironment
+from interpreter.vm.builtin import Builtin
+from interpreter.vm.builtins import core_builtins
 from interpreter.vm.field_fallback import (
     FieldFallbackStrategy,
     NoFieldFallback,
@@ -78,6 +82,7 @@ class HandlerContext:
     function_scoping: FunctionScopingStrategy
     symbol_table: SymbolTable
     permit_unresolved_call_targets: bool
+    builtins: Mapping[FuncName, Builtin]
 
 
 def _default_handler_context() -> HandlerContext:
@@ -98,6 +103,7 @@ def _default_handler_context() -> HandlerContext:
         function_scoping=LocalFunctionScopingStrategy(),
         symbol_table=SymbolTable.empty(),
         permit_unresolved_call_targets=True,
+        builtins=core_builtins(),
     )
 
 

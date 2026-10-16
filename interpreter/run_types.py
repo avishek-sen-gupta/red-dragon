@@ -3,12 +3,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
 from interpreter.constants import LLMProvider
+from interpreter.func_name import FuncName
+from interpreter.vm.builtin import Builtin
+from interpreter.vm.builtins import core_builtins
 
 
 class UnresolvedCallStrategy(Enum):
@@ -27,6 +30,7 @@ class VMConfig:
     verbose: bool = False
     unresolved_call_strategy: UnresolvedCallStrategy = UnresolvedCallStrategy.SYMBOLIC
     permit_unresolved_call_targets: bool = True
+    builtins: Mapping[FuncName, Builtin] = field(default_factory=core_builtins)
     source_language: str = ""
     io_provider: Any = (
         None  # Any: COBOL isolation boundary — CobolIOProvider avoided in core VM
