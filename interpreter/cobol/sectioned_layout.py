@@ -118,6 +118,10 @@ class MaterialisedSectionedLayout:
             return match, self.linkage_binding(match.storage).region_reg, region
         return match, reg, region
 
+    def layout_of(self, region: RegionId) -> DataLayout:
+        """The DataLayout of the section ``region`` holds."""
+        return next(layout for layout, _, owner in self._sections() if owner is region)
+
     def _sections(self) -> tuple[tuple[DataLayout, Register, RegionId], ...]:
         return (
             (*self.local_storage, RegionId.LOCAL_STORAGE),

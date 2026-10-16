@@ -1450,7 +1450,7 @@ class TestTier1Lowering:
                 value="123",
             ),
         ]
-        stmts = [InitializeStatement(operands=["WS-A"])]
+        stmts = [InitializeStatement(operands=[RefModOperand(name="WS-A")])]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         # Should produce WRITE_REGION: initial value + INITIALIZE reset
@@ -1474,7 +1474,7 @@ class TestTier1Lowering:
                 value="HELLO",
             ),
         ]
-        stmts = [InitializeStatement(operands=["WS-NAME"])]
+        stmts = [InitializeStatement(operands=[RefModOperand(name="WS-NAME")])]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
@@ -1500,7 +1500,11 @@ class TestTier1Lowering:
                 value="ABC",
             ),
         ]
-        stmts = [InitializeStatement(operands=["WS-A", "WS-B"])]
+        stmts = [
+            InitializeStatement(
+                operands=[RefModOperand(name="WS-A"), RefModOperand(name="WS-B")]
+            )
+        ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
@@ -1531,7 +1535,7 @@ class TestTier1Lowering:
                 ],
             ),
         ]
-        stmts = [InitializeStatement(operands=["WS-GROUP"])]
+        stmts = [InitializeStatement(operands=[RefModOperand(name="WS-GROUP")])]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)

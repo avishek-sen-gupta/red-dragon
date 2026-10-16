@@ -748,18 +748,21 @@ class ExitStatement:
 class InitializeStatement:
     """INITIALIZE field1 field2 ... — reset fields to type-appropriate defaults."""
 
-    operands: list[str] = field(default_factory=list)
+    operands: list[RefModOperand] = field(default_factory=list)
     span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> InitializeStatement:
         return cls(
-            operands=data.get("operands", []),
+            operands=[RefModOperand.from_dict(o) for o in data.get("operands", [])],
             span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
-        result = {"type": "INITIALIZE", "operands": list(self.operands)}
+        result = {
+            "type": "INITIALIZE",
+            "operands": [operand.to_dict() for operand in self.operands],
+        }
         if self.span is not None:
             self.span.write_into(result)
         return result

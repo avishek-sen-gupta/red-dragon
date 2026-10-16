@@ -1211,7 +1211,7 @@ public final class StatementSerializer {
         JsonArray operands = new JsonArray();
         try {
             for (Call dataItemCall : stmt.getDataItemCalls()) {
-                operands.add(extractCallName(dataItemCall));
+                operands.add(serializeRef(dataItemCall));
             }
         } catch (Exception e) {
             LOG.fine("Could not extract INITIALIZE operands: " + e.getMessage());
