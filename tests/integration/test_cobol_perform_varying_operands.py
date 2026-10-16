@@ -57,17 +57,17 @@ class TestPerformVaryingOperands:
                 "    MOVE N TO R0. MOVE I TO R1. MOVE 0 TO N.",
                 "    PERFORM BUMP VARYING I FROM ONE BY STP UNTIL I > 4",
                 "        AFTER J FROM STP BY STP3 UNTIL J > 7.",
-                "    MOVE N TO R2. MOVE I TO R3. MOVE 0 TO N.",
+                "    MOVE N TO R2. MOVE I TO R3. MOVE J TO R4. MOVE 0 TO N.",
                 "    PERFORM BUMP WITH TEST AFTER",
                 "        VARYING I FROM ONE BY STP UNTIL I > 4",
                 "        AFTER J FROM STP BY STP3 UNTIL J > 7.",
-                "    MOVE N TO R4.",
+                "    MOVE N TO R5.",
                 "    STOP RUN.",
                 "BUMP.",
                 "    ADD 1 TO N.",
             ],
-            5,
-        ) == [4, 8, 4, 5, 4]
+            6,
+        ) == [4, 8, 4, 5, 2, 9]
 
     @covers(
         CobolFeature.PERFORM_VARYING,
@@ -91,14 +91,46 @@ class TestPerformVaryingOperands:
                 "    MOVE 0 TO N.",
                 "    PERFORM BUMP VARYING I FROM 1 BY 1 UNTIL I > 2",
                 "        AFTER EL (S1) FROM 1 BY EL (3) UNTIL EL (S1) > 30.",
-                "    MOVE N TO R3. MOVE 0 TO N.",
+                "    MOVE N TO R3. MOVE EL (2) TO R4. MOVE 0 TO N.",
                 "    PERFORM BUMP WITH TEST AFTER",
                 "        VARYING EL (S1) FROM EL (1) BY EL (3)",
                 "        UNTIL EL (S1) > 50.",
-                "    MOVE N TO R4. MOVE EL (2) TO R5.",
+                "    MOVE N TO R5. MOVE EL (2) TO R6.",
                 "    STOP RUN.",
                 "BUMP.",
                 "    ADD 1 TO N.",
             ],
-            6,
-        ) == [3, 80, 20, 4, 2, 60]
+            7,
+        ) == [3, 80, 20, 4, 1, 3, 60]
+
+    @covers(
+        CobolFeature.PERFORM_VARYING,
+        CobolFeature.PERFORM_VARYING_AFTER,
+        CobolFeature.PERFORM_TEST_AFTER,
+    )
+    def test_outer_step_resets_inner_and_test_after_tests_before_stepping(self):
+        assert _results(
+            [
+                "01 A1 PIC 99 VALUE 0.",
+                "01 B1 PIC 99 VALUE 0.",
+            ],
+            [
+                "MAIN-PARA.",
+                "    PERFORM BUMP VARYING A1 FROM 1 BY 1 UNTIL A1 > 3",
+                "        AFTER B1 FROM A1 BY 1 UNTIL B1 > 3.",
+                "    MOVE N TO R0. MOVE A1 TO R1. MOVE B1 TO R2. MOVE 0 TO N.",
+                "    PERFORM BUMP WITH TEST AFTER",
+                "        VARYING A1 FROM 1 BY 1 UNTIL A1 > 3.",
+                "    MOVE N TO R3. MOVE A1 TO R4. MOVE 0 TO N.",
+                "    PERFORM SATISFY WITH TEST AFTER",
+                "        VARYING A1 FROM 2 BY 5 UNTIL A1 = 1",
+                "        AFTER B1 FROM 2 BY 6 UNTIL B1 > 19.",
+                "    MOVE N TO R5. MOVE A1 TO R6. MOVE B1 TO R7.",
+                "    STOP RUN.",
+                "BUMP.",
+                "    ADD 1 TO N.",
+                "SATISFY.",
+                "    ADD 1 TO N. MOVE 1 TO A1. MOVE 99 TO B1.",
+            ],
+            8,
+        ) == [6, 4, 4, 4, 4, 1, 1, 99]

@@ -1493,11 +1493,12 @@ class TestPerformVaryingAfter:
         assert _decode_zoned_unsigned(region, 0, 4) == 8
 
     @covers(CobolFeature.PERFORM_VARYING_AFTER, CobolFeature.PERFORM_TEST_AFTER)
-    def test_perform_varying_after_test_after_2x3(self):
-        """PERFORM VARYING I AFTER J TEST AFTER runs body 2×3=6 times.
+    def test_perform_varying_after_test_after_3x4(self):
+        """PERFORM VARYING I AFTER J TEST AFTER runs body 3×4=12 times.
 
-        TEST AFTER executes the body before checking UNTIL, so with I ranging
-        1..2 and J ranging 1..3 the body still runs 6 times and WS-CNT == 6.
+        TEST AFTER tests each UNTIL after the body and before stepping, so the
+        body also runs with the value that satisfies it: I takes 1..3 and J
+        takes 1..4 (ANSI X3.23-1985 VI-117 6.20.4 GR10(d)2).
         """
         vm = _run_cobol(
             [
@@ -1520,7 +1521,7 @@ class TestPerformVaryingAfter:
             max_steps=5000,
         )
         region = _first_region(vm)
-        assert _decode_zoned_unsigned(region, 0, 4) == 6
+        assert _decode_zoned_unsigned(region, 0, 4) == 12
 
 
 class TestStringMove:
