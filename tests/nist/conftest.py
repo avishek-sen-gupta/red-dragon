@@ -9,9 +9,9 @@ import pytest
 
 from interpreter.cobol.real_file_provider import RealFileIOProvider
 
-NIST_DIR = Path(
-    "~/code/red-dragon/proleap-bridge/proleap-cobol-parser"
-    "/target/test-classes/gov/nist"
+NIST_DIR = (
+    Path(__file__).resolve().parents[2]
+    / "proleap-bridge/proleap-cobol-parser/src/test/resources/gov/nist"
 )
 
 _SELECT_ASSIGN_RE = re.compile(
