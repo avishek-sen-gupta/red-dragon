@@ -66,16 +66,22 @@ def _main_src(working_storage: str, body: str) -> str:
     )
 
 
-def _run(tmp_path, main_src: str):
+_MAIN_ENTRY = EntryPoint.function(
+    lambda ref: str(ref.label).endswith("func_main_0")
+    and "init_params" not in str(ref.label)
+)
+
+
+def _linked(tmp_path, main_src: str):
     (tmp_path / "HELPER.cbl").write_text(HELPER_SRC)
     (tmp_path / "MAIN.cbl").write_text(main_src)
-    linked = compile_programs_in(tmp_path, "MAIN")
+    return compile_programs_in(tmp_path, "MAIN")
+
+
+def _run(tmp_path, main_src: str):
     return run_linked(
-        linked,
-        entry_point=EntryPoint.function(
-            lambda ref: str(ref.label).endswith("func_main_0")
-            and "init_params" not in str(ref.label)
-        ),
+        _linked(tmp_path, main_src),
+        entry_point=_MAIN_ENTRY,
         max_steps=3000,
         initial_vm=initial_vm_state(),
     )
@@ -206,3 +212,23 @@ def test_call_data_name_is_matched_without_regard_to_case(tmp_path):
         ),
     )
     assert _ticket(vm) == 77
+
+
+@covers(CobolFeature.CALL, CobolFeature.CALL_USING)
+def test_call_literal_to_nothing_raises_only_when_unresolved_targets_are_refused(
+    tmp_path,
+):
+    main_src = _main_src("", "           CALL 'NOSUCH' USING BY REFERENCE WS-TICKET.\n")
+    permitted = _run(tmp_path, main_src)
+    with pytest.raises(UnresolvedProgramError) as refused:
+        run_linked(
+            _linked(tmp_path, main_src),
+            entry_point=_MAIN_ENTRY,
+            max_steps=3000,
+            initial_vm=initial_vm_state(),
+            permit_unresolved_call_targets=False,
+        )
+    assert (_ticket(permitted), str(refused.value)) == (
+        0,
+        "CALL to __entry_NOSUCH, but nothing in this run unit is registered under it",
+    )

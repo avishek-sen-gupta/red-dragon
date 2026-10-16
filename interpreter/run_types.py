@@ -26,6 +26,7 @@ class VMConfig:
     max_steps: int = 100
     verbose: bool = False
     unresolved_call_strategy: UnresolvedCallStrategy = UnresolvedCallStrategy.SYMBOLIC
+    permit_unresolved_call_targets: bool = True
     source_language: str = ""
     io_provider: Any = (
         None  # Any: COBOL isolation boundary — CobolIOProvider avoided in core VM

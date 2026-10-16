@@ -321,6 +321,7 @@ def _make_base_ctx(
     registry: FunctionRegistry,
     call_resolver: Any,
     strategies: ExecutionStrategies,
+    config: VMConfig,
 ) -> HandlerContext:
     """Build the per-run HandlerContext shared by every step in a loop slice."""
     return HandlerContext(
@@ -338,6 +339,7 @@ def _make_base_ctx(
         field_fallback=strategies.field_fallback,
         function_scoping=strategies.function_scoping,
         symbol_table=strategies.symbol_table,
+        permit_unresolved_call_targets=config.permit_unresolved_call_targets,
     )
 
 
@@ -522,7 +524,7 @@ def execute_cfg(
     logger.debug("execute_cfg: entry=%s max_steps=%d", entry, config.max_steps)
 
     call_resolver = _create_resolver(config)
-    base_ctx = _make_base_ctx(cfg, registry, call_resolver, strategies)
+    base_ctx = _make_base_ctx(cfg, registry, call_resolver, strategies, config)
 
     loop = _run_loop(
         cfg,
@@ -646,7 +648,7 @@ def run_resumable(
     raising as ``execute_cfg`` does), or ``Completed`` when it terminates."""
     entry = _find_entry_point(cfg, entry_point)
     call_resolver = _create_resolver(config)
-    base_ctx = _make_base_ctx(cfg, registry, call_resolver, strategies)
+    base_ctx = _make_base_ctx(cfg, registry, call_resolver, strategies, config)
     loop = _run_loop(
         cfg,
         vm,
@@ -681,7 +683,7 @@ def resume(
     if state.resume_reg is not None and state.resume_reg.is_present():
         vm.current_frame.registers[state.resume_reg] = typed(value, UNKNOWN)
     call_resolver = _create_resolver(config)
-    base_ctx = _make_base_ctx(cfg, registry, call_resolver, strategies)
+    base_ctx = _make_base_ctx(cfg, registry, call_resolver, strategies, config)
     loop = _run_loop(
         cfg,
         vm,
@@ -750,6 +752,7 @@ def execute_cfg_traced(
         field_fallback=strategies.field_fallback,
         function_scoping=strategies.function_scoping,
         symbol_table=strategies.symbol_table,
+        permit_unresolved_call_targets=config.permit_unresolved_call_targets,
     )
 
     for step in range(config.max_steps):
@@ -898,6 +901,7 @@ def run_linked(
     io_provider: Any = None,  # Any: CobolIOProvider — optional COBOL I/O injection
     *,
     initial_vm: VMState,
+    permit_unresolved_call_targets: bool = True,
     step_callback: Callable[[int, str], None] | None = None,
     step_callback_interval: int = 1_000_000,
 ) -> VMState:
@@ -914,6 +918,9 @@ def run_linked(
         io_provider: Optional COBOL I/O provider (e.g. StubIOProvider for testing).
         initial_vm: VM state to execute against. Use ``initial_vm_state()`` for a
             fresh one.
+        permit_unresolved_call_targets: When False, a CALL_WITH_MEMORY to a
+            literal location that resolves to nothing raises
+            UnresolvedProgramError instead of going to the call resolver.
         step_callback: Optional callable(step, label) invoked every
             step_callback_interval steps for progress reporting.
         step_callback_interval: How often to invoke step_callback (default 1M steps).
@@ -926,6 +933,7 @@ def run_linked(
         verbose=verbose,
         source_language=linked.language,
         unresolved_call_strategy=unresolved_call_strategy,
+        permit_unresolved_call_targets=permit_unresolved_call_targets,
         io_provider=io_provider,
         step_callback=step_callback,
         step_callback_interval=step_callback_interval,
@@ -1025,6 +1033,7 @@ def run_linked_resumable(
     io_provider: Any = None,
     *,
     initial_vm: VMState,
+    permit_unresolved_call_targets: bool = True,
 ) -> RunOutcome:
     """Like ``run_linked`` but suspendable: returns ``Suspended`` if execution
     reaches a ``SUSPEND`` instruction, else ``Completed``.
@@ -1040,6 +1049,7 @@ def run_linked_resumable(
         verbose=verbose,
         source_language=linked.language,
         unresolved_call_strategy=unresolved_call_strategy,
+        permit_unresolved_call_targets=permit_unresolved_call_targets,
         io_provider=io_provider,
     )
     dispatch, entered = _entering(linked, entry_point)
@@ -1088,6 +1098,7 @@ def resume_linked(
     backend: str = LLMProvider.CLAUDE,
     unresolved_call_strategy: UnresolvedCallStrategy = UnresolvedCallStrategy.SYMBOLIC,
     io_provider: Any = None,
+    permit_unresolved_call_targets: bool = True,
 ) -> RunOutcome:
     """Resume a ``run_linked_resumable`` continuation, injecting ``value`` at the
     suspension point, and run to the next suspension or to termination."""
@@ -1098,6 +1109,7 @@ def resume_linked(
         verbose=verbose,
         source_language=linked.language,
         unresolved_call_strategy=unresolved_call_strategy,
+        permit_unresolved_call_targets=permit_unresolved_call_targets,
         io_provider=io_provider,
     )
     if io_provider is not None:
@@ -1121,6 +1133,7 @@ def run_linked_traced(
     verbose: bool = False,
     backend: str = LLMProvider.CLAUDE,
     unresolved_call_strategy: UnresolvedCallStrategy = UnresolvedCallStrategy.SYMBOLIC,
+    permit_unresolved_call_targets: bool = True,
 ) -> tuple[VMState, ExecutionTrace]:
     """Execute a LinkedProgram and return a trace of execution steps.
 
@@ -1150,6 +1163,7 @@ def run_linked_traced(
         verbose=verbose,
         source_language=linked.language,
         unresolved_call_strategy=unresolved_call_strategy,
+        permit_unresolved_call_targets=permit_unresolved_call_targets,
     )
     initial_vm = initial_vm_state()
     dispatch, entered = _entering(linked, entry_point)

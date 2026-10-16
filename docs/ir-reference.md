@@ -371,7 +371,7 @@ Dispatch (ADR-182):
 
 COBOL's convention, owned by `interpreter/cobol/program_object.py`: each program's init block stores its entry function in `__entry_<PROGRAM-ID>`; the entry function declares `param:__call_arguments`; a literal CALL's location is `__entry_<NAME>`, and `CALL identifier` computes it in IR (TRIM, UPPER-CASE, prefix). The callee binds each LINKAGE 01 from `__call_arguments` in plain IR.
 
-If the variable is missing, holds no function reference, or its label is not in the CFG, a literal location goes to the configured unresolved-call resolver; a register location raises `UnresolvedProgramError`. A callee that declares no parameter raises `MemoryNotReceivedError` rather than run on an outer frame's arguments.
+If the variable is missing, holds no function reference, or its label is not in the CFG, a literal location goes to the configured unresolved-call resolver, or raises `UnresolvedProgramError` when the run sets `permit_unresolved_call_targets=False`; a register location always raises `UnresolvedProgramError`. A callee that declares no parameter raises `MemoryNotReceivedError` rather than run on an outer frame's arguments.
 
 ```
 %r9 = call_with_memory __entry_SUBPROG %r8
