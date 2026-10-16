@@ -226,4 +226,10 @@ fileignoreconfig:
   checksum: ab287a335b3d973a4ed2614e499cb4f0d8d198ea59308e0f049edf637948eaab
 - filename: tests/unit/cobol/test_file_calls_name_their_program.py
   checksum: 032f77764c218b3cbf098fc5c124d653095bc86b075e58a7c4b2510061d5a7b9
+- filename: tests/unit/cobol/test_nist_pass_check.py
+  checksum: 7027367e2078365b7c9a61d934720ca8adba5a823fe8f4dff42b80c7a42bfb0c
+- filename: tests/nist/test_nc.py
+  checksum: f74457ef3ece3bc6a72bbf97238e1b3d06aa84c99bdc07473b104a24aa1d4df0
+- filename: tests/nist/conftest.py
+  checksum: a73b4fc1feb6688c8aebf45def23e392dc87346ed77d52694f6a335ed3216f55
 version: "1.0"

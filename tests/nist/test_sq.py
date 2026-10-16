@@ -2,12 +2,9 @@
 
 Run: uv run python -m pytest tests/nist/test_sq.py -m nist -v
 
-assert_nist_pass now requires real completion (END OF TEST banner) AND a zero
-failure count in the CCVS summary — see tests/nist/conftest.py. Under that
-honest bar most programs currently FAIL: across SQ/IX/RL only ~17/162 genuinely
-pass; ~98 halt before completion (red-dragon-m0oa.7) and ~38 complete but report
-real conformance failures. This suite is excluded from the default test run and
-is executed on demand with `-m nist`.
+A program passes only when it runs to its END OF TEST banner and its CCVS summary reports
+zero failed tests (tests/nist/conftest.py). Excluded from the default test run; run on
+demand with `-m nist`.
 """
 
 from __future__ import annotations
@@ -30,8 +27,7 @@ def _run_nist(prog: str, tmp_path: Path) -> None:
         pytest.skip(f"NIST source not found: {src_path}")
     src = src_path.read_text()
     provider, print_path = make_provider(src, tmp_path)
-    result = run(src, language="cobol", io_provider=provider, max_steps=1_000_000)
-    assert result is not None, f"{prog}: run() returned None"
+    run(src, language="cobol", io_provider=provider, max_steps=1_000_000)
     assert_nist_pass(print_path, prog)
 
 
