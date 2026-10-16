@@ -11,6 +11,7 @@ from cobol_asg.cobol_statements import (
     CallUsingParam,
     CancelStatement,
     EntryStatement,
+    ProcedureRef,
 )
 from cobol_asg.cobol_types import CobolTypeDescriptor
 from cobol_asg.pic_parser import parse_pic
@@ -429,7 +430,9 @@ def lower_alter(
     """ALTER para-1 TO PROCEED TO para-2."""
     span = stmt.span
     for pt in stmt.proceed_tos:
-        target_reg = ctx.const_to_reg(str(ctx.procedure_label(pt.target)), span=span)
+        target_reg = ctx.const_to_reg(
+            str(ctx.procedure_label(ProcedureRef(paragraph=pt.target))), span=span
+        )
         ctx.emit_inst(
             StoreVar(
                 name=VarName(f"__alter_{pt.source}"),

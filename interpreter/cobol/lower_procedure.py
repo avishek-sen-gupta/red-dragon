@@ -26,7 +26,9 @@ def lower_procedure_division(
     """Lower division-level bare statements, standalone paragraphs, and sections."""
     for strat in ctx.extension_strategies:
         strat.on_procedure_entry(ctx, materialised)
-    ctx.procedures = procedure_labels([*asg.sections, *asg.declaratives])
+    ctx.procedures = procedure_labels(
+        [*asg.sections, *asg.declaratives], asg.paragraphs
+    )
 
     # Build the USE-declarative registry: map each registered USE to its
     # declarative SECTION NAME so I/O verbs can fire the matching procedure on an
@@ -124,14 +126,17 @@ def lower_paragraph(
 ) -> None:
     span = para.span
     labels = ctx.procedures
-    ctx.emit_inst(Label_(label=labels.paragraph(para.name)), span=span)
+    section = ctx.section
+    ctx.emit_inst(Label_(label=labels.paragraph(para.name, section)), span=span)
     with ctx.in_paragraph(para.name):
         for position, sentence in enumerate(_sentences(para)):
             _lower_sentence(ctx, para, position, sentence, materialised)
-    exit_label = labels.paragraph_exit(para.name)
+    exit_label = labels.paragraph_exit(para.name, section)
     if ctx.exit_requested(exit_label):
         ctx.emit_inst(Label_(label=exit_label), span=span)
-    ctx.emit_inst(ResumeContinuation(name=labels.paragraph_end(para.name)), span=span)
+    ctx.emit_inst(
+        ResumeContinuation(name=labels.paragraph_end(para.name, section)), span=span
+    )
 
 
 def _sentences(para: CobolParagraph) -> list[list[CobolStatementType]]:
@@ -154,7 +159,7 @@ def _lower_sentence(
 ) -> None:
     """A sentence's statements, then the landing a NEXT SENTENCE in them branched
     to -- only if one did, so a program without one lowers unchanged."""
-    exit_label = ctx.procedures.sentence_exit(para.name, position)
+    exit_label = ctx.procedures.sentence_exit(para.name, ctx.section, position)
     with ctx.in_sentence(exit_label):
         for stmt in statements:
             ctx.lower_statement(stmt, materialised)

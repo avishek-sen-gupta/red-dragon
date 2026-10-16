@@ -59,3 +59,54 @@ class TestProcedureNames:
             )
             == 1324
         )
+
+    @covers(CobolFeature.PERFORM, CobolFeature.GO_TO)
+    def test_unqualified_paragraph_name_resolves_in_its_own_section(self):
+        assert (
+            _trace(
+                [
+                    "S1 SECTION.",
+                    "INIT.",
+                    _step(1),
+                    "    PERFORM WORK.",
+                    "    GO TO S2.",
+                    "WORK.",
+                    _step(2),
+                    "S2 SECTION.",
+                    "INIT.",
+                    _step(3),
+                    "    PERFORM WORK.",
+                    "    STOP RUN.",
+                    "WORK.",
+                    _step(4),
+                ]
+            )
+            == 1234
+        )
+
+    @covers(CobolFeature.PERFORM, CobolFeature.PERFORM_THRU, CobolFeature.GO_TO)
+    def test_qualified_paragraph_name_names_the_section_it_is_in(self):
+        assert (
+            _trace(
+                [
+                    "MAIN SECTION.",
+                    "M1.",
+                    "    PERFORM P1 OF S1.",
+                    "    PERFORM P1 IN S2.",
+                    "    PERFORM P1 OF S1 THRU P2 OF S1.",
+                    "    GO TO P1 IN S1.",
+                    "S1 SECTION.",
+                    "P1.",
+                    _step(1),
+                    "P2.",
+                    _step(2),
+                    "S2 SECTION.",
+                    "P1.",
+                    _step(3),
+                    "P2.",
+                    _step(4),
+                    "    STOP RUN.",
+                ]
+            )
+            == 13121234
+        )

@@ -209,6 +209,8 @@ At the end of each paragraph, `RESUME_CONTINUATION "para_WORK_end"` returns to t
 
 Every section and paragraph label, its `_end` continuation and its `_exit` landing is built by `ProcedureLabels` (`interpreter/cobol/procedure_labels.py`) from the upper-cased procedure-name. Procedure-names are COBOL words and case-insensitive, so `perform pass` reaches a paragraph declared `PASS.`
 
+A paragraph-name need be unique only within its section. A name declared once keeps the label `para_<NAME>`; a name declared in two sections is labelled `para_<SECTION>_<NAME>` in each. `PERFORM`/`GO TO P OF S` (or `IN S`) reaches S's P; an unqualified P means the P in the referencing section, else the section that declares it. The bridge carries the qualifier as `ProcedureRef.section` (GO TO) and `PerformStatement.target_section`/`thru_section`.
+
 ## String Operation Builtins
 
 String operations use 7 low-level builtins registered in `byte_builtins.py`:

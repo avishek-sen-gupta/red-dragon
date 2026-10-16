@@ -757,10 +757,13 @@ public final class StatementSerializer {
             if (!calls.isEmpty()) {
                 // First call is the start paragraph
                 operands.add(extractCallName(calls.get(0)));
+                addProcedureSection(obj, "target_section", calls.get(0));
             }
             // If there are >= 2 calls, last call is the THRU paragraph
             if (calls.size() >= 2) {
-                obj.addProperty("thru", extractCallName(calls.get(calls.size() - 1)));
+                Call thru = calls.get(calls.size() - 1);
+                obj.addProperty("thru", extractCallName(thru));
+                addProcedureSection(obj, "thru_section", thru);
             }
             serializePerformType(procStmt.getPerformType(), obj);
         }
@@ -960,9 +963,27 @@ public final class StatementSerializer {
     private static JsonObject serializeProcedureRef(Call call) {
         JsonObject obj = new JsonObject();
         obj.addProperty("paragraph", extractCallName(call));
-        JsonArray quals = extractQualifiers(call);
-        obj.addProperty("section", quals.size() > 0 ? quals.get(0).getAsString() : "");
+        obj.addProperty("section", procedureSection(call));
         return obj;
+    }
+
+    private static void addProcedureSection(JsonObject obj, String property, Call call) {
+        String section = procedureSection(call);
+        if (!section.isEmpty()) {
+            obj.addProperty(property, section);
+        }
+    }
+
+    /** The section named by a procedure-name's {@code OF}/{@code IN} qualifier, or "". */
+    private static String procedureSection(Call call) {
+        if (call == null || !(call.unwrap() instanceof ASGElementImpl element)) {
+            return "";
+        }
+        if (!(element.getCtx() instanceof CobolParser.ProcedureNameContext name)
+                || name.inSection() == null) {
+            return "";
+        }
+        return name.inSection().sectionName().getText();
     }
 
     private static JsonObject serializeEvaluate(EvaluateStatement stmt) {

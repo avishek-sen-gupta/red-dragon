@@ -11,6 +11,7 @@ from cobol_asg.cobol_statements import (
     PerformTimesSpec,
     PerformUntilSpec,
     PerformVaryingSpec,
+    ProcedureRef,
 )
 from cobol_asg.source_span import SourceSpan
 from interpreter.cobol.condition_lowering import _lower_expr_dict, lower_expr_node
@@ -76,28 +77,29 @@ def resolve_perform_target(
     ctx: EmitContext, stmt: PerformStatement
 ) -> tuple[CodeLabel, ContinuationName]:
     """Resolve branch-target label and continuation-key name for PERFORM."""
-    target = stmt.target
-    labels = ctx.procedures
+    if not stmt.target_section and ctx.procedures.is_section(stmt.target):
+        return ctx.procedures.section(stmt.target), _section_range_end(ctx, stmt)
+    branch_label = ctx.procedure_label(
+        ProcedureRef(paragraph=stmt.target, section=stmt.target_section)
+    )
+    if stmt.thru:
+        return branch_label, _paragraph_end(ctx, stmt.thru, stmt.thru_section)
+    return branch_label, _paragraph_end(ctx, stmt.target, stmt.target_section)
 
-    if labels.is_section(target):
-        branch_label = labels.section(target)
-        thru = stmt.thru
-        if thru and labels.is_section(thru):
-            continuation_key = labels.section_end(thru)
-        elif thru:
-            # THRU target is a paragraph, not a section. The perform range ends
-            # *after that paragraph*, so the return continuation must be keyed on
-            # the paragraph's end — not the FROM section's end. Keying it on the
-            # section end mismatches the `resume_continuation para_{thru}_end`
-            # that the paragraph emits, so control falls through to whatever
-            # paragraph follows the THRU target instead of returning to PERFORM.
-            continuation_key = labels.paragraph_end(thru)
-        else:
-            continuation_key = labels.section_end(target)
-        return branch_label, continuation_key
 
-    thru_name = stmt.thru if stmt.thru else target
-    return labels.paragraph(target), labels.paragraph_end(thru_name)
+def _section_range_end(ctx: EmitContext, stmt: PerformStatement) -> ContinuationName:
+    """Where a PERFORM that starts at a section returns: the end of its THRU
+    procedure, which may be a paragraph, or else of the section itself."""
+    if not stmt.thru:
+        return ctx.procedures.section_end(stmt.target)
+    if not stmt.thru_section and ctx.procedures.is_section(stmt.thru):
+        return ctx.procedures.section_end(stmt.thru)
+    return _paragraph_end(ctx, stmt.thru, stmt.thru_section)
+
+
+def _paragraph_end(ctx: EmitContext, name: str, qualifier: str) -> ContinuationName:
+    section = ctx.procedures.owner(name, qualifier, ctx.section)
+    return ctx.procedures.paragraph_end(name, section)
 
 
 def emit_perform_branch(

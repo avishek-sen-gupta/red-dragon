@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from cobol_asg.cobol_expression import ExprNode
 
 from cobol_asg.asg_types import CobolASG
+from cobol_asg.cobol_statements import ProcedureRef
 from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from cobol_asg.source_span import SourceSpan
 from cobol_memory.field_extent import FieldExtent, Precision
@@ -151,8 +152,12 @@ class EmitContext:
     def procedures(self, value: ProcedureLabels) -> None:
         self._procedures = value
 
-    def procedure_label(self, name: str) -> CodeLabel:
-        return self._procedures.procedure(name)
+    def procedure_label(self, ref: ProcedureRef) -> CodeLabel:
+        return self._procedures.procedure(ref.paragraph, ref.section, self._section)
+
+    @property
+    def section(self) -> str:
+        return self._section
 
     @property
     def extension_strategies(self) -> tuple[RedDragonExtensionLoweringStrategy, ...]:
@@ -237,7 +242,9 @@ class EmitContext:
         """The label EXIT PARAGRAPH branches to, recorded so the paragraph emits it."""
         if not self._paragraph:
             raise NotImplementedError("EXIT PARAGRAPH outside a named paragraph")
-        return self._request_exit(self._procedures.paragraph_exit(self._paragraph))
+        return self._request_exit(
+            self._procedures.paragraph_exit(self._paragraph, self._section)
+        )
 
     def section_exit(self) -> CodeLabel:
         """The label EXIT SECTION branches to, recorded so the section emits it."""
