@@ -188,15 +188,20 @@ def _ref_mod(d: JsonExpr) -> ExprNode:
     )
 
 
-def _reference(d: JsonExpr) -> ExprNode:
-    """A field reference, sliced or whole -- both arrive as ``kind: "ref"``."""
-    if "ref_mod_start" in d:
-        return _ref_mod(d)
+def field_ref_from_dict(d: JsonExpr) -> FieldRefNode:
+    """A whole-field reference: a receiving operand such as a VARYING identifier."""
     return FieldRefNode(
         name=_text(d, "name"),
         subscripts=_children(d, "subscripts"),
         qualifiers=_qualifiers(d),
     )
+
+
+def _reference(d: JsonExpr) -> ExprNode:
+    """A field reference, sliced or whole -- both arrive as ``kind: "ref"``."""
+    if "ref_mod_start" in d:
+        return _ref_mod(d)
+    return field_ref_from_dict(d)
 
 
 def _binop(d: JsonExpr) -> ExprNode:

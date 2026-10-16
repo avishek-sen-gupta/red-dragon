@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 
-from cobol_asg.cobol_expression import expr_from_dict
+from cobol_asg.cobol_expression import FieldRefNode
 from cobol_asg.cobol_statements import (
     PerformStatement,
     PerformTimesSpec,
@@ -14,7 +14,7 @@ from cobol_asg.cobol_statements import (
     ProcedureRef,
 )
 from cobol_asg.source_span import SourceSpan
-from interpreter.cobol.condition_lowering import _lower_expr_dict, lower_expr_node
+from interpreter.cobol.condition_lowering import lower_expr_node
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.continuation_name import ContinuationName
@@ -249,20 +249,33 @@ def _init_varying_var(
     *,
     span: SourceSpan | None = None,
 ) -> None:
-    """Write spec.varying_from into spec.varying_var in the heap."""
-    if not ctx.has_field(spec.varying_var, materialised):
-        return
-    varying_ref, varying_rr = ctx.resolve_field_ref(
-        spec.varying_var, materialised, span=span
+    """Store the FROM value in the VARYING identifier."""
+    from_reg = lower_expr_node(ctx, spec.varying_from, materialised, span=span)
+    _store_varying_var(ctx, spec.varying_var, from_reg, materialised, span=span)
+
+
+def _store_varying_var(
+    ctx: EmitContext,
+    var: FieldRefNode,
+    value_reg: Register,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None = None,
+) -> None:
+    """Write a numeric value to the VARYING identifier, at its subscripted occurrence."""
+    ref, region_reg = ctx.resolve_field_ref(
+        var.name,
+        materialised,
+        qualifiers=var.qualifiers,
+        subscripts=var.subscripts,
+        span=span,
     )
-    from_val_reg = _eval_varying_from(ctx, spec.varying_from, materialised, span=span)
-    from_str_reg = ctx.emit_to_string(from_val_reg, span=span)
     ctx.emit_encode_and_write(
-        varying_rr,
-        varying_ref.fl,
-        from_str_reg,
-        varying_ref.offset_reg,
-        extent=varying_ref.extent,
+        region_reg,
+        ref.fl,
+        ctx.emit_to_string(value_reg, span=span),
+        ref.offset_reg,
+        extent=ref.extent,
         span=span,
     )
 
@@ -466,49 +479,6 @@ def lower_perform_varying(
         )
 
 
-def _eval_varying_from(
-    ctx: EmitContext,
-    varying_from: str | dict,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None = None,
-) -> Register:
-    """Evaluate a PERFORM VARYING FROM value to a numeric register.
-
-    Handles the structured forms emitted by the bridge:
-    - {"kind": "length_of", "name": "WS-S"} → the field's byte length (a const)
-    - a ref-modified field, NUMF(1:4)      → the slice read as a NUMBER.
-      ``_lower_expr_dict`` returns the slice's characters, which is what a
-      condition wants and never what a loop bound does (red-dragon-twfl).
-    - {"kind": "ref"/"lit"/"binop"/...}     → general expression lowering
-      (a bare field decodes to its value, a literal to its const).
-
-    A legacy flat-string FROM falls back to field-decode-or-literal.
-    """
-    if isinstance(varying_from, dict):
-        if varying_from.get("kind") == "length_of":
-            name = varying_from.get("name", "")
-            if ctx.has_field(name, materialised):
-                ref, _ = ctx.resolve_field_ref(name, materialised, span=span)
-                return ctx.const_to_reg(ref.fl.byte_length, span=span)
-            logger.warning("LENGTH OF unknown field %s — using 0", name)
-            return ctx.const_to_reg(0, span=span)
-        if "ref_mod_start" in varying_from:
-            return lower_expr_node(
-                ctx, expr_from_dict(varying_from), materialised, span=span
-            )
-        return _lower_expr_dict(ctx, varying_from, materialised, span=span)
-
-    # Legacy text form (no structured node available).
-    text = str(varying_from)
-    if ctx.has_field(text, materialised):
-        ref, rr = ctx.resolve_field_ref(text, materialised, span=span)
-        return ctx.emit_decode_field(
-            rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
-        )
-    return ctx.const_to_reg(ctx.parse_literal(text), span=span)
-
-
 def emit_varying_increment(
     ctx: EmitContext,
     spec: PerformVaryingSpec,
@@ -516,40 +486,17 @@ def emit_varying_increment(
     *,
     span: SourceSpan | None = None,
 ) -> None:
-    """Emit IR to increment the VARYING variable by the BY value."""
-    if not ctx.has_field(spec.varying_var, materialised):
-        logger.warning("VARYING variable %s not found in layout", spec.varying_var)
-        return
-
-    varying_ref, varying_rr = ctx.resolve_field_ref(
-        spec.varying_var, materialised, span=span
-    )
-    val_reg = ctx.emit_decode_field(
-        varying_rr,
-        varying_ref.fl,
-        varying_ref.offset_reg,
-        extent=varying_ref.extent,
-        span=span,
-    )
-
-    by_reg = ctx.const_to_reg(ctx.parse_literal(spec.varying_by), span=span)
+    """Augment the VARYING identifier by the BY value."""
+    val_reg = lower_expr_node(ctx, spec.varying_var, materialised, span=span)
+    by_reg = lower_expr_node(ctx, spec.varying_by, materialised, span=span)
     new_val_reg = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
             result_reg=new_val_reg,
             operator=resolve_binop("+"),
-            left=Register(str(val_reg)),
-            right=Register(str(by_reg)),
+            left=val_reg,
+            right=by_reg,
         ),
         span=span,
     )
-
-    new_str_reg = ctx.emit_to_string(new_val_reg, span=span)
-    ctx.emit_encode_and_write(
-        varying_rr,
-        varying_ref.fl,
-        new_str_reg,
-        varying_ref.offset_reg,
-        extent=varying_ref.extent,
-        span=span,
-    )
+    _store_varying_var(ctx, spec.varying_var, new_val_reg, materialised, span=span)
