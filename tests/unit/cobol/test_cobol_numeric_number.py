@@ -110,6 +110,15 @@ def test_round_half_up_rounds_ties_away_from_zero():
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_round_half_up_to_negative_places_rounds_to_tens_and_beyond():
+    assert round_half_up(-95, -1) == -100
+    assert round_half_up(-94, -1) == -90
+    assert round_half_up(from_literal("1249.9"), -2) == 1200
+    assert round_half_up(1250, -2) == 1300
+    assert round_half_up(10**26 + 65, -1) == 10**26 + 70
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_reaches_magnitude_ignores_the_sign():
     assert reaches_magnitude(from_literal("99.9"), 100) is False
     assert reaches_magnitude(100, 100) is True

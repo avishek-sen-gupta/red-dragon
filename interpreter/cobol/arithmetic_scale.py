@@ -27,7 +27,7 @@ from cobol_asg.cobol_expression import (
     RefModNode,
 )
 from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
-from cobol_numeric.number import from_literal
+from cobol_numeric.number import CobolNumber, from_literal, scale_by
 from cobol_numeric.scale import (
     Scale,
     add_scale,
@@ -113,8 +113,12 @@ def receiver_decimals(td: CobolTypeDescriptor, rounded: bool) -> int:
     return field_scale(td).decimal_places + (1 if rounded else 0)
 
 
-def receiver_capacity(td: CobolTypeDescriptor) -> int:
-    return 10 ** (td.total_digits - td.decimal_digits)
+def receiver_capacity(td: CobolTypeDescriptor) -> CobolNumber:
+    return scale_by(10 ** (td.total_digits - td.decimal_digits), td.scale)
+
+
+def receiver_rounding_places(td: CobolTypeDescriptor) -> int:
+    return td.decimal_digits - td.scale
 
 
 def _numeric_literal_scale(text: str) -> Scale | None:

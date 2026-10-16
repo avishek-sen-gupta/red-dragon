@@ -177,3 +177,45 @@ class TestRoundedSizeError:
             "E",
             "P",
         ]
+
+
+class TestPScaledReceiver:
+    @covers(
+        CobolFeature.SUBTRACT,
+        CobolFeature.ADD,
+        CobolFeature.COMPUTE,
+        CobolFeature.ROUNDED_CLAUSE,
+        CobolFeature.ON_SIZE_ERROR,
+    )
+    def test_rounding_and_capacity_follow_the_p_scaled_digit_positions(self, capsys):
+        shown = _display_after(
+            capsys,
+            [
+                "01 A PIC S99P VALUE 0.",
+                "01 B PIC S99P VALUE 0.",
+                "01 C PIC 99P VALUE 0.",
+                "01 D PIC 99P VALUE 0.",
+                "01 E PIC PP9 VALUE 0.",
+                "01 F1 PIC X VALUE 'P'.",
+                "01 F2 PIC X VALUE 'P'.",
+                "01 F3 PIC X VALUE 'P'.",
+                "01 V PIC X(5) VALUE 'NNNNN'.",
+            ],
+            [
+                "    SUBTRACT 99 FROM A ROUNDED.",
+                "    COMPUTE B ROUNDED = -94.",
+                "    ADD 985 TO C",
+                "        ON SIZE ERROR MOVE 'E' TO F1.",
+                "    ADD 995 TO D ROUNDED",
+                "        ON SIZE ERROR MOVE 'E' TO F2.",
+                "    COMPUTE E ROUNDED = .0046",
+                "        ON SIZE ERROR MOVE 'E' TO F3.",
+                "    IF A = -100 MOVE 'Y' TO V(1:1).",
+                "    IF B = -90 MOVE 'Y' TO V(2:1).",
+                "    IF C = 980 MOVE 'Y' TO V(3:1).",
+                "    IF D = 0 MOVE 'Y' TO V(4:1).",
+                "    IF E = .005 MOVE 'Y' TO V(5:1).",
+            ],
+            ["V", "F1", "F2", "F3"],
+        )
+        assert shown == ["YYYYY", "P", "E", "P"]
