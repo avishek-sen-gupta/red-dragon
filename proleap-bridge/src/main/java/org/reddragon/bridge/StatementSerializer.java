@@ -386,6 +386,7 @@ public final class StatementSerializer {
 
         JsonObject obj = newStatement("ADD");
         JsonArray operands = new JsonArray();
+        JsonArray targets = new JsonArray();
 
         AddToStatement addTo = stmt.getAddToStatement();
         if (addTo != null) {
@@ -396,7 +397,7 @@ public final class StatementSerializer {
             for (To to : addTo.getTos()) {
                 JsonObject t = serializeRef(to.getToCall());
                 t.addProperty("rounded", to.isRounded());
-                operands.add(t);
+                targets.add(t);
             }
         } else {
             AddToGivingStatement addGiving = stmt.getAddToGivingStatement();
@@ -405,7 +406,7 @@ public final class StatementSerializer {
                     operands.add(serializeArithSource(from.getFromValueStmt()));
                 }
                 for (ToGiving to : addGiving.getTos()) {
-                    operands.add(extractValueStmtText(to.getToValueStmt()));
+                    operands.add(serializeArithSource(to.getToValueStmt()));
                 }
                 JsonArray givingTargets = new JsonArray();
                 for (io.proleap.cobol.asg.metamodel.procedure.add.Giving g : addGiving.getGivings()) {
@@ -420,6 +421,9 @@ public final class StatementSerializer {
         }
 
         obj.add("operands", operands);
+        if (targets.size() > 0) {
+            obj.add("targets", targets);
+        }
         if (stmt.getOnSizeErrorPhrase() != null) {
             obj.add("on_size_error", serializeStatements(stmt.getOnSizeErrorPhrase().getStatements()));
         }
@@ -446,6 +450,7 @@ public final class StatementSerializer {
 
         JsonObject obj = newStatement("SUBTRACT");
         JsonArray operands = new JsonArray();
+        JsonArray targets = new JsonArray();
 
         SubtractFromStatement subtractFrom = stmt.getSubtractFromStatement();
         if (subtractFrom != null) {
@@ -456,14 +461,14 @@ public final class StatementSerializer {
             for (Minuend min : subtractFrom.getMinuends()) {
                 JsonObject t = serializeRef(min.getMinuendCall());
                 t.addProperty("rounded", min.isRounded());
-                operands.add(t);
+                targets.add(t);
             }
         } else {
             SubtractFromGivingStatement subtractGiving = stmt.getSubtractFromGivingStatement();
             if (subtractGiving != null) {
-                // Minuend first (source), subtrahends second (target)
-                // SUBTRACT X FROM Y GIVING Z → operands=[Y, X], giving=[Z]
-                // Python computes source - target = Y - X
+                // Minuend first, then every subtrahend:
+                // SUBTRACT X W FROM Y GIVING Z → operands=[Y, X, W], giving=[Z]
+                // and the lowering computes Y - (X + W).
                 MinuendGiving minuend = subtractGiving.getMinuend();
                 if (minuend != null) {
                     operands.add(serializeArithSource(minuend.getMinuendValueStmt()));
@@ -484,6 +489,9 @@ public final class StatementSerializer {
         }
 
         obj.add("operands", operands);
+        if (targets.size() > 0) {
+            obj.add("targets", targets);
+        }
         if (stmt.getOnSizeErrorPhrase() != null) {
             obj.add("on_size_error", serializeStatements(stmt.getOnSizeErrorPhrase().getStatements()));
         }
@@ -496,6 +504,7 @@ public final class StatementSerializer {
     private static JsonObject serializeMultiply(MultiplyStatement stmt) {
         JsonObject obj = newStatement("MULTIPLY");
         JsonArray operands = new JsonArray();
+        JsonArray targets = new JsonArray();
         try {
             // Source operand: the value being multiplied
             ValueStmt operandVs = stmt.getOperandValueStmt();
@@ -537,7 +546,7 @@ public final class StatementSerializer {
                         if (targetCall != null) {
                             JsonObject t = serializeRef(targetCall);
                             t.addProperty("rounded", byOp.isRounded());
-                            operands.add(t);
+                            targets.add(t);
                         }
                     }
                 }
@@ -546,6 +555,9 @@ public final class StatementSerializer {
             LOG.fine("Could not extract MULTIPLY operands: " + e.getMessage());
         }
         obj.add("operands", operands);
+        if (targets.size() > 0) {
+            obj.add("targets", targets);
+        }
         if (stmt.getOnSizeErrorPhrase() != null) {
             obj.add("on_size_error", serializeStatements(stmt.getOnSizeErrorPhrase().getStatements()));
         }
@@ -558,6 +570,7 @@ public final class StatementSerializer {
     private static JsonObject serializeDivide(DivideStatement stmt) {
         JsonObject obj = newStatement("DIVIDE");
         JsonArray operands = new JsonArray();
+        JsonArray targets = new JsonArray();
         try {
             // The single "operand" the grammar attaches to the DIVIDE statement
             // itself (X in both "DIVIDE X INTO ..." and "DIVIDE X BY ..."). Its
@@ -630,10 +643,9 @@ public final class StatementSerializer {
                     }
                 }
             } else {
-                // DIVIDE X INTO Y (in-place: Y = Y / X). X (the statement-level
-                // operand, the divisor) stays operands[0] — this in-place form's
-                // Python lowering resolves it as the divisor, unrelated to the
-                // GIVING forms' [dividend, divisor] convention above.
+                // DIVIDE X INTO Y W (in-place: Y = Y / X, W = W / X). X, the
+                // divisor, is the sole operand; Y and W are the targets. This is
+                // unrelated to the GIVING forms' [dividend, divisor] convention.
                 DivideIntoStatement intoStmt = stmt.getDivideIntoStatement();
                 if (operandVs != null) {
                     operands.add(serializeArithSource(operandVs));
@@ -644,7 +656,7 @@ public final class StatementSerializer {
                         if (targetCall != null) {
                             JsonObject t = serializeRef(targetCall);
                             t.addProperty("rounded", into.isRounded());
-                            operands.add(t);
+                            targets.add(t);
                         }
                     }
                 }
@@ -653,6 +665,9 @@ public final class StatementSerializer {
             LOG.fine("Could not extract DIVIDE operands: " + e.getMessage());
         }
         obj.add("operands", operands);
+        if (targets.size() > 0) {
+            obj.add("targets", targets);
+        }
         if (stmt.getOnSizeErrorPhrase() != null) {
             obj.add("on_size_error", serializeStatements(stmt.getOnSizeErrorPhrase().getStatements()));
         }

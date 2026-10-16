@@ -99,10 +99,12 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 | Statement | IR Pattern |
 |---|---|
 | `MOVE X TO Y` | Decode X → encode as Y's type → `WRITE_REGION` |
-| `ADD X TO Y` | Decode both → `BINOP +` → encode → write |
-| `SUBTRACT X FROM Y` | Decode both → `BINOP -` → encode → write |
-| `MULTIPLY X BY Y` | Decode both → `BINOP *` → encode → write |
-| `DIVIDE X INTO Y` | Decode both → `BINOP /` → encode → write |
+| `ADD X W TO Y Z` | Sum the sending operands once (X + W), then for each receiver in turn: decode it → add the sum → encode → write. The bridge emits the sending operands as `operands` and the receivers, each with its own `rounded`, as `targets`. |
+| `SUBTRACT X W FROM Y Z` | As ADD: each receiver loses the sum X + W. |
+| `MULTIPLY X BY Y Z` | Each receiver in turn becomes receiver × X. |
+| `DIVIDE X INTO Y Z` | Each receiver in turn becomes receiver ÷ X. |
+| `... GIVING G H` | The result is computed once as `operands[0] <op> (sum of the remaining operands)` — ADD sums every operand, `SUBTRACT X W FROM Y GIVING G` is Y − (X + W) — and written to every GIVING receiver, each with its own ROUNDED. |
+| `ON SIZE ERROR` with several receivers | Per receiver: one whose result does not fit is left unchanged while the others are written; ON SIZE ERROR runs once afterwards if any receiver failed, NOT ON SIZE ERROR otherwise. DIVIDE by zero is a size error for every receiver. |
 | `DIVIDE ... GIVING ... REMAINDER r` | `remainder = dividend - trunc(quotient) * divisor`, using the same operands the GIVING quotient was computed from, written back alongside the quotient. `DIVIDE X INTO Y GIVING Z` computes `Z = Y / X` (dividend/divisor); `DIVIDE X BY Y GIVING Z` computes `Z = X / Y` — the bridge normalizes both forms to a `[dividend, divisor]` operand order before lowering. |
 | `MOVE CORRESPONDING A TO B ...` | For each direct leaf name present in both groups: decode A.field → encode → write to B.field. Each group is found in whichever section declares it (WORKING-STORAGE, LOCAL-STORAGE, LINKAGE, FILE); a LINKAGE group reads and writes its caller's argument. |
 | `ADD/SUBTRACT CORRESPONDING A TO/FROM B` | For each leaf name present in both groups: decode B.field and A.field → `BINOP +/-` → encode → write back to B.field. Non-matching fields untouched. |

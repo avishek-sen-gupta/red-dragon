@@ -259,17 +259,11 @@ class ArithmeticCorrespondingStatement:
 
 @dataclass(frozen=True)
 class ArithmeticStatement:
-    """ADD/SUBTRACT/MULTIPLY/DIVIDE source TO/FROM/BY/INTO target.
+    """ADD/SUBTRACT/MULTIPLY/DIVIDE: sending operands, in-place targets or GIVING receivers."""
 
-    For GIVING forms (MULTIPLY X BY Y GIVING Z), operands holds [X, Y]
-    and giving holds [Z].  The result (X * Y) is stored in Z, not in Y.
-
-    Source can be a field name with optional reference modification (1-based slice).
-    """
-
-    op: str  # "ADD" | "SUBTRACT" | "MULTIPLY" | "DIVIDE"
-    source: RefModOperand
-    target: RefModOperand
+    op: str
+    operands: list[RefModOperand]
+    targets: list[RefModOperand] = field(default_factory=list)
     giving: list[RefModOperand] = field(default_factory=list)
     remainder: RefModOperand | None = None
     on_size_error: list[CobolStatementType] = field(default_factory=list)
@@ -278,46 +272,17 @@ class ArithmeticStatement:
 
     @classmethod
     def from_dict(cls, data: dict) -> ArithmeticStatement:
-        operands = data.get("operands", [])
-
-        # Parse source operand: can be a dict with ref_mod or a plain string
-        source_data = operands[0] if len(operands) > 0 else {"name": ""}
-        if isinstance(source_data, str):
-            source = RefModOperand(name=source_data)
-        else:
-            source = RefModOperand.from_dict(source_data)
-
-        # Target operand: a structured ref object (name + subscripts + ref-mod)
-        # from the bridge, or a plain string from legacy/test fixtures. Carrying
-        # the full operand keeps subscripts for in-place targets like
-        # `ADD X TO WS-TBL(I)` (red-dragon-6ddr).
-        target_data = operands[1] if len(operands) > 1 else ""
-        if isinstance(target_data, str):
-            target = RefModOperand(name=target_data)
-        else:
-            target = RefModOperand.from_dict(target_data)
-
-        # GIVING targets: each may be a structured ref object (carrying its own
-        # subscripts, e.g. `... GIVING WS-TBL(I)`) or a plain name string.
-        giving: list[RefModOperand] = []
-        for g in data.get("giving", []):
-            if isinstance(g, str):
-                giving.append(RefModOperand(name=g))
-            else:
-                giving.append(RefModOperand.from_dict(g))
-
         remainder_data = data.get("remainder")
         remainder = (
             RefModOperand.from_dict(remainder_data)
             if isinstance(remainder_data, dict)
             else RefModOperand(name=remainder_data) if remainder_data else None
         )
-
         return cls(
             op=data["type"],
-            source=source,
-            target=target,
-            giving=giving,
+            operands=[RefModOperand.from_dict(o) for o in data.get("operands", [])],
+            targets=[RefModOperand.from_dict(t) for t in data.get("targets", [])],
+            giving=[RefModOperand.from_dict(g) for g in data.get("giving", [])],
             remainder=remainder,
             on_size_error=[parse_statement(c) for c in data.get("on_size_error", [])],
             not_on_size_error=[
@@ -329,8 +294,10 @@ class ArithmeticStatement:
     def to_dict(self) -> dict:
         result: dict = {
             "type": self.op,
-            "operands": [self.source.to_dict(), self.target.to_dict()],
+            "operands": [o.to_dict() for o in self.operands],
         }
+        if self.targets:
+            result["targets"] = [t.to_dict() for t in self.targets]
         if self.giving:
             result["giving"] = [g.to_dict() for g in self.giving]
         if self.remainder is not None:

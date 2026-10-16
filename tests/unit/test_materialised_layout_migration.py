@@ -226,8 +226,8 @@ class TestLowerArithmeticWithMaterialised:
 
         stmt = ArithmeticStatement(
             op="ADD",
-            source=RefModOperand(name="1"),
-            target=RefModOperand(name="WS-A"),
+            operands=[RefModOperand(name="1")],
+            targets=[RefModOperand(name="WS-A")],
             giving=[],
             on_size_error=[],
             not_on_size_error=[],

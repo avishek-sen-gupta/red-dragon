@@ -90,11 +90,13 @@ class TestParseStatementDispatch:
 
     @covers(CobolFeature.ADD)
     def test_add(self):
-        stmt = parse_statement({"type": "ADD", "operands": ["5", "WS-A"]})
+        stmt = parse_statement(
+            {"type": "ADD", "operands": ["5", "WS-B"], "targets": ["WS-A", "WS-C"]}
+        )
         assert isinstance(stmt, ArithmeticStatement)
         assert stmt.op == "ADD"
-        assert stmt.source.name == "5"
-        assert stmt.target.name == "WS-A"
+        assert [o.name for o in stmt.operands] == ["5", "WS-B"]
+        assert [t.name for t in stmt.targets] == ["WS-A", "WS-C"]
 
     @covers(CobolFeature.ADD, CobolFeature.GIVING_CLAUSE)
     def test_add_giving(self):
@@ -103,13 +105,15 @@ class TestParseStatementDispatch:
         )
         assert isinstance(stmt, ArithmeticStatement)
         assert stmt.op == "ADD"
-        assert stmt.source.name == "5"
-        assert stmt.target.name == "WS-A"
+        assert [o.name for o in stmt.operands] == ["5", "WS-A"]
+        assert stmt.targets == []
         assert [g.name for g in stmt.giving] == ["WS-R"]
 
     @covers(CobolFeature.SUBTRACT)
     def test_subtract(self):
-        stmt = parse_statement({"type": "SUBTRACT", "operands": ["3", "WS-A"]})
+        stmt = parse_statement(
+            {"type": "SUBTRACT", "operands": ["3"], "targets": ["WS-A"]}
+        )
         assert isinstance(stmt, ArithmeticStatement)
         assert stmt.op == "SUBTRACT"
 
@@ -120,19 +124,22 @@ class TestParseStatementDispatch:
         )
         assert isinstance(stmt, ArithmeticStatement)
         assert stmt.op == "SUBTRACT"
-        assert stmt.source.name == "WS-B"
-        assert stmt.target.name == "WS-A"
+        assert [o.name for o in stmt.operands] == ["WS-B", "WS-A"]
         assert [g.name for g in stmt.giving] == ["WS-R"]
 
     @covers(CobolFeature.MULTIPLY)
     def test_multiply(self):
-        stmt = parse_statement({"type": "MULTIPLY", "operands": ["2", "WS-A"]})
+        stmt = parse_statement(
+            {"type": "MULTIPLY", "operands": ["2"], "targets": ["WS-A"]}
+        )
         assert isinstance(stmt, ArithmeticStatement)
         assert stmt.op == "MULTIPLY"
 
     @covers(CobolFeature.DIVIDE)
     def test_divide(self):
-        stmt = parse_statement({"type": "DIVIDE", "operands": ["4", "WS-A"]})
+        stmt = parse_statement(
+            {"type": "DIVIDE", "operands": ["4"], "targets": ["WS-A"]}
+        )
         assert isinstance(stmt, ArithmeticStatement)
         assert stmt.op == "DIVIDE"
 
@@ -978,7 +985,11 @@ class TestRoundTrip:
 
     @covers(CobolFeature.ADD)
     def test_add_round_trip(self):
-        data = {"type": "ADD", "operands": [{"name": "5"}, {"name": "WS-A"}]}
+        data = {
+            "type": "ADD",
+            "operands": [{"name": "5"}, {"name": "WS-B"}],
+            "targets": [{"name": "WS-A"}, {"name": "WS-C", "rounded": True}],
+        }
         assert self._round_trip(data) == data
 
     @covers(CobolFeature.ADD, CobolFeature.GIVING_CLAUSE)
