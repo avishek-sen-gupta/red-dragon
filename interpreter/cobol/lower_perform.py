@@ -145,17 +145,7 @@ def lower_perform_times(
         span=span,
     )
 
-    if ctx.has_field(spec.times, materialised):
-        times_ref, times_rr = ctx.resolve_field_ref(spec.times, materialised, span=span)
-        times_reg = ctx.emit_decode_field(
-            times_rr,
-            times_ref.fl,
-            times_ref.offset_reg,
-            extent=times_ref.extent,
-            span=span,
-        )
-    else:
-        times_reg = ctx.const_to_reg(ctx.parse_literal(spec.times), span=span)
+    times_reg = lower_expr_node(ctx, spec.times, materialised, span=span)
 
     ctx.emit_inst(Label_(label=loop_label), span=span)
     ctr_reg = ctx.fresh_reg()

@@ -46,6 +46,7 @@ from cobol_asg.ref_mod import (
     RefModOperand,
     RefModReference,
 )
+from cobol_asg.set_operand import SetOperand
 from cobol_asg.source_span import SourceSpan
 from cobol_memory.region_id import RegionId
 from cobol_numeric.number import from_literal
@@ -2341,6 +2342,37 @@ def _set_condition_name(
     )
 
 
+def _set_operand_ref(
+    ctx: EmitContext,
+    operand: SetOperand,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> tuple[ResolvedFieldRef, Register]:
+    """The field a SET operand names, at the occurrence its subscripts select."""
+    return ctx.resolve_field_ref(
+        operand.name,
+        materialised,
+        qualifiers=operand.qualifiers,
+        subscripts=tuple(expr_from_dict(s) for s in operand.subscripts),
+        span=span,
+    )
+
+
+def _decode_set_operand(
+    ctx: EmitContext,
+    operand: SetOperand,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> Register:
+    """The value of the data item a SET operand names."""
+    ref, region_reg = _set_operand_ref(ctx, operand, materialised, span=span)
+    return ctx.emit_decode_field(
+        region_reg, ref.fl, ref.offset_reg, extent=ref.extent, span=span
+    )
+
+
 def lower_set(
     ctx: EmitContext,
     stmt: SetStatement,
@@ -2360,7 +2392,8 @@ def lower_set(
     condition_index = ctx._condition_index
     if stmt.set_type == "TO":
         value_str = stmt.values[0].text if stmt.values else "0"
-        for target_name in (target.text for target in stmt.targets):
+        for target in stmt.targets:
+            target_name = target.text
             if condition_index.has_condition(target_name):
                 _set_condition_name(
                     ctx, target_name, value_str, materialised, span=span
@@ -2369,23 +2402,16 @@ def lower_set(
             if not ctx.has_field(target_name, materialised):
                 logger.warning("SET target %s not found in layout", target_name)
                 continue
-            target_ref, target_rr = ctx.resolve_field_ref(
-                target_name, materialised, span=span
+            target_ref, target_rr = _set_operand_ref(
+                ctx, target, materialised, span=span
             )
             # SET A TO B is legal when B is a data item; stmt.values[0] is raw
             # operand text from the bridge and is never tested for being a name.
             # Untested, it wrote the two characters "B" — which encodes into a
             # numeric field as 0, so the symptom is a plausible zero, not a crash.
             if ctx.has_field(str(value_str), materialised):
-                src_ref, src_rr = ctx.resolve_field_ref(
-                    str(value_str), materialised, span=span
-                )
-                value_str_reg = ctx.emit_decode_field(
-                    src_rr,
-                    src_ref.fl,
-                    src_ref.offset_reg,
-                    extent=src_ref.extent,
-                    span=span,
+                value_str_reg = _decode_set_operand(
+                    ctx, stmt.values[0], materialised, span=span
                 )
             else:
                 value_str_reg = ctx.const_to_reg(str(value_str), span=span)
@@ -2400,12 +2426,12 @@ def lower_set(
     elif stmt.set_type == "BY":
         step_val = stmt.values[0].text if stmt.values else "1"
         op = "+" if stmt.by_type == "UP" else "-"
-        for target_name in (target.text for target in stmt.targets):
-            if not ctx.has_field(target_name, materialised):
-                logger.warning("SET target %s not found in layout", target_name)
+        for target in stmt.targets:
+            if not ctx.has_field(target.text, materialised):
+                logger.warning("SET target %s not found in layout", target.text)
                 continue
-            target_ref, target_rr = ctx.resolve_field_ref(
-                target_name, materialised, span=span
+            target_ref, target_rr = _set_operand_ref(
+                ctx, target, materialised, span=span
             )
             tgt_decoded = ctx.emit_decode_field(
                 target_rr,
@@ -2416,15 +2442,8 @@ def lower_set(
             )
             # SET ... UP/DOWN BY <data-item> takes the same path as TO above.
             if ctx.has_field(str(step_val), materialised):
-                step_ref, step_rr = ctx.resolve_field_ref(
-                    str(step_val), materialised, span=span
-                )
-                step_reg = ctx.emit_decode_field(
-                    step_rr,
-                    step_ref.fl,
-                    step_ref.offset_reg,
-                    extent=step_ref.extent,
-                    span=span,
+                step_reg = _decode_set_operand(
+                    ctx, stmt.values[0], materialised, span=span
                 )
             else:
                 step_reg = ctx.const_to_reg(ctx.parse_literal(step_val), span=span)

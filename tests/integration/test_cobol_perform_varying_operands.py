@@ -3,6 +3,8 @@
 Every result is copied into the zoned two-digit fields at the start of
 WORKING-STORAGE, so the assertions read them straight off the region."""
 
+from collections.abc import Sequence
+
 import pytest
 
 from interpreter.cobol.features import CobolFeature
@@ -17,7 +19,7 @@ from tests.integration.cobol_helpers import (
 )
 
 
-def _results(storage: list[str], procedure: list[str], count: int) -> list[int]:
+def _results(storage: Sequence[str], procedure: Sequence[str], count: int) -> list[int]:
     vm = run_cobol(
         [
             "IDENTIFICATION DIVISION.",
