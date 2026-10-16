@@ -1801,37 +1801,20 @@ def lower_initialize(
     """
     span = stmt.span
     for operand in stmt.operands:
-        if not ctx.has_field(operand, materialised):
-            logger.warning("INITIALIZE target %s not found in layout", operand)
+        if not ctx.has_field(operand.name, materialised):
+            logger.warning("INITIALIZE target %s not found in layout", operand.name)
             continue
-        ref, _rr = ctx.resolve_field_ref(operand, materialised, span=span)
-        # Look up the layout section that owns this field for _leaf_fields_of
-        _fl_layout, _ = materialised.resolve(operand)
-        # Determine which DataLayout to use for leaf enumeration
-        # We use the working_storage layout as a fallback; the actual layout
-        # is the one from the resolved section.
-        # Since _leaf_fields_of needs the full DataLayout for all_leaves(),
-        # we pick the right section layout.
-        ws_layout, _ = materialised.working_storage
-        ls_layout, _ = materialised.local_storage
-        lk_layout, _ = materialised.linkage
-        if ws_layout.exists(operand):
-            section_layout = ws_layout
-        elif ls_layout.exists(operand):
-            section_layout = ls_layout
-        else:
-            section_layout = lk_layout
-        for leaf_fl in _leaf_fields_of(ref.fl, section_layout):
-            leaf_ref, leaf_rr = ctx.resolve_field_ref(
-                leaf_fl.name, materialised, span=span
+        match, region_reg, region = materialised.resolve_match(
+            operand.name, operand.qualifiers
+        )
+        for leaf_fl in _leaf_fields_of(match.storage, materialised.layout_of(region)):
+            leaf_ref = ctx.resolve_field_ref_from(
+                leaf_fl, region_reg, region, materialised, span=span
             )
             td = leaf_fl.type_descriptor
-            if td.holds_characters:
-                default = " " * td.total_digits
-            else:
-                default = "0"
+            default = " " * td.total_digits if td.holds_characters else "0"
             ctx.emit_field_encode(
-                leaf_rr,
+                region_reg,
                 leaf_fl,
                 default,
                 leaf_ref.offset_reg,

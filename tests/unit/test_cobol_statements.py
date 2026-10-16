@@ -426,9 +426,11 @@ class TestParseStatementDispatch:
 
     @covers(CobolFeature.INITIALIZE)
     def test_initialize(self):
-        stmt = parse_statement({"type": "INITIALIZE", "operands": ["WS-A", "WS-B"]})
+        stmt = parse_statement(
+            {"type": "INITIALIZE", "operands": [{"name": "WS-A"}, {"name": "WS-B"}]}
+        )
         assert isinstance(stmt, InitializeStatement)
-        assert stmt.operands == ["WS-A", "WS-B"]
+        assert stmt.operands == [RefModOperand(name="WS-A"), RefModOperand(name="WS-B")]
 
     @covers(CobolFeature.SET_TO)
     def test_set_to(self):
@@ -1340,7 +1342,7 @@ class TestRoundTrip:
 
     @covers(CobolFeature.INITIALIZE)
     def test_initialize_round_trip(self):
-        data = {"type": "INITIALIZE", "operands": ["WS-A", "WS-B"]}
+        data = {"type": "INITIALIZE", "operands": [{"name": "WS-A"}, {"name": "WS-B"}]}
         assert self._round_trip(data) == data
 
     @covers(CobolFeature.SET_TO)

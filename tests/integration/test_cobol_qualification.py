@@ -198,3 +198,19 @@ class TestQualifiedStatementOperands:
             ],
         )
         assert shown == "R2R12"
+
+    @covers(CobolFeature.INITIALIZE)
+    def test_initialize_resets_only_the_qualified_group(self, capsys):
+        shown = _shown(
+            capsys,
+            [
+                '01 R1. 02 G. 03 A PIC X VALUE "X". 03 N PIC 9 VALUE 7.',
+                '01 R2. 02 G. 03 A PIC X VALUE "Y". 03 N PIC 9 VALUE 8.',
+                '   02 H. 03 A PIC X VALUE "Z".',
+            ],
+            [
+                "    INITIALIZE G OF R2 A OF H.",
+                "    DISPLAY R1 R2.",
+            ],
+        )
+        assert shown == "X7 0 "
