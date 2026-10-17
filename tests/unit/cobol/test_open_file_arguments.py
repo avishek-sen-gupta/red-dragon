@@ -1,13 +1,16 @@
-"""OPEN hands the provider each file's attributes from its SELECT entry and FD: record
-length (its longest record), organization, prime key extent within the file's own
-record, access mode, RELATIVE KEY digits, OPTIONAL, whether its records vary, and its smallest record.
-"""
+"""A program declares each file's frame to the provider once, from its start-up code:
+organization, access mode, prime key extent within the file's own record, RELATIVE KEY
+digits, OPTIONAL, whether its records vary, and its smallest and longest record. OPEN
+then names only the file, the mode and the program."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
+from cobol_asg.file_enums import AccessMode, FileOrganization
 from interpreter.cobol.features import CobolFeature
+from interpreter.cobol.file_frame import FileFrame, frame_of
+from interpreter.cobol.prime_key import PrimeKey
 from interpreter.frontend import make_cobol_parser
 from interpreter.instructions import CallFunction, Const, InstructionBase
 from interpreter.project.cobol_compile import compile_cobol_module
@@ -45,9 +48,16 @@ _THREE_FILES = b"""\
 """
 
 
-def _open_arguments(
-    ir: tuple[InstructionBase, ...],
-) -> list[tuple[str | int, ...]]:
+def _declared(ir: tuple[InstructionBase, ...]) -> list[tuple[FileFrame, str]]:
+    consts = {i.result_reg: i.value for i in ir if isinstance(i, Const)}
+    return [
+        (frame_of(consts[Register(str(i.args[0]))]), consts[Register(str(i.args[1]))])
+        for i in ir
+        if isinstance(i, CallFunction) and str(i.func_name) == "__cobol_declare_file"
+    ]
+
+
+def _opens(ir: tuple[InstructionBase, ...]) -> list[tuple[str, ...]]:
     consts = {i.result_reg: i.value for i in ir if isinstance(i, Const)}
     return [
         tuple(consts[Register(str(a))] for a in i.args)
@@ -57,26 +67,61 @@ def _open_arguments(
 
 
 @covers(CobolFeature.OPEN)
-def test_open_passes_each_files_attributes(tmp_path: Path) -> None:
+def test_each_file_is_declared_once_and_opened_by_name_and_mode(
+    tmp_path: Path,
+) -> None:
     parser = make_cobol_parser()
     ast_path = tmp_path / "program.ast.json"
     parser.parse_to_file(_THREE_FILES, ast_path)
     ir = compile_cobol_module(_THREE_FILES, parser=parser, ast_path=ast_path).ir
-    assert _open_arguments(ir) == [
-        (
-            "SQ",
-            "INPUT",
-            14,
-            "SEQUENTIAL",
-            0,
-            0,
-            "SEQUENTIAL",
-            0,
-            False,
-            True,
-            10,
-            "PGMX",
-        ),
-        ("IX", "INPUT", 12, "INDEXED", 3, 4, "SEQUENTIAL", 0, True, False, 12, "PGMX"),
-        ("RL", "INPUT", 6, "RELATIVE", 0, 0, "RANDOM", 3, False, False, 6, "PGMX"),
-    ]
+    assert (_declared(ir), _opens(ir)) == (
+        [
+            (
+                FileFrame(
+                    "SQ",
+                    FileOrganization.SEQUENTIAL,
+                    AccessMode.SEQUENTIAL,
+                    PrimeKey(),
+                    0,
+                    False,
+                    True,
+                    10,
+                    14,
+                ),
+                "PGMX",
+            ),
+            (
+                FileFrame(
+                    "IX",
+                    FileOrganization.INDEXED,
+                    AccessMode.SEQUENTIAL,
+                    PrimeKey(3, 4),
+                    0,
+                    True,
+                    False,
+                    12,
+                    12,
+                ),
+                "PGMX",
+            ),
+            (
+                FileFrame(
+                    "RL",
+                    FileOrganization.RELATIVE,
+                    AccessMode.RANDOM,
+                    PrimeKey(),
+                    3,
+                    False,
+                    False,
+                    6,
+                    6,
+                ),
+                "PGMX",
+            ),
+        ],
+        [
+            ("SQ", "INPUT", "PGMX"),
+            ("IX", "INPUT", "PGMX"),
+            ("RL", "INPUT", "PGMX"),
+        ],
+    )

@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from cobol_asg.file_enums import AccessMode, FileOrganization
 from interpreter.cobol.data_literals import text
 from interpreter.cobol.file_definitions_data import FILE_DEFINITIONS
+from interpreter.cobol.file_frame import FileFrame
 from interpreter.cobol.io_provider import IOResult, NullIOProvider
+from interpreter.cobol.prime_key import PrimeKey
 from interpreter.data_value import DataList, DataRecord, DataValue
 from interpreter.field_name import FieldName
 from interpreter.frontend import make_cobol_parser
@@ -69,6 +72,7 @@ _ALL_VERBS = b"""\
 
 _FILE_CALLS = frozenset(
     {
+        "__cobol_declare_file",
         "__cobol_open_file",
         "__cobol_read_record",
         "__cobol_write_record",
@@ -90,11 +94,13 @@ def _ir(source: bytes, tmp_path: Path) -> tuple[InstructionBase, ...]:
     return compile_cobol_module(source, parser=parser, ast_path=ast_path).ir
 
 
-def _producers(ir: tuple[InstructionBase, ...]) -> dict[Register, str | int]:
-    consts: dict[Register, str | int] = {
+def _producers(
+    ir: tuple[InstructionBase, ...],
+) -> dict[Register, str | int | DataRecord]:
+    consts: dict[Register, str | int | DataRecord] = {
         i.result_reg: i.value for i in ir if isinstance(i, Const)
     }
-    calls: dict[Register, str | int] = {
+    calls: dict[Register, str | int | DataRecord] = {
         i.result_reg: f"<{i.func_name}>" for i in ir if isinstance(i, CallFunction)
     }
     return {**consts, **calls}
@@ -102,7 +108,7 @@ def _producers(ir: tuple[InstructionBase, ...]) -> dict[Register, str | int]:
 
 def _file_calls(
     ir: tuple[InstructionBase, ...],
-) -> list[tuple[str, tuple[str | int, ...]]]:
+) -> list[tuple[str, tuple[str | int | DataRecord, ...]]]:
     produced = _producers(ir)
     return [
         (str(i.func_name), tuple(produced[Register(str(a))] for a in i.args))
@@ -136,21 +142,11 @@ class _Recording(NullIOProvider):
     def _saw(self, method: str, program: str) -> None:
         self.seen = (*self.seen, (method, program))
 
-    def _open_file(
-        self,
-        filename: str,
-        mode: str,
-        record_length: int,
-        organization: str,
-        key_offset: int,
-        key_length: int,
-        access_mode: str,
-        relative_key_digits: int,
-        optional: bool,
-        variable: bool,
-        minimum_record_length: int,
-        program: str,
-    ) -> IOResult:
+    def _declare_file(self, frame: DataRecord, program: str) -> IOResult:
+        self._saw("declare_file", program)
+        return IOResult("00", None)
+
+    def _open_file(self, filename: str, mode: str, program: str) -> IOResult:
         self._saw("open_file", program)
         return IOResult("00", None)
 
@@ -183,22 +179,23 @@ def test_each_file_call_names_the_calling_program_last(tmp_path):
     assert (_file_calls(ir), recording.seen, _named(f1, "program")) == (
         [
             (
-                "__cobol_open_file",
+                "__cobol_declare_file",
                 (
-                    "F1",
-                    "INPUT",
-                    10,
-                    "SEQUENTIAL",
-                    0,
-                    0,
-                    "SEQUENTIAL",
-                    0,
-                    False,
-                    False,
-                    10,
+                    FileFrame(
+                        "F1",
+                        FileOrganization.SEQUENTIAL,
+                        AccessMode.SEQUENTIAL,
+                        PrimeKey(),
+                        0,
+                        False,
+                        False,
+                        10,
+                        10,
+                    ).data(),
                     "PGMX",
                 ),
             ),
+            ("__cobol_open_file", ("F1", "INPUT", "PGMX")),
             ("__cobol_io_status", ("<__cobol_open_file>", "PGMX")),
             ("__cobol_read_record", ("F1", "", "PGMX")),
             ("__cobol_io_status", ("<__cobol_read_record>", "PGMX")),
@@ -207,6 +204,7 @@ def test_each_file_call_names_the_calling_program_last(tmp_path):
             ("__cobol_io_status", ("<__cobol_close_file>", "PGMX")),
         ],
         (
+            ("declare_file", "PGMX"),
             ("open_file", "PGMX"),
             ("io_status", "PGMX"),
             ("read_record", "PGMX"),

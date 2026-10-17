@@ -9,8 +9,11 @@ from pathlib import Path
 
 from cobol_asg.file_enums import AccessMode, FileOrganization
 from interpreter.cobol.features import CobolFeature
+from interpreter.cobol.file_frame import FileFrame
+from interpreter.cobol.prime_key import PrimeKey
 from interpreter.cobol.real_file_provider import RealFileIOProvider
 from tests.covers import covers
+from tests.unit.cobol.declared_files import opened
 
 _INDEXED = FileOrganization.INDEXED.value
 _RELATIVE = FileOrganization.RELATIVE.value
@@ -25,12 +28,38 @@ def _loaded(
     access: str,
     records: Sequence[str],
 ) -> None:
-    prov._open_file(
-        name, "OUTPUT", 4, organization, 0, 2, access, 0, False, False, 0, "P"
+    opened(
+        prov,
+        "OUTPUT",
+        FileFrame(
+            name,
+            FileOrganization(organization),
+            AccessMode(access),
+            PrimeKey(0, 2),
+            0,
+            False,
+            False,
+            0,
+            4,
+        ),
     )
     [prov._write_record(name, record, "", "P") for record in records]
     prov._close_file(name, "P")
-    prov._open_file(name, "I-O", 4, organization, 0, 2, access, 0, False, False, 0, "P")
+    opened(
+        prov,
+        "I-O",
+        FileFrame(
+            name,
+            FileOrganization(organization),
+            AccessMode(access),
+            PrimeKey(0, 2),
+            0,
+            False,
+            False,
+            0,
+            4,
+        ),
+    )
 
 
 @covers(CobolFeature.DELETE_RECORD)

@@ -1,5 +1,9 @@
 threshold: low
 fileignoreconfig:
+- filename: interpreter/cobol/file_frame.py
+  checksum: 0c7ca0ab4d415df128b188445752cc27c5ee6f80daad2e2a5761bb4dd1c54c35
+- filename: interpreter/cobol/file_facts.py
+  checksum: 5c1877d78d5fbc7f107d70e4471502db386f29587704b5e1fa380e8f030aab8d
 - filename: tests/integration/test_cobol_relative_start.py
   checksum: 5e53f787af78ae33dad1a0bff737f651ee67115235eb783aa6037731bd0098ca
 - filename: tests/unit/cobol/test_file_drivers.py
@@ -17,7 +21,7 @@ fileignoreconfig:
 - filename: tests/unit/cobol/test_indexed_read_key.py
   checksum: 3e2bf689c2e8a6e60329cd3cded41030c59fbbf913f88d890e3b51045089cf5b
 - filename: tests/unit/cobol/test_open_file_arguments.py
-  checksum: 45ec60a22a2256ee37a12fa099eddccc29d190792e8860eed8c9558160147c8c
+  checksum: c90e3e46eaf4810fde4437a80d86c31533a8218b811581e7478d7aa90f763545
 - filename: tests/unit/cobol/test_access_mode_status.py
   checksum: 5c13f6d7567a88d6d79d27b65ad973b5e9058b286839596c4e02a29765d27575
 - filename: tests/integration/test_cobol_access_mode_status.py
@@ -221,7 +225,7 @@ fileignoreconfig:
 - filename: tests/unit/cobol/test_recorded_memory_effects.py
   checksum: ba151292b7ee1a3f747628e5950297f904de1c1cd625307f762f7a98b570b3de
 - filename: docs/frontend-design/cobol.md
-  checksum: c5132beca579b6b886bdc0881e5e283ec4f3da4afe49862a404897f21ba130e0
+  checksum: 3f1d46b7777605ae67ea2d42e36f51d8a33763e66bf84b1b674db7225a1fe898
 - filename: tests/integration/test_cobol_call_using_addresses.py
   checksum: 353804977c7a3e5eb44a303f7e42a47ef1bdf9f837f41e396bf5033813c4fdb0
 - filename: tests/integration/test_cobol_call_using_slots.py

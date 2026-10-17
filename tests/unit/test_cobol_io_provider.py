@@ -15,20 +15,7 @@ from tests.covers import covers
 _UNCOMPUTABLE = Operators.UNCOMPUTABLE
 _PROGRAM = typed_from_runtime("PGM")
 
-_OPEN_ARGS = [
-    typed_from_runtime("F1"),
-    typed_from_runtime("INPUT"),
-    typed_from_runtime(80),
-    typed_from_runtime("SEQUENTIAL"),
-    typed_from_runtime(0),
-    typed_from_runtime(0),
-    typed_from_runtime("SEQUENTIAL"),
-    typed_from_runtime(0),
-    typed_from_runtime(False),
-    typed_from_runtime(False),
-    typed_from_runtime(0),
-    _PROGRAM,
-]
+_OPEN_ARGS = [typed_from_runtime("F1"), typed_from_runtime("INPUT"), _PROGRAM]
 
 # _read_record now takes (filename, key)
 _READ_ARGS_F1 = [typed_from_runtime("F1"), typed_from_runtime(""), _PROGRAM]
@@ -230,15 +217,6 @@ class TestStubIOProvider:
             [
                 typed_from_runtime("F1"),
                 typed_from_runtime("INPUT"),
-                typed_from_runtime(80),
-                typed_from_runtime("SEQUENTIAL"),
-                typed_from_runtime(0),
-                typed_from_runtime(0),
-                typed_from_runtime("SEQUENTIAL"),
-                typed_from_runtime(0),
-                typed_from_runtime(False),
-                typed_from_runtime(False),
-                typed_from_runtime(0),
                 _PROGRAM,
             ],
         )
@@ -253,15 +231,6 @@ class TestStubIOProvider:
             [
                 typed_from_runtime("F1"),
                 typed_from_runtime("INPUT"),
-                typed_from_runtime(80),
-                typed_from_runtime("SEQUENTIAL"),
-                typed_from_runtime(0),
-                typed_from_runtime(0),
-                typed_from_runtime("SEQUENTIAL"),
-                typed_from_runtime(0),
-                typed_from_runtime(False),
-                typed_from_runtime(False),
-                typed_from_runtime(0),
                 _PROGRAM,
             ],
         )

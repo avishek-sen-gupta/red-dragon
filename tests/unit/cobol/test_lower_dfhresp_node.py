@@ -15,8 +15,8 @@ from cobol_asg.expression_subject import ExpressionSubject
 from cobol_asg.value_object import ValueObject
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.features import CobolFeature
-from interpreter.cobol.lower_evaluate import lower_evaluate
 from interpreter.cobol.lower_data_division import lower_sectioned_data_division
+from interpreter.cobol.lower_evaluate import lower_evaluate
 from interpreter.cobol.sectioned_layout import (
     MaterialisedSectionedLayout,
     build_sectioned_layout,

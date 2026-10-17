@@ -112,15 +112,6 @@ class TestExecutorIOProviderDispatch:
         open_args = (
             ("%f", "MY-FILE"),
             ("%m", "INPUT"),
-            ("%rl", 80),
-            ("%org", "SEQUENTIAL"),
-            ("%ko", 0),
-            ("%kl", 0),
-            ("%am", "SEQUENTIAL"),
-            ("%rk", 0),
-            ("%op", False),
-            ("%va", False),
-            ("%mn", 0),
         )
         instructions = [
             IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),

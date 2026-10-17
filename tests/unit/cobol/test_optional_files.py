@@ -5,9 +5,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from cobol_asg.file_enums import AccessMode, FileOrganization
 from interpreter.cobol.features import CobolFeature
+from interpreter.cobol.file_frame import FileFrame
+from interpreter.cobol.prime_key import PrimeKey
 from interpreter.cobol.real_file_provider import RealFileIOProvider
 from tests.covers import covers
+from tests.unit.cobol.declared_files import opened
 
 _SEQ = "SEQUENTIAL"
 _INDEXED = "INDEXED"
@@ -20,31 +24,105 @@ _DYNAMIC = "DYNAMIC"
 def test_an_absent_optional_file_opens_with_status_05(tmp_path: Path) -> None:
     prov = RealFileIOProvider(base_dir=tmp_path)
     statuses = [
-        prov._open_file(
-            "IN", "INPUT", 2, _INDEXED, 0, 2, _DYNAMIC, 0, True, False, 0, "P"
+        opened(
+            prov,
+            "INPUT",
+            FileFrame(
+                "IN",
+                FileOrganization(_INDEXED),
+                AccessMode(_DYNAMIC),
+                PrimeKey(0, 2),
+                0,
+                True,
+                False,
+                0,
+                2,
+            ),
         ),
         prov._read_record("IN", "", "P"),
         prov._read_record("IN", "AB", "P"),
         prov._start_file("IN", "AB", ">=", "P"),
         prov._close_file("IN", "P"),
-        prov._open_file(
-            "IO", "I-O", 2, _INDEXED, 0, 2, _DYNAMIC, 0, True, False, 0, "P"
+        opened(
+            prov,
+            "I-O",
+            FileFrame(
+                "IO",
+                FileOrganization(_INDEXED),
+                AccessMode(_DYNAMIC),
+                PrimeKey(0, 2),
+                0,
+                True,
+                False,
+                0,
+                2,
+            ),
         ),
         prov._write_record("IO", "AB", "", "P"),
         prov._close_file("IO", "P"),
-        prov._open_file(
-            "EX", "EXTEND", 2, _INDEXED, 0, 2, _SEQ, 0, True, False, 0, "P"
+        opened(
+            prov,
+            "EXTEND",
+            FileFrame(
+                "EX",
+                FileOrganization(_INDEXED),
+                AccessMode(_SEQ),
+                PrimeKey(0, 2),
+                0,
+                True,
+                False,
+                0,
+                2,
+            ),
         ),
         prov._write_record("EX", "CD", "", "P"),
         prov._close_file("EX", "P"),
-        prov._open_file(
-            "EX", "EXTEND", 2, _INDEXED, 0, 2, _SEQ, 0, True, False, 0, "P"
+        opened(
+            prov,
+            "EXTEND",
+            FileFrame(
+                "EX",
+                FileOrganization(_INDEXED),
+                AccessMode(_SEQ),
+                PrimeKey(0, 2),
+                0,
+                True,
+                False,
+                0,
+                2,
+            ),
         ),
         prov._write_record("EX", "EF", "", "P"),
         prov._close_file("EX", "P"),
-        prov._open_file("NO", "EXTEND", 2, _SEQ, 0, 0, _SEQ, 0, False, False, 0, "P"),
-        prov._open_file(
-            "NO", "I-O", 2, _INDEXED, 0, 2, _DYNAMIC, 0, False, False, 0, "P"
+        opened(
+            prov,
+            "EXTEND",
+            FileFrame(
+                "NO",
+                FileOrganization(_SEQ),
+                AccessMode(_SEQ),
+                PrimeKey(0, 0),
+                0,
+                False,
+                False,
+                0,
+                2,
+            ),
+        ),
+        opened(
+            prov,
+            "I-O",
+            FileFrame(
+                "NO",
+                FileOrganization(_INDEXED),
+                AccessMode(_DYNAMIC),
+                PrimeKey(0, 2),
+                0,
+                False,
+                False,
+                0,
+                2,
+            ),
         ),
     ]
     assert (

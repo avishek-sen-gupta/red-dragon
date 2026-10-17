@@ -7,8 +7,8 @@ from dataclasses import dataclass, replace
 
 from cobol_asg.file_enums import AccessMode, FileOrganization, OpenMode
 from interpreter.cobol.access_result import AccessCondition, AccessResult
-from interpreter.cobol.file_attributes import FileAttributes
 from interpreter.cobol.file_drivers import FileOrganizationDriver
+from interpreter.cobol.file_frame import FileFrame
 from interpreter.cobol.file_logic_status import FileLogicStatus
 from interpreter.cobol.file_position import FilePosition
 
@@ -33,7 +33,7 @@ def _permitted_unless(refused: bool, status: FileLogicStatus) -> FileLogicStatus
 class OpenFile:
     driver: FileOrganizationDriver
     mode: OpenMode
-    attributes: FileAttributes
+    attributes: FileFrame
     position: FilePosition = FilePosition.NO_CURRENT_RECORD
     last_key: bytes = b""
 
