@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 
 from cobol_asg.cobol_statements import (
     AcceptStatement,
     CloseStatement,
+    CobolStatementType,
     DeleteStatement,
     OpenStatement,
     ReadStatement,
@@ -22,6 +24,7 @@ from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.field_resolution import whole_field_extent
 from interpreter.cobol.program_object import program_name
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
+from interpreter.cobol.status_class import StatusClass
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Binop,
@@ -31,6 +34,7 @@ from interpreter.instructions import (
     Label_,
     SetContinuation,
 )
+from interpreter.ir import CodeLabel
 from interpreter.operator_kind import resolve_binop
 from interpreter.register import NO_REGISTER, Register
 
@@ -51,17 +55,42 @@ def _select_to_record(ctx: EmitContext) -> dict[str, str]:
     return {sel: rec for rec, sel in reversed(ctx._asg.file_record_to_select.items())}
 
 
+def _emit_skip_if_class(
+    ctx: EmitContext,
+    first_reg: Register,
+    status_class: StatusClass,
+    skip_lbl: CodeLabel,
+    *,
+    span: SourceSpan | None,
+) -> None:
+    match_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        Binop(
+            result_reg=match_reg,
+            operator=resolve_binop("=="),
+            left=first_reg,
+            right=Register(str(ctx.const_to_reg(status_class.value, span=span))),
+        ),
+        span=span,
+    )
+    next_lbl = ctx.fresh_label("use_check")
+    ctx.emit_inst(
+        BranchIf(cond_reg=match_reg, branch_targets=(skip_lbl, next_lbl)), span=span
+    )
+    ctx.emit_inst(Label_(label=next_lbl), span=span)
+
+
 def _emit_conditional_use_perform(
     ctx: EmitContext,
     status_reg: Register,
     section: str,
+    handled: Sequence[StatusClass],
     *,
     span: SourceSpan | None = None,
 ) -> None:
-    """Emit: if status is an error (first char != "0"), PERFORM the USE section
-    and return to the point of the I/O verb. A no-op on success."""
-    # err = status first char != "0" (status classes 1..9: AT END / INVALID KEY /
-    # permanent / implementor — i.e. anything not 0x successful/info).
+    """Emit: unless the status is successful or of a class the statement's own
+    AT END / INVALID KEY phrase handles, PERFORM the USE section and return to
+    the point of the I/O verb."""
     first_reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(
@@ -75,23 +104,11 @@ def _emit_conditional_use_perform(
         ),
         span=span,
     )
-    zero_reg = ctx.const_to_reg("0", span=span)
-    err_reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        Binop(
-            result_reg=err_reg,
-            operator=resolve_binop("!="),
-            left=first_reg,
-            right=Register(str(zero_reg)),
-        ),
-        span=span,
-    )
-    use_lbl = ctx.fresh_label("use_proc")
     skip_lbl = ctx.fresh_label("use_skip")
-    ctx.emit_inst(
-        BranchIf(cond_reg=err_reg, branch_targets=(use_lbl, skip_lbl)), span=span
-    )
-    ctx.emit_inst(Label_(label=use_lbl), span=span)
+    _ = [
+        _emit_skip_if_class(ctx, first_reg, status_class, skip_lbl, span=span)
+        for status_class in (StatusClass.SUCCESSFUL, *handled)
+    ]
     ret_lbl = ctx.fresh_label("use_return")
     ctx.emit_inst(
         SetContinuation(name=ctx.procedures.section_end(section), target_label=ret_lbl),
@@ -103,23 +120,29 @@ def _emit_conditional_use_perform(
     ctx.emit_inst(Label_(label=skip_lbl), span=span)
 
 
+def handled_classes(at_end: bool, invalid_key: bool) -> tuple[StatusClass, ...]:
+    """The status classes a statement's own AT END / INVALID KEY phrase handles."""
+    return (
+        *((StatusClass.AT_END,) if at_end else ()),
+        *((StatusClass.INVALID_KEY,) if invalid_key else ()),
+    )
+
+
 def emit_use_trigger(
     ctx: EmitContext,
     file_name: str,
     status_reg: Register,
-    has_explicit_clause: bool,
+    handled: Sequence[StatusClass],
     materialised: MaterialisedSectionedLayout,
     *,
     span: SourceSpan | None = None,
 ) -> None:
     """Inject a conditional PERFORM of the matching USE declarative when an I/O
-    verb returns an error/exception status and the statement has no explicit
-    AT END / INVALID KEY clause (COBOL precedence)."""
-    if has_explicit_clause:
-        return
-    section = ctx.use_by_file.get(file_name.upper()) or ctx.use_global
-    if section is not None:
-        _emit_conditional_use_perform(ctx, status_reg, section, span=span)
+    verb returns an error/exception status that the statement's own AT END /
+    INVALID KEY phrase does not handle."""
+    section = ctx.use_by_file.get(file_name.upper(), "") or ctx.use_global or ""
+    if section:
+        _emit_conditional_use_perform(ctx, status_reg, section, handled, span=span)
         return
     if not ctx.use_by_mode:
         return
@@ -154,7 +177,7 @@ def emit_use_trigger(
             BranchIf(cond_reg=match_reg, branch_targets=(do_lbl, next_lbl)), span=span
         )
         ctx.emit_inst(Label_(label=do_lbl), span=span)
-        _emit_conditional_use_perform(ctx, status_reg, sec, span=span)
+        _emit_conditional_use_perform(ctx, status_reg, sec, handled, span=span)
         ctx.emit_inst(Branch(label=next_lbl), span=span)
         ctx.emit_inst(Label_(label=next_lbl), span=span)
 
@@ -176,7 +199,7 @@ def _emit_open_use_trigger(
     )
     if not section:
         return
-    _emit_conditional_use_perform(ctx, status_reg, section, span=span)
+    _emit_conditional_use_perform(ctx, status_reg, section, (), span=span)
 
 
 def lower_accept(
@@ -343,7 +366,7 @@ def lower_close(
         ctx.emit_file_status_update(filename, status_reg, materialised, span=span)
         # CLOSE has no AT END / INVALID KEY clause, so a USE declarative fires
         # on a non-success close status (red-dragon-m0oa.8).
-        emit_use_trigger(ctx, filename, status_reg, False, materialised, span=span)
+        emit_use_trigger(ctx, filename, status_reg, (), materialised, span=span)
         logger.info("CLOSE %s", filename)
 
 
@@ -403,9 +426,7 @@ def lower_read(
         ctx,
         stmt.file_name,
         status_reg,
-        bool(
-            stmt.at_end or stmt.not_at_end or stmt.invalid_key or stmt.not_invalid_key
-        ),
+        handled_classes(bool(stmt.at_end), bool(stmt.invalid_key)),
         materialised,
         span=span,
     )
@@ -533,8 +554,8 @@ def _emit_invalid_key_branch(
     ctx: EmitContext,
     status_reg: Register,
     file_name: str,
-    invalid_key: list,
-    not_invalid_key: list,
+    invalid_key: Sequence[CobolStatementType],
+    not_invalid_key: Sequence[CobolStatementType],
     materialised: MaterialisedSectionedLayout,
     after_label: object,
     *,
@@ -652,7 +673,7 @@ def lower_write(
         ctx,
         file_name,
         status_reg,
-        bool(stmt.invalid_key or stmt.not_invalid_key),
+        handled_classes(False, bool(stmt.invalid_key)),
         materialised,
         span=span,
     )
@@ -715,7 +736,7 @@ def lower_rewrite(
         ctx,
         file_name,
         status_reg,
-        bool(stmt.invalid_key or stmt.not_invalid_key),
+        handled_classes(False, bool(stmt.invalid_key)),
         materialised,
         span=span,
     )
@@ -777,7 +798,7 @@ def lower_start(
         ctx,
         stmt.file_name,
         status_reg,
-        bool(stmt.invalid_key or stmt.not_invalid_key),
+        handled_classes(False, bool(stmt.invalid_key)),
         materialised,
         span=span,
     )
@@ -833,7 +854,7 @@ def lower_delete(
         ctx,
         stmt.file_name,
         status_reg,
-        bool(stmt.invalid_key or stmt.not_invalid_key),
+        handled_classes(False, bool(stmt.invalid_key)),
         materialised,
         span=span,
     )

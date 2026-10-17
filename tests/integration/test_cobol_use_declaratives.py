@@ -282,3 +282,41 @@ class TestUseDeclaratives:
             to_fixed(lines), language="cobol", io_provider=provider, max_steps=4000
         )
         assert _decode(_first_region(vm), 0, 1) == 2
+
+    @covers(CobolFeature.DECLARATIVES)
+    def test_explicit_clause_leaves_other_statuses_to_use(self, tmp_path: Path) -> None:
+        # AT END covers only the at-end condition (status class 1) and INVALID KEY
+        # only class 2. A READ ... AT END of an unopened file (47) and a WRITE ...
+        # INVALID KEY to a file open INPUT (48) still fire the USE: FLAG=2. The
+        # READ past the end runs AT END only, adding nothing.
+        lines = [
+            "IDENTIFICATION DIVISION.",
+            "PROGRAM-ID. USEC.",
+            "ENVIRONMENT DIVISION.",
+            "INPUT-OUTPUT SECTION.",
+            "FILE-CONTROL.",
+            "    SELECT F1 ASSIGN TO XXXXX001.",
+            "DATA DIVISION.",
+            "FILE SECTION.",
+            "FD  F1.",
+            "01  F1-REC PIC X(10).",
+            "WORKING-STORAGE SECTION.",
+            "01  FLAG PIC 9(1) VALUE 0.",
+            "PROCEDURE DIVISION.",
+            "DECLARATIVES.",
+            "D1 SECTION.",
+            "    USE AFTER STANDARD ERROR PROCEDURE ON F1.",
+            "D1-P.",
+            "    ADD 1 TO FLAG.",
+            "END DECLARATIVES.",
+            "MAIN SECTION.",
+            "MAIN-P.",
+            "    READ F1 AT END CONTINUE END-READ.",
+            "    OPEN INPUT F1.",
+            "    WRITE F1-REC INVALID KEY CONTINUE END-WRITE.",
+            "    READ F1 AT END CONTINUE END-READ.",
+            "    READ F1 AT END CONTINUE END-READ.",
+            "    CLOSE F1.",
+            "    STOP RUN.",
+        ]
+        assert _flag(lines, tmp_path) == 2
