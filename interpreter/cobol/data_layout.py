@@ -20,6 +20,7 @@ from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from cobol_asg.condition_name import ConditionName, ConditionValue
 from cobol_asg.ref_mod import RefModOperand
 from cobol_asg.source_span import SourceSpan
+from interpreter.cobol.figurative_constants import repeat_to_width
 
 logger = logging.getLogger(__name__)
 
@@ -465,9 +466,16 @@ def _flatten_field(
             total_bytes=group_length,
             occurs_count=cobol_field.occurs,
             element_size=elem_size,
-            conditions=list(cobol_field.conditions),
+            conditions=_sized_conditions(
+                cobol_field.conditions,
+                (
+                    group_length // cobol_field.occurs
+                    if cobol_field.occurs
+                    else group_length
+                ),
+            ),
             span=cobol_field.span,
-            value=cobol_field.value,
+            value=_sized_value(cobol_field, group_length),
             value_is_figurative=cobol_field.value_is_figurative,
             occurs_depending_on=cobol_field.occurs_depending_on,
         )
@@ -487,7 +495,7 @@ def _flatten_field(
         offset=absolute_offset,
         byte_length=total_byte_length,
         redefines=cobol_field.redefines,
-        value=cobol_field.value,
+        value=_sized_value(cobol_field, total_byte_length),
         value_is_figurative=cobol_field.value_is_figurative,
         occurs_count=cobol_field.occurs,
         element_size=(
@@ -495,7 +503,7 @@ def _flatten_field(
             if cobol_field.element_size > 0
             else element_byte_length
         ),
-        conditions=cobol_field.conditions,
+        conditions=_sized_conditions(cobol_field.conditions, element_byte_length),
         values=cobol_field.values,
         sign_separate=cobol_field.sign_separate,
         sign_leading=cobol_field.sign_leading,
@@ -506,6 +514,30 @@ def _flatten_field(
         span=cobol_field.span,
     )
     return cobol_field.name, fl
+
+
+def _sized_value(cobol_field: CobolField, width: int) -> str:
+    if not cobol_field.value_is_all:
+        return cobol_field.value
+    return repeat_to_width(cobol_field.value, width)
+
+
+def _sized_conditions(
+    conditions: Sequence[ConditionName], width: int
+) -> list[ConditionName]:
+    return [
+        replace(
+            condition,
+            values=[_sized_condition_value(v, width) for v in condition.values],
+        )
+        for condition in conditions
+    ]
+
+
+def _sized_condition_value(value: ConditionValue, width: int) -> ConditionValue:
+    if not value.is_all:
+        return value
+    return replace(value, from_val=repeat_to_width(value.from_val, width), is_all=False)
 
 
 def record_length(cobol_field: CobolField) -> int:

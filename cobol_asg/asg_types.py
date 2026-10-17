@@ -87,6 +87,7 @@ class CobolField:
     offset: int
     value: str = ""
     value_is_figurative: bool = False
+    value_is_all: bool = False
     redefines: str = ""
     children: list[CobolField] = field(default_factory=list)
     occurs: int = 0
@@ -155,6 +156,7 @@ class CobolField:
             offset=data.get("offset", 0),
             value=data.get("value", ""),
             value_is_figurative=data.get("value_is_figurative", False),
+            value_is_all=data.get("value_is_all", False),
             redefines=data.get("redefines", ""),
             children=[
                 CobolField.from_dict(c, currency, pointer_type)
@@ -186,6 +188,7 @@ class CobolField:
             "pic": self.pic,
             "usage": self.usage,
             "offset": self.offset,
+            **({"value_is_all": True} if self.value_is_all else {}),
         }
         if self.span is not None:
             self.span.write_into(result)

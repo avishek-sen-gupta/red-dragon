@@ -29,7 +29,8 @@ from interpreter.cobol.arithmetic_scale import (
 )
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.condition_name_index import ConditionNameIndex
-from interpreter.cobol.emit_context import EmitContext
+from interpreter.cobol.emit_context import EmitContext, strip_cobol_literal
+from interpreter.cobol.figurative_constants import repeat_to_width
 from interpreter.cobol.pointer_lowering import PointerLowering
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.func_name import FuncName
@@ -439,6 +440,8 @@ def _lower_figurative(
     sibling is not a field.
     """
     value = str(fig.get("value", "")).upper()
+    if value == _ALL:
+        return _lower_all_literal(ctx, fig, sibling, materialised, span=span)
     # ZERO / ZEROS against a NUMERIC field compares by value (integer 0), not as
     # a zero-filled character string — otherwise "1000.00" <= "0000000000.00"
     # would be a (broken) number-vs-string comparison (red-dragon-z6ad family).
@@ -456,6 +459,22 @@ def _lower_figurative(
     return ctx.const_to_reg(literal, span=span)
 
 
+def _lower_all_literal(
+    ctx: EmitContext,
+    fig: dict,
+    sibling: dict,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> Register:
+    pattern = strip_cobol_literal(str(fig.get("literal", "")))
+    length = _field_byte_length(ctx, sibling, materialised, span=span)
+    width = len(pattern) if length is None else length
+    return ctx.const_to_reg(repeat_to_width(pattern, width), span=span)
+
+
+_ALL = "ALL"
+
 # Figuratives whose natural class is alphanumeric (character) rather than
 # numeric. ZERO/ZEROS is numeric and is intentionally excluded so a
 # numeric-DISPLAY field still compares to it by value.
@@ -469,6 +488,7 @@ _ALPHANUMERIC_FIGURATIVES: frozenset[str] = frozenset(
         "HIGH-VALUES",
         "QUOTE",
         "QUOTES",
+        _ALL,
     }
 )
 

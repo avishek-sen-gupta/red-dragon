@@ -73,6 +73,7 @@ from interpreter.cobol.condition_lowering import (
 from interpreter.cobol.data_layout import DataLayout, FieldLayout
 from interpreter.cobol.emit_context import EmitContext, strip_cobol_literal
 from interpreter.cobol.field_resolution import ResolvedFieldRef, whole_field_extent
+from interpreter.cobol.figurative_constants import repeat_to_width
 from interpreter.cobol.lower_pointer import is_pointer_set, lower_pointer_set
 from interpreter.cobol.lower_program_exit import (
     emit_publish_run_unit_return_code,
@@ -662,8 +663,7 @@ def lower_move(
     # Resolve the source field once (when it is a field). A numeric-DISPLAY
     # (zoned) source carries an extra character representation, picked per target
     # by category-pair in _store_move_value (red-dragon-0fqr).
-    # Track whether the source is a figurative constant — see per-target loop.
-    _figurative_fill_char: str | None = None
+    _fill_pattern = ""
     source_fl: FieldLayout | None = None
     # Get the source value (decode field or literal) — evaluated ONCE.
     if ctx.has_field(stmt.source.name, materialised):
@@ -700,15 +700,11 @@ def lower_move(
     else:
         literal = strip_cobol_literal(ctx.figuratives.translate(stmt.source.name))
         value_str_reg = ctx.const_to_reg(literal, span=span)
-        # COBOL figurative constants (SPACES/ZEROS/ZEROES/QUOTES) fill ALL
-        # receiver positions with the same character — MOVE ZEROES TO X(3)
-        # produces '000', not '0  '. Track the fill char here; the per-target
-        # loop repeats it to the target's width before encoding.
-        # HIGH-VALUES/LOW-VALUES are already handled by the raw-byte path above.
-        # Only applies when no source reference modification is present.
         if stmt.source.ref_mod_start is None:
-            _figurative_fill_char = ctx.figuratives.characters.get(
-                stmt.source.name.upper()
+            _fill_pattern = (
+                literal
+                if stmt.source.all_literal
+                else ctx.figuratives.characters.get(stmt.source.name.upper(), "")
             )
 
     # Handle reference modification if present
@@ -800,13 +796,15 @@ def lower_move(
         # there is no target reference modification (a ref-mod write targets a
         # specific slice, so the fill character must remain single for SPLICE).
         effective_source = source_value_reg
-        if _figurative_fill_char is not None and target.ref_mod_start is None:
+        if _fill_pattern and target.ref_mod_start is None:
             if ctx.has_field(target.name, materialised):
                 tgt_ref, _ = ctx.resolve_field_ref(
                     target.name, materialised, target.qualifiers, span=span
                 )
                 fill_width = tgt_ref.fl.byte_length
-                filled = ctx.const_to_reg(_figurative_fill_char * fill_width, span=span)
+                filled = ctx.const_to_reg(
+                    repeat_to_width(_fill_pattern, fill_width), span=span
+                )
                 effective_source = filled
         _store_move_value(
             ctx, target, effective_source, materialised, zoned_display_reg, span=span

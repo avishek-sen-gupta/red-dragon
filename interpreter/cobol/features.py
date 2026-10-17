@@ -202,6 +202,7 @@ class CobolFeature(Enum):
     PROGRAM_COLLATING_SEQUENCE = (
         "OBJECT-COMPUTER PROGRAM COLLATING SEQUENCE naming a SPECIAL-NAMES ALPHABET"
     )
+    FIGURATIVE_ALL = "ALL literal figurative constant repeated to the associated item"
 
     # ---------------------------------------------------------------------------
     # Expressions and conditions
