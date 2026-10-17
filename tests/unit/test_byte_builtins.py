@@ -429,6 +429,7 @@ class TestByteBuiltinsRegistration:
             "__string_find",
             "__string_split",
             "__multi_delimiter_split",
+            "__unstring_by_size",
             "__multi_delimiter_consumed_length",
             "__string_count",
             "__string_replace",

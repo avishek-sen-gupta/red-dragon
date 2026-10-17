@@ -74,6 +74,7 @@ class BuiltinName:
     COBOL_PREPARE_SIGN = "__cobol_prepare_sign"
     STRING_FIND = "__string_find"
     STRING_SPLIT = "__string_split"
+    UNSTRING_BY_SIZE = "__unstring_by_size"
     MULTI_DELIMITER_SPLIT = "__multi_delimiter_split"
     MULTI_DELIMITER_CONSUMED_LENGTH = "__multi_delimiter_consumed_length"
     STRING_COUNT = "__string_count"
