@@ -3845,25 +3845,34 @@ class TestUsageComp:
         assert _decode_zoned_unsigned(region, flag_offset, 1) == 1
 
     @covers(CobolFeature.USAGE_COMP)
-    def test_comp_binary_unsigned_stores_value_above_signed_max(self):
-        """PIC 9(4) COMP can store 50000 (> signed 2-byte max 32767) without corruption."""
+    def test_comp_binary_move_keeps_only_the_picture_digits(self):
+        """ANSI X3.23-1985 MOVE: a numeric receiver keeps the digits its PICTURE
+        describes and loses the high-order ones; a binary item is no exception
+        (IBM TRUNC(STD)). 50000 into PIC 9(4) COMP stores 0, not 0xC350."""
         vm = _run_cobol(
             [
                 "IDENTIFICATION DIVISION.",
-                "PROGRAM-ID. TEST-COMP-U.",
+                "PROGRAM-ID. TEST-COMP-T.",
                 "DATA DIVISION.",
                 "WORKING-STORAGE SECTION.",
                 "01 WS-UBIN  PIC 9(4) COMP VALUE 0.",
+                "01 WS-ONE   PIC 9 COMP VALUE 0.",
+                "01 WS-POS   PIC S999 COMP VALUE 0.",
+                "01 WS-NEG   PIC S999 COMP VALUE 0.",
+                "01 WS-SRC   PIC 9(10) VALUE 15.",
                 "PROCEDURE DIVISION.",
                 "MAIN-PARA.",
                 "    MOVE 50000 TO WS-UBIN.",
+                "    MOVE WS-SRC TO WS-ONE.",
+                "    MOVE 1023 TO WS-SRC.",
+                "    MOVE WS-SRC TO WS-POS.",
+                "    MOVE -1023 TO WS-NEG.",
                 "    STOP RUN.",
             ],
             max_steps=1500,
         )
         region = _first_region(vm)
-        raw = int.from_bytes(region[0:2], "big", signed=False)
-        assert raw == 50000
+        assert bytes(region[0:8]).hex() == "0000" "0005" "0017" "ffe9"
 
 
 class TestUsageComp3:
