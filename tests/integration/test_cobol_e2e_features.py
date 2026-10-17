@@ -1025,13 +1025,6 @@ class TestStringOperations:
     def test_inspect_replacing_leading_to_field_operand(self):
         """REPLACING LEADING <lit> BY <identifier> shares the same from/to
         resolution code path as ALL (red-dragon-twn family).
-
-        Uses a single leading occurrence deliberately: _builtin_string_replace's
-        LEADING mode has its own separate, pre-existing bug where multiple
-        leading matches only get the first one replaced (the while loop's
-        re-check compares against the already-substituted prefix, which no
-        longer starts with from_pat) -- out of scope here since it is not an
-        operand-resolution defect; flagged in the task report instead.
         """
         vm = _run_cobol(
             [

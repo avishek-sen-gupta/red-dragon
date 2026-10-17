@@ -77,9 +77,7 @@ from interpreter.cobol.byte_builtins import (
     _builtin_string_concat,
     _builtin_string_concat_pair,
     _builtin_string_convert,
-    _builtin_string_count,
     _builtin_string_find,
-    _builtin_string_replace,
     _builtin_string_slice,
     _builtin_string_splice,
     _builtin_string_split,
@@ -431,8 +429,6 @@ class TestByteBuiltinsRegistration:
             "__multi_delimiter_split",
             "__unstring_by_size",
             "__multi_delimiter_consumed_length",
-            "__string_count",
-            "__string_replace",
             "__string_concat",
             "__string_concat_pair",
             "__int_to_binary_bytes",
@@ -448,8 +444,6 @@ class TestByteBuiltinsRegistration:
             "__cobol_inspect_replace",
             "__cobol_inspect_convert",
             "__string_slice",
-            "__string_boundary_slice",
-            "__string_boundary_split",
             "__string_splice",
             "__string_zfill",
             "__string_pad_to",
@@ -1265,207 +1259,6 @@ class TestStringSplit:
         assert (
             _builtin_string_split(
                 [typed_from_runtime(sym), typed_from_runtime(",")], None
-            ).value
-            is _UNCOMPUTABLE
-        )
-
-
-class TestStringCount:
-    """Tests for __string_count builtin."""
-
-    def test_all_mode(self):
-        assert (
-            _builtin_string_count(
-                [
-                    typed_from_runtime("abcabc"),
-                    typed_from_runtime("abc"),
-                    typed_from_runtime("all"),
-                ],
-                None,
-            ).value
-            == 2
-        )
-
-    def test_all_mode_no_match(self):
-        assert (
-            _builtin_string_count(
-                [
-                    typed_from_runtime("hello"),
-                    typed_from_runtime("xyz"),
-                    typed_from_runtime("all"),
-                ],
-                None,
-            ).value
-            == 0
-        )
-
-    def test_leading_mode(self):
-        assert (
-            _builtin_string_count(
-                [
-                    typed_from_runtime("aaab"),
-                    typed_from_runtime("a"),
-                    typed_from_runtime("leading"),
-                ],
-                None,
-            ).value
-            == 3
-        )
-
-    def test_leading_mode_no_leading(self):
-        assert (
-            _builtin_string_count(
-                [
-                    typed_from_runtime("baaa"),
-                    typed_from_runtime("a"),
-                    typed_from_runtime("leading"),
-                ],
-                None,
-            ).value
-            == 0
-        )
-
-    def test_characters_mode(self):
-        assert (
-            _builtin_string_count(
-                [
-                    typed_from_runtime("hello"),
-                    typed_from_runtime(""),
-                    typed_from_runtime("characters"),
-                ],
-                None,
-            ).value
-            == 5
-        )
-
-    def test_unknown_mode_returns_uncomputable(self):
-        assert (
-            _builtin_string_count(
-                [
-                    typed_from_runtime("hello"),
-                    typed_from_runtime("l"),
-                    typed_from_runtime("unknown"),
-                ],
-                None,
-            ).value
-            is _UNCOMPUTABLE
-        )
-
-    def test_symbolic_returns_uncomputable(self):
-        sym = SymbolicValue(name="x")
-        assert (
-            _builtin_string_count(
-                [
-                    typed_from_runtime(sym),
-                    typed_from_runtime("a"),
-                    typed_from_runtime("all"),
-                ],
-                None,
-            ).value
-            is _UNCOMPUTABLE
-        )
-
-
-class TestStringReplace:
-    """Tests for __string_replace builtin."""
-
-    def test_all_mode(self):
-        assert (
-            _builtin_string_replace(
-                [
-                    typed_from_runtime("aXaXa"),
-                    typed_from_runtime("X"),
-                    typed_from_runtime("Y"),
-                    typed_from_runtime("all"),
-                ],
-                None,
-            ).value
-            == "aYaYa"
-        )
-
-    def test_first_mode(self):
-        assert (
-            _builtin_string_replace(
-                [
-                    typed_from_runtime("aXaXa"),
-                    typed_from_runtime("X"),
-                    typed_from_runtime("Y"),
-                    typed_from_runtime("first"),
-                ],
-                None,
-            ).value
-            == "aYaXa"
-        )
-
-    def test_leading_mode(self):
-        # "XXa" -> replace leading "X" with "Y" -> "YXa" (result no longer starts with "X")
-        assert (
-            _builtin_string_replace(
-                [
-                    typed_from_runtime("XXa"),
-                    typed_from_runtime("X"),
-                    typed_from_runtime("Y"),
-                    typed_from_runtime("leading"),
-                ],
-                None,
-            ).value
-            == "YXa"
-        )
-
-    def test_leading_mode_repeating(self):
-        # "XXXb" with from="XX" -> "YXb" (one leading match consumed)
-        assert (
-            _builtin_string_replace(
-                [
-                    typed_from_runtime("XXXb"),
-                    typed_from_runtime("XX"),
-                    typed_from_runtime("Y"),
-                    typed_from_runtime("leading"),
-                ],
-                None,
-            ).value
-            == "YXb"
-        )
-
-    def test_empty_from_pat_returns_source(self):
-        assert (
-            _builtin_string_replace(
-                [
-                    typed_from_runtime("hello"),
-                    typed_from_runtime(""),
-                    typed_from_runtime("Y"),
-                    typed_from_runtime("all"),
-                ],
-                None,
-            ).value
-            == "hello"
-        )
-
-    def test_unknown_mode_returns_uncomputable(self):
-        assert (
-            _builtin_string_replace(
-                [
-                    typed_from_runtime("a"),
-                    typed_from_runtime("a"),
-                    typed_from_runtime("b"),
-                    typed_from_runtime("unknown"),
-                ],
-                None,
-            ).value
-            is _UNCOMPUTABLE
-        )
-
-    def test_symbolic_returns_uncomputable(self):
-        sym = SymbolicValue(name="x")
-        assert (
-            _builtin_string_replace(
-                [
-                    typed_from_runtime(sym),
-                    typed_from_runtime("a"),
-                    typed_from_runtime("b"),
-                    typed_from_runtime("all"),
-                ],
-                None,
             ).value
             is _UNCOMPUTABLE
         )

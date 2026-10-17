@@ -51,8 +51,6 @@ from interpreter.cobol.cobol_constants import (
     ByteConstants,
     CobolEncoding,
     NibblePosition,
-    ReplaceMode,
-    TallyMode,
 )
 from interpreter.cobol.ebcdic_table import EbcdicTable
 from interpreter.cobol.inspect_mode import InspectMode
@@ -464,125 +462,6 @@ def _builtin_multi_delimiter_consumed_length(
         consumed += best_pos + len(best_delim)
         remaining = remaining[best_pos + len(best_delim) :]
     return BuiltinResult(value=consumed)
-
-
-def _builtin_string_count(args: list[TypedValue], vm: VMState) -> BuiltinResult:
-    """Count occurrences of pattern in source string.
-
-    Args: [source: str, pattern: str, mode: str ("all"/"leading"/"characters")]
-    Returns: int
-    """
-    if len(args) < 3 or any(_is_symbolic(a.value) for a in args):
-        return BuiltinResult(value=_UNCOMPUTABLE)
-    source, pattern, mode = args[0].value, args[1].value, args[2].value
-    if (
-        not isinstance(source, str)
-        or not isinstance(pattern, str)
-        or not isinstance(mode, str)
-    ):
-        return BuiltinResult(value=_UNCOMPUTABLE)
-    if mode == TallyMode.ALL:
-        return BuiltinResult(value=source.count(pattern) if pattern else 0)
-    if mode == TallyMode.LEADING:
-        count = 0
-        pos = 0
-        while pos <= len(source) - len(pattern) and pattern:
-            if source[pos : pos + len(pattern)] == pattern:
-                count += 1
-                pos += len(pattern)
-            else:
-                break
-        return BuiltinResult(value=count)
-    if mode == TallyMode.CHARACTERS:
-        return BuiltinResult(value=len(source))
-    return BuiltinResult(value=_UNCOMPUTABLE)
-
-
-def _builtin_string_boundary_slice(
-    args: list[TypedValue], vm: VMState
-) -> BuiltinResult:
-    """Slice source down to a BEFORE/AFTER INITIAL boundary.
-
-    Args: [source: str, boundary_text: str, kind: str ("before"/"after")]
-    Returns: str — the bounded region; if boundary_text is not found at all,
-        the entire source string is returned unchanged (standard COBOL
-        behavior per red-dragon-4q25.13 acceptance criterion 5).
-    """
-    if len(args) < 3 or any(_is_symbolic(a.value) for a in args):
-        return BuiltinResult(value=_UNCOMPUTABLE)
-    source, boundary_text, kind = (a.value for a in args)
-    if not all(isinstance(v, str) for v in (source, boundary_text, kind)):
-        return BuiltinResult(value=_UNCOMPUTABLE)
-    pos = source.find(boundary_text)
-    if pos < 0:
-        return BuiltinResult(value=source)
-    if kind == "before":
-        return BuiltinResult(value=source[:pos])
-    return BuiltinResult(value=source[pos + len(boundary_text) :])
-
-
-def _builtin_string_boundary_split(
-    args: list[TypedValue], vm: VMState
-) -> BuiltinResult:
-    """Split source at a BEFORE/AFTER INITIAL boundary into [bounded, remainder].
-
-    Args: [source: str, boundary_text: str, kind: str ("before"/"after")]
-    Returns: list[str] of exactly 2 elements: [bounded_part, remainder_part].
-        bounded_part is the region a bounded operation (e.g. REPLACING) should
-        act on; remainder_part is everything else in source, to be spliced
-        back around the (possibly modified) bounded_part to reconstruct the
-        full string. If boundary_text is not found at all, bounded_part is
-        the entire source and remainder_part is "" (nothing left over) —
-        consistent with STRING_BOUNDARY_SLICE's own not-found fallback.
-    """
-    if len(args) < 3 or any(_is_symbolic(a.value) for a in args):
-        return BuiltinResult(value=_UNCOMPUTABLE)
-    source, boundary_text, kind = (a.value for a in args)
-    if not all(isinstance(v, str) for v in (source, boundary_text, kind)):
-        return BuiltinResult(value=_UNCOMPUTABLE)
-    pos = source.find(boundary_text)
-    if pos < 0:
-        return BuiltinResult(value=[source, ""])
-    if kind == "before":
-        return BuiltinResult(value=[source[:pos], source[pos:]])
-    return BuiltinResult(
-        value=[source[pos + len(boundary_text) :], source[: pos + len(boundary_text)]]
-    )
-
-
-def _builtin_string_replace(args: list[TypedValue], vm: VMState) -> BuiltinResult:
-    """Replace occurrences of pattern in source string.
-
-    Args: [source: str, from_pat: str, to_pat: str, mode: str ("all"/"leading"/"first")]
-    Returns: str
-    """
-    if len(args) < 4 or any(_is_symbolic(a.value) for a in args):
-        return BuiltinResult(value=_UNCOMPUTABLE)
-    source, from_pat, to_pat, mode = (
-        args[0].value,
-        args[1].value,
-        args[2].value,
-        args[3].value,
-    )
-    if (
-        not isinstance(source, str)
-        or not isinstance(from_pat, str)
-        or not isinstance(to_pat, str)
-        or not isinstance(mode, str)
-    ):
-        return BuiltinResult(value=_UNCOMPUTABLE)
-    if not from_pat:
-        return BuiltinResult(value=source)
-    if mode == ReplaceMode.ALL:
-        return BuiltinResult(value=source.replace(from_pat, to_pat))
-    if mode == ReplaceMode.FIRST:
-        return BuiltinResult(value=source.replace(from_pat, to_pat, 1))
-    if mode == ReplaceMode.LEADING:
-        result = source
-        while result.startswith(from_pat):
-            result = to_pat + result[len(from_pat) :]
-        return BuiltinResult(value=result)
-    return BuiltinResult(value=_UNCOMPUTABLE)
 
 
 def _builtin_string_concat(args: list[TypedValue], vm: VMState) -> BuiltinResult:
@@ -2001,8 +1880,6 @@ BYTE_BUILTINS: Mapping[FuncName, Builtin] = MappingProxyType(
         FuncName(
             BuiltinName.MULTI_DELIMITER_CONSUMED_LENGTH
         ): _builtin_multi_delimiter_consumed_length,
-        FuncName(BuiltinName.STRING_COUNT): _builtin_string_count,
-        FuncName(BuiltinName.STRING_REPLACE): _builtin_string_replace,
         FuncName(BuiltinName.STRING_CONCAT): _builtin_string_concat,
         FuncName(BuiltinName.STRING_CONCAT_PAIR): _builtin_string_concat_pair,
         FuncName(BuiltinName.INT_TO_BINARY_BYTES): _builtin_int_to_binary_bytes,
@@ -2022,8 +1899,6 @@ BYTE_BUILTINS: Mapping[FuncName, Builtin] = MappingProxyType(
         FuncName(BuiltinName.COBOL_INSPECT_REPLACE): _builtin_cobol_inspect_replace,
         FuncName(BuiltinName.COBOL_INSPECT_CONVERT): _builtin_cobol_inspect_convert,
         FuncName(BuiltinName.STRING_SLICE): _builtin_string_slice,
-        FuncName(BuiltinName.STRING_BOUNDARY_SLICE): _builtin_string_boundary_slice,
-        FuncName(BuiltinName.STRING_BOUNDARY_SPLIT): _builtin_string_boundary_split,
         FuncName(BuiltinName.STRING_SPLICE): _builtin_string_splice,
         FuncName(BuiltinName.STRING_ZFILL): _builtin_string_zfill,
         FuncName(BuiltinName.STRING_PAD_TO): _builtin_string_pad_to,
