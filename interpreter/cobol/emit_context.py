@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import dataclasses
 import logging
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 
@@ -99,6 +99,68 @@ def strip_cobol_literal(value: str) -> str:
 DispatchFn = Callable[
     ["EmitContext", Any, "MaterialisedSectionedLayout"], None
 ]  # Any: CobolStatementType, circular-import boundary
+
+
+def _sign_index(fl: FieldLayout) -> int:
+    return 0 if fl.type_descriptor.sign_leading else fl.byte_length - 1
+
+
+def _decode_ir(fl: FieldLayout) -> list[InstructionBase]:
+    td = fl.type_descriptor
+    if td.holds_characters or td.category == CobolDataCategory.NUMERIC_EDITED:
+        # The FILE-section region holds the file's raw bytes; a real dataset
+        # is EBCDIC, exactly like WS/LS/LK regions — so alphanumeric FD
+        # fields decode as EBCDIC too. Decoding them as LATIN-1 (the removed
+        # f6d84cfb branch) matched only an ASCII stub and mangled real EBCDIC
+        # files, breaking e.g. FUNCTION UPPER-CASE(FD-record) (red-dragon-uxpp).
+        return build_decode_alphanumeric_ir(f"dec_alpha_{fl.name}")
+    return _NUMERIC_DECODE_IR[td.category](fl)
+
+
+def _decode_zoned_ir(fl: FieldLayout) -> list[InstructionBase]:
+    td = fl.type_descriptor
+    if td.sign_separate:
+        return build_decode_zoned_separate_ir(
+            f"dec_zoned_sep_{fl.name}",
+            td.total_digits,
+            td.decimal_digits,
+            sign_leading=td.sign_leading,
+        )
+    return build_decode_zoned_ir(
+        f"dec_zoned_{fl.name}",
+        td.total_digits,
+        td.decimal_digits,
+        sign_leading=td.sign_leading,
+    )
+
+
+def _decode_binary_ir(fl: FieldLayout) -> list[InstructionBase]:
+    td = fl.type_descriptor
+    return build_decode_binary_ir(
+        f"dec_bin_{fl.name}", td.byte_length, td.decimal_digits, td.signed
+    )
+
+
+def _decode_float_ir(fl: FieldLayout) -> list[InstructionBase]:
+    return build_decode_float_ir(f"dec_float_{fl.name}", fl.type_descriptor.byte_length)
+
+
+def _decode_comp3_ir(fl: FieldLayout) -> list[InstructionBase]:
+    td = fl.type_descriptor
+    return build_decode_comp3_ir(
+        f"dec_comp3_{fl.name}", td.total_digits, td.decimal_digits
+    )
+
+
+_NUMERIC_DECODE_IR: Mapping[
+    CobolDataCategory, Callable[[FieldLayout], list[InstructionBase]]
+] = {
+    CobolDataCategory.ZONED_DECIMAL: _decode_zoned_ir,
+    CobolDataCategory.BINARY: _decode_binary_ir,
+    CobolDataCategory.COMP1: _decode_float_ir,
+    CobolDataCategory.COMP2: _decode_float_ir,
+    CobolDataCategory.COMP3: _decode_comp3_ir,
+}
 
 
 class EmitContext:
@@ -953,41 +1015,7 @@ class EmitContext:
         )
 
         td = fl.type_descriptor
-        if td.holds_characters or td.category == CobolDataCategory.NUMERIC_EDITED:
-            # The FILE-section region holds the file's raw bytes; a real dataset
-            # is EBCDIC, exactly like WS/LS/LK regions — so alphanumeric FD
-            # fields decode as EBCDIC too. Decoding them as LATIN-1 (the removed
-            # f6d84cfb branch) matched only an ASCII stub and mangled real EBCDIC
-            # files, breaking e.g. FUNCTION UPPER-CASE(FD-record) (red-dragon-uxpp).
-            ir = build_decode_alphanumeric_ir(f"dec_alpha_{fl.name}")
-        elif td.category == CobolDataCategory.ZONED_DECIMAL:
-            if td.sign_separate:
-                ir = build_decode_zoned_separate_ir(
-                    f"dec_zoned_sep_{fl.name}",
-                    td.total_digits,
-                    td.decimal_digits,
-                    sign_leading=td.sign_leading,
-                )
-            else:
-                ir = build_decode_zoned_ir(
-                    f"dec_zoned_{fl.name}",
-                    td.total_digits,
-                    td.decimal_digits,
-                    sign_leading=td.sign_leading,
-                )
-        elif td.category == CobolDataCategory.BINARY:
-            ir = build_decode_binary_ir(
-                f"dec_bin_{fl.name}",
-                td.byte_length,
-                td.decimal_digits,
-                td.signed,
-            )
-        elif td.category in (CobolDataCategory.COMP1, CobolDataCategory.COMP2):
-            ir = build_decode_float_ir(f"dec_float_{fl.name}", td.byte_length)
-        else:
-            ir = build_decode_comp3_ir(
-                f"dec_comp3_{fl.name}", td.total_digits, td.decimal_digits
-            )
+        ir = _decode_ir(fl)
 
         decoded = self.inline_ir(ir, {"%p_data": data_reg}, span=span)
         if not td.scale:
@@ -1075,6 +1103,174 @@ class EmitContext:
             region_reg, fl, offset_reg, extent=extent, span=span
         )
         return self.emit_to_string(decoded, span=span)
+
+    def emit_numeric_digit_image(
+        self,
+        region_reg: Register,
+        fl: FieldLayout,
+        offset_reg: Register = NO_REGISTER,
+        *,
+        extent: FieldExtent,
+        span: SourceSpan | None,
+    ) -> Register:
+        td = fl.type_descriptor
+        if td.category == CobolDataCategory.ZONED_DECIMAL and not td.signed:
+            return self._emit_with_scaling_zeros(
+                self.emit_decode_zoned_display(
+                    region_reg, fl, offset_reg, extent=extent, span=span
+                ),
+                td.scale,
+                span=span,
+            )
+        value = self.emit_decode_field(
+            region_reg, fl, offset_reg, extent=extent, span=span
+        )
+        image = self.fresh_reg()
+        self.emit_inst(
+            CallFunction(
+                result_reg=image,
+                func_name=FuncName(BuiltinName.COBOL_DIGIT_IMAGE),
+                args=(
+                    value,
+                    self.const_to_reg(td.total_digits, span=span),
+                    self.const_to_reg(td.decimal_digits, span=span),
+                    self.const_to_reg(td.scale, span=span),
+                ),
+            ),
+            span=span,
+        )
+        return image
+
+    def _emit_with_scaling_zeros(
+        self, stored: Register, scale: int, *, span: SourceSpan | None
+    ) -> Register:
+        if scale <= 0:
+            return stored
+        padded = self.fresh_reg()
+        self.emit_inst(
+            CallFunction(
+                result_reg=padded,
+                func_name=FuncName(BuiltinName.STRING_CONCAT_PAIR),
+                args=(stored, self.const_to_reg("0" * scale, span=span)),
+            ),
+            span=span,
+        )
+        return padded
+
+    def emit_stored_characters(
+        self,
+        region_reg: Register,
+        fl: FieldLayout,
+        offset_reg: Register = NO_REGISTER,
+        *,
+        extent: FieldExtent,
+        span: SourceSpan | None,
+    ) -> Register:
+        if fl.type_descriptor.category == CobolDataCategory.ZONED_DECIMAL:
+            return self.emit_decode_zoned_display(
+                region_reg, fl, offset_reg, extent=extent, span=span
+            )
+        return self.emit_decode_field_characters(
+            region_reg, fl, offset_reg, extent=extent, span=span
+        )
+
+    def emit_inspected_characters(
+        self,
+        region_reg: Register,
+        fl: FieldLayout,
+        offset_reg: Register = NO_REGISTER,
+        *,
+        extent: FieldExtent,
+        span: SourceSpan | None,
+    ) -> Register:
+        td = fl.type_descriptor
+        if not (td.category == CobolDataCategory.ZONED_DECIMAL and td.signed):
+            return self.emit_decode_field_characters(
+                region_reg, fl, offset_reg, extent=extent, span=span
+            )
+        stored = self._emit_load_field_bytes(
+            region_reg, fl, offset_reg, extent=extent, span=span
+        )
+        digits = self.fresh_reg()
+        self.emit_inst(
+            CallFunction(
+                result_reg=digits,
+                func_name=FuncName(BuiltinName.COBOL_ZONED_STRIP_SIGN),
+                args=(
+                    stored,
+                    self.const_to_reg(_sign_index(fl), span=span),
+                    self.const_to_reg(td.sign_separate, span=span),
+                ),
+            ),
+            span=span,
+        )
+        ir = build_decode_alphanumeric_ir(f"dec_inspected_{fl.name}")
+        return self.inline_ir(ir, {"%p_data": digits}, span=span)
+
+    def emit_write_inspected_characters(
+        self,
+        region_reg: Register,
+        fl: FieldLayout,
+        value_str_reg: Register,
+        offset_reg: Register = NO_REGISTER,
+        *,
+        extent: FieldExtent,
+        span: SourceSpan | None,
+    ) -> None:
+        td = fl.type_descriptor
+        if not (td.category == CobolDataCategory.ZONED_DECIMAL and td.signed):
+            self.emit_encode_and_write(
+                region_reg, fl, value_str_reg, offset_reg, extent=extent, span=span
+            )
+            return
+        field_offset = self._materialise_offset(fl, offset_reg, span=span)
+        ir = build_encode_alphanumeric_ir(f"enc_inspected_{fl.name}", td.total_digits)
+        digits = self.inline_ir(ir, {"%p_value": value_str_reg}, span=span)
+        original = self._emit_load_field_bytes(
+            region_reg, fl, field_offset, extent=extent, span=span
+        )
+        signed = self.fresh_reg()
+        self.emit_inst(
+            CallFunction(
+                result_reg=signed,
+                func_name=FuncName(BuiltinName.COBOL_ZONED_RESTORE_SIGN),
+                args=(
+                    digits,
+                    original,
+                    self.const_to_reg(_sign_index(fl), span=span),
+                    self.const_to_reg(td.sign_separate, span=span),
+                ),
+            ),
+            span=span,
+        )
+        self._emit_write_region(
+            region_reg=region_reg,
+            offset_reg=field_offset,
+            value_reg=signed,
+            length=fl.byte_length,
+            extent=extent,
+            span=span,
+        )
+
+    def _emit_load_field_bytes(
+        self,
+        region_reg: Register,
+        fl: FieldLayout,
+        offset_reg: Register,
+        *,
+        extent: FieldExtent,
+        span: SourceSpan | None,
+    ) -> Register:
+        data_reg = self.fresh_reg()
+        self._emit_load_region(
+            result_reg=data_reg,
+            region_reg=region_reg,
+            offset_reg=self._materialise_offset(fl, offset_reg, span=span),
+            length=fl.byte_length,
+            extent=extent,
+            span=span,
+        )
+        return data_reg
 
     # ── Byte-faithful (raw) region read/write ─────────────────────
 

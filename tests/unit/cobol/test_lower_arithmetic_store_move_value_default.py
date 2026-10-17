@@ -7,6 +7,6 @@ from tests.covers import NotLanguageFeature, covers
 
 class TestStoreMovValueDefault:
     @covers(NotLanguageFeature.INFRASTRUCTURE)
-    def test_zoned_display_reg_defaults_to_no_register(self):
+    def test_digit_image_reg_defaults_to_no_register(self):
         sig = inspect.signature(_store_move_value)
-        assert sig.parameters["zoned_display_reg"].default is NO_REGISTER
+        assert sig.parameters["digit_image_reg"].default is NO_REGISTER

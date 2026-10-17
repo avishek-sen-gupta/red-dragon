@@ -18,16 +18,19 @@ def _args(*values):
 
 
 @covers(CobolFeature.COMPARISON_OPERATORS)
-def test_digit_image_is_every_digit_position_without_the_sign():
+def test_digit_image_is_every_digit_position_without_the_sign_and_p_positions_as_zeros():
     images = [
         _builtin_cobol_digit_image(_args(*shape), VMState()).value
         for shape in (
-            (from_literal("-1234"), 4, 0),
-            (42, 6, 0),
-            (from_literal("-12.5"), 5, 2),
+            (from_literal("-1234"), 4, 0, 0),
+            (42, 6, 0, 0),
+            (from_literal("-12.5"), 5, 2, 0),
+            (5000, 1, 0, 3),
+            (from_literal("-200"), 1, 0, 2),
+            (from_literal("0.005"), 1, 0, -3),
         )
     ]
-    assert images == ["1234", "000042", "01250"]
+    assert images == ["1234", "000042", "01250", "5000", "200", "5"]
 
 
 @covers(CobolFeature.COMPARISON_OPERATORS)
