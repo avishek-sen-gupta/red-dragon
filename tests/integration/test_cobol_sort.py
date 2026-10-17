@@ -247,3 +247,60 @@ def test_merge_interleaves_ordered_files_with_equal_keys_in_using_order(
         ),
     )
     assert capsys.readouterr().out == "A3\nA1\nB4\nC2\n"
+
+
+@covers(CobolFeature.SORT)
+def test_sort_collates_by_its_collating_sequence_else_the_programs(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    files = ("IN-F", "SRT")
+    source = to_fixed(
+        [
+            "IDENTIFICATION DIVISION.",
+            "PROGRAM-ID. SORTCOLL.",
+            "ENVIRONMENT DIVISION.",
+            "CONFIGURATION SECTION.",
+            "OBJECT-COMPUTER. X PROGRAM COLLATING SEQUENCE IS ASC.",
+            "SPECIAL-NAMES.",
+            "    ALPHABET ASC IS STANDARD-1",
+            "    ALPHABET NAT IS NATIVE.",
+            "INPUT-OUTPUT SECTION.",
+            "FILE-CONTROL.",
+            *(f'    SELECT {name} ASSIGN TO "{name}".' for name in files),
+            "DATA DIVISION.",
+            "FILE SECTION.",
+            "FD IN-F.",
+            "01 IN-REC PIC X.",
+            "SD SRT.",
+            "01 SRT-REC PIC X.",
+            "WORKING-STORAGE SECTION.",
+            '01 EOF-FLAG PIC X VALUE "N".',
+            "PROCEDURE DIVISION.",
+            "MAIN-PARA.",
+            "    OPEN OUTPUT IN-F.",
+            '    MOVE "A" TO IN-REC. WRITE IN-REC.',
+            '    MOVE "1" TO IN-REC. WRITE IN-REC.',
+            "    CLOSE IN-F.",
+            "    SORT SRT ON ASCENDING KEY SRT-REC USING IN-F",
+            "        OUTPUT PROCEDURE SHOW.",
+            '    MOVE "N" TO EOF-FLAG.',
+            "    SORT SRT ON ASCENDING KEY SRT-REC",
+            "        COLLATING SEQUENCE IS NAT USING IN-F",
+            "        OUTPUT PROCEDURE SHOW.",
+            "    STOP RUN.",
+            "SHOW.",
+            '    RETURN SRT AT END MOVE "Y" TO EOF-FLAG',
+            "        NOT AT END DISPLAY SRT-REC END-RETURN.",
+            '    IF EOF-FLAG = "N" GO TO SHOW.',
+        ]
+    )
+    run(
+        source=source,
+        language="cobol",
+        max_steps=50000,
+        io_provider=RealFileIOProvider(
+            base_dir=tmp_path,
+            path_overrides={name: tmp_path / name for name in files},
+        ),
+    )
+    assert capsys.readouterr().out == "1\nA\nA\n1\n"

@@ -15,6 +15,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Union
 
+from cobol_asg.alphabet import Alphabet
 from cobol_asg.call_target import CallTarget
 from cobol_asg.cobol_expression import (
     ExprNode,
@@ -34,6 +35,7 @@ from cobol_asg.file_enums import AccessMode, FileOrganization, OpenMode, Recordi
 from cobol_asg.frontend_extension import DialectParser
 from cobol_asg.initialize_category import InitializeCategory
 from cobol_asg.initialize_replacing import InitializeReplacing
+from cobol_asg.program_collation import PROGRAM_COLLATION, ProgramCollation
 from cobol_asg.ref_mod import (
     FunctionCallOperand,
     RefModOperand,
@@ -1864,6 +1866,23 @@ class ProcedureRange:
 
 SortSource = SortFiles | ProcedureRange
 
+SortCollation = Alphabet | ProgramCollation
+
+
+def _sort_collation(data: Mapping) -> SortCollation:
+    if "collating_sequence" not in data:
+        return PROGRAM_COLLATION
+    named = data["collating_sequence"]
+    return Alphabet.from_parts(named["name"], named["kind"], named.get("items", []))
+
+
+def _sort_collation_to_dict(collation: SortCollation) -> dict:
+    match collation:
+        case Alphabet():
+            return {"collating_sequence": collation.to_dict()}
+        case ProgramCollation():
+            return {}
+
 
 def _sort_source(data: Mapping, files: str, procedure: str) -> SortSource:
     if procedure in data:
@@ -1886,6 +1905,7 @@ class SortStatement:
 
     file_name: str
     keys: tuple[SortKey, ...]
+    collating_sequence: SortCollation
     source: SortSource
     sink: SortSource
     span: SourceSpan | None
@@ -1895,6 +1915,7 @@ class SortStatement:
         return cls(
             file_name=data["file_name"],
             keys=tuple(SortKey.from_dict(k) for k in data["keys"]),
+            collating_sequence=_sort_collation(data),
             source=_sort_source(data, "using", "input_procedure"),
             sink=_sort_source(data, "giving", "output_procedure"),
             span=SourceSpan.from_dict(data),
@@ -1905,6 +1926,7 @@ class SortStatement:
             "type": "SORT",
             "file_name": self.file_name,
             "keys": [k.to_dict() for k in self.keys],
+            **_sort_collation_to_dict(self.collating_sequence),
             **_sort_source_to_dict(self.source, "using", "input_procedure"),
             **_sort_source_to_dict(self.sink, "giving", "output_procedure"),
         }
@@ -1921,6 +1943,7 @@ class MergeStatement:
 
     file_name: str
     keys: tuple[SortKey, ...]
+    collating_sequence: SortCollation
     using: SortFiles
     sink: SortSource
     span: SourceSpan | None
@@ -1930,6 +1953,7 @@ class MergeStatement:
         return cls(
             file_name=data["file_name"],
             keys=tuple(SortKey.from_dict(k) for k in data["keys"]),
+            collating_sequence=_sort_collation(data),
             using=SortFiles(tuple(data["using"])),
             sink=_sort_source(data, "giving", "output_procedure"),
             span=SourceSpan.from_dict(data),
@@ -1940,6 +1964,7 @@ class MergeStatement:
             "type": "MERGE",
             "file_name": self.file_name,
             "keys": [k.to_dict() for k in self.keys],
+            **_sort_collation_to_dict(self.collating_sequence),
             "using": list(self.using.names),
             **_sort_source_to_dict(self.sink, "giving", "output_procedure"),
         }

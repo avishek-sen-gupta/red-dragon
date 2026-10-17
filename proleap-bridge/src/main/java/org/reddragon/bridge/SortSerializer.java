@@ -5,10 +5,13 @@ import com.google.gson.JsonObject;
 import io.proleap.cobol.asg.metamodel.call.Call;
 import io.proleap.cobol.asg.metamodel.procedure.AtEndPhrase;
 import io.proleap.cobol.asg.metamodel.procedure.NotAtEndPhrase;
+import io.proleap.cobol.asg.metamodel.procedure.Statement;
+import io.proleap.cobol.asg.metamodel.procedure.merge.CollatingSequencePhrase;
 import io.proleap.cobol.asg.metamodel.procedure.merge.MergeStatement;
 import io.proleap.cobol.asg.metamodel.procedure.merge.OutputProcedurePhrase;
 import io.proleap.cobol.asg.metamodel.procedure.release.ReleaseStatement;
 import io.proleap.cobol.asg.metamodel.procedure.returnstmt.ReturnStatement;
+import io.proleap.cobol.asg.metamodel.procedure.sort.CollatingSequence;
 import io.proleap.cobol.asg.metamodel.procedure.sort.Giving;
 import io.proleap.cobol.asg.metamodel.procedure.sort.GivingPhrase;
 import io.proleap.cobol.asg.metamodel.procedure.sort.InputProcedure;
@@ -28,6 +31,15 @@ final class SortSerializer {
         obj.addProperty("type", "SORT");
         obj.addProperty("file_name", StatementSerializer.extractCallName(stmt.getFileCall()));
         obj.add("keys", keys(stmt.getOnKeys()));
+        CollatingSequence sequence = stmt.getCollatingSequence();
+        if (sequence != null) {
+            addCollatingSequence(
+                    obj,
+                    stmt,
+                    sequence.getAlphaNumeric() != null
+                            ? sequence.getAlphaNumeric().getAlphabetCall()
+                            : sequence.getAlphabetCalls().get(0));
+        }
         obj.add("using", using(stmt.getUsingPhrases()));
         obj.add("giving", giving(stmt.getGivingPhrases()));
         InputProcedure input = stmt.getInputProcedure();
@@ -67,6 +79,15 @@ final class SortSerializer {
             }
         }
         obj.add("keys", keys);
+        CollatingSequencePhrase sequence = stmt.getCollatingSequencePhrase();
+        if (sequence != null) {
+            addCollatingSequence(
+                    obj,
+                    stmt,
+                    sequence.getAlphaNumeric() != null
+                            ? sequence.getAlphaNumeric().getAlphabetCall()
+                            : sequence.getAlphabetCalls().get(0));
+        }
         JsonArray using = new JsonArray();
         for (io.proleap.cobol.asg.metamodel.procedure.merge.UsingPhrase phrase : stmt.getUsingPhrases()) {
             for (Call fileCall : phrase.getFileCalls()) {
@@ -124,6 +145,15 @@ final class SortSerializer {
                         ? new JsonArray()
                         : StatementSerializer.serializeStatements(notAtEnd.getStatements()));
         return obj;
+    }
+
+    private static void addCollatingSequence(JsonObject obj, Statement stmt, Call alphabet) {
+        JsonObject named =
+                AsgSerializer.alphabetNamed(
+                        stmt.getProgramUnit(), StatementSerializer.extractCallName(alphabet));
+        if (named != null) {
+            obj.add("collating_sequence", named);
+        }
     }
 
     private static JsonObject procedure(Call first, Call thru) {

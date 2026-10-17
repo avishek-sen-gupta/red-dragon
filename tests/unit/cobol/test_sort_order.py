@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from cobol_asg.alphabet import Alphabet
 from cobol_asg.cobol_statements import (
     MergeStatement,
     ProcedureRange,
@@ -9,6 +10,7 @@ from cobol_asg.cobol_statements import (
     SortStatement,
     parse_statement,
 )
+from cobol_asg.program_collation import PROGRAM_COLLATION
 from cobol_asg.ref_mod import RefModOperand
 from cobol_asg.sort_files import SortFiles
 from cobol_asg.sort_key import SortKey
@@ -50,6 +52,11 @@ def test_sort_and_merge_statements_read_and_write_their_bridge_form() -> None:
         "keys": [
             {"direction": "DESCENDING", "key": {"name": "K", "qualifiers": ["G"]}}
         ],
+        "collating_sequence": {
+            "name": "REV",
+            "kind": "LITERALS",
+            "items": [{"link": "NONE", "kind": "NONNUMERIC", "value": "B"}],
+        },
         "using": ["IN-F"],
         "giving": [],
         "output_procedure": {"target": "P1", "thru": "P2", "thru_section": "S"},
@@ -62,6 +69,9 @@ def test_sort_and_merge_statements_read_and_write_their_bridge_form() -> None:
                 direction=SortKeyDirection.DESCENDING,
                 key=RefModOperand(name="K", qualifiers=("G",)),
             ),
+        ),
+        collating_sequence=Alphabet.from_parts(
+            "REV", "LITERALS", [{"kind": "NONNUMERIC", "value": "B", "link": "NONE"}]
         ),
         source=SortFiles(("IN-F",)),
         sink=ProcedureRange(target=ProcedureRef("P1"), thru=ProcedureRef("P2", "S")),
@@ -78,6 +88,7 @@ def test_sort_and_merge_statements_read_and_write_their_bridge_form() -> None:
     assert parse_statement(merge) == MergeStatement(
         file_name="SRT",
         keys=(),
+        collating_sequence=PROGRAM_COLLATION,
         using=SortFiles(("A", "B")),
         sink=SortFiles(("C",)),
         span=None,
