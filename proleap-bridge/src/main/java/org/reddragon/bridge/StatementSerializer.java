@@ -3662,6 +3662,15 @@ public final class StatementSerializer {
             if (addressed != null) {
                 return operandRef(addressed, "address_of");
             }
+            // LENGTH OF <item> as an arithmetic operand (COMPUTE L = LENGTH OF G + 1)
+            // is the item's length, not a data item named LENGTH (red-dragon-sl30.53).
+            Call measured = lengthOfTarget(call);
+            if (measured != null) {
+                JsonObject lengthOf = new JsonObject();
+                lengthOf.addProperty("kind", "length_of");
+                lengthOf.add("name", serializeRef(measured).get("name"));
+                return lengthOf;
+            }
             JsonObject ref = new JsonObject();
             ref.addProperty("kind", "ref");
             if (call != null) {

@@ -708,6 +708,20 @@ class EmitContext:
         """Leaf field names of a symbolic-map group (for SEND/RECEIVE MAP lowering)."""
         return materialised.group_leaf_names(group_name)
 
+    def emit_length_of(
+        self,
+        name: str,
+        materialised: MaterialisedSectionedLayout,
+        *,
+        span: SourceSpan | None,
+    ) -> Register:
+        """LENGTH OF an item: its byte length, or the current length an item
+        ending in an OCCURS DEPENDING ON table has from its object's value."""
+        ref, _ = self.resolve_field_ref(name, materialised, span=span)
+        if ref.fl.current_length.is_present():
+            return ref.fl.current_length
+        return self.const_to_reg(ref.fl.byte_length, span=span)
+
     def _with_current_length(
         self,
         match: DataItemMatch,
