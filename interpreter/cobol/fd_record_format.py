@@ -1,6 +1,6 @@
 """Whether an FD's records vary in length, by IBM Enterprise COBOL's rules: RECORDING
 MODE when coded, else the RECORD clause, else whether its record descriptions differ in
-length or hold an OCCURS DEPENDING ON table."""
+length or hold an OCCURS DEPENDING ON table; and the sizes its clauses allow."""
 
 from __future__ import annotations
 
@@ -88,3 +88,17 @@ def depending_on(asg: CobolASG, file_name: str) -> str:
         ),
         "",
     )
+
+
+def _stated_minimum(description: FileDescription) -> int:
+    match description.record_clause:
+        case RecordContainsRange() | RecordVarying():
+            return description.record_clause.minimum
+        case _:
+            return 0
+
+
+def minimum_length(asg: CobolASG, file_name: str) -> int:
+    stated = [_stated_minimum(d) for d in _descriptions(asg, file_name)]
+    described = [record_length(r) for r in fd_records(asg, file_name.upper())]
+    return next((m for m in stated if m), min(described, default=0))

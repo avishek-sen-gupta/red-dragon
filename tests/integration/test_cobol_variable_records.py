@@ -1,6 +1,6 @@
 """End-to-end: RECORD IS VARYING ... DEPENDING ON writes each record at the length its
-data item holds, READ sets that item to the length read, and a sequential REWRITE of
-another length is a boundary violation (44)."""
+data item holds, READ sets that item to the length read, and a WRITE outside the file's
+record sizes or a sequential REWRITE of another length is a boundary violation (44)."""
 
 from __future__ import annotations
 
@@ -53,6 +53,8 @@ def test_records_vary_in_length_by_their_depending_on_item(
             "MAIN-PARA.",
             "    OPEN OUTPUT F.",
             '    MOVE "ABCDE" TO F-REC.',
+            '    MOVE 1 TO F-LEN. WRITE F-REC. DISPLAY "W " ST.',
+            '    MOVE 6 TO F-LEN. WRITE F-REC. DISPLAY "W " ST.',
             "    MOVE 3 TO F-LEN. WRITE F-SHORT.",
             "    MOVE 5 TO F-LEN. WRITE F-REC.",
             "    CLOSE F.",
@@ -91,7 +93,7 @@ def test_records_vary_in_length_by_their_depending_on_item(
         (tmp_path / "vsq").read_bytes(),
         (tmp_path / "vrl").read_bytes(),
     ) == (
-        "03 [ABC  ]\nRW 44\nRW 00\n05\n21\n42\n",
+        "W 44\nW 44\n03 [ABC  ]\nRW 44\nRW 00\n05\n21\n42\n",
         b"\x00\x07\x00\x00\xe7\xe8\xe9\x00\x09\x00\x00\xc1\xc2\xc3\xc4\xc5",
         b"\x00\x06\x00\x00\xe6\xe7\x00\x00\x00\x08\x00\x00\xe6\xe7\xe8\xe9",
     )

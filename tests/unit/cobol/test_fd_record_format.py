@@ -1,10 +1,14 @@
 """Whether an FD's records vary in length: RECORDING MODE when coded, else the RECORD
-clause, else whether its record descriptions differ in length; and the RECORD VARYING
-clause's DEPENDING ON item."""
+clause, else whether its record descriptions differ in length; the RECORD VARYING
+clause's DEPENDING ON item; and the size of its smallest record."""
 
 from __future__ import annotations
 
-from interpreter.cobol.fd_record_format import depending_on, records_vary
+from interpreter.cobol.fd_record_format import (
+    depending_on,
+    minimum_length,
+    records_vary,
+)
 from interpreter.cobol.features import CobolFeature
 from interpreter.frontend import make_cobol_parser
 from tests.covers import covers
@@ -71,7 +75,9 @@ def test_an_fds_records_vary_by_mode_clause_or_descriptions() -> None:
     assert (
         [records_vary(asg, f) for f in _FILES],
         [depending_on(asg, f) for f in _FILES],
+        [minimum_length(asg, f) for f in _FILES],
     ) == (
         [False, True, False, False, True, True, False, True],
         ["", "", "", "", "", "VY-LEN", "", ""],
+        [4, 4, 4, 4, 4, 1, 4, 4],
     )

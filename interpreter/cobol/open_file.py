@@ -83,15 +83,27 @@ class OpenFile:
         relative = self.attributes.organization is FileOrganization.RELATIVE
         return relative and bool(key) and int(key) < 1
 
+    def _outside_sizes(self, record: bytes) -> bool:
+        attributes = self.attributes
+        sizes = range(
+            attributes.minimum_record_length, attributes.maximum_record_length + 1
+        )
+        return attributes.variable and len(record) not in sizes
+
+    def _out_of_sequence(self, record: bytes) -> bool:
+        key = self.attributes.prime_key.of(record)
+        return self._indexed_in_sequence() and key < self.last_key
+
     def write_check(self, record: bytes, key: str) -> FileLogicStatus:
-        if self.mode not in self._write_modes():
-            return FileLogicStatus.WRITE_NOT_PERMITTED
-        if self._before_first_record(key):
-            return FileLogicStatus.BOUNDARY_VIOLATION
-        return _permitted_unless(
-            self._indexed_in_sequence()
-            and self.attributes.prime_key.of(record) < self.last_key,
-            FileLogicStatus.SEQUENCE_ERROR,
+        refusals = (
+            (self.mode not in self._write_modes(), FileLogicStatus.WRITE_NOT_PERMITTED),
+            (self._outside_sizes(record), FileLogicStatus.RECORD_SIZE_VIOLATION),
+            (self._before_first_record(key), FileLogicStatus.BOUNDARY_VIOLATION),
+            (self._out_of_sequence(record), FileLogicStatus.SEQUENCE_ERROR),
+        )
+        return next(
+            (status for refused, status in refusals if refused),
+            FileLogicStatus.PERMITTED,
         )
 
     def _current_record_check(self) -> FileLogicStatus:
@@ -107,6 +119,8 @@ class OpenFile:
         current = self._current_record_check()
         if current is not FileLogicStatus.PERMITTED:
             return current
+        if self._outside_sizes(record):
+            return FileLogicStatus.RECORD_SIZE_VIOLATION
         return _permitted_unless(
             self._indexed_in_sequence()
             and self.attributes.prime_key.of(record) != self.last_key,

@@ -148,6 +148,7 @@ class _Recording(NullIOProvider):
         relative_key_digits: int,
         optional: bool,
         variable: bool,
+        minimum_record_length: int,
         program: str,
     ) -> IOResult:
         self._saw("open_file", program)
@@ -194,6 +195,7 @@ def test_each_file_call_names_the_calling_program_last(tmp_path):
                     0,
                     False,
                     False,
+                    10,
                     "PGMX",
                 ),
             ),

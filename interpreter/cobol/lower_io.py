@@ -23,7 +23,11 @@ from cobol_asg.source_span import SourceSpan
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.emit_context import EmitContext
-from interpreter.cobol.fd_record_format import depending_on, records_vary
+from interpreter.cobol.fd_record_format import (
+    depending_on,
+    minimum_length,
+    records_vary,
+)
 from interpreter.cobol.field_resolution import whole_field_extent
 from interpreter.cobol.program_object import program_name
 from interpreter.cobol.relative_key import addressing_key, reported_key
@@ -44,6 +48,7 @@ from interpreter.register import NO_REGISTER, Register
 
 logger = logging.getLogger(__name__)
 
+_PAST_THE_AREA = "\x40"
 _CLOSE_BUILTINS = {
     False: FuncName("__cobol_close_file"),
     True: FuncName("__cobol_close_file_with_lock"),
@@ -334,6 +339,7 @@ def _open_arguments(
         _relative_key_digits(materialised, entry),
         entry.optional,
         records_vary(ctx._asg, filename),
+        minimum_length(ctx._asg, filename),
     )
 
 
@@ -518,13 +524,25 @@ def _emit_record_of_its_length(
     area_reg = ctx.emit_read_region_raw(
         area_rr, area_ref.fl, area_ref.offset_reg, extent=area_ref.extent, span=span
     )
+    overlong_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=overlong_reg,
+            func_name=FuncName(BuiltinName.STRING_CONCAT_PAIR),
+            args=(
+                area_reg,
+                Register(str(ctx.const_to_reg(_PAST_THE_AREA, span=span))),
+            ),
+        ),
+        span=span,
+    )
     record_reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(
             result_reg=record_reg,
             func_name=FuncName(BuiltinName.STRING_SLICE),
             args=(
-                area_reg,
+                overlong_reg,
                 Register(str(ctx.const_to_reg(0, span=span))),
                 Register(str(length_reg)),
             ),

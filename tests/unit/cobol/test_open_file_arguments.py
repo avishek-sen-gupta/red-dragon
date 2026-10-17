@@ -1,6 +1,7 @@
 """OPEN hands the provider each file's attributes from its SELECT entry and FD: record
 length (its longest record), organization, prime key extent within the file's own
-record, access mode, RELATIVE KEY digits, OPTIONAL and whether its records vary."""
+record, access mode, RELATIVE KEY digits, OPTIONAL, whether its records vary, and its smallest record.
+"""
 
 from __future__ import annotations
 
@@ -62,7 +63,20 @@ def test_open_passes_each_files_attributes(tmp_path: Path) -> None:
     parser.parse_to_file(_THREE_FILES, ast_path)
     ir = compile_cobol_module(_THREE_FILES, parser=parser, ast_path=ast_path).ir
     assert _open_arguments(ir) == [
-        ("SQ", "INPUT", 14, "SEQUENTIAL", 0, 0, "SEQUENTIAL", 0, False, True, "PGMX"),
-        ("IX", "INPUT", 12, "INDEXED", 3, 4, "SEQUENTIAL", 0, True, False, "PGMX"),
-        ("RL", "INPUT", 6, "RELATIVE", 0, 0, "RANDOM", 3, False, False, "PGMX"),
+        (
+            "SQ",
+            "INPUT",
+            14,
+            "SEQUENTIAL",
+            0,
+            0,
+            "SEQUENTIAL",
+            0,
+            False,
+            True,
+            10,
+            "PGMX",
+        ),
+        ("IX", "INPUT", 12, "INDEXED", 3, 4, "SEQUENTIAL", 0, True, False, 12, "PGMX"),
+        ("RL", "INPUT", 6, "RELATIVE", 0, 0, "RANDOM", 3, False, False, 6, "PGMX"),
     ]
