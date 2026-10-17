@@ -98,6 +98,12 @@ turns up something pertinent — a rejected approach, an edge case, a related is
   the program: file and record I/O, run inputs such as switch settings, or
   membership of the run unit. Too cumbersome means things like sort, merge and
   search. Every new builtin's commit message states which of these applies.
+- **Primitives stay thin.** A function with more than three or four parameters is
+  an anti-pattern: group static facts into one typed value, or deliver them once.
+  A file-provider method is an I/O primitive. Language rules layered on it (COBOL
+  file statuses, OPTIONAL files, record-length and key-sequence checks) are
+  emitted as IR around the call, or as a builtin built on the primitive. They
+  never widen the primitive's signature.
 - **A builtin hides the program from analysis.** Symbolic input also collapses
   to UNCOMPUTABLE there, whereas IR carries the symbolic value through.
 
