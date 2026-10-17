@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from cobol_asg.addressing_mode import AddressingMode
+from cobol_asg.alphabet import NATIVE_ALPHABET, Alphabet
 from cobol_asg.cobol_statements import (
     CallUsingParam,
     CobolStatementType,
@@ -354,6 +355,9 @@ class CobolASG:
     # the ASG level so to_dict can round-trip it — without that, reviving a
     # serialised ASG silently reverts every edited field to '$'.
     currency_symbol: str = DEFAULT_CURRENCY
+    # OBJECT-COMPUTER PROGRAM COLLATING SEQUENCE: the ALPHABET clause it names,
+    # the native sequence when the clause is absent.
+    collating_sequence: Alphabet = NATIVE_ALPHABET
 
     @classmethod
     def from_dict(
@@ -367,6 +371,7 @@ class CobolASG:
             if f.get("fd_name") and f.get("level") == 1
         }
         currency = _currency_from_special_names(data)
+        collating = data.get("special_names", {}).get("program_collating_sequence", {})
         pointer = addressing_mode.pointer_type
         return cls(
             program_id=data.get("program_id", ""),
@@ -405,14 +410,20 @@ class CobolASG:
                 CobolSection.from_dict(s) for s in data.get("declaratives", [])
             ],
             currency_symbol=currency,
+            collating_sequence=Alphabet.from_parts(
+                collating.get("name", NATIVE_ALPHABET.name),
+                collating.get("kind", NATIVE_ALPHABET.kind),
+                collating.get("items", []),
+            ),
         )
 
     def to_dict(self) -> dict:
         result: dict = {}
         if self.program_id:
             result["program_id"] = self.program_id
-        if self.currency_symbol != DEFAULT_CURRENCY:
-            result["special_names"] = {"currency_sign": self.currency_symbol}
+        special_names = self._special_names_dict()
+        if special_names:
+            result["special_names"] = special_names
         if self.file_control:
             result["file_control"] = [e.to_dict() for e in self.file_control]
         if self.data_fields:
@@ -434,6 +445,18 @@ class CobolASG:
         if self.declaratives:
             result["declaratives"] = [s.to_dict() for s in self.declaratives]
         return result | self._procedure_using_dict() | self._file_descriptions_dict()
+
+    def _special_names_dict(self) -> dict:
+        currency = (
+            {"currency_sign": self.currency_symbol}
+            if self.currency_symbol != DEFAULT_CURRENCY
+            else {}
+        )
+        if self.collating_sequence == NATIVE_ALPHABET:
+            return currency
+        return currency | {
+            "program_collating_sequence": self.collating_sequence.to_dict()
+        }
 
     def _file_descriptions_dict(self) -> dict:
         if not self.file_descriptions:

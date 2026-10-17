@@ -16,7 +16,6 @@ from interpreter.cobol.cobol_constants import BuiltinName, DelimiterMode, Inspec
 from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.emit_context import EmitContext, strip_cobol_literal
 from interpreter.cobol.field_resolution import ResolvedFieldRef
-from interpreter.cobol.figurative_constants import translate_cobol_figurative
 from interpreter.cobol.ir_encoders import (
     build_inspect_replace_ir,
     build_inspect_tally_ir,
@@ -198,7 +197,7 @@ def lower_string(
         else:
             delim_reg = ctx.const_to_reg(
                 strip_cobol_literal(
-                    translate_cobol_figurative(str(sending.delimited_by))
+                    ctx.figuratives.translate(str(sending.delimited_by))
                 ),
                 span=span,
             )
@@ -491,7 +490,7 @@ def lower_unstring(
     # delimiter is just the N=1 case of the same builtin (red-dragon-4q25.12).
     delim_regs = tuple(
         ctx.const_to_reg(
-            strip_cobol_literal(translate_cobol_figurative(str(d))), span=span
+            strip_cobol_literal(ctx.figuratives.translate(str(d))), span=span
         )
         for d in stmt.delimiters
     )
@@ -702,7 +701,7 @@ def _resolve_inspect_operand(
             rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
         )
     if operand in ("SPACES", "SPACE", "ZEROS", "ZEROES", "ZERO", "LOW-VALUES"):
-        return ctx.const_to_reg(translate_cobol_figurative(operand), span=span)
+        return ctx.const_to_reg(ctx.figuratives.translate(operand), span=span)
     return ctx.const_to_reg(strip_cobol_literal(str(operand)), span=span)
 
 

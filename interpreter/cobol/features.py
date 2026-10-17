@@ -199,6 +199,9 @@ class CobolFeature(Enum):
     FIGURATIVE_HIGH_VALUES = "HIGH-VALUES figurative constant for maximum binary value"
     FIGURATIVE_LOW_VALUES = "LOW-VALUES figurative constant for minimum binary value"
     FIGURATIVE_QUOTES = "QUOTES figurative constant for quotation characters"
+    PROGRAM_COLLATING_SEQUENCE = (
+        "OBJECT-COMPUTER PROGRAM COLLATING SEQUENCE naming a SPECIAL-NAMES ALPHABET"
+    )
 
     # ---------------------------------------------------------------------------
     # Expressions and conditions

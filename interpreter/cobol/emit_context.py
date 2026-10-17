@@ -31,10 +31,10 @@ from cobol_memory.region_id import RegionId
 from cobol_numeric.number import from_literal, is_cobol_number
 from interpreter.cobol.alphanumeric import encode_hex_literal, parse_hex_literal
 from interpreter.cobol.cobol_constants import BuiltinName, ByteConstants, CobolEncoding
+from interpreter.cobol.collating_sequences import collating_sequence_of
 from interpreter.cobol.condition_name_index import ConditionNameIndex
 from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.field_resolution import ResolvedFieldRef, field_access_extent
-from interpreter.cobol.figurative_constants import COBOL_FIGURATIVE_CONSTANTS
 from interpreter.cobol.ir_encoders import (
     build_decode_alphanumeric_ir,
     build_decode_binary_ir,
@@ -124,6 +124,8 @@ class EmitContext:
         self._condition_index = condition_index
         self._extension_strategies = tuple(extension_strategies)
         self._asg: CobolASG = asg
+        self.collating_sequence = collating_sequence_of(asg.collating_sequence)
+        self.figuratives = self.collating_sequence.figuratives()
         self._instructions: list[InstructionBase] = []
         self._reg_counter: int = 0
         self._label_counter: int = 0
@@ -729,10 +731,10 @@ class EmitContext:
             # (e.g. PIC X(52) VALUE SPACES is 52 spaces, not "SPACES" + padding).
             # Gated on value_is_figurative so a quoted literal VALUE 'SPACE' is
             # left verbatim. red-dragon-zuhj: surfaced via INSPECT CONVERTING.
-            if fl.value_is_figurative and value in COBOL_FIGURATIVE_CONSTANTS:
+            if fl.value_is_figurative and value in self.figuratives.characters:
                 return self.emit_encode_alphanumeric(
                     fl.name,
-                    COBOL_FIGURATIVE_CONSTANTS[value] * fl.byte_length,
+                    self.figuratives.characters[value] * fl.byte_length,
                     td.total_digits,
                     justified_right=td.justified_right,
                     span=span,

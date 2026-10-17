@@ -24,6 +24,7 @@ from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.emit_context import EmitContext, strip_cobol_literal
 from interpreter.cobol.field_resolution import ResolvedFieldRef
 from interpreter.cobol.figurative_constants import COBOL_FIGURATIVE_CONSTANTS
+from interpreter.cobol.program_figuratives import ProgramFiguratives
 from interpreter.cobol.lower_arithmetic import eval_ref_mod_expr
 from interpreter.cobol.lower_program_exit import (
     emit_return_code_load,
@@ -319,7 +320,7 @@ def _literal_copy(
     ctx: EmitContext, param: CallUsingParam, *, span: SourceSpan | None
 ) -> tuple[Register, Register]:
     """A literal argument in the representation IBM defines for it, in a fresh copy."""
-    layout = _layout(_literal_type(param))
+    layout = _layout(_literal_type(param, ctx.figuratives))
     copy = ctx.fresh_reg()
     ctx.emit_inst(
         AllocRegion(
@@ -331,7 +332,7 @@ def _literal_copy(
     ctx.emit_encode_and_write(
         copy,
         layout,
-        ctx.const_to_reg(_literal_value(param), span=span),
+        ctx.const_to_reg(_literal_value(param, ctx.figuratives), span=span),
         zero,
         extent=_copy_extent(layout.byte_length, LITERAL_ARGUMENT),
         span=span,
@@ -339,13 +340,15 @@ def _literal_copy(
     return copy, zero
 
 
-def _literal_type(param: CallUsingParam) -> CobolTypeDescriptor:
+def _literal_type(
+    param: CallUsingParam, figuratives: ProgramFiguratives
+) -> CobolTypeDescriptor:
     """BY VALUE: a numeric literal or ZERO as a fullword binary, a floating-point
     literal as COMP-2. Anything else: its characters, a figurative constant one."""
     word = param.name.upper()
     if param.param_type == "VALUE" and _is_numeric(word):
         return _COMP2 if word not in _ZEROS and "E" in word else _FULLWORD
-    return parse_pic(f"X({max(len(_literal_value(param)), 1)})")
+    return parse_pic(f"X({max(len(_literal_value(param, figuratives)), 1)})")
 
 
 def _is_numeric(word: str) -> bool:
@@ -354,8 +357,8 @@ def _is_numeric(word: str) -> bool:
     )
 
 
-def _literal_value(param: CallUsingParam) -> str:
-    return COBOL_FIGURATIVE_CONSTANTS.get(
+def _literal_value(param: CallUsingParam, figuratives: ProgramFiguratives) -> str:
+    return figuratives.characters.get(
         param.name.upper(), strip_cobol_literal(param.name)
     )
 
