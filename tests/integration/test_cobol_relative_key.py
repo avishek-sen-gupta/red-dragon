@@ -80,3 +80,50 @@ def test_relative_key_addresses_and_reports_record_numbers(
     assert capsys.readouterr().out == (
         "0001\n0002\nW 22\nR 23\nTWO 0002\nNEW\nFIV0005\n"
     )
+
+
+@covers(CobolFeature.WRITE)
+@covers(CobolFeature.READ)
+def test_invalid_key_phrase_runs_for_every_invalid_key_status(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    source = to_fixed(
+        [
+            "IDENTIFICATION DIVISION.",
+            "PROGRAM-ID. RELINV.",
+            "ENVIRONMENT DIVISION.",
+            "INPUT-OUTPUT SECTION.",
+            "FILE-CONTROL.",
+            '    SELECT F ASSIGN TO "rlf" ORGANIZATION IS RELATIVE',
+            "        ACCESS MODE IS RANDOM RELATIVE KEY IS RK",
+            "        FILE STATUS IS ST.",
+            "DATA DIVISION.",
+            "FILE SECTION.",
+            "FD F.",
+            "01 F-REC PIC X(3).",
+            "WORKING-STORAGE SECTION.",
+            "01 ST PIC XX.",
+            "01 RK PIC 9(4).",
+            "PROCEDURE DIVISION.",
+            "MAIN-PARA.",
+            "    OPEN OUTPUT F.",
+            '    MOVE 1 TO RK. MOVE "ONE" TO F-REC.',
+            '    WRITE F-REC INVALID KEY DISPLAY "I " ST',
+            '        NOT INVALID KEY DISPLAY "N " ST END-WRITE.',
+            '    WRITE F-REC INVALID KEY DISPLAY "I " ST',
+            '        NOT INVALID KEY DISPLAY "N " ST END-WRITE.',
+            "    CLOSE F.",
+            "    OPEN INPUT F.",
+            '    MOVE 7 TO RK. READ F INVALID KEY DISPLAY "I " ST',
+            '        NOT INVALID KEY DISPLAY "N " ST END-READ.',
+            "    CLOSE F.",
+            "    STOP RUN.",
+        ]
+    )
+    run(
+        source=source,
+        language="cobol",
+        max_steps=20000,
+        io_provider=RealFileIOProvider(base_dir=tmp_path),
+    )
+    assert capsys.readouterr().out == "N 00\nI 22\nI 23\n"

@@ -608,13 +608,13 @@ def lower_read(
         inv_lbl = ctx.fresh_label("read_inv_key")
         not_inv_lbl = ctx.fresh_label("read_not_inv")
         cond_reg = ctx.fresh_reg()
-        twenty_three_reg = ctx.const_to_reg("23", span=span)
+        invalid_key_class = ctx.const_to_reg(StatusClass.INVALID_KEY.value, span=span)
         ctx.emit_inst(
             Binop(
                 result_reg=cond_reg,
                 operator=resolve_binop("=="),
-                left=status_reg,
-                right=Register(str(twenty_three_reg)),
+                left=_emit_status_class(ctx, status_reg, span=span),
+                right=Register(str(invalid_key_class)),
             ),
             span=span,
         )
@@ -651,13 +651,13 @@ def _emit_invalid_key_branch(
     inv_lbl = ctx.fresh_label("inv_key")
     not_inv_lbl = ctx.fresh_label("not_inv_key")
     cond_reg = ctx.fresh_reg()
-    twenty_three_reg = ctx.const_to_reg("23", span=span)
+    invalid_key_class = ctx.const_to_reg(StatusClass.INVALID_KEY.value, span=span)
     ctx.emit_inst(
         Binop(
             result_reg=cond_reg,
             operator=resolve_binop("=="),
-            left=status_reg,
-            right=Register(str(twenty_three_reg)),
+            left=_emit_status_class(ctx, status_reg, span=span),
+            right=Register(str(invalid_key_class)),
         ),
         span=span,
     )
