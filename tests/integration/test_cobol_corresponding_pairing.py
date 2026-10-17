@@ -115,7 +115,8 @@ class TestCorrespondingPairing:
                 "    SUBTRACT CORRESPONDING T1 FROM T2.",
                 "    ADD CORRESPONDING T1 TO T2.",
                 "    ADD CORRESPONDING UE(2) TO UF(1).",
+                "    SUBTRACT CORR UE(1) FROM UF(2).",
                 "    DISPLAY T2 U2.",
             ],
         )
-        assert shown == "140304161224AB4413141010"
+        assert shown == "140304161224AB4413140908"
