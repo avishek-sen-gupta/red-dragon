@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from functools import singledispatch
 
-from cobol_asg.asg_types import CobolASG, CobolField
+from cobol_asg.asg_types import CobolASG
 from cobol_asg.cobol_statements import (
     FileControlEntry,
     FileDescription,
@@ -17,6 +17,7 @@ from cobol_asg.cobol_statements import (
 )
 from interpreter.cobol.data_layout import record_length
 from interpreter.cobol.data_literals import boolean, integer, named, text
+from interpreter.cobol.fd_record_format import depends, fd_records
 from interpreter.cobol.program_object import program_name
 from interpreter.data_value import DataList, DataRecord
 from interpreter.instructions import Data
@@ -65,22 +66,8 @@ def _varying(clause: RecordVarying) -> DataRecord:
     )
 
 
-def _depends(field: CobolField) -> bool:
-    return bool(field.occurs_depending_on.name) or any(
-        _depends(c) for c in field.children
-    )
-
-
-def _records(asg: CobolASG, file_name: str) -> tuple[CobolField, ...]:
-    return tuple(
-        f
-        for f in asg.file_fields
-        if f.level == 1 and asg.file_record_to_select.get(f.name.upper()) == file_name
-    )
-
-
 def _fd(asg: CobolASG, description: FileDescription) -> DataRecord:
-    records = _records(asg, description.fd_name.upper())
+    records = fd_records(asg, description.fd_name.upper())
     return DataRecord(
         (
             named("recording_mode", text(description.recording_mode.value)),
@@ -89,7 +76,7 @@ def _fd(asg: CobolASG, description: FileDescription) -> DataRecord:
                 "record_lengths",
                 DataList(tuple(integer(record_length(r)) for r in records)),
             ),
-            named("depending", boolean(any(_depends(r) for r in records))),
+            named("depending", boolean(any(depends(r) for r in records))),
         )
     )
 

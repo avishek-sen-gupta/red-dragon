@@ -25,10 +25,10 @@ def _loaded(
     access: str,
     records: Sequence[str],
 ) -> None:
-    prov._open_file(name, "OUTPUT", 4, organization, 0, 2, access, 0, False, "P")
+    prov._open_file(name, "OUTPUT", 4, organization, 0, 2, access, 0, False, False, "P")
     [prov._write_record(name, record, "", "P") for record in records]
     prov._close_file(name, "P")
-    prov._open_file(name, "I-O", 4, organization, 0, 2, access, 0, False, "P")
+    prov._open_file(name, "I-O", 4, organization, 0, 2, access, 0, False, False, "P")
 
 
 @covers(CobolFeature.DELETE_RECORD)

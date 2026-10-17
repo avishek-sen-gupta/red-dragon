@@ -3209,3 +3209,11 @@ Because `Halt_` is a distinct type, it is naturally absent from `_infer_return`'
 **Decision:** `_write_record(filename, data, key, program)` and `_rewrite_record(filename, data, key, program)` take a key, as `_delete_record` already does (red-dragon-sl30.72), `""` when the verb is not addressed by one. The lowering decides which verbs address by RELATIVE KEY from the FILE-CONTROL access mode and READ's NEXT phrase (`relative_key.py`). `AccessResult` and `IOResult` carry `record_number`, 0 when none; `__cobol_io_record_number` reads it. `RealFileIOProvider` turns a relative file's key text into the driver's record number.
 
 **Consequences:** A provider outside red-dragon gains the `key` parameter on WRITE and REWRITE. START's key is unchanged.
+
+### ADR-187: Variable-length COBOL records live behind record descriptor words (2026-10-17)
+
+**Context:** The real-file drivers stored every record in a fixed slot of the file's record length, so a file whose records vary (RECORD IS VARYING, RECORD CONTAINS m TO n, RECORDING MODE V, or 01s of different lengths) lost each record's length: READ could not set the DEPENDING ON item and a sequential REWRITE of another length could not be refused with 44 (red-dragon-sl30.77).
+
+**Decision:** The lowering decides whether an FD's records vary by IBM Enterprise COBOL's rules (`fd_record_format.py`) and passes it to `_open_file` as `variable`. A WRITE or REWRITE hands the provider the record at its length: as many bytes of the record area as the DEPENDING ON item holds, else the named record's. After a successful READ the lowering MOVEs the length of the record read to the DEPENDING ON item. `RealFileIOProvider` stores a variable sequential file as records each behind a 4-byte record descriptor word (length including itself, big-endian, then 2 reserved bytes), the layout the forge already uses for RECFM=V datasets, and a variable relative file as fixed slots of 4 + maximum bytes with the descriptor word at the slot's start and a zero word marking an empty slot. Indexed files keep fixed slots.
+
+**Consequences:** `_open_file` gains `variable`. A provider that chooses its own drivers for variable files (the forge's jackal does, by DD label) can ignore it. The data a WRITE or REWRITE passes may now be shorter than the record area.

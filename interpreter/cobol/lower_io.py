@@ -23,6 +23,7 @@ from cobol_asg.source_span import SourceSpan
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.cobol.fd_record_format import depending_on, records_vary
 from interpreter.cobol.field_resolution import whole_field_extent
 from interpreter.cobol.program_object import program_name
 from interpreter.cobol.relative_key import addressing_key, reported_key
@@ -332,6 +333,7 @@ def _open_arguments(
         entry.access_mode.value,
         _relative_key_digits(materialised, entry),
         entry.optional,
+        records_vary(ctx._asg, filename),
     )
 
 
@@ -466,6 +468,81 @@ def _emit_record_number_report(
         ),
         span=span,
     )
+    _emit_store_if_successful(ctx, status_reg, number_reg, key, materialised, span=span)
+
+
+def _emit_record_length_report(
+    ctx: EmitContext,
+    data_reg: Register,
+    status_reg: Register,
+    file_name: str,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> None:
+    item = RefModOperand(name=depending_on(ctx._asg, file_name))
+    if not materialised.has_field(item.name):
+        return
+    length_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=length_reg,
+            func_name=FuncName(BuiltinName.LENGTH),
+            args=(data_reg,),
+        ),
+        span=span,
+    )
+    _emit_store_if_successful(
+        ctx, status_reg, length_reg, item, materialised, span=span
+    )
+
+
+def _emit_record_of_its_length(
+    ctx: EmitContext,
+    data_reg: Register,
+    file_name: str,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> Register:
+    item = RefModOperand(name=depending_on(ctx._asg, file_name))
+    if not materialised.has_field(item.name):
+        return data_reg
+    item_ref, item_rr = ctx.resolve_field_ref(item.name, materialised, span=span)
+    length_reg = ctx.emit_decode_field(
+        item_rr, item_ref.fl, item_ref.offset_reg, extent=item_ref.extent, span=span
+    )
+    area_ref, area_rr = ctx.resolve_field_ref(
+        _largest_record(ctx, file_name, materialised), materialised, span=span
+    )
+    area_reg = ctx.emit_read_region_raw(
+        area_rr, area_ref.fl, area_ref.offset_reg, extent=area_ref.extent, span=span
+    )
+    record_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=record_reg,
+            func_name=FuncName(BuiltinName.STRING_SLICE),
+            args=(
+                area_reg,
+                Register(str(ctx.const_to_reg(0, span=span))),
+                Register(str(length_reg)),
+            ),
+        ),
+        span=span,
+    )
+    return record_reg
+
+
+def _emit_store_if_successful(
+    ctx: EmitContext,
+    status_reg: Register,
+    value_reg: Register,
+    target: RefModOperand,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> None:
     ok_reg = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
@@ -478,21 +555,21 @@ def _emit_record_number_report(
         ),
         span=span,
     )
-    store_lbl = ctx.fresh_label("record_number_store")
-    skip_lbl = ctx.fresh_label("record_number_skip")
+    store_lbl = ctx.fresh_label("io_report_store")
+    skip_lbl = ctx.fresh_label("io_report_skip")
     ctx.emit_inst(
         BranchIf(cond_reg=ok_reg, branch_targets=(store_lbl, skip_lbl)), span=span
     )
     ctx.emit_inst(Label_(label=store_lbl), span=span)
-    key_ref, key_rr = ctx.resolve_field_ref(
-        key.name, materialised, key.qualifiers, key.subscripts, span=span
+    target_ref, target_rr = ctx.resolve_field_ref(
+        target.name, materialised, target.qualifiers, target.subscripts, span=span
     )
     ctx.emit_encode_and_write(
-        key_rr,
-        key_ref.fl,
-        ctx.emit_to_string(number_reg, span=span),
-        key_ref.offset_reg,
-        extent=key_ref.extent,
+        target_rr,
+        target_ref.fl,
+        ctx.emit_to_string(value_reg, span=span),
+        target_ref.offset_reg,
+        extent=target_ref.extent,
         span=span,
     )
     ctx.emit_inst(Branch(label=skip_lbl), span=span)
@@ -602,6 +679,9 @@ def lower_read(
         ),
         span=span,
     )
+    _emit_record_length_report(
+        ctx, data_reg, status_reg, stmt.file_name, materialised, span=span
+    )
 
     # Write data into file section region via the FD record name for this file
     rec_name = _largest_record(ctx, stmt.file_name, materialised)
@@ -669,22 +749,20 @@ def lower_read(
             span=span,
         )
         ctx.emit_inst(Label_(label=at_end_lbl), span=span)
-        for s in stmt.at_end:
-            ctx.lower_statement(s, materialised)
+        _ = [ctx.lower_statement(s, materialised) for s in stmt.at_end]
         ctx.emit_inst(Branch(label=after_label), span=span)
         ctx.emit_inst(Label_(label=ok_lbl), span=span)
-        for s in stmt.not_at_end:
-            ctx.lower_statement(s, materialised)
+        _ = [ctx.lower_statement(s, materialised) for s in stmt.not_at_end]
         ctx.emit_inst(Branch(label=after_label), span=span)
 
     if has_inv_key:
         inv_lbl = ctx.fresh_label("read_inv_key")
         not_inv_lbl = ctx.fresh_label("read_not_inv")
-        cond_reg = ctx.fresh_reg()
+        inv_cond_reg = ctx.fresh_reg()
         invalid_key_class = ctx.const_to_reg(StatusClass.INVALID_KEY.value, span=span)
         ctx.emit_inst(
             Binop(
-                result_reg=cond_reg,
+                result_reg=inv_cond_reg,
                 operator=resolve_binop("=="),
                 left=_emit_status_class(ctx, status_reg, span=span),
                 right=Register(str(invalid_key_class)),
@@ -692,16 +770,14 @@ def lower_read(
             span=span,
         )
         ctx.emit_inst(
-            BranchIf(cond_reg=cond_reg, branch_targets=(inv_lbl, not_inv_lbl)),
+            BranchIf(cond_reg=inv_cond_reg, branch_targets=(inv_lbl, not_inv_lbl)),
             span=span,
         )
         ctx.emit_inst(Label_(label=inv_lbl), span=span)
-        for s in stmt.invalid_key:
-            ctx.lower_statement(s, materialised)
+        _ = [ctx.lower_statement(s, materialised) for s in stmt.invalid_key]
         ctx.emit_inst(Branch(label=after_label), span=span)
         ctx.emit_inst(Label_(label=not_inv_lbl), span=span)
-        for s in stmt.not_invalid_key:
-            ctx.lower_statement(s, materialised)
+        _ = [ctx.lower_statement(s, materialised) for s in stmt.not_invalid_key]
         ctx.emit_inst(Branch(label=after_label), span=span)
 
     ctx.emit_inst(Label_(label=after_label), span=span)
@@ -738,12 +814,10 @@ def _emit_invalid_key_branch(
         BranchIf(cond_reg=cond_reg, branch_targets=(inv_lbl, not_inv_lbl)), span=span
     )
     ctx.emit_inst(Label_(label=inv_lbl), span=span)
-    for s in invalid_key:
-        ctx.lower_statement(s, materialised)
+    _ = [ctx.lower_statement(s, materialised) for s in invalid_key]
     ctx.emit_inst(Branch(label=after_label), span=span)  # type: ignore[arg-type]
     ctx.emit_inst(Label_(label=not_inv_lbl), span=span)
-    for s in not_invalid_key:
-        ctx.lower_statement(s, materialised)
+    _ = [ctx.lower_statement(s, materialised) for s in not_invalid_key]
     ctx.emit_inst(Branch(label=after_label), span=span)  # type: ignore[arg-type]
 
 
@@ -793,13 +867,18 @@ def lower_write(
 ) -> None:
     """WRITE record-name [FROM field] [INVALID KEY ...] — write record via __cobol_write_record."""
     span = stmt.span
-    data_reg = _write_source_reg(
-        ctx, stmt.from_field, stmt.record_name, materialised, span=span
+    file_name = ctx._asg.file_record_to_select.get(
+        stmt.record_name.upper(), stmt.record_name
     )
-
-    # Map FD record name → SELECT file name for the provider dispatch
-    r2s = ctx._asg.file_record_to_select
-    file_name = r2s.get(stmt.record_name.upper(), stmt.record_name)
+    data_reg = _emit_record_of_its_length(
+        ctx,
+        _write_source_reg(
+            ctx, stmt.from_field, stmt.record_name, materialised, span=span
+        ),
+        file_name,
+        materialised,
+        span=span,
+    )
     fn_reg = ctx.const_to_reg(file_name, span=span)
     key_reg = _emit_key_text(
         ctx, addressing_key(ctx._asg, file_name, False), materialised, span=span
@@ -869,12 +948,18 @@ def lower_rewrite(
 ) -> None:
     """REWRITE record-name [FROM field] [INVALID KEY ...] — rewrite via __cobol_rewrite_record."""
     span = stmt.span
-    data_reg = _write_source_reg(
-        ctx, stmt.from_field, stmt.record_name, materialised, span=span
+    file_name = ctx._asg.file_record_to_select.get(
+        stmt.record_name.upper(), stmt.record_name
     )
-
-    r2s = ctx._asg.file_record_to_select
-    file_name = r2s.get(stmt.record_name.upper(), stmt.record_name)
+    data_reg = _emit_record_of_its_length(
+        ctx,
+        _write_source_reg(
+            ctx, stmt.from_field, stmt.record_name, materialised, span=span
+        ),
+        file_name,
+        materialised,
+        span=span,
+    )
     fn_reg = ctx.const_to_reg(file_name, span=span)
     key_reg = _emit_key_text(
         ctx, addressing_key(ctx._asg, file_name, False), materialised, span=span
