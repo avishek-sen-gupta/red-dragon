@@ -2909,7 +2909,7 @@ class TestLevel88InPerformUntil:
 class TestBlankWhenZero:
     @covers(CobolFeature.BLANK_WHEN_ZERO)
     def test_blank_when_zero_with_zero_value(self):
-        """BLANK WHEN ZERO field with VALUE 0 should be all EBCDIC spaces (0x40)."""
+        """BLANK WHEN ZERO does not apply to a VALUE: VALUE 0 stores zoned zeros."""
         vm = _run_cobol(
             [
                 "IDENTIFICATION DIVISION.",
@@ -2924,9 +2924,7 @@ class TestBlankWhenZero:
             ]
         )
         region = _first_region(vm)
-        # WS-AMT has BLANK WHEN ZERO + VALUE 0 → all 4 bytes are EBCDIC space (0x40)
-        assert list(region[0:4]) == [0x40, 0x40, 0x40, 0x40]
-        # WS-QTY has no BLANK WHEN ZERO → normal zoned decimal zeros (0xF0)
+        assert list(region[0:4]) == [0xF0, 0xF0, 0xF0, 0xF0]
         assert _decode_zoned_unsigned(region, 4, 4) == 0
 
     @covers(CobolFeature.BLANK_WHEN_ZERO)

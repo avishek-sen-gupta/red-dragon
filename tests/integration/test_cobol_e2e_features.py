@@ -1322,8 +1322,8 @@ class TestBlankWhenZeroComposition:
         )
         region = _first_region(vm)
 
-        # WS-AMT1: BWZ + VALUE 0 -> all EBCDIC spaces (0x40)
-        assert list(region[0:4]) == [0x40, 0x40, 0x40, 0x40]
+        # WS-AMT1: BWZ does not apply to VALUE 0 -> zoned zeros
+        assert list(region[0:4]) == [0xF0, 0xF0, 0xF0, 0xF0]
 
         # WS-AMT2: BWZ + VALUE 42 -> normal zoned decimal
         assert _decode(region, 4, 4) == 42
@@ -1343,10 +1343,11 @@ class TestBlankWhenZeroComposition:
                 "PROGRAM-ID. E2E-BWZ-AC3.",
                 "DATA DIVISION.",
                 "WORKING-STORAGE SECTION.",
-                "77 WS-BLANK PIC 9(4) BLANK WHEN ZERO VALUE 0.",
+                "77 WS-BLANK PIC 9(4) BLANK WHEN ZERO VALUE 7.",
                 "77 WS-DEST  PIC 9(4) VALUE 99.",
                 "PROCEDURE DIVISION.",
                 "MAIN-PARA.",
+                "    MOVE 0 TO WS-BLANK.",
                 "    MOVE WS-BLANK TO WS-DEST.",
                 "    STOP RUN.",
             ]
