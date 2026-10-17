@@ -56,9 +56,13 @@ def test_sequential_verbs_return_the_record_number_they_used(tmp_path: Path) -> 
     prov._open_file("F", "OUTPUT", 3, _REL, 0, 0, "P")
     written = [prov._write_record("F", rec, "", "P").record_number for rec in "AB"]
     prov._close_file("F", "P")
+    prov._open_file("F", "EXTEND", 3, _REL, 0, 0, "P")
+    extended = prov._write_record("F", "C", "", "P").record_number
+    prov._close_file("F", "P")
     prov._open_file("F", "INPUT", 3, _REL, 0, 0, "P")
-    read = [_seen(prov._read_record("F", "", "P")) for _ in range(3)]
-    assert (written, read) == (
+    read = [_seen(prov._read_record("F", "", "P")) for _ in range(4)]
+    assert (written, extended, read) == (
         [1, 2],
-        [("00", "A  ", 1), ("00", "B  ", 2), ("10", "", 0)],
+        3,
+        [("00", "A  ", 1), ("00", "B  ", 2), ("00", "C  ", 3), ("10", "", 0)],
     )
