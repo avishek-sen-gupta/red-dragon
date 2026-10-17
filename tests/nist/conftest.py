@@ -63,12 +63,35 @@ def make_provider(src: str, tmp_path: Path) -> tuple[RealFileIOProvider, Path]:
 
 # CCVS programs close each run with a summary block. A genuine pass must:
 #   1. reach completion          -> the "END OF TEST" banner is written
-#   2. report zero failed tests  -> "NNN TEST(S) FAILED" with NNN == 0 (or "NO")
+#   2. report zero failed tests  -> "NNN TEST(S) FAILED" with NNN == 0 (or "NO"),
+#      or, for a visual-inspection program, "NNN TESTS REQUIRE VISUAL INSPECTION"
 #   3. carry no inline failures  -> no detail line contains "FAIL*"
 # Checking only (3) lets a program that halts after the header — or one whose
 # own summary admits failures — masquerade as a pass. See red-dragon-m0oa.7.
 _END_OF_TEST = "END OF TEST"
 _TESTS_FAILED_RE = re.compile(r"(\d+|NO)\s+TEST\(S\)\s+FAILED", re.IGNORECASE)
+_VISUAL_INSPECTION_RE = re.compile(
+    r"\d+\s+TESTS\s+REQUIRE\s+VISUAL\s+INSPECTION", re.IGNORECASE
+)
+
+
+def _summary_failed_count(text: str, prog: str) -> int:
+    counts = _TESTS_FAILED_RE.findall(text)
+    if counts == [] and _VISUAL_INSPECTION_RE.search(text):
+        return 0
+    assert counts != [], (
+        f"{prog}: completion banner present but no 'TEST(S) FAILED' summary line "
+        f"found — cannot confirm a clean run."
+    )
+    return 0 if counts[0].upper() == "NO" else int(counts[0])
+
+
+def _print_records(data: bytes) -> list[str]:
+    return [
+        EbcdicTable.ebcdic_to_ascii(data[i : i + _PRINT_RECORD_LEN]).decode("latin-1")
+        for i in range(0, len(data), _PRINT_RECORD_LEN)
+        if data[i : i + _PRINT_RECORD_LEN].strip(b"\x00")
+    ]
 
 
 def assert_nist_pass(print_path: Path, prog: str) -> None:
@@ -81,12 +104,7 @@ def assert_nist_pass(print_path: Path, prog: str) -> None:
     if not print_path.exists():
         pytest.skip(f"{prog}: PRINT-FILE not written — program did not produce output")
 
-    data = print_path.read_bytes()
-    records = [
-        EbcdicTable.ebcdic_to_ascii(data[i : i + _PRINT_RECORD_LEN]).decode("latin-1")
-        for i in range(0, len(data), _PRINT_RECORD_LEN)
-        if data[i : i + _PRINT_RECORD_LEN].strip(b"\x00")
-    ]
+    records = _print_records(print_path.read_bytes())
     text = "\n".join(records)
 
     # (1) Completion: the CCVS end-of-test banner must be present.
@@ -96,12 +114,7 @@ def assert_nist_pass(print_path: Path, prog: str) -> None:
     )
 
     # (2) Summary failure count must be zero.
-    counts = _TESTS_FAILED_RE.findall(text)
-    assert counts != [], (
-        f"{prog}: completion banner present but no 'TEST(S) FAILED' summary line "
-        f"found — cannot confirm a clean run."
-    )
-    n_failed = 0 if counts[0].upper() == "NO" else int(counts[0])
+    n_failed = _summary_failed_count(text, prog)
     assert n_failed == 0, f"{prog}: CCVS summary reports {n_failed} failed test(s)."
 
     # (3) No inline failure markers in the detail lines.
