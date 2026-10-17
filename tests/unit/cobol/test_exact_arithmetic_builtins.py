@@ -78,14 +78,7 @@ def test_parse_number_builtin():
 
 
 @covers(CobolFeature.USAGE_COMP)
-def test_binary_unscaled_builtin_keeps_the_picture_digits():
-    assert _call(BuiltinName.COBOL_BINARY_UNSCALED, "123.45", 2, 0, True, 5) == 12345
-    assert _call(BuiltinName.COBOL_BINARY_UNSCALED, "-1.239", 2, 0, True, 3) == -123
-    assert _call(BuiltinName.COBOL_BINARY_UNSCALED, "50000", 0, 0, True, 9) == 50000
-    assert _call(BuiltinName.COBOL_BINARY_UNSCALED, "50000", 0, 0, False, 4) == 0
-    assert _call(BuiltinName.COBOL_BINARY_UNSCALED, "1023", 0, 0, True, 3) == 23
-    assert _call(BuiltinName.COBOL_BINARY_UNSCALED, "-1023.7", 1, 0, True, 3) == -237
-    assert _call(BuiltinName.COBOL_BINARY_UNSCALED, "12300", 0, 2, True, 3) == 123
-    assert _call(BuiltinName.COBOL_BINARY_UNSCALED, "512300", 0, 2, True, 3) == 123
-    assert _call(BuiltinName.COBOL_BINARY_UNSCALED, "-1.239", 2, 0, False, 3) == 123
-    assert _call(BuiltinName.COBOL_BINARY_UNSCALED, "-70717", 0, 0, False, 5) == 70717
+def test_binary_unscaled_builtin_scales_and_truncates_toward_zero():
+    assert _call(BuiltinName.COBOL_BINARY_UNSCALED, "123.45", 2, 0) == 12345
+    assert _call(BuiltinName.COBOL_BINARY_UNSCALED, "-1023.79", 1, 0) == -10237
+    assert _call(BuiltinName.COBOL_BINARY_UNSCALED, "512300", 0, 2) == 5123

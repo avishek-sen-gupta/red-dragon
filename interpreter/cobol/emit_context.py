@@ -30,6 +30,7 @@ from cobol_asg.source_span import SourceSpan
 from cobol_memory.field_extent import FieldExtent, Precision
 from cobol_memory.region_id import RegionId
 from cobol_numeric.number import from_literal, is_cobol_number
+from interpreter.cobol.binary_digits_ir import build_binary_picture_digits_ir
 from interpreter.cobol.alphanumeric import encode_hex_literal, parse_hex_literal
 from interpreter.cobol.cobol_constants import BuiltinName, ByteConstants, CobolEncoding
 from interpreter.cobol.collating_sequences import collating_sequence_of
@@ -1477,28 +1478,8 @@ class EmitContext:
             return encoded
 
         if td.category == CobolDataCategory.BINARY:
-            # BINARY stores the unscaled value, cut to the PICTURE's digits, as a
-            # big-endian integer of the field's byte width. Implied decimal places
-            # and PIC P scale are applied exactly (red-dragon-0dvs).
-            int_reg = self.fresh_reg()
-            decimals_reg = self.const_to_reg(td.decimal_digits, span=span)
-            scale_reg = self.const_to_reg(td.scale, span=span)
+            int_reg = self.emit_binary_unscaled(value_str_reg, td, span=span)
             signed_reg = self.const_to_reg(td.signed, span=span)
-            digits_reg = self.const_to_reg(td.total_digits, span=span)
-            self.emit_inst(
-                CallFunction(
-                    result_reg=int_reg,
-                    func_name=FuncName(BuiltinName.COBOL_BINARY_UNSCALED),
-                    args=(
-                        value_str_reg,
-                        decimals_reg,
-                        scale_reg,
-                        signed_reg,
-                        digits_reg,
-                    ),
-                ),
-                span=span,
-            )
             byte_count_reg = self.const_to_reg(td.byte_length, span=span)
             result = self.fresh_reg()
             self.emit_inst(
@@ -1517,6 +1498,32 @@ class EmitContext:
                 encoded, value_str_reg, fl.byte_length, span=span
             )
         return encoded
+
+    def emit_binary_unscaled(
+        self,
+        value_reg: Register,
+        td: CobolTypeDescriptor,
+        *,
+        span: SourceSpan | None,
+    ) -> Register:
+        unscaled = self.fresh_reg()
+        self.emit_inst(
+            CallFunction(
+                result_reg=unscaled,
+                func_name=FuncName(BuiltinName.COBOL_BINARY_UNSCALED),
+                args=(
+                    value_reg,
+                    self.const_to_reg(td.decimal_digits, span=span),
+                    self.const_to_reg(td.scale, span=span),
+                ),
+            ),
+            span=span,
+        )
+        return self.inline_ir(
+            build_binary_picture_digits_ir("binary_digits", td.total_digits, td.signed),
+            {"%p_value": unscaled},
+            span=span,
+        )
 
     def emit_numeric_encode_from_string(
         self,
