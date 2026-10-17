@@ -128,6 +128,25 @@ class TestExactOperands:
         )
         assert bytes(first_region(vm)[:11]).hex() == "00003039f0f0f1f2f3f4f5"
 
+    @covers(CobolFeature.USAGE_COMP, CobolFeature.MOVE, CobolFeature.COMPUTE)
+    def test_unsigned_comp_field_stores_the_magnitude_of_a_negative_value(self):
+        """red-dragon-sl30.21: a negative value into unsigned COMP raised OverflowError."""
+        vm = _program(
+            [
+                "01 S PIC S9(5) VALUE -70717.",
+                "01 U PIC 9(5) COMP.",
+                "01 UC PIC 9(4) COMP.",
+                "01 UV PIC 9V9 COMP.",
+            ],
+            ["    MOVE S TO U.", "    MOVE -5 TO UC.", "    COMPUTE UV = 1 - 3.25."],
+        )
+        region = bytes(first_region(vm))
+        assert (region[5:9], region[9:11], region[11:13]) == (
+            (70717).to_bytes(4, "big"),
+            (5).to_bytes(2, "big"),
+            (22).to_bytes(2, "big"),
+        )
+
     @covers(CobolFeature.PIC_CLAUSE)
     def test_pic_p_field_round_trips(self):
         vm = _program(

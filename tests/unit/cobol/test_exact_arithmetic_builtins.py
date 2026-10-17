@@ -79,10 +79,12 @@ def test_parse_number_builtin():
 
 @covers(CobolFeature.USAGE_COMP)
 def test_binary_unscaled_builtin():
-    assert _call(BuiltinName.COBOL_BINARY_UNSCALED, "123.45", 2, 0) == 12345
-    assert _call(BuiltinName.COBOL_BINARY_UNSCALED, "-1.239", 2, 0) == -123
-    assert _call(BuiltinName.COBOL_BINARY_UNSCALED, "50000", 0, 0) == 50000
-    assert _call(BuiltinName.COBOL_BINARY_UNSCALED, "12300", 0, 2) == 123
+    assert _call(BuiltinName.COBOL_BINARY_UNSCALED, "123.45", 2, 0, True) == 12345
+    assert _call(BuiltinName.COBOL_BINARY_UNSCALED, "-1.239", 2, 0, True) == -123
+    assert _call(BuiltinName.COBOL_BINARY_UNSCALED, "50000", 0, 0, True) == 50000
+    assert _call(BuiltinName.COBOL_BINARY_UNSCALED, "12300", 0, 2, True) == 123
+    assert _call(BuiltinName.COBOL_BINARY_UNSCALED, "-1.239", 2, 0, False) == 123
+    assert _call(BuiltinName.COBOL_BINARY_UNSCALED, "-70717", 0, 0, False) == 70717
 
 
 @covers(CobolFeature.ON_SIZE_ERROR)
