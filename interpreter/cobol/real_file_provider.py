@@ -10,9 +10,10 @@ from pathlib import Path
 from types import MappingProxyType
 
 from cobol_asg.cobol_statements import FileControlEntry
-from cobol_asg.file_enums import FileOrganization, OpenMode
+from cobol_asg.file_enums import AccessMode, FileOrganization, OpenMode
 from cobol_asg.switch_status import SwitchStatus
 from interpreter.cobol.access_result import AccessCondition, AccessResult
+from interpreter.cobol.file_attributes import FileAttributes
 from interpreter.cobol.file_drivers import (
     FileOrganizationDriver,
     open_driver,
@@ -21,6 +22,7 @@ from interpreter.cobol.file_logic_status import FileLogicStatus
 from interpreter.cobol.file_verb import FileVerb
 from interpreter.cobol.io_provider import CobolIOProvider, IOResult
 from interpreter.cobol.open_file import OpenFile
+from interpreter.cobol.prime_key import PrimeKey
 from interpreter.vm.vm import Operators
 
 _FILE_STATUS: dict[AccessCondition, str] = {
@@ -184,6 +186,8 @@ class RealFileIOProvider(CobolIOProvider):
         organization: str,
         key_offset: int,
         key_length: int,
+        access_mode: str,
+        relative_key_digits: int,
         program: str,
     ) -> IOResult:
         refusals = self._open_refusals(filename, OpenMode(mode))
@@ -193,10 +197,13 @@ class RealFileIOProvider(CobolIOProvider):
         return self._open_closed(
             filename,
             OpenMode(mode),
+            FileAttributes(
+                _organization_of(organization),
+                AccessMode(access_mode),
+                PrimeKey(key_offset, key_length),
+                relative_key_digits,
+            ),
             record_length,
-            organization,
-            key_offset,
-            key_length,
         )
 
     def _open_refusals(self, filename: str, mode: OpenMode) -> list[IOResult]:
@@ -215,42 +222,34 @@ class RealFileIOProvider(CobolIOProvider):
         self,
         filename: str,
         mode: OpenMode,
+        attributes: FileAttributes,
         record_length: int,
-        organization: str,
-        key_offset: int,
-        key_length: int,
     ) -> IOResult:
-        org = _organization_of(organization)
         path = self._resolve_path(filename, self._assign_to(filename))
         try:
             drv = self._driver(
                 filename,
-                org,
+                attributes.organization,
                 path,
                 mode,
                 record_length,
-                key_offset,
-                key_length,
+                attributes.prime_key.offset,
+                attributes.prime_key.length,
             )
-        except FileNotFoundError:
-            logger.warning("OPEN %s: file not found at %s", filename, path)
-            return _OPEN_FAILED
         except OSError as exc:
-            logger.warning("OPEN %s failed: %s", filename, exc)
+            logger.warning("OPEN %s at %s failed: %s", filename, path, exc)
             return _OPEN_FAILED
-        return self._opened(filename, mode, org, path, drv)
+        return self._opened(filename, OpenFile(drv, mode, attributes), path)
 
-    def _opened(
-        self,
-        filename: str,
-        mode: OpenMode,
-        org: FileOrganization,
-        path: Path,
-        drv: FileOrganizationDriver,
-    ) -> IOResult:
-        self._files = {**self._files, filename: OpenFile(drv, mode, org)}
+    def _opened(self, filename: str, file: OpenFile, path: Path) -> IOResult:
+        self._files = {**self._files, filename: file}
         logger.info(
-            "OPEN %s mode=%s org=%s path=%s", filename, mode.value, org.value, path
+            "OPEN %s mode=%s org=%s access=%s path=%s",
+            filename,
+            file.mode.value,
+            file.attributes.organization.value,
+            file.attributes.access.value,
+            path,
         )
         return to_ioresult(AccessResult(AccessCondition.OK))
 
@@ -281,9 +280,16 @@ class RealFileIOProvider(CobolIOProvider):
         file = self._files[filename]
         check = verb.check(file)
         if check is not FileLogicStatus.PERMITTED:
+            self._files = {**self._files, filename: file.after_refusal()}
             return check.result()
+        return self._performed(filename, file, verb)
+
+    def _performed(self, filename: str, file: OpenFile, verb: FileVerb) -> IOResult:
         result = verb.action(file)
-        self._files = {**self._files, filename: verb.after(file, result.condition)}
+        self._files = {**self._files, filename: verb.after(file, result)}
+        outcome = verb.outcome(file, result)
+        if outcome is not FileLogicStatus.PERMITTED:
+            return outcome.result()
         return to_ioresult(result)
 
     def _read_record(self, filename: str, key: str, program: str) -> IOResult:
@@ -298,35 +304,34 @@ class RealFileIOProvider(CobolIOProvider):
                     else file.driver.read_seq()
                 ),
                 OpenFile.after_read,
+                OpenFile.read_outcome,
             ),
         )
 
     def _write_record(
         self, filename: str, data: str, key: str, program: str
     ) -> IOResult:
+        record = data.encode("latin-1")
         return self._verb(
             filename,
             FileLogicStatus.WRITE_NOT_PERMITTED,
             FileVerb(
-                OpenFile.write_check,
-                lambda file: file.driver.write(
-                    data.encode("latin-1"), file.key_bytes(key)
-                ),
-                OpenFile.after_other,
+                lambda file: file.write_check(record),
+                lambda file: file.driver.write(record, file.key_bytes(key)),
+                lambda file, result: file.after_write(record, result),
             ),
         )
 
     def _rewrite_record(
         self, filename: str, data: str, key: str, program: str
     ) -> IOResult:
+        record = data.encode("latin-1")
         return self._verb(
             filename,
             FileLogicStatus.UPDATE_NOT_PERMITTED,
             FileVerb(
-                OpenFile.update_check,
-                lambda file: file.driver.rewrite(
-                    data.encode("latin-1"), file.key_bytes(key)
-                ),
+                lambda file: file.rewrite_check(record),
+                lambda file: file.driver.rewrite(record, file.key_bytes(key)),
                 OpenFile.after_other,
             ),
         )
@@ -349,7 +354,7 @@ class RealFileIOProvider(CobolIOProvider):
             filename,
             FileLogicStatus.UPDATE_NOT_PERMITTED,
             FileVerb(
-                lambda file: file.delete_check(key),
+                OpenFile.delete_check,
                 lambda file: file.driver.delete(file.key_bytes(key)),
                 OpenFile.after_other,
             ),

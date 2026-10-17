@@ -144,6 +144,8 @@ class _Recording(NullIOProvider):
         organization: str,
         key_offset: int,
         key_length: int,
+        access_mode: str,
+        relative_key_digits: int,
         program: str,
     ) -> IOResult:
         self._saw("open_file", program)
@@ -177,7 +179,10 @@ def test_each_file_call_names_the_calling_program_last(tmp_path):
     run(source=_PGMX.decode(), language="cobol", io_provider=recording)
     assert (_file_calls(ir), recording.seen, _named(f1, "program")) == (
         [
-            ("__cobol_open_file", ("F1", "INPUT", 10, "SEQUENTIAL", 0, 0, "PGMX")),
+            (
+                "__cobol_open_file",
+                ("F1", "INPUT", 10, "SEQUENTIAL", 0, 0, "SEQUENTIAL", 0, "PGMX"),
+            ),
             ("__cobol_io_status", ("<__cobol_open_file>", "PGMX")),
             ("__cobol_read_record", ("F1", "", "PGMX")),
             ("__cobol_io_status", ("<__cobol_read_record>", "PGMX")),

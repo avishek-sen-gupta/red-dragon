@@ -20,7 +20,7 @@ def _seen(result: IOResult) -> tuple[str, str, int]:
 @covers(CobolFeature.READ)
 def test_keyed_verbs_address_the_record_number_they_are_given(tmp_path: Path) -> None:
     prov = RealFileIOProvider(base_dir=tmp_path)
-    prov._open_file("F", "OUTPUT", 3, _REL, 0, 0, "P")
+    prov._open_file("F", "OUTPUT", 3, _REL, 0, 0, "DYNAMIC", 0, "P")
     writes = [
         prov._write_record("F", "ONE", "1", "P").status,
         prov._write_record("F", "TWO", "0003", "P").status,
@@ -28,7 +28,7 @@ def test_keyed_verbs_address_the_record_number_they_are_given(tmp_path: Path) ->
         prov._write_record("F", "NIL", "0", "P").status,
     ]
     prov._close_file("F", "P")
-    prov._open_file("F", "I-O", 3, _REL, 0, 0, "P")
+    prov._open_file("F", "I-O", 3, _REL, 0, 0, "DYNAMIC", 0, "P")
     reads = [
         _seen(prov._read_record("F", "0", "P")),
         _seen(prov._read_record("F", "5", "P")),
@@ -53,13 +53,13 @@ def test_keyed_verbs_address_the_record_number_they_are_given(tmp_path: Path) ->
 @covers(CobolFeature.READ)
 def test_sequential_verbs_return_the_record_number_they_used(tmp_path: Path) -> None:
     prov = RealFileIOProvider(base_dir=tmp_path)
-    prov._open_file("F", "OUTPUT", 3, _REL, 0, 0, "P")
+    prov._open_file("F", "OUTPUT", 3, _REL, 0, 0, "SEQUENTIAL", 0, "P")
     written = [prov._write_record("F", rec, "", "P").record_number for rec in "AB"]
     prov._close_file("F", "P")
-    prov._open_file("F", "EXTEND", 3, _REL, 0, 0, "P")
+    prov._open_file("F", "EXTEND", 3, _REL, 0, 0, "SEQUENTIAL", 0, "P")
     extended = prov._write_record("F", "C", "", "P").record_number
     prov._close_file("F", "P")
-    prov._open_file("F", "INPUT", 3, _REL, 0, 0, "P")
+    prov._open_file("F", "INPUT", 3, _REL, 0, 0, "SEQUENTIAL", 0, "P")
     read = [_seen(prov._read_record("F", "", "P")) for _ in range(4)]
     assert (written, extended, read) == (
         [1, 2],

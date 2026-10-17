@@ -139,9 +139,12 @@ class CobolIOProvider(ABC):
         organization: str,
         key_offset: int,
         key_length: int,
+        access_mode: str,
+        relative_key_digits: int,
         program: str,
     ) -> IOResult:
-        """OPEN file in given mode (INPUT/OUTPUT/I-O/EXTEND)."""
+        """OPEN file in given mode (INPUT/OUTPUT/I-O/EXTEND), with its SELECT entry's
+        ACCESS MODE and its RELATIVE KEY's digit count (0 without one)."""
         ...
 
     @abstractmethod
@@ -211,6 +214,8 @@ class NullIOProvider(CobolIOProvider):
         organization: str,
         key_offset: int,
         key_length: int,
+        access_mode: str,
+        relative_key_digits: int,
         program: str,
     ) -> IOResult:
         return IOResult("00", None)
@@ -290,6 +295,8 @@ class StubIOProvider(CobolIOProvider):
         organization: str,
         key_offset: int,
         key_length: int,
+        access_mode: str,
+        relative_key_digits: int,
         program: str,
     ) -> IOResult:
         stub = self.get_file(filename)

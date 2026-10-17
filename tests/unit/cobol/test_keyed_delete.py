@@ -7,22 +7,28 @@ from __future__ import annotations
 from collections.abc import Sequence
 from pathlib import Path
 
-from cobol_asg.file_enums import FileOrganization
+from cobol_asg.file_enums import AccessMode, FileOrganization
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.real_file_provider import RealFileIOProvider
 from tests.covers import covers
 
 _INDEXED = FileOrganization.INDEXED.value
 _RELATIVE = FileOrganization.RELATIVE.value
+_DYNAMIC = AccessMode.DYNAMIC.value
+_SEQUENTIAL = AccessMode.SEQUENTIAL.value
 
 
 def _loaded(
-    prov: RealFileIOProvider, name: str, organization: str, records: Sequence[str]
+    prov: RealFileIOProvider,
+    name: str,
+    organization: str,
+    access: str,
+    records: Sequence[str],
 ) -> None:
-    prov._open_file(name, "OUTPUT", 4, organization, 0, 2, "P")
+    prov._open_file(name, "OUTPUT", 4, organization, 0, 2, access, 0, "P")
     [prov._write_record(name, record, "", "P") for record in records]
     prov._close_file(name, "P")
-    prov._open_file(name, "I-O", 4, organization, 0, 2, "P")
+    prov._open_file(name, "I-O", 4, organization, 0, 2, access, 0, "P")
 
 
 @covers(CobolFeature.DELETE_RECORD)
@@ -30,9 +36,9 @@ def test_a_keyed_delete_needs_no_current_record(
     tmp_path: Path,
 ) -> None:
     prov = RealFileIOProvider(base_dir=tmp_path)
-    _loaded(prov, "IX", _INDEXED, ["01AA", "02BB", "03CC"])
-    _loaded(prov, "IS", _INDEXED, ["01AA", "02BB", "03CC"])
-    _loaded(prov, "RL", _RELATIVE, ["AAAA", "BBBB"])
+    _loaded(prov, "IX", _INDEXED, _DYNAMIC, ["01AA", "02BB", "03CC"])
+    _loaded(prov, "IS", _INDEXED, _SEQUENTIAL, ["01AA", "02BB", "03CC"])
+    _loaded(prov, "RL", _RELATIVE, _DYNAMIC, ["AAAA", "BBBB"])
     statuses = [
         prov._delete_record("IX", "02", "P").status,
         prov._delete_record("IX", "09", "P").status,
