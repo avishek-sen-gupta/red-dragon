@@ -157,6 +157,9 @@ public final class DataFieldSerializer {
         JsonObject obj = new JsonObject();
         String fieldName = disambiguateFiller(group.getName());
         obj.addProperty("name", fieldName);
+        if (isFiller(group.getName())) {
+            obj.addProperty("filler", true);
+        }
         obj.addProperty("level", group.getLevelNumber());
         obj.addProperty("pic", extractPic(group));
         obj.addProperty("usage", extractUsage(group));
@@ -286,8 +289,12 @@ public final class DataFieldSerializer {
      * Disambiguates FILLER field names by appending a sequential counter.
      * "FILLER" becomes "FILLER_1", "FILLER_2", etc.
      */
+    private static boolean isFiller(String name) {
+        return name == null || "FILLER".equalsIgnoreCase(name);
+    }
+
     private String disambiguateFiller(String name) {
-        if (name == null || "FILLER".equalsIgnoreCase(name)) {
+        if (isFiller(name)) {
             fillerCount++;
             return "FILLER_" + fillerCount;
         }

@@ -34,6 +34,8 @@ from cobol_asg.cobol_statements import (
 )
 from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from cobol_asg.exit_kind import ExitKind
+from cobol_asg.initialize_category import InitializeCategory
+from cobol_asg.initialize_replacing import InitializeReplacing
 from cobol_asg.ref_mod import (
     FunctionCallOperand,
     RefModBinOp,
@@ -81,6 +83,8 @@ from interpreter.cobol.data_layout import DataItemMatch, DataLayout, FieldLayout
 from interpreter.cobol.emit_context import EmitContext, strip_cobol_literal
 from interpreter.cobol.field_resolution import ResolvedFieldRef, whole_field_extent
 from interpreter.cobol.figurative_constants import repeat_to_width
+from interpreter.cobol.initialize_target import InitializeTarget
+from interpreter.cobol.initialize_targets import initialize_targets
 from interpreter.cobol.lower_pointer import is_pointer_set, lower_pointer_set
 from interpreter.cobol.lower_program_exit import (
     emit_publish_run_unit_return_code,
@@ -1824,37 +1828,19 @@ _EXIT_TARGETS: Mapping[ExitKind, Callable[[EmitContext], CodeLabel]] = {
 }
 
 
-def _leaf_fields_of(target_fl: FieldLayout, layout: DataLayout) -> list[FieldLayout]:
-    """Return leaf FieldLayouts contained within target_fl's byte range.
+_DEFAULT_SPACES = RefModOperand(name="SPACES")
+_DEFAULT_ZERO = RefModOperand(name="ZERO")
 
-    A leaf is a field that has no other fields falling strictly inside its range.
-    Returns [target_fl] if target_fl is itself a leaf (not a group item).
-    """
-    target_start = target_fl.offset
-    target_end = target_fl.offset + target_fl.byte_length
-
-    contained = [
-        fl
-        for fl in layout.all_leaves()
-        if fl.name != target_fl.name
-        and fl.offset >= target_start
-        and fl.offset + fl.byte_length <= target_end
-    ]
-
-    if not contained:
-        return [target_fl]
-
-    return [fl for fl in contained if _is_leaf_among(fl, contained)]
-
-
-def _is_leaf_among(fl: FieldLayout, contained: Sequence[FieldLayout]) -> bool:
-    fl_end = fl.offset + fl.byte_length
-    return not any(
-        other.name != fl.name
-        and other.offset >= fl.offset
-        and other.offset + other.byte_length <= fl_end
-        for other in contained
-    )
+_INITIALIZE_CATEGORY = {
+    CobolDataCategory.ZONED_DECIMAL: InitializeCategory.NUMERIC,
+    CobolDataCategory.COMP3: InitializeCategory.NUMERIC,
+    CobolDataCategory.BINARY: InitializeCategory.NUMERIC,
+    CobolDataCategory.COMP1: InitializeCategory.NUMERIC,
+    CobolDataCategory.COMP2: InitializeCategory.NUMERIC,
+    CobolDataCategory.ALPHANUMERIC: InitializeCategory.ALPHANUMERIC,
+    CobolDataCategory.ALPHANUMERIC_EDITED: InitializeCategory.ALPHANUMERIC_EDITED,
+    CobolDataCategory.NUMERIC_EDITED: InitializeCategory.NUMERIC_EDITED,
+}
 
 
 def lower_initialize(
@@ -1862,33 +1848,43 @@ def lower_initialize(
     stmt: InitializeStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """INITIALIZE field1 field2 — reset to type-appropriate defaults.
+    """INITIALIZE is a MOVE into each elementary item of each operand.
 
-    Each elementary (leaf) item receives SPACES (character categories) or ZERO
-    (numeric and numeric-edited) as a MOVE would, so an edited item is edited.
+    Without REPLACING a character item receives SPACES and a numeric or
+    numeric-edited one ZERO. With REPLACING only the items of a named category are
+    moved into, each receiving its category's value; the rest are left alone.
     """
-    span = stmt.span
-    for operand in stmt.operands:
-        if not ctx.has_field(operand.name, materialised):
-            logger.warning("INITIALIZE target %s not found in layout", operand.name)
-            continue
-        match, region_reg, region = materialised.resolve_match(
-            operand.name, operand.qualifiers
-        )
-        for leaf_fl in _leaf_fields_of(match.storage, materialised.layout_of(region)):
-            leaf_ref = ctx.resolve_field_ref_from(
-                leaf_fl, region_reg, region, materialised, span=span
-            )
-            td = leaf_fl.type_descriptor
-            default = " " * td.total_digits if td.holds_characters else 0
-            ctx.emit_encode_and_write(
-                region_reg,
-                leaf_fl,
-                ctx.const_to_reg(default, span=span),
-                leaf_ref.offset_reg,
-                extent=leaf_ref.extent,
-                span=span,
-            )
+    moves = [
+        MoveStatement(source=value, targets=[target.operand], span=stmt.span)
+        for operand in stmt.operands
+        for target in _initialize_targets(ctx, operand, materialised)
+        for value in _initial_values(target.storage.type_descriptor, stmt.replacing)
+    ]
+    for move in moves:
+        lower_move(ctx, move, materialised)
+
+
+def _initialize_targets(
+    ctx: EmitContext, operand: RefModOperand, materialised: MaterialisedSectionedLayout
+) -> tuple[InitializeTarget, ...]:
+    if not ctx.has_field(operand.name, materialised):
+        logger.warning("INITIALIZE target %s not found in layout", operand.name)
+        return ()
+    match, _, _ = materialised.resolve_match(operand.name, operand.qualifiers)
+    return initialize_targets(operand, match)
+
+
+def _initial_values(
+    td: CobolTypeDescriptor, replacing: Sequence[InitializeReplacing]
+) -> tuple[RefModOperand, ...]:
+    if not replacing:
+        return (_DEFAULT_SPACES if td.holds_characters else _DEFAULT_ZERO,)
+    category = (
+        InitializeCategory.ALPHABETIC
+        if td.alphabetic
+        else _INITIALIZE_CATEGORY[td.category]
+    )
+    return tuple(phrase.by for phrase in replacing if phrase.category is category)
 
 
 def _set_condition_name(

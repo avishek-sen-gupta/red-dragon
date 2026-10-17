@@ -32,6 +32,8 @@ from cobol_asg.evaluate_selection import (
 from cobol_asg.exit_kind import ExitKind
 from cobol_asg.file_enums import AccessMode, FileOrganization, OpenMode, RecordingMode
 from cobol_asg.frontend_extension import DialectParser
+from cobol_asg.initialize_category import InitializeCategory
+from cobol_asg.initialize_replacing import InitializeReplacing
 from cobol_asg.ref_mod import (
     FunctionCallOperand,
     RefModOperand,
@@ -761,12 +763,20 @@ class InitializeStatement:
     """INITIALIZE field1 field2 ... — reset fields to type-appropriate defaults."""
 
     operands: list[RefModOperand] = field(default_factory=list)
+    replacing: list[InitializeReplacing] = field(default_factory=list)
     span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> InitializeStatement:
         return cls(
             operands=[RefModOperand.from_dict(o) for o in data.get("operands", [])],
+            replacing=[
+                InitializeReplacing(
+                    category=InitializeCategory(r["category"]),
+                    by=RefModOperand.from_dict(r["by"]),
+                )
+                for r in data.get("replacing", [])
+            ],
             span=SourceSpan.from_dict(data),
         )
 
@@ -774,6 +784,16 @@ class InitializeStatement:
         result = {
             "type": "INITIALIZE",
             "operands": [operand.to_dict() for operand in self.operands],
+            **(
+                {
+                    "replacing": [
+                        {"category": r.category.value, "by": r.by.to_dict()}
+                        for r in self.replacing
+                    ]
+                }
+                if self.replacing
+                else {}
+            ),
         }
         if self.span is not None:
             self.span.write_into(result)

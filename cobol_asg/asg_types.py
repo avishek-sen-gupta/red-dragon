@@ -107,6 +107,7 @@ class CobolField:
     renames_from: RefModOperand = NOT_RENAMED
     renames_thru: RefModOperand = NOT_RENAMED
     blank_when_zero: bool = False
+    filler: bool = False
     # The program's currency symbol at the time this field was ingested — '$'
     # unless SPECIAL-NAMES declared CURRENCY SIGN IS otherwise. It is
     # program-scoped, not per-field, but __post_init__ computes the type
@@ -178,6 +179,7 @@ class CobolField:
             renames_from=RefModOperand.from_dict(data.get("renames_from", {})),
             renames_thru=RefModOperand.from_dict(data.get("renames_thru", {})),
             blank_when_zero=data.get("blank_when_zero", False),
+            filler=data.get("filler", False),
             currency_symbol=currency,
             pointer_type=pointer_type,
             span=SourceSpan.from_dict(data),
@@ -192,6 +194,7 @@ class CobolField:
             "offset": self.offset,
             **({"value_is_all": True} if self.value_is_all else {}),
             **({"value_is_numeric": True} if self.value_is_numeric else {}),
+            **({"filler": True} if self.filler else {}),
         }
         if self.span is not None:
             self.span.write_into(result)

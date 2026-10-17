@@ -2,6 +2,8 @@
 
 import pytest
 
+from cobol_asg.any_object import AnyObject
+from cobol_asg.cobol_expression import BinOpNode, FieldRefNode, LiteralNode
 from cobol_asg.cobol_statements import (
     AcceptStatement,
     AlteredGoto,
@@ -49,9 +51,9 @@ from cobol_asg.cobol_statements import (
     XmlGenerateStatement,
     parse_statement,
 )
-from cobol_asg.any_object import AnyObject
-from cobol_asg.cobol_expression import BinOpNode, FieldRefNode, LiteralNode
 from cobol_asg.expression_subject import ExpressionSubject
+from cobol_asg.initialize_category import InitializeCategory
+from cobol_asg.initialize_replacing import InitializeReplacing
 from cobol_asg.operand_kind import OperandKind
 from cobol_asg.range_object import RangeObject
 from cobol_asg.ref_mod import RefModOperand
@@ -447,10 +449,27 @@ class TestParseStatementDispatch:
     @covers(CobolFeature.INITIALIZE)
     def test_initialize(self):
         stmt = parse_statement(
-            {"type": "INITIALIZE", "operands": [{"name": "WS-A"}, {"name": "WS-B"}]}
+            {
+                "type": "INITIALIZE",
+                "operands": [{"name": "WS-A"}, {"name": "WS-B"}],
+                "replacing": [
+                    {"category": "ALPHABETIC", "by": {"name": '"AAA"'}},
+                    {"category": "NUMERIC_EDITED", "by": {"name": "WS-N"}},
+                ],
+            }
         )
         assert isinstance(stmt, InitializeStatement)
-        assert stmt.operands == [RefModOperand(name="WS-A"), RefModOperand(name="WS-B")]
+        assert (stmt.operands, stmt.replacing) == (
+            [RefModOperand(name="WS-A"), RefModOperand(name="WS-B")],
+            [
+                InitializeReplacing(
+                    InitializeCategory.ALPHABETIC, RefModOperand(name='"AAA"')
+                ),
+                InitializeReplacing(
+                    InitializeCategory.NUMERIC_EDITED, RefModOperand(name="WS-N")
+                ),
+            ],
+        )
 
     @covers(CobolFeature.SET_TO)
     def test_set_to(self):
@@ -1362,8 +1381,16 @@ class TestRoundTrip:
 
     @covers(CobolFeature.INITIALIZE)
     def test_initialize_round_trip(self):
-        data = {"type": "INITIALIZE", "operands": [{"name": "WS-A"}, {"name": "WS-B"}]}
-        assert self._round_trip(data) == data
+        plain = {"type": "INITIALIZE", "operands": [{"name": "WS-A"}, {"name": "WS-B"}]}
+        replacing = {
+            "type": "INITIALIZE",
+            "operands": [{"name": "WS-A"}],
+            "replacing": [{"category": "NUMERIC", "by": {"name": "7"}}],
+        }
+        assert (self._round_trip(plain), self._round_trip(replacing)) == (
+            plain,
+            replacing,
+        )
 
     @covers(CobolFeature.SET_TO)
     def test_set_to_round_trip(self):
