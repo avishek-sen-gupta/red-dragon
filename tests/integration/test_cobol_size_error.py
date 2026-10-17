@@ -302,3 +302,32 @@ class TestNumericEditedReceiver:
             ["E1", "E2", "E3", "F1", "F2", "F3"],
         )
         assert shown == ["$0000.00", "9998.90", "$999.90", "E", "P", "P"]
+
+
+class TestFloatingPointReceiver:
+    @covers(
+        CobolFeature.COMPUTE,
+        CobolFeature.ON_SIZE_ERROR,
+        CobolFeature.USAGE_COMP_1,
+        CobolFeature.USAGE_COMP_2,
+    )
+    def test_only_a_magnitude_the_float_cannot_hold_is_a_size_error(self, capsys):
+        shown = _display_after(
+            capsys,
+            [
+                "01 G USAGE COMP-2.",
+                "01 H USAGE COMP-1.",
+                "01 N PIC 9(4).",
+                "01 F1 PIC X VALUE 'P'.",
+                "01 F2 PIC X VALUE 'P'.",
+                "01 F3 PIC X VALUE 'P'.",
+            ],
+            [
+                "    COMPUTE G = 5 * 250 ON SIZE ERROR MOVE 'E' TO F1.",
+                "    MOVE G TO N.",
+                "    COMPUTE H = 1.5E30 ON SIZE ERROR MOVE 'E' TO F2.",
+                "    COMPUTE H = 1.0E39 ON SIZE ERROR MOVE 'E' TO F3.",
+            ],
+            ["N", "F1", "F2", "F3"],
+        )
+        assert shown == ["1250", "P", "P", "E"]
