@@ -57,7 +57,8 @@ def test_lower_call_emits_call_with_memory():
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_lower_call_giving_result_written_back():
-    """GIVING: result written back to caller's WS field via WRITE_REGION."""
+    """GIVING: after the copy-up, RETURN-CODE is read back as a field and its value
+    written to the caller's WS field -- a MOVE, not a copy of the raw bytes."""
     ctx, materialised = _materialised_with_ws("WS-RESULT")
     stmt = CallStatement(
         target=CallTarget.of_literal("SUBPROG"),
@@ -65,9 +66,12 @@ def test_lower_call_giving_result_written_back():
         giving=RefModOperand(name="WS-RESULT"),
     )
     lower_call(ctx, stmt, materialised)
-    opcodes = [i.opcode for i in ctx.instructions]
-    assert Opcode.CALL_WITH_MEMORY in opcodes
-    assert Opcode.WRITE_REGION in opcodes
+    _sr_layout, sr_reg = materialised.special_registers
+    _ws_layout, ws_reg = materialised.working_storage
+    assert (
+        _post_call_accesses_of_region(ctx, sr_reg),
+        _post_call_accesses_of_region(ctx, ws_reg),
+    ) == ([Opcode.WRITE_REGION, Opcode.LOAD_REGION], [Opcode.WRITE_REGION])
 
 
 def _post_call_accesses_of_region(ctx, region_reg):
