@@ -151,6 +151,11 @@ p_run: p_pos+
 // present, a Z/* run is present, a sign is present, a floating +/- run is
 // present, or a simple/special insertion symbol sits in the body.
 //
+// A suppression run may follow a leading decimal point (".ZZ", "$.**") when no
+// integer digit position precedes it: every digit position is then a
+// replacement symbol, right of the point (p. 224, from memory; NIST-85 NC175A
+// declares PIC $.** and expects "*.**" at zero).
+//
 // cs_run covers fixed AND floating currency insertion in one rule, because the
 // difference is the run's LENGTH (1 vs >= 2) and length is not a shape -- see
 // the note at the top of this file. Same for z_run and star_run, where a
@@ -163,8 +168,8 @@ p_run: p_pos+
 // fixed trailing plus. "Only one of the following symbols can be written in a
 // given PICTURE character-string: + - CR DB" (p. 218) is what bars the second
 // reading, and giving the floating run no ne_trail slot is how that is spelled.
-numeric_edited: sign_pos? cs_run ne_suppress? ne_pos* ne_trail?
-              | sign_pos? ne_suppress ne_pos* ne_trail?
+numeric_edited: sign_pos? cs_run (DOT? ne_suppress)? ne_pos* ne_trail?
+              | sign_pos? DOT? ne_suppress ne_pos* ne_trail?
               | sign_pos ne_pos* ne_trail?
               | ne_float_sign ne_pos*
               | ne_bare_pos* ne_edit_pos ne_pos* ne_trail?

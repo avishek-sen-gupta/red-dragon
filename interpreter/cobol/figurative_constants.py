@@ -23,6 +23,8 @@ COBOL_FIGURATIVE_CONSTANTS: dict[str, str] = {
     "HIGH-VALUES": _HIGH_VALUE,
 }
 
+FIGURATIVE_ZEROS = frozenset({"ZERO", "ZEROS", "ZEROES"})
+
 
 def repeat_to_width(pattern: str, width: int) -> str:
     return (pattern * (width // len(pattern) + 1))[:width]

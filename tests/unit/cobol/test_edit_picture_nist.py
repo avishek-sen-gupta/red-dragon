@@ -283,3 +283,68 @@ class TestScalingPositionsAreNotStored:
     )
     def test_byte_length_excludes_scaling_positions(self, pic: str, width: int):
         assert parse_pic(pic).byte_length == width
+
+
+class TestNistSuppressionRegions:
+    """Zero suppression on the fraction side, and insertion inside a run.
+
+    NIST-85 NC175A declares ``PIC $.**`` and expects ``*.**`` at zero: a
+    suppression run may follow the decimal point when no integer digit position
+    precedes it. NIST-85 NC126A declares ``PIC -*B*99`` and expects ``-***42`` for
+    -42: a simple insertion symbol inside a suppression run is part of the run
+    and takes the fill character while suppression is active (IBM Enterprise
+    COBOL LR, "Zero suppression and replacement editing").
+    """
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    @pytest.mark.parametrize(
+        ("pic", "width", "decimal_digits"),
+        [("$.**", 4, 2), (".ZZ", 3, 2), (".**", 3, 2), ("-*B*99", 6, 0)],
+    )
+    def test_parse_pic_accepts_and_sizes(
+        self, pic: str, width: int, decimal_digits: int
+    ):
+        descriptor = parse_pic(pic)
+        assert (
+            descriptor.category,
+            descriptor.byte_length,
+            descriptor.decimal_digits,
+        ) == (CobolDataCategory.NUMERIC_EDITED, width, decimal_digits)
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    @pytest.mark.parametrize(
+        ("value", "pic", "expected"),
+        [
+            ("0", "$.**", "*.**"),
+            (".05", "$.**", "$.05"),
+            ("0", ".ZZ", "   "),
+            (".5", ".ZZ", ".50"),
+            ("-42", "-*B*99", "-***42"),
+            ("-2345", "-*B*99", "-2 345"),
+            ("42", "Z0Z99", "   42"),
+            ("12345", "Z0Z99", "20345"),
+            ("5", "0999", "0005"),
+        ],
+    )
+    def test_matches_nist(self, value: str, pic: str, expected: str):
+        assert format_edited(value, pic) == expected
+
+
+class TestNistInsertionRightOfAFloatingString:
+    """A simple insertion symbol immediately right of a floating string is part
+    of it, so the floating symbol lands there when the first significant digit
+    lies past the string. Values from NIST-85 NC105A EDIT-TEST-F1-124..127."""
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    @pytest.mark.parametrize(
+        ("value", "pic", "expected"),
+        [
+            ("987.65", "$$$,999.99", "   $987.65"),
+            ("123.45", "$$$B999.99", "   $123.45"),
+            ("321.01", "+++,999.99", "   +321.01"),
+            ("-12.98", "---,999.99", "   -012.98"),
+            ("4321.5", "$$$,999.99", " $4,321.50"),
+        ],
+    )
+    def test_matches_nist(self, value: str, pic: str, expected: str):
+        assert format_edited(value, pic) == expected

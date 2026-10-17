@@ -78,7 +78,7 @@ The DATA DIVISION is lowered to byte-addressed memory regions:
 
 1. `build_data_layout()` parses all WORKING-STORAGE fields, computing offsets and byte lengths from PIC clauses
 2. `ALLOC_REGION` allocates a contiguous byte array sized to `layout.total_bytes`
-3. Each field with a VALUE clause is encoded per its PIC type and written via `WRITE_REGION`; a group's VALUE is encoded as alphanumeric over the whole group, before its descendants'. A numeric-edited item stores a nonnumeric VALUE literal as its characters, unedited; a numeric literal (the bridge marks it `value_is_numeric`) is edited as a MOVE would edit it. BLANK WHEN ZERO plays no part in a VALUE; it blanks an item, numeric-edited included, when a zero value is moved or stored into it
+3. Each field with a VALUE clause is encoded per its PIC type and written via `WRITE_REGION`; a group's VALUE is encoded as alphanumeric over the whole group, before its descendants'. A numeric-edited item stores a nonnumeric VALUE literal as its characters, unedited; a numeric literal (the bridge marks it `value_is_numeric`) and the figurative ZERO are edited as a MOVE would edit them (`PIC $.** VALUE ZERO` holds `*.**`). BLANK WHEN ZERO plays no part in a VALUE; it blanks an item, numeric-edited included, when a zero value is moved or stored into it
 
 ### Data-name qualification
 

@@ -44,9 +44,11 @@ expected values:
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from itertools import takewhile
 
+from cobol_asg.edit_picture_shape import EditPicture
+from cobol_asg.edit_render import EditRender
 from cobol_numeric.number import (
     CobolNumber,
     digits_for_encode,
@@ -56,6 +58,7 @@ from cobol_numeric.number import (
 )
 
 _SIGN_SYMS = frozenset("+-")
+_SIMPLE_INSERTIONS = frozenset(",B0/")
 
 # The default currency symbol. A program may replace it via
 # SPECIAL-NAMES CURRENCY SIGN IS <literal> (red-dragon-3o5f), so every entry
@@ -201,42 +204,6 @@ def format_alphanumeric_edited(
     return "".join(out)
 
 
-@dataclass(frozen=True)
-class EditPicture:
-    """A parsed numeric edit picture.
-
-    Attributes:
-        template: the expanded per-character position symbols.
-        width: total character width (== storage byte length).
-        int_digits: number of digit positions (9/Z) left of the decimal point.
-        frac_digits: number of digit positions (9/Z) right of the decimal point.
-        signed: whether the picture carries a sign symbol (+/-).
-        sign_symbol: the sign symbol ('+' or '-'), or '' if unsigned.
-        sign_leading: True if the sign is at the start, False if trailing.
-        all_suppressible: True if every digit position is suppressible (no '9').
-        fill_char: the character leading suppressed zeros become — ' ' for Z
-            suppression, '*' for check protection.
-        float_symbol: the floating insertion symbol ('$', '+', '-'), or ''.
-        float_positions: template indices of the float symbols, in order. The
-            FIRST is the reserved slot for the symbol itself; the rest are
-            suppressible digit positions. So N float symbols give N-1 digits.
-        trailing_sign: 'CR' / 'DB' if the picture ends with one, else ''.
-    """
-
-    template: tuple[str, ...]
-    width: int
-    int_digits: int
-    frac_digits: int
-    signed: bool
-    sign_symbol: str
-    sign_leading: bool
-    all_suppressible: bool
-    fill_char: str = " "
-    float_symbol: str = ""
-    float_positions: tuple[int, ...] = ()
-    trailing_sign: str = ""
-
-
 def parse_edit_picture(pic: str, currency: str = DEFAULT_CURRENCY) -> EditPicture:
     """Parse a numeric-edited PIC string into an :class:`EditPicture`."""
     # S (operational sign), V (implied decimal point) and P (decimal scaling)
@@ -302,12 +269,12 @@ def parse_edit_picture(pic: str, currency: str = DEFAULT_CURRENCY) -> EditPictur
     )
 
 
-def _digit_strings(value: CobolNumber, ep: EditPicture) -> tuple[str, str]:
-    """Return (integer_digits, fraction_digits) zero-padded/truncated to the
-    picture's digit-position counts. Truncates toward zero (no ROUNDED); on
-    overflow the low-order integer digits win (COBOL high-order truncation)."""
+def _digit_string(value: CobolNumber, ep: EditPicture) -> str:
+    """The picture's digits, zero-padded/truncated to its digit-position counts.
+    Truncates toward zero (no ROUNDED); on overflow the low-order integer digits
+    win (COBOL high-order truncation)."""
     _, digits = digits_for_encode(value, ep.int_digits + ep.frac_digits, ep.frac_digits)
-    return digits[: ep.int_digits], digits[ep.int_digits :]
+    return digits
 
 
 def format_edited(
@@ -321,158 +288,82 @@ def format_edited(
     Returns the edited display string, exactly ``width`` characters wide.
     """
     ep = parse_edit_picture(pic, currency)
-    try:
-        dec = scale_by(from_literal(str(value).strip() or "0"), -scale)
-    except ValueError:
-        dec = from_digits(0, 0)
-
-    negative = dec < 0
-    is_zero = dec == 0
-
-    # Every digit position suppressible and the value zero: the whole item is
-    # blanked (IBM zero-suppression rule) — decimal point, commas and fixed
-    # sign included. Check protection is the ONE exception: '*' FILLS rather
-    # than blanks, and the decimal point SURVIVES. NIST-85 NC124A:
-    # "ZZ.ZZ" -> '     ' but "**.**" -> '**.**' and "*,***.**" -> '*****.**'.
-    if ep.all_suppressible and is_zero:
-        if ep.fill_char == "*":
-            return "".join("." if sym == "." else "*" for sym in ep.template)
-        return " " * ep.width
-
-    int_part, frac_part = _digit_strings(dec, ep)
+    dec = _edited_value(value, scale)
+    if ep.all_suppressible and dec == 0:
+        return _zero_image(ep)
     body = ep.template[:-2] if ep.trailing_sign else ep.template
-    float_slot = _float_slot(ep, int_part)
+    digits = _position_digits(ep, body, _digit_string(dec, ep))
+    render = EditRender(
+        picture=ep,
+        body=body,
+        digits=digits,
+        float_slot=_float_slot(ep, digits),
+        negative=dec < 0,
+    )
+    return render.image() + _trailing_sign_image(ep, dec < 0)
 
-    out: list[str] = []
-    suppressing = True  # within the leading-zero zone (left of decimal only)
-    int_idx = 0
-    frac_idx = 0
-    past_decimal = False
+
+def _edited_value(value: str, scale: int) -> CobolNumber:
+    try:
+        return scale_by(from_literal(str(value).strip() or "0"), -scale)
+    except ValueError:
+        return from_digits(0, 0)
+
+
+def _zero_image(ep: EditPicture) -> str:
+    """Every digit position suppressible and the value zero: the whole item is
+    blanked (IBM zero-suppression rule). Check protection is the exception: '*'
+    FILLS rather than blanks, and the decimal point SURVIVES (NIST-85 NC124A)."""
+    if ep.fill_char == "*":
+        return "".join("." if sym == "." else "*" for sym in ep.template)
+    return " " * ep.width
+
+
+def _position_digits(
+    ep: EditPicture, body: Sequence[str], digits: str
+) -> Mapping[int, str]:
     float_digits = frozenset(ep.float_positions[1:])
-
-    for index, sym in enumerate(body):
-        is_float_pos = index in float_digits or (
-            bool(ep.float_symbol) and index == ep.float_positions[0]
-        )
-        if index == float_slot:
-            # The floating symbol lands here — immediately left of the first
-            # significant digit. Its own digit (if it had one) is suppressed.
-            out.append(
-                _sign_char(ep.float_symbol, negative)
-                if ep.float_symbol in _SIGN_SYMS
-                else ep.float_symbol
-            )
-            if index in float_digits and not past_decimal:
-                int_idx += 1
-        elif is_float_pos:
-            if index not in float_digits:
-                out.append(ep.fill_char)  # reserved slot, symbol went elsewhere
-            elif past_decimal:
-                out.append(frac_part[frac_idx])
-                frac_idx += 1
-            else:
-                digit = int_part[int_idx]
-                int_idx += 1
-                if suppressing and digit == "0":
-                    out.append(ep.fill_char)
-                else:
-                    suppressing = False
-                    out.append(digit)
-        elif sym in _SIGN_SYMS:
-            out.append(_sign_char(sym, negative))
-        elif sym == "9":
-            if past_decimal:
-                out.append(frac_part[frac_idx])
-                frac_idx += 1
-            else:
-                out.append(int_part[int_idx])
-                int_idx += 1
-                suppressing = False
-        elif sym in ("Z", "*"):
-            if past_decimal:
-                # value is non-zero here (all-zero handled above); show digit.
-                out.append(frac_part[frac_idx])
-                frac_idx += 1
-            else:
-                digit = int_part[int_idx]
-                int_idx += 1
-                if suppressing and digit == "0":
-                    out.append(ep.fill_char)
-                else:
-                    suppressing = False
-                    out.append(digit)
-        elif sym == ",":
-            out.append(ep.fill_char if suppressing else ",")
-        elif sym == ".":
-            out.append(".")
-            past_decimal = True
-            suppressing = False
-        elif sym == "B":
-            out.append(" ")
-        else:
-            # Insertion symbol (0, /) or unknown — emit verbatim.
-            out.append(sym)
-
-    if ep.trailing_sign:
-        # CR / DB report ONLY a negative value; non-negative emits two spaces.
-        out.append(ep.trailing_sign if negative else "  ")
-
-    return "".join(out)
+    positions = [
+        index
+        for index, sym in enumerate(body)
+        if sym in ("9", "Z", "*") or index in float_digits
+    ]
+    return dict(zip(positions, digits, strict=True))
 
 
-def _float_slot(ep: EditPicture, int_part: str) -> int:
+def _trailing_sign_image(ep: EditPicture, negative: bool) -> str:
+    if not ep.trailing_sign:
+        return ""
+    return ep.trailing_sign if negative else "  "
+
+
+def _float_slot(ep: EditPicture, digits: Mapping[int, str]) -> int:
     """Return the template index where the floating symbol is emitted.
 
-    The symbol sits immediately to the LEFT of the first significant digit, so
-    its position depends on the value, not just the picture. Deciding this up
-    front (rather than writing left-to-right and patching backwards) is what
-    keeps the awkward cases honest — in ``"$$$$$.99"`` at zero and
-    ``"$$,$$$.$$"`` at ``.02`` the symbol lands against the DECIMAL POINT
-    rather than against a digit, which a backward patch would have to
-    special-case.
-
-    Returns -1 when the picture has no floating string.
+    The symbol sits immediately to the LEFT of the first significant integer
+    digit when that digit is in the floating string. Otherwise it takes the
+    floating string's rightmost position, and "any simple-insertion symbols
+    (B 0 / ,) within or to the immediate right of the string of floating
+    insertion symbols are considered part of the floating character-string"
+    (IBM LR, "Floating insertion editing"): "$$$,999.99" holding 987.65 is
+    "   $987.65" (NIST-85 NC105A). Returns -1 when there is no floating string.
     """
     if not ep.float_symbol:
         return -1
-    positions = ep.float_positions
-    decimal_index = ep.template.index(".") if "." in ep.template else len(ep.template)
-    float_digits = frozenset(positions[1:])
-
-    # Every INTEGER digit position in template order, whatever its symbol —
-    # the float-hosted ones and any '9'/'Z'/'*' that follow the float string.
-    int_slots = [
-        i
-        for i, sym in enumerate(ep.template)
-        if i < decimal_index and (sym in ("9", "Z", "*") or i in float_digits)
-    ]
-
-    for slot, digit in zip(int_slots, int_part, strict=False):
-        if digit == "0":
-            continue
-        # Suppression ends here. If this digit sits in a float position the
-        # symbol goes immediately to its left — which may be an insertion
-        # character inside the floating string, e.g. the ',' of "--,---.--"
-        # rendering -123 as '  -123.00'.
-        if slot in float_digits:
-            return slot - 1
-        # The first significant digit is past the floating string entirely
-        # (e.g. "$$99" at 12): the symbol takes the last float position.
-        break
-
-    before_point = [p for p in positions if p < decimal_index]
-    return before_point[-1] if before_point else positions[-1]
+    point = ep.template.index(".") if "." in ep.template else len(ep.template)
+    first = next(
+        (i for i, digit in sorted(digits.items()) if i < point and digit != "0"), -1
+    )
+    if first in ep.float_positions[1:]:
+        return first - 1
+    return _float_string_end(ep, point)
 
 
-def _sign_char(symbol: str, negative: bool) -> str:
-    """Resolve a fixed sign symbol to its emitted character.
-
-    '+' shows '+' for non-negative, '-' for negative.
-    '-' shows ' ' for non-negative, '-' for negative.
-    """
-    if symbol == "+":
-        return "-" if negative else "+"
-    return "-" if negative else " "
+def _float_string_end(ep: EditPicture, point: int) -> int:
+    before_point = [p for p in ep.float_positions if p < point]
+    last = before_point[-1] if before_point else ep.float_positions[-1]
+    trailing = takewhile(lambda sym: sym in _SIMPLE_INSERTIONS, ep.template[last + 1 :])
+    return last + len(tuple(trailing))
 
 
 _DE_EDIT_DIGITS = frozenset("9Z*P")
