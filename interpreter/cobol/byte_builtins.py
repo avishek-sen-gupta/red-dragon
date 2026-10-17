@@ -730,6 +730,29 @@ def _builtin_cobol_digit_image(args: list[TypedValue], vm: VMState) -> BuiltinRe
     return BuiltinResult(value=digits + "0" * max(scale, 0))
 
 
+_NEGATIVE_ZONE = 0xD0
+
+
+def _builtin_cobol_zoned_display_image(
+    args: Sequence[TypedValue], vm: VMState
+) -> BuiltinResult:
+    from interpreter.cobol.pic_scale import encode_digits
+
+    value, total_digits, decimal_digits, scale = (a.value for a in args)
+    if not (
+        is_cobol_number(value)
+        and isinstance(total_digits, int)
+        and isinstance(decimal_digits, int)
+        and isinstance(scale, int)
+    ):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    negative, digits = encode_digits(value, total_digits, decimal_digits, scale)
+    if not negative:
+        return BuiltinResult(value=digits)
+    overpunch = chr(EbcdicTable.EBCDIC_TO_ASCII[_NEGATIVE_ZONE | int(digits[-1])])
+    return BuiltinResult(value=digits[:-1] + overpunch)
+
+
 _DIGIT_ZONE = 0xF0
 _LOWEST_SIGN_ZONE = 0xA0
 
@@ -1891,6 +1914,9 @@ BYTE_BUILTINS: Mapping[FuncName, Builtin] = MappingProxyType(
         FuncName(BuiltinName.STRING_ZFILL): _builtin_string_zfill,
         FuncName(BuiltinName.STRING_PAD_TO): _builtin_string_pad_to,
         FuncName(BuiltinName.COBOL_DIGIT_IMAGE): _builtin_cobol_digit_image,
+        FuncName(
+            BuiltinName.COBOL_ZONED_DISPLAY_IMAGE
+        ): _builtin_cobol_zoned_display_image,
         FuncName(BuiltinName.COBOL_ZONED_STRIP_SIGN): _builtin_cobol_zoned_strip_sign,
         FuncName(
             BuiltinName.COBOL_ZONED_RESTORE_SIGN

@@ -2195,6 +2195,9 @@ def lower_set(
             )
 
 
+_DISPLAYED_AS_ZONED = frozenset({CobolDataCategory.BINARY, CobolDataCategory.COMP3})
+
+
 def _lower_display_operand(
     ctx: EmitContext,
     operand: RefModOperand,
@@ -2211,8 +2214,25 @@ def _lower_display_operand(
             subscripts=operand.subscripts,
             span=span,
         )
-        display_reg = ctx.emit_decode_field_characters(
-            rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
+        td = ref.fl.type_descriptor
+        display_reg = (
+            _call_builtin(
+                ctx,
+                BuiltinName.COBOL_ZONED_DISPLAY_IMAGE,
+                (
+                    ctx.emit_decode_field(
+                        rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
+                    ),
+                    ctx.const_to_reg(td.total_digits, span=span),
+                    ctx.const_to_reg(td.decimal_digits, span=span),
+                    ctx.const_to_reg(td.scale, span=span),
+                ),
+                span=span,
+            )
+            if td.category in _DISPLAYED_AS_ZONED
+            else ctx.emit_decode_field_characters(
+                rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
+            )
         )
     else:
         display_reg = ctx.const_to_reg(
