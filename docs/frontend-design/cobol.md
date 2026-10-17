@@ -86,6 +86,10 @@ A reference `N OF Q1 OF Q2 ...` (or `IN`) is resolved by `DataLayout.qualified_m
 
 A level-88 condition-name is indexed with its parent qualified by every enclosing group (`ConditionEntry.parent`), so `IF B OF D32` and `SET B OF D32 TO TRUE` select among same-named 88s the same way. A level-66 RENAMES item belongs to the 01 record it follows (`DataLayout.renames`): its FROM/THRU operands, elementary or group and qualified as written, resolve within that record, and the 66 item is itself qualified by the record name.
 
+### Variable-length items (OCCURS DEPENDING ON)
+
+Storage is allocated at the table's maximum. An unsubscripted reference to an item that ends in an OCCURS DEPENDING ON table (`DataLayout.odo_tail`) is as long as the object's current value says: the maximum less the inactive occurrences. Every read of it (MOVE and STRING senders, comparisons, INSPECT, UNSTRING, DISPLAY) takes that many characters. As a receiver it is written over its current length and the bytes past it are kept, unless it contains its own ODO object, in which case it receives at its maximum length.
+
 ### PIC-Driven Encoding
 
 | PIC Category | Encoding | Bytes | Example |

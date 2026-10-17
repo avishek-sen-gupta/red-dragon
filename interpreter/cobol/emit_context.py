@@ -33,7 +33,7 @@ from interpreter.cobol.alphanumeric import encode_hex_literal, parse_hex_literal
 from interpreter.cobol.cobol_constants import BuiltinName, ByteConstants, CobolEncoding
 from interpreter.cobol.collating_sequences import collating_sequence_of
 from interpreter.cobol.condition_name_index import ConditionNameIndex
-from interpreter.cobol.data_layout import FieldLayout
+from interpreter.cobol.data_layout import DataItemMatch, DataLayout, FieldLayout
 from interpreter.cobol.field_resolution import ResolvedFieldRef, field_access_extent
 from interpreter.cobol.ir_encoders import (
     build_decode_alphanumeric_ir,
@@ -50,6 +50,7 @@ from interpreter.cobol.ir_encoders import (
     build_encode_zoned_ir,
     build_encode_zoned_separate_ir,
 )
+from interpreter.cobol.odo_tail import OdoTail
 from interpreter.cobol.pic_scale import encode_digits
 from interpreter.cobol.procedure_labels import ProcedureLabels
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
@@ -537,18 +538,19 @@ class EmitContext:
         fl = match.storage
 
         if not subscripts:
-            offset_reg = self._field_offset(fl, region, materialised, span=span)
+            storage = self._with_current_length(match, materialised, span=span)
+            offset_reg = self._field_offset(storage, region, materialised, span=span)
             extent = field_access_extent(
                 name=base_name,
-                fl=fl,
+                fl=storage,
                 region=region,
                 subscripts=(),
                 tables=(),
                 record=None,
-                access_len=fl.byte_length,
+                access_len=storage.byte_length,
             )
             return (
-                ResolvedFieldRef(fl=fl, offset_reg=offset_reg, extent=extent),
+                ResolvedFieldRef(fl=storage, offset_reg=offset_reg, extent=extent),
                 region_reg,
             )
 
@@ -701,6 +703,70 @@ class EmitContext:
     ) -> list[str]:
         """Leaf field names of a symbolic-map group (for SEND/RECEIVE MAP lowering)."""
         return materialised.group_leaf_names(group_name)
+
+    def _with_current_length(
+        self,
+        match: DataItemMatch,
+        materialised: MaterialisedSectionedLayout,
+        *,
+        span: SourceSpan | None,
+    ) -> FieldLayout:
+        """The item's storage, with its current length when it ends in an
+        OCCURS DEPENDING ON table: the maximum less the inactive occurrences."""
+        fl = match.storage
+        item = match.item
+        tail = (
+            item.odo_tail()
+            if isinstance(item, DataLayout)
+            else OdoTail(fl.occurs_depending_on, fl.element_size, fl.occurs_count)
+        )
+        if not tail.is_present():
+            return fl
+        object_ref, object_region = self.resolve_field_ref(
+            tail.object_name, materialised, span=span
+        )
+        current_count = self.emit_decode_field(
+            object_region,
+            object_ref.fl,
+            object_ref.offset_reg,
+            extent=object_ref.extent,
+            span=span,
+        )
+        inactive = self._emit_binop(
+            "-",
+            self.const_to_reg(tail.max_count, span=span),
+            current_count,
+            span=span,
+        )
+        shrink = self._emit_binop(
+            "*",
+            inactive,
+            self.const_to_reg(tail.element_size, span=span),
+            span=span,
+        )
+        return dataclasses.replace(
+            fl,
+            current_length=self._emit_binop(
+                "-",
+                self.const_to_reg(fl.byte_length, span=span),
+                shrink,
+                span=span,
+            ),
+            receives_at_maximum=isinstance(item, DataLayout)
+            and item.exists(tail.object_name),
+        )
+
+    def _emit_binop(
+        self, op: str, left: Register, right: Register, *, span: SourceSpan | None
+    ) -> Register:
+        result = self.fresh_reg()
+        self.emit_inst(
+            Binop(
+                result_reg=result, operator=resolve_binop(op), left=left, right=right
+            ),
+            span=span,
+        )
+        return result
 
     def resolve_field_ref_from(
         self,
@@ -991,6 +1057,13 @@ class EmitContext:
         ir = _decode_ir(fl)
 
         decoded = self.inline_ir(ir, {"%p_data": data_reg}, span=span)
+        if fl.current_length.is_present():
+            return self._emit_slice(
+                decoded,
+                self.const_to_reg(0, span=span),
+                fl.current_length,
+                span=span,
+            )
         if not td.scale or td.category == CobolDataCategory.NUMERIC_EDITED:
             return decoded
         # PIC P: the stored digits are the value divided by the scaling factor,
@@ -1568,7 +1641,14 @@ class EmitContext:
         span: SourceSpan | None = None,
     ) -> None:
         """Encode a string value and write it to the field's region slot."""
-        encoded_reg = self.emit_encode_from_string(fl, value_str_reg, span=span)
+        stored_value_reg = (
+            self._emit_keep_inactive_tail(
+                region_reg, fl, value_str_reg, offset_reg, extent=extent, span=span
+            )
+            if fl.current_length.is_present() and not fl.receives_at_maximum
+            else value_str_reg
+        )
+        encoded_reg = self.emit_encode_from_string(fl, stored_value_reg, span=span)
         offset_reg = self._materialise_offset(fl, offset_reg, span=span)
         self._emit_write_region(
             region_reg=region_reg,
@@ -1578,6 +1658,61 @@ class EmitContext:
             extent=extent,
             span=span,
         )
+
+    def _emit_keep_inactive_tail(
+        self,
+        region_reg: Register,
+        fl: FieldLayout,
+        value_str_reg: Register,
+        offset_reg: Register,
+        *,
+        extent: FieldExtent,
+        span: SourceSpan | None,
+    ) -> Register:
+        """The item's new image: the value over its current length, then the
+        bytes already stored past it, which the move does not reach."""
+        stored = self.emit_decode_field(
+            region_reg,
+            dataclasses.replace(fl, current_length=NO_REGISTER),
+            offset_reg,
+            extent=extent,
+            span=span,
+        )
+        padded = self._emit_call(
+            BuiltinName.STRING_PAD_TO, (value_str_reg, stored), span=span
+        )
+        head = self._emit_slice(
+            padded, self.const_to_reg(0, span=span), fl.current_length, span=span
+        )
+        tail = self._emit_slice(
+            stored,
+            fl.current_length,
+            self.const_to_reg(fl.byte_length, span=span),
+            span=span,
+        )
+        return self._emit_call(BuiltinName.STRING_CONCAT_PAIR, (head, tail), span=span)
+
+    def _emit_slice(
+        self,
+        value: Register,
+        start: Register,
+        length: Register,
+        *,
+        span: SourceSpan | None,
+    ) -> Register:
+        return self._emit_call(
+            BuiltinName.STRING_SLICE, (value, start, length), span=span
+        )
+
+    def _emit_call(
+        self, builtin: str, args: tuple[Register, ...], *, span: SourceSpan | None
+    ) -> Register:
+        result = self.fresh_reg()
+        self.emit_inst(
+            CallFunction(result_reg=result, func_name=FuncName(builtin), args=args),
+            span=span,
+        )
+        return result
 
     # ── Condition Lowering ───────────────────────────────────────
 
