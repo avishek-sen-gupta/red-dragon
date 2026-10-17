@@ -61,11 +61,14 @@ def lower_data_division(
         span=None,  # region-level: no single declaration
     )
 
-    fields_with_values = [fl for fl in layout.all_fields() if fl.value]
-    for fl in fields_with_values:
-        # A VALUE clause initialises the whole declared field at its own
-        # offset — no subscript is in play — so the whole-field extent is
-        # exactly right here. A group's VALUE comes before its descendants'.
+    occurrences = [
+        occurrence
+        for match in layout.items()
+        if not match.storage.renames_from
+        for occurrence in match.initialised_occurrences
+        if occurrence.value
+    ]
+    for fl in occurrences:
         ctx.emit_field_encode(
             region_reg,
             fl,
@@ -77,7 +80,7 @@ def lower_data_division(
     logger.debug(
         "Data Division: allocated %d bytes, initialized %d fields",
         layout.total_bytes,
-        len(fields_with_values),
+        len(occurrences),
     )
     return region_reg
 
