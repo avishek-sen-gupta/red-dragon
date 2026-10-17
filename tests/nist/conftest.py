@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Sequence
+from functools import cache
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,12 @@ import pytest
 from cobol_asg.switch_status import SwitchStatus
 from interpreter.cobol.ebcdic_table import EbcdicTable
 from interpreter.cobol.real_file_provider import RealFileIOProvider
+from interpreter.frontend import make_cobol_parser
+from interpreter.project.cobol_compile import compile_cobol
+from interpreter.project.entry_point import EntryPoint
+from interpreter.project.source_file import SourceFile
+from interpreter.run import initial_vm_state, run_linked
+from interpreter.vm.builtins import core_builtins
 
 NIST_DIR = (
     Path(__file__).resolve().parents[2]
@@ -37,6 +44,14 @@ _X_CARDS = {
     "XXXXX091": "197",
 }
 _SWITCH_SETTINGS = {"SWITCH-1": SwitchStatus.ON, "SWITCH-2": SwitchStatus.OFF}
+_X_CARD_FILE_RE = re.compile(r"XXXX[XPD](\d{3})")
+_COPY_RE = re.compile(r"\bCOPY\s+([\w-]+)", re.IGNORECASE)
+_HEADER_RE = re.compile(
+    r"^.{6}\*HEADER,COBOL,(\w+),(SUBPRG|SUBRTN),(\w+)", re.MULTILINE
+)
+_SUBPRG = "SUBPRG"
+_SUBRTN = "SUBRTN"
+_MAX_STEPS = 2_000_000
 
 
 def _with_x_cards(line: str) -> str:
@@ -88,6 +103,103 @@ def extract_file_controls(src: str) -> list[tuple[str, str]]:
     ]
 
 
+def _x_card_file(assign_to: str) -> str:
+    """The file an ASSIGN names. EXEC85 reads an X-card's number from columns
+    17-19 and ignores column 16, so XXXXP001 (passed on) and XXXXD001 (read
+    back) are the one file X-card 001 names."""
+    return _X_CARD_FILE_RE.sub(r"XXXXX\1", assign_to).lower()
+
+
+def _source(prog: str) -> str:
+    return substitute_x_cards((NIST_DIR / f"{prog}.CBL").read_text())
+
+
+@cache
+def _links() -> tuple[tuple[str, str, str], ...]:
+    """Every CCVS *HEADER link: (owner, SUBPRG or SUBRTN, member)."""
+    return tuple(
+        (m[1], m[2], m[3])
+        for path in sorted(NIST_DIR.glob("*.CBL"))
+        for m in _HEADER_RE.finditer(path.read_text())
+    )
+
+
+def subroutines(prog: str) -> list[str]:
+    """The SUBRTN members of a program: subprograms it CALLs, compiled with it."""
+    return [
+        member for owner, link, member in _links() if (owner, link) == (prog, _SUBRTN)
+    ]
+
+
+def preceding_run_units(prog: str) -> list[str]:
+    """The run units a SUBPRG member follows in its CCVS job: the owner, then
+    each earlier member. They create the files this program reads."""
+    owners = [
+        owner for owner, link, member in _links() if (link, member) == (_SUBPRG, prog)
+    ]
+    return [
+        *owners,
+        *(
+            member
+            for owner, link, member in _links()
+            if link == _SUBPRG and owner in owners and member < prog
+        ),
+    ]
+
+
+def _copied_members(src: str) -> list[str]:
+    """The library text a source COPYs, so file controls inside it are seen."""
+    return [
+        path.read_text()
+        for name in _COPY_RE.findall(_cobol_content(src))
+        if (path := NIST_DIR / f"{name.upper()}.CPY").exists()
+    ]
+
+
+def _run_unit(prog: str, tmp_path: Path, max_steps: int) -> Path:
+    """Compile a program with its SUBRTN subprograms, run it, return its print path."""
+    src = _source(prog)
+    callees = [_source(callee) for callee in subroutines(prog)]
+    units = [src, *callees]
+    provider, print_path = make_provider(
+        "\n".join([*units, *(t for unit in units for t in _copied_members(unit))]),
+        tmp_path,
+        input_deck(NIST_DIR / f"{prog}.DAT"),
+    )
+    linked = compile_cobol(
+        src.encode(),
+        parser=make_cobol_parser(copybook_dirs=[NIST_DIR]),
+        programs=tuple(
+            SourceFile(Path(f"{callee}.CBL"), text.encode())
+            for callee, text in zip(subroutines(prog), callees, strict=True)
+        ),
+        copybook_dirs=[NIST_DIR],
+    )
+    label = linked.entry_func_label
+    run_linked(
+        linked,
+        entry_point=EntryPoint.function(lambda ref: ref.label == label),
+        max_steps=max_steps,
+        io_provider=provider,
+        builtins=core_builtins(),
+        initial_vm=initial_vm_state(io_provider=provider),
+    )
+    return print_path
+
+
+def run_nist(prog: str, tmp_path: Path) -> None:
+    """Run a CCVS program as its job does, then assert it passed.
+
+    The run units it follows run first in the same directory, so the files they
+    pass on are there; their reports are discarded before this program runs.
+    """
+    if not (NIST_DIR / f"{prog}.CBL").exists():
+        pytest.skip(f"NIST source not found: {prog}")
+    for unit in preceding_run_units(prog):
+        _run_unit(unit, tmp_path, _MAX_STEPS).unlink(missing_ok=True)
+    assert_nist_pass(_run_unit(prog, tmp_path, _MAX_STEPS), prog)
+
+
 def make_provider(
     src: str, tmp_path: Path, system_input: Sequence[str] = ()
 ) -> tuple[RealFileIOProvider, Path]:
@@ -96,7 +208,7 @@ def make_provider(
     A program with no PRINT file gets a path that is never written.
     """
     overrides = {
-        file_name: tmp_path / f"{assign_to.lower()}.dat"
+        file_name: tmp_path / f"{_x_card_file(assign_to)}.dat"
         for file_name, assign_to in extract_file_controls(src)
     }
     print_path = next(
