@@ -78,7 +78,7 @@ The DATA DIVISION is lowered to byte-addressed memory regions:
 
 1. `build_data_layout()` parses all WORKING-STORAGE fields, computing offsets and byte lengths from PIC clauses
 2. `ALLOC_REGION` allocates a contiguous byte array sized to `layout.total_bytes`
-3. Each field with a VALUE clause is encoded per its PIC type and written via `WRITE_REGION`; a group's VALUE is encoded as alphanumeric over the whole group, before its descendants'
+3. Each field with a VALUE clause is encoded per its PIC type and written via `WRITE_REGION`; a group's VALUE is encoded as alphanumeric over the whole group, before its descendants'. A numeric-edited item stores a nonnumeric VALUE literal as its characters, unedited; a numeric literal (the bridge marks it `value_is_numeric`) is edited as a MOVE would edit it
 
 ### Data-name qualification
 
@@ -144,7 +144,7 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 
 | Statement | IR Pattern |
 |---|---|
-| `INITIALIZE` | Reset fields to type-appropriate defaults (SPACES for alphanumeric, ZEROS for numeric) |
+| `INITIALIZE` | MOVE SPACES to character items and ZERO to numeric items, so an edited item is edited |
 | `SET` | TO: encode value → write. UP/DOWN BY: decode → `BINOP +/-` → encode → write. A subscripted or qualified target or value resolves to the occurrence it names. |
 | `SET p TO ADDRESS OF x \| NULL \| q` | A POINTER target: the address — x's region register `BINOP +` its offset, 0 for NULL, or q's contents — written as the addressing mode's binary (`INT_TO_BINARY_BYTES`, signed, 4 bytes under LP(32), 8 under LP(64)). |
 | `SET ADDRESS OF lk TO …` | A LINKAGE 01 or 77 item only: its region register becomes the address and its shift moves its static start there (`STORE_VAR` into its binding variables, then `LOAD_VAR` into its binding registers, so every later access follows). A subordinate item is rejected at lowering. |

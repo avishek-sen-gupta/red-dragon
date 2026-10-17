@@ -174,6 +174,9 @@ public final class DataFieldSerializer {
         if (isAllValue(group)) {
             obj.addProperty("value_is_all", true);
         }
+        if (isNumericValue(group)) {
+            obj.addProperty("value_is_numeric", true);
+        }
 
         JsonArray valuesArray = extractAllValues(group);
         if (valuesArray.size() > 0) {
@@ -420,6 +423,23 @@ public final class DataFieldSerializer {
         return group.getValueClause() != null
                 && !group.getValueClause().getValueIntervals().isEmpty()
                 && isAllLiteral(fromLiteral(group.getValueClause().getValueIntervals().get(0)));
+    }
+
+    /**
+     * True when the item's VALUE is a numeric literal: an edited item edits a
+     * numeric VALUE as a MOVE would, but stores a nonnumeric one verbatim.
+     * The figurative ZERO is not a numeric literal.
+     */
+    private static boolean isNumericValue(DataDescriptionEntryGroup group) {
+        if (group.getValueClause() == null
+                || group.getValueClause().getValueIntervals().isEmpty()) {
+            return false;
+        }
+        CobolParser.LiteralContext lit =
+                fromLiteral(group.getValueClause().getValueIntervals().get(0));
+        CobolParser.NumericLiteralContext numeric =
+                lit == null ? null : unwrapAll(lit).numericLiteral();
+        return numeric != null && numeric.ZERO() == null;
     }
 
     /**

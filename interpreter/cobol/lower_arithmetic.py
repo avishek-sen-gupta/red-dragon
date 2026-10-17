@@ -1818,8 +1818,8 @@ def lower_initialize(
 ) -> None:
     """INITIALIZE field1 field2 — reset to type-appropriate defaults.
 
-    For group items, each elementary (leaf) child is reset with the
-    type-appropriate default: spaces for ALPHANUMERIC, zeros for numeric.
+    Each elementary (leaf) item receives SPACES (character categories) or ZERO
+    (numeric and numeric-edited) as a MOVE would, so an edited item is edited.
     """
     span = stmt.span
     for operand in stmt.operands:
@@ -1834,11 +1834,11 @@ def lower_initialize(
                 leaf_fl, region_reg, region, materialised, span=span
             )
             td = leaf_fl.type_descriptor
-            default = " " * td.total_digits if td.holds_characters else "0"
-            ctx.emit_field_encode(
+            default = " " * td.total_digits if td.holds_characters else 0
+            ctx.emit_encode_and_write(
                 region_reg,
                 leaf_fl,
-                default,
+                ctx.const_to_reg(default, span=span),
                 leaf_ref.offset_reg,
                 extent=leaf_ref.extent,
                 span=span,
