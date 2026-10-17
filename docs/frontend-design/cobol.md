@@ -88,7 +88,7 @@ A level-88 condition-name is indexed with its parent qualified by every enclosin
 
 ### Variable-length items (OCCURS DEPENDING ON)
 
-Storage is allocated at the table's maximum. An unsubscripted reference to an item that ends in an OCCURS DEPENDING ON table (`DataLayout.odo_tail`) is as long as the object's current value says: the maximum less the inactive occurrences. Every read of it (MOVE and STRING senders, comparisons, INSPECT, UNSTRING, DISPLAY) takes that many characters. LENGTH OF it (in MOVE, arithmetic expressions and reference-modification bounds) and FUNCTION LENGTH of it are that length. As a receiver it is written over its current length and the bytes past it are kept, unless it contains its own ODO object, in which case it receives at its maximum length.
+Storage is allocated at the table's maximum. The bridge carries the DEPENDING ON object as a qualified reference (`CobolField.occurs_depending_on`, a `RefModOperand`), resolved by `qualified_matches` like any other operand. An unsubscripted reference to an item that ends in an OCCURS DEPENDING ON table (`DataLayout.odo_tail`) is as long as the object's current value says: the maximum less the inactive occurrences. Every read of it (MOVE and STRING senders, comparisons, INSPECT, UNSTRING, DISPLAY) takes that many characters. LENGTH OF it (in MOVE, arithmetic expressions and reference-modification bounds) and FUNCTION LENGTH of it are that length. As a receiver it is written over its current length and the bytes past it are kept, unless it contains its own ODO object, in which case it receives at its maximum length.
 
 ### PIC-Driven Encoding
 

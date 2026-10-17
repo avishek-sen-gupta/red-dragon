@@ -1,6 +1,7 @@
 """Tests for finding the OCCURS DEPENDING ON table a data item ends with."""
 
 from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
+from cobol_asg.ref_mod import RefModOperand
 from interpreter.cobol.data_layout import DataLayout, FieldLayout
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.odo_tail import NO_ODO_TAIL, OdoTail
@@ -19,7 +20,7 @@ def _leaf(
         byte_length=length * max(occurs, 1),
         occurs_count=occurs,
         element_size=length,
-        occurs_depending_on=depending_on,
+        occurs_depending_on=RefModOperand(name=depending_on),
     )
 
 
@@ -34,13 +35,13 @@ def test_odo_tail_is_found_in_leaves_nested_groups_and_the_table_itself():
         total_bytes=15,
         occurs_count=5,
         element_size=3,
-        occurs_depending_on="N",
+        occurs_depending_on=RefModOperand(name="N"),
     )
     unsized_group_table = DataLayout(
         fields={"A": _leaf("A", 3)},
         total_bytes=12,
         occurs_count=4,
-        occurs_depending_on="M",
+        occurs_depending_on=RefModOperand(name="M"),
     )
     nested = DataLayout(
         fields={"H": _leaf("H", 2)},
@@ -55,9 +56,9 @@ def test_odo_tail_is_found_in_leaves_nested_groups_and_the_table_itself():
         nested.odo_tail(),
         fixed.odo_tail(),
     ] == [
-        OdoTail("CNT", 2, 4),
-        OdoTail("N", 3, 5),
-        OdoTail("M", 3, 4),
-        OdoTail("N", 3, 5),
+        OdoTail(RefModOperand(name="CNT"), 2, 4),
+        OdoTail(RefModOperand(name="N"), 3, 5),
+        OdoTail(RefModOperand(name="M"), 3, 4),
+        OdoTail(RefModOperand(name="N"), 3, 5),
         NO_ODO_TAIL,
     ]

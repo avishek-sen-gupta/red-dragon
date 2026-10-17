@@ -218,9 +218,9 @@ public final class DataFieldSerializer {
             obj.addProperty("occurs_min", occursMin);
         }
 
-        String dependingOn = extractOccursDependingOn(group);
-        if (!dependingOn.isEmpty()) {
-            obj.addProperty("occurs_depending_on", dependingOn);
+        JsonObject dependingOn = extractOccursDependingOn(group);
+        if (dependingOn != null) {
+            obj.add("occurs_depending_on", dependingOn);
         }
 
         JsonObject signObj = extractSign(group);
@@ -872,22 +872,24 @@ public final class DataFieldSerializer {
     }
 
     /**
-     * Extracts the DEPENDING ON field name from an OCCURS clause.
-     * Returns empty string if no DEPENDING ON clause is present.
+     * Extracts the DEPENDING ON object of an OCCURS clause as a structured
+     * reference, OF/IN qualifiers included. Returns null if no DEPENDING ON
+     * clause is present.
      */
-    private static String extractOccursDependingOn(DataDescriptionEntryGroup group) {
+    private static JsonObject extractOccursDependingOn(DataDescriptionEntryGroup group) {
         try {
             List<OccursClause> occursClauses = group.getOccursClauses();
             if (occursClauses != null && !occursClauses.isEmpty()) {
                 OccursClause clause = occursClauses.get(0);
                 if (clause.getOccursDepending() != null
                         && clause.getOccursDepending().getDependingOnCall() != null) {
-                    return clause.getOccursDepending().getDependingOnCall().getName();
+                    return StatementSerializer.serializeRef(
+                            clause.getOccursDepending().getDependingOnCall());
                 }
             }
         } catch (Exception e) {
             LOG.fine("Could not extract DEPENDING ON for " + group.getName() + ": " + e.getMessage());
         }
-        return "";
+        return null;
     }
 }

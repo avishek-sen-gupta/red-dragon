@@ -15,7 +15,7 @@ from dataclasses import dataclass, field, replace
 from itertools import accumulate, chain, product
 from typing import TypeVar
 
-from cobol_asg.asg_types import CobolField
+from cobol_asg.asg_types import NO_ODO_OBJECT, CobolField
 from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from cobol_asg.condition_name import ConditionName, ConditionValue
 from cobol_asg.index_types import INDEX_ITEM
@@ -92,7 +92,7 @@ class FieldLayout:
     sign_separate: bool = False
     sign_leading: bool = False
     justified_right: bool = False
-    occurs_depending_on: str = ""
+    occurs_depending_on: RefModOperand = NO_ODO_OBJECT
     occurs_min: int = 0
     renames_from: str = ""
     renames_thru: str = ""
@@ -164,7 +164,7 @@ class DataLayout:
     span: SourceSpan | None = None
     value: str = ""
     value_is_figurative: bool = False
-    occurs_depending_on: str = ""
+    occurs_depending_on: RefModOperand = NO_ODO_OBJECT
     renames: dict[str, FieldLayout] = field(default_factory=dict)
     redefines: str = ""
     filler: bool = False
@@ -296,13 +296,13 @@ class DataLayout:
         """The OCCURS DEPENDING ON table this item ends with, or NO_ODO_TAIL."""
         return next(
             chain(
-                (self._own_odo_tail(),) if self.occurs_depending_on else (),
+                (self._own_odo_tail(),) if self.occurs_depending_on.name else (),
                 (
                     OdoTail(
                         leaf.occurs_depending_on, leaf.element_size, leaf.occurs_count
                     )
                     for leaf in self.fields.values()
-                    if leaf.occurs_depending_on
+                    if leaf.occurs_depending_on.name
                 ),
                 (
                     tail
