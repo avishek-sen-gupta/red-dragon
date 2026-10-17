@@ -259,14 +259,14 @@ def _emit_accept_call(ctx: EmitContext, stmt: AcceptStatement, length: int) -> R
     return result_reg
 
 
-def _record_length(
+def _record_area(
     ctx: EmitContext, filename: str, materialised: MaterialisedSectionedLayout
-) -> int:
+) -> tuple[FieldLayout, ...]:
     rec_name = _select_to_record(ctx).get(filename.upper(), "")
     if not (rec_name and materialised.has_field(rec_name)):
-        return 0
+        return ()
     fl, _ = materialised.resolve(rec_name)
-    return fl.byte_length
+    return (fl,)
 
 
 def _declared_key(
@@ -279,12 +279,15 @@ def _declared_key(
 
 
 def _prime_key_extent(
-    materialised: MaterialisedSectionedLayout, entry: FileControlEntry
+    record: Sequence[FieldLayout],
+    materialised: MaterialisedSectionedLayout,
+    entry: FileControlEntry,
 ) -> tuple[int, int]:
     return next(
         (
-            (fl.offset, fl.byte_length)
-            for fl in _declared_key(materialised, entry.record_key)
+            (key.offset - area.offset, key.byte_length)
+            for area in record
+            for key in _declared_key(materialised, entry.record_key)
         ),
         (0, 0),
     )
@@ -311,11 +314,12 @@ def _open_arguments(
     materialised: MaterialisedSectionedLayout,
 ) -> tuple[str | int, ...]:
     entry = _file_entries(ctx).get(filename, FileControlEntry(file_name=filename))
-    key_offset, key_length = _prime_key_extent(materialised, entry)
+    record = _record_area(ctx, filename, materialised)
+    key_offset, key_length = _prime_key_extent(record, materialised, entry)
     return (
         filename,
         mode.value,
-        _record_length(ctx, filename, materialised),
+        next((area.byte_length for area in record), 0),
         entry.organization.value,
         key_offset,
         key_length,
