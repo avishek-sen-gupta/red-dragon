@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import math
 import struct
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import UTC
 from types import MappingProxyType
 
@@ -898,6 +898,23 @@ def _builtin_is_numeric(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     else:
         result = check.isdigit()
     return BuiltinResult(value=result)
+
+
+_DIGIT_CHARACTERS = frozenset("0123456789")
+
+
+def _builtin_is_digits(args: Sequence[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL ``IS NUMERIC`` class test for an alphanumeric operand.
+
+    Args: [value: str]
+    Returns: bool — True when the value is non-empty and every character is 0-9.
+    """
+    if len(args) < 1 or _is_symbolic(args[0].value):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    value = args[0].value
+    if not isinstance(value, str):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=bool(value) and set(value) <= _DIGIT_CHARACTERS)
 
 
 def _builtin_is_alphabetic(args: list[TypedValue], vm: VMState) -> BuiltinResult:
@@ -1863,6 +1880,7 @@ BYTE_BUILTINS: Mapping[FuncName, Builtin] = MappingProxyType(
         FuncName(BuiltinName.TRIM): _builtin_cobol_trim,
         FuncName(BuiltinName.CURRENT_DATE): _builtin_current_date,
         FuncName(BuiltinName.IS_NUMERIC): _builtin_is_numeric,
+        FuncName(BuiltinName.IS_DIGITS): _builtin_is_digits,
         FuncName(BuiltinName.IS_ALPHABETIC): _builtin_is_alphabetic,
         FuncName(BuiltinName.IS_ALPHABETIC_LOWER): _builtin_is_alphabetic_lower,
         FuncName(BuiltinName.IS_ALPHABETIC_UPPER): _builtin_is_alphabetic_upper,

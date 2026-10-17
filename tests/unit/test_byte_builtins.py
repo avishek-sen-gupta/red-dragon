@@ -41,6 +41,7 @@ from interpreter.cobol.byte_builtins import (
     _builtin_is_alphabetic,
     _builtin_is_alphabetic_lower,
     _builtin_is_alphabetic_upper,
+    _builtin_is_digits,
     _builtin_is_numeric,
     _builtin_length,
     _builtin_list_concat,
@@ -453,6 +454,7 @@ class TestByteBuiltinsRegistration:
             "__cobol_trim",
             "__current_date",
             "__is_numeric",
+            "__is_digits",
             "__is_alphabetic",
             "__is_alphabetic_lower",
             "__is_alphabetic_upper",
@@ -1793,6 +1795,24 @@ class TestCurrentDate:
 
     def test_registered_in_builtins(self):
         assert FuncName(BuiltinName.CURRENT_DATE) in BYTE_BUILTINS
+
+
+class TestIsDigits:
+    def test_true_only_when_every_character_is_a_digit(self):
+        """ANSI X3.23-1985 VI-6.15.4: an alphanumeric item is NUMERIC only when
+        it consists entirely of the characters 0 through 9."""
+        values = ["01234", "+1234", "-1234", "12.34", "12 ", "", "\u0661"]
+        results = [_builtin_is_digits([typed_from_runtime(v)], None) for v in values]
+        assert [r.value for r in results] == [
+            True,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
+        ]
+        assert FuncName(BuiltinName.IS_DIGITS) in BYTE_BUILTINS
 
 
 class TestIsNumeric:

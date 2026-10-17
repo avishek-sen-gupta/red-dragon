@@ -36,7 +36,7 @@ _PROGRAM = [
     "DATA DIVISION.",
     "WORKING-STORAGE SECTION.",
     "01 WS-R.",
-    *[f"   05 R{n} PIC 9 VALUE 9." for n in range(1, 8)],
+    *[f"   05 R{n} PIC 9 VALUE 9." for n in range(1, 9)],
     "01 C1 PIC 99 VALUE 11.",
     "01 C2 PIC 99 VALUE 12.",
     "01 C3 PIC 99 VALUE 13.",
@@ -58,6 +58,16 @@ _PROGRAM = [
     "01 X4 PIC 99 VALUE 11.",
     "01 X5 PIC 99 VALUE 12.",
     "01 X6 PIC 99 VALUE 7.",
+    "01 FOUR PIC S9 VALUE 4.",
+    "01 QUATROS PIC S9 VALUE +4.",
+    "01 TEN PIC 99 VALUE 10.",
+    "01 D32 PIC S9(4)V99 VALUE 1235.",
+    "   88 E VALUE .01 .11.",
+    "   88 F VALUE 1000 THRU 1280.",
+    "   88 G VALUE 1234 THRU 5678.",
+    "01 CLASS-1 PIC X(5) VALUE '+1234'.",
+    "01 SIGN-1 PIC S9(5) VALUE +9.",
+    "01 SIGN-2 PIC S9(5) VALUE -5.",
     "PROCEDURE DIVISION.",
     "MAIN-PARA.",
     *_if(["C1 = 11 AND C3 > 12 OR C2 < 20 AND C1 > 12"], "R1"),
@@ -67,6 +77,15 @@ _PROGRAM = [
     *_if(["X1 > X2 AND NOT < X3 OR", "X4 OR NOT X5 AND X6"], "R5"),
     *_if(["X1 > X4 OR NOT X5"], "R6"),
     *_if(["X1 > X2 AND NOT < X3"], "R7"),
+    *_if(
+        [
+            "FOUR GREATER THAN 2.5 AND EQUAL TO QUATROS",
+            "AND (FOUR = TEN OR NOT < TEN OR SIGN-1 POSITIVE AND",
+            "(SIGN-2 NOT NEGATIVE OR CLASS-1 NOT NUMERIC))",
+            "AND NOT OFF-SW-1 OR E AND F OR NOT G",
+        ],
+        "R8",
+    ),
     "    STOP RUN.",
 ]
 
@@ -79,7 +98,7 @@ class TestCombinedConditions:
         relational operator, a NOT before an operator is part of it, and a NOT
         before a bare operand negates that one relation."""
         vm = run_cobol(_PROGRAM, max_steps=5000)
-        assert bytes(first_region(vm)[0:7]).decode("cp037") == "1110110"
+        assert bytes(first_region(vm)[0:8]).decode("cp037") == "11101101"
 
     def test_bridge_groups_or_of_and_runs_with_abbreviation_subjects(self):
         source = to_fixed(_PROGRAM).encode()

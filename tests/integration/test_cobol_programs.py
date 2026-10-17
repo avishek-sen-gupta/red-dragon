@@ -7340,6 +7340,38 @@ class TestClassConditions:
         assert _decode_zoned_unsigned(region, 2, 1) == 1
 
     @covers(CobolFeature.CLASS_CONDITION, CobolFeature.IF_ELSE)
+    def test_numeric_alphanumeric_item_is_digits_only(self):
+        """ANSI X3.23-1985 VI-6.15.4: an alphanumeric item is NUMERIC only when
+        every character is 0 through 9, so a sign or a point makes it not
+        numeric; a signed numeric item with a negative value stays NUMERIC."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-CLSDIG.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R.",
+                "   05 WS-R1 PIC 9 VALUE 9.",
+                "   05 WS-R2 PIC 9 VALUE 9.",
+                "   05 WS-R3 PIC 9 VALUE 9.",
+                "   05 WS-R4 PIC 9 VALUE 9.",
+                "01 WS-A PIC X(5) VALUE '+1234'.",
+                "01 WS-B PIC X(5) VALUE '12.34'.",
+                "01 WS-C PIC X(5) VALUE '01234'.",
+                "01 WS-S PIC S9(3) VALUE -12.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    IF WS-A IS NUMERIC MOVE 1 TO WS-R1 ELSE MOVE 0 TO WS-R1.",
+                "    IF WS-B IS NUMERIC MOVE 1 TO WS-R2 ELSE MOVE 0 TO WS-R2.",
+                "    IF WS-C IS NUMERIC MOVE 1 TO WS-R3 ELSE MOVE 0 TO WS-R3.",
+                "    IF WS-S IS NUMERIC MOVE 1 TO WS-R4 ELSE MOVE 0 TO WS-R4.",
+                "    STOP RUN.",
+            ],
+            max_steps=2000,
+        )
+        assert bytes(_first_region(vm)[0:4]).decode("cp037") == "0011"
+
+    @covers(CobolFeature.CLASS_CONDITION, CobolFeature.IF_ELSE)
     def test_alphabetic_true_for_letters(self):
         """WS-A = 'AB' IS ALPHABETIC → TRUE → WS-R == 1."""
         vm = _run_cobol(

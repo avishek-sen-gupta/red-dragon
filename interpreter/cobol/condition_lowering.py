@@ -733,14 +733,20 @@ def _lower_class_condition(
     An unknown class never matches (rather than silently evaluating TRUE).
     """
     class_name = str(node.get("class", "")).upper()
-    builtin = _CLASS_BUILTIN.get(class_name)
+    operand = node.get("operand", {})
+    builtin = (
+        BuiltinName.IS_DIGITS
+        if class_name == "NUMERIC"
+        and _is_nonnumeric_operand(ctx, operand, materialised, span=span)
+        else _CLASS_BUILTIN.get(class_name)
+    )
     if builtin is None:
         logger.warning("unknown class condition %r — never matching", class_name)
         result = ctx.fresh_reg()
         ctx.emit_inst(Const.bool_(result, False), span=span)
         return result
 
-    value_reg = _lower_expr_dict(ctx, node.get("operand", {}), materialised, span=span)
+    value_reg = _lower_expr_dict(ctx, operand, materialised, span=span)
     value_str_reg = ctx.emit_to_string(value_reg, span=span)
     result = ctx.fresh_reg()
     ctx.emit_inst(
