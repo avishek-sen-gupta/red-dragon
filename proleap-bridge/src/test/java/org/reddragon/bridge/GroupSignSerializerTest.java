@@ -33,17 +33,11 @@ public class GroupSignSerializerTest {
         assertEquals("{\"position\":\"TRAILING\",\"separate\":false}", sign(asg, "C"));
         assertEquals("", sign(asg, "D"));
         assertEquals("", sign(asg, "E"));
-        assertEquals(3, offset(asg, "C"));
-        assertEquals(7, offset(asg, "E"));
     }
 
     private String sign(JsonObject asg, String name) {
         JsonObject field = findField(asg.getAsJsonArray("data_fields"), name);
         return field.has("sign") ? field.get("sign").toString() : "";
-    }
-
-    private int offset(JsonObject asg, String name) {
-        return findField(asg.getAsJsonArray("data_fields"), name).get("offset").getAsInt();
     }
 
     private JsonObject serializeFixture(String fixtureName) throws Exception {

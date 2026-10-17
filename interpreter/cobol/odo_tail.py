@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from cobol_asg.asg_types import NO_ODO_OBJECT
+from cobol_asg.cobol_field import NO_ODO_OBJECT
 from cobol_asg.ref_mod import RefModOperand
 
 

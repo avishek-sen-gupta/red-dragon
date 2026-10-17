@@ -432,16 +432,14 @@ public final class AsgSerializer {
         if (fileSection != null) {
             // Flatten every FD's record entries into one list, tagging each
             // 01-level root entry with its FD (SELECT) name so the Python side
-            // can map record names back to file names. Each FD's records share
-            // one record area; the FDs' areas follow each other.
+            // can map record names back to file names and group each FD's
+            // records.
             JsonArray allFields = new JsonArray();
-            int areaBase = 0;
             for (FileDescriptionEntry fd : fileSection.getFileDescriptionEntries()) {
                 String fdName = fd.getName();
                 List<DataDescriptionEntry> fdRoots =
                         new ArrayList<>(fd.getRootDataDescriptionEntries());
-                JsonArray fdFields = DataFieldSerializer.serializeRecordArea(fdRoots, areaBase);
-                areaBase += DataFieldSerializer.recordAreaLength(fdRoots);
+                JsonArray fdFields = DataFieldSerializer.serializeRecordArea(fdRoots);
                 for (int i = 0; i < fdFields.size(); i++) {
                     fdFields.get(i).getAsJsonObject().addProperty("fd_name", fdName);
                 }

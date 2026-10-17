@@ -166,7 +166,7 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 | `SET ADDRESS OF lk TO …` | A LINKAGE 01 or 77 item only: its region register becomes the address and its shift moves its static start there (`STORE_VAR` into its binding variables, then `LOAD_VAR` into its binding registers, so every later access follows). A subordinate item is rejected at lowering. |
 | `SET p UP/DOWN BY n` | A POINTER target: decode → `BINOP +/-` n bytes → write the address back. |
 | `ADDRESS OF x` in a condition | x's region register `BINOP +` its offset; NULL is 0, so `ADDRESS OF lk = NULL` tests for an OMITTED or unsupplied parameter. |
-| `USAGE POINTER` | A signed binary of the addressing mode's width; the `LP` option given to `compile_cobol` sets it, and reaches the bridge's offsets as `-pointer-size`. |
+| `USAGE POINTER` | A signed binary of the addressing mode's width; the `LP` option given to `compile_cobol` sets it, and the ASG reader lays the item out with that width. |
 | `USAGE INDEX` | An unsigned fullword binary holding an occurrence number, like an `INDEXED BY` index; `SET` moves one into and out of it. A USAGE written on a group applies to every elementary item in it (the bridge resolves the nearest enclosing USAGE). |
 
 ### String Operations (3 types)
@@ -216,7 +216,7 @@ Each file verb's status is `__cobol_io_status(result, program)`. A sequential RE
 
 I/O statements dispatch to an injectable `CobolIOProvider` (ABC in `io_provider.py`). `NullIOProvider` returns `UNCOMPUTABLE` (symbolic fallthrough). `StubIOProvider` returns queued test data for concrete execution without real files or console. Provider is injected via `VMConfig(io_provider=stub)`.
 
-Every 01 under one FD starts at that FD's record area (an implicit redefinition), so a MOVE to one record is what a WRITE of another record of the same file sends. Each FD has its own area, as long as its largest record; the bridge places the areas one after another in the FILE region (red-dragon-sl30.31).
+Every 01 under one FD starts at that FD's record area (an implicit redefinition), so a MOVE to one record is what a WRITE of another record of the same file sends. Each FD has its own area, as long as its largest record; the ASG reader places the areas one after another in the FILE region (red-dragon-sl30.31). The bridge emits no offsets: `cobol_asg/storage_layout.py` computes every item's offset and OCCURS element size from its picture and usage (ADR-188).
 
 Each FD's `RECORDING MODE` and `RECORD` clause (`CONTAINS n`, `CONTAINS m TO n`, `IS VARYING [FROM m] [TO n] [DEPENDING ON x]`) reach `CobolASG.file_descriptions` as `FileDescription` values, for an I/O provider to derive the file's record format from. A `WRITE` or `REWRITE` hands the provider the record at its own length: the RECORD VARYING DEPENDING ON item's value in bytes of the record area, else the named record's length; after a successful `READ` the DEPENDING ON item is set to the length of the record read. `RealFileIOProvider` stores a variable sequential file as records behind 4-byte record descriptor words and a variable relative file as slots of 4 + maximum bytes led by one; a sequential `REWRITE` of another length, and a `WRITE` or `REWRITE` of a variable record shorter than the smallest or longer than the largest, give 44 (ADR-187). A DEPENDING ON value past the record area releases one byte more than the area, so the provider sees the record is too long.
 

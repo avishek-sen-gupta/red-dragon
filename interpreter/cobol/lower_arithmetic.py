@@ -11,7 +11,7 @@ from functools import partial, reduce
 from itertools import chain, product
 
 from cobol_asg.edit_picture import de_edit_plan
-from cobol_asg.asg_types import NO_ODO_OBJECT
+from cobol_asg.cobol_field import NO_ODO_OBJECT
 from cobol_asg.cobol_expression import (
     AllSubscriptNode,
     ExprNode,
