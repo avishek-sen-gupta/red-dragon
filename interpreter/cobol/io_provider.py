@@ -59,6 +59,9 @@ _COBOL_IO_DISPATCH: dict[FuncName, str] = {
     FuncName("__cobol_file_open_mode"): "_open_mode",
     FuncName("__cobol_switch_status"): "_switch_status",
     FuncName("__cobol_set_switch"): "_set_switch",
+    FuncName("__cobol_sort_using"): "_sort_using",
+    FuncName("__cobol_sort_giving"): "_sort_giving",
+    FuncName("__cobol_sort_file"): "_sort_file",
 }
 
 
@@ -115,6 +118,21 @@ class CobolIOProvider(ABC):
     def _set_switch(self, environment_name: str, status: str) -> IOResult:
         """SET mnemonic-name TO ON|OFF. A provider that keeps no switch state
         ignores it."""
+        return IOResult("00", None)
+
+    def _sort_using(self, sort_file: str, filename: str, program: str) -> IOResult:
+        return IOResult("00", None)
+
+    def _sort_giving(self, sort_file: str, filename: str, program: str) -> IOResult:
+        return IOResult("00", None)
+
+    def _sort_file(
+        self,
+        sort_file: str,
+        record_length: int,
+        weights: str,
+        *keys_then_program: int | str,
+    ) -> IOResult:
         return IOResult("00", None)
 
     def _accept_area(

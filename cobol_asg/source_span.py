@@ -14,6 +14,7 @@ what the bridge has always emitted.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 
@@ -27,7 +28,7 @@ class SourceSpan:
     col_end: int
 
     @classmethod
-    def from_dict(cls, data: dict) -> SourceSpan | None:
+    def from_dict(cls, data: Mapping) -> SourceSpan | None:
         """Read a span from a bridge JSON object, or None if it carries no position.
 
         The bridge omits all four keys together when the underlying ANTLR

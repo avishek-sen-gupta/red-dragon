@@ -49,6 +49,7 @@ import io.proleap.cobol.asg.metamodel.procedure.inspect.ReplacingAllLeading;
 import io.proleap.cobol.asg.metamodel.procedure.inspect.ReplacingAllLeadings;
 import io.proleap.cobol.asg.metamodel.procedure.open.OpenStatement;
 import io.proleap.cobol.asg.metamodel.procedure.read.ReadStatement;
+import io.proleap.cobol.asg.metamodel.procedure.sort.SortStatement;
 import io.proleap.cobol.asg.metamodel.procedure.search.SearchStatement;
 import io.proleap.cobol.asg.metamodel.procedure.alter.AlterStatement;
 import io.proleap.cobol.asg.metamodel.procedure.alter.ProceedTo;
@@ -292,6 +293,7 @@ public final class StatementSerializer {
         if (stmtType == StatementTypeEnum.EXEC_CICS) return serializeExecCics((ExecCicsStatement) stmt);
         if (stmtType == StatementTypeEnum.EXEC_SQL) return serializeExecSql((ExecSqlStatement) stmt);
         if (stmtType == StatementTypeEnum.XML_GENERATE) return serializeXmlGenerate((XmlGenerateStatement) stmt);
+        if (stmtType == StatementTypeEnum.SORT) return SortSerializer.serializeSort((SortStatement) stmt);
 
         return serializeUnknown(stmtType);
     }

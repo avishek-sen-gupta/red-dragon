@@ -41,6 +41,7 @@ from cobol_asg.ref_mod import (
     ref_mod_expr_to_dict,
 )
 from cobol_asg.set_operand import SetOperand, set_operand_from_dict
+from cobol_asg.sort_key import SortKey
 from cobol_asg.source_span import SourceSpan
 from cobol_asg.unstring_delimiter import UnstringDelimiter
 from cobol_asg.unstring_receiver import UnstringReceiver
@@ -136,6 +137,7 @@ CobolStatementType = Union[
     "StartStatement",
     "DeleteStatement",
     "XmlGenerateStatement",
+    "SortStatement",
 ]
 
 
@@ -1833,6 +1835,40 @@ class DeleteStatement:
 
 
 @dataclass(frozen=True)
+class SortStatement:
+    """SORT file ON ASCENDING|DESCENDING KEY k ... USING f ... GIVING g ...."""
+
+    file_name: str
+    keys: tuple[SortKey, ...]
+    using: tuple[str, ...]
+    giving: tuple[str, ...]
+    span: SourceSpan | None
+
+    @classmethod
+    def from_dict(cls, data: Mapping) -> SortStatement:
+        return cls(
+            file_name=data["file_name"],
+            keys=tuple(SortKey.from_dict(k) for k in data["keys"]),
+            using=tuple(data["using"]),
+            giving=tuple(data["giving"]),
+            span=SourceSpan.from_dict(data),
+        )
+
+    def to_dict(self) -> dict:
+        result: dict = {
+            "type": "SORT",
+            "file_name": self.file_name,
+            "keys": [k.to_dict() for k in self.keys],
+            "using": list(self.using),
+            "giving": list(self.giving),
+        }
+        match self.span:
+            case SourceSpan() as span:
+                span.write_into(result)
+        return result
+
+
+@dataclass(frozen=True)
 class XmlGenerateStatement:
     """XML GENERATE xml-document FROM record [COUNT IN n] [ON EXCEPTION ...].
 
@@ -2039,6 +2075,7 @@ _DISPATCH_TABLE: dict[str, type] = {
     "START": StartStatement,
     "DELETE": DeleteStatement,
     "XML_GENERATE": XmlGenerateStatement,
+    "SORT": SortStatement,
 }
 
 

@@ -134,6 +134,7 @@ class CobolFeature(Enum):
     REWRITE = "REWRITE record file record update statements"
     START = "START file KEY relop field file positioning statements"
     DELETE_RECORD = "DELETE file RECORD file record deletion statements"
+    SORT = "SORT file ON ASCENDING/DESCENDING KEY ... USING/GIVING sort statements"
 
     # ---------------------------------------------------------------------------
     # Data Division — PIC clause and types
