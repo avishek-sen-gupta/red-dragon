@@ -11,6 +11,7 @@ from types import MappingProxyType
 
 from cobol_asg.cobol_statements import FileControlEntry
 from cobol_asg.file_enums import FileOrganization, OpenMode
+from cobol_asg.switch_status import SwitchStatus
 from interpreter.cobol.access_result import AccessCondition, AccessResult
 from interpreter.cobol.file_drivers import (
     FileOrganizationDriver,
@@ -69,6 +70,8 @@ class RealFileIOProvider(CobolIOProvider):
         path_overrides: Test hook — takes precedence over all other resolution.
         system_input: The system input device's fixed-length records, which
             ACCEPT reads in order.
+        switches: The run's implementor switch settings by environment name;
+            a switch not named is OFF.
     """
 
     def __init__(
@@ -77,9 +80,13 @@ class RealFileIOProvider(CobolIOProvider):
         file_control: Sequence[FileControlEntry] = (),
         path_overrides: Mapping[str, Path] = MappingProxyType({}),
         system_input: Sequence[str] = (),
+        switches: Mapping[str, SwitchStatus] = MappingProxyType({}),
     ) -> None:
         self._base_dir = base_dir
         self._system_input: Iterator[str] = iter(system_input)
+        self._switches: dict[str, SwitchStatus] = {
+            name.upper(): status for name, status in switches.items()
+        }
         self._fce: dict[str, FileControlEntry] = {e.file_name: e for e in file_control}
         self._overrides: Mapping[str, Path] = path_overrides
         self._drivers: dict[str, FileOrganizationDriver] = {}
@@ -104,6 +111,13 @@ class RealFileIOProvider(CobolIOProvider):
             iter(self._overridden(file_name, assign_to)),
             self._assigned(file_name, assign_to),
         )
+
+    def _switch_status(self, environment_name: str) -> str:
+        return self._switches.get(environment_name.upper(), SwitchStatus.OFF).value
+
+    def _set_switch(self, environment_name: str, status: str) -> IOResult:
+        self._switches[environment_name.upper()] = SwitchStatus(status)
+        return IOResult("00", None)
 
     def _accept(self, from_device: str) -> str | Operators._Uncomputable:
         return next(self._system_input, _UNCOMPUTABLE)

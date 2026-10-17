@@ -203,6 +203,9 @@ class CobolFeature(Enum):
         "OBJECT-COMPUTER PROGRAM COLLATING SEQUENCE naming a SPECIAL-NAMES ALPHABET"
     )
     FIGURATIVE_ALL = "ALL literal figurative constant repeated to the associated item"
+    IMPLEMENTOR_SWITCH = (
+        "SPECIAL-NAMES implementor switches: ON/OFF STATUS conditions, SET TO ON/OFF"
+    )
 
     # ---------------------------------------------------------------------------
     # Expressions and conditions

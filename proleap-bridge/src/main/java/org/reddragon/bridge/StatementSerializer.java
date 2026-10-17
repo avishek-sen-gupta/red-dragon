@@ -1269,12 +1269,13 @@ public final class StatementSerializer {
                 obj.addProperty("set_type", "TO");
                 JsonArray targets = new JsonArray();
                 JsonArray values = new JsonArray();
+                // One value per target: each target takes the value of its own
+                // TO phrase, as in SET A TO 1 B TO 2.
                 for (SetTo setTo : stmt.getSetTos()) {
+                    JsonObject value = setToValueOperand(setTo.getValues().get(0));
                     for (io.proleap.cobol.asg.metamodel.procedure.set.To to : setTo.getTos()) {
                         targets.add(callOperand(to.getToCall()));
-                    }
-                    for (io.proleap.cobol.asg.metamodel.procedure.set.Value val : setTo.getValues()) {
-                        values.add(setValueOperand(val.getValueStmt()));
+                        values.add(value.deepCopy());
                     }
                 }
                 obj.add("targets", targets);
@@ -1345,6 +1346,19 @@ public final class StatementSerializer {
     }
 
     /** A SET value: a reference, ADDRESS OF, a figurative constant (NULL among them) or a literal. */
+    /** A SET ... TO value: ON or OFF for an implementor switch, else the value's operand. */
+    private static JsonObject setToValueOperand(io.proleap.cobol.asg.metamodel.procedure.set.Value val) {
+        io.proleap.cobol.asg.metamodel.procedure.set.Value.ValueType type = val.getValueType();
+        if (type == io.proleap.cobol.asg.metamodel.procedure.set.Value.ValueType.ON
+                || type == io.proleap.cobol.asg.metamodel.procedure.set.Value.ValueType.OFF) {
+            JsonObject status = new JsonObject();
+            status.addProperty("kind", "switch_status");
+            status.addProperty("value", type.name());
+            return status;
+        }
+        return setValueOperand(val.getValueStmt());
+    }
+
     private static JsonObject setValueOperand(ValueStmt vs) {
         if (vs instanceof CallValueStmt && ((CallValueStmt) vs).getCall() != null) {
             return callOperand(((CallValueStmt) vs).getCall());

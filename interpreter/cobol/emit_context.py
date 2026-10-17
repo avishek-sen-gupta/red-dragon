@@ -33,6 +33,7 @@ from interpreter.cobol.alphanumeric import encode_hex_literal, parse_hex_literal
 from interpreter.cobol.cobol_constants import BuiltinName, ByteConstants, CobolEncoding
 from interpreter.cobol.collating_sequences import collating_sequence_of
 from interpreter.cobol.condition_name_index import ConditionNameIndex
+from interpreter.cobol.switch_index import SwitchIndex
 from interpreter.cobol.data_layout import DataItemMatch, DataLayout, FieldLayout
 from interpreter.cobol.field_resolution import ResolvedFieldRef, field_access_extent
 from interpreter.cobol.figurative_constants import FIGURATIVE_ZEROS
@@ -203,6 +204,7 @@ class EmitContext:
         self._extension_strategies = tuple(extension_strategies)
         self._asg: CobolASG = asg
         self.collating_sequence = collating_sequence_of(asg.collating_sequence)
+        self.switches = SwitchIndex(asg.switches)
         self.figuratives = self.collating_sequence.figuratives()
         self._instructions: list[InstructionBase] = []
         self._reg_counter: int = 0

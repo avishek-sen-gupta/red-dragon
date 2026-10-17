@@ -32,6 +32,7 @@ from interpreter.cobol.emit_context import EmitContext, strip_cobol_literal
 from interpreter.cobol.figurative_constants import repeat_to_width
 from interpreter.cobol.pointer_lowering import PointerLowering
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
+from interpreter.cobol.switch_condition import SwitchCondition
 from interpreter.func_name import FuncName
 from interpreter.instructions import Binop, CallFunction, Const
 from interpreter.operator_kind import resolve_binop
@@ -325,6 +326,10 @@ def _lower_condition_node(
                 qualifiers=tuple(node.get("condition_qualifiers", ())),
                 span=span,
             )
+        elif ctx.switches.has_condition(name):
+            inner = _lower_switch_condition(
+                ctx, ctx.switches.condition(name), span=span
+            )
         elif "abbreviation" in node:
             inner = _lower_relation_node(
                 ctx,
@@ -376,6 +381,33 @@ def _lower_condition_node(
             operator=resolve_binop("=="),
             left=Register(str(inner)),
             right=Register(str(ctx.const_to_reg(False, span=span))),
+        ),
+        span=span,
+    )
+    return result
+
+
+def _lower_switch_condition(
+    ctx: EmitContext, condition: SwitchCondition, *, span: SourceSpan | None
+) -> Register:
+    """A switch-status condition: the run's status of the switch, compared with
+    the status the condition-name stands for."""
+    status = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=status,
+            func_name=FuncName("__cobol_switch_status"),
+            args=(ctx.const_to_reg(condition.environment_name, span=span),),
+        ),
+        span=span,
+    )
+    result = ctx.fresh_reg()
+    ctx.emit_inst(
+        Binop(
+            result_reg=result,
+            operator=resolve_binop("=="),
+            left=status,
+            right=ctx.const_to_reg(condition.status.value, span=span),
         ),
         span=span,
     )

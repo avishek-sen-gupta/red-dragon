@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from cobol_asg.switch_status import SwitchStatus
 from interpreter.cobol.ebcdic_table import EbcdicTable
 from interpreter.cobol.real_file_provider import RealFileIOProvider
 
@@ -29,8 +30,11 @@ _INPUT_RECORD_LEN = 80
 _DECK_MARKERS = ("*HEADER,", "*END-OF,")
 _X_CARD_RE = re.compile(r"XXXXX\d{3}")
 _X_CARDS = {
+    "XXXXX051": "SWITCH-1",
+    "XXXXX052": "SWITCH-2",
     "XXXXX081": '"12345678"',
 }
+_SWITCH_SETTINGS = {"SWITCH-1": SwitchStatus.ON, "SWITCH-2": SwitchStatus.OFF}
 
 
 def _with_x_cards(line: str) -> str:
@@ -102,6 +106,7 @@ def make_provider(
         file_control=[],
         path_overrides=overrides,
         system_input=system_input,
+        switches=_SWITCH_SETTINGS,
     )
     return provider, print_path
 

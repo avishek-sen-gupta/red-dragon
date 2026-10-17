@@ -39,6 +39,9 @@ import io.proleap.cobol.asg.metamodel.procedure.use.UseStatement;
 import io.proleap.cobol.asg.metamodel.call.Call;
 
 import java.util.ArrayList;
+import org.antlr.v4.runtime.ParserRuleContext;
+import org.antlr.v4.runtime.tree.ParseTree;
+import org.antlr.v4.runtime.tree.TerminalNode;
 import java.util.Collection;
 import java.util.List;
 import java.util.logging.Logger;
@@ -138,6 +141,7 @@ public final class AsgSerializer {
         SpecialNamesParagraph snp = env.getSpecialNamesParagraph();
         if (snp == null) return result;
         serializeProgramCollatingSequence(env, snp, result);
+        serializeSwitches(snp, result);
         if (snp.getDecimalPointClause() != null) {
             result.addProperty("decimal_point_is_comma", true);
         }
@@ -152,6 +156,52 @@ public final class AsgSerializer {
                     literalText(csc.getPictureSymbolLiteral()));
         }
         return result;
+    }
+
+    /**
+     * Each implementor switch clause ({@code environment-name IS mnemonic-name
+     * ON STATUS IS condition-1 OFF STATUS IS condition-2}) as its environment
+     * name, mnemonic name and the two status condition-names, each empty when
+     * not written. ProLeap's ASG drops these clauses, so they are read from the
+     * parse tree.
+     */
+    private static void serializeSwitches(SpecialNamesParagraph snp, JsonObject result) {
+        if (!(snp.getCtx() instanceof CobolParser.SpecialNamesParagraphContext ctx)) return;
+        JsonArray switches = new JsonArray();
+        for (CobolParser.SpecialNameClauseContext clause : ctx.specialNameClause()) {
+            if (clause.environmentSwitchNameClause() != null) {
+                switches.add(serializeSwitch(clause.environmentSwitchNameClause()));
+            }
+        }
+        if (switches.size() > 0) {
+            result.add("switches", switches);
+        }
+    }
+
+    private static JsonObject serializeSwitch(CobolParser.EnvironmentSwitchNameClauseContext ctx) {
+        JsonObject sw = new JsonObject();
+        sw.addProperty("environment_name", upperText(ctx.environmentName()));
+        sw.addProperty("mnemonic_name", upperText(ctx.mnemonicName()));
+        sw.addProperty("on_condition", "");
+        sw.addProperty("off_condition", "");
+        CobolParser.EnvironmentSwitchNameSpecialNamesStatusPhraseContext phrase =
+                ctx.environmentSwitchNameSpecialNamesStatusPhrase();
+        if (phrase == null) return sw;
+        String status = "";
+        for (ParseTree child : phrase.children) {
+            if (child instanceof TerminalNode token
+                    && (token.getSymbol().getType() == CobolParser.ON
+                        || token.getSymbol().getType() == CobolParser.OFF)) {
+                status = token.getSymbol().getType() == CobolParser.ON ? "on_condition" : "off_condition";
+            } else if (child instanceof CobolParser.ConditionContext condition) {
+                sw.addProperty(status, condition.getText().toUpperCase());
+            }
+        }
+        return sw;
+    }
+
+    private static String upperText(ParserRuleContext ctx) {
+        return ctx == null ? "" : ctx.getText().toUpperCase();
     }
 
     private static boolean hasDecimalPointIsComma(ProgramUnit pu) {

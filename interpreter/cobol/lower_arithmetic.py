@@ -48,6 +48,7 @@ from cobol_asg.ref_mod import (
 )
 from cobol_asg.set_operand import SetOperand
 from cobol_asg.source_span import SourceSpan
+from cobol_asg.switch_status import SwitchStatus
 from cobol_memory.region_id import RegionId
 from cobol_numeric.number import from_literal
 from cobol_numeric.scale import (
@@ -2062,6 +2063,74 @@ def _decode_set_operand(
     )
 
 
+def _set_switch(
+    ctx: EmitContext, stmt: SetStatement, mnemonic_name: str, value: SetOperand
+) -> None:
+    """SET mnemonic-name TO ON|OFF: the switch the mnemonic names takes that
+    status for the rest of the run."""
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=ctx.fresh_reg(),
+            func_name=FuncName("__cobol_set_switch"),
+            args=(
+                ctx.const_to_reg(
+                    ctx.switches.environment_of(mnemonic_name), span=stmt.span
+                ),
+                ctx.const_to_reg(SwitchStatus(value.value).value, span=stmt.span),
+            ),
+        ),
+        span=stmt.span,
+    )
+
+
+def _set_to(
+    ctx: EmitContext,
+    stmt: SetStatement,
+    target: SetOperand,
+    value: SetOperand,
+    materialised: MaterialisedSectionedLayout,
+) -> None:
+    """One target of SET ... TO, with the value its own TO phrase gives it."""
+    target_name = target.text
+    if ctx.switches.has_mnemonic(target_name):
+        _set_switch(ctx, stmt, target_name, value)
+        return
+    if ctx._condition_index.has_condition(target_name):
+        _set_condition_name(ctx, target, value.text, materialised, span=stmt.span)
+        return
+    if not ctx.has_field(target_name, materialised):
+        logger.warning("SET target %s not found in layout", target_name)
+        return
+    _set_data_item(ctx, stmt, target, value, materialised)
+
+
+def _set_data_item(
+    ctx: EmitContext,
+    stmt: SetStatement,
+    target: SetOperand,
+    value: SetOperand,
+    materialised: MaterialisedSectionedLayout,
+) -> None:
+    target_ref, target_rr = _set_operand_ref(ctx, target, materialised, span=stmt.span)
+    # SET A TO B is legal when B is a data item; the value is raw operand text
+    # from the bridge and is never tested for being a name. Untested, it wrote
+    # the two characters "B" — which encodes into a numeric field as 0, so the
+    # symptom is a plausible zero, not a crash.
+    value_str_reg = (
+        _decode_set_operand(ctx, value, materialised, span=stmt.span)
+        if ctx.has_field(value.text, materialised)
+        else ctx.const_to_reg(value.text, span=stmt.span)
+    )
+    ctx.emit_encode_and_write(
+        target_rr,
+        target_ref.fl,
+        value_str_reg,
+        target_ref.offset_reg,
+        extent=target_ref.extent,
+        span=stmt.span,
+    )
+
+
 def lower_set(
     ctx: EmitContext,
     stmt: SetStatement,
@@ -2078,38 +2147,9 @@ def lower_set(
         lower_pointer_set(ctx, stmt, materialised)
         return
     span = stmt.span
-    condition_index = ctx._condition_index
     if stmt.set_type == "TO":
-        value_str = stmt.values[0].text if stmt.values else "0"
-        for target in stmt.targets:
-            target_name = target.text
-            if condition_index.has_condition(target_name):
-                _set_condition_name(ctx, target, value_str, materialised, span=span)
-                continue
-            if not ctx.has_field(target_name, materialised):
-                logger.warning("SET target %s not found in layout", target_name)
-                continue
-            target_ref, target_rr = _set_operand_ref(
-                ctx, target, materialised, span=span
-            )
-            # SET A TO B is legal when B is a data item; stmt.values[0] is raw
-            # operand text from the bridge and is never tested for being a name.
-            # Untested, it wrote the two characters "B" — which encodes into a
-            # numeric field as 0, so the symptom is a plausible zero, not a crash.
-            if ctx.has_field(str(value_str), materialised):
-                value_str_reg = _decode_set_operand(
-                    ctx, stmt.values[0], materialised, span=span
-                )
-            else:
-                value_str_reg = ctx.const_to_reg(str(value_str), span=span)
-            ctx.emit_encode_and_write(
-                target_rr,
-                target_ref.fl,
-                value_str_reg,
-                target_ref.offset_reg,
-                extent=target_ref.extent,
-                span=span,
-            )
+        for target, value in zip(stmt.targets, stmt.values, strict=True):
+            _set_to(ctx, stmt, target, value, materialised)
     elif stmt.set_type == "BY":
         step_val = stmt.values[0].text if stmt.values else "1"
         op = "+" if stmt.by_type == "UP" else "-"

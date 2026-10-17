@@ -18,6 +18,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
+from cobol_asg.switch_status import SwitchStatus
 from interpreter.func_name import FuncName
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.vm import Operators
@@ -53,6 +54,8 @@ _COBOL_IO_DISPATCH: dict[FuncName, str] = {
     FuncName("__cobol_io_status"): "_io_status",
     FuncName("__cobol_io_data"): "_io_data",
     FuncName("__cobol_file_open_mode"): "_open_mode",
+    FuncName("__cobol_switch_status"): "_switch_status",
+    FuncName("__cobol_set_switch"): "_set_switch",
 }
 
 
@@ -96,6 +99,16 @@ class CobolIOProvider(ABC):
     def _open_mode(self, filename: Any, program: str) -> Any:
         """Current OPEN mode of a file ("INPUT"/"OUTPUT"/"I-O"/"EXTEND"), "" if closed."""
         return ""
+
+    def _switch_status(self, environment_name: str) -> str:
+        """An implementor switch's status, "ON" or "OFF": OFF unless supplied, as
+        IBM's UPSI run-time option defaults every switch off."""
+        return SwitchStatus.OFF.value
+
+    def _set_switch(self, environment_name: str, status: str) -> IOResult:
+        """SET mnemonic-name TO ON|OFF. A provider that keeps no switch state
+        ignores it."""
+        return IOResult("00", None)
 
     def _accept_area(
         self, from_device: str, length: int

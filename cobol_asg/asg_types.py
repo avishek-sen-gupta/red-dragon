@@ -21,6 +21,7 @@ from cobol_asg.cobol_statements import (
 )
 from cobol_asg.cobol_types import CobolTypeDescriptor
 from cobol_asg.condition_name import ConditionName, ConditionValue
+from cobol_asg.implementor_switch import ImplementorSwitch
 from cobol_asg.edit_picture import (
     DEFAULT_CURRENCY,
     UnsupportedEditPictureError,
@@ -379,6 +380,7 @@ class CobolASG:
     # OBJECT-COMPUTER PROGRAM COLLATING SEQUENCE: the ALPHABET clause it names,
     # the native sequence when the clause is absent.
     collating_sequence: Alphabet = NATIVE_ALPHABET
+    switches: list[ImplementorSwitch] = field(default_factory=list)
 
     @classmethod
     def from_dict(
@@ -438,36 +440,32 @@ class CobolASG:
                 collating.get("kind", NATIVE_ALPHABET.kind),
                 collating.get("items", []),
             ),
+            switches=[
+                ImplementorSwitch.from_dict(s)
+                for s in data.get("special_names", {}).get("switches", [])
+            ],
         )
 
     def to_dict(self) -> dict:
-        result: dict = {}
-        if self.program_id:
-            result["program_id"] = self.program_id
         special_names = self._special_names_dict()
-        if special_names:
-            result["special_names"] = special_names
-        if self.file_control:
-            result["file_control"] = [e.to_dict() for e in self.file_control]
-        if self.data_fields:
-            result["data_fields"] = [f.to_dict() for f in self.data_fields]
-        if self.linkage_fields:
-            result["linkage_fields"] = [f.to_dict() for f in self.linkage_fields]
-        if self.local_storage_fields:
-            result["local_storage_fields"] = [
-                f.to_dict() for f in self.local_storage_fields
-            ]
-        if self.file_fields:
-            result["file_fields"] = [f.to_dict() for f in self.file_fields]
-        if self.sections:
-            result["sections"] = [s.to_dict() for s in self.sections]
-        if self.paragraphs:
-            result["paragraphs"] = [p.to_dict() for p in self.paragraphs]
-        if self.statements:
-            result["statements"] = [s.to_dict() for s in self.statements]
-        if self.declaratives:
-            result["declaratives"] = [s.to_dict() for s in self.declaratives]
-        return result | self._procedure_using_dict() | self._file_descriptions_dict()
+        listed: dict[str, list[dict]] = {
+            "file_control": [e.to_dict() for e in self.file_control],
+            "data_fields": [f.to_dict() for f in self.data_fields],
+            "linkage_fields": [f.to_dict() for f in self.linkage_fields],
+            "local_storage_fields": [f.to_dict() for f in self.local_storage_fields],
+            "file_fields": [f.to_dict() for f in self.file_fields],
+            "sections": [s.to_dict() for s in self.sections],
+            "paragraphs": [p.to_dict() for p in self.paragraphs],
+            "statements": [s.to_dict() for s in self.statements],
+            "declaratives": [s.to_dict() for s in self.declaratives],
+        }
+        return (
+            ({"program_id": self.program_id} if self.program_id else {})
+            | ({"special_names": special_names} if special_names else {})
+            | {section: items for section, items in listed.items() if items}
+            | self._procedure_using_dict()
+            | self._file_descriptions_dict()
+        )
 
     def _special_names_dict(self) -> dict:
         currency = (
@@ -475,9 +473,12 @@ class CobolASG:
             if self.currency_symbol != DEFAULT_CURRENCY
             else {}
         ) | ({"decimal_point_is_comma": True} if self.decimal_point_is_comma else {})
+        clauses = currency | (
+            {"switches": [s.to_dict() for s in self.switches]} if self.switches else {}
+        )
         if self.collating_sequence == NATIVE_ALPHABET:
-            return currency
-        return currency | {
+            return clauses
+        return clauses | {
             "program_collating_sequence": self.collating_sequence.to_dict()
         }
 
