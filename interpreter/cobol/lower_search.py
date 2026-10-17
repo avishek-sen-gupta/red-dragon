@@ -5,8 +5,10 @@ from __future__ import annotations
 import logging
 
 from cobol_asg.cobol_statements import SearchStatement
+from cobol_asg.ref_mod import RefModOperand
 from interpreter.cobol.condition_lowering import _lower_condition_str
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.cobol.field_resolution import ResolvedFieldRef
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.instructions import (
     Binop,
@@ -32,9 +34,11 @@ logger = logging.getLogger(__name__)
 # order of magnitude above the largest real table.
 _RUNAWAY_GUARD = 4096
 
+_NO_ITEM = RefModOperand(name="")
+
 
 def _table_occurrence_count(
-    table: str, materialised: MaterialisedSectionedLayout
+    table: RefModOperand, materialised: MaterialisedSectionedLayout
 ) -> int | None:
     """Return the OCCURS count for the SEARCHed table.
 
@@ -45,14 +49,15 @@ def _table_occurrence_count(
     EmitContext.resolve_field_ref reaches the layout: MaterialisedSectionedLayout
     .resolve() does the case-insensitive lookup (see data_layout.py's _ci_get).
     """
-    fl, _region_reg = materialised.resolve(table)
+    fl, _region_reg = materialised.resolve(table.name, table.qualifiers)
     return fl.occurs_count or None
 
 
 def _search_index(
     stmt: SearchStatement, materialised: MaterialisedSectionedLayout
-) -> str:
-    """Return the index a SEARCH over its table advances and bounds, or "".
+) -> RefModOperand:
+    """Return the index a SEARCH over its table advances and bounds, or an
+    unnamed operand.
 
     The VARYING operand when it is one of the table's own INDEXED BY names,
     otherwise the table's first INDEXED BY name (ANSI X3.23-1985 VI-6.21.4).
@@ -61,27 +66,28 @@ def _search_index(
     back to the VARYING operand itself, the only item there is to advance.
     """
     index_layout, _region_reg = materialised.indexes
-    if stmt.varying and index_layout.is_index_of(stmt.varying, stmt.table):
+    if stmt.varying.name and index_layout.is_index_of(stmt.varying.name, stmt.table):
         return stmt.varying
-    return index_layout.first_index_for(stmt.table) or stmt.varying
+    first_index = index_layout.first_index_for(stmt.table)
+    return RefModOperand(name=first_index) if first_index else stmt.varying
 
 
-def _companion_of(stmt: SearchStatement, search_index: str) -> str:
+def _companion_of(stmt: SearchStatement, search_index: RefModOperand) -> RefModOperand:
     """The VARYING operand when it is not the search index itself: another
     table's index or a data item, incremented in step with the search index."""
-    if not search_index or stmt.varying.upper() == search_index.upper():
-        return ""
+    if not search_index.name or stmt.varying.name.upper() == search_index.name.upper():
+        return _NO_ITEM
     return stmt.varying
 
 
 def _store_number(
     ctx: EmitContext,
     stmt: SearchStatement,
-    name: str,
+    item: RefModOperand,
     value_reg: Register,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    ref, region_reg = ctx.resolve_field_ref(name, materialised, span=stmt.span)
+    ref, region_reg = _resolve(ctx, stmt, item, materialised)
     ctx.emit_encode_and_write(
         region_reg,
         ref.fl,
@@ -92,16 +98,24 @@ def _store_number(
     )
 
 
+def _resolve(
+    ctx: EmitContext,
+    stmt: SearchStatement,
+    item: RefModOperand,
+    materialised: MaterialisedSectionedLayout,
+) -> tuple[ResolvedFieldRef, Register]:
+    return ctx.resolve_field_ref(
+        item.name, materialised, item.qualifiers, item.subscripts, span=stmt.span
+    )
+
+
 def _decode(
     ctx: EmitContext,
     stmt: SearchStatement,
-    name: str,
+    item: RefModOperand,
     materialised: MaterialisedSectionedLayout,
-    qualifiers: tuple[str, ...] = (),
 ) -> Register:
-    ref, region_reg = ctx.resolve_field_ref(
-        name, materialised, qualifiers, span=stmt.span
-    )
+    ref, region_reg = _resolve(ctx, stmt, item, materialised)
     return ctx.emit_decode_field(
         region_reg, ref.fl, ref.offset_reg, extent=ref.extent, span=stmt.span
     )
@@ -110,7 +124,7 @@ def _decode(
 def _advance(
     ctx: EmitContext,
     stmt: SearchStatement,
-    name: str,
+    item: RefModOperand,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     incremented = ctx.fresh_reg()
@@ -118,12 +132,12 @@ def _advance(
         Binop(
             result_reg=incremented,
             operator=resolve_binop("+"),
-            left=_decode(ctx, stmt, name, materialised),
+            left=_decode(ctx, stmt, item, materialised),
             right=ctx.const_to_reg(1, span=stmt.span),
         ),
         span=stmt.span,
     )
-    _store_number(ctx, stmt, name, incremented, materialised)
+    _store_number(ctx, stmt, item, incremented, materialised)
 
 
 def _occurrence_bound(
@@ -134,11 +148,11 @@ def _occurrence_bound(
 ) -> Register:
     """The highest occurrence the search may reach: the OCCURS DEPENDING ON
     object's current value for a variable table, else the OCCURS count."""
-    depending_on = materialised.resolve(stmt.table)[0].occurs_depending_on
+    depending_on = materialised.resolve(stmt.table.name, stmt.table.qualifiers)[
+        0
+    ].occurs_depending_on
     if depending_on.name and ctx.has_field(depending_on.name, materialised):
-        return _decode(
-            ctx, stmt, depending_on.name, materialised, depending_on.qualifiers
-        )
+        return _decode(ctx, stmt, depending_on, materialised)
     return ctx.const_to_reg(occurs, span=stmt.span)
 
 
@@ -155,17 +169,19 @@ def lower_search(
     increment_label = ctx.fresh_label("search_incr")
 
     candidate = _search_index(stmt, materialised)
-    advance_name = (
-        candidate if candidate and ctx.has_field(candidate, materialised) else ""
+    advance = (
+        candidate
+        if candidate.name and ctx.has_field(candidate.name, materialised)
+        else _NO_ITEM
     )
-    if not advance_name:
+    if not advance.name:
         logger.warning(
             "SEARCH over %r has no index to advance — the loop cannot progress "
             "(VARYING operand: %s)",
-            stmt.table,
-            repr(stmt.varying) if stmt.varying else "none given",
+            stmt.table.name,
+            repr(stmt.varying.name) if stmt.varying.name else "none given",
         )
-    companion = _companion_of(stmt, advance_name)
+    companion = _companion_of(stmt, advance)
 
     # Real SEARCH terminates when the INDEX VALUE passes the table's occurrence
     # count, and only then runs AT END. The old hard-coded 256 was wrong in both
@@ -187,7 +203,7 @@ def lower_search(
         logger.warning(
             "SEARCH table %r not found in layout — falling back to the runaway "
             "guard; the loop bound is not the table's own length",
-            stmt.table,
+            stmt.table.name,
         )
     else:
         if occurs is None:
@@ -195,12 +211,12 @@ def lower_search(
                 "SEARCH table %r is not a table (no OCCURS clause) — falling "
                 "back to the runaway guard; the loop bound is not the table's "
                 "own length",
-                stmt.table,
+                stmt.table.name,
             )
     bound_limit = occurs if occurs is not None else _RUNAWAY_GUARD
-    bound_index_name = advance_name if occurs is not None else ""
+    bound_index = advance if occurs is not None else _NO_ITEM
 
-    if not bound_index_name:
+    if not bound_index.name:
         counter_var = ctx.fresh_name("__search_ctr")
         zero_reg = ctx.const_to_reg(0, span=span)
         ctx.emit_inst(
@@ -211,17 +227,13 @@ def lower_search(
     else:
         max_reg = _occurrence_bound(ctx, stmt, bound_limit, materialised)
 
-    if stmt.search_all and advance_name:
-        _store_number(
-            ctx, stmt, advance_name, ctx.const_to_reg(1, span=span), materialised
-        )
+    if stmt.search_all and advance.name:
+        _store_number(ctx, stmt, advance, ctx.const_to_reg(1, span=span), materialised)
 
     ctx.emit_inst(Label_(label=loop_label), span=span)
 
-    if bound_index_name:
-        bound_ref, bound_rr = ctx.resolve_field_ref(
-            bound_index_name, materialised, span=span
-        )
+    if bound_index.name:
+        bound_ref, bound_rr = _resolve(ctx, stmt, bound_index, materialised)
         current_reg = ctx.emit_decode_field(
             bound_rr,
             bound_ref.fl,
@@ -283,12 +295,12 @@ def lower_search(
     ctx.emit_inst(Branch(label=increment_label), span=span)
     ctx.emit_inst(Label_(label=increment_label), span=span)
 
-    if advance_name:
-        _advance(ctx, stmt, advance_name, materialised)
-    if companion and ctx.has_field(companion, materialised):
+    if advance.name:
+        _advance(ctx, stmt, advance, materialised)
+    if companion.name and ctx.has_field(companion.name, materialised):
         _advance(ctx, stmt, companion, materialised)
 
-    if not bound_index_name:
+    if not bound_index.name:
         ctr_reg2 = ctx.fresh_reg()
         ctx.emit_inst(
             LoadVar(result_reg=ctr_reg2, name=VarName(counter_var)), span=span
