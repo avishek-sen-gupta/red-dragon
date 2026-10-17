@@ -1937,10 +1937,13 @@ class TestTier2Lowering:
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
-        count_calls = [
-            c for c in calls if c.operands and c.operands[0] == "__cobol_inspect_tally"
+        scan_calls = [
+            c.operands[0]
+            for c in calls
+            if c.operands
+            and c.operands[0] in {"__cobol_inspect_tally", "__string_find"}
         ]
-        assert len(count_calls) == 1
+        assert scan_calls == ["__string_find"]
 
         # Should produce WRITE_REGION for tally target
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
@@ -1980,15 +1983,86 @@ class TestTier2Lowering:
 
         calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
         replace_calls = [
-            c
+            c.operands[0]
             for c in calls
-            if c.operands and c.operands[0] == "__cobol_inspect_replace"
+            if c.operands
+            and c.operands[0] in {"__cobol_inspect_replace", "__string_splice"}
         ]
-        assert len(replace_calls) == 1
+        assert replace_calls == ["__string_splice"]
 
         # Should write back to source field
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
         assert len(writes) >= 2  # initial VALUE + REPLACING write-back
+
+    @covers(
+        CobolFeature.INSPECT_TALLYING,
+        CobolFeature.INSPECT_REPLACING,
+        CobolFeature.INSPECT_CONVERTING,
+    )
+    def test_inspect_scans_lower_to_ir_without_a_scan_builtin(self):
+        fields = [
+            CobolField(
+                name="WS-DATA",
+                level=77,
+                pic="X(10)",
+                usage="DISPLAY",
+                offset=0,
+                value="AABAA",
+            ),
+            CobolField(
+                name="WS-COUNT",
+                level=77,
+                pic="9(3)",
+                usage="DISPLAY",
+                offset=10,
+                value="0",
+            ),
+        ]
+        stmts = [
+            InspectStatement(
+                inspect_type="TALLYING",
+                source=RefModOperand(name="WS-DATA"),
+                tallying_groups=[
+                    TallyingGroup(
+                        target=RefModOperand(name="WS-COUNT"),
+                        patterns=[TallyingFor(mode="CHARACTERS")],
+                    )
+                ],
+            ),
+            InspectStatement(
+                inspect_type="REPLACING",
+                source=RefModOperand(name="WS-DATA"),
+                replacings=[
+                    Replacing(
+                        mode="LEADING",
+                        from_pattern=RefModOperand(name="'A'"),
+                        to_pattern=RefModOperand(name="'B'"),
+                    )
+                ],
+            ),
+            InspectStatement(
+                inspect_type="CONVERTING",
+                source=RefModOperand(name="WS-DATA"),
+                converting_from=RefModOperand(name="'AB'"),
+                converting_to=RefModOperand(name="'XY'"),
+            ),
+        ]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        called = {
+            c.operands[0]
+            for c in _find_opcodes(instructions, Opcode.CALL_FUNCTION)
+            if c.operands
+        }
+        assert (
+            called
+            & {
+                "__cobol_inspect_tally",
+                "__cobol_inspect_replace",
+                "__cobol_inspect_convert",
+            }
+            == set()
+        )
 
 
 class TestSearchLowering:

@@ -54,13 +54,6 @@ from interpreter.cobol.cobol_constants import (
     NibblePosition,
 )
 from interpreter.cobol.ebcdic_table import EbcdicTable
-from interpreter.cobol.inspect_mode import InspectMode
-from interpreter.cobol.inspect_phrase import InspectPhrase
-from interpreter.cobol.inspect_scan import (
-    inspect_convert,
-    inspect_replace,
-    inspect_tally,
-)
 from interpreter.cobol.numeric_builtins import NUMERIC_BUILTINS
 from interpreter.cobol.numeric_class import packed_is_numeric, zoned_is_numeric
 from interpreter.cobol.program_presence import program_present
@@ -542,39 +535,6 @@ def _builtin_cobol_de_edit(args: list[TypedValue], vm: VMState) -> BuiltinResult
     )
 
 
-_INSPECT_PHRASE_ARGS = 6
-
-
-def _inspect_phrases(args: Sequence[TypedValue]) -> tuple[InspectPhrase, ...]:
-    """Phrases given as consecutive (mode, pattern, BY value, AFTER, BEFORE,
-    counter) argument groups."""
-    values = [a.value for a in args]
-    return tuple(
-        InspectPhrase(
-            mode=InspectMode(str(mode)),
-            pattern=str(pattern),
-            replacement=str(replacement),
-            after=str(after),
-            before=str(before),
-            counter=int(counter),
-        )
-        for mode, pattern, replacement, after, before, counter in (
-            values[i : i + _INSPECT_PHRASE_ARGS]
-            for i in range(0, len(values), _INSPECT_PHRASE_ARGS)
-        )
-    )
-
-
-def _builtin_cobol_inspect_tally(args: list[TypedValue], vm: VMState) -> BuiltinResult:
-    """Args: [source, counter count, phrase groups...]. Returns each counter's gain."""
-    if any(_is_symbolic(a.value) for a in args):
-        return BuiltinResult(value=_UNCOMPUTABLE)
-    counts = inspect_tally(
-        str(args[0].value), _inspect_phrases(args[2:]), int(args[1].value)
-    )
-    return BuiltinResult(value=list(counts))
-
-
 def _builtin_cobol_string(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Args: [receiver, pointer, delimited sendings...].
     Returns [receiver characters, pointer, overflow]."""
@@ -616,29 +576,6 @@ def _builtin_cobol_unstring(args: list[TypedValue], vm: VMState) -> BuiltinResul
                 for item in (piece.text, piece.delimiter, piece.count)
             ),
         ]
-    )
-
-
-def _builtin_cobol_inspect_replace(
-    args: list[TypedValue], vm: VMState
-) -> BuiltinResult:
-    """Args: [source, phrase groups...]. Returns the replaced characters."""
-    if any(_is_symbolic(a.value) for a in args):
-        return BuiltinResult(value=_UNCOMPUTABLE)
-    return BuiltinResult(
-        value=inspect_replace(str(args[0].value), _inspect_phrases(args[1:]))
-    )
-
-
-def _builtin_cobol_inspect_convert(
-    args: list[TypedValue], vm: VMState
-) -> BuiltinResult:
-    """Args: [source, from, to, AFTER operand, BEFORE operand]."""
-    if any(_is_symbolic(a.value) for a in args):
-        return BuiltinResult(value=_UNCOMPUTABLE)
-    source, from_chars, to_chars, after, before = (str(a.value) for a in args)
-    return BuiltinResult(
-        value=inspect_convert(source, from_chars, to_chars, after, before)
     )
 
 
@@ -1913,11 +1850,8 @@ BYTE_BUILTINS: Mapping[FuncName, Builtin] = MappingProxyType(
             BuiltinName.COBOL_APPLY_ALPHANUMERIC_EDIT
         ): _builtin_cobol_apply_alphanumeric_edit,
         FuncName(BuiltinName.COBOL_DE_EDIT): _builtin_cobol_de_edit,
-        FuncName(BuiltinName.COBOL_INSPECT_TALLY): _builtin_cobol_inspect_tally,
         FuncName(BuiltinName.COBOL_STRING): _builtin_cobol_string,
         FuncName(BuiltinName.COBOL_UNSTRING): _builtin_cobol_unstring,
-        FuncName(BuiltinName.COBOL_INSPECT_REPLACE): _builtin_cobol_inspect_replace,
-        FuncName(BuiltinName.COBOL_INSPECT_CONVERT): _builtin_cobol_inspect_convert,
         FuncName(BuiltinName.STRING_SLICE): _builtin_string_slice,
         FuncName(BuiltinName.STRING_SPLICE): _builtin_string_splice,
         FuncName(BuiltinName.STRING_ZFILL): _builtin_string_zfill,
