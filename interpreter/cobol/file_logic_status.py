@@ -9,6 +9,7 @@ from interpreter.cobol.io_provider import IOResult
 
 class FileLogicStatus(Enum):
     PERMITTED = "00"
+    CLOSED_WITH_LOCK = "38"
     ALREADY_OPEN = "41"
     NOT_OPEN = "42"
     NO_CURRENT_RECORD = "43"

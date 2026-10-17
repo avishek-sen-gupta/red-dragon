@@ -1614,20 +1614,26 @@ class OpenStatement:
 
 @dataclass(frozen=True)
 class CloseStatement:
-    """CLOSE file1 file2 ..."""
+    """CLOSE file1 [WITH LOCK] file2 ... — with_lock names the files closed WITH LOCK."""
 
     files: list[str] = field(default_factory=list)
+    with_lock: list[str] = field(default_factory=list)
     span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> CloseStatement:
         return cls(
             files=data.get("files", []),
+            with_lock=data.get("with_lock", []),
             span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
-        result = {"type": "CLOSE", "files": list(self.files)}
+        result = {
+            "type": "CLOSE",
+            "files": list(self.files),
+            "with_lock": list(self.with_lock),
+        }
         if self.span is not None:
             self.span.write_into(result)
         return result

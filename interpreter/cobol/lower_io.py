@@ -36,6 +36,11 @@ from interpreter.register import NO_REGISTER, Register
 
 logger = logging.getLogger(__name__)
 
+_CLOSE_BUILTINS = {
+    False: FuncName("__cobol_close_file"),
+    True: FuncName("__cobol_close_file_with_lock"),
+}
+
 
 def _program(ctx: EmitContext, *, span: SourceSpan | None) -> Register:
     return Register(str(ctx.const_to_reg(program_name(ctx._asg), span=span)))
@@ -315,7 +320,7 @@ def lower_close(
         ctx.emit_inst(
             CallFunction(
                 result_reg=raw_reg,
-                func_name=FuncName("__cobol_close_file"),
+                func_name=_CLOSE_BUILTINS[filename in stmt.with_lock],
                 args=(
                     Register(str(fn_reg)),
                     _program(ctx, span=span),

@@ -46,6 +46,7 @@ _COBOL_IO_DISPATCH: dict[FuncName, str] = {
     FuncName("__cobol_accept"): "_accept_area",
     FuncName("__cobol_open_file"): "_open_file",
     FuncName("__cobol_close_file"): "_close_file",
+    FuncName("__cobol_close_file_with_lock"): "_close_file_with_lock",
     FuncName("__cobol_read_record"): "_read_record",
     FuncName("__cobol_write_record"): "_write_record",
     FuncName("__cobol_rewrite_record"): "_rewrite_record",
@@ -141,6 +142,10 @@ class CobolIOProvider(ABC):
     def _close_file(self, filename: str, program: str) -> IOResult:
         """CLOSE file."""
         ...
+
+    def _close_file_with_lock(self, filename: str, program: str) -> IOResult:
+        """CLOSE file WITH LOCK. A provider that keeps no lock state closes it."""
+        return self._close_file(filename, program)
 
     @abstractmethod
     def _read_record(

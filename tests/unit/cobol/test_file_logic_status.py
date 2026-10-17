@@ -90,3 +90,20 @@ def test_write_and_rewrite_need_their_open_modes_and_a_current_record(
         "43",
     ]
     assert (tmp_path / "f.dat").read_bytes() == b"CCCC"
+
+
+@covers(CobolFeature.CLOSE)
+def test_a_file_closed_with_lock_cannot_be_opened_again(tmp_path: Path) -> None:
+    prov = _provider(tmp_path)
+    _one_record_file(prov)
+    prov._open_file("F", "INPUT", 4, _SEQ, 0, 0, "P")
+    prov._open_file("G", "OUTPUT", 4, _SEQ, 0, 0, "P")
+    statuses = [
+        prov._close_file_with_lock("F", "P").status,
+        prov._open_file("F", "INPUT", 4, _SEQ, 0, 0, "P").status,
+        prov._open_file("F", "EXTEND", 4, _SEQ, 0, 0, "P").status,
+        prov._close_file_with_lock("F", "P").status,
+        prov._close_file("G", "P").status,
+        prov._open_file("G", "INPUT", 4, _SEQ, 0, 0, "P").status,
+    ]
+    assert statuses == ["00", "38", "38", "42", "00", "00"]

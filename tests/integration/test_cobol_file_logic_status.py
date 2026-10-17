@@ -99,3 +99,43 @@ def test_open_extend_of_an_absent_file_fails_with_35(
         "35\n48\n",
         False,
     )
+
+
+@covers(CobolFeature.CLOSE)
+@covers(CobolFeature.OPEN)
+def test_open_after_close_with_lock_fails_with_38(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    source = to_fixed(
+        [
+            "IDENTIFICATION DIVISION.",
+            "PROGRAM-ID. FLOCK.",
+            "ENVIRONMENT DIVISION.",
+            "INPUT-OUTPUT SECTION.",
+            "FILE-CONTROL.",
+            '    SELECT F ASSIGN TO "lockf" FILE STATUS IS ST.',
+            '    SELECT G ASSIGN TO "freeg" FILE STATUS IS GS.',
+            "DATA DIVISION.",
+            "FILE SECTION.",
+            "FD F.",
+            "01 F-REC PIC X(4).",
+            "FD G.",
+            "01 G-REC PIC X(4).",
+            "WORKING-STORAGE SECTION.",
+            "01 ST PIC XX.",
+            "01 GS PIC XX.",
+            "PROCEDURE DIVISION.",
+            "MAIN-PARA.",
+            "    OPEN OUTPUT F G.",
+            "    CLOSE F WITH LOCK G. DISPLAY ST GS.",
+            "    OPEN INPUT F G. DISPLAY ST GS.",
+            "    STOP RUN.",
+        ]
+    )
+    run(
+        source=source,
+        language="cobol",
+        max_steps=5000,
+        io_provider=RealFileIOProvider(base_dir=tmp_path),
+    )
+    assert capsys.readouterr().out == "0000\n3800\n"

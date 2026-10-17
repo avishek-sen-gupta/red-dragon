@@ -54,6 +54,11 @@ logger = logging.getLogger(__name__)
 _UNCOMPUTABLE = Operators.UNCOMPUTABLE
 _PATH_MARKS = frozenset("/\\.")
 _OPEN_FAILED = to_ioresult(AccessResult(AccessCondition.FILE_NOT_FOUND))
+_CLOSED_STATUS = _file_status(AccessCondition.OK)
+
+
+def _locked_by(filename: str, closed: IOResult) -> frozenset[str]:
+    return frozenset({filename}) if closed.status == _CLOSED_STATUS else frozenset()
 
 
 def _organization_of(organization: str) -> FileOrganization:
@@ -92,6 +97,7 @@ class RealFileIOProvider(CobolIOProvider):
         self._fce: dict[str, FileControlEntry] = {e.file_name: e for e in file_control}
         self._overrides: Mapping[str, Path] = path_overrides
         self._files: dict[str, OpenFile] = {}
+        self._locked: frozenset[str] = frozenset()
 
     def _overridden(self, file_name: str, assign_to: str) -> list[Path]:
         names = [file_name, *([assign_to] if assign_to else [])]
@@ -176,11 +182,10 @@ class RealFileIOProvider(CobolIOProvider):
         key_length: int,
         program: str,
     ) -> IOResult:
-        if filename in self._files:
-            return FileLogicStatus.ALREADY_OPEN.result()
-        if self._extending_absent(filename, OpenMode(mode)):
-            logger.warning("OPEN EXTEND %s: file not present", filename)
-            return _OPEN_FAILED
+        refusals = self._open_refusals(filename, OpenMode(mode))
+        if refusals:
+            logger.warning("OPEN %s %s refused: %s", mode, filename, refusals[0].status)
+            return refusals[0]
         return self._open_closed(
             filename,
             OpenMode(mode),
@@ -189,6 +194,14 @@ class RealFileIOProvider(CobolIOProvider):
             key_offset,
             key_length,
         )
+
+    def _open_refusals(self, filename: str, mode: OpenMode) -> list[IOResult]:
+        checks = (
+            (filename in self._files, FileLogicStatus.ALREADY_OPEN.result()),
+            (filename in self._locked, FileLogicStatus.CLOSED_WITH_LOCK.result()),
+            (self._extending_absent(filename, mode), _OPEN_FAILED),
+        )
+        return [result for refused, result in checks if refused]
 
     def _extending_absent(self, filename: str, mode: OpenMode) -> bool:
         path = self._resolve_path(filename, self._assign_to(filename))
@@ -244,6 +257,11 @@ class RealFileIOProvider(CobolIOProvider):
         self._files = {k: f for k, f in self._files.items() if k != filename}
         logger.info("CLOSE %s", filename)
         return to_ioresult(AccessResult(AccessCondition.OK))
+
+    def _close_file_with_lock(self, filename: str, program: str) -> IOResult:
+        closed = self._close_file(filename, program)
+        self._locked = self._locked | _locked_by(filename, closed)
+        return closed
 
     def _open_mode(self, filename: str, program: str) -> str:
         return self._files[filename].mode.value if filename in self._files else ""
