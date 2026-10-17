@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 
+from cobol_asg.abbreviated_condition import resolve_condition
 from cobol_asg.any_object import AnyObject
 from cobol_asg.cobol_expression import expr_from_dict
 from cobol_asg.expression_subject import ExpressionSubject
@@ -20,14 +21,18 @@ SelectionObject = (
 
 _SUBJECTS: Mapping[str, Callable[[Mapping], SelectionSubject]] = {
     "expr": lambda d: ExpressionSubject(expr=expr_from_dict(d["expr"])),
-    "condition": lambda d: SelectionCondition(condition=d["condition"]),
+    "condition": lambda d: SelectionCondition(
+        condition=resolve_condition(d["condition"])
+    ),
     "boolean": lambda d: TruthValue(value=bool(d["value"])),
 }
 
 _OBJECTS: Mapping[str, Callable[[Mapping], SelectionObject]] = {
     "any": lambda d: AnyObject(),
     "boolean": lambda d: TruthValue(value=bool(d["value"])),
-    "condition": lambda d: SelectionCondition(condition=d["condition"]),
+    "condition": lambda d: SelectionCondition(
+        condition=resolve_condition(d["condition"])
+    ),
     "value": lambda d: ValueObject(
         value=expr_from_dict(d["value"]), negated=bool(d.get("not", False))
     ),

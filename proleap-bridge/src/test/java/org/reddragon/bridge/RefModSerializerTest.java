@@ -235,8 +235,8 @@ public class RefModSerializerTest {
             }
         }
         assertNotNull("IF statement must exist", ifStmt);
-        // condition.relation.left = FUNCTION LENGTH( FUNCTION TRIM( ref ) )
-        JsonObject left = ifStmt.getAsJsonObject("condition")
+        // condition.first.relation.left = FUNCTION LENGTH( FUNCTION TRIM( ref ) )
+        JsonObject left = ifStmt.getAsJsonObject("condition").getAsJsonObject("first")
                 .getAsJsonObject("relation").getAsJsonObject("left");
         assertEquals("function", left.get("kind").getAsString());
         assertEquals("LENGTH", left.get("name").getAsString());

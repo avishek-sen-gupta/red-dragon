@@ -110,7 +110,7 @@ def test_function_bound_in_a_relation_operand_keeps_the_sliced_field(bridge_jar)
         "  MOVE 'Y' TO D",
         "END-IF.",
     )[0]
-    assert statement["condition"]["relation"]["left"] == _SLICED_M
+    assert statement["condition"]["first"]["relation"]["left"] == _SLICED_M
 
 
 @covers(CobolFeature.INTRINSIC_FUNCTION, CobolFeature.REFERENCE_MODIFICATION)
@@ -154,7 +154,7 @@ def test_length_of_bound_in_a_relation_operand_keeps_the_sliced_field(bridge_jar
         "  MOVE 'Y' TO D",
         "END-IF.",
     )[0]
-    assert statement["condition"]["relation"]["left"] == {
+    assert statement["condition"]["first"]["relation"]["left"] == {
         "kind": "ref",
         "name": "M",
         "ref_mod_start": _LIT_1,

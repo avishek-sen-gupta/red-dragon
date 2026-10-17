@@ -303,12 +303,12 @@ bounded by a runaway guard.
 
 ## Condition Lowering
 
-Conditions are serialized by the Java bridge as recursive JSON trees (not raw source text). Each node carries a `"kind"` discriminant:
+The Java bridge writes a condition as the parse tree has it: `{"first": <atom>, "rest": [...]}`, each link an AND or OR with either one atom or a list of abbreviations (`{"not", "op"?, "right"}`), and a combined relation `A = (X OR Y)` as `{"combined": {"left", "op", "bool", "operands"}}`. The ASG reader (`cobol_asg/abbreviated_condition.py`) resolves it into the tree lowering walks (ANSI X3.23-1985 VI-6.15):
 
-- `{"kind": "relation", "left": ..., "right": ..., "op": "EQ"|"GT"|"LT"|...}` — relational comparison
-- `{"kind": "and"|"or", "left": ..., "right": ...}` — compound condition
-- `{"kind": "not", "expr": ...}` — negation
-- `{"kind": "condition_name", "name": "COND-88-NAME"}` — 88-level condition name test (names are indexed over WORKING-STORAGE, LOCAL-STORAGE, LINKAGE and the FILE SECTION)
+- AND binds tighter than OR: `{"op": "AND"|"OR", "left": ..., "right": ...}`.
+- An abbreviated operand takes the last stated subject and relational operator; a NOT immediately before an operator is part of it, and a NOT before a bare operand negates that relation: `{"not": bool, "relation": {"left", "op", "right"}}`.
+- A bare identifier after a relation parses as a condition name; it carries the implied subject and operator under `"abbreviation"`, and lowering compares with it when the name is a data item rather than a level-88 (`{"not": bool, "condition_name": ...}`, names indexed over WORKING-STORAGE, LOCAL-STORAGE, LINKAGE and the FILE SECTION).
+- A combined relation expands into one relation per operand under `"condition"`; a parenthesised condition is resolved the same way.
 
 `_lower_condition()` deserializes this tree and recursively emits IR: leaf relation nodes produce a `BINOP` comparison; compound nodes chain via `BRANCH_IF` with short-circuit blocks.
 
