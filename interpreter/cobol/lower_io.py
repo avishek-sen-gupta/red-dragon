@@ -14,6 +14,7 @@ from cobol_asg.cobol_statements import (
     StartStatement,
     WriteStatement,
 )
+from cobol_asg.file_enums import OpenMode
 from cobol_asg.ref_mod import RefModOperand
 from cobol_asg.source_span import SourceSpan
 from interpreter.cobol.cobol_constants import BuiltinName
@@ -42,11 +43,7 @@ def _program(ctx: EmitContext, *, span: SourceSpan | None) -> Register:
 
 def _select_to_record(ctx: EmitContext) -> dict[str, str]:
     """Return SELECT-file-name → first-FD-record-name (both uppercased)."""
-    result: dict[str, str] = {}
-    for rec, sel in ctx._asg.file_record_to_select.items():
-        if sel not in result:
-            result[sel] = rec
-    return result
+    return {sel: rec for rec, sel in reversed(ctx._asg.file_record_to_select.items())}
 
 
 def _emit_conditional_use_perform(
@@ -155,6 +152,26 @@ def emit_use_trigger(
         _emit_conditional_use_perform(ctx, status_reg, sec, span=span)
         ctx.emit_inst(Branch(label=next_lbl), span=span)
         ctx.emit_inst(Label_(label=next_lbl), span=span)
+
+
+def _emit_open_use_trigger(
+    ctx: EmitContext,
+    file_name: str,
+    mode: OpenMode,
+    status_reg: Register,
+    *,
+    span: SourceSpan | None,
+) -> None:
+    """A failed OPEN leaves the file closed, so an open-mode USE is chosen by the
+    mode the OPEN attempted, not by the file's current mode."""
+    section = (
+        ctx.use_by_file.get(file_name.upper(), "")
+        or ctx.use_global
+        or ctx.use_by_mode.get(mode.value, "")
+    )
+    if not section:
+        return
+    _emit_conditional_use_perform(ctx, status_reg, section, span=span)
 
 
 def lower_accept(
@@ -281,7 +298,7 @@ def lower_open(
                 span=span,
             )
             ctx.emit_file_status_update(filename, status_reg, materialised, span=span)
-            emit_use_trigger(ctx, filename, status_reg, False, materialised, span=span)
+            _emit_open_use_trigger(ctx, filename, mode, status_reg, span=span)
             logger.info("OPEN %s %s", mode.value, filename)
 
 

@@ -235,3 +235,50 @@ class TestUseDeclaratives:
             "    STOP RUN.",
         ]
         assert _flag(lines, tmp_path) == 2
+
+    @covers(CobolFeature.DECLARATIVES)
+    def test_open_mode_use_fires_for_the_mode_a_failed_open_attempted(
+        self, tmp_path: Path
+    ) -> None:
+        # OPEN INPUT of an absent file fails with 35 and leaves F1 closed, so the
+        # mode to match is the one OPEN attempted: the INPUT USE adds 1, the
+        # OUTPUT USE never runs. A second OPEN INPUT fires it again -> FLAG=2.
+        lines = [
+            "IDENTIFICATION DIVISION.",
+            "PROGRAM-ID. USEO.",
+            "ENVIRONMENT DIVISION.",
+            "INPUT-OUTPUT SECTION.",
+            "FILE-CONTROL.",
+            "    SELECT F1 ASSIGN TO XXXXX001.",
+            "DATA DIVISION.",
+            "FILE SECTION.",
+            "FD  F1.",
+            "01  F1-REC PIC X(10).",
+            "WORKING-STORAGE SECTION.",
+            "01  FLAG PIC 9(1) VALUE 0.",
+            "PROCEDURE DIVISION.",
+            "DECLARATIVES.",
+            "D1 SECTION.",
+            "    USE AFTER STANDARD ERROR PROCEDURE INPUT.",
+            "D1-P.",
+            "    ADD 1 TO FLAG.",
+            "D2 SECTION.",
+            "    USE AFTER STANDARD ERROR PROCEDURE OUTPUT.",
+            "D2-P.",
+            "    ADD 5 TO FLAG.",
+            "END DECLARATIVES.",
+            "MAIN SECTION.",
+            "MAIN-P.",
+            "    OPEN INPUT F1.",
+            "    OPEN INPUT F1.",
+            "    STOP RUN.",
+        ]
+        provider = RealFileIOProvider(
+            base_dir=tmp_path,
+            file_control=[],
+            path_overrides={"F1": tmp_path / "absent.dat"},
+        )
+        vm = run(
+            to_fixed(lines), language="cobol", io_provider=provider, max_steps=4000
+        )
+        assert _decode(_first_region(vm), 0, 1) == 2
