@@ -3,29 +3,30 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from pathlib import Path
+from types import MappingProxyType
 
 import pytest
 
 from cobol_asg.cobol_statements import FileControlEntry
 from cobol_asg.file_enums import FileOrganization, OpenMode
+from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.file_drivers import FileOrganizationDriver, open_driver
 from interpreter.cobol.real_file_provider import RealFileIOProvider
+from interpreter.vm.vm import Operators
 from tests.covers import NotLanguageFeature, covers
 
 
 def _provider(
     tmp_path: Path,
-    entries: list[dict] | None = None,
-    overrides: dict[str, Path] | None = None,
+    entries: Sequence[Mapping[str, str]] = (),
+    overrides: Mapping[str, Path] = MappingProxyType({}),
 ) -> RealFileIOProvider:
-    fce = [FileControlEntry.from_dict(e) for e in (entries or [])]
-    if overrides is not None:
-        return RealFileIOProvider(
-            base_dir=tmp_path, file_control=fce, path_overrides=overrides
-        )
-    else:
-        return RealFileIOProvider(base_dir=tmp_path, file_control=fce)
+    fce = [FileControlEntry.from_dict(dict(e)) for e in entries]
+    return RealFileIOProvider(
+        base_dir=tmp_path, file_control=fce, path_overrides=overrides
+    )
 
 
 class TestRealFileIOProvider:
@@ -199,3 +200,12 @@ def test_a_subclass_chooses_the_driver_each_open_of_each_file_uses(
         (tmp_path / "F1.dat").read_bytes(),
         (tmp_path / "F2.dat").read_bytes(),
     ) == (["00", "00"], b"HELLO     ", b"WORLD")
+
+
+@covers(CobolFeature.ACCEPT)
+def test_accept_fills_the_receiving_area_from_successive_system_input_records(
+    tmp_path: Path,
+) -> None:
+    prov = RealFileIOProvider(base_dir=tmp_path, system_input=["ABCD", "EFGH", "IJKL"])
+    filled = [prov._accept_area("SYSIN", length) for length in (6, 2, 3)]
+    assert filled == ["ABCDEF", "IJ", Operators.UNCOMPUTABLE]

@@ -42,7 +42,7 @@ class IOResult:
 
 # Dispatch table mapping __cobol_* function names to provider method names.
 _COBOL_IO_DISPATCH: dict[FuncName, str] = {
-    FuncName("__cobol_accept"): "_accept",
+    FuncName("__cobol_accept"): "_accept_area",
     FuncName("__cobol_open_file"): "_open_file",
     FuncName("__cobol_close_file"): "_close_file",
     FuncName("__cobol_read_record"): "_read_record",
@@ -96,6 +96,12 @@ class CobolIOProvider(ABC):
     def _open_mode(self, filename: Any, program: str) -> Any:
         """Current OPEN mode of a file ("INPUT"/"OUTPUT"/"I-O"/"EXTEND"), "" if closed."""
         return ""
+
+    def _accept_area(
+        self, from_device: str, length: int
+    ) -> str | Operators._Uncomputable:
+        """ACCEPT into a receiving area of ``length`` bytes: one message."""
+        return self._accept(from_device)
 
     @abstractmethod
     def _accept(

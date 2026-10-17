@@ -162,36 +162,46 @@ def lower_accept(
     stmt: AcceptStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """ACCEPT target [FROM device] — read input via __cobol_accept."""
+    """ACCEPT target [FROM device] — read input via __cobol_accept and store it
+    unedited, as characters over the receiver's bytes."""
+    span = stmt.span
+    if not ctx.has_field(stmt.target.name, materialised):
+        _emit_accept_call(ctx, stmt, 0)
+        return
+    target_ref, target_rr = ctx.resolve_field_ref(
+        stmt.target.name,
+        materialised,
+        stmt.target.qualifiers,
+        subscripts=stmt.target.subscripts,
+        span=span,
+    )
+    result_reg = _emit_accept_call(ctx, stmt, target_ref.fl.byte_length)
+    str_reg = ctx.emit_to_string(result_reg, span=span)
+    ctx.emit_encode_and_write(
+        target_rr,
+        target_ref.fl.as_characters(),
+        str_reg,
+        target_ref.offset_reg,
+        extent=target_ref.extent,
+        span=span,
+    )
+    logger.info("ACCEPT %s FROM %s", stmt.target.name, stmt.from_device)
+
+
+def _emit_accept_call(ctx: EmitContext, stmt: AcceptStatement, length: int) -> Register:
     span = stmt.span
     device_reg = ctx.const_to_reg(stmt.from_device, span=span)
+    length_reg = ctx.const_to_reg(length, span=span)
     result_reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(
             result_reg=result_reg,
             func_name=FuncName("__cobol_accept"),
-            args=(Register(str(device_reg)),),
+            args=(Register(str(device_reg)), Register(str(length_reg))),
         ),
         span=span,
     )
-    if ctx.has_field(stmt.target.name, materialised):
-        target_ref, target_rr = ctx.resolve_field_ref(
-            stmt.target.name,
-            materialised,
-            stmt.target.qualifiers,
-            subscripts=stmt.target.subscripts,
-            span=span,
-        )
-        str_reg = ctx.emit_to_string(result_reg, span=span)
-        ctx.emit_encode_and_write(
-            target_rr,
-            target_ref.fl,
-            str_reg,
-            target_ref.offset_reg,
-            extent=target_ref.extent,
-            span=span,
-        )
-    logger.info("ACCEPT %s FROM %s", stmt.target.name, stmt.from_device)
+    return result_reg
 
 
 def lower_open(

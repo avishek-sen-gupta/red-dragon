@@ -57,7 +57,7 @@ def _execute_with_provider(instructions, provider):
 class TestExecutorIOProviderDispatch:
     @covers(CobolFeature.IO_PROVIDER, CobolFeature.ACCEPT)
     def test_stub_accept_returns_concrete_value(self):
-        ir = _build_call_function_ir("__cobol_accept", "CONSOLE")
+        ir = _build_call_function_ir("__cobol_accept", "CONSOLE", 10)
         provider = StubIOProvider(accept_values=["HELLO"])
         vm = _execute_with_provider(ir, provider)
 
@@ -66,7 +66,7 @@ class TestExecutorIOProviderDispatch:
 
     @covers(CobolFeature.IO_PROVIDER, CobolFeature.ACCEPT)
     def test_stub_accept_empty_returns_symbolic(self):
-        ir = _build_call_function_ir("__cobol_accept", "CONSOLE")
+        ir = _build_call_function_ir("__cobol_accept", "CONSOLE", 10)
         provider = StubIOProvider(accept_values=[])
         vm = _execute_with_provider(ir, provider)
 
@@ -77,7 +77,7 @@ class TestExecutorIOProviderDispatch:
 
     @covers(CobolFeature.IO_PROVIDER, CobolFeature.ACCEPT)
     def test_null_provider_returns_symbolic(self):
-        ir = _build_call_function_ir("__cobol_accept", "CONSOLE")
+        ir = _build_call_function_ir("__cobol_accept", "CONSOLE", 10)
         provider = NullIOProvider()
         vm = _execute_with_provider(ir, provider)
 
