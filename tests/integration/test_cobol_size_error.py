@@ -249,8 +249,11 @@ class TestCorresponding:
                 "01 H5.",
                 "   02 C1 PIC 99 VALUE 1.",
                 "   02 C2 PIC 99 VALUE 99.",
+                "01 H6.",
+                "   02 D1 PIC 99 VALUE 7.",
                 "01 F1 PIC X VALUE 'P'.",
                 "01 F2 PIC X VALUE 'P'.",
+                "01 F3 PIC X VALUE 'P'.",
             ],
             [
                 "    ADD CORRESPONDING H1 TO H2 ROUNDED",
@@ -262,7 +265,11 @@ class TestCorresponding:
                 "        NOT ON SIZE ERROR MOVE 'N' TO F2",
                 "    END-SUBTRACT.",
                 "    ADD CORR H1 TO H5.",
+                "    ADD CORR H1 TO H6",
+                "        ON SIZE ERROR MOVE 'E' TO F3",
+                "        NOT ON SIZE ERROR MOVE 'N' TO F3",
+                "    END-ADD.",
             ],
-            ["H2", "H3", "H5", "F1", "F2"],
+            ["H2", "H3", "H5", "H6", "F1", "F2", "F3"],
         )
-        assert shown == ["13995", "505", "1200", "E", "N"]
+        assert shown == ["13995", "505", "1200", "07", "E", "N", "N"]
