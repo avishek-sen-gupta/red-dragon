@@ -89,10 +89,3 @@ def test_binary_unscaled_builtin_keeps_the_picture_digits():
     assert _call(BuiltinName.COBOL_BINARY_UNSCALED, "512300", 0, 2, True, 3) == 123
     assert _call(BuiltinName.COBOL_BINARY_UNSCALED, "-1.239", 2, 0, False, 3) == 123
     assert _call(BuiltinName.COBOL_BINARY_UNSCALED, "-70717", 0, 0, False, 5) == 70717
-
-
-@covers(CobolFeature.ON_SIZE_ERROR)
-def test_size_error_builtin_compares_the_magnitude_with_the_capacity():
-    assert _call(BuiltinName.COBOL_SIZE_ERROR, from_literal("-4.57"), 1) is True
-    assert _call(BuiltinName.COBOL_SIZE_ERROR, from_literal(".218"), 1) is False
-    assert _call(BuiltinName.COBOL_SIZE_ERROR, -10, 10) is True

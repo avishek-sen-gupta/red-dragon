@@ -74,6 +74,7 @@ from cobol_numeric.scale import (
 from interpreter.cobol.de_edit_ir import emit_de_edit
 from interpreter.cobol.digit_image_ir import emit_display_image, emit_field_digit_image
 from interpreter.cobol.ir_emitter import IrEmitter
+from interpreter.cobol.size_error_ir import emit_size_error
 from interpreter.cobol.arithmetic_precision import ArithmeticPrecision
 from interpreter.cobol.arithmetic_receiver import ArithmeticReceiver
 from interpreter.cobol.arithmetic_scale import (
@@ -309,16 +310,9 @@ def _compute_overflow_flag(
     *,
     span: SourceSpan | None = None,
 ) -> Register:
-    overflow_reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        CallFunction(
-            result_reg=overflow_reg,
-            func_name=FuncName(BuiltinName.COBOL_SIZE_ERROR),
-            args=(result_reg, ctx.const_to_reg(receiver_capacity(td), span=span)),
-        ),
-        span=span,
+    return emit_size_error(
+        IrEmitter(ctx=ctx, span=span), result_reg, receiver_capacity(td)
     )
-    return overflow_reg
 
 
 def eval_ref_mod_expr(

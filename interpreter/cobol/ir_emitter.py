@@ -6,6 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from cobol_asg.source_span import SourceSpan
+from cobol_numeric.number import CobolNumber
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
@@ -39,6 +40,11 @@ class IrEmitter:
     def text(self, value: str) -> Register:
         reg = self.ctx.fresh_reg()
         self.ctx.emit_inst(Const.string(reg, value), span=self.span)
+        return reg
+
+    def decimal(self, value: CobolNumber) -> Register:
+        reg = self.ctx.fresh_reg()
+        self.ctx.emit_inst(Const.decimal_(reg, value), span=self.span)
         return reg
 
     def bool_(self, value: bool) -> Register:

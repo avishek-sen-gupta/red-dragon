@@ -22,12 +22,15 @@ from interpreter.cobol.lower_procedure import lower_procedure_division
 from interpreter.cobol.sectioned_layout import build_sectioned_layout
 from interpreter.cobol.statement_dispatch import dispatch_statement
 from interpreter.func_name import FuncName
-from interpreter.instructions import CallFunction
+from interpreter.instructions import Binop, CallFunction, InstructionBase
+from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
 from tests.covers import covers
 
 
-def _calls(statements: Sequence[CobolStatementType]) -> list[CallFunction]:
+def _instructions(
+    statements: Sequence[CobolStatementType],
+) -> list[InstructionBase]:
     asg = CobolASG(
         program_id="SIZEERR",
         data_fields=[
@@ -41,20 +44,28 @@ def _calls(statements: Sequence[CobolStatementType]) -> list[CallFunction]:
         ctx, build_sectioned_layout(asg), asg.program_id
     )
     lower_procedure_division(ctx, asg, materialised)
-    return [i for i in ctx.instructions if isinstance(i, CallFunction)]
+    return list(ctx.instructions)
+
+
+def _calls(instructions: Sequence[InstructionBase]) -> list[CallFunction]:
+    return [i for i in instructions if isinstance(i, CallFunction)]
 
 
 def _results_of(calls: Sequence[CallFunction], name: str) -> list[Register]:
     return [c.result_reg for c in calls if c.func_name == FuncName(name)]
 
 
-def _tested_values(calls: Sequence[CallFunction]) -> list[Register]:
+def _tested_values(instructions: Sequence[InstructionBase]) -> list[Register]:
+    parsed = {
+        c.result_reg: c.args[0]
+        for c in _calls(instructions)
+        if c.func_name == FuncName(BuiltinName.COBOL_PARSE_NUMBER)
+        and isinstance(c.args[0], Register)
+    }
     return [
-        argument
-        for c in calls
-        if c.func_name == FuncName(BuiltinName.COBOL_SIZE_ERROR)
-        for argument in c.args[:1]
-        if isinstance(argument, Register)
+        parsed[i.left]
+        for i in instructions
+        if isinstance(i, Binop) and i.operator == BinopKind.GE and i.left in parsed
     ]
 
 
@@ -66,7 +77,7 @@ def _tested_values(calls: Sequence[CallFunction]) -> list[Register]:
 )
 def test_a_rounded_receiver_is_size_tested_on_its_rounded_value():
     on_size_error: list[CobolStatementType] = [ContinueStatement()]
-    calls = _calls(
+    instructions = _instructions(
         [
             ArithmeticStatement(
                 op="MULTIPLY",
@@ -84,7 +95,28 @@ def test_a_rounded_receiver_is_size_tested_on_its_rounded_value():
             ),
         ]
     )
-    rounded = _results_of(calls, BuiltinName.COBOL_ROUND)
-    tested = _tested_values(calls)
+    rounded = _results_of(_calls(instructions), BuiltinName.COBOL_ROUND)
+    tested = _tested_values(instructions)
     assert len(rounded) == 2
     assert [value in rounded for value in tested] == [True, False, True, False]
+
+
+@covers(CobolFeature.ADD, CobolFeature.ON_SIZE_ERROR)
+def test_the_size_error_test_lowers_to_ir_without_a_builtin():
+    instructions = _instructions(
+        [
+            ArithmeticStatement(
+                op="ADD",
+                operands=[RefModOperand(name="1")],
+                targets=[RefModOperand(name="R")],
+                on_size_error=[ContinueStatement()],
+            )
+        ]
+    )
+    comparisons = [
+        i.operator
+        for i in instructions
+        if isinstance(i, Binop) and i.operator in (BinopKind.GE, BinopKind.LE)
+    ]
+    assert _results_of(_calls(instructions), "__cobol_size_error") == []
+    assert comparisons == [BinopKind.GE, BinopKind.LE]
