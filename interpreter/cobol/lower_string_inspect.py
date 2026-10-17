@@ -148,7 +148,7 @@ def lower_string(
                 subscripts=sending.value.subscripts,
                 span=span,
             )
-            src_str_reg = ctx.emit_decode_field_characters(
+            src_str_reg = ctx.emit_stored_characters(
                 source_rr,
                 source_ref.fl,
                 source_ref.offset_reg,
@@ -635,7 +635,7 @@ def lower_inspect(
         stmt.source.name, materialised, span=span
     )
     source_fl = source_ref.fl
-    src_str_reg = ctx.emit_decode_field_characters(
+    src_str_reg = ctx.emit_inspected_characters(
         source_rr, source_fl, source_ref.offset_reg, extent=source_ref.extent, span=span
     )
 
@@ -739,7 +739,7 @@ def lower_inspect_converting(
         )
         # Write-back of the whole INSPECT source at its own offset — the
         # re-resolved ref is unsubscripted, so its extent is the exact field.
-        ctx.emit_encode_and_write(
+        ctx.emit_write_inspected_characters(
             source_rr,
             source_fl,
             converted_reg,
@@ -947,7 +947,7 @@ def lower_inspect_replacing(
         )
         # Write-back of the whole INSPECT source at its own offset — the
         # re-resolved ref is unsubscripted, so its extent is the exact field.
-        ctx.emit_encode_and_write(
+        ctx.emit_write_inspected_characters(
             source_rr,
             source_fl,
             current_str_reg,

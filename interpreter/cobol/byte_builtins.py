@@ -795,15 +795,74 @@ def _builtin_string_pad_to(args: list[TypedValue], vm: VMState) -> BuiltinResult
 def _builtin_cobol_digit_image(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     from interpreter.cobol.pic_scale import encode_digits
 
-    value, total_digits, decimal_digits = (a.value for a in args)
+    value, total_digits, decimal_digits, scale = (a.value for a in args)
     if not (
         is_cobol_number(value)
         and isinstance(total_digits, int)
         and isinstance(decimal_digits, int)
+        and isinstance(scale, int)
     ):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    _, digits = encode_digits(value, total_digits, decimal_digits, 0)
-    return BuiltinResult(value=digits)
+    _, digits = encode_digits(value, total_digits, decimal_digits, scale)
+    return BuiltinResult(value=digits + "0" * max(scale, 0))
+
+
+_DIGIT_ZONE = 0xF0
+_LOWEST_SIGN_ZONE = 0xA0
+
+
+def _unzoned(byte: int) -> int:
+    if byte & 0xF0 >= _LOWEST_SIGN_ZONE and byte & 0x0F <= 9:
+        return _DIGIT_ZONE | (byte & 0x0F)
+    return byte
+
+
+def _rezoned(byte: int, original: int) -> int:
+    if (
+        byte & 0xF0 == _DIGIT_ZONE
+        and byte & 0x0F <= 9
+        and _unzoned(original) != original
+    ):
+        return (original & 0xF0) | (byte & 0x0F)
+    return byte
+
+
+def _builtin_cobol_zoned_strip_sign(
+    args: Sequence[TypedValue], vm: VMState
+) -> BuiltinResult:
+    data, sign_index, separate = (a.value for a in args)
+    if not (isinstance(data, list) and isinstance(sign_index, int)):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    if separate:
+        return BuiltinResult(value=data[:sign_index] + data[sign_index + 1 :])
+    return BuiltinResult(
+        value=[
+            _unzoned(byte) if position == sign_index else byte
+            for position, byte in enumerate(data)
+        ]
+    )
+
+
+def _builtin_cobol_zoned_restore_sign(
+    args: Sequence[TypedValue], vm: VMState
+) -> BuiltinResult:
+    digits, original, sign_index, separate = (a.value for a in args)
+    if not (
+        isinstance(digits, list)
+        and isinstance(original, list)
+        and isinstance(sign_index, int)
+    ):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    if separate:
+        return BuiltinResult(
+            value=[*digits[:sign_index], original[sign_index], *digits[sign_index:]]
+        )
+    return BuiltinResult(
+        value=[
+            _rezoned(byte, original[sign_index]) if position == sign_index else byte
+            for position, byte in enumerate(digits)
+        ]
+    )
 
 
 def _builtin_upper_case(args: list[TypedValue], vm: VMState) -> BuiltinResult:
@@ -1875,6 +1934,10 @@ BYTE_BUILTINS: Mapping[FuncName, Builtin] = MappingProxyType(
         FuncName(BuiltinName.STRING_ZFILL): _builtin_string_zfill,
         FuncName(BuiltinName.STRING_PAD_TO): _builtin_string_pad_to,
         FuncName(BuiltinName.COBOL_DIGIT_IMAGE): _builtin_cobol_digit_image,
+        FuncName(BuiltinName.COBOL_ZONED_STRIP_SIGN): _builtin_cobol_zoned_strip_sign,
+        FuncName(
+            BuiltinName.COBOL_ZONED_RESTORE_SIGN
+        ): _builtin_cobol_zoned_restore_sign,
         FuncName(BuiltinName.UPPER_CASE): _builtin_upper_case,
         FuncName(BuiltinName.LOWER_CASE): _builtin_lower_case,
         FuncName(BuiltinName.TRIM): _builtin_cobol_trim,

@@ -586,6 +586,14 @@ def _call_builtin(
 
 _STATEFUL_FUNCTIONS = {"RANDOM": _lower_random}
 
+_FIXED_POINT_CATEGORIES: frozenset[CobolDataCategory] = frozenset(
+    {
+        CobolDataCategory.ZONED_DECIMAL,
+        CobolDataCategory.COMP3,
+        CobolDataCategory.BINARY,
+    }
+)
+
 
 def lower_move(
     ctx: EmitContext,
@@ -637,40 +645,40 @@ def lower_move(
     if (
         not ctx.has_field(stmt.source.name, materialised)
         and stmt.source.ref_mod_start is None
+        and ctx.figuratives.is_raw(stmt.source.name)
     ):
-        if ctx.figuratives.is_raw(stmt.source.name):
-            fill_byte = ctx.figuratives.raw_byte(stmt.source.name)
-            for target in stmt.targets:
-                if not ctx.has_field(target.name, materialised):
-                    if _is_special_register(target.name):
-                        logger.warning(
-                            "MOVE into special register %r is not modelled — skipping",
-                            target.name,
-                        )
-                    continue
-                if target.ref_mod_start is not None:
-                    # Ref-modified receiver: fall back to the character path so the
-                    # SPLICE write still works (rare combination).
-                    raw_str = chr(fill_byte)
-                    src_reg = ctx.const_to_reg(raw_str, span=span)
-                    _store_move_value(ctx, target, src_reg, materialised, span=span)
-                    continue
-                target_ref, target_rr = ctx.resolve_field_ref(
-                    target.name,
-                    materialised,
-                    target.qualifiers,
-                    subscripts=target.subscripts,
-                    span=span,
-                )
-                ctx.emit_fill_raw_byte(
-                    target_rr,
-                    target_ref.fl,
-                    fill_byte,
-                    target_ref.offset_reg,
-                    extent=target_ref.extent,
-                    span=span,
-                )
-            return
+        fill_byte = ctx.figuratives.raw_byte(stmt.source.name)
+        for target in stmt.targets:
+            if not ctx.has_field(target.name, materialised):
+                if _is_special_register(target.name):
+                    logger.warning(
+                        "MOVE into special register %r is not modelled — skipping",
+                        target.name,
+                    )
+                continue
+            if target.ref_mod_start is not None:
+                # Ref-modified receiver: fall back to the character path so the
+                # SPLICE write still works (rare combination).
+                raw_str = chr(fill_byte)
+                src_reg = ctx.const_to_reg(raw_str, span=span)
+                _store_move_value(ctx, target, src_reg, materialised, span=span)
+                continue
+            target_ref, target_rr = ctx.resolve_field_ref(
+                target.name,
+                materialised,
+                target.qualifiers,
+                subscripts=target.subscripts,
+                span=span,
+            )
+            ctx.emit_fill_raw_byte(
+                target_rr,
+                target_ref.fl,
+                fill_byte,
+                target_ref.offset_reg,
+                extent=target_ref.extent,
+                span=span,
+            )
+        return
 
     # Resolve the source field once (when it is a field). A numeric-DISPLAY
     # (zoned) source carries an extra character representation, picked per target
@@ -769,19 +777,13 @@ def lower_move(
             )
             value_str_reg = result_reg
 
-    # For a numeric-DISPLAY (zoned) source with NO source reference modification,
-    # compute its zoned character representation ONCE (width-preserving digit
-    # characters). _store_move_value uses this only for alphanumeric receivers,
-    # where COBOL moves the sending field's characters left-justified rather than
-    # the numeric value (red-dragon-0fqr). Ref-modified sources keep the existing
-    # sliced-string path.
-    zoned_display_reg: Register = NO_REGISTER
+    digit_image_reg: Register = NO_REGISTER
     if (
         source_fl is not None
         and stmt.source.ref_mod_start is None
-        and source_fl.type_descriptor.category == CobolDataCategory.ZONED_DECIMAL
+        and source_fl.type_descriptor.category in _FIXED_POINT_CATEGORIES
     ):
-        zoned_display_reg = ctx.emit_decode_zoned_display(
+        digit_image_reg = ctx.emit_numeric_digit_image(
             source_rr,
             source_fl,
             source_ref.offset_reg,
@@ -808,18 +810,21 @@ def lower_move(
         # there is no target reference modification (a ref-mod write targets a
         # specific slice, so the fill character must remain single for SPLICE).
         effective_source = source_value_reg
-        if _fill_pattern and target.ref_mod_start is None:
-            if ctx.has_field(target.name, materialised):
-                tgt_ref, _ = ctx.resolve_field_ref(
-                    target.name, materialised, target.qualifiers, span=span
-                )
-                fill_width = tgt_ref.fl.byte_length
-                filled = ctx.const_to_reg(
-                    repeat_to_width(_fill_pattern, fill_width), span=span
-                )
-                effective_source = filled
+        if (
+            _fill_pattern
+            and target.ref_mod_start is None
+            and ctx.has_field(target.name, materialised)
+        ):
+            tgt_ref, _ = ctx.resolve_field_ref(
+                target.name, materialised, target.qualifiers, span=span
+            )
+            fill_width = tgt_ref.fl.byte_length
+            filled = ctx.const_to_reg(
+                repeat_to_width(_fill_pattern, fill_width), span=span
+            )
+            effective_source = filled
         _store_move_value(
-            ctx, target, effective_source, materialised, zoned_display_reg, span=span
+            ctx, target, effective_source, materialised, digit_image_reg, span=span
         )
 
 
@@ -828,7 +833,7 @@ def _store_move_value(
     target: RefModOperand,
     source_value_reg: Register,
     materialised: MaterialisedSectionedLayout,
-    zoned_display_reg: Register = NO_REGISTER,
+    digit_image_reg: Register = NO_REGISTER,
     *,
     span: SourceSpan | None = None,
 ) -> None:
@@ -837,11 +842,10 @@ def _store_move_value(
     Applies the target's own reference modification (SPLICE write path) and
     PICTURE conversion. The source value register is never clobbered.
 
-    When the source is a numeric-DISPLAY (zoned) field and this receiver is
-    alphanumeric, COBOL moves the sending field's CHARACTER representation
-    (zoned digit characters, width-preserving) left-justified — NOT the numeric
-    value. zoned_display_reg carries that character form; it is used only for
-    alphanumeric receivers without target reference modification (red-dragon-0fqr).
+    A numeric sender moved to a character receiver sends its digit image (an
+    unsigned integer of its digit positions, P positions as zeros) rather than
+    its value; digit_image_reg carries it, and is used only for character
+    receivers without target reference modification.
     """
     target_ref, target_rr = ctx.resolve_field_ref(
         target.name,
@@ -852,11 +856,11 @@ def _store_move_value(
     )
 
     if (
-        zoned_display_reg.is_present()
+        digit_image_reg.is_present()
         and target.ref_mod_start is None
         and target_ref.fl.type_descriptor.holds_characters
     ):
-        source_value_reg = zoned_display_reg
+        source_value_reg = digit_image_reg
 
     target_value_reg = source_value_reg
 

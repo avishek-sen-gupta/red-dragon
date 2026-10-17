@@ -449,6 +449,8 @@ class TestByteBuiltinsRegistration:
             "__string_zfill",
             "__string_pad_to",
             "__cobol_digit_image",
+            "__cobol_zoned_strip_sign",
+            "__cobol_zoned_restore_sign",
             "__upper_case",
             "__lower_case",
             "__cobol_trim",

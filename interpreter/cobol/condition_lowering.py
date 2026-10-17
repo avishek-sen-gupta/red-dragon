@@ -585,28 +585,9 @@ def _lower_numeric_field_characters(
         subscripts=tuple(expr_from_dict(s) for s in expr.get("subscripts", [])),
         span=span,
     )
-    td = ref.fl.type_descriptor
-    if td.category == CobolDataCategory.ZONED_DECIMAL and not td.signed:
-        return ctx.emit_decode_zoned_display(
-            rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
-        )
-    value = ctx.emit_decode_field(
+    return ctx.emit_numeric_digit_image(
         rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
     )
-    image = ctx.fresh_reg()
-    ctx.emit_inst(
-        CallFunction(
-            result_reg=image,
-            func_name=FuncName(BuiltinName.COBOL_DIGIT_IMAGE),
-            args=(
-                value,
-                ctx.const_to_reg(td.total_digits, span=span),
-                ctx.const_to_reg(td.decimal_digits, span=span),
-            ),
-        ),
-        span=span,
-    )
-    return image
 
 
 def _lower_nonnumeric_operand(
