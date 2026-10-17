@@ -785,6 +785,27 @@ def _builtin_string_zfill(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     return BuiltinResult(value=value.zfill(width))
 
 
+def _builtin_string_pad_to(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    value, other = args[0].value, args[1].value
+    if not (isinstance(value, str) and isinstance(other, str)):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=value.ljust(len(other)))
+
+
+def _builtin_cobol_digit_image(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    from interpreter.cobol.pic_scale import encode_digits
+
+    value, total_digits, decimal_digits = (a.value for a in args)
+    if not (
+        is_cobol_number(value)
+        and isinstance(total_digits, int)
+        and isinstance(decimal_digits, int)
+    ):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    _, digits = encode_digits(value, total_digits, decimal_digits, 0)
+    return BuiltinResult(value=digits)
+
+
 def _builtin_upper_case(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """COBOL FUNCTION UPPER-CASE: uppercase a string value.
 
@@ -1835,6 +1856,8 @@ BYTE_BUILTINS: Mapping[FuncName, Builtin] = MappingProxyType(
         FuncName(BuiltinName.STRING_BOUNDARY_SPLIT): _builtin_string_boundary_split,
         FuncName(BuiltinName.STRING_SPLICE): _builtin_string_splice,
         FuncName(BuiltinName.STRING_ZFILL): _builtin_string_zfill,
+        FuncName(BuiltinName.STRING_PAD_TO): _builtin_string_pad_to,
+        FuncName(BuiltinName.COBOL_DIGIT_IMAGE): _builtin_cobol_digit_image,
         FuncName(BuiltinName.UPPER_CASE): _builtin_upper_case,
         FuncName(BuiltinName.LOWER_CASE): _builtin_lower_case,
         FuncName(BuiltinName.TRIM): _builtin_cobol_trim,

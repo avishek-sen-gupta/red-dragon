@@ -491,30 +491,6 @@ def _is_alphanumeric_operand(expr: dict) -> bool:
     return False
 
 
-def _is_zoned_display_field(
-    ctx: EmitContext,
-    expr: dict,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None = None,
-) -> bool:
-    """True if an operand is a reference to a USAGE DISPLAY numeric (zoned) field.
-
-    COMP-3 / binary numerics are a different category and are deliberately
-    excluded — only ZONED_DECIMAL carries a meaningful zoned character form.
-    A reference-modified operand is already character-sliced, so it is excluded.
-    """
-    if expr.get("kind") != "ref" or "ref_mod_start" in expr:
-        return False
-    name = expr.get("name", "")
-    if not ctx.has_field(name, materialised):
-        return False
-    ref, _ = ctx.resolve_field_ref(
-        name, materialised, tuple(expr.get("qualifiers", ())), span=span
-    )
-    return ref.fl.type_descriptor.category == CobolDataCategory.ZONED_DECIMAL
-
-
 _NUMERIC_CATEGORIES: frozenset[CobolDataCategory] = frozenset(
     {
         CobolDataCategory.ZONED_DECIMAL,
@@ -547,40 +523,19 @@ def _is_numeric_field(
     return ref.fl.type_descriptor.category in _NUMERIC_CATEGORIES
 
 
-def _is_alphanumeric_field(
+def _is_nonnumeric_operand(
     ctx: EmitContext,
     expr: dict,
     materialised: MaterialisedSectionedLayout,
     *,
-    span: SourceSpan | None = None,
+    span: SourceSpan | None,
 ) -> bool:
-    """True if an operand is a reference to an ALPHANUMERIC (PIC X) field, or a
-    reference-modified slice (always character data)."""
-    if expr.get("kind") != "ref":
-        return False
-    if "ref_mod_start" in expr:
+    if _is_alphanumeric_operand(expr) or "ref_mod_start" in expr:
         return True
-    name = expr.get("name", "")
-    if not ctx.has_field(name, materialised):
-        return False
-    ref, _ = ctx.resolve_field_ref(
-        name, materialised, tuple(expr.get("qualifiers", ())), span=span
-    )
-    return ref.fl.type_descriptor.holds_characters
-
-
-def _is_alphanumeric_sibling(
-    ctx: EmitContext,
-    sibling: dict,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None = None,
-) -> bool:
-    """An operand counts as alphanumeric for the zoned-display comparison rule
-    when it is a non-numeric figurative / quoted char literal OR an alphanumeric
-    field (or ref-mod slice)."""
-    return _is_alphanumeric_operand(sibling) or _is_alphanumeric_field(
-        ctx, sibling, materialised, span=span
+    return (
+        expr.get("kind") == "ref"
+        and ctx.has_field(expr.get("name", ""), materialised)
+        and not _is_numeric_field(ctx, expr, materialised, span=span)
     )
 
 
@@ -592,71 +547,100 @@ def _lower_relation_operand(
     *,
     span: SourceSpan | None = None,
 ) -> Register:
-    """Lower one side of a relation, resolving figuratives against the sibling.
-
-    Special case (red-dragon-dmu8): when this operand is a numeric USAGE DISPLAY
-    (zoned) field and the *sibling* is alphanumeric (a non-numeric figurative or
-    a quoted character literal), COBOL compares the numeric operand by its zoned
-    CHARACTER (display) representation, not its decoded integer value. Decode it
-    to its display digit string so both sides compare as character data. This is
-    scoped to unsigned-effective values: the raw zoned bytes are used, so a
-    trailing-sign overpunch (if any) would be carried verbatim — acceptable for
-    the SPACES / LOW-VALUES / placeholder cases this targets.
-    """
     if expr.get("kind") == "figurative":
         return _lower_figurative(ctx, expr, sibling, materialised, span=span)
-    if _is_zoned_display_field(
-        ctx, expr, materialised, span=span
-    ) and _is_alphanumeric_sibling(ctx, sibling, materialised, span=span):
-        name = expr.get("name", "")
-        subscripts = tuple(expr_from_dict(s) for s in expr.get("subscripts", []))
-        ref, rr = ctx.resolve_field_ref(
-            name,
-            materialised,
-            qualifiers=tuple(expr.get("qualifiers", ())),
-            subscripts=subscripts,
-            span=span,
-        )
-        return ctx.emit_decode_zoned_display(
-            rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
-        )
-    if (
-        _is_alphanumeric_operand(expr)
-        and expr.get("kind") == "lit"
-        and _is_zoned_display_field(ctx, sibling, materialised, span=span)
-    ):
-        # A non-numeric char literal compared to a numeric-DISPLAY field: COBOL
-        # space-pads the (shorter) literal to the field width and compares
-        # characters. Size to the sibling field so it lines up with the field's
-        # zoned display string (red-dragon-dmu8).
-        return _lower_padded_char_literal(ctx, expr, sibling, materialised, span=span)
     return _lower_expr_dict(ctx, expr, materialised, span=span)
 
 
-def _lower_padded_char_literal(
+def _lower_numeric_field_characters(
     ctx: EmitContext,
-    lit: dict,
+    expr: dict,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> Register:
+    ref, rr = ctx.resolve_field_ref(
+        expr.get("name", ""),
+        materialised,
+        qualifiers=tuple(expr.get("qualifiers", ())),
+        subscripts=tuple(expr_from_dict(s) for s in expr.get("subscripts", [])),
+        span=span,
+    )
+    td = ref.fl.type_descriptor
+    if td.category == CobolDataCategory.ZONED_DECIMAL and not td.signed:
+        return ctx.emit_decode_zoned_display(
+            rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
+        )
+    value = ctx.emit_decode_field(
+        rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
+    )
+    image = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=image,
+            func_name=FuncName(BuiltinName.COBOL_DIGIT_IMAGE),
+            args=(
+                value,
+                ctx.const_to_reg(td.total_digits, span=span),
+                ctx.const_to_reg(td.decimal_digits, span=span),
+            ),
+        ),
+        span=span,
+    )
+    return image
+
+
+def _lower_nonnumeric_operand(
+    ctx: EmitContext,
+    expr: dict,
     sibling: dict,
     materialised: MaterialisedSectionedLayout,
     *,
-    span: SourceSpan | None = None,
+    span: SourceSpan | None,
 ) -> Register:
-    """Lower a quoted char literal space-padded to the sibling field's width.
+    if expr.get("kind") == "lit" and not _is_alphanumeric_operand(expr):
+        return ctx.const_to_reg(str(expr.get("value", "")).lstrip("+-"), span=span)
+    if _is_numeric_field(ctx, expr, materialised, span=span):
+        return _lower_numeric_field_characters(ctx, expr, materialised, span=span)
+    return _lower_relation_operand(ctx, expr, sibling, materialised, span=span)
 
-    The literal text carries its surrounding quotes (e.g. "'*'"); they are
-    stripped, the content is right-padded with spaces to the sibling field's
-    byte length, and emitted as a string constant.
-    """
-    raw = str(lit.get("value", ""))
-    if len(raw) >= 2 and raw[0] in ("'", '"') and raw[-1] == raw[0]:
-        content = raw[1:-1]
-    else:
-        content = raw
-    width = _field_byte_length(ctx, sibling, materialised, span=span)
-    if width is None or width < len(content):
-        width = len(content)
-    padded = content.ljust(width)
-    return ctx.const_to_reg(padded, span=span)
+
+def _pad_to(
+    ctx: EmitContext, value: Register, other: Register, *, span: SourceSpan | None
+) -> Register:
+    padded = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=padded,
+            func_name=FuncName(BuiltinName.STRING_PAD_TO),
+            args=(value, other),
+        ),
+        span=span,
+    )
+    return padded
+
+
+def _lower_relation_registers(
+    ctx: EmitContext,
+    rel: dict,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> tuple[Register, Register]:
+    left, right = rel["left"], rel["right"]
+    if not any(
+        _is_nonnumeric_operand(ctx, e, materialised, span=span) for e in (left, right)
+    ):
+        return (
+            _lower_relation_operand(ctx, left, right, materialised, span=span),
+            _lower_relation_operand(ctx, right, left, materialised, span=span),
+        )
+    left_reg = _lower_nonnumeric_operand(ctx, left, right, materialised, span=span)
+    right_reg = _lower_nonnumeric_operand(ctx, right, left, materialised, span=span)
+    return (
+        _pad_to(ctx, left_reg, right_reg, span=span),
+        _pad_to(ctx, right_reg, left_reg, span=span),
+    )
 
 
 def _lower_relation_node(
@@ -667,12 +651,7 @@ def _lower_relation_node(
     span: SourceSpan | None = None,
 ) -> Register:
     """Lower a structured relation dict {"left": <expr>, "op": "...", "right": <expr>}."""
-    left_reg = _lower_relation_operand(
-        ctx, rel["left"], rel["right"], materialised, span=span
-    )
-    right_reg = _lower_relation_operand(
-        ctx, rel["right"], rel["left"], materialised, span=span
-    )
+    left_reg, right_reg = _lower_relation_registers(ctx, rel, materialised, span=span)
     op = _OP_MAP.get(rel.get("op", "=="), "==")
     result = ctx.fresh_reg()
     ctx.emit_inst(

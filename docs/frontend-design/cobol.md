@@ -283,6 +283,8 @@ Conditions are serialized by the Java bridge as recursive JSON trees (not raw so
 
 `_lower_condition()` deserializes this tree and recursively emits IR: leaf relation nodes produce a `BINOP` comparison; compound nodes chain via `BRANCH_IF` with short-circuit blocks.
 
+A relation with a nonnumeric operand (a nonnumeric literal or figurative, a reference-modified slice, or an alphanumeric, edited or group item) compares characters. A numeric operand there becomes its digit characters without the sign: an integer literal as written, an unsigned zoned item its own bytes, any other numeric item the digits of its value (`__cobol_digit_image`). The shorter operand is then extended on the right with spaces (`__string_pad_to`, at run time, so variable-length reference modification pads too). Two numeric operands compare by value.
+
 ## Known Gaps
 
 - **Exponentiation (`**`) is not parsed or lowered** (red-dragon-wxur). Fixed-point arithmetic itself is exact: values, IBM `ARITH(COMPAT)` intermediate scales and every conversion live behind the `cobol_numeric` boundary (ADR-148, ADR-149), and only COMP-1/COMP-2 fields and floating intrinsics use IEEE floats.

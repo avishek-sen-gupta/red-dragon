@@ -104,6 +104,8 @@ class BuiltinName:
     STRING_BOUNDARY_SPLIT = "__string_boundary_split"
     STRING_SPLICE = "__string_splice"
     STRING_ZFILL = "__string_zfill"
+    STRING_PAD_TO = "__string_pad_to"
+    COBOL_DIGIT_IMAGE = "__cobol_digit_image"
     UPPER_CASE = "__upper_case"
     LOWER_CASE = "__lower_case"
     TRIM = "__cobol_trim"
