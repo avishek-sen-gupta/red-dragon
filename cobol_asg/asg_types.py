@@ -31,6 +31,7 @@ from cobol_asg.edit_picture import (
     UnsupportedEditPictureError,
 )
 from cobol_asg.lp32 import LP32_MODE
+from cobol_asg.program_conventions import ProgramConventions
 from cobol_asg.source_span import SourceSpan
 from cobol_asg.storage_layout import file_section_layout, section_layout
 
@@ -227,7 +228,11 @@ class CobolASG:
         }
         currency = _currency_from_special_names(data)
         collating = data.get("special_names", {}).get("program_collating_sequence", {})
-        pointer = addressing_mode.pointer_type
+        conventions = ProgramConventions(
+            currency=currency,
+            pointer_type=addressing_mode.pointer_type,
+            decimal_point_is_comma=comma,
+        )
         return cls(
             program_id=data.get("program_id", ""),
             file_control=[
@@ -235,13 +240,13 @@ class CobolASG:
             ],
             data_fields=section_layout(
                 [
-                    CobolField.from_dict(f, currency, pointer, comma)
+                    CobolField.from_dict(f, conventions)
                     for f in data.get("data_fields", [])
                 ]
             ),
             linkage_fields=section_layout(
                 [
-                    CobolField.from_dict(f, currency, pointer, comma)
+                    CobolField.from_dict(f, conventions)
                     for f in data.get("linkage_fields", [])
                 ]
             ),
@@ -250,13 +255,13 @@ class CobolASG:
             ],
             local_storage_fields=section_layout(
                 [
-                    CobolField.from_dict(f, currency, pointer, comma)
+                    CobolField.from_dict(f, conventions)
                     for f in data.get("local_storage_fields", [])
                 ]
             ),
             file_fields=file_section_layout(
                 [
-                    [CobolField.from_dict(f, currency, pointer, comma) for f in records]
+                    [CobolField.from_dict(f, conventions) for f in records]
                     for _, records in groupby(data.get("file_fields", []), _fd_name)
                 ]
             ),

@@ -63,7 +63,17 @@ def test_floating_point_items_occupy_four_and_eight_bytes_without_a_picture():
     ]
 
 
-def test_a_group_sign_separate_widens_each_signed_display_item_under_it():
+def test_signed_display_items_take_the_nearest_sign_clause_and_others_take_none():
     fields = _parsed("group_sign.cbl").data_fields
 
+    assert [
+        (name, _named(fields, name).sign_leading, _named(fields, name).sign_separate)
+        for name in "ABCDE"
+    ] == [
+        ("A", False, True),
+        ("B", True, True),
+        ("C", False, False),
+        ("D", False, False),
+        ("E", False, False),
+    ]
     assert (_named(fields, "C").offset, _named(fields, "E").offset) == (3, 7)

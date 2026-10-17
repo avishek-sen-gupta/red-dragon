@@ -15,7 +15,7 @@ import java.util.logging.Logger;
 
 import static org.junit.Assert.*;
 
-/** A group's SIGN clause reaches each signed DISPLAY numeric item under it; the nearest clause wins. */
+/** Each entry's own SIGN clause is serialised as written; none is inherited here. */
 public class GroupSignSerializerTest {
 
     @BeforeClass
@@ -25,12 +25,14 @@ public class GroupSignSerializerTest {
     }
 
     @Test
-    public void signedDisplayItemsTakeTheNearestSignClauseAndOthersTakeNone() throws Exception {
+    public void eachEntryCarriesOnlyItsOwnSignClause() throws Exception {
         JsonObject asg = serializeFixture("group_sign.cbl");
 
-        assertEquals("{\"position\":\"TRAILING\",\"separate\":true}", sign(asg, "A"));
-        assertEquals("{\"position\":\"LEADING\",\"separate\":true}", sign(asg, "B"));
+        assertEquals("{\"position\":\"TRAILING\",\"separate\":true}", sign(asg, "OUTER"));
+        assertEquals("{\"position\":\"LEADING\",\"separate\":true}", sign(asg, "INNER"));
         assertEquals("{\"position\":\"TRAILING\",\"separate\":false}", sign(asg, "C"));
+        assertEquals("", sign(asg, "A"));
+        assertEquals("", sign(asg, "B"));
         assertEquals("", sign(asg, "D"));
         assertEquals("", sign(asg, "E"));
     }

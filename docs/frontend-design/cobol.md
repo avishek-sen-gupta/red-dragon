@@ -104,7 +104,7 @@ Storage is allocated at the table's maximum. The bridge carries the DEPENDING ON
 
 | PIC Category | Encoding | Bytes | Example |
 |---|---|---|---|
-| `9(n)` (DISPLAY) | Zoned decimal — one byte per digit, sign in last byte zone; a SIGN clause moves it to the first byte or into a separate `+`/`-` byte. A signed item takes its own SIGN clause, else the nearest enclosing group's (resolved by the bridge) | n, +1 if SIGN SEPARATE | `PIC 9(5)` → 5 bytes |
+| `9(n)` (DISPLAY) | Zoned decimal — one byte per digit, sign in last byte zone; a SIGN clause moves it to the first byte or into a separate `+`/`-` byte. A signed item takes its own SIGN clause, else the nearest enclosing group's (resolved by the ASG reader, `CobolField.from_dict`; the bridge emits each entry's own clause) | n, +1 if SIGN SEPARATE | `PIC 9(5)` → 5 bytes |
 | `S9(n) COMP-3` | Packed decimal — two digits per byte, sign nibble in last byte | ⌈(n+1)/2⌉ | `PIC S9(5) COMP-3` → 3 bytes |
 | `X(n)` | Alphanumeric — one byte per character (ASCII or EBCDIC) | n | `PIC X(10)` → 10 bytes |
 | `9(n) COMP` / `BINARY` | Big-endian two's-complement integer of the unscaled value (implied decimals and PIC P applied, truncated toward zero), cut to the PICTURE's digits as for any numeric receiver (IBM TRUNC(STD): 1023 into `PIC S999 COMP` stores 23); an unsigned item stores the magnitude, so a negative value is stored without its sign | 2 / 4 / 8 by n | `PIC 9(5) COMP` → 4 bytes |
