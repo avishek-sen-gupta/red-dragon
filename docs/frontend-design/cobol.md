@@ -226,19 +226,17 @@ A paragraph-name need be unique only within its section. A name declared once ke
 
 ## String Operation Builtins
 
-String operations use 7 low-level builtins registered in `byte_builtins.py`:
+String operations use these low-level builtins registered in `byte_builtins.py`:
 
 | Builtin | Signature | Purpose |
 |---|---|---|
 | `__string_find` | `(source, needle) → int` | Find first occurrence (-1 if not found) |
 | `__string_split` | `(source, delimiter) → list[str]` | Split by delimiter |
-| `__string_count` | `(source, pattern, mode) → int` | Count occurrences (mode: all/leading/characters) |
-| `__string_replace` | `(source, from, to, mode) → str` | Replace occurrences (mode: all/leading/first) |
 | `__string_concat` | `(parts) → str` | Concatenate list of strings |
 | `__string_slice__` | `(source, start, length) → str` | Extract substring (0-based start, exclusive end); used for reference modification reads |
 | `__string_splice__` | `(source, start, length, replacement) → str` | Replace substring (0-based start); used for reference modification writes |
 
-These are composed into IR instruction sequences via builders in `ir_encoders.py` (`build_string_split_ir`, `build_inspect_tally_ir`, `build_inspect_replace_ir`). The composed IR is inlined at each lowering site, keeping all operations visible to data-flow analysis.
+These are composed into IR instruction sequences via builders in `ir_encoders.py` (`build_string_split_ir`); INSPECT uses its own builtins (see INSPECT Lowering). The composed IR is inlined at each lowering site, keeping all operations visible to data-flow analysis.
 
 ## INSPECT Lowering
 
