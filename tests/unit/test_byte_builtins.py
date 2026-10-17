@@ -442,6 +442,7 @@ class TestByteBuiltinsRegistration:
             "__cobol_round",
             "__cobol_apply_edit_picture",
             "__cobol_apply_alphanumeric_edit",
+            "__cobol_de_edit",
             "__string_slice",
             "__string_boundary_slice",
             "__string_boundary_split",

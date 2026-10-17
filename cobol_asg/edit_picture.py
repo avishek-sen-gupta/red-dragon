@@ -46,6 +46,7 @@ expected values:
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from cobol_numeric.number import (
@@ -469,3 +470,49 @@ def _sign_char(symbol: str, negative: bool) -> str:
     if symbol == "+":
         return "-" if negative else "+"
     return "-" if negative else " "
+
+
+_DE_EDIT_DIGITS = frozenset("9Z*P")
+_POINT_SYMBOLS = frozenset(".V")
+_NEGATIVE_MARKS = frozenset({("+", "-"), ("-", "-"), ("C", "C"), ("D", "D")})
+
+
+def _de_edit_cells(image: str, template: Sequence[str]) -> tuple[tuple[str, str], ...]:
+    stored = iter(image.ljust(len(template)))
+    return tuple(
+        (sym, "0" if sym == "P" else "" if sym == "V" else next(stored))
+        for sym in template
+    )
+
+
+def _integer_digit_count(cells: tuple[tuple[str, str], ...], digit_syms: str) -> int:
+    symbols = [sym for sym, _ in cells]
+    point = next(
+        (i for i, sym in enumerate(symbols) if sym in _POINT_SYMBOLS), len(symbols)
+    )
+    leading_p = next((sym for sym in symbols if sym in digit_syms), "") == "P"
+    integer_end = 0 if point == len(symbols) and leading_p else point
+    return sum(1 for sym in symbols[:integer_end] if sym in digit_syms)
+
+
+def de_edit(image: str, pic: str, currency: str = DEFAULT_CURRENCY) -> CobolNumber:
+    """The numeric value a numeric-edited ``image`` of ``pic`` represents.
+
+    De-editing (ANSI X3.23-1985 MOVE; IBM Enterprise COBOL LR, "Elementary
+    moves"): each digit position contributes its digit, a suppressed or
+    check-protected one contributes zero, insertion characters are dropped, and
+    the value is negative when a sign position shows '-' or CR / DB is present.
+    """
+    template = [sym for sym in _expand(pic.upper()) if sym != "S"]
+    float_symbol, _ = find_float_string(template, currency)
+    digit_syms = "".join(_DE_EDIT_DIGITS) + float_symbol
+    cells = _de_edit_cells(image, template)
+    digits = "".join(
+        char if char.isdigit() else "0" for sym, char in cells if sym in digit_syms
+    )
+    negative = any(cell in _NEGATIVE_MARKS for cell in cells)
+    magnitude = int(digits or "0")
+    return from_digits(
+        -magnitude if negative else magnitude,
+        len(digits) - _integer_digit_count(cells, digit_syms),
+    )
