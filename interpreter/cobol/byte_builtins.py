@@ -63,6 +63,8 @@ from interpreter.cobol.inspect_scan import (
 from interpreter.cobol.numeric_builtins import NUMERIC_BUILTINS
 from interpreter.cobol.run_unit import advanced, restarted, value_of
 from interpreter.cobol.string_transfer import string_into
+from interpreter.cobol.unstring_delimiter_text import UnstringDelimiterText
+from interpreter.cobol.unstring_scan import unstring
 from interpreter.func_name import FuncName
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.builtin import Builtin
@@ -365,106 +367,6 @@ def _builtin_string_split(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     return BuiltinResult(value=source.split(delimiter))
 
 
-def _builtin_unstring_by_size(args: list[TypedValue], vm: VMState) -> BuiltinResult:
-    """Args: [source: str, size1: int, ...]. The pieces an undelimited UNSTRING
-    moves: each receiver's size in turn, stopping once the source is exhausted."""
-    if any(_is_symbolic(a.value) for a in args):
-        return BuiltinResult(value=_UNCOMPUTABLE)
-    source = str(args[0].value)
-    sizes = [int(a.value) for a in args[1:]]
-    starts = accumulate(sizes, initial=0)
-    return BuiltinResult(
-        value=[
-            source[start : start + size]
-            for start, size in zip(starts, sizes, strict=False)
-            if start < len(source)
-        ]
-    )
-
-
-def _builtin_multi_delimiter_split(
-    args: list[TypedValue], vm: VMState
-) -> BuiltinResult:
-    """Split source on whichever candidate delimiter matches nearest, repeated
-    until the source is exhausted (COBOL UNSTRING ... DELIMITED BY d1 OR d2 OR ...).
-
-    Args: [source: str, delim1: str, delim2: str, ...] — one or more delimiters.
-    Returns: list[str]. A single delimiter behaves identically to
-        str.split(delimiter) (str.split's own behavior is the N=1 case of this
-        same repeated-nearest-match scan).
-    """
-    if len(args) < 2 or any(_is_symbolic(a.value) for a in args):
-        return BuiltinResult(value=_UNCOMPUTABLE)
-    source = args[0].value
-    delimiters = [a.value for a in args[1:]]
-    if not isinstance(source, str) or not all(isinstance(d, str) for d in delimiters):
-        return BuiltinResult(value=_UNCOMPUTABLE)
-    parts: list[str] = []
-    remaining = source
-    while True:
-        best_pos = -1
-        best_delim = ""
-        for d in delimiters:
-            if not d:
-                continue
-            pos = remaining.find(d)
-            if pos >= 0 and (best_pos < 0 or pos < best_pos):
-                best_pos = pos
-                best_delim = d
-        if best_pos < 0:
-            parts.append(remaining)
-            break
-        parts.append(remaining[:best_pos])
-        remaining = remaining[best_pos + len(best_delim) :]
-    return BuiltinResult(value=parts)
-
-
-def _builtin_multi_delimiter_consumed_length(
-    args: list[TypedValue], vm: VMState
-) -> BuiltinResult:
-    """Length of source consumed by the first target_count delimiter-splits
-    (COBOL UNSTRING ... WITH POINTER: the cursor advances past whatever was
-    actually consumed, delimiter included — not an assumed fixed delimiter
-    width). Performs the same repeated-nearest-match scan as
-    MULTI_DELIMITER_SPLIT, but returns the consumed prefix length instead of
-    the split parts.
-
-    Args: [source: str, target_count: int, delim1: str, delim2: str, ...]
-    Returns: int. If fewer than target_count delimiters are found, returns
-        len(source) (the whole remaining source was consumed).
-    """
-    if len(args) < 3 or any(_is_symbolic(a.value) for a in args):
-        return BuiltinResult(value=_UNCOMPUTABLE)
-    source = args[0].value
-    target_count = args[1].value
-    delimiters = [a.value for a in args[2:]]
-    if (
-        not isinstance(source, str)
-        or not isinstance(target_count, int)
-        or not all(isinstance(d, str) for d in delimiters)
-    ):
-        return BuiltinResult(value=_UNCOMPUTABLE)
-    consumed = 0
-    remaining = source
-    for _ in range(target_count):
-        best_pos = -1
-        best_delim = ""
-        for d in delimiters:
-            if not d:
-                continue
-            pos = remaining.find(d)
-            if pos >= 0 and (best_pos < 0 or pos < best_pos):
-                best_pos = pos
-                best_delim = d
-        if best_pos < 0:
-            consumed += len(remaining)
-            remaining = ""
-            break
-        consumed += best_pos + len(best_delim)
-        remaining = remaining[best_pos + len(best_delim) :]
-    return BuiltinResult(value=consumed)
-
-
 def _builtin_string_concat(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Concatenate a list of strings.
 
@@ -672,6 +574,39 @@ def _builtin_cobol_string(args: list[TypedValue], vm: VMState) -> BuiltinResult:
         str(args[0].value), int(args[1].value), [str(a.value) for a in args[2:]]
     )
     return BuiltinResult(value=[outcome.image, outcome.pointer, outcome.overflow])
+
+
+def _builtin_cobol_unstring(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """Args: [source, pointer, delimiter count, (delimiter, ALL flag)...,
+    receiver sizes...]. Returns [pointer, overflow, receivers acted on,
+    (characters, delimiter, count) for each receiver acted on...]."""
+    if any(_is_symbolic(a.value) for a in args):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    delimiter_end = 3 + 2 * int(args[2].value)
+    delimiter_args = args[3:delimiter_end]
+    outcome = unstring(
+        str(args[0].value),
+        int(args[1].value),
+        [
+            UnstringDelimiterText(text=str(text.value), all=bool(flag.value))
+            for text, flag in zip(
+                delimiter_args[::2], delimiter_args[1::2], strict=True
+            )
+        ],
+        [int(a.value) for a in args[delimiter_end:]],
+    )
+    return BuiltinResult(
+        value=[
+            outcome.pointer,
+            outcome.overflow,
+            len(outcome.pieces),
+            *(
+                item
+                for piece in outcome.pieces
+                for item in (piece.text, piece.delimiter, piece.count)
+            ),
+        ]
+    )
 
 
 def _builtin_cobol_inspect_replace(
@@ -1887,11 +1822,6 @@ BYTE_BUILTINS: Mapping[FuncName, Builtin] = MappingProxyType(
         FuncName(BuiltinName.COBOL_PREPARE_SIGN): _builtin_cobol_prepare_sign,
         FuncName(BuiltinName.STRING_FIND): _builtin_string_find,
         FuncName(BuiltinName.STRING_SPLIT): _builtin_string_split,
-        FuncName(BuiltinName.MULTI_DELIMITER_SPLIT): _builtin_multi_delimiter_split,
-        FuncName(BuiltinName.UNSTRING_BY_SIZE): _builtin_unstring_by_size,
-        FuncName(
-            BuiltinName.MULTI_DELIMITER_CONSUMED_LENGTH
-        ): _builtin_multi_delimiter_consumed_length,
         FuncName(BuiltinName.STRING_CONCAT): _builtin_string_concat,
         FuncName(BuiltinName.STRING_CONCAT_PAIR): _builtin_string_concat_pair,
         FuncName(BuiltinName.INT_TO_BINARY_BYTES): _builtin_int_to_binary_bytes,
@@ -1909,6 +1839,7 @@ BYTE_BUILTINS: Mapping[FuncName, Builtin] = MappingProxyType(
         FuncName(BuiltinName.COBOL_DE_EDIT): _builtin_cobol_de_edit,
         FuncName(BuiltinName.COBOL_INSPECT_TALLY): _builtin_cobol_inspect_tally,
         FuncName(BuiltinName.COBOL_STRING): _builtin_cobol_string,
+        FuncName(BuiltinName.COBOL_UNSTRING): _builtin_cobol_unstring,
         FuncName(BuiltinName.COBOL_INSPECT_REPLACE): _builtin_cobol_inspect_replace,
         FuncName(BuiltinName.COBOL_INSPECT_CONVERT): _builtin_cobol_inspect_convert,
         FuncName(BuiltinName.STRING_SLICE): _builtin_string_slice,

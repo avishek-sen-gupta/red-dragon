@@ -19,7 +19,9 @@ def _first_statement(obj: dict) -> dict:
     return obj["statements"][0]
 
 
-def test_unstring_emits_multiple_delimiters_as_a_list(bridge_jar):
+def test_unstring_emits_delimiters_with_all_and_receivers_with_their_items(
+    bridge_jar,
+):
     obj = _parse(
         [
             "IDENTIFICATION DIVISION.",
@@ -27,16 +29,42 @@ def test_unstring_emits_multiple_delimiters_as_a_list(bridge_jar):
             "DATA DIVISION.",
             "WORKING-STORAGE SECTION.",
             "01 WS-SRC PIC X(10).",
+            "01 WS-T. 02 WS-D PIC X OCCURS 3.",
+            "01 WS-I PIC 9.",
             "01 WS-F1 PIC X(5).",
             "01 WS-F2 PIC X(5).",
+            "01 WS-DL PIC X.",
+            "01 WS-CT PIC 99.",
             "PROCEDURE DIVISION.",
-            "    UNSTRING WS-SRC DELIMITED BY ',' OR ';' INTO WS-F1 WS-F2.",
+            "    UNSTRING WS-SRC DELIMITED BY ALL '0' OR ';' OR ALL SPACE",
+            "        OR WS-D (WS-I)",
+            "        INTO WS-F1 DELIMITER IN WS-DL COUNT IN WS-CT WS-F2.",
             "    GOBACK.",
         ],
         bridge_jar,
     )
     stmt = _first_statement(obj)
-    assert stmt["delimiters"] == ["','", "';'"]
+    assert (stmt["delimiters"], stmt["into"]) == (
+        [
+            {"operand": {"name": "'0'"}, "all": True},
+            {"operand": {"name": "';'"}},
+            {"operand": {"name": "SPACE"}, "all": True},
+            {
+                "operand": {
+                    "name": "WS-D",
+                    "subscripts": [{"kind": "ref", "name": "WS-I"}],
+                }
+            },
+        ],
+        [
+            {
+                "target": {"name": "WS-F1"},
+                "delimiter_in": {"name": "WS-DL"},
+                "count_in": {"name": "WS-CT"},
+            },
+            {"target": {"name": "WS-F2"}},
+        ],
+    )
 
 
 def test_unstring_emits_pointer_and_tallying_target(bridge_jar):

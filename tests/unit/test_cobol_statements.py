@@ -63,6 +63,8 @@ from cobol_asg.ref_mod import RefModOperand
 from cobol_asg.selection_condition import SelectionCondition
 from cobol_asg.set_operand import SetOperand
 from cobol_asg.truth_value import TruthValue
+from cobol_asg.unstring_delimiter import UnstringDelimiter
+from cobol_asg.unstring_receiver import UnstringReceiver
 from cobol_asg.value_object import ValueObject
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
@@ -547,14 +549,25 @@ class TestParseStatementDispatch:
             {
                 "type": "UNSTRING",
                 "source": {"name": "WS-FULL"},
-                "delimiters": ["SPACES"],
-                "into": ["WS-FIRST", "WS-LAST"],
+                "delimiters": [{"operand": {"name": "SPACES"}, "all": True}],
+                "into": [
+                    {"target": {"name": "WS-FIRST"}},
+                    {"target": {"name": "WS-LAST"}, "count_in": {"name": "WS-N"}},
+                ],
             }
         )
         assert isinstance(stmt, UnstringStatement)
         assert stmt.source.name == "WS-FULL"
-        assert stmt.delimiters == ["SPACES"]
-        assert [i.name for i in stmt.into] == ["WS-FIRST", "WS-LAST"]
+        assert stmt.delimiters == [
+            UnstringDelimiter(operand=RefModOperand(name="SPACES"), all=True)
+        ]
+        assert stmt.into == [
+            UnstringReceiver(target=RefModOperand(name="WS-FIRST")),
+            UnstringReceiver(
+                target=RefModOperand(name="WS-LAST"),
+                count_in=RefModOperand(name="WS-N"),
+            ),
+        ]
 
     @covers(CobolFeature.INSPECT_TALLYING)
     def test_inspect_tallying(self):
@@ -1472,8 +1485,15 @@ class TestRoundTrip:
         data = {
             "type": "UNSTRING",
             "source": {"name": "WS-FULL"},
-            "delimiters": [" "],
-            "into": [{"name": "WS-FIRST"}, {"name": "WS-LAST"}],
+            "delimiters": [{"operand": {"name": "' '"}, "all": True}],
+            "into": [
+                {
+                    "target": {"name": "WS-FIRST"},
+                    "delimiter_in": {"name": "WS-D"},
+                    "count_in": {"name": "WS-C"},
+                },
+                {"target": {"name": "WS-LAST"}},
+            ],
         }
         assert self._round_trip(data) == data
 
@@ -1491,8 +1511,8 @@ class TestRoundTrip:
         unstring_data = {
             "type": "UNSTRING",
             "source": {"name": "WS-FULL"},
-            "delimiters": [","],
-            "into": [{"name": "WS-FIRST"}],
+            "delimiters": [{"operand": {"name": "','"}}],
+            "into": [{"target": {"name": "WS-FIRST"}}],
             "on_overflow": on,
             "not_on_overflow": not_on,
         }
@@ -1754,8 +1774,7 @@ class TestStringRefModAst:
         stmt = UnstringStatement.from_dict(
             {
                 "source": {"name": "WS-SRC"},
-                "delimited_by": "SPACE",
-                "into": ["WS-A"],
+                "into": [{"target": {"name": "WS-A"}}],
             }
         )
         assert isinstance(stmt.source, RefModOperand)

@@ -42,6 +42,8 @@ from cobol_asg.ref_mod import (
 )
 from cobol_asg.set_operand import SetOperand, set_operand_from_dict
 from cobol_asg.source_span import SourceSpan
+from cobol_asg.unstring_delimiter import UnstringDelimiter
+from cobol_asg.unstring_receiver import UnstringReceiver
 
 # ── Dialect parser injection ──────────────────────────────────────
 # Set by CobolFrontend.lower() for the duration of each parse call. Cicada
@@ -937,16 +939,16 @@ class StringStatement:
 
 @dataclass(frozen=True)
 class UnstringStatement:
-    """UNSTRING source DELIMITED BY ... INTO targets.
+    """UNSTRING source DELIMITED BY [ALL] d1 OR [ALL] d2 ... INTO receivers.
 
-    Each entry in ``into`` may carry reference modification (``INTO
-    dest(start:length)``, red-dragon-2fxq) — a bare receiving field is
-    ``RefModOperand(name=...)`` with no ref-mod set.
+    Each delimiter is an operand (literal, figurative constant or data item)
+    with its ALL flag; each receiver carries its DELIMITER IN and COUNT IN
+    items. A receiver may carry reference modification (red-dragon-2fxq).
     """
 
     source: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
-    delimiters: list[str] = field(default_factory=list)
-    into: list[RefModOperand] = field(default_factory=list)
+    delimiters: list[UnstringDelimiter] = field(default_factory=list)
+    into: list[UnstringReceiver] = field(default_factory=list)
     tallying_target: str = ""
     pointer: str = ""
     on_overflow: list[CobolStatementType] = field(default_factory=list)
@@ -957,8 +959,21 @@ class UnstringStatement:
     def from_dict(cls, data: dict) -> UnstringStatement:
         return cls(
             source=RefModOperand.from_dict(data.get("source", {})),
-            delimiters=list(data.get("delimiters", [])),
-            into=[RefModOperand.from_dict(i) for i in data.get("into", [])],
+            delimiters=[
+                UnstringDelimiter(
+                    operand=RefModOperand.from_dict(d["operand"]),
+                    all=d.get("all", False),
+                )
+                for d in data.get("delimiters", [])
+            ],
+            into=[
+                UnstringReceiver(
+                    target=RefModOperand.from_dict(i["target"]),
+                    delimiter_in=_operand(i, "delimiter_in"),
+                    count_in=_operand(i, "count_in"),
+                )
+                for i in data.get("into", [])
+            ],
             tallying_target=data.get("tallying_target", ""),
             pointer=data.get("pointer", ""),
             on_overflow=[parse_statement(c) for c in data.get("on_overflow", [])],
@@ -972,8 +987,22 @@ class UnstringStatement:
         result = {
             "type": "UNSTRING",
             "source": self.source.to_dict(),
-            "delimiters": list(self.delimiters),
-            "into": [i.to_dict() for i in self.into],
+            "delimiters": [
+                {"operand": d.operand.to_dict(), **({"all": True} if d.all else {})}
+                for d in self.delimiters
+            ],
+            "into": [
+                {
+                    "target": i.target.to_dict(),
+                    **(
+                        {"delimiter_in": i.delimiter_in.to_dict()}
+                        if i.delimiter_in.name
+                        else {}
+                    ),
+                    **({"count_in": i.count_in.to_dict()} if i.count_in.name else {}),
+                }
+                for i in self.into
+            ],
             **_phrases_to_dict(
                 {
                     "on_overflow": self.on_overflow,

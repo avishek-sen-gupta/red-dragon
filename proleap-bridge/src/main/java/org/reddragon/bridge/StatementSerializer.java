@@ -1444,34 +1444,42 @@ public final class StatementSerializer {
             if (stmt.getSending() != null && stmt.getSending().getSendingCall() != null) {
                 obj.add("source", serializeMoveOperand(stmt.getSending().getSendingCall()));
             }
-            // Delimiters: first from DelimitedByPhrase, then each OR ALL? phrase.
-            // Multiple delimiters (DELIMITED BY x OR y OR z) all land in one JSON
-            // array; Python repeatedly finds whichever candidate is nearest at
-            // each split point, not a single delimiter chosen once (red-dragon-4q25.12).
+            // Delimiters: the DELIMITED BY operand, then each OR operand, in the
+            // order written, each with its ALL flag. A delimiter is an operand: a
+            // data reference keeping its qualifiers and subscripts, or a literal /
+            // figurative constant (red-dragon-sl30.42).
             if (stmt.getSending() != null) {
                 JsonArray delimiters = new JsonArray();
                 io.proleap.cobol.asg.metamodel.procedure.unstring.DelimitedByPhrase dbp =
                         stmt.getSending().getDelimitedByPhrase();
                 if (dbp != null && dbp.getDelimitedByValueStmt() != null) {
-                    delimiters.add(extractValueStmtText(dbp.getDelimitedByValueStmt()));
+                    boolean all = ((CobolParser.UnstringDelimitedByPhraseContext) dbp.getCtx()).ALL() != null;
+                    delimiters.add(unstringDelimiter(dbp.getDelimitedByValueStmt(), all));
                 }
                 for (io.proleap.cobol.asg.metamodel.procedure.unstring.OrAll orAll
                         : stmt.getSending().getOrAlls()) {
                     if (orAll.getOrAllValueStmt() != null) {
-                        delimiters.add(extractValueStmtText(orAll.getOrAllValueStmt()));
+                        boolean all = ((CobolParser.UnstringOrAllPhraseContext) orAll.getCtx()).ALL() != null;
+                        delimiters.add(unstringDelimiter(orAll.getOrAllValueStmt(), all));
                     }
                 }
                 obj.add("delimiters", delimiters);
             }
-            // INTO targets — each a structured ref (name + ref_mod_start/
-            // length + subscripts + qualifiers), not a plain name, so
-            // INTO dest(start:length) on any receiving field is preserved
-            // (red-dragon-2fxq).
+            // INTO receivers: each a structured ref (so INTO dest(start:length) is
+            // preserved, red-dragon-2fxq) with its DELIMITER IN and COUNT IN items.
             if (stmt.getIntoPhrase() != null) {
                 JsonArray intoArr = new JsonArray();
                 for (io.proleap.cobol.asg.metamodel.procedure.unstring.Into into : stmt.getIntoPhrase().getIntos()) {
                     if (into.getIntoCall() != null) {
-                        intoArr.add(serializeRef(into.getIntoCall()));
+                        JsonObject receiver = new JsonObject();
+                        receiver.add("target", serializeRef(into.getIntoCall()));
+                        if (into.getDelimiterIn() != null && into.getDelimiterIn().getDelimiterInCall() != null) {
+                            receiver.add("delimiter_in", serializeRef(into.getDelimiterIn().getDelimiterInCall()));
+                        }
+                        if (into.getCountIn() != null && into.getCountIn().getCountInCall() != null) {
+                            receiver.add("count_in", serializeRef(into.getCountIn().getCountInCall()));
+                        }
+                        intoArr.add(receiver);
                     }
                 }
                 obj.add("into", intoArr);
@@ -1494,6 +1502,20 @@ public final class StatementSerializer {
         addPhrase(obj, "on_overflow", stmt.getOnOverflowPhrase());
         addPhrase(obj, "not_on_overflow", stmt.getNotOnOverflowPhrase());
         return obj;
+    }
+
+    /**
+     * One UNSTRING delimiter: its operand and whether ALL precedes it. The grammar
+     * may read {@code ALL "0"} as the figurative {@code ALL literal} instead of the
+     * phrase's own ALL; either way the delimiter is ALL (red-dragon-sl30.42).
+     */
+    private static JsonObject unstringDelimiter(ValueStmt vs, boolean all) {
+        JsonObject delimiter = new JsonObject();
+        delimiter.add("operand", inspectOperand(vs));
+        if (all || allLiteralOf(vs) != null) {
+            delimiter.addProperty("all", true);
+        }
+        return delimiter;
     }
 
     /**
