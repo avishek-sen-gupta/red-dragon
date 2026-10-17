@@ -23,8 +23,9 @@ from __future__ import annotations
 import pytest
 
 from cobol_asg.cobol_types import CobolDataCategory
-from cobol_asg.edit_picture import format_edited
+from cobol_asg.edit_picture import de_edit, format_edited
 from cobol_asg.pic_parser import parse_pic
+from cobol_numeric.number import from_literal
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
 
@@ -348,3 +349,41 @@ class TestNistInsertionRightOfAFloatingString:
     )
     def test_matches_nist(self, value: str, pic: str, expected: str):
         assert format_edited(value, pic) == expected
+
+
+class TestDecimalPointIsComma:
+    """DECIMAL-POINT IS COMMA "exchanges the functions of the period and the
+    comma in PICTURE character-strings and in numeric literals" (IBM Enterprise
+    COBOL LR, SPECIAL-NAMES). Values from NIST-85 NC107A DCOM-TEST-1."""
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    def test_parse_pic_reads_the_comma_as_the_point(self):
+        descriptor = parse_pic("9.999.999,99", decimal_point_is_comma=True)
+        assert (
+            descriptor.category,
+            descriptor.byte_length,
+            descriptor.decimal_digits,
+            descriptor.decimal_point_is_comma,
+        ) == (CobolDataCategory.NUMERIC_EDITED, 12, 2, True)
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    @pytest.mark.parametrize(
+        ("value", "pic", "expected"),
+        [
+            ("1234567.89", "9.999.999,99", "1.234.567,89"),
+            ("1234.5", "ZZZ.ZZ9,99", "  1.234,50"),
+            ("0.25", "$$.$$9,99", "    $0,25"),
+            ("0", "**,**", "**,**"),
+            ("0", "*.***,**", "*****,**"),
+        ],
+    )
+    def test_format_edited_swaps_point_and_comma(
+        self, value: str, pic: str, expected: str
+    ):
+        assert format_edited(value, pic, decimal_point_is_comma=True) == expected
+
+    @covers(CobolFeature.NUMERIC_EDITED)
+    def test_de_edit_reads_the_comma_as_the_point(self):
+        assert de_edit("1.234.567,89", "9.999.999,99", decimal_point_is_comma=True) == (
+            from_literal("1234567.89")
+        )

@@ -453,15 +453,18 @@ public final class DataFieldSerializer {
     }
 
     /**
-     * Strips surrounding quotes from a string literal.
+     * A VALUE literal's characters: a nonnumeric literal loses its delimiters and
+     * each doubled delimiter inside it stands for one; a numeric literal is
+     * written with a period for its decimal point.
      */
     private static String stripQuotes(String raw) {
         if (raw.length() >= 2
                 && ((raw.startsWith("'") && raw.endsWith("'"))
                 || (raw.startsWith("\"") && raw.endsWith("\"")))) {
-            return raw.substring(1, raw.length() - 1);
+            String delimiter = raw.substring(0, 1);
+            return raw.substring(1, raw.length() - 1).replace(delimiter + delimiter, delimiter);
         }
-        return raw;
+        return NumericLiteralText.canonical(raw);
     }
 
     /**

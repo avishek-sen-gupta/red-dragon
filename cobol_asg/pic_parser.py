@@ -113,23 +113,20 @@ _BLANK_WHEN_ZERO_CATEGORIES = frozenset(
     }
 )
 
+
 # One parser per currency symbol, built on first use. A compilation unit's
 # CURRENCY SIGN clause changes a TERMINAL of the grammar, so it cannot be a
 # parse-time argument; asg_types threads the symbol down from SPECIAL-NAMES
 # (red-dragon-3o5f). Building a Lark parser is expensive enough to be worth
 # caching, and a program has at most a handful of currency symbols.
 #
-# DECIMAL-POINT IS COMMA is not threaded through: it is a second SPECIAL-NAMES
-# clause the ASG does not yet carry, and picture.build_parser already takes it.
-_parsers: dict[str, Lark] = {}
-
-
-def _parser_for(currency: str) -> Lark:
-    parser = _parsers.get(currency)
-    if parser is None:
-        parser = picture.build_parser(currency_symbols=currency)
-        _parsers[currency] = parser
-    return parser
+# DECIMAL-POINT IS COMMA swaps two terminals the same way, so it selects the
+# parser too.
+@cache
+def _parser_for(currency: str, decimal_point_is_comma: bool) -> Lark:
+    return picture.build_parser(
+        currency_symbols=currency, decimal_point_is_comma=decimal_point_is_comma
+    )
 
 
 def _digit_counts(
@@ -160,6 +157,7 @@ def parse_pic(
     blank_when_zero: bool = False,
     currency: str = DEFAULT_CURRENCY,
     pointer_type: CobolTypeDescriptor = FULLWORD_POINTER,
+    decimal_point_is_comma: bool = False,
 ) -> CobolTypeDescriptor:
     """Parse a COBOL PIC clause string into a CobolTypeDescriptor.
 
@@ -174,6 +172,9 @@ def parse_pic(
             declared CURRENCY SIGN IS otherwise (red-dragon-3o5f). It is a
             grammar terminal, so it selects the parser rather than being an
             argument to the parse.
+        decimal_point_is_comma: SPECIAL-NAMES DECIMAL-POINT IS COMMA, which
+            exchanges the period and the comma in the picture; it selects the
+            parser for the same reason.
 
     Returns:
         A CobolTypeDescriptor describing the field's type and layout.
@@ -196,7 +197,7 @@ def parse_pic(
         return CobolTypeDescriptor(category=usage_category, total_digits=0)
 
     try:
-        tree = _parser_for(currency).parse(pic)
+        tree = _parser_for(currency, decimal_point_is_comma).parse(pic)
     except UnexpectedInput as exc:
         raise ValueError(f"Cannot parse PIC clause: {pic!r}") from exc
 
@@ -231,6 +232,7 @@ def parse_pic(
         blank_when_zero=blank_when_zero and category in _BLANK_WHEN_ZERO_CATEGORIES,
         scale=analysis.point_shift,
         currency=currency,
+        decimal_point_is_comma=decimal_point_is_comma,
         pic_string=pic,
         alphabetic=analysis.category == "alphabetic",
     )

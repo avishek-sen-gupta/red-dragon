@@ -98,6 +98,9 @@ class CobolTypeDescriptor:
     # applied at RUNTIME from pic_string, so the symbol has to travel with it
     # or the formatter falls back to '$' (red-dragon-3o5f).
     currency: str = "$"
+    # For NUMERIC_EDITED: SPECIAL-NAMES DECIMAL-POINT IS COMMA, which exchanges
+    # the functions of the period and the comma in the picture, applied with it.
+    decimal_point_is_comma: bool = False
     # PIC P decimal scaling: the value is stored_digits * 10**scale. Positive
     # for trailing P (999PP -> +2), negative for leading P (PP9 -> -3). P
     # occupies no storage, so this never affects byte_length (red-dragon-qhtv).

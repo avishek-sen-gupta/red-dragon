@@ -24,8 +24,8 @@ Supported edit constructs:
   - Simple insertion: ``,`` ``.`` ``B`` ``0`` ``/``
 
 ``P`` positions occupy no width; the scaling they denote reaches
-:func:`format_edited` as its ``scale`` argument. Still NOT supported: the
-``DECIMAL-POINT IS COMMA`` clause, so ``.`` is hardcoded.
+:func:`format_edited` as its ``scale`` argument. ``DECIMAL-POINT IS COMMA``
+exchanges ``.`` and ``,`` in the picture and in the edited image.
 
 Two rules here are counter-intuitive and are taken from the NIST-85
 conformance suite rather than from a reading of the standard — see
@@ -58,6 +58,8 @@ from cobol_numeric.number import (
 )
 
 _SIGN_SYMS = frozenset("+-")
+_POINT_SWAP = str.maketrans(".,", ",.")
+_NO_SWAP = str.maketrans("", "")
 _SIMPLE_INSERTIONS = frozenset(",B0/")
 
 # The default currency symbol. A program may replace it via
@@ -278,15 +280,26 @@ def _digit_string(value: CobolNumber, ep: EditPicture) -> str:
 
 
 def format_edited(
-    value: str, pic: str, currency: str = DEFAULT_CURRENCY, scale: int = 0
+    value: str,
+    pic: str,
+    currency: str = DEFAULT_CURRENCY,
+    scale: int = 0,
+    decimal_point_is_comma: bool = False,
 ) -> str:
     """Format a numeric ``value`` string per the numeric-edited ``pic``.
 
     ``value`` is a decimal string such as ``"123.45"``, ``"-0.5"``, ``"0"``.
     ``scale`` is the picture's P scaling: the edited digits are the value
-    divided by ``10**scale``.
+    divided by ``10**scale``. ``decimal_point_is_comma`` is SPECIAL-NAMES
+    DECIMAL-POINT IS COMMA, which exchanges the functions of the period and the
+    comma in the picture and therefore in the edited image.
     Returns the edited display string, exactly ``width`` characters wide.
     """
+    swap = _POINT_SWAP if decimal_point_is_comma else _NO_SWAP
+    return _format_edited(value, pic.translate(swap), currency, scale).translate(swap)
+
+
+def _format_edited(value: str, pic: str, currency: str, scale: int) -> str:
     ep = parse_edit_picture(pic, currency)
     dec = _edited_value(value, scale)
     if ep.all_suppressible and dec == 0:
@@ -389,15 +402,22 @@ def _integer_digit_count(cells: tuple[tuple[str, str], ...], digit_syms: str) ->
     return sum(1 for sym in symbols[:integer_end] if sym in digit_syms)
 
 
-def de_edit(image: str, pic: str, currency: str = DEFAULT_CURRENCY) -> CobolNumber:
+def de_edit(
+    image: str,
+    pic: str,
+    currency: str = DEFAULT_CURRENCY,
+    decimal_point_is_comma: bool = False,
+) -> CobolNumber:
     """The numeric value a numeric-edited ``image`` of ``pic`` represents.
 
     De-editing (ANSI X3.23-1985 MOVE; IBM Enterprise COBOL LR, "Elementary
     moves"): each digit position contributes its digit, a suppressed or
     check-protected one contributes zero, insertion characters are dropped, and
     the value is negative when a sign position shows '-' or CR / DB is present.
+    DECIMAL-POINT IS COMMA makes the picture's comma the point.
     """
-    template = [sym for sym in _expand(pic.upper()) if sym != "S"]
+    swap = _POINT_SWAP if decimal_point_is_comma else _NO_SWAP
+    template = [sym for sym in _expand(pic.upper().translate(swap)) if sym != "S"]
     float_symbol, _ = find_float_string(template, currency)
     digit_syms = "".join(_DE_EDIT_DIGITS) + float_symbol
     cells = _de_edit_cells(image, template)
