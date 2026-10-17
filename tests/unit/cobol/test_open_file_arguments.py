@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from cobol_asg.file_enums import AccessMode, FileOrganization
+from cobol_asg.file_enums import FileOrganization
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.file_frame import FileFrame, frame_of
 from interpreter.cobol.prime_key import PrimeKey
@@ -77,36 +77,15 @@ def test_each_file_is_declared_once_and_opened_by_name_and_mode(
     assert (_declared(ir), _opens(ir)) == (
         [
             (
-                FileFrame(
-                    "SQ",
-                    FileOrganization.SEQUENTIAL,
-                    AccessMode.SEQUENTIAL,
-                    PrimeKey(),
-                    True,
-                    14,
-                ),
+                FileFrame("SQ", FileOrganization.SEQUENTIAL, PrimeKey(), True, 14),
                 "PGMX",
             ),
             (
-                FileFrame(
-                    "IX",
-                    FileOrganization.INDEXED,
-                    AccessMode.SEQUENTIAL,
-                    PrimeKey(3, 4),
-                    False,
-                    12,
-                ),
+                FileFrame("IX", FileOrganization.INDEXED, PrimeKey(3, 4), False, 12),
                 "PGMX",
             ),
             (
-                FileFrame(
-                    "RL",
-                    FileOrganization.RELATIVE,
-                    AccessMode.RANDOM,
-                    PrimeKey(),
-                    False,
-                    6,
-                ),
+                FileFrame("RL", FileOrganization.RELATIVE, PrimeKey(), False, 6),
                 "PGMX",
             ),
         ],

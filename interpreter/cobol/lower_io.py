@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable, Sequence
 from functools import partial
-from collections.abc import Sequence
 
 from cobol_asg.cobol_statements import (
     AcceptStatement,
@@ -31,6 +31,7 @@ from interpreter.cobol.fd_record_format import (
 from interpreter.cobol.field_resolution import whole_field_extent
 from interpreter.cobol.file_facts import (
     largest_record,
+    prime_key,
     record_area,
     relative_key_digits,
 )
@@ -39,6 +40,7 @@ from interpreter.cobol.file_position import FilePosition
 from interpreter.cobol.file_state import file_state
 from interpreter.cobol.file_verb_ir import FileVerbIr, Refusal, VerbOutcome
 from interpreter.cobol.ir_emitter import IrEmitter
+from interpreter.cobol.prime_key import PrimeKey
 from interpreter.cobol.program_object import program_name
 from interpreter.cobol.read_plan import ReadPlan
 from interpreter.cobol.relative_key import addressing_key, reported_key
@@ -323,6 +325,7 @@ def _emit_open(
 def _opened(v: FileVerbIr, mode: OpenMode) -> None:
     v.set_mode(mode.value)
     v.set_position(FilePosition.NO_CURRENT_RECORD)
+    v.e.store(v.state.last_key, v.e.text(""))
 
 
 def _emit_optional_absent(
@@ -744,6 +747,7 @@ def _emit_guarded_read(v: FileVerbIr, outcome: VerbOutcome, plan: ReadPlan) -> N
         v.keep_record(raw, outcome)
         v.keep_number(raw, outcome)
         _emit_relative_key_overflow(v, outcome, plan.key_digits)
+        _remember_key(v, v.e.load(outcome.data), plan.sequence)
 
     def perform() -> None:
         v.unless_absent(
@@ -803,6 +807,7 @@ def lower_read(
             _sequential_read(ctx, stmt, materialised),
             entry.optional,
             relative_key_digits(materialised, entry),
+            _key_sequence(ctx, stmt.file_name, materialised),
         ),
     )
     status_reg = v.e.load(outcome.status)
@@ -992,15 +997,16 @@ def _write_source_reg(
 def _emit_guarded_update(
     v: FileVerbIr,
     outcome: VerbOutcome,
-    call: tuple[str, tuple[Register, ...]],
+    call: tuple[str, tuple[Register, ...], Callable[[], None]],
     refusals: Sequence[Refusal],
 ) -> None:
-    primitive, args = call
+    primitive, args, performed = call
 
     def perform() -> None:
         raw = v.called(primitive, outcome, *args)
         v.keep_number(raw, outcome)
         v.set_position(FilePosition.NO_CURRENT_RECORD)
+        performed()
 
     v.guarded(refusals, outcome, perform, v.forget_current_record)
 
@@ -1056,6 +1062,46 @@ def _addressed_key_values(
     return (_emit_key_value(ctx, key, materialised, span=span),)
 
 
+def _key_sequence(
+    ctx: EmitContext, file_name: str, materialised: MaterialisedSectionedLayout
+) -> tuple[PrimeKey, ...]:
+    """The prime key an indexed file in sequential access keeps in sequence by; none
+    for any other file."""
+    entry = _entry(ctx, file_name)
+    indexed = entry.organization is FileOrganization.INDEXED
+    if not (indexed and entry.access_mode is AccessMode.SEQUENTIAL):
+        return ()
+    return (
+        prime_key(record_area(ctx._asg, file_name, materialised), materialised, entry),
+    )
+
+
+def _key_of(v: FileVerbIr, record: Register, key: PrimeKey) -> Register:
+    return v.e.call(
+        BuiltinName.STRING_SLICE, record, v.e.int_(key.offset), v.e.int_(key.length)
+    )
+
+
+def _sequence_refusals(
+    v: FileVerbIr, record: Register, keys: Sequence[PrimeKey], operator: str
+) -> tuple[Refusal, ...]:
+    """In sequential access to an indexed file a WRITE whose prime key is below the last
+    one written, or a REWRITE whose prime key differs from the record read, is 21."""
+    return tuple(
+        Refusal(
+            lambda key=key: v.e.binop(
+                operator, _key_of(v, record, key), v.e.load(v.state.last_key)
+            ),
+            FileLogicStatus.SEQUENCE_ERROR,
+        )
+        for key in keys
+    )
+
+
+def _remember_key(v: FileVerbIr, record: Register, keys: Sequence[PrimeKey]) -> None:
+    _ = [v.e.store(v.state.last_key, _key_of(v, record, key)) for key in keys]
+
+
 def _current_record_refusals(
     v: FileVerbIr, entry: FileControlEntry
 ) -> tuple[Refusal, ...]:
@@ -1103,10 +1149,18 @@ def lower_write(
     v = _verb(ctx, file_name, span=span)
     outcome = v.outcome()
     entry = _entry(ctx, file_name)
+    sequence = _key_sequence(ctx, file_name, materialised)
     _emit_guarded_update(
         v,
         outcome,
-        ("__cobol_write_record", (v.e.text(file_name), data_reg, key_reg)),
+        (
+            "__cobol_write_record",
+            (v.e.text(file_name), data_reg, key_reg),
+            lambda: v.when(
+                v.status_is(outcome, FileLogicStatus.PERMITTED),
+                partial(_remember_key, v, data_reg, sequence),
+            ),
+        ),
         (
             Refusal(
                 lambda: v.mode_is_not(*_write_modes(entry)),
@@ -1114,6 +1168,7 @@ def lower_write(
             ),
             *_size_refusals(ctx, v, file_name, data_reg, materialised),
             *_boundary_refusals(v, key_values),
+            *_sequence_refusals(v, data_reg, sequence, "<"),
         ),
     )
     status_reg = v.e.load(outcome.status)
@@ -1176,10 +1231,13 @@ def lower_rewrite(
     _emit_guarded_update(
         v,
         outcome,
-        ("__cobol_rewrite_record", (v.e.text(file_name), data_reg, key_reg)),
+        ("__cobol_rewrite_record", (v.e.text(file_name), data_reg, key_reg), _nothing),
         (
             *_current_record_refusals(v, _entry(ctx, file_name)),
             *_size_refusals(ctx, v, file_name, data_reg, materialised),
+            *_sequence_refusals(
+                v, data_reg, _key_sequence(ctx, file_name, materialised), "!="
+            ),
         ),
     )
     status_reg = v.e.load(outcome.status)
@@ -1357,7 +1415,7 @@ def lower_delete(
     _emit_guarded_update(
         v,
         outcome,
-        ("__cobol_delete_record", (v.e.text(stmt.file_name), key_reg)),
+        ("__cobol_delete_record", (v.e.text(stmt.file_name), key_reg), _nothing),
         _current_record_refusals(v, _entry(ctx, stmt.file_name)),
     )
     status_reg = v.e.load(outcome.status)

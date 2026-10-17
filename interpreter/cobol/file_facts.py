@@ -82,7 +82,6 @@ def file_frame(
     return FileFrame(
         file_name=entry.file_name,
         organization=entry.organization,
-        access=entry.access_mode,
         prime_key=prime_key(record, materialised, entry),
         variable=records_vary(asg, entry.file_name),
         record_length=next((area.byte_length for area in record), 0),

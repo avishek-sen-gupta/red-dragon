@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from cobol_asg.file_enums import AccessMode, FileOrganization
+from cobol_asg.file_enums import FileOrganization
 from interpreter.cobol.data_literals import text
 from interpreter.cobol.file_definitions_data import FILE_DEFINITIONS
 from interpreter.cobol.file_frame import FileFrame
@@ -187,12 +187,7 @@ def test_each_file_call_names_the_calling_program_last(tmp_path):
                 "__cobol_declare_file",
                 (
                     FileFrame(
-                        "F1",
-                        FileOrganization.SEQUENTIAL,
-                        AccessMode.SEQUENTIAL,
-                        PrimeKey(),
-                        False,
-                        10,
+                        "F1", FileOrganization.SEQUENTIAL, PrimeKey(), False, 10
                     ).data(),
                     "PGMX",
                 ),

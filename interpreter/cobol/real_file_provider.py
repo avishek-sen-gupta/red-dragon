@@ -11,7 +11,7 @@ from pathlib import Path
 from types import MappingProxyType
 
 from cobol_asg.cobol_statements import FileControlEntry
-from cobol_asg.file_enums import AccessMode, FileOrganization, OpenMode
+from cobol_asg.file_enums import FileOrganization, OpenMode
 from cobol_asg.switch_status import SwitchStatus
 from interpreter.cobol.access_result import AccessCondition, AccessResult
 from interpreter.cobol.described_slot import DescribedSlot
@@ -21,10 +21,7 @@ from interpreter.cobol.file_drivers import (
     open_driver,
 )
 from interpreter.cobol.file_frame import FileFrame, frame_of
-from interpreter.cobol.file_logic_status import FileLogicStatus
-from interpreter.cobol.file_verb import FileVerb
 from interpreter.cobol.io_provider import CobolIOProvider, IOResult
-from interpreter.cobol.open_file import OpenFile
 from interpreter.cobol.prime_key import PrimeKey
 from interpreter.cobol.sort_field import sort_fields
 from interpreter.cobol.sort_order import ordered
@@ -66,6 +63,7 @@ def to_ioresult(result: AccessResult) -> IOResult:
 logger = logging.getLogger(__name__)
 _UNCOMPUTABLE = Operators.UNCOMPUTABLE
 _PATH_MARKS = frozenset("/\\.")
+_RELATIVE_KEY_BYTES = 4
 _OPEN_FAILED = to_ioresult(AccessResult(AccessCondition.FILE_NOT_FOUND))
 _SUCCESSFUL_STATUS = _file_status(AccessCondition.OK)
 _VARIABLE_DRIVERS: dict[FileOrganization, Callable[[], FileOrganizationDriver]] = {
@@ -77,10 +75,6 @@ _COPIED = to_ioresult(AccessResult(AccessCondition.OK))
 
 def _successful(result: IOResult) -> bool:
     return result.status.startswith("0")
-
-
-def _refused(status: FileLogicStatus) -> IOResult:
-    return IOResult(status.value, None)
 
 
 class RealFileIOProvider(CobolIOProvider):
@@ -111,7 +105,7 @@ class RealFileIOProvider(CobolIOProvider):
         }
         self._fce: dict[str, FileControlEntry] = {e.file_name: e for e in file_control}
         self._overrides: Mapping[str, Path] = path_overrides
-        self._files: dict[str, OpenFile] = {}
+        self._files: dict[str, FileOrganizationDriver] = {}
         self._frames: dict[str, FileFrame] = {}
 
     def _overridden(self, file_name: str, assign_to: str) -> list[Path]:
@@ -213,104 +207,64 @@ class RealFileIOProvider(CobolIOProvider):
         except OSError as exc:
             logger.warning("OPEN %s at %s failed: %s", filename, path, exc)
             return _OPEN_FAILED
-        return self._opened(filename, OpenFile(drv, mode, frame), path)
-
-    def _opened(self, filename: str, file: OpenFile, path: Path) -> IOResult:
-        self._files = {**self._files, filename: file}
+        self._files = {**self._files, filename: drv}
         logger.info(
-            "OPEN %s mode=%s org=%s access=%s path=%s",
+            "OPEN %s mode=%s org=%s path=%s",
             filename,
-            file.mode.value,
-            file.attributes.organization.value,
-            file.attributes.access.value,
+            mode.value,
+            frame.organization.value,
             path,
         )
         return to_ioresult(AccessResult(AccessCondition.OK))
 
     def _close_file(self, filename: str, program: str) -> IOResult:
         if filename not in self._files:
-            return _refused(FileLogicStatus.NOT_OPEN)
-        self._files[filename].driver.close()
+            return to_ioresult(AccessResult(AccessCondition.NOT_OPEN))
+        self._files[filename].close()
         self._files = {k: f for k, f in self._files.items() if k != filename}
         logger.info("CLOSE %s", filename)
         return to_ioresult(AccessResult(AccessCondition.OK))
 
-    def _verb(self, filename: str, verb: FileVerb) -> IOResult:
-        file = self._files[filename]
-        check = verb.check(file)
-        if check is not FileLogicStatus.PERMITTED:
-            return _refused(check)
-        return self._performed(filename, file, verb)
-
-    def _performed(self, filename: str, file: OpenFile, verb: FileVerb) -> IOResult:
-        result = verb.action(file)
-        self._files = {**self._files, filename: verb.after(file, result)}
-        outcome = verb.outcome(file, result)
-        if outcome is not FileLogicStatus.PERMITTED:
-            return _refused(outcome)
-        return to_ioresult(result)
+    def _key_bytes(self, filename: str, key: str) -> bytes:
+        if not key:
+            return b""
+        if self._frames[filename].organization is FileOrganization.RELATIVE:
+            return int(key).to_bytes(_RELATIVE_KEY_BYTES, "big")
+        return key.encode("latin-1")
 
     def _read_record(self, filename: str, key: str, program: str) -> IOResult:
-        return self._verb(
-            filename,
-            FileVerb(
-                OpenFile.permitted,
-                lambda file: (
-                    file.driver.read_key(file.key_bytes(key))
-                    if key
-                    else file.driver.read_seq()
-                ),
-                OpenFile.after_read,
-            ),
-        )
+        driver = self._files[filename]
+        if key:
+            return to_ioresult(driver.read_key(self._key_bytes(filename, key)))
+        return to_ioresult(driver.read_seq())
 
     def _write_record(
         self, filename: str, data: str, key: str, program: str
     ) -> IOResult:
-        record = data.encode("latin-1")
-        return self._verb(
-            filename,
-            FileVerb(
-                lambda file: file.write_check(record),
-                lambda file: file.driver.write(record, file.key_bytes(key)),
-                lambda file, result: file.after_write(record, result),
-            ),
+        return to_ioresult(
+            self._files[filename].write(
+                data.encode("latin-1"), self._key_bytes(filename, key)
+            )
         )
 
     def _rewrite_record(
         self, filename: str, data: str, key: str, program: str
     ) -> IOResult:
-        record = data.encode("latin-1")
-        return self._verb(
-            filename,
-            FileVerb(
-                lambda file: file.rewrite_check(record),
-                lambda file: file.driver.rewrite(record, file.key_bytes(key)),
-                OpenFile.after_other,
-            ),
+        return to_ioresult(
+            self._files[filename].rewrite(
+                data.encode("latin-1"), self._key_bytes(filename, key)
+            )
         )
 
     def _start_file(
         self, filename: str, key: str, relop: str, program: str
     ) -> IOResult:
-        return self._verb(
-            filename,
-            FileVerb(
-                OpenFile.permitted,
-                lambda file: file.driver.start(file.key_bytes(key), relop or ">="),
-                OpenFile.after_other,
-            ),
+        return to_ioresult(
+            self._files[filename].start(self._key_bytes(filename, key), relop or ">=")
         )
 
     def _delete_record(self, filename: str, key: str, program: str) -> IOResult:
-        return self._verb(
-            filename,
-            FileVerb(
-                OpenFile.permitted,
-                lambda file: file.driver.delete(file.key_bytes(key)),
-                OpenFile.after_other,
-            ),
-        )
+        return to_ioresult(self._files[filename].delete(self._key_bytes(filename, key)))
 
     def _records(self, filename: str, program: str) -> Iterator[str]:
         reads = (self._read_record(filename, "", program) for _ in count())
@@ -336,12 +290,7 @@ class RealFileIOProvider(CobolIOProvider):
         self._frames = {
             **self._frames,
             sort_file: FileFrame(
-                sort_file,
-                FileOrganization.SEQUENTIAL,
-                AccessMode.SEQUENTIAL,
-                PrimeKey(),
-                False,
-                record_length,
+                sort_file, FileOrganization.SEQUENTIAL, PrimeKey(), False, record_length
             ),
         }
         return self._open_file(sort_file, mode.value, program)

@@ -1,6 +1,7 @@
 """The variables holding one program's run-time state of one of its files: its open mode,
-whether it was closed WITH LOCK, where its position indicator stands, and whether it is
-an OPTIONAL file opened INPUT while absent."""
+whether it was closed WITH LOCK, where its position indicator stands, whether it is an
+OPTIONAL file opened INPUT while absent, and the prime key of its last record read or
+written."""
 
 from __future__ import annotations
 
@@ -15,6 +16,7 @@ class FileState:
     locked: VarName
     position: VarName
     absent: VarName
+    last_key: VarName
 
 
 def file_state(program: str, file_name: str) -> FileState:
@@ -24,4 +26,5 @@ def file_state(program: str, file_name: str) -> FileState:
         locked=VarName(f"{prefix}_locked"),
         position=VarName(f"{prefix}_position"),
         absent=VarName(f"{prefix}_absent"),
+        last_key=VarName(f"{prefix}_last_key"),
     )
