@@ -100,7 +100,8 @@ class TestNullIOProvider:
     def test_delete_returns_io_result_ok(self):
         provider = NullIOProvider()
         result = provider.handle_call(
-            FuncName("__cobol_delete_record"), [typed_from_runtime("F1"), _PROGRAM]
+            FuncName("__cobol_delete_record"),
+            [typed_from_runtime("F1"), typed_from_runtime(""), _PROGRAM],
         )
         assert result == IOResult("00", None)
 
@@ -291,7 +292,8 @@ class TestStubIOProvider:
     def test_delete_removes_first_record(self):
         provider = StubIOProvider(files={"F1": {"records": ["REC1", "REC2"]}})
         result = provider.handle_call(
-            FuncName("__cobol_delete_record"), [typed_from_runtime("F1"), _PROGRAM]
+            FuncName("__cobol_delete_record"),
+            [typed_from_runtime("F1"), typed_from_runtime(""), _PROGRAM],
         )
         assert result == IOResult("00", None)
         assert provider.get_file("F1").records == ["REC2"]
@@ -300,7 +302,8 @@ class TestStubIOProvider:
     def test_delete_returns_io_result_ok_when_no_records(self):
         provider = StubIOProvider(files={"F1": {"records": []}})
         result = provider.handle_call(
-            FuncName("__cobol_delete_record"), [typed_from_runtime("F1"), _PROGRAM]
+            FuncName("__cobol_delete_record"),
+            [typed_from_runtime("F1"), typed_from_runtime(""), _PROGRAM],
         )
         assert result == IOResult("00", None)
 

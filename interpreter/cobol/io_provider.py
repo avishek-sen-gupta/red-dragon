@@ -172,8 +172,9 @@ class CobolIOProvider(ABC):
         ...
 
     @abstractmethod
-    def _delete_record(self, filename: str, program: str) -> IOResult:
-        """DELETE — remove the last-read record from file."""
+    def _delete_record(self, filename: str, key: str, program: str) -> IOResult:
+        """DELETE — remove the record ``key`` names, or the last-read record
+        when ``key`` is empty (sequential access)."""
         ...
 
 
@@ -221,7 +222,7 @@ class NullIOProvider(CobolIOProvider):
     ) -> IOResult:
         return IOResult("00", None)
 
-    def _delete_record(self, filename: str, program: str) -> IOResult:
+    def _delete_record(self, filename: str, key: str, program: str) -> IOResult:
         return IOResult("00", None)
 
 
@@ -320,7 +321,7 @@ class StubIOProvider(CobolIOProvider):
         )
         return IOResult("00", None)
 
-    def _delete_record(self, filename: str, program: str) -> IOResult:
+    def _delete_record(self, filename: str, key: str, program: str) -> IOResult:
         stub = self._files.get(filename)
         if stub and stub.records:
             removed = stub.records.pop(0)

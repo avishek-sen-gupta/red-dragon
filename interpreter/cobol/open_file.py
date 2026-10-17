@@ -15,6 +15,7 @@ _SEQUENTIAL_WRITE_MODES = frozenset({OpenMode.OUTPUT, OpenMode.EXTEND})
 _RELATIVE_OR_INDEXED_WRITE_MODES = frozenset(
     {OpenMode.OUTPUT, OpenMode.EXTEND, OpenMode.IO}
 )
+_RELATIVE_KEY_BYTES = 4
 _READ_POSITIONS = {
     AccessCondition.OK: FilePosition.CURRENT_RECORD,
     AccessCondition.DUPLICATES_FOLLOW: FilePosition.CURRENT_RECORD,
@@ -68,6 +69,21 @@ class OpenFile:
             self._sequential() and self.position is not FilePosition.CURRENT_RECORD,
             FileLogicStatus.NO_CURRENT_RECORD,
         )
+
+    def delete_check(self, key: str) -> FileLogicStatus:
+        if self.mode is not OpenMode.IO:
+            return FileLogicStatus.UPDATE_NOT_PERMITTED
+        return _permitted_unless(
+            not key and self.position is not FilePosition.CURRENT_RECORD,
+            FileLogicStatus.NO_CURRENT_RECORD,
+        )
+
+    def key_bytes(self, key: str) -> bytes:
+        if not key:
+            return b""
+        if self.organization is FileOrganization.RELATIVE:
+            return int(key).to_bytes(_RELATIVE_KEY_BYTES, "big")
+        return key.encode("latin-1")
 
     def after_read(self, condition: AccessCondition) -> OpenFile:
         return replace(

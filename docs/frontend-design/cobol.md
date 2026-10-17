@@ -203,7 +203,7 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 | `WRITE rec FROM var` | Decode FROM field → `CALL_FUNCTION __cobol_write_record(filename, data, program)` |
 | `REWRITE rec FROM var` | Decode FROM field → `CALL_FUNCTION __cobol_rewrite_record(filename, data, program)` |
 | `START file KEY key` | `CALL_FUNCTION __cobol_start_file(filename, key, relop, program)` |
-| `DELETE file` | `CALL_FUNCTION __cobol_delete_record(filename, program)` |
+| `DELETE file` | `CALL_FUNCTION __cobol_delete_record(filename, key, program)` — `key` is the RECORD KEY's bytes or the RELATIVE KEY's value in random or dynamic access, empty in sequential access |
 
 Each file verb's status is `__cobol_io_status(result, program)`; a USE declarative scoped by open mode asks `__cobol_file_open_mode(filename, program)`. `program` is the calling program's PROGRAM-ID, upper-cased, a constant the lowering emits as the last argument of every file call, and each `CobolIOProvider` method takes it as its last parameter; red-dragon's providers accept and ignore it (ADR-185).
 
