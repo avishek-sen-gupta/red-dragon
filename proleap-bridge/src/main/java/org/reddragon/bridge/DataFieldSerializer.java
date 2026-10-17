@@ -771,25 +771,48 @@ public final class DataFieldSerializer {
     }
 
     /**
-     * Extracts the SIGN clause from a data description entry.
-     * Returns a JSON object with "position" ("LEADING"/"TRAILING") and "separate" (boolean),
-     * or null if no SIGN clause is present.
+     * The item's SIGN clause as a JSON object with "position" ("LEADING"/"TRAILING")
+     * and "separate" (boolean): its own clause, else, for a signed numeric DISPLAY
+     * item, the nearest enclosing group's; null if neither applies. "The SIGN clause
+     * specified at group level applies to each signed numeric data description entry
+     * subordinate to that group; one specified at a subordinate level takes
+     * precedence" (ANSI X3.23-1985 / ISO 1989 SIGN clause, VI-42 5.12.4).
      */
     private static JsonObject extractSign(DataDescriptionEntryGroup group) {
-        try {
-            SignClause signClause = group.getSignClause();
-            if (signClause != null && signClause.getSignClauseType() != null) {
-                JsonObject signObj = new JsonObject();
-                String position = signClause.getSignClauseType() == SignClause.SignClauseType.LEADING
-                        ? "LEADING" : "TRAILING";
-                signObj.addProperty("position", position);
-                signObj.addProperty("separate", signClause.isSeparate());
-                return signObj;
-            }
-        } catch (Exception e) {
-            LOG.fine("No SIGN clause for " + group.getName());
+        SignClause own = group.getSignClause();
+        if (own != null && own.getSignClauseType() != null) {
+            return signJson(own);
         }
-        return null;
+        if (!isSignedDisplayNumeric(group)) {
+            return null;
+        }
+        SignClause inherited = nearestGroupSign(group.getParentDataDescriptionEntryGroup());
+        return inherited != null ? signJson(inherited) : null;
+    }
+
+    private static SignClause nearestGroupSign(DataDescriptionEntryGroup group) {
+        if (group == null) {
+            return null;
+        }
+        SignClause sign = group.getSignClause();
+        if (sign != null && sign.getSignClauseType() != null) {
+            return sign;
+        }
+        return nearestGroupSign(group.getParentDataDescriptionEntryGroup());
+    }
+
+    private static boolean isSignedDisplayNumeric(DataDescriptionEntryGroup group) {
+        return extractPic(group).toUpperCase().startsWith("S")
+                && "DISPLAY".equals(extractUsage(group));
+    }
+
+    private static JsonObject signJson(SignClause signClause) {
+        JsonObject signObj = new JsonObject();
+        String position = signClause.getSignClauseType() == SignClause.SignClauseType.LEADING
+                ? "LEADING" : "TRAILING";
+        signObj.addProperty("position", position);
+        signObj.addProperty("separate", signClause.isSeparate());
+        return signObj;
     }
 
     /**
