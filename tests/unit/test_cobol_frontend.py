@@ -61,14 +61,17 @@ from cobol_asg.ref_mod import RefModOperand
 from cobol_asg.set_operand import SetOperand
 from cobol_asg.unstring_delimiter import UnstringDelimiter
 from cobol_asg.unstring_receiver import UnstringReceiver
+from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.cobol_frontend import CobolFrontend
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.field_position import FieldPosition
 from interpreter.cobol.layout_data import field_positions
 from interpreter.cobol.run_unit import RUN_UNIT_VAR
 from interpreter.continuation_name import ContinuationName
+from interpreter.func_name import FuncName
 from interpreter.instructions import (
     AllocRegion,
+    CallFunction,
     Const,
     Data,
     InstructionBase,
@@ -76,6 +79,7 @@ from interpreter.instructions import (
     WriteRegion,
 )
 from interpreter.ir import Opcode
+from interpreter.register import Register
 from tests.covers import covers
 
 
@@ -473,6 +477,42 @@ class TestProcedureDivisionLowering:
         assert any("if_true" in l for l in label_names)
         assert any("if_false" in l for l in label_names)
         assert any("if_end" in l for l in label_names)
+
+    @covers(CobolFeature.DISPLAY)
+    def test_display_sends_a_nonnumeric_literals_characters_not_its_quotes(self):
+        fields = [
+            CobolField(
+                name="WS-A", level=77, pic="9", usage="DISPLAY", offset=0, value="5"
+            ),
+        ]
+        stmts = [
+            DisplayStatement(
+                operands=(
+                    RefModOperand(name="'IT''S '"),
+                    RefModOperand(name="WS-A"),
+                    RefModOperand(name='"!"'),
+                    RefModOperand(name="12"),
+                )
+            ),
+        ]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        consts = {
+            inst.result_reg: inst.value
+            for inst in instructions
+            if isinstance(inst, Const)
+        }
+        concat_args = [
+            tuple(arg for arg in inst.args if isinstance(arg, Register))
+            for inst in instructions
+            if isinstance(inst, CallFunction)
+            and inst.func_name == FuncName(BuiltinName.STRING_CONCAT_PAIR)
+        ]
+        assert (
+            consts[concat_args[0][0]],
+            consts[concat_args[1][1]],
+            consts[concat_args[2][1]],
+        ) == ("IT'S ", "!", "12")
 
     @covers(
         CobolFeature.IF_ELSE,

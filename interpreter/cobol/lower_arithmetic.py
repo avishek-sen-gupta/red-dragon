@@ -2175,7 +2175,9 @@ def _lower_display_operand(
             rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
         )
     else:
-        display_reg = ctx.const_to_reg(str(operand.name), span=span)
+        display_reg = ctx.const_to_reg(
+            strip_cobol_literal(str(operand.name)), span=span
+        )
 
     if operand.ref_mod_start is not None:
         raw_start_reg = eval_ref_mod_expr(
