@@ -139,7 +139,6 @@ class BuiltinName:
     MEDIAN = "__median"
     MIDRANGE = "__midrange"
     VARIANCE = "__variance"
-    STANDARD_DEVIATION = "__standard_deviation"
     ORD_MAX = "__ord_max"
     ORD_MIN = "__ord_min"
     CONCATENATE = "__concatenate"

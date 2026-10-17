@@ -28,7 +28,6 @@ from cobol_numeric.intrinsics import (
     present_value,
     remainder,
     square_root,
-    standard_deviation,
     total,
     value_range,
     variance,
@@ -1322,17 +1321,6 @@ def _builtin_variance(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     return BuiltinResult(value=_decimal_to_intrinsic(variance(values)))
 
 
-def _builtin_standard_deviation(
-    args: Sequence[TypedValue], vm: VMState
-) -> BuiltinResult:
-    """COBOL FUNCTION STANDARD-DEVIATION(a, b, ...): the square root of the
-    population variance (IBM Enterprise COBOL LR, STANDARD-DEVIATION)."""
-    values = _coerce_intrinsic_decimal_list(args)
-    if not values:
-        return BuiltinResult(value=_UNCOMPUTABLE)
-    return BuiltinResult(value=_decimal_to_intrinsic(standard_deviation(values)))
-
-
 def _builtin_ord_max(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """COBOL FUNCTION ORD-MAX(a, b, ...): the 1-based position of the first
     occurrence of the largest argument."""
@@ -1731,7 +1719,6 @@ BYTE_BUILTINS: Mapping[FuncName, Builtin] = MappingProxyType(
         FuncName(BuiltinName.MEDIAN): _builtin_median,
         FuncName(BuiltinName.MIDRANGE): _builtin_midrange,
         FuncName(BuiltinName.VARIANCE): _builtin_variance,
-        FuncName(BuiltinName.STANDARD_DEVIATION): _builtin_standard_deviation,
         FuncName(BuiltinName.PROGRAM_PRESENT): program_present,
         FuncName(BuiltinName.ORD_MAX): _builtin_ord_max,
         FuncName(BuiltinName.ORD_MIN): _builtin_ord_min,
