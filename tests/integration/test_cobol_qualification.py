@@ -284,3 +284,29 @@ class TestQualifiedStatementOperands:
             ],
         )
         assert shown == "060705BBBB"
+
+    @covers(CobolFeature.STRING_VERB, CobolFeature.UNSTRING_VERB)
+    def test_string_and_unstring_pointer_and_tally_are_the_qualified_items(
+        self, capsys
+    ):
+        shown = _shown(
+            capsys,
+            [
+                "01 R1. 02 N PIC 99 VALUE 0.",
+                "01 R2. 02 N PIC 99 VALUE 0.",
+                "01 OUT1 PIC X(6) VALUE SPACES.",
+                "01 O1 PIC XX.",
+                "01 O2 PIC XX.",
+                '01 SRC PIC X(5) VALUE "AB,CD".',
+            ],
+            [
+                "    MOVE 3 TO N OF R2.",
+                '    STRING "XY" DELIMITED BY SIZE INTO OUT1',
+                "        WITH POINTER N OF R2.",
+                "    MOVE 1 TO N OF R1.",
+                '    UNSTRING SRC DELIMITED BY "," INTO O1 O2',
+                "        WITH POINTER N OF R1 TALLYING IN N IN R2.",
+                "    DISPLAY OUT1 N OF R1 N OF R2 O1 O2.",
+            ],
+        )
+        assert shown == "  XY  0607ABCD"

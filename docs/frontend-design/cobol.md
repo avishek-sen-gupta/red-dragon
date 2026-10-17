@@ -86,6 +86,8 @@ A reference `N OF Q1 OF Q2 ...` (or `IN`) is resolved by `DataLayout.qualified_m
 
 `LENGTH OF X OF G` (in MOVE, arithmetic expressions and reference-modification bounds) measures the item its qualifiers select: the bridge's `length_of` node carries the qualifiers (`LengthOfNode`, `RefModLengthOf`, `RefModOperand.length_of`).
 
+STRING and UNSTRING `WITH POINTER` items and the UNSTRING `TALLYING IN` item are qualified, subscriptable references (`RefModOperand`), resolved like any other operand.
+
 A level-88 condition-name is indexed with its parent qualified by every enclosing group (`ConditionEntry.parent`), so `IF B OF D32` and `SET B OF D32 TO TRUE` select among same-named 88s the same way. A level-66 RENAMES item belongs to the 01 record it follows (`DataLayout.renames`): its FROM/THRU operands, elementary or group and qualified as written, resolve within that record, and the 66 item is itself qualified by the record name.
 
 ### Variable-length items (OCCURS DEPENDING ON)

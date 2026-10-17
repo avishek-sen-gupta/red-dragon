@@ -120,7 +120,9 @@ def lower_string(
     if not ctx.has_field(stmt.into.name, materialised):
         logger.warning("STRING INTO target %s not found in layout", stmt.into.name)
         return
-    has_pointer = bool(stmt.pointer) and ctx.has_field(stmt.pointer, materialised)
+    has_pointer = bool(stmt.pointer.name) and ctx.has_field(
+        stmt.pointer.name, materialised
+    )
     outcome_reg = _string_outcome(ctx, stmt, has_pointer, materialised)
     _write_ref_mod_target(
         ctx,
@@ -297,12 +299,14 @@ def _ref_mod_window(
 
 def _read_pointer(
     ctx: EmitContext,
-    name: str,
+    item: RefModOperand,
     materialised: MaterialisedSectionedLayout,
     *,
     span: SourceSpan | None,
 ) -> Register:
-    ref, rr = ctx.resolve_field_ref(name, materialised, span=span)
+    ref, rr = ctx.resolve_field_ref(
+        item.name, materialised, item.qualifiers, item.subscripts, span=span
+    )
     return ctx.emit_decode_field(
         rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
     )
@@ -310,13 +314,15 @@ def _read_pointer(
 
 def _write_number(
     ctx: EmitContext,
-    name: str,
+    item: RefModOperand,
     value_reg: Register,
     materialised: MaterialisedSectionedLayout,
     *,
     span: SourceSpan | None,
 ) -> None:
-    ref, rr = ctx.resolve_field_ref(name, materialised, span=span)
+    ref, rr = ctx.resolve_field_ref(
+        item.name, materialised, item.qualifiers, item.subscripts, span=span
+    )
     ctx.emit_encode_and_write(
         rr,
         ref.fl,
@@ -393,7 +399,9 @@ def lower_unstring(
     if not ctx.has_field(stmt.source.name, materialised):
         logger.warning("UNSTRING source %s not found in layout", stmt.source.name)
         return
-    has_pointer = bool(stmt.pointer) and ctx.has_field(stmt.pointer, materialised)
+    has_pointer = bool(stmt.pointer.name) and ctx.has_field(
+        stmt.pointer.name, materialised
+    )
     outcome_reg = _unstring_outcome(ctx, stmt, has_pointer, materialised)
     acted_reg = _list_item(ctx, outcome_reg, 2, span=span)
     for index, receiver in enumerate(stmt.into):
@@ -408,7 +416,9 @@ def lower_unstring(
             materialised,
             span=span,
         )
-    if stmt.tallying_target and ctx.has_field(stmt.tallying_target, materialised):
+    if stmt.tallying_target.name and ctx.has_field(
+        stmt.tallying_target.name, materialised
+    ):
         _add_to_number(ctx, stmt.tallying_target, acted_reg, materialised, span=span)
     _lower_overflow_phrases(
         ctx,
@@ -525,7 +535,7 @@ def _write_unstring_receiver(
 
 def _add_to_number(
     ctx: EmitContext,
-    name: str,
+    item: RefModOperand,
     addend_reg: Register,
     materialised: MaterialisedSectionedLayout,
     *,
@@ -536,12 +546,12 @@ def _add_to_number(
         Binop(
             result_reg=total_reg,
             operator=resolve_binop("+"),
-            left=_read_pointer(ctx, name, materialised, span=span),
+            left=_read_pointer(ctx, item, materialised, span=span),
             right=addend_reg,
         ),
         span=span,
     )
-    _write_number(ctx, name, total_reg, materialised, span=span)
+    _write_number(ctx, item, total_reg, materialised, span=span)
 
 
 def lower_inspect(
