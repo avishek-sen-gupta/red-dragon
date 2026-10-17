@@ -3001,51 +3001,91 @@ public final class StatementSerializer {
     }
 
     /**
-     * Arguments of a functionCall, with a trailing parenthesised group re-attached
-     * to the data name it subscripts.
+     * Arguments of a functionCall, with a parenthesised group re-attached to the
+     * data name it subscripts.
      *
      * ProLeap's grammar is ambiguous for {@code FUNCTION TRIM(TBL(I))}:
      * {@code identifier} lists {@code qualifiedDataName} ahead of {@code tableCall},
      * and {@code (I)} is itself a legal parenthesised {@code basis}, so ANTLR's
      * lowest-viable-alternative resolution hands back TWO {@code argument} contexts
-     * — {@code TBL} and {@code (I)} — and the subscript is lost. The grammar is
-     * vendored ProLeap, so the join belongs here.
+     * — {@code TBL} and {@code (I)} — and the subscript is lost. The same split
+     * cuts {@code FUNCTION SQRT(TBL(5) / 9)} into {@code TBL} and {@code (5) / 9}.
+     * The grammar is vendored ProLeap, so the join belongs here.
+     *
+     * An argument ending in a bare data name and the next argument opening with a
+     * parenthesised group form one run; a run of several arguments is the single
+     * argument whose source text they share, re-read as one arithmeticExpression
+     * (where a group after a data name can only be its subscript), so operator
+     * precedence across the join is the grammar's own.
      *
      * The join keys off the SEPARATOR, not the parenthesis: {@code FUNCTION MAX(A, (B))}
      * is a genuine two-argument call and the comma forbids the join, whereas
      * {@code FUNCTION MAX(A (B))} is what Enterprise COBOL reads as a subscripted
      * {@code A} — a left parenthesis directly following a data name is subscripting.
-     * A parenthesised, arithmetic or already-subscripted left operand is never a
-     * join base, so {@code FUNCTION MAX((A) (B))} keeps both arguments.
+     * A parenthesised or already-subscripted left operand is never a join base, so
+     * {@code FUNCTION MAX((A) (B))} keeps both arguments.
      */
     private static List<JsonElement> serializeFunctionArguments(
             CobolParser.FunctionCallContext fc) {
-        List<JsonElement> args = new ArrayList<>();
-        CobolParser.ArgumentContext joinBase = null;
+        List<List<CobolParser.ArgumentContext>> runs = new ArrayList<>();
+        CobolParser.ArgumentContext previous = null;
         for (int i = 0; i < fc.getChildCount(); i++) {
             org.antlr.v4.runtime.tree.ParseTree child = fc.getChild(i);
             if (!(child instanceof CobolParser.ArgumentContext)) {
                 // Any terminal at this level — the argument list's own parentheses,
                 // FUNCTION, or a bare COMMACHAR — ends the previous argument's
                 // eligibility as a subscript base.
-                joinBase = null;
+                previous = null;
                 continue;
             }
             CobolParser.ArgumentContext arg = (CobolParser.ArgumentContext) child;
-            CobolParser.ArithmeticExpressionContext index = parenthesisedArgument(arg);
-            CobolParser.IdentifierContext base =
-                    (index == null || joinBase == null || separatedByComma(joinBase, arg))
-                            ? null
-                            : bareDataNameArgument(joinBase);
-            if (base != null) {
-                args.set(args.size() - 1, subscriptedRef(base, index));
-                joinBase = null;
+            boolean joins = previous != null
+                    && endsInBareDataName(previous)
+                    && opensWithGroup(arg)
+                    && !separatedByComma(previous, arg);
+            if (joins) {
+                runs.get(runs.size() - 1).add(arg);
             } else {
-                args.add(serializeFunctionArg(arg));
-                joinBase = arg;
+                List<CobolParser.ArgumentContext> run = new ArrayList<>();
+                run.add(arg);
+                runs.add(run);
             }
+            previous = arg;
+        }
+        List<JsonElement> args = new ArrayList<>();
+        for (List<CobolParser.ArgumentContext> run : runs) {
+            args.add(run.size() == 1 ? serializeFunctionArg(run.get(0)) : serializeJoinedRun(run));
         }
         return args;
+    }
+
+    /**
+     * The expression is re-read as the right-hand side of a COMPUTE in a whole,
+     * EOF-anchored program: there nothing may follow it, so a group after a data
+     * name can only be read as its subscript.
+     */
+    private static final String REREAD_PREFIX =
+            "IDENTIFICATION DIVISION. PROGRAM-ID. X. PROCEDURE DIVISION. COMPUTE X = ";
+
+    private static final String REREAD_SUFFIX = ".\n";
+
+    private static JsonElement serializeJoinedRun(List<CobolParser.ArgumentContext> run) {
+        org.antlr.v4.runtime.Token begin = run.get(0).getStart();
+        org.antlr.v4.runtime.Token end = run.get(run.size() - 1).getStop();
+        String text = begin.getInputStream()
+                .getText(org.antlr.v4.runtime.misc.Interval.of(
+                        begin.getStartIndex(), end.getStopIndex()));
+        CobolParser parser = new CobolParser(new org.antlr.v4.runtime.CommonTokenStream(
+                new io.proleap.cobol.CobolLexer(
+                        org.antlr.v4.runtime.CharStreams.fromString(
+                                REREAD_PREFIX + text + REREAD_SUFFIX))));
+        CobolParser.ComputeStatementContext compute = (CobolParser.ComputeStatementContext)
+                walkOperand(parser.startRule(), n -> n instanceof CobolParser.ComputeStatementContext);
+        if (parser.getNumberOfSyntaxErrors() != 0 || compute == null) {
+            throw new IllegalStateException(
+                    "function argument did not re-read as one expression: " + text);
+        }
+        return serializeArithExprCtx(compute.arithmeticExpression());
     }
 
     /**
@@ -3072,62 +3112,40 @@ public final class StatementSerializer {
                         >= 0;
     }
 
-    /**
-     * The single unsigned {@code basis} an arithmeticExpression consists of, or
-     * {@code null} when it spans an operator (and so is a computed value, never a
-     * subscript base).
-     */
-    private static CobolParser.BasisContext soleBasis(
-            CobolParser.ArithmeticExpressionContext expr) {
-        if (expr == null || !expr.plusMinus().isEmpty()) {
+    /** The rightmost basis of an argument's arithmeticExpression. */
+    private static CobolParser.BasisContext lastBasis(CobolParser.ArgumentContext arg) {
+        CobolParser.ArithmeticExpressionContext expr = arg.arithmeticExpression();
+        if (expr == null) {
             return null;
         }
-        CobolParser.MultDivsContext multDivs = expr.multDivs();
-        if (multDivs == null || !multDivs.multDiv().isEmpty()) {
-            return null;
-        }
-        CobolParser.PowersContext powers = multDivs.powers();
-        if (powers == null
-                || !powers.power().isEmpty()
-                || powers.PLUSCHAR() != null
-                || powers.MINUSCHAR() != null) {
-            return null;
-        }
-        return powers.basis();
+        CobolParser.MultDivsContext multDivs = expr.plusMinus().isEmpty()
+                ? expr.multDivs()
+                : expr.plusMinus().get(expr.plusMinus().size() - 1).multDivs();
+        CobolParser.PowersContext powers = multDivs.multDiv().isEmpty()
+                ? multDivs.powers()
+                : multDivs.multDiv().get(multDivs.multDiv().size() - 1).powers();
+        return powers.power().isEmpty()
+                ? powers.basis()
+                : powers.power().get(powers.power().size() - 1).basis();
     }
 
-    /** The identifier of an argument that is exactly a bare, unsubscripted data name. */
-    private static CobolParser.IdentifierContext bareDataNameArgument(
-            CobolParser.ArgumentContext arg) {
-        if (arg == null) {
-            return null;
-        }
-        CobolParser.BasisContext basis = soleBasis(arg.arithmeticExpression());
+    /** True when an argument ends in a bare, unsubscripted data name. */
+    private static boolean endsInBareDataName(CobolParser.ArgumentContext arg) {
+        CobolParser.BasisContext basis = lastBasis(arg);
         CobolParser.IdentifierContext id = (basis == null) ? null : basis.identifier();
-        return (id != null && id.qualifiedDataName() != null) ? id : null;
+        return id != null && id.qualifiedDataName() != null;
     }
 
-    /** The expression an argument parenthesises, or {@code null} when it is not a group. */
-    private static CobolParser.ArithmeticExpressionContext parenthesisedArgument(
-            CobolParser.ArgumentContext arg) {
-        if (arg == null) {
-            return null;
+    /** True when an argument opens with an unsigned parenthesised group. */
+    private static boolean opensWithGroup(CobolParser.ArgumentContext arg) {
+        CobolParser.ArithmeticExpressionContext expr = arg.arithmeticExpression();
+        if (expr == null) {
+            return false;
         }
-        CobolParser.BasisContext basis = soleBasis(arg.arithmeticExpression());
-        return (basis == null || basis.LPARENCHAR() == null)
-                ? null
-                : basis.arithmeticExpression();
-    }
-
-    private static JsonObject subscriptedRef(
-            CobolParser.IdentifierContext base, CobolParser.ArithmeticExpressionContext index) {
-        JsonObject ref = new JsonObject();
-        ref.addProperty("kind", "ref");
-        ref.addProperty("name", baseDataName(base));
-        JsonArray subscripts = new JsonArray();
-        subscripts.add(serializeArithExprCtx(index));
-        ref.add("subscripts", subscripts);
-        return ref;
+        CobolParser.PowersContext powers = expr.multDivs().powers();
+        return powers.PLUSCHAR() == null
+                && powers.MINUSCHAR() == null
+                && powers.basis().LPARENCHAR() != null;
     }
 
     /**

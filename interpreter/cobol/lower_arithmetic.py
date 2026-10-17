@@ -9,7 +9,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 from functools import partial, reduce
 
-from cobol_asg.cobol_expression import expr_from_dict
+from cobol_asg.cobol_expression import FunctionNode, expr_from_dict
 from cobol_asg.cobol_statements import (
     ArithmeticCorrespondingStatement,
     ArithmeticStatement,
@@ -59,6 +59,7 @@ from cobol_numeric.scale import (
     literal_scale,
     mul_scale,
 )
+from interpreter.cobol.arithmetic_precision import ArithmeticPrecision
 from interpreter.cobol.arithmetic_receiver import ArithmeticReceiver
 from interpreter.cobol.arithmetic_scale import (
     field_scale,
@@ -447,8 +448,9 @@ def _lower_function_arg_to_string(
     ctx: EmitContext,
     arg: dict,
     materialised: MaterialisedSectionedLayout,
+    precision: ArithmeticPrecision,
     *,
-    span: SourceSpan | None = None,
+    span: SourceSpan | None,
 ) -> Register:
     """Lower one intrinsic-function argument dict to a string-valued register.
 
@@ -457,29 +459,44 @@ def _lower_function_arg_to_string(
     """
     kind = arg.get("kind", "lit")
     if kind == "ref":
-        # Delegated rather than re-resolved: this path used to call
-        # resolve_field_ref with neither the subscripts nor the reference
-        # modification the node carries, so FUNCTION f(TBL(I)) always read
-        # occurrence 1 (red-dragon-jscx). _lower_expr_dict is the one place that
-        # decodes a structured ref, and it honours both.
-        from interpreter.cobol.condition_lowering import (
-            _lower_expr_dict,
-            _unresolvable_operand,
-        )
-
-        name = arg.get("name", "")
-        if not ctx.has_field(name, materialised):
-            return _unresolvable_operand(ctx, name, span=span)
-        decoded = _lower_expr_dict(ctx, arg, materialised, span=span)
-        return ctx.emit_to_string(decoded, span=span)
+        return _lower_ref_function_arg(ctx, arg, materialised, span=span)
     if kind == "lit":
         return ctx.const_to_reg(ctx.parse_literal(arg.get("value", "")), span=span)
-    # Arithmetic / other expression args: lower via the expression path, then
-    # stringify so the builtin (e.g. UPPER-CASE) receives character data.
-    from interpreter.cobol.condition_lowering import _lower_expr_dict
+    from interpreter.cobol.condition_lowering import lower_expr_node
 
-    value_reg = _lower_expr_dict(ctx, arg, materialised, span=span)
+    value_reg = lower_expr_node(
+        ctx,
+        expr_from_dict(arg),
+        materialised,
+        receiver_decimals=precision.dmax,
+        floating_receiver=precision.floating,
+        span=span,
+    )
     return ctx.emit_to_string(value_reg, span=span)
+
+
+def _lower_ref_function_arg(
+    ctx: EmitContext,
+    arg: dict,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> Register:
+    # Delegated rather than re-resolved: this path used to call
+    # resolve_field_ref with neither the subscripts nor the reference
+    # modification the node carries, so FUNCTION f(TBL(I)) always read
+    # occurrence 1 (red-dragon-jscx). _lower_expr_dict is the one place that
+    # decodes a structured ref, and it honours both.
+    from interpreter.cobol.condition_lowering import (
+        _lower_expr_dict,
+        _unresolvable_operand,
+    )
+
+    name = arg.get("name", "")
+    if not ctx.has_field(name, materialised):
+        return _unresolvable_operand(ctx, name, span=span)
+    decoded = _lower_expr_dict(ctx, arg, materialised, span=span)
+    return ctx.emit_to_string(decoded, span=span)
 
 
 def lower_function_operand(
@@ -496,31 +513,47 @@ def lower_function_operand(
     and fall back to their first argument (or empty string) — never silent wrong data.
     FUNCTION RANDOM keeps its state in the run-unit region, so it lowers on its own.
     """
+    from interpreter.cobol.condition_lowering import standalone_precision
+
+    precision = standalone_precision(
+        ctx,
+        FunctionNode(
+            name=operand.name, args=tuple(expr_from_dict(a) for a in operand.args)
+        ),
+        materialised,
+    )
+    return lower_function_in_expression(
+        ctx, operand, materialised, precision, span=span
+    )
+
+
+def lower_function_in_expression(
+    ctx: EmitContext,
+    operand: FunctionCallOperand,
+    materialised: MaterialisedSectionedLayout,
+    precision: ArithmeticPrecision,
+    *,
+    span: SourceSpan | None,
+) -> Register:
     lowering = _STATEFUL_FUNCTIONS.get(operand.name.upper(), _lower_builtin_function)
-    return lowering(ctx, operand, materialised, span=span)
+    return lowering(ctx, operand, materialised, precision, span=span)
 
 
 def _lower_builtin_function(
     ctx: EmitContext,
     operand: FunctionCallOperand,
     materialised: MaterialisedSectionedLayout,
+    precision: ArithmeticPrecision,
     *,
     span: SourceSpan | None,
 ) -> Register:
-    builtin = _INTRINSIC_FUNCTIONS.get(operand.name.upper())
-    if builtin is None:
-        logger.warning(
-            "Unsupported COBOL intrinsic FUNCTION %r — falling back to first argument",
-            operand.name,
+    if operand.name.upper() not in _INTRINSIC_FUNCTIONS:
+        return _lower_unsupported_function(
+            ctx, operand, materialised, precision, span=span
         )
-        if operand.args:
-            return _lower_function_arg_to_string(
-                ctx, operand.args[0], materialised, span=span
-            )
-        return ctx.const_to_reg("", span=span)
-
+    builtin = _INTRINSIC_FUNCTIONS[operand.name.upper()]
     arg_regs = tuple(
-        _lower_function_arg_to_string(ctx, arg, materialised, span=span)
+        _lower_function_arg_to_string(ctx, arg, materialised, precision, span=span)
         for arg in operand.args
     )
     result_reg = ctx.fresh_reg()
@@ -535,10 +568,30 @@ def _lower_builtin_function(
     return result_reg
 
 
+def _lower_unsupported_function(
+    ctx: EmitContext,
+    operand: FunctionCallOperand,
+    materialised: MaterialisedSectionedLayout,
+    precision: ArithmeticPrecision,
+    *,
+    span: SourceSpan | None,
+) -> Register:
+    logger.warning(
+        "Unsupported COBOL intrinsic FUNCTION %r — falling back to first argument",
+        operand.name,
+    )
+    if not operand.args:
+        return ctx.const_to_reg("", span=span)
+    return _lower_function_arg_to_string(
+        ctx, operand.args[0], materialised, precision, span=span
+    )
+
+
 def _lower_random(
     ctx: EmitContext,
     operand: FunctionCallOperand,
     materialised: MaterialisedSectionedLayout,
+    precision: ArithmeticPrecision,
     *,
     span: SourceSpan | None,
 ) -> Register:
@@ -558,7 +611,7 @@ def _lower_random(
         span=span,
     )
     seed_regs = tuple(
-        _lower_function_arg_to_string(ctx, arg, materialised, span=span)
+        _lower_function_arg_to_string(ctx, arg, materialised, precision, span=span)
         for arg in operand.args[:1]
     )
     next_reg = _call_builtin(
