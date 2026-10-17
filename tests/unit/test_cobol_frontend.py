@@ -499,6 +499,37 @@ class TestProcedureDivisionLowering:
         ]
         assert output_calls == ["println", "print"]
 
+    @covers(
+        CobolFeature.DISPLAY,
+        CobolFeature.FIGURATIVE_SPACES,
+        CobolFeature.FIGURATIVE_QUOTES,
+    )
+    def test_display_sends_one_occurrence_of_a_figurative_constant(self):
+        fields = [
+            CobolField(
+                name="WS-A", level=77, pic="9", usage="DISPLAY", offset=0, value="5"
+            ),
+        ]
+        stmts = [
+            DisplayStatement(
+                operands=(RefModOperand(name="SPACES"), RefModOperand(name="quote"))
+            ),
+        ]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        consts = {
+            inst.result_reg: inst.value
+            for inst in instructions
+            if isinstance(inst, Const)
+        }
+        concat_args = [
+            tuple(arg for arg in inst.args if isinstance(arg, Register))
+            for inst in instructions
+            if isinstance(inst, CallFunction)
+            and inst.func_name == FuncName(BuiltinName.STRING_CONCAT_PAIR)
+        ]
+        assert [consts[reg] for reg in concat_args[0]] == [" ", '"']
+
     @covers(CobolFeature.DISPLAY)
     def test_display_sends_a_nonnumeric_literals_characters_not_its_quotes(self):
         fields = [

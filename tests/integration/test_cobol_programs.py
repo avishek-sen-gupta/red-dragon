@@ -5306,6 +5306,35 @@ class TestDisplayLinePositioning:
         assert capsys.readouterr().out == "AB\nXYZ\nCDXYZE\n"
 
 
+class TestDisplayFigurativeConstants:
+    @covers(
+        CobolFeature.DISPLAY,
+        CobolFeature.FIGURATIVE_SPACES,
+        CobolFeature.FIGURATIVE_ZEROS,
+        CobolFeature.FIGURATIVE_QUOTES,
+    )
+    def test_a_figurative_constant_displays_one_occurrence_of_its_character(
+        self, capsys
+    ):
+        """IBM Enterprise COBOL LR, DISPLAY statement, literal-1: "When a
+        figurative constant is specified, only a single occurrence of that
+        figurative constant is displayed."
+        """
+        _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-DISP-FIG.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    DISPLAY SPACE.",
+                "    DISPLAY ZEROES QUOTE.",
+                '    DISPLAY "A" SPACES "B" ZERO.',
+                "    STOP RUN.",
+            ]
+        )
+        assert capsys.readouterr().out == ' \n0"\nA B0\n'
+
+
 class TestArithmeticRefMod:
     @covers(CobolFeature.ARITHMETIC_REF_MOD, CobolFeature.ADD)
     def test_add_source_ref_mod(self):
