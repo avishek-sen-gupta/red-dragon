@@ -6,6 +6,7 @@ from cobol_asg.cobol_statements import (
     AcceptStatement,
     AlteredGoto,
     AlterStatement,
+    ArithmeticCorrespondingStatement,
     ArithmeticStatement,
     CallStatement,
     CallTarget,
@@ -133,6 +134,25 @@ class TestParseStatementDispatch:
         assert stmt.op == "SUBTRACT"
         assert [o.name for o in stmt.operands] == ["WS-B", "WS-A"]
         assert [g.name for g in stmt.giving] == ["WS-R"]
+
+    @covers(CobolFeature.ADD, CobolFeature.ON_SIZE_ERROR)
+    def test_add_corresponding_round_trips_rounded_and_size_error(self):
+        data = {
+            "type": "ADD_CORRESPONDING",
+            "source": {"name": "G1"},
+            "target": {"name": "G2", "rounded": True},
+            "on_size_error": [{"type": "MOVE", "operands": ["'E'", "F"]}],
+            "not_on_size_error": [{"type": "MOVE", "operands": ["'N'", "F"]}],
+        }
+        stmt = parse_statement(data)
+        assert isinstance(stmt, ArithmeticCorrespondingStatement)
+        assert (
+            stmt.op,
+            stmt.target.rounded,
+            [type(s).__name__ for s in stmt.on_size_error],
+            [type(s).__name__ for s in stmt.not_on_size_error],
+        ) == ("ADD", True, ["MoveStatement"], ["MoveStatement"])
+        assert parse_statement(stmt.to_dict()) == stmt
 
     @covers(CobolFeature.MULTIPLY)
     def test_multiply(self):

@@ -249,6 +249,8 @@ class ArithmeticCorrespondingStatement:
     op: str  # "ADD" | "SUBTRACT"
     source: RefModOperand
     target: RefModOperand
+    on_size_error: list[CobolStatementType] = field(default_factory=list)
+    not_on_size_error: list[CobolStatementType] = field(default_factory=list)
     span: SourceSpan | None = None
 
     @classmethod
@@ -258,14 +260,24 @@ class ArithmeticCorrespondingStatement:
             op=op,
             source=RefModOperand.from_dict(data["source"]),
             target=RefModOperand.from_dict(data["target"]),
+            on_size_error=[parse_statement(c) for c in data.get("on_size_error", [])],
+            not_on_size_error=[
+                parse_statement(c) for c in data.get("not_on_size_error", [])
+            ],
             span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
-        result = {
+        result: dict = {
             "type": f"{self.op}_CORRESPONDING",
             "source": self.source.to_dict(),
             "target": self.target.to_dict(),
+            **_phrases_to_dict(
+                {
+                    "on_size_error": self.on_size_error,
+                    "not_on_size_error": self.not_on_size_error,
+                }
+            ),
         }
         if self.span is not None:
             self.span.write_into(result)

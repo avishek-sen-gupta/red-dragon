@@ -6,6 +6,8 @@ import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import io.proleap.cobol.asg.metamodel.Scope;
+import io.proleap.cobol.asg.metamodel.procedure.NotOnSizeErrorPhrase;
+import io.proleap.cobol.asg.metamodel.procedure.OnSizeErrorPhrase;
 import io.proleap.cobol.asg.metamodel.procedure.Statement;
 import io.proleap.cobol.asg.metamodel.procedure.StatementType;
 import io.proleap.cobol.asg.metamodel.procedure.StatementTypeEnum;
@@ -379,6 +381,16 @@ public final class StatementSerializer {
         return obj;
     }
 
+    private static void addSizeErrorPhrases(
+            JsonObject obj, OnSizeErrorPhrase onSizeError, NotOnSizeErrorPhrase notOnSizeError) {
+        if (onSizeError != null) {
+            obj.add("on_size_error", serializeStatements(onSizeError.getStatements()));
+        }
+        if (notOnSizeError != null) {
+            obj.add("not_on_size_error", serializeStatements(notOnSizeError.getStatements()));
+        }
+    }
+
     private static JsonObject serializeAdd(AddStatement stmt) {
         // ADD CORRESPONDING src TO dst
         io.proleap.cobol.asg.metamodel.procedure.add.AddCorrespondingStatement addCorr =
@@ -388,8 +400,11 @@ public final class StatementSerializer {
             obj.add("source", serializeRef(addCorr.getFromCall()));
             io.proleap.cobol.asg.metamodel.procedure.add.To corrTo = addCorr.getTo();
             if (corrTo != null) {
-                obj.add("target", serializeRef(corrTo.getToCall()));
+                JsonObject t = serializeRef(corrTo.getToCall());
+                t.addProperty("rounded", corrTo.isRounded());
+                obj.add("target", t);
             }
+            addSizeErrorPhrases(obj, stmt.getOnSizeErrorPhrase(), stmt.getNotOnSizeErrorPhrase());
             return obj;
         }
 
@@ -452,8 +467,11 @@ public final class StatementSerializer {
             io.proleap.cobol.asg.metamodel.procedure.subtract.MinuendCorresponding minCorr =
                 subCorr.getMinuend();
             if (minCorr != null) {
-                obj.add("target", serializeRef(minCorr.getMinuendCall()));
+                JsonObject t = serializeRef(minCorr.getMinuendCall());
+                t.addProperty("rounded", minCorr.isRounded());
+                obj.add("target", t);
             }
+            addSizeErrorPhrases(obj, stmt.getOnSizeErrorPhrase(), stmt.getNotOnSizeErrorPhrase());
             return obj;
         }
 

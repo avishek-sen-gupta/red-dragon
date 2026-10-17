@@ -70,6 +70,8 @@ from interpreter.cobol.condition_lowering import (
     _float_operand,
     lower_expr_node,
 )
+from interpreter.cobol.corresponding_pair import CorrespondingPair
+from interpreter.cobol.corresponding_regions import CorrespondingRegions
 from interpreter.cobol.data_layout import DataLayout, FieldLayout
 from interpreter.cobol.emit_context import EmitContext, strip_cobol_literal
 from interpreter.cobol.field_resolution import ResolvedFieldRef, whole_field_extent
@@ -132,21 +134,14 @@ _EXACT_VERB_BUILTINS = {
 }
 
 
-def _operand_type(
-    ctx: EmitContext, operand: RefModOperand, materialised: MaterialisedSectionedLayout
-):
-    if not ctx.has_field(operand.name, materialised):
-        return None
-    return materialised.resolve(operand.name, operand.qualifiers)[0].type_descriptor
-
-
 def _operand_scale(
     ctx: EmitContext, operand: RefModOperand, materialised: MaterialisedSectionedLayout
 ) -> Scale:
     name = operand.name
-    td = _operand_type(ctx, operand, materialised)
-    if td is not None:
-        return field_scale(td)
+    if ctx.has_field(name, materialised):
+        return field_scale(
+            materialised.resolve(name, operand.qualifiers)[0].type_descriptor
+        )
     try:
         from_literal(ctx.figuratives.translate(name))
     except ValueError:
@@ -234,18 +229,35 @@ def _emit_verb_operation(
     span: SourceSpan | None = None,
 ) -> ArithmeticValue:
     """Emit ``left <op> right``, exact unless IBM's floating-point rule applies."""
+    return _emit_scaled_operation(
+        ctx,
+        op,
+        left,
+        right,
+        _receiver_places(ctx, receivers, materialised),
+        any(_is_floating_operand(ctx, r, materialised) for r in receivers),
+        span=span,
+    )
+
+
+def _emit_scaled_operation(
+    ctx: EmitContext,
+    op: str,
+    left: ArithmeticValue,
+    right: ArithmeticValue,
+    receiver_places: int,
+    floating_receiver: bool,
+    *,
+    span: SourceSpan | None = None,
+) -> ArithmeticValue:
     operand_places = (
         left.scale.decimal_places
         if op == "DIVIDE"
         else max(left.scale.decimal_places, right.scale.decimal_places)
     )
-    dmax = max(_receiver_places(ctx, receivers, materialised), operand_places)
+    dmax = max(receiver_places, operand_places)
     scale = carry(_VERB_SCALES[op](left.scale, right.scale, dmax), dmax)
-    if (
-        left.floating
-        or right.floating
-        or any(_is_floating_operand(ctx, r, materialised) for r in receivers)
-    ):
+    if left.floating or right.floating or floating_receiver:
         return _emit_float_operation(ctx, op, left, right, scale, span=span)
     result_reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -962,55 +974,80 @@ def lower_arithmetic_corresponding(
     stmt: ArithmeticCorrespondingStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """ADD/SUBTRACT CORRESPONDING src TO/FROM dst.
-
-    For each field name present in both src and dst groups, emit the
-    equivalent of ADD src.field TO dst.field (or SUBTRACT).
-    """
-    span = stmt.span
-    op_str = "+" if stmt.op == "ADD" else "-"
-
+    """ADD/SUBTRACT CORRESPONDING: each pair is a separate ADD/SUBTRACT with the
+    statement's ROUNDED, and its size error phrases run once after every pair."""
     src_group, src_rr, src_region = _require_group(stmt.source, materialised)
     dst_group, dst_rr, dst_region = _require_group(stmt.target, materialised)
+    pairs = [
+        CorrespondingPair(source=src_group.fields[name], target=dst_fl)
+        for name, dst_fl in dst_group.fields.items()
+        if name in src_group.fields
+    ]
+    step = partial(
+        _corresponding_step,
+        ctx,
+        stmt,
+        CorrespondingRegions(
+            source=src_rr,
+            source_region=src_region,
+            target=dst_rr,
+            target_region=dst_region,
+        ),
+        materialised,
+    )
+    _store(ctx, stmt, _no_size_error_guard, pairs, step, _no_follow_up, materialised)
 
-    matching_names = src_group.fields.keys() & dst_group.fields.keys()
-    for name in matching_names:
-        src_fl = src_group.fields[name]
-        dst_fl = dst_group.fields[name]
 
-        src_ref = ctx.resolve_field_ref_from(
-            src_fl, src_rr, src_region, materialised, span=span
-        )
-        src_val = ctx.emit_decode_field(
-            src_rr, src_fl, src_ref.offset_reg, extent=src_ref.extent, span=span
-        )
+def _corresponding_field(
+    ctx: EmitContext,
+    stmt: ArithmeticCorrespondingStatement,
+    fl: FieldLayout,
+    region: Register,
+    region_id: RegionId,
+    materialised: MaterialisedSectionedLayout,
+) -> tuple[ResolvedFieldRef, ArithmeticValue]:
+    ref = ctx.resolve_field_ref_from(
+        fl, region, region_id, materialised, span=stmt.span
+    )
+    value = ArithmeticValue(
+        register=ctx.emit_decode_field(
+            region, fl, ref.offset_reg, extent=ref.extent, span=stmt.span
+        ),
+        scale=field_scale(fl.type_descriptor),
+        floating=is_floating_type(fl.type_descriptor),
+    )
+    return ref, value
 
-        dst_ref = ctx.resolve_field_ref_from(
-            dst_fl, dst_rr, dst_region, materialised, span=span
-        )
-        dst_val = ctx.emit_decode_field(
-            dst_rr, dst_fl, dst_ref.offset_reg, extent=dst_ref.extent, span=span
-        )
 
-        result_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Binop(
-                result_reg=result_reg,
-                operator=resolve_binop(op_str),
-                left=Register(str(dst_val)),
-                right=Register(str(src_val)),
-            ),
-            span=span,
-        )
-        result_str = ctx.emit_to_string(result_reg, span=span)
-        ctx.emit_encode_and_write(
-            dst_rr,
-            dst_fl,
-            result_str,
-            dst_ref.offset_reg,
-            extent=dst_ref.extent,
-            span=span,
-        )
+def _corresponding_step(
+    ctx: EmitContext,
+    stmt: ArithmeticCorrespondingStatement,
+    regions: CorrespondingRegions,
+    materialised: MaterialisedSectionedLayout,
+    pair: CorrespondingPair,
+) -> tuple[ArithmeticReceiver, Register]:
+    _, sending = _corresponding_field(
+        ctx, stmt, pair.source, regions.source, regions.source_region, materialised
+    )
+    dst_ref, current = _corresponding_field(
+        ctx, stmt, pair.target, regions.target, regions.target_region, materialised
+    )
+    td = pair.target.type_descriptor
+    result = _emit_scaled_operation(
+        ctx,
+        stmt.op,
+        current,
+        sending,
+        _receiver_decimals(td, stmt.target.rounded),
+        is_floating_type(td),
+        span=stmt.span,
+    )
+    receiver = ArithmeticReceiver(
+        operand=RefModOperand(name=pair.target.name, rounded=stmt.target.rounded),
+        ref=dst_ref,
+        region=regions.target,
+    )
+    return receiver, result.register
 
 
 def _emit_arithmetic_writeback(
@@ -1054,12 +1091,7 @@ def _emit_arithmetic_writeback(
             span=span,
         )
 
-        if target_op.ref_mod_length is not None:
-            tgt_length_reg = eval_ref_mod_expr(
-                ctx, target_op.ref_mod_length, materialised, span=span
-            )
-        else:
-            tgt_length_reg = ctx.const_to_reg(999999, span=span)
+        tgt_length_reg = _ref_mod_length(ctx, target_op, materialised, span=span)
 
         # Parse the text as an exact number, then normalise → int → zero-padded
         # string ('015') before splicing to fill the exact ref-mod width.
@@ -1390,17 +1422,19 @@ def _emit_size_error_arm(
     ctx.emit_inst(Branch(label=end_label), span=span)
 
 
-ReceiverStep = Callable[[RefModOperand], tuple[ArithmeticReceiver, Register]]
+type ReceiverStep[R] = Callable[[R], tuple[ArithmeticReceiver, Register]]
 SizeErrorGuard = Callable[[CodeLabel], None]
-SizeErrorPhrases = ArithmeticStatement | ComputeStatement
+SizeErrorPhrases = (
+    ArithmeticStatement | ArithmeticCorrespondingStatement | ComputeStatement
+)
 
 
-def _store_guarded(
+def _store_guarded[R](
     ctx: EmitContext,
     stmt: SizeErrorPhrases,
     guard: SizeErrorGuard,
-    receivers: Sequence[RefModOperand],
-    step: ReceiverStep,
+    receivers: Sequence[R],
+    step: ReceiverStep[R],
     follow_up: Callable[[], None],
     materialised: MaterialisedSectionedLayout,
 ) -> None:
@@ -1441,10 +1475,10 @@ def _store_guarded(
     ctx.emit_inst(Label_(label=end_label), span=span)
 
 
-def _store_unguarded(
+def _store_unguarded[R](
     ctx: EmitContext,
-    target: RefModOperand,
-    step: ReceiverStep,
+    target: R,
+    step: ReceiverStep[R],
     materialised: MaterialisedSectionedLayout,
     *,
     span: SourceSpan | None = None,
@@ -1459,12 +1493,12 @@ def _store_unguarded(
     )
 
 
-def _store(
+def _store[R](
     ctx: EmitContext,
     stmt: SizeErrorPhrases,
     guard: SizeErrorGuard,
-    receivers: Sequence[RefModOperand],
-    step: ReceiverStep,
+    receivers: Sequence[R],
+    step: ReceiverStep[R],
     follow_up: Callable[[], None],
     materialised: MaterialisedSectionedLayout,
 ) -> None:

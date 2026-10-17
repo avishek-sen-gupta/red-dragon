@@ -219,3 +219,50 @@ class TestPScaledReceiver:
             ["V", "F1", "F2", "F3"],
         )
         assert shown == ["YYYYY", "P", "E", "P"]
+
+
+class TestCorresponding:
+    @covers(
+        CobolFeature.ADD,
+        CobolFeature.SUBTRACT,
+        CobolFeature.ROUNDED_CLAUSE,
+        CobolFeature.ON_SIZE_ERROR,
+    )
+    def test_each_corresponding_pair_is_rounded_and_size_checked(self, capsys):
+        shown = _display_after(
+            capsys,
+            [
+                "01 H1.",
+                "   02 C1 PIC 99V9 VALUE 11.6.",
+                "   02 C2 PIC 99 VALUE 1.",
+                "   02 C3 PIC 9 VALUE 2.",
+                "01 H2.",
+                "   02 C1 PIC 99 VALUE 1.",
+                "   02 C2 PIC 99 VALUE 99.",
+                "   02 C3 PIC 9 VALUE 3.",
+                "01 H3.",
+                "   02 C1 PIC 99 VALUE 50.",
+                "   02 C3 PIC 9 VALUE 9.",
+                "01 H4.",
+                "   02 C1 PIC 9V9 VALUE 0.5.",
+                "   02 C3 PIC 9 VALUE 4.",
+                "01 H5.",
+                "   02 C1 PIC 99 VALUE 1.",
+                "   02 C2 PIC 99 VALUE 99.",
+                "01 F1 PIC X VALUE 'P'.",
+                "01 F2 PIC X VALUE 'P'.",
+            ],
+            [
+                "    ADD CORRESPONDING H1 TO H2 ROUNDED",
+                "        ON SIZE ERROR MOVE 'E' TO F1",
+                "        NOT ON SIZE ERROR MOVE 'N' TO F1",
+                "    END-ADD.",
+                "    SUBTRACT CORRESPONDING H4 FROM H3 ROUNDED",
+                "        ON SIZE ERROR MOVE 'E' TO F2",
+                "        NOT ON SIZE ERROR MOVE 'N' TO F2",
+                "    END-SUBTRACT.",
+                "    ADD CORR H1 TO H5.",
+            ],
+            ["H2", "H3", "H5", "F1", "F2"],
+        )
+        assert shown == ["13995", "505", "1200", "E", "N"]
