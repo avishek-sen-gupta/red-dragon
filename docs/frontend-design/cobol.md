@@ -195,7 +195,7 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 
 | Statement | IR Pattern |
 |---|---|
-| `ACCEPT var` | `CALL_FUNCTION __cobol_accept(device)` → encode result → `WRITE_REGION` to target field |
+| `ACCEPT var` | `CALL_FUNCTION __cobol_accept(device, receiver byte length)` → store the characters unedited (`as_characters`) → `WRITE_REGION` to target field. `RealFileIOProvider(system_input=...)` fills the area from successive fixed-length system input records, truncating the last |
 | `OPEN mode file` | `CALL_FUNCTION __cobol_open_file(filename, mode, record_length, organization, key_offset, key_length, program)` per file |
 | `CLOSE file` | `CALL_FUNCTION __cobol_close_file(filename, program)` per file |
 | `READ file INTO var` | `CALL_FUNCTION __cobol_read_record(filename, key, program)` → `__cobol_io_data(result, program)` → encode → `WRITE_REGION` to INTO target |

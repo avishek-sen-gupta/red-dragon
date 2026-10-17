@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import logging
 import os
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from pathlib import Path
 from types import MappingProxyType
 
@@ -67,6 +67,8 @@ class RealFileIOProvider(CobolIOProvider):
         base_dir: Root for resolving relative paths from ``assign_to``.
         file_control: FileControlEntry list from the ASG.
         path_overrides: Test hook — takes precedence over all other resolution.
+        system_input: The system input device's fixed-length records, which
+            ACCEPT reads in order.
     """
 
     def __init__(
@@ -74,8 +76,10 @@ class RealFileIOProvider(CobolIOProvider):
         base_dir: Path,
         file_control: Sequence[FileControlEntry] = (),
         path_overrides: Mapping[str, Path] = MappingProxyType({}),
+        system_input: Sequence[str] = (),
     ) -> None:
         self._base_dir = base_dir
+        self._system_input: Iterator[str] = iter(system_input)
         self._fce: dict[str, FileControlEntry] = {e.file_name: e for e in file_control}
         self._overrides: Mapping[str, Path] = path_overrides
         self._drivers: dict[str, FileOrganizationDriver] = {}
@@ -101,8 +105,26 @@ class RealFileIOProvider(CobolIOProvider):
             self._assigned(file_name, assign_to),
         )
 
-    def _accept(self, from_device: str) -> Operators._Uncomputable:
-        return _UNCOMPUTABLE
+    def _accept(self, from_device: str) -> str | Operators._Uncomputable:
+        return next(self._system_input, _UNCOMPUTABLE)
+
+    def _accept_area(
+        self, from_device: str, length: int
+    ) -> str | Operators._Uncomputable:
+        match self._accept(from_device):
+            case str() as record:
+                return self._filled(record, from_device, length)
+            case end:
+                return end
+
+    def _filled(self, received: str, from_device: str, length: int) -> str:
+        if len(received) >= length:
+            return received[:length]
+        match self._accept(from_device):
+            case str() as record:
+                return self._filled(received + record, from_device, length)
+            case _:
+                return received
 
     def _driver(
         self,

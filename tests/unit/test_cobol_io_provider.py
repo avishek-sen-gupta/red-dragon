@@ -44,7 +44,8 @@ class TestNullIOProvider:
         provider = NullIOProvider()
         assert (
             provider.handle_call(
-                FuncName("__cobol_accept"), [typed_from_runtime("CONSOLE")]
+                FuncName("__cobol_accept"),
+                [typed_from_runtime("CONSOLE"), typed_from_runtime(10)],
             )
             is _UNCOMPUTABLE
         )
@@ -115,13 +116,15 @@ class TestStubIOProvider:
         provider = StubIOProvider(accept_values=["Y", "JOHN DOE"])
         assert (
             provider.handle_call(
-                FuncName("__cobol_accept"), [typed_from_runtime("CONSOLE")]
+                FuncName("__cobol_accept"),
+                [typed_from_runtime("CONSOLE"), typed_from_runtime(10)],
             )
             == "Y"
         )
         assert (
             provider.handle_call(
-                FuncName("__cobol_accept"), [typed_from_runtime("CONSOLE")]
+                FuncName("__cobol_accept"),
+                [typed_from_runtime("CONSOLE"), typed_from_runtime(10)],
             )
             == "JOHN DOE"
         )
@@ -131,13 +134,15 @@ class TestStubIOProvider:
         provider = StubIOProvider(accept_values=["ONLY"])
         assert (
             provider.handle_call(
-                FuncName("__cobol_accept"), [typed_from_runtime("CONSOLE")]
+                FuncName("__cobol_accept"),
+                [typed_from_runtime("CONSOLE"), typed_from_runtime(10)],
             )
             == "ONLY"
         )
         assert (
             provider.handle_call(
-                FuncName("__cobol_accept"), [typed_from_runtime("CONSOLE")]
+                FuncName("__cobol_accept"),
+                [typed_from_runtime("CONSOLE"), typed_from_runtime(10)],
             )
             is _UNCOMPUTABLE
         )

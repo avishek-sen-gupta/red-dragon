@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
@@ -22,6 +23,45 @@ _SELECT_ASSIGN_RE = re.compile(
 
 _PRINT_RECORD_LEN = 120
 _NO_PRINT_FILE = "no-print-file.dat"
+_TEXT_AREA_START = 7
+_TEXT_AREA_END = 72
+_INPUT_RECORD_LEN = 80
+_DECK_MARKERS = ("*HEADER,", "*END-OF,")
+_X_CARD_RE = re.compile(r"XXXXX\d{3}")
+_X_CARDS = {
+    "XXXXX081": '"12345678"',
+}
+
+
+def _with_x_cards(line: str) -> str:
+    text_area = line[_TEXT_AREA_START:_TEXT_AREA_END]
+    substituted = _X_CARD_RE.sub(lambda m: _X_CARDS.get(m[0], m[0]), text_area)
+    if substituted == text_area:
+        return line
+    width = _TEXT_AREA_END - _TEXT_AREA_START
+    assert len(substituted.rstrip()) <= width, f"X-card overflows: {line!r}"
+    return (
+        line[:_TEXT_AREA_START]
+        + substituted.rstrip().ljust(width)
+        + line[_TEXT_AREA_END:]
+    )
+
+
+def substitute_x_cards(src: str) -> str:
+    """Replace each X-card placeholder that has a value, as the CCVS
+    extraction step does, keeping every line's sequence area in place."""
+    return "\n".join(_with_x_cards(line) for line in src.splitlines())
+
+
+def input_deck(deck_path: Path) -> list[str]:
+    """The data cards of a program's CCVS input deck, as 80-column records."""
+    if not deck_path.exists():
+        return []
+    return [
+        line[:_INPUT_RECORD_LEN].ljust(_INPUT_RECORD_LEN)
+        for line in deck_path.read_text().splitlines()
+        if not line[6:].startswith(_DECK_MARKERS)
+    ]
 
 
 def _cobol_content(src: str) -> str:
@@ -42,7 +82,9 @@ def extract_file_controls(src: str) -> list[tuple[str, str]]:
     ]
 
 
-def make_provider(src: str, tmp_path: Path) -> tuple[RealFileIOProvider, Path]:
+def make_provider(
+    src: str, tmp_path: Path, system_input: Sequence[str] = ()
+) -> tuple[RealFileIOProvider, Path]:
     """Build RealFileIOProvider; return (provider, print_file_path).
 
     A program with no PRINT file gets a path that is never written.
@@ -56,7 +98,10 @@ def make_provider(src: str, tmp_path: Path) -> tuple[RealFileIOProvider, Path]:
         tmp_path / _NO_PRINT_FILE,
     )
     provider = RealFileIOProvider(
-        base_dir=tmp_path, file_control=[], path_overrides=overrides
+        base_dir=tmp_path,
+        file_control=[],
+        path_overrides=overrides,
+        system_input=system_input,
     )
     return provider, print_path
 
