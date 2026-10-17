@@ -17,10 +17,17 @@ _COMMA_PROGRAM = [
     "01 WS-MOVED PIC 9(6)V99.",
     "01 WS-EDITED PIC 9.999.999,99.",
     "01 WS-FLAG PIC X VALUE 'N'.",
+    "01 WS-RATE PIC 9V9 VALUE 2,5.",
+    "    88 RATE-HALF-UP VALUE 2,5.",
+    "01 WS-RATE-FLAG PIC X VALUE 'N'.",
+    "01 WS-COMPUTED PIC 99V99.",
+    "01 WS-TEXT PIC X(3) VALUE '1,5'.",
     "PROCEDURE DIVISION.",
     "    MOVE 1,5 TO WS-MOVED.",
     "    MOVE 1234567,89 TO WS-EDITED.",
     "    IF WS-MOVED = 1,5 MOVE 'Y' TO WS-FLAG.",
+    "    IF RATE-HALF-UP MOVE 'Y' TO WS-RATE-FLAG.",
+    "    COMPUTE WS-COMPUTED = WS-RATE * 2,25.",
     "    STOP RUN.",
 ]
 
@@ -43,7 +50,9 @@ _QUOTE_PROGRAM = [
 def test_the_comma_is_the_decimal_point_in_literals_and_pictures() -> None:
     ws = bytes(ws_region(run_cobol_programs(_COMMA_PROGRAM, {}), "DCOMMA"))
 
-    assert ws.decode("cp037") == "123456" + "00000150" + "1.234.567,89" + "Y"
+    assert ws.decode("cp037") == (
+        "123456" + "00000150" + "1.234.567,89" + "Y" + "25" + "Y" + "0562" + "1,5"
+    )
 
 
 @covers(CobolFeature.VALUE_CLAUSE)

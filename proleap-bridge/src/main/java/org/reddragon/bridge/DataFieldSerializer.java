@@ -436,7 +436,14 @@ public final class DataFieldSerializer {
         if (isAllLiteral(fromLiteral(interval))) {
             intervalObj.addProperty("all", true);
         }
+        if (isNumericLiteral(fromLiteral(interval))) {
+            intervalObj.addProperty("numeric", true);
+        }
         return intervalObj;
+    }
+
+    private static boolean isNumericLiteral(CobolParser.LiteralContext lit) {
+        return lit != null && unwrapAll(lit).numericLiteral() != null;
     }
 
     private static CobolParser.LiteralContext fromLiteral(ValueInterval interval) {
@@ -493,7 +500,7 @@ public final class DataFieldSerializer {
     /**
      * A VALUE literal's characters: a nonnumeric literal loses its delimiters and
      * each doubled delimiter inside it stands for one; a numeric literal is
-     * written with a period for its decimal point.
+     * emitted as written.
      */
     private static String stripQuotes(String raw) {
         if (raw.length() >= 2
@@ -502,7 +509,7 @@ public final class DataFieldSerializer {
             String delimiter = raw.substring(0, 1);
             return raw.substring(1, raw.length() - 1).replace(delimiter + delimiter, delimiter);
         }
-        return NumericLiteralText.canonical(raw);
+        return raw;
     }
 
     /**

@@ -22,6 +22,7 @@ from cobol_asg.cobol_statements import (
 )
 from cobol_asg.cobol_types import CobolTypeDescriptor
 from cobol_asg.condition_name import ConditionName, ConditionValue
+from cobol_asg.decimal_point import DecimalPoint
 from cobol_asg.class_definition import ClassDefinition
 from cobol_asg.implementor_switch import ImplementorSwitch
 from cobol_asg.edit_picture import (
@@ -160,13 +161,19 @@ class CobolField:
         decimal_point_is_comma: bool = False,
     ) -> CobolField:
         sign_data = data.get("sign", {})
+        decimal_point = DecimalPoint(decimal_point_is_comma)
+        value = data.get("value", "")
         return cls(
             name=data["name"],
             level=data["level"],
             pic=data.get("pic", ""),
             usage=data.get("usage", "DISPLAY"),
             offset=data.get("offset", 0),
-            value=data.get("value", ""),
+            value=(
+                decimal_point.numeric_literal(value)
+                if data.get("value_is_numeric", False)
+                else value
+            ),
             value_is_figurative=data.get("value_is_figurative", False),
             value_is_all=data.get("value_is_all", False),
             value_is_numeric=data.get("value_is_numeric", False),
@@ -177,8 +184,14 @@ class CobolField:
             ],
             occurs=data.get("occurs", 0),
             element_size=data.get("element_size", 0),
-            conditions=[ConditionName.from_dict(c) for c in data.get("conditions", [])],
-            values=[ConditionValue.from_dict(v) for v in data.get("values", [])],
+            conditions=[
+                ConditionName.from_dict(c, decimal_point)
+                for c in data.get("conditions", [])
+            ],
+            values=[
+                ConditionValue.from_dict(v, decimal_point)
+                for v in data.get("values", [])
+            ],
             sign_leading=sign_data.get("position", "") == "LEADING",
             sign_separate=sign_data.get("separate", False),
             justified_right=data.get("justified_right", False),
@@ -395,8 +408,12 @@ class CobolASG:
 
     @classmethod
     def from_dict(
-        cls, data: dict, addressing_mode: AddressingMode = LP32_MODE
+        cls, written: dict, addressing_mode: AddressingMode = LP32_MODE
     ) -> CobolASG:
+        comma = bool(
+            written.get("special_names", {}).get("decimal_point_is_comma", False)
+        )
+        data = DecimalPoint(comma).program(written)
         # Build FD-record-name → SELECT-file-name mapping from fd_name tags
         # (populated by bridge since the fd_name fix). Level-1 fields only.
         record_to_select: dict[str, str] = {
@@ -407,7 +424,6 @@ class CobolASG:
         currency = _currency_from_special_names(data)
         collating = data.get("special_names", {}).get("program_collating_sequence", {})
         pointer = addressing_mode.pointer_type
-        comma = bool(data.get("special_names", {}).get("decimal_point_is_comma", False))
         return cls(
             program_id=data.get("program_id", ""),
             file_control=[

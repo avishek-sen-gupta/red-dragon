@@ -15,6 +15,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from cobol_asg.decimal_point import PERIOD_POINT, DecimalPoint
+
 
 @dataclass(frozen=True)
 class ConditionValue:
@@ -30,10 +32,13 @@ class ConditionValue:
     is_all: bool = False
 
     @classmethod
-    def from_dict(cls, data: dict) -> ConditionValue:
+    def from_dict(
+        cls, data: dict, decimal_point: DecimalPoint = PERIOD_POINT
+    ) -> ConditionValue:
+        literal = decimal_point.numeric_literal if data.get("numeric", False) else str
         return cls(
-            from_val=data.get("from", ""),
-            to_val=data.get("to", ""),
+            from_val=literal(data.get("from", "")),
+            to_val=literal(data.get("to", "")),
             is_all=data.get("all", False),
         )
 
@@ -62,10 +67,15 @@ class ConditionName:
     values: list[ConditionValue] = field(default_factory=list)
 
     @classmethod
-    def from_dict(cls, data: dict) -> ConditionName:
+    def from_dict(
+        cls, data: dict, decimal_point: DecimalPoint = PERIOD_POINT
+    ) -> ConditionName:
         return cls(
             name=data.get("name", ""),
-            values=[ConditionValue.from_dict(v) for v in data.get("values", [])],
+            values=[
+                ConditionValue.from_dict(v, decimal_point)
+                for v in data.get("values", [])
+            ],
         )
 
     def to_dict(self) -> dict:
