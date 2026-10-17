@@ -18,6 +18,7 @@ from cobol_asg.cobol_expression import (
     FigurativeNode,
     LengthOfNode,
 )
+from cobol_asg.ref_mod import RefModOperand
 from interpreter.cobol.condition_lowering import lower_expr_node
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.lower_data_division import lower_sectioned_data_division
@@ -76,7 +77,7 @@ def test_length_of_an_item_ending_in_an_odo_table_reads_the_object():
                         offset=2,
                         occurs=5,
                         element_size=4,
-                        occurs_depending_on="WS-N",
+                        occurs_depending_on=RefModOperand(name="WS-N"),
                         occurs_min=1,
                     ),
                 ],

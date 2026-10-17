@@ -97,8 +97,11 @@ def _decode(
     stmt: SearchStatement,
     name: str,
     materialised: MaterialisedSectionedLayout,
+    qualifiers: tuple[str, ...] = (),
 ) -> Register:
-    ref, region_reg = ctx.resolve_field_ref(name, materialised, span=stmt.span)
+    ref, region_reg = ctx.resolve_field_ref(
+        name, materialised, qualifiers, span=stmt.span
+    )
     return ctx.emit_decode_field(
         region_reg, ref.fl, ref.offset_reg, extent=ref.extent, span=stmt.span
     )
@@ -132,8 +135,10 @@ def _occurrence_bound(
     """The highest occurrence the search may reach: the OCCURS DEPENDING ON
     object's current value for a variable table, else the OCCURS count."""
     depending_on = materialised.resolve(stmt.table)[0].occurs_depending_on
-    if depending_on and ctx.has_field(depending_on, materialised):
-        return _decode(ctx, stmt, depending_on, materialised)
+    if depending_on.name and ctx.has_field(depending_on.name, materialised):
+        return _decode(
+            ctx, stmt, depending_on.name, materialised, depending_on.qualifiers
+        )
     return ctx.const_to_reg(occurs, span=stmt.span)
 
 

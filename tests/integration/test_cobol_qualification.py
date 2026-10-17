@@ -233,3 +233,29 @@ class TestQualifiedStatementOperands:
             ],
         )
         assert shown == "5ABCD0077"
+
+    @covers(CobolFeature.OCCURS_DEPENDING_ON)
+    def test_occurs_depending_on_object_is_the_qualified_item(self, capsys):
+        shown = _shown(
+            capsys,
+            [
+                "01 GRP-A.",
+                "   02 VLEN PIC S9(4) BINARY VALUE 0.",
+                "   02 VTEXT.",
+                "      03 VCHAR PIC X OCCURS 0 TO 8 TIMES",
+                "         DEPENDING ON VLEN OF GRP-A.",
+                "01 GRP-B.",
+                "   02 VLEN PIC S9(4) BINARY VALUE 0.",
+                "   02 VTEXT.",
+                "      03 VCHAR PIC X OCCURS 0 TO 8 TIMES",
+                "         DEPENDING ON VLEN IN GRP-B.",
+            ],
+            [
+                "    MOVE 3 TO VLEN OF GRP-A.",
+                "    MOVE 5 TO VLEN OF GRP-B.",
+                '    MOVE "ABCDEFGH" TO VTEXT OF GRP-A.',
+                '    MOVE "VWXYZ" TO VTEXT OF GRP-B.',
+                "    DISPLAY VTEXT OF GRP-A VTEXT OF GRP-B.",
+            ],
+        )
+        assert shown == "ABCVWXYZ"

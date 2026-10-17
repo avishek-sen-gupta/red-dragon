@@ -4,17 +4,20 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from cobol_asg.asg_types import NO_ODO_OBJECT
+from cobol_asg.ref_mod import RefModOperand
+
 
 @dataclass(frozen=True)
 class OdoTail:
-    """Object name, occurrence size and maximum count of an item's ODO table."""
+    """Object reference, occurrence size and maximum count of an item's ODO table."""
 
-    object_name: str = ""
+    depending_on: RefModOperand = NO_ODO_OBJECT
     element_size: int = 0
     max_count: int = 0
 
     def is_present(self) -> bool:
-        return bool(self.object_name)
+        return bool(self.depending_on.name)
 
 
 NO_ODO_TAIL = OdoTail()

@@ -63,6 +63,7 @@ def _currency_from_special_names(data: dict) -> str:
 
 
 NOT_RENAMED = RefModOperand(name="")
+NO_ODO_OBJECT = RefModOperand(name="")
 
 
 @dataclass(frozen=True)
@@ -99,7 +100,7 @@ class CobolField:
     sign_separate: bool = False
     justified_right: bool = False
     synchronized: bool = False
-    occurs_depending_on: str = ""
+    occurs_depending_on: RefModOperand = NO_ODO_OBJECT
     occurs_min: int = 0
     # Compiler-allocated index names from OCCURS ... INDEXED BY, in declaration
     # order. Order is load-bearing: a Format 1 SEARCH advances the first one.
@@ -178,7 +179,9 @@ class CobolField:
             sign_separate=sign_data.get("separate", False),
             justified_right=data.get("justified_right", False),
             synchronized=data.get("synchronized", False),
-            occurs_depending_on=data.get("occurs_depending_on", ""),
+            occurs_depending_on=RefModOperand.from_dict(
+                data.get("occurs_depending_on", {})
+            ),
             occurs_min=data.get("occurs_min", 0),
             indexed_by=list(data.get("indexed_by", [])),
             renames_from=RefModOperand.from_dict(data.get("renames_from", {})),
@@ -229,8 +232,8 @@ class CobolField:
             result["justified_right"] = True
         if self.synchronized:
             result["synchronized"] = True
-        if self.occurs_depending_on:
-            result["occurs_depending_on"] = self.occurs_depending_on
+        if self.occurs_depending_on.name:
+            result["occurs_depending_on"] = self.occurs_depending_on.to_dict()
         if self.occurs_min:
             result["occurs_min"] = self.occurs_min
         if self.indexed_by:

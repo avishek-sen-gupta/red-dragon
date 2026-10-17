@@ -66,7 +66,9 @@ def _varying(clause: RecordVarying) -> DataRecord:
 
 
 def _depends(field: CobolField) -> bool:
-    return bool(field.occurs_depending_on) or any(_depends(c) for c in field.children)
+    return bool(field.occurs_depending_on.name) or any(
+        _depends(c) for c in field.children
+    )
 
 
 def _records(asg: CobolASG, file_name: str) -> tuple[CobolField, ...]:

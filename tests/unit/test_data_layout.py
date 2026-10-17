@@ -321,7 +321,9 @@ class TestBuildDataLayoutOccursDependingOnMixedCase:
                                     offset=0,
                                     occurs=256,
                                     element_size=1,
-                                    occurs_depending_on="Vstring-length",
+                                    occurs_depending_on=RefModOperand(
+                                        name="Vstring-length"
+                                    ),
                                 ),
                             ],
                         ),
@@ -346,7 +348,7 @@ class TestBuildDataLayoutOccursDependingOnMixedCase:
         assert char.offset == 2
         assert char.occurs_count == 256
         assert char.element_size == 1
-        assert char.occurs_depending_on == "Vstring-length"
+        assert char.occurs_depending_on == RefModOperand(name="Vstring-length")
 
     @covers(CobolFeature.OCCURS_DEPENDING_ON)
     def test_trailing_field_offset_is_past_max_odo_array(self):
@@ -367,7 +369,7 @@ class TestBuildDataLayoutOccursDependingOnMixedCase:
             offset=2,
             occurs=6,
             element_size=2,
-            occurs_depending_on="LEN",
+            occurs_depending_on=RefModOperand(name="LEN"),
             children=[_leaf("KY", 0, pic="99")],
         )
         layout = build_data_layout(
@@ -385,8 +387,13 @@ class TestBuildDataLayoutOccursDependingOnMixedCase:
         )
         storage = layout.lookup_as_storage("ENT")
         assert storage is not None
-        assert (storage.occurs_count, storage.occurs_depending_on) == (6, "LEN")
-        assert layout.lookup_as_storage("TBL").occurs_depending_on == ""
+        assert (storage.occurs_count, storage.occurs_depending_on) == (
+            6,
+            RefModOperand(name="LEN"),
+        )
+        assert layout.lookup_as_storage("TBL").occurs_depending_on == RefModOperand(
+            name=""
+        )
 
     @covers(CobolFeature.OCCURS_DEPENDING_ON)
     def test_odo_group_lookup_case_insensitive(self):
@@ -654,7 +661,7 @@ class TestBuildDataLayoutOccursDependingOn:
                 offset=0,
                 occurs=10,
                 element_size=5,
-                occurs_depending_on="WS-COUNT",
+                occurs_depending_on=RefModOperand(name="WS-COUNT"),
                 occurs_min=1,
             ),
         ]
@@ -663,7 +670,7 @@ class TestBuildDataLayoutOccursDependingOn:
         assert fl is not None
         assert fl.byte_length == 50  # 10 * 5 = max storage
         assert fl.occurs_count == 10
-        assert fl.occurs_depending_on == "WS-COUNT"
+        assert fl.occurs_depending_on == RefModOperand(name="WS-COUNT")
         assert fl.occurs_min == 1
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
@@ -692,7 +699,7 @@ class TestBuildDataLayoutOccursDependingOn:
                         offset=3,
                         occurs=20,
                         element_size=10,
-                        occurs_depending_on="WS-COUNT",
+                        occurs_depending_on=RefModOperand(name="WS-COUNT"),
                         occurs_min=1,
                     ),
                 ],
@@ -701,7 +708,7 @@ class TestBuildDataLayoutOccursDependingOn:
         layout = build_data_layout(fields)
         fl = layout.lookup("WS-ITEMS")
         assert fl is not None
-        assert fl.occurs_depending_on == "WS-COUNT"
+        assert fl.occurs_depending_on == RefModOperand(name="WS-COUNT")
         assert fl.occurs_min == 1
         assert fl.byte_length == 200  # 20 * 10
 

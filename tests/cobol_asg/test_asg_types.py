@@ -232,12 +232,14 @@ class TestCobolField:
             "offset": 0,
             "occurs": 100,
             "element_size": 10,
-            "occurs_depending_on": "WS-COUNT",
+            "occurs_depending_on": {"name": "WS-COUNT", "qualifiers": ["WS-REC"]},
             "occurs_min": 1,
         }
         field = CobolField.from_dict(data)
         assert field.occurs == 100
-        assert field.occurs_depending_on == "WS-COUNT"
+        assert field.occurs_depending_on == RefModOperand(
+            name="WS-COUNT", qualifiers=("WS-REC",)
+        )
         assert field.occurs_min == 1
         assert CobolField.from_dict(field.to_dict()) == field
 
@@ -251,7 +253,7 @@ class TestCobolField:
             "element_size": 10,
         }
         field = CobolField.from_dict(data)
-        assert field.occurs_depending_on == ""
+        assert field.occurs_depending_on == RefModOperand(name="")
         assert field.occurs_min == 0
         assert "occurs_depending_on" not in field.to_dict()
         assert "occurs_min" not in field.to_dict()

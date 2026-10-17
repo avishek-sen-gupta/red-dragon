@@ -752,7 +752,10 @@ class EmitContext:
         if not tail.is_present():
             return fl
         object_ref, object_region = self.resolve_field_ref(
-            tail.object_name, materialised, span=span
+            tail.depending_on.name,
+            materialised,
+            tail.depending_on.qualifiers,
+            span=span,
         )
         current_count = self.emit_decode_field(
             object_region,
@@ -782,7 +785,7 @@ class EmitContext:
                 span=span,
             ),
             receives_at_maximum=isinstance(item, DataLayout)
-            and item.exists(tail.object_name),
+            and item.exists(tail.depending_on.name),
         )
 
     def _emit_binop(
