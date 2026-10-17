@@ -123,7 +123,7 @@ def test_group_in_an_if_relation_keeps_every_operand(bridge_jar):
         "    MOVE 1 TO O",
         "END-IF.",
     )["condition"]
-    assert condition["relation"]["left"] == {
+    assert condition["first"]["relation"]["left"] == {
         "kind": "binop",
         "op": "-",
         "left": _LENGTH_OF_M,
@@ -139,7 +139,7 @@ def test_group_in_a_perform_until_keeps_every_operand(bridge_jar):
         "    ADD 1 TO N",
         "END-PERFORM.",
     )
-    assert statement["until"]["relation"]["right"] == {
+    assert statement["until"]["first"]["relation"]["right"] == {
         "kind": "binop",
         "op": "-",
         "left": _LENGTH_OF_M,

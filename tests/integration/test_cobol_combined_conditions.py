@@ -36,7 +36,7 @@ _PROGRAM = [
     "DATA DIVISION.",
     "WORKING-STORAGE SECTION.",
     "01 WS-R.",
-    *[f"   05 R{n} PIC 9 VALUE 9." for n in range(1, 9)],
+    *[f"   05 R{n} PIC 9 VALUE 9." for n in range(1, 11)],
     "01 C1 PIC 99 VALUE 11.",
     "01 C2 PIC 99 VALUE 12.",
     "01 C3 PIC 99 VALUE 13.",
@@ -86,6 +86,8 @@ _PROGRAM = [
         ],
         "R8",
     ),
+    *_if(["X1 < (X2 OR X3)"], "R9"),
+    *_if(["X1 > (X2 AND X3)"], "R10"),
     "    STOP RUN.",
 ]
 
@@ -98,7 +100,7 @@ class TestCombinedConditions:
         relational operator, a NOT before an operator is part of it, and a NOT
         before a bare operand negates that one relation."""
         vm = run_cobol(_PROGRAM, max_steps=5000)
-        assert bytes(first_region(vm)[0:8]).decode("cp037") == "11101101"
+        assert bytes(first_region(vm)[0:10]).decode("cp037") == "1110110110"
 
     def test_bridge_groups_or_of_and_runs_with_abbreviation_subjects(self):
         source = to_fixed(_PROGRAM).encode()

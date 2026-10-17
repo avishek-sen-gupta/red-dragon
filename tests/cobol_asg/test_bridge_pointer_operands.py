@@ -60,7 +60,7 @@ def test_address_of_and_null_are_structured_operands() -> None:
     sets = [
         (s["targets"], s.get("values"), s.get("value")) for s in _statements(doc, "SET")
     ]
-    relation = _statements(doc, "IF")[0]["condition"]["relation"]
+    relation = _statements(doc, "IF")[0]["condition"]["first"]["relation"]
     using = _statements(doc, "CALL")[0]["using"][0]
 
     assert (sets, relation["left"], relation["right"], using) == (

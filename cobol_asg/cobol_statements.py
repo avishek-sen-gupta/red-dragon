@@ -15,6 +15,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Union
 
+from cobol_asg.abbreviated_condition import resolve_condition
 from cobol_asg.alphabet import Alphabet
 from cobol_asg.call_target import CallTarget
 from cobol_asg.cobol_expression import (
@@ -426,7 +427,7 @@ class IfStatement:
     @classmethod
     def from_dict(cls, data: dict) -> IfStatement:
         return cls(
-            condition=data.get("condition", {}),
+            condition=resolve_condition(data.get("condition", {})),
             children=[parse_statement(c) for c in data.get("children", [])],
             else_children=[parse_statement(c) for c in data.get("else_children", [])],
             span=SourceSpan.from_dict(data),
@@ -1197,17 +1198,25 @@ class InspectStatement:
         return result
 
 
+def _when_condition(written: Mapping | str) -> dict | str:
+    match written:
+        case Mapping():
+            return resolve_condition(written)
+        case _:
+            return written
+
+
 @dataclass(frozen=True)
 class SearchWhen:
     """A WHEN clause inside a SEARCH statement."""
 
-    condition: str
+    condition: dict | str
     children: list[CobolStatementType] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict) -> SearchWhen:
         return cls(
-            condition=data.get("condition", ""),
+            condition=_when_condition(data.get("condition", "")),
             children=[parse_statement(c) for c in data.get("children", [])],
         )
 
@@ -2095,7 +2104,7 @@ def _parse_perform_spec(
         return PerformTimesSpec(times=expr_from_dict(data["times"]))
     if perform_type == "UNTIL":
         return PerformUntilSpec(
-            condition=data.get("until", {}),
+            condition=resolve_condition(data.get("until", {})),
             test_before=data.get("test_before", True),
         )
     if perform_type == "VARYING":
@@ -2105,7 +2114,7 @@ def _parse_perform_spec(
                 varying_var=field_ref_from_dict(a["varying_var"]),
                 varying_from=expr_from_dict(a["varying_from"]),
                 varying_by=expr_from_dict(a["varying_by"]),
-                condition=a.get("until", {}),
+                condition=resolve_condition(a.get("until", {})),
             )
             for a in raw_afters
         )
@@ -2113,7 +2122,7 @@ def _parse_perform_spec(
             varying_var=field_ref_from_dict(data["varying_var"]),
             varying_from=expr_from_dict(data["varying_from"]),
             varying_by=expr_from_dict(data["varying_by"]),
-            condition=data.get("until", {}),
+            condition=resolve_condition(data.get("until", {})),
             test_before=data.get("test_before", True),
             after_specs=after_specs,
         )

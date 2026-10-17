@@ -3227,181 +3227,51 @@ public final class StatementSerializer {
     }
 
     /**
-     * Serializes a ConditionValueStmt into a structured JSON tree.
+     * Serializes a ConditionValueStmt as written: its first combinable condition,
+     * then each AND/OR link in order.
      *
-     * <p>Single-atom conditions produce a combinable-condition object directly.
-     * Compound conditions follow ANSI X3.23-1985 VI-6.15 precedence: AND binds
-     * tighter than OR, so the flat chain becomes an OR of left-folded AND runs,
-     * {@code {"op": "OR", "left": {"op": "AND", ...}, "right": ...}}.
-     *
-     * <p>Abbreviated operands take the last stated subject and relational
-     * operator. An abbreviation written as a bare identifier parses as a
-     * condition name; it carries that subject and operator under
-     * {@code "abbreviation"} so lowering can expand it when the name is a data
-     * item rather than a level-88.
+     * <p>{@code {"first": <atom>, "rest": [{"bool": "AND"|"OR", "atom": <atom>}
+     * | {"bool": ..., "abbreviations": [{"not": bool, "op"?: op, "right": <expr>}]}]}}.
+     * An abbreviation's {@code "op"} is absent when it states none. The ASG
+     * reader (cobol_asg/abbreviated_condition.py) applies precedence and the
+     * implied subject and operator.
      */
     private static JsonObject serializeConditionNode(ConditionValueStmt cond) {
-        CombinableCondition firstCc = cond.getCombinableCondition();
-        JsonElement subjectExpr = relationSubjectExpr(firstCc);
-        String subjectOp = relationSubjectOp(firstCc);
-
-        java.util.List<JsonObject> orTerms = new java.util.ArrayList<>();
-        JsonObject andRun = serializeCombinableCondition(firstCc);
-
+        JsonObject written = new JsonObject();
+        written.add("first", serializeCombinableCondition(cond.getCombinableCondition()));
+        JsonArray rest = new JsonArray();
         for (AndOrCondition aoc : cond.getAndOrConditions()) {
-            boolean isAnd = aoc.getAndOrConditionType() == AndOrCondition.AndOrConditionType.AND;
-            String boolOp = isAnd ? "AND" : "OR";
-            JsonObject right;
-            CombinableCondition rightCc = aoc.getCombinableCondition();
-            if (rightCc != null) {
-                right = serializeCombinableCondition(rightCc);
-                JsonElement nextSubj = relationSubjectExpr(rightCc);
-                if (nextSubj != null) {
-                    subjectExpr = nextSubj;
-                    subjectOp = relationSubjectOp(rightCc);
-                } else if (subjectExpr != null && right.has("condition_name")) {
-                    JsonObject abbreviation = new JsonObject();
-                    abbreviation.add("left", subjectExpr);
-                    abbreviation.addProperty("op", subjectOp);
-                    right.add("abbreviation", abbreviation);
-                }
+            JsonObject link = new JsonObject();
+            link.addProperty("bool",
+                    aoc.getAndOrConditionType() == AndOrCondition.AndOrConditionType.AND ? "AND" : "OR");
+            if (aoc.getCombinableCondition() != null) {
+                link.add("atom", serializeCombinableCondition(aoc.getCombinableCondition()));
             } else {
-                right = serializeAbbreviations(aoc, subjectExpr, subjectOp, boolOp);
-                subjectOp = lastStatedOperator(aoc, subjectOp);
+                link.add("abbreviations", serializeAbbreviations(aoc));
             }
-            if (isAnd) {
-                andRun = compoundNode("AND", andRun, right);
-            } else {
-                orTerms.add(andRun);
-                andRun = right;
-            }
+            rest.add(link);
         }
-        orTerms.add(andRun);
-        return orTerms.stream().reduce((left, right) -> compoundNode("OR", left, right)).get();
+        written.add("rest", rest);
+        return written;
     }
 
-    private static JsonObject compoundNode(String boolOp, JsonObject left, JsonObject right) {
-        JsonObject compound = new JsonObject();
-        compound.addProperty("op", boolOp);
-        compound.add("left", left);
-        compound.add("right", right);
-        return compound;
-    }
-
-    /**
-     * The relational operator an abbreviation states, NOT included: in an
-     * abbreviated combined relation condition a NOT immediately followed by a
-     * relational operator is part of that operator (ANSI X3.23-1985 VI-6.15).
-     * Returns {@code null} when the abbreviation states no operator.
-     */
-    private static String statedOperator(
-            io.proleap.cobol.asg.metamodel.valuestmt.relation.Abbreviation abbr) {
-        if (abbr.getOperator() == null) {
-            return null;
-        }
-        String op = relationalOpToString(abbr.getOperator());
-        CobolParser.AbbreviationContext ctx = (CobolParser.AbbreviationContext) abbr.getCtx();
-        return ctx.NOT() != null ? negatedOperator(op) : op;
-    }
-
-    private static String negatedOperator(String op) {
-        switch (op) {
-            case "==": return "!=";
-            case "!=": return "==";
-            case ">": return "<=";
-            case "<=": return ">";
-            case "<": return ">=";
-            case ">=": return "<";
-            default: throw new IllegalArgumentException("Unknown relational operator: " + op);
-        }
-    }
-
-    private static String lastStatedOperator(AndOrCondition aoc, String inheritedOp) {
-        String op = inheritedOp;
+    private static JsonArray serializeAbbreviations(AndOrCondition aoc) {
+        JsonArray written = new JsonArray();
         if (aoc.getAbbreviations() == null) {
-            return op;
+            return written;
         }
         for (io.proleap.cobol.asg.metamodel.valuestmt.relation.Abbreviation abbr : aoc.getAbbreviations()) {
-            String stated = statedOperator(abbr);
-            if (stated != null) {
-                op = stated;
+            CobolParser.AbbreviationContext ctx = (CobolParser.AbbreviationContext) abbr.getCtx();
+            JsonObject abbreviation = new JsonObject();
+            abbreviation.addProperty("not", ctx.NOT() != null);
+            if (abbr.getOperator() != null) {
+                abbreviation.addProperty("op", relationalOpToString(abbr.getOperator()));
             }
+            abbreviation.add("right", abbr.getArithmeticExpression() != null
+                    ? serializeArithmeticExpr(abbr.getArithmeticExpression()) : litNode(""));
+            written.add(abbreviation);
         }
-        return op;
-    }
-
-    /**
-     * Returns the left-hand arithmetic expression of a combinable condition's
-     * ARITHMETIC relation (the abbreviation subject), or {@code null} if absent.
-     */
-    private static JsonElement relationSubjectExpr(CombinableCondition cc) {
-        ArithmeticComparison ac = arithmeticComparisonOf(cc);
-        if (ac == null || ac.getArithmeticExpressionLeft() == null) {
-            return null;
-        }
-        return serializeArithmeticExpr(ac.getArithmeticExpressionLeft());
-    }
-
-    /** Returns the relational operator of a combinable condition's ARITHMETIC relation. */
-    private static String relationSubjectOp(CombinableCondition cc) {
-        ArithmeticComparison ac = arithmeticComparisonOf(cc);
-        return ac != null ? relationalOpToString(ac.getOperator()) : "==";
-    }
-
-    private static ArithmeticComparison arithmeticComparisonOf(CombinableCondition cc) {
-        if (cc == null || cc.getSimpleCondition() == null) {
-            return null;
-        }
-        SimpleCondition sc = cc.getSimpleCondition();
-        if (sc.getSimpleConditionType() != SimpleCondition.SimpleConditionType.RELATION_CONDITION) {
-            return null;
-        }
-        RelationConditionValueStmt rel = sc.getRelationCondition();
-        if (rel == null
-                || rel.getRelationConditionType() != RelationConditionValueStmt.RelationConditionType.ARITHMETIC) {
-            return null;
-        }
-        return rel.getArithmeticComparison();
-    }
-
-    /**
-     * Builds the right-hand condition node for an abbreviated AndOrCondition whose
-     * operands inherit the subject expression and operator from the preceding
-     * relation. Each abbreviation may override the operator (e.g. {@code A = X OR > Y}).
-     */
-    private static JsonObject serializeAbbreviations(
-            AndOrCondition aoc, JsonElement subjectExpr, String inheritedOp, String boolOp) {
-        java.util.List<io.proleap.cobol.asg.metamodel.valuestmt.relation.Abbreviation> abbrevs =
-                aoc.getAbbreviations();
-        if (subjectExpr == null || abbrevs == null || abbrevs.isEmpty()) {
-            JsonObject obj = new JsonObject();
-            obj.addProperty("text", "");
-            return obj;
-        }
-        JsonObject current = null;
-        String op = inheritedOp;
-        for (io.proleap.cobol.asg.metamodel.valuestmt.relation.Abbreviation abbr : abbrevs) {
-            String stated = statedOperator(abbr);
-            if (stated != null) {
-                op = stated;
-            }
-            CobolParser.AbbreviationContext abbrCtx = (CobolParser.AbbreviationContext) abbr.getCtx();
-            boolean negated = stated == null && abbrCtx.NOT() != null;
-            JsonElement operand = abbr.getArithmeticExpression() != null
-                    ? serializeArithmeticExpr(abbr.getArithmeticExpression()) : litNode("");
-
-            JsonObject relation = new JsonObject();
-            relation.add("left", subjectExpr);
-            relation.addProperty("op", op);
-            relation.add("right", operand);
-
-            JsonObject atom = new JsonObject();
-            atom.addProperty("not", negated);
-            atom.add("relation", relation);
-
-            current = current == null ? atom : compoundNode(boolOp, current, atom);
-        }
-        return current;
+        return written;
     }
 
     /**
@@ -3415,6 +3285,7 @@ public final class StatementSerializer {
      *   <li>{@code {"not": bool, "relation": {"left": <expr>, "op": "...", "right": <expr>}}} for relation conditions</li>
      *   <li>{@code {"not": bool, "text": "..."}} fallback for class/sign/unknown conditions</li>
      *   <li>{@code {"not": bool, "condition": {...}}} for nested parenthesised conditions</li>
+     *   <li>{@code {"not": bool, "combined": {...}}} for a combined relation {@code A = (X OR Y)}</li>
      * </ul>
      */
     private static JsonObject serializeCombinableCondition(CombinableCondition cc) {
@@ -3462,12 +3333,9 @@ public final class StatementSerializer {
                 obj.addProperty("text", insertSpaces(sc.getCtx().getText()));
             } else if (rel.getRelationConditionType()
                     == RelationConditionValueStmt.RelationConditionType.COMBINED) {
-                // Abbreviated comparison (A = X OR Y): expand into the AND/OR tree.
-                JsonObject expanded = serializeCombinedComparison(rel.getCombinedComparison());
-                if (expanded != null) {
-                    // Wrap the expanded tree as a nested condition so the surrounding
-                    // 'not' flag still applies via the {not, condition} shape.
-                    obj.add("condition", expanded);
+                JsonObject combined = serializeCombinedComparison(rel.getCombinedComparison());
+                if (combined != null) {
+                    obj.add("combined", combined);
                 } else {
                     obj.addProperty("text", insertSpaces(sc.getCtx().getText()));
                 }
@@ -3614,16 +3482,12 @@ public final class StatementSerializer {
     }
 
     /**
-     * Serializes a COMBINED (abbreviated) relation into the incumbent AND/OR
-     * condition tree, returning a full condition-node object (NOT a relation).
+     * Serializes a COMBINED relation {@code A = (X OR Y)} as written:
+     * {@code {"left": A, "op": op, "bool": "AND"|"OR", "operands": [X, Y]}}.
+     * The ASG reader expands it.
      *
-     * <p>An abbreviated comparison {@code A = X OR Y} carries a single subject
-     * {@code A} and operator {@code =}, with the trailing operands inheriting both.
-     * Each operand becomes {@code {"not":false,"relation":{left:A,op:=,right:operand}}},
-     * folded left into {@code {"op":"OR","left":...,"right":...}}.
-     *
-     * @return the condition node, or {@code null} if the shape is not a simple
-     *         abbreviated comparison (caller should fall back to text).
+     * @return the written relation, or {@code null} if a part is missing
+     *         (caller falls back to text).
      */
     private static JsonObject serializeCombinedComparison(CombinedComparison cc) {
         if (cc == null) {
@@ -3638,33 +3502,17 @@ public final class StatementSerializer {
         if (operands == null || operands.isEmpty()) {
             return null;
         }
-        String op = relationalOpToString(cc.getOperator());
-        String boolOp = (combined.getCombinedConditionType()
-                == CombinedCondition.CombinedConditionType.AND) ? "AND" : "OR";
-
-        JsonElement subjectExpr = serializeArithmeticExpr(subject);
-        JsonObject current = null;
+        JsonObject written = new JsonObject();
+        written.add("left", serializeArithmeticExpr(subject));
+        written.addProperty("op", relationalOpToString(cc.getOperator()));
+        written.addProperty("bool", (combined.getCombinedConditionType()
+                == CombinedCondition.CombinedConditionType.AND) ? "AND" : "OR");
+        JsonArray right = new JsonArray();
         for (ArithmeticValueStmt operand : operands) {
-            JsonObject relation = new JsonObject();
-            relation.add("left", subjectExpr);
-            relation.addProperty("op", op);
-            relation.add("right", serializeArithmeticExpr(operand));
-
-            JsonObject atom = new JsonObject();
-            atom.addProperty("not", false);
-            atom.add("relation", relation);
-
-            if (current == null) {
-                current = atom;
-            } else {
-                JsonObject compound = new JsonObject();
-                compound.addProperty("op", boolOp);
-                compound.add("left", current);
-                compound.add("right", atom);
-                current = compound;
-            }
+            right.add(serializeArithmeticExpr(operand));
         }
-        return current;
+        written.add("operands", right);
+        return written;
     }
 
     private static String relationalOpToString(RelationalOperator op) {

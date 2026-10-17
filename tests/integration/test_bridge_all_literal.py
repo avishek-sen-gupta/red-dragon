@@ -50,8 +50,8 @@ def test_bridge_serialises_all_literal_with_its_all(bridge_jar):
         fields["DC"]["conditions"][0]["values"],
         statements[0]["operands"][0],
         statements[1]["operands"][0],
-        statements[2]["condition"]["relation"]["right"],
-        statements[3]["condition"]["relation"]["left"],
+        statements[2]["condition"]["first"]["relation"]["right"],
+        statements[3]["condition"]["first"]["relation"]["left"],
     ) == (
         "AB",
         True,
