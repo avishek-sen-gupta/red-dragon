@@ -75,6 +75,7 @@ from interpreter.cobol.de_edit_ir import emit_de_edit
 from interpreter.cobol.digit_image_ir import emit_display_image, emit_field_digit_image
 from interpreter.cobol.ir_emitter import IrEmitter
 from interpreter.cobol.size_error_ir import emit_size_error
+from interpreter.cobol.standard_deviation_ir import emit_standard_deviation
 from interpreter.cobol.arithmetic_precision import ArithmeticPrecision
 from interpreter.cobol.arithmetic_receiver import ArithmeticReceiver
 from interpreter.cobol.arithmetic_scale import (
@@ -429,7 +430,6 @@ _INTRINSIC_FUNCTIONS = {
     "MEDIAN": BuiltinName.MEDIAN,
     "MIDRANGE": BuiltinName.MIDRANGE,
     "VARIANCE": BuiltinName.VARIANCE,
-    "STANDARD-DEVIATION": BuiltinName.STANDARD_DEVIATION,
     "ORD-MAX": BuiltinName.ORD_MAX,
     "ORD-MIN": BuiltinName.ORD_MIN,
     "CONCATENATE": BuiltinName.CONCATENATE,
@@ -608,25 +608,34 @@ def _lower_builtin_function(
     *,
     span: SourceSpan | None,
 ) -> Register:
-    if operand.name.upper() not in _INTRINSIC_FUNCTIONS:
+    if operand.name.upper() not in _INTRINSIC_EMITTERS:
         return _lower_unsupported_function(
             ctx, operand, materialised, precision, span=span
         )
-    builtin = _INTRINSIC_FUNCTIONS[operand.name.upper()]
     arg_regs = tuple(
         _lower_function_arg_to_string(ctx, arg, materialised, precision, span=span)
         for arg in operand.args
     )
-    result_reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        CallFunction(
-            result_reg=result_reg,
-            func_name=FuncName(builtin),
-            args=arg_regs,
-        ),
-        span=span,
+    return _INTRINSIC_EMITTERS[operand.name.upper()](
+        IrEmitter(ctx=ctx, span=span), arg_regs
     )
-    return result_reg
+
+
+def _call_intrinsic_builtin(
+    builtin: str, e: IrEmitter, args: tuple[Register, ...]
+) -> Register:
+    return e.call(builtin, *args)
+
+
+_INTRINSIC_EMITTERS: Mapping[
+    str, Callable[[IrEmitter, tuple[Register, ...]], Register]
+] = {
+    **{
+        name: partial(_call_intrinsic_builtin, builtin)
+        for name, builtin in _INTRINSIC_FUNCTIONS.items()
+    },
+    "STANDARD-DEVIATION": emit_standard_deviation,
+}
 
 
 def _lower_unsupported_function(

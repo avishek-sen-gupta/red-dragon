@@ -72,10 +72,6 @@ def variance(values: Sequence[CobolNumber]) -> CobolNumber:
     return sum(((v - average) ** 2 for v in values), Decimal(0)) / len(values)
 
 
-def standard_deviation(values: Sequence[CobolNumber]) -> CobolNumber:
-    return square_root(variance(values))
-
-
 def square_root(value: CobolNumber) -> CobolNumber:
     return value.sqrt()
 

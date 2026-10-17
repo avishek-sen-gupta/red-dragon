@@ -74,7 +74,6 @@ from interpreter.cobol.byte_builtins import (
     _builtin_reverse,
     _builtin_sin,
     _builtin_sqrt,
-    _builtin_standard_deviation,
     _builtin_string_concat,
     _builtin_string_concat_pair,
     _builtin_string_convert,
@@ -480,7 +479,6 @@ class TestByteBuiltinsRegistration:
             "__median",
             "__midrange",
             "__variance",
-            "__standard_deviation",
             "__cobol_program_present",
             "__ord_max",
             "__ord_min",
@@ -2628,21 +2626,6 @@ class TestVariance:
     @covers(CobolFeature.INTRINSIC_FUNCTION)
     def test_registered_in_builtins(self):
         assert FuncName(BuiltinName.VARIANCE) in BYTE_BUILTINS
-
-
-class TestStandardDeviation:
-    """FUNCTION STANDARD-DEVIATION(a, b, ...) -> the square root of the
-    population variance (IBM Enterprise COBOL LR, STANDARD-DEVIATION)."""
-
-    @covers(CobolFeature.INTRINSIC_FUNCTION)
-    def test_square_root_of_the_population_variance(self):
-        values = [typed_from_runtime(v) for v in (2, 4, 4, 4, 5, 5, 7, 9)]
-        assert (
-            _builtin_standard_deviation(values, None).value,
-            _builtin_standard_deviation([typed_from_runtime(5)], None).value,
-            _builtin_standard_deviation([], None).value,
-            FuncName(BuiltinName.STANDARD_DEVIATION) in BYTE_BUILTINS,
-        ) == (2, 0, _UNCOMPUTABLE, True)
 
 
 class TestOrdMax:
