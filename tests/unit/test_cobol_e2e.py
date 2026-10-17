@@ -150,7 +150,7 @@ class TestHelloWorldFixture:
 
         # Should have at least one region
         assert vm.region_count() >= 1
-        region_addr = list(vm.region_keys())[0]
+        region_addr = next(iter(vm.region_keys()))
         region = vm.region_get(region_addr)
         assert region is not None
 
@@ -223,7 +223,7 @@ class TestArithmeticFixture:
 
         vm = _execute_straight_line(instructions, stop_before_procedure=True)
 
-        region_addr = list(vm.region_keys())[0]
+        region_addr = next(iter(vm.region_keys()))
         region = vm.region_get(region_addr)
         assert region is not None
         assert len(region) == 5  # 9(5)
@@ -246,7 +246,7 @@ class TestArithmeticFixture:
 
         vm = _execute_straight_line(instructions)
 
-        region_addr = list(vm.region_keys())[0]
+        region_addr = next(iter(vm.region_keys()))
         region = vm.region_get(region_addr)
         assert region is not None
         assert len(region) == 5  # 9(5)
@@ -275,7 +275,7 @@ class TestPerformReturnFixture:
 
         # Execution should have completed (hit STOP RUN)
         assert vm.region_count() >= 1
-        region_addr = list(vm.region_keys())[0]
+        region_addr = next(iter(vm.region_keys()))
         region = vm.region_get(region_addr)
         # WS-RESULT at offset 0, PIC 9(3): MOVE 42 should yield 42
         assert (
@@ -335,7 +335,7 @@ class TestPerformReturnFixture:
 
         assert stats.steps < 300
         assert vm.region_count() >= 1
-        region = vm.region_get(list(vm.region_keys())[0])
+        region = vm.region_get(next(iter(vm.region_keys())))
         # PARA-A: MOVE 10 → PERFORM PARA-B (MOVE 99) → MOVE 42
         # Final WS-VAL == 42 proves PARA-B returned to PARA-A and PARA-A continued
         assert _decode_zoned_unsigned(region, 0, 3) == 42
@@ -386,7 +386,7 @@ class TestPerformReturnFixture:
         assert stats.steps < 200
         assert vm.region_count() >= 1
         # WS-A should be 2: FIRST-PARA MOVEs 1, then fall-through to SECOND-PARA MOVEs 2
-        region = vm.region_get(list(vm.region_keys())[0])
+        region = vm.region_get(next(iter(vm.region_keys())))
         assert _decode_zoned_unsigned(region, 0, 3) == 2
 
 
@@ -527,7 +527,7 @@ class TestIfElseExecution:
         assert stats.steps < 200
         assert vm.region_count() >= 1
         # WS-RESULT should be 1 (THEN branch: MOVE 1 TO WS-RESULT)
-        region = vm.region_get(list(vm.region_keys())[0])
+        region = vm.region_get(next(iter(vm.region_keys())))
         assert _decode_zoned_unsigned(region, 3, 3) == 1
 
     @covers(
@@ -594,7 +594,7 @@ class TestIfElseExecution:
         assert stats.steps < 200
         assert vm.region_count() >= 1
         # WS-RESULT should be 2 (ELSE branch: MOVE 2 TO WS-RESULT)
-        region = vm.region_get(list(vm.region_keys())[0])
+        region = vm.region_get(next(iter(vm.region_keys())))
         assert _decode_zoned_unsigned(region, 3, 3) == 2
 
 
@@ -653,7 +653,7 @@ class TestPerformTimesExecution:
         assert stats.steps < 500
         assert vm.region_count() >= 1
         # WS-CTR should be 3 after ADD 1 executed 3 times
-        region = vm.region_get(list(vm.region_keys())[0])
+        region = vm.region_get(next(iter(vm.region_keys())))
         assert _decode_zoned_unsigned(region, 0, 3) == 3
 
 
@@ -716,7 +716,7 @@ class TestPerformUntilExecution:
         assert stats.steps < 500
         assert vm.region_count() >= 1
         # WS-A should be 3: test-before loops ADD 1 three times (0→1→2→3), then exits
-        region = vm.region_get(list(vm.region_keys())[0])
+        region = vm.region_get(next(iter(vm.region_keys())))
         assert _decode_zoned_unsigned(region, 0, 3) == 3
 
 
@@ -795,7 +795,7 @@ class TestPerformVaryingExecution:
         assert vm.region_count() >= 1
         # WS-SUM should be 6: VARYING WS-IDX from 1 by 1 until > 3
         # adds 1+2+3 = 6
-        region = vm.region_get(list(vm.region_keys())[0])
+        region = vm.region_get(next(iter(vm.region_keys())))
         assert _decode_zoned_unsigned(region, 3, 5) == 6
 
 
@@ -848,7 +848,7 @@ class TestNumericValueVerification:
 
         vm, _ = _execute_cobol_program(cfg, registry, max_steps=500)
 
-        region = vm.region_get(list(vm.region_keys())[0])
+        region = vm.region_get(next(iter(vm.region_keys())))
         assert _decode_zoned_unsigned(region, 0, 3) == 42
 
     @covers(
@@ -895,7 +895,7 @@ class TestNumericValueVerification:
 
         vm, _ = _execute_cobol_program(cfg, registry, max_steps=500)
 
-        region = vm.region_get(list(vm.region_keys())[0])
+        region = vm.region_get(next(iter(vm.region_keys())))
         assert _decode_zoned_unsigned(region, 0, 4) == 10  # WS-A unchanged
         assert _decode_zoned_unsigned(region, 4, 4) == 15  # WS-B = 10 + 5
 
@@ -943,7 +943,7 @@ class TestNumericValueVerification:
 
         vm, _ = _execute_cobol_program(cfg, registry, max_steps=500)
 
-        region = vm.region_get(list(vm.region_keys())[0])
+        region = vm.region_get(next(iter(vm.region_keys())))
         assert _decode_zoned_unsigned(region, 0, 4) == 7  # WS-A = 10 - 3
 
     @covers(
@@ -982,7 +982,7 @@ class TestNumericValueVerification:
 
         vm, _ = _execute_cobol_program(cfg, registry, max_steps=500)
 
-        region = vm.region_get(list(vm.region_keys())[0])
+        region = vm.region_get(next(iter(vm.region_keys())))
         assert _decode_zoned_unsigned(region, 0, 4) == 25
 
     @covers(
@@ -1034,7 +1034,7 @@ class TestNumericValueVerification:
 
         vm, _ = _execute_cobol_program(cfg, registry, max_steps=500)
 
-        region = vm.region_get(list(vm.region_keys())[0])
+        region = vm.region_get(next(iter(vm.region_keys())))
         assert _decode_zoned_unsigned(region, 0, 4) == 3
 
     @covers(
@@ -1073,7 +1073,7 @@ class TestNumericValueVerification:
 
         vm, _ = _execute_cobol_program(cfg, registry, max_steps=500)
 
-        region = vm.region_get(list(vm.region_keys())[0])
+        region = vm.region_get(next(iter(vm.region_keys())))
         assert _decode_zoned_unsigned(region, 0, 4) == 123
 
     @covers(
@@ -1113,7 +1113,7 @@ class TestNumericValueVerification:
 
         vm, _ = _execute_cobol_program(cfg, registry, max_steps=500)
 
-        region = vm.region_get(list(vm.region_keys())[0])
+        region = vm.region_get(next(iter(vm.region_keys())))
         assert _decode_zoned_unsigned(region, 0, 4) == 15
 
     @covers(
@@ -1169,7 +1169,7 @@ class TestNumericValueVerification:
 
         vm, _ = _execute_cobol_program(cfg, registry, max_steps=1000)
 
-        region = vm.region_get(list(vm.region_keys())[0])
+        region = vm.region_get(next(iter(vm.region_keys())))
         assert _decode_zoned_unsigned(region, 0, 4) == 30
 
     @covers(
@@ -1227,8 +1227,63 @@ class TestNumericValueVerification:
 
         vm, _ = _execute_cobol_program(cfg, registry, max_steps=1000)
 
-        region = vm.region_get(list(vm.region_keys())[0])
+        region = vm.region_get(next(iter(vm.region_keys())))
         assert _decode_zoned_unsigned(region, 0, 4) == 130
+
+    @covers(
+        CobolFeature.DIVIDE,
+        CobolFeature.DIVIDE_REMAINDER,
+        CobolFeature.NUMERIC_EXECUTION,
+        CobolFeature.DATA_LAYOUT_ENGINE,
+    )
+    def test_divide_remainder_uses_the_stored_quotient(self):
+        """DIVIDE 7 BY 2 GIVING Q (9V9) REMAINDER R (9V9) → Q=3.5, R=7-3.5*2=0."""
+        data = {
+            "data_fields": [
+                {
+                    "name": "WS-Q",
+                    "level": 77,
+                    "pic": "9V9",
+                    "usage": "DISPLAY",
+                    "offset": 0,
+                    "value": "0",
+                },
+                {
+                    "name": "WS-R",
+                    "level": 77,
+                    "pic": "9V9",
+                    "usage": "DISPLAY",
+                    "offset": 2,
+                    "value": "9",
+                },
+            ],
+            "paragraphs": [
+                {
+                    "name": "MAIN-PARA",
+                    "statements": [
+                        {
+                            "type": "DIVIDE",
+                            "operands": ["7", "2"],
+                            "giving": ["WS-Q"],
+                            "remainder": "WS-R",
+                        },
+                        {"type": "STOP_RUN"},
+                    ],
+                },
+            ],
+        }
+        frontend = CobolFrontend(make_cobol_parser())
+        instructions = frontend.lower_from_ast_dict(data)
+        cfg = build_cfg(instructions)
+        registry = build_registry(instructions, cfg)
+
+        vm, _ = _execute_cobol_program(cfg, registry, max_steps=500)
+
+        region = vm.region_get(next(iter(vm.region_keys())))
+        assert (
+            _decode_zoned_unsigned(region, 0, 2),
+            _decode_zoned_unsigned(region, 2, 2),
+        ) == (35, 0)
 
 
 class TestSectionFallThrough:
@@ -1285,7 +1340,7 @@ class TestSectionFallThrough:
         assert stats.steps < 200
         assert vm.region_count() >= 1
         # Fall-through: FIRST-PARA sets WS-A=1, SECOND-PARA overwrites to 2
-        region = vm.region_get(list(vm.region_keys())[0])
+        region = vm.region_get(next(iter(vm.region_keys())))
         assert _decode_zoned_unsigned(region, 0, 3) == 2
 
 
@@ -1348,7 +1403,7 @@ class TestNestedPerformNumericValues:
 
         vm, _ = _execute_cobol_program(cfg, registry, max_steps=500)
 
-        region = vm.region_get(list(vm.region_keys())[0])
+        region = vm.region_get(next(iter(vm.region_keys())))
         assert _decode_zoned_unsigned(region, 0, 4) == 111
 
     @covers(
@@ -1416,7 +1471,7 @@ class TestNestedPerformNumericValues:
 
         vm, _ = _execute_cobol_program(cfg, registry, max_steps=2000)
 
-        region = vm.region_get(list(vm.region_keys())[0])
+        region = vm.region_get(next(iter(vm.region_keys())))
         assert _decode_zoned_unsigned(region, 0, 4) == 6
 
 
@@ -1477,7 +1532,7 @@ class TestGotoInsidePerform:
 
         vm, _ = _execute_cobol_program(cfg, registry, max_steps=500)
 
-        region = vm.region_get(list(vm.region_keys())[0])
+        region = vm.region_get(next(iter(vm.region_keys())))
         assert _decode_zoned_unsigned(region, 0, 4) == 11
 
     @covers(
@@ -1540,7 +1595,7 @@ class TestGotoInsidePerform:
 
         vm, _ = _execute_cobol_program(cfg, registry, max_steps=500)
 
-        region = vm.region_get(list(vm.region_keys())[0])
+        region = vm.region_get(next(iter(vm.region_keys())))
         assert _decode_zoned_unsigned(region, 0, 4) == 11
 
     @covers(
@@ -1609,7 +1664,7 @@ class TestGotoInsidePerform:
 
         vm, _ = _execute_cobol_program(cfg, registry, max_steps=500)
 
-        region = vm.region_get(list(vm.region_keys())[0])
+        region = vm.region_get(next(iter(vm.region_keys())))
         # WORK-PARA adds 10, GO TO jumps to EXIT-PARA which adds 100.
         # The GO TO bypasses WORK-PARA's end label, so the PERFORM
         # continuation is never triggered — control does NOT return to
@@ -1648,7 +1703,7 @@ class TestPicXDigitOnlyValue:
         instructions = frontend.lower_from_ast_dict(data)
 
         vm = _execute_straight_line(instructions)
-        raw = vm.region_get(list(vm.region_keys())[0])
+        raw = vm.region_get(next(iter(vm.region_keys())))
         assert raw is not None
         region = list(raw)
 
@@ -1685,7 +1740,7 @@ class TestPicXDigitOnlyValue:
         registry = build_registry(instructions, cfg)
 
         vm, _ = _execute_cobol_program(cfg, registry, max_steps=500)
-        region = list(vm.region_get(list(vm.region_keys())[0]))
+        region = list(vm.region_get(next(iter(vm.region_keys()))))
 
         assert (
             region != [0] * 5
