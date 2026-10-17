@@ -9,6 +9,8 @@ from interpreter.cobol.io_provider import IOResult
 
 class FileLogicStatus(Enum):
     PERMITTED = "00"
+    RELATIVE_KEY_TOO_SMALL = "14"
+    SEQUENCE_ERROR = "21"
     CLOSED_WITH_LOCK = "38"
     ALREADY_OPEN = "41"
     NOT_OPEN = "42"

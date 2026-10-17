@@ -1,11 +1,13 @@
-"""An open COBOL file: its driver, open mode, organization and position indicator."""
+"""An open COBOL file: its driver, open mode, organization, access mode, keys and
+position indicator."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from cobol_asg.file_enums import FileOrganization, OpenMode
-from interpreter.cobol.access_result import AccessCondition
+from cobol_asg.file_enums import AccessMode, FileOrganization, OpenMode
+from interpreter.cobol.access_result import AccessCondition, AccessResult
+from interpreter.cobol.file_attributes import FileAttributes
 from interpreter.cobol.file_drivers import FileOrganizationDriver
 from interpreter.cobol.file_logic_status import FileLogicStatus
 from interpreter.cobol.file_position import FilePosition
@@ -31,11 +33,21 @@ def _permitted_unless(refused: bool, status: FileLogicStatus) -> FileLogicStatus
 class OpenFile:
     driver: FileOrganizationDriver
     mode: OpenMode
-    organization: FileOrganization
+    attributes: FileAttributes
     position: FilePosition = FilePosition.NO_CURRENT_RECORD
+    last_key: bytes = b""
 
     def _sequential(self) -> bool:
-        return self.organization is FileOrganization.SEQUENTIAL
+        return self.attributes.organization is FileOrganization.SEQUENTIAL
+
+    def _sequential_access(self) -> bool:
+        return self._sequential() or self.attributes.access is AccessMode.SEQUENTIAL
+
+    def _indexed_in_sequence(self) -> bool:
+        return (
+            self.attributes.organization is FileOrganization.INDEXED
+            and self.attributes.access is AccessMode.SEQUENTIAL
+        )
 
     def _write_modes(self) -> frozenset[OpenMode]:
         return (
@@ -43,6 +55,10 @@ class OpenFile:
             if self._sequential()
             else _RELATIVE_OR_INDEXED_WRITE_MODES
         )
+
+    def _exceeds_relative_key(self, result: AccessResult) -> bool:
+        digits = len(str(result.record_number))
+        return 0 < self.attributes.relative_key_digits < digits
 
     def read_check(self, sequential_read: bool) -> FileLogicStatus:
         if self.mode not in _READ_MODES:
@@ -52,44 +68,79 @@ class OpenFile:
             FileLogicStatus.NO_NEXT_RECORD,
         )
 
+    def read_outcome(self, result: AccessResult) -> FileLogicStatus:
+        return _permitted_unless(
+            self._exceeds_relative_key(result),
+            FileLogicStatus.RELATIVE_KEY_TOO_SMALL,
+        )
+
     def start_check(self) -> FileLogicStatus:
         return _permitted_unless(
             self.mode not in _READ_MODES, FileLogicStatus.READ_NOT_PERMITTED
         )
 
-    def write_check(self) -> FileLogicStatus:
+    def write_check(self, record: bytes) -> FileLogicStatus:
+        if self.mode not in self._write_modes():
+            return FileLogicStatus.WRITE_NOT_PERMITTED
         return _permitted_unless(
-            self.mode not in self._write_modes(), FileLogicStatus.WRITE_NOT_PERMITTED
+            self._indexed_in_sequence()
+            and self.attributes.prime_key.of(record) < self.last_key,
+            FileLogicStatus.SEQUENCE_ERROR,
         )
 
-    def update_check(self) -> FileLogicStatus:
+    def _current_record_check(self) -> FileLogicStatus:
         if self.mode is not OpenMode.IO:
             return FileLogicStatus.UPDATE_NOT_PERMITTED
         return _permitted_unless(
-            self._sequential() and self.position is not FilePosition.CURRENT_RECORD,
+            self._sequential_access()
+            and self.position is not FilePosition.CURRENT_RECORD,
             FileLogicStatus.NO_CURRENT_RECORD,
         )
 
-    def delete_check(self, key: str) -> FileLogicStatus:
-        if self.mode is not OpenMode.IO:
-            return FileLogicStatus.UPDATE_NOT_PERMITTED
+    def rewrite_check(self, record: bytes) -> FileLogicStatus:
+        current = self._current_record_check()
+        if current is not FileLogicStatus.PERMITTED:
+            return current
         return _permitted_unless(
-            not key and self.position is not FilePosition.CURRENT_RECORD,
-            FileLogicStatus.NO_CURRENT_RECORD,
+            self._indexed_in_sequence()
+            and self.attributes.prime_key.of(record) != self.last_key,
+            FileLogicStatus.SEQUENCE_ERROR,
         )
+
+    def delete_check(self) -> FileLogicStatus:
+        return self._current_record_check()
 
     def key_bytes(self, key: str) -> bytes:
         if not key:
             return b""
-        if self.organization is FileOrganization.RELATIVE:
+        if self.attributes.organization is FileOrganization.RELATIVE:
             return int(key).to_bytes(_RELATIVE_KEY_BYTES, "big")
         return key.encode("latin-1")
 
-    def after_read(self, condition: AccessCondition) -> OpenFile:
+    def _read_position(self, result: AccessResult) -> FilePosition:
+        if self._exceeds_relative_key(result):
+            return FilePosition.AT_END
+        return _READ_POSITIONS.get(result.condition, FilePosition.NO_CURRENT_RECORD)
+
+    def after_read(self, result: AccessResult) -> OpenFile:
         return replace(
             self,
-            position=_READ_POSITIONS.get(condition, FilePosition.NO_CURRENT_RECORD),
+            position=self._read_position(result),
+            last_key=self.attributes.prime_key.of(result.data or b""),
         )
 
-    def after_other(self, condition: AccessCondition) -> OpenFile:
+    def after_write(self, record: bytes, result: AccessResult) -> OpenFile:
+        written = result.condition is AccessCondition.OK
+        return replace(
+            self,
+            position=FilePosition.NO_CURRENT_RECORD,
+            last_key=self.attributes.prime_key.of(record) if written else self.last_key,
+        )
+
+    def after_refusal(self) -> OpenFile:
+        if self.position is FilePosition.CURRENT_RECORD:
+            return replace(self, position=FilePosition.NO_CURRENT_RECORD)
+        return self
+
+    def after_other(self, result: AccessResult) -> OpenFile:
         return replace(self, position=FilePosition.NO_CURRENT_RECORD)

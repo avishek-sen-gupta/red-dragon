@@ -15,13 +15,14 @@ from tests.covers import covers
 _UNCOMPUTABLE = Operators.UNCOMPUTABLE
 _PROGRAM = typed_from_runtime("PGM")
 
-# Helpers for building typed args for _open_file (filename, mode, record_length, organization, key_offset, key_length)
 _OPEN_ARGS = [
     typed_from_runtime("F1"),
     typed_from_runtime("INPUT"),
     typed_from_runtime(80),
     typed_from_runtime("SEQUENTIAL"),
     typed_from_runtime(0),
+    typed_from_runtime(0),
+    typed_from_runtime("SEQUENTIAL"),
     typed_from_runtime(0),
     _PROGRAM,
 ]
@@ -230,6 +231,8 @@ class TestStubIOProvider:
                 typed_from_runtime("SEQUENTIAL"),
                 typed_from_runtime(0),
                 typed_from_runtime(0),
+                typed_from_runtime("SEQUENTIAL"),
+                typed_from_runtime(0),
                 _PROGRAM,
             ],
         )
@@ -247,6 +250,8 @@ class TestStubIOProvider:
                 typed_from_runtime(80),
                 typed_from_runtime("SEQUENTIAL"),
                 typed_from_runtime(0),
+                typed_from_runtime(0),
+                typed_from_runtime("SEQUENTIAL"),
                 typed_from_runtime(0),
                 _PROGRAM,
             ],

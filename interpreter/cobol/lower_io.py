@@ -21,6 +21,7 @@ from cobol_asg.file_enums import AccessMode, FileOrganization, OpenMode
 from cobol_asg.ref_mod import RefModOperand
 from cobol_asg.source_span import SourceSpan
 from interpreter.cobol.cobol_constants import BuiltinName
+from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.field_resolution import whole_field_extent
 from interpreter.cobol.program_object import program_name
@@ -258,85 +259,120 @@ def _emit_accept_call(ctx: EmitContext, stmt: AcceptStatement, length: int) -> R
     return result_reg
 
 
+def _record_length(
+    ctx: EmitContext, filename: str, materialised: MaterialisedSectionedLayout
+) -> int:
+    rec_name = _select_to_record(ctx).get(filename.upper(), "")
+    if not (rec_name and materialised.has_field(rec_name)):
+        return 0
+    fl, _ = materialised.resolve(rec_name)
+    return fl.byte_length
+
+
+def _declared_key(
+    materialised: MaterialisedSectionedLayout, key: RefModOperand
+) -> tuple[FieldLayout, ...]:
+    if not (key.name and materialised.has_field(key.name)):
+        return ()
+    fl, _ = materialised.resolve(key.name, key.qualifiers)
+    return (fl,)
+
+
+def _prime_key_extent(
+    materialised: MaterialisedSectionedLayout, entry: FileControlEntry
+) -> tuple[int, int]:
+    return next(
+        (
+            (fl.offset, fl.byte_length)
+            for fl in _declared_key(materialised, entry.record_key)
+        ),
+        (0, 0),
+    )
+
+
+def _relative_key_digits(
+    materialised: MaterialisedSectionedLayout, entry: FileControlEntry
+) -> int:
+    if entry.organization is not FileOrganization.RELATIVE:
+        return 0
+    return next(
+        (
+            fl.type_descriptor.total_digits
+            for fl in _declared_key(materialised, entry.relative_key)
+        ),
+        0,
+    )
+
+
+def _open_arguments(
+    ctx: EmitContext,
+    filename: str,
+    mode: OpenMode,
+    materialised: MaterialisedSectionedLayout,
+) -> tuple[str | int, ...]:
+    entry = _file_entries(ctx).get(filename, FileControlEntry(file_name=filename))
+    key_offset, key_length = _prime_key_extent(materialised, entry)
+    return (
+        filename,
+        mode.value,
+        _record_length(ctx, filename, materialised),
+        entry.organization.value,
+        key_offset,
+        key_length,
+        entry.access_mode.value,
+        _relative_key_digits(materialised, entry),
+    )
+
+
+def _lower_open_file(
+    ctx: EmitContext,
+    filename: str,
+    mode: OpenMode,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> None:
+    raw_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=raw_reg,
+            func_name=FuncName("__cobol_open_file"),
+            args=(
+                *(
+                    Register(str(ctx.const_to_reg(value, span=span)))
+                    for value in _open_arguments(ctx, filename, mode, materialised)
+                ),
+                _program(ctx, span=span),
+            ),
+        ),
+        span=span,
+    )
+    status_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=status_reg,
+            func_name=FuncName("__cobol_io_status"),
+            args=(Register(str(raw_reg)), _program(ctx, span=span)),
+        ),
+        span=span,
+    )
+    ctx.emit_file_status_update(filename, status_reg, materialised, span=span)
+    _emit_open_use_trigger(ctx, filename, mode, status_reg, span=span)
+    logger.info("OPEN %s %s", mode.value, filename)
+
+
 def lower_open(
     ctx: EmitContext,
     stmt: OpenStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """OPEN [mode file1 ...] ... — emit __cobol_open_file per file with org/key metadata."""
-    span = stmt.span
-    for mode, files in stmt.mode_groups:
-        for filename in files:
-            fn_reg = ctx.const_to_reg(filename, span=span)
-            mode_reg = ctx.const_to_reg(mode.value, span=span)
-
-            # Look up FileControlEntry for organization and key metadata
-            fce = next(
-                (e for e in ctx._asg.file_control if e.file_name == filename), None
-            )
-            org = fce.organization.value if fce else "SEQUENTIAL"
-
-            # Resolve record length: look up the first FD record for this SELECT
-            # file, then read its byte_length from the file section layout.
-            record_length = 0
-            s2r = _select_to_record(ctx)
-            rec_name = s2r.get(filename.upper())
-            if rec_name:
-                try:
-                    fl, _ = materialised.resolve(rec_name)
-                    record_length = fl.byte_length
-                except KeyError:
-                    pass
-
-            # Resolve key offset/length from FileControlEntry.record_key
-            key_offset, key_length = 0, 0
-            if fce and fce.record_key.name:
-                try:
-                    key_fl, _ = materialised.resolve(
-                        fce.record_key.name, fce.record_key.qualifiers
-                    )
-                    key_offset = key_fl.offset
-                    key_length = key_fl.byte_length
-                except KeyError:
-                    pass
-
-            rl_reg = ctx.const_to_reg(record_length, span=span)
-            org_reg = ctx.const_to_reg(org, span=span)
-            koff_reg = ctx.const_to_reg(key_offset, span=span)
-            klen_reg = ctx.const_to_reg(key_length, span=span)
-
-            raw_reg = ctx.fresh_reg()
-            ctx.emit_inst(
-                CallFunction(
-                    result_reg=raw_reg,
-                    func_name=FuncName("__cobol_open_file"),
-                    args=(
-                        Register(str(fn_reg)),
-                        Register(str(mode_reg)),
-                        Register(str(rl_reg)),
-                        Register(str(org_reg)),
-                        Register(str(koff_reg)),
-                        Register(str(klen_reg)),
-                        _program(ctx, span=span),
-                    ),
-                ),
-                span=span,
-            )
-            status_reg = ctx.fresh_reg()
-            ctx.emit_inst(
-                CallFunction(
-                    result_reg=status_reg,
-                    func_name=FuncName("__cobol_io_status"),
-                    args=(
-                        Register(str(raw_reg)),
-                        _program(ctx, span=span),
-                    ),
-                ),
-                span=span,
-            )
-            ctx.emit_file_status_update(filename, status_reg, materialised, span=span)
-            _emit_open_use_trigger(ctx, filename, mode, status_reg, span=span)
-            logger.info("OPEN %s %s", mode.value, filename)
+    """OPEN [mode file1 ...] ... — emit __cobol_open_file per file with the
+    attributes its SELECT entry declares."""
+    _ = [
+        _lower_open_file(ctx, filename, mode, materialised, span=stmt.span)
+        for mode, files in stmt.mode_groups
+        for filename in files
+    ]
 
 
 def lower_close(
@@ -581,13 +617,13 @@ def lower_read(
         at_end_lbl = ctx.fresh_label("read_at_end")
         ok_lbl = ctx.fresh_label("read_ok")
         cond_reg = ctx.fresh_reg()
-        ten_reg = ctx.const_to_reg("10", span=span)
+        at_end_class = ctx.const_to_reg(StatusClass.AT_END.value, span=span)
         ctx.emit_inst(
             Binop(
                 result_reg=cond_reg,
                 operator=resolve_binop("=="),
-                left=status_reg,
-                right=Register(str(ten_reg)),
+                left=_emit_status_class(ctx, status_reg, span=span),
+                right=Register(str(at_end_class)),
             ),
             span=span,
         )

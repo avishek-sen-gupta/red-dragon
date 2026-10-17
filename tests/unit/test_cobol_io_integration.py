@@ -147,6 +147,16 @@ class TestExecutorIOProviderDispatch:
         )
         instructions.append(
             IRInstruction(
+                opcode=Opcode.CONST,
+                result_reg=Register("%am"),
+                operands=["SEQUENTIAL"],
+            )
+        )
+        instructions.append(
+            IRInstruction(opcode=Opcode.CONST, result_reg=Register("%rk"), operands=[0])
+        )
+        instructions.append(
+            IRInstruction(
                 opcode=Opcode.CALL_FUNCTION,
                 result_reg=Register("%r1"),
                 operands=[
@@ -157,6 +167,8 @@ class TestExecutorIOProviderDispatch:
                     "%org",
                     "%ko",
                     "%kl",
+                    "%am",
+                    "%rk",
                     "%p",
                 ],
             )
