@@ -77,7 +77,12 @@ class TestNullIOProvider:
         provider = NullIOProvider()
         result = provider.handle_call(
             FuncName("__cobol_write_record"),
-            [typed_from_runtime("F1"), typed_from_runtime("DATA"), _PROGRAM],
+            [
+                typed_from_runtime("F1"),
+                typed_from_runtime("DATA"),
+                typed_from_runtime(""),
+                _PROGRAM,
+            ],
         )
         assert result == IOResult("00", None)
 
@@ -86,7 +91,12 @@ class TestNullIOProvider:
         provider = NullIOProvider()
         result = provider.handle_call(
             FuncName("__cobol_rewrite_record"),
-            [typed_from_runtime("F1"), typed_from_runtime("DATA"), _PROGRAM],
+            [
+                typed_from_runtime("F1"),
+                typed_from_runtime("DATA"),
+                typed_from_runtime(""),
+                _PROGRAM,
+            ],
         )
         assert result == IOResult("00", None)
 
@@ -188,12 +198,22 @@ class TestStubIOProvider:
         provider = StubIOProvider()
         result = provider.handle_call(
             FuncName("__cobol_write_record"),
-            [typed_from_runtime("OUT-FILE"), typed_from_runtime("DATA1"), _PROGRAM],
+            [
+                typed_from_runtime("OUT-FILE"),
+                typed_from_runtime("DATA1"),
+                typed_from_runtime(""),
+                _PROGRAM,
+            ],
         )
         assert result == IOResult("00", None)
         result = provider.handle_call(
             FuncName("__cobol_write_record"),
-            [typed_from_runtime("OUT-FILE"), typed_from_runtime("DATA2"), _PROGRAM],
+            [
+                typed_from_runtime("OUT-FILE"),
+                typed_from_runtime("DATA2"),
+                typed_from_runtime(""),
+                _PROGRAM,
+            ],
         )
         assert result == IOResult("00", None)
         assert provider.get_file("OUT-FILE").written == ["DATA1", "DATA2"]
@@ -255,11 +275,21 @@ class TestStubIOProvider:
         provider = StubIOProvider()
         provider.handle_call(
             FuncName("__cobol_write_record"),
-            [typed_from_runtime("F1"), typed_from_runtime("OLD"), _PROGRAM],
+            [
+                typed_from_runtime("F1"),
+                typed_from_runtime("OLD"),
+                typed_from_runtime(""),
+                _PROGRAM,
+            ],
         )
         result = provider.handle_call(
             FuncName("__cobol_rewrite_record"),
-            [typed_from_runtime("F1"), typed_from_runtime("NEW"), _PROGRAM],
+            [
+                typed_from_runtime("F1"),
+                typed_from_runtime("NEW"),
+                typed_from_runtime(""),
+                _PROGRAM,
+            ],
         )
         assert result == IOResult("00", None)
         assert provider.get_file("F1").written == ["NEW"]
@@ -269,7 +299,12 @@ class TestStubIOProvider:
         provider = StubIOProvider()
         result = provider.handle_call(
             FuncName("__cobol_rewrite_record"),
-            [typed_from_runtime("F1"), typed_from_runtime("DATA"), _PROGRAM],
+            [
+                typed_from_runtime("F1"),
+                typed_from_runtime("DATA"),
+                typed_from_runtime(""),
+                _PROGRAM,
+            ],
         )
         assert result == IOResult("00", None)
         assert provider.get_file("F1").written == ["DATA"]

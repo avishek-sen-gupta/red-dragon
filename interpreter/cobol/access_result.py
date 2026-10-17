@@ -29,3 +29,4 @@ class AccessCondition(Enum):
 class AccessResult:
     condition: AccessCondition
     data: bytes | None = None
+    record_number: int = 0

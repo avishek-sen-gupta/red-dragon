@@ -99,7 +99,9 @@ class TestExecutorIOProviderDispatch:
 
     @covers(CobolFeature.IO_PROVIDER, CobolFeature.WRITE)
     def test_stub_write_captures_data(self):
-        ir = _build_call_function_ir("__cobol_write_record", "OUT-FILE", "DATA1", "PGM")
+        ir = _build_call_function_ir(
+            "__cobol_write_record", "OUT-FILE", "DATA1", "", "PGM"
+        )
         provider = StubIOProvider()
         _execute_with_provider(ir, provider)
 

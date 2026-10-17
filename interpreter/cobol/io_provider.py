@@ -39,6 +39,7 @@ class IOResult:
 
     status: str
     data: str | None
+    record_number: int = 0
 
 
 # Dispatch table mapping __cobol_* function names to provider method names.
@@ -54,6 +55,7 @@ _COBOL_IO_DISPATCH: dict[FuncName, str] = {
     FuncName("__cobol_delete_record"): "_delete_record",
     FuncName("__cobol_io_status"): "_io_status",
     FuncName("__cobol_io_data"): "_io_data",
+    FuncName("__cobol_io_record_number"): "_io_record_number",
     FuncName("__cobol_file_open_mode"): "_open_mode",
     FuncName("__cobol_switch_status"): "_switch_status",
     FuncName("__cobol_set_switch"): "_set_switch",
@@ -96,6 +98,10 @@ class CobolIOProvider(ABC):
         if isinstance(raw, IOResult):
             return raw.data or ""
         return _UNCOMPUTABLE
+
+    def _io_record_number(self, raw: IOResult, program: str) -> int:
+        """The relative record number a relative-file verb used, 0 for others."""
+        return raw.record_number
 
     def _open_mode(self, filename: Any, program: str) -> Any:
         """Current OPEN mode of a file ("INPUT"/"OUTPUT"/"I-O"/"EXTEND"), "" if closed."""
@@ -155,13 +161,17 @@ class CobolIOProvider(ABC):
         ...
 
     @abstractmethod
-    def _write_record(self, filename: str, data: str, program: str) -> IOResult:
-        """WRITE — write a record to file."""
+    def _write_record(
+        self, filename: str, data: str, key: str, program: str
+    ) -> IOResult:
+        """WRITE — write a record to file, at relative record number ``key`` if given."""
         ...
 
     @abstractmethod
-    def _rewrite_record(self, filename: str, data: str, program: str) -> IOResult:
-        """REWRITE — replace the last-read record in file."""
+    def _rewrite_record(
+        self, filename: str, data: str, key: str, program: str
+    ) -> IOResult:
+        """REWRITE — replace the record numbered ``key``, or the last-read one."""
         ...
 
     @abstractmethod
@@ -211,10 +221,14 @@ class NullIOProvider(CobolIOProvider):
     def _read_record(self, filename: str, key: str, program: str) -> Any:
         return _UNCOMPUTABLE
 
-    def _write_record(self, filename: str, data: str, program: str) -> IOResult:
+    def _write_record(
+        self, filename: str, data: str, key: str, program: str
+    ) -> IOResult:
         return IOResult("00", None)
 
-    def _rewrite_record(self, filename: str, data: str, program: str) -> IOResult:
+    def _rewrite_record(
+        self, filename: str, data: str, key: str, program: str
+    ) -> IOResult:
         return IOResult("00", None)
 
     def _start_file(
@@ -255,7 +269,7 @@ class StubIOProvider(CobolIOProvider):
     def get_file(self, filename: str) -> StubFile:
         """Get the StubFile for a filename, creating one if absent."""
         if filename not in self._files:
-            self._files[filename] = StubFile()
+            self._files = {**self._files, filename: StubFile()}
         return self._files[filename]
 
     def _accept(self, from_device: str) -> Any:
@@ -298,13 +312,17 @@ class StubIOProvider(CobolIOProvider):
         logger.info("StubIOProvider READ %s → AT END", filename)
         return IOResult("10", None)
 
-    def _write_record(self, filename: str, data: str, program: str) -> IOResult:
+    def _write_record(
+        self, filename: str, data: str, key: str, program: str
+    ) -> IOResult:
         stub = self.get_file(filename)
         stub.written.append(data)
         logger.info("StubIOProvider WRITE %s ← %r", filename, data)
         return IOResult("00", None)
 
-    def _rewrite_record(self, filename: str, data: str, program: str) -> IOResult:
+    def _rewrite_record(
+        self, filename: str, data: str, key: str, program: str
+    ) -> IOResult:
         stub = self.get_file(filename)
         if stub.written:
             stub.written[-1] = data
