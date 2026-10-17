@@ -32,6 +32,10 @@ from interpreter.cobol.string_ir_outcome import StringIrOutcome
 from interpreter.cobol.unstring_ir import emit_unstring
 from interpreter.cobol.unstring_ir_outcome import UnstringIrOutcome
 from interpreter.cobol.unstring_ir_piece import UnstringIrPiece
+from interpreter.cobol.zoned_sign_ir import (
+    emit_inspected_characters,
+    emit_write_inspected_characters,
+)
 from interpreter.func_name import FuncName
 from interpreter.instructions import Binop, Branch, BranchIf, CallFunction, Label_
 from interpreter.ir import CodeLabel
@@ -545,12 +549,12 @@ def lower_inspect(
         subscripts=stmt.source.subscripts,
         span=span,
     )
-    image_reg = ctx.emit_inspected_characters(
+    image_reg = emit_inspected_characters(
+        IrEmitter(ctx=ctx, span=span),
         source_rr,
         source_ref.fl,
         source_ref.offset_reg,
-        extent=source_ref.extent,
-        span=span,
+        source_ref.extent,
     )
     window = _inspected_window(ctx, stmt, materialised)
     inspected_reg = (
@@ -563,7 +567,8 @@ def lower_inspect(
     rewritten_reg = _rewritten(ctx, stmt, inspected_reg, materialised)
     if not rewritten_reg.is_present():
         return
-    ctx.emit_write_inspected_characters(
+    emit_write_inspected_characters(
+        IrEmitter(ctx=ctx, span=span),
         source_rr,
         source_ref.fl,
         (
@@ -577,8 +582,7 @@ def lower_inspect(
             else rewritten_reg
         ),
         source_ref.offset_reg,
-        extent=source_ref.extent,
-        span=span,
+        source_ref.extent,
     )
 
 
