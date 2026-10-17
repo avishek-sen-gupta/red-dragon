@@ -600,6 +600,14 @@ public final class AsgSerializer {
      * lists declaratives paragraphs in the flat paragraph list, not under the
      * declarative object.
      */
+    private static AfterOn.AfterOnType afterOnType(AfterOn afterOn) {
+        if (afterOn.getAfterOnType() != null) {
+            return afterOn.getAfterOnType();
+        }
+        CobolParser.UseAfterOnContext ctx = (CobolParser.UseAfterOnContext) afterOn.getCtx();
+        return ctx.EXTEND() != null ? AfterOn.AfterOnType.EXTEND : null;
+    }
+
     private static JsonArray serializeDeclaratives(
             ProcedureDivision pd, Collection<Paragraph> allParagraphs) {
         JsonArray arr = new JsonArray();
@@ -623,10 +631,10 @@ public final class AsgSerializer {
                     && us.getUseAfterStatement() != null) {
                 UseAfterStatement ua = us.getUseAfterStatement();
                 AfterOn afterOn = ua.getAfterOn();
-                if (afterOn != null && afterOn.getAfterOnType() != null) {
+                AfterOn.AfterOnType t = afterOn == null ? null : afterOnType(afterOn);
+                if (t != null) {
                     JsonObject useObj = new JsonObject();
                     useObj.addProperty("global", ua.isGlobal());
-                    AfterOn.AfterOnType t = afterOn.getAfterOnType();
                     String target = switch (t) {
                         case FILE -> "FILE";
                         case INPUT -> "INPUT";

@@ -242,7 +242,8 @@ class TestUseDeclaratives:
     ) -> None:
         # OPEN INPUT of an absent file fails with 35 and leaves F1 closed, so the
         # mode to match is the one OPEN attempted: the INPUT USE adds 1, the
-        # OUTPUT USE never runs. A second OPEN INPUT fires it again -> FLAG=2.
+        # OUTPUT USE never runs. A second OPEN INPUT fires it again, and OPEN
+        # EXTEND of the absent file fires the EXTEND USE -> FLAG=5.
         lines = [
             "IDENTIFICATION DIVISION.",
             "PROGRAM-ID. USEO.",
@@ -266,11 +267,16 @@ class TestUseDeclaratives:
             "    USE AFTER STANDARD ERROR PROCEDURE OUTPUT.",
             "D2-P.",
             "    ADD 5 TO FLAG.",
+            "D3 SECTION.",
+            "    USE AFTER EXCEPTION PROCEDURE EXTEND.",
+            "D3-P.",
+            "    ADD 3 TO FLAG.",
             "END DECLARATIVES.",
             "MAIN SECTION.",
             "MAIN-P.",
             "    OPEN INPUT F1.",
             "    OPEN INPUT F1.",
+            "    OPEN EXTEND F1.",
             "    STOP RUN.",
         ]
         provider = RealFileIOProvider(
@@ -281,7 +287,7 @@ class TestUseDeclaratives:
         vm = run(
             to_fixed(lines), language="cobol", io_provider=provider, max_steps=4000
         )
-        assert _decode(_first_region(vm), 0, 1) == 2
+        assert _decode(_first_region(vm), 0, 1) == 5
 
     @covers(CobolFeature.DECLARATIVES)
     def test_explicit_clause_leaves_other_statuses_to_use(self, tmp_path: Path) -> None:
