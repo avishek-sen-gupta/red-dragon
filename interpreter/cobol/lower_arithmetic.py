@@ -1522,7 +1522,6 @@ def _emit_remainder(
     stmt: ArithmeticStatement,
     dividend: ArithmeticValue,
     divisor: ArithmeticValue,
-    quotient: ArithmeticValue,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     match stmt.remainder:
@@ -1534,10 +1533,31 @@ def _emit_remainder(
                 remainder_op,
                 dividend,
                 divisor,
-                quotient,
+                stmt.giving[0],
                 materialised,
                 span=stmt.span,
             )
+
+
+def _emit_exact(
+    ctx: EmitContext,
+    builtin: str,
+    left: Register,
+    right: Register,
+    places: int,
+    *,
+    span: SourceSpan | None = None,
+) -> Register:
+    result = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=result,
+            func_name=FuncName(builtin),
+            args=(left, right, ctx.const_to_reg(places, span=span)),
+        ),
+        span=span,
+    )
+    return result
 
 
 def _write_remainder(
@@ -1545,36 +1565,39 @@ def _write_remainder(
     remainder_op: RefModOperand,
     dividend: ArithmeticValue,
     divisor: ArithmeticValue,
-    quotient: ArithmeticValue,
+    quotient_op: RefModOperand,
     materialised: MaterialisedSectionedLayout,
     *,
     span: SourceSpan | None = None,
 ) -> None:
-    truncated = ctx.fresh_reg()
-    ctx.emit_inst(
-        CallFunction(
-            result_reg=truncated, func_name=FuncName("int"), args=(quotient.register,)
-        ),
+    quotient_places = field_scale(
+        materialised.resolve(quotient_op.name, quotient_op.qualifiers)[
+            0
+        ].type_descriptor
+    ).decimal_places
+    product_places = quotient_places + divisor.scale.decimal_places
+    quotient = _emit_exact(
+        ctx,
+        BuiltinName.COBOL_DIVIDE,
+        dividend.register,
+        divisor.register,
+        quotient_places,
         span=span,
     )
-    product = ctx.fresh_reg()
-    ctx.emit_inst(
-        Binop(
-            result_reg=product,
-            operator=resolve_binop("*"),
-            left=truncated,
-            right=divisor.register,
-        ),
+    product = _emit_exact(
+        ctx,
+        BuiltinName.COBOL_MULTIPLY,
+        quotient,
+        divisor.register,
+        product_places,
         span=span,
     )
-    remainder = ctx.fresh_reg()
-    ctx.emit_inst(
-        Binop(
-            result_reg=remainder,
-            operator=resolve_binop("-"),
-            left=dividend.register,
-            right=product,
-        ),
+    remainder = _emit_exact(
+        ctx,
+        BuiltinName.COBOL_SUBTRACT,
+        dividend.register,
+        product,
+        max(dividend.scale.decimal_places, product_places),
         span=span,
     )
     _write_result(
@@ -1621,7 +1644,7 @@ def _lower_arithmetic_giving(
         ctx, stmt.op, first, rest, stmt.giving, materialised, span=span
     )
     step = partial(_giving_step, ctx, result.register, materialised, span)
-    remainder = partial(_emit_remainder, ctx, stmt, first, rest, result, materialised)
+    remainder = partial(_emit_remainder, ctx, stmt, first, rest, materialised)
     guard = _divisor_guard(ctx, stmt, rest)
     _store(ctx, stmt, guard, stmt.giving, step, remainder, materialised)
 
