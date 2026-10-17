@@ -203,6 +203,9 @@ class IndexedDriver:
                 return mid, True
         return lo, False
 
+    def _shifted_cursor(self, slot: int, shift: int) -> int:
+        return self._cursor + shift if slot * self._rl < self._cursor else self._cursor
+
     def read_seq(self) -> AccessResult:
         assert self._fh is not None
         n = self._count()
@@ -278,6 +281,7 @@ class IndexedDriver:
             self._fh.write(src)
         self._fh.seek(slot * self._rl)
         self._fh.write(rec)
+        self._cursor = self._shifted_cursor(slot, self._rl)
         return AccessResult(condition=AccessCondition.OK)
 
     def rewrite(self, data: bytes, key: bytes = b"") -> AccessResult:
@@ -300,15 +304,17 @@ class IndexedDriver:
             if not found:
                 return AccessResult(condition=AccessCondition.NOT_FOUND)
             slot = s
-        n = self._count()
-        # Shift tail backward
-        for i in range(slot, n - 1):
-            src = self._rec_at(i + 1)
-            self._fh.seek(i * self._rl)
-            self._fh.write(src)
-        self._fh.seek((n - 1) * self._rl)
-        self._fh.truncate()
+        self._remove_slot(slot)
         return AccessResult(condition=AccessCondition.OK)
+
+    def _remove_slot(self, slot: int) -> None:
+        assert self._fh is not None
+        n = self._count()
+        tail = [self._rec_at(i) for i in range(slot + 1, n)]
+        self._fh.seek(slot * self._rl)
+        self._fh.write(b"".join(tail))
+        self._fh.truncate((n - 1) * self._rl)
+        self._cursor = self._shifted_cursor(slot, -self._rl)
 
 
 class RelativeDriver:
