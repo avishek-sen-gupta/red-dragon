@@ -96,6 +96,7 @@ class FieldLayout:
     renames_from: str = ""
     renames_thru: str = ""
     holds_address: bool = False
+    filler: bool = False
     current_length: Register = NO_REGISTER
     """For one reference to an item ending in an OCCURS DEPENDING ON table: the
     register holding its length under the ODO object's current value."""
@@ -165,6 +166,7 @@ class DataLayout:
     occurs_depending_on: str = ""
     renames: dict[str, FieldLayout] = field(default_factory=dict)
     redefines: str = ""
+    filler: bool = False
 
     def lookup(self, name: str) -> FieldLayout | None:
         """Search for a leaf field by bare name within this subtree.
@@ -553,6 +555,7 @@ def _flatten_field(
             value_is_figurative=cobol_field.value_is_figurative,
             occurs_depending_on=cobol_field.occurs_depending_on,
             redefines=cobol_field.redefines,
+            filler=cobol_field.filler,
         )
         return cobol_field.name, group_layout
 
@@ -587,6 +590,7 @@ def _flatten_field(
         occurs_depending_on=cobol_field.occurs_depending_on,
         occurs_min=cobol_field.occurs_min,
         holds_address=cobol_field.usage == "POINTER",
+        filler=cobol_field.filler,
         span=cobol_field.span,
     )
     return cobol_field.name, fl

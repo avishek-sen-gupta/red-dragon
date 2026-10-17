@@ -232,4 +232,5 @@ def parse_pic(
         scale=analysis.point_shift,
         currency=currency,
         pic_string=pic,
+        alphabetic=analysis.category == "alphabetic",
     )

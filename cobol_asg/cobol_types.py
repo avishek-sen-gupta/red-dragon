@@ -110,6 +110,7 @@ class CobolTypeDescriptor:
     # diagnostics. Empty when there is no PICTURE clause at all (COMP-1, COMP-2,
     # USAGE POINTER).
     pic_string: str = ""
+    alphabetic: bool = False
 
     @property
     def holds_characters(self) -> bool:

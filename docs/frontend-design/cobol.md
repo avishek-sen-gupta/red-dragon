@@ -149,7 +149,7 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 
 | Statement | IR Pattern |
 |---|---|
-| `INITIALIZE` | MOVE SPACES to character items and ZERO to numeric items, so an edited item is edited |
+| `INITIALIZE` | A MOVE into every occurrence of each elementary item, FILLER and REDEFINES items skipped: SPACES to character items and ZERO to numeric ones, so an edited item is edited; with REPLACING, only the named categories, each from its own literal or identifier |
 | `SET` | TO: encode value → write. UP/DOWN BY: decode → `BINOP +/-` → encode → write. A subscripted or qualified target or value resolves to the occurrence it names. |
 | `SET p TO ADDRESS OF x \| NULL \| q` | A POINTER target: the address — x's region register `BINOP +` its offset, 0 for NULL, or q's contents — written as the addressing mode's binary (`INT_TO_BINARY_BYTES`, signed, 4 bytes under LP(32), 8 under LP(64)). |
 | `SET ADDRESS OF lk TO …` | A LINKAGE 01 or 77 item only: its region register becomes the address and its shift moves its static start there (`STORE_VAR` into its binding variables, then `LOAD_VAR` into its binding registers, so every later access follows). A subordinate item is rejected at lowering. |

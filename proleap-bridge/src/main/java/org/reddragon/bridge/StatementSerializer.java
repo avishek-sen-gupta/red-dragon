@@ -40,6 +40,7 @@ import io.proleap.cobol.asg.metamodel.procedure.gotostmt.DependingOnPhrase;
 import io.proleap.cobol.asg.metamodel.procedure.ifstmt.IfStatement;
 import io.proleap.cobol.asg.metamodel.procedure.ifstmt.Then;
 import io.proleap.cobol.asg.metamodel.procedure.ifstmt.Else;
+import io.proleap.cobol.asg.metamodel.procedure.initialize.By;
 import io.proleap.cobol.asg.metamodel.procedure.initialize.InitializeStatement;
 import io.proleap.cobol.asg.metamodel.procedure.inspect.AllLeading;
 import io.proleap.cobol.asg.metamodel.procedure.inspect.AllLeadingPhrase;
@@ -1234,15 +1235,30 @@ public final class StatementSerializer {
     private static JsonObject serializeInitialize(InitializeStatement stmt) {
         JsonObject obj = newStatement("INITIALIZE");
         JsonArray operands = new JsonArray();
-        try {
-            for (Call dataItemCall : stmt.getDataItemCalls()) {
-                operands.add(serializeRef(dataItemCall));
-            }
-        } catch (Exception e) {
-            LOG.fine("Could not extract INITIALIZE operands: " + e.getMessage());
+        for (Call dataItemCall : stmt.getDataItemCalls()) {
+            operands.add(serializeMoveOperand(dataItemCall));
         }
         obj.add("operands", operands);
+        JsonArray replacing = new JsonArray();
+        if (stmt.getReplacingPhrase() != null) {
+            for (By by : stmt.getReplacingPhrase().getBys()) {
+                JsonObject phrase = new JsonObject();
+                phrase.addProperty("category", by.getByType().name());
+                phrase.add("by", serializeReplacingValue(by.getValueStmt()));
+                replacing.add(phrase);
+            }
+        }
+        obj.add("replacing", replacing);
         return obj;
+    }
+
+    private static JsonObject serializeReplacingValue(ValueStmt vs) {
+        if (vs instanceof CallValueStmt callValue) {
+            return serializeMoveOperand(callValue.getCall());
+        }
+        JsonObject literal = new JsonObject();
+        literal.addProperty("name", extractValueStmtText(vs));
+        return literal;
     }
 
     private static JsonObject serializeSet(SetStatement stmt) {
