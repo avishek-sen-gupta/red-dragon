@@ -93,6 +93,7 @@ A level-88 condition-name is indexed with its parent qualified by every enclosin
 | `9(n)` (DISPLAY) | Zoned decimal — one byte per digit, sign in last byte zone | n | `PIC 9(5)` → 5 bytes |
 | `S9(n) COMP-3` | Packed decimal — two digits per byte, sign nibble in last byte | ⌈(n+1)/2⌉ | `PIC S9(5) COMP-3` → 3 bytes |
 | `X(n)` | Alphanumeric — one byte per character (ASCII or EBCDIC) | n | `PIC X(10)` → 10 bytes |
+| `9(n) COMP` / `BINARY` | Big-endian two's-complement integer of the unscaled value (implied decimals and PIC P applied, truncated toward zero); an unsigned item stores the magnitude, so a negative value is stored without its sign | 2 / 4 / 8 by n | `PIC 9(5) COMP` → 4 bytes |
 
 Encoding/decoding is performed via composable IR instruction builders in `ir_encoders.py`. Each builder returns a `list[InstructionBase]` using parameter registers (`%p_data`, `%p_digits`, etc.) that are inlined at the lowering site via `_inline_ir()`.
 

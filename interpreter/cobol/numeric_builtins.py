@@ -138,8 +138,9 @@ def _builtin_cobol_binary_unscaled(
     args: list[TypedValue], vm: VMState
 ) -> BuiltinResult:
     """Integer stored in a COMP/BINARY field: value × 10^(decimal_digits − scale),
-    truncated toward zero. No digit-count truncation (byte width bounds BINARY)."""
-    if len(args) < 3 or any(_is_symbolic(a.value) for a in args):
+    truncated toward zero; an unsigned field stores its magnitude. No digit-count
+    truncation (byte width bounds BINARY)."""
+    if len(args) < 4 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
     decimals, scale = _int_arg(args[1].value), _int_arg(args[2].value)
     if decimals is None or scale is None:
@@ -149,7 +150,9 @@ def _builtin_cobol_binary_unscaled(
     except (ValueError, TypeError):
         return BuiltinResult(value=_UNCOMPUTABLE)
     unscaled = as_whole_int(scale_by(stored, decimals))
-    return BuiltinResult(value=_UNCOMPUTABLE if unscaled is None else unscaled)
+    if unscaled is None:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=unscaled if args[3].value else abs(unscaled))
 
 
 def _builtin_cobol_size_error(args: list[TypedValue], vm: VMState) -> BuiltinResult:

@@ -1278,16 +1278,16 @@ class EmitContext:
             int_reg = self.fresh_reg()
             decimals_reg = self.const_to_reg(td.decimal_digits, span=span)
             scale_reg = self.const_to_reg(td.scale, span=span)
+            signed_reg = self.const_to_reg(td.signed, span=span)
             self.emit_inst(
                 CallFunction(
                     result_reg=int_reg,
                     func_name=FuncName(BuiltinName.COBOL_BINARY_UNSCALED),
-                    args=(value_str_reg, decimals_reg, scale_reg),
+                    args=(value_str_reg, decimals_reg, scale_reg, signed_reg),
                 ),
                 span=span,
             )
             byte_count_reg = self.const_to_reg(td.byte_length, span=span)
-            signed_reg = self.const_to_reg(td.signed, span=span)
             result = self.fresh_reg()
             self.emit_inst(
                 CallFunction(
