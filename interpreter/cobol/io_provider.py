@@ -7,7 +7,7 @@ this is injected via VMConfig and accessed by the executor for __cobol_*
 CALL_FUNCTION dispatch.
 
 Two implementations:
-- NullIOProvider: returns UNCOMPUTABLE for READ; IOResult("00", None) for all other ops.
+- NullIOProvider: returns UNCOMPUTABLE for READ; IOResult(AccessCondition.OK, None) for all other ops.
 - StubIOProvider: returns queued test data for concrete execution without files.
 """
 
@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from cobol_asg.switch_status import SwitchStatus
+from interpreter.cobol.access_result import AccessCondition
 from interpreter.data_value import DataRecord
 from interpreter.func_name import FuncName
 from interpreter.types.typed_value import TypedValue
@@ -33,12 +34,11 @@ _UNCOMPUTABLE = Operators.UNCOMPUTABLE
 class IOResult:
     """Structured return value for all CobolIOProvider I/O methods.
 
-    status: COBOL file status code ("00"=success, "10"=AT END, "22"=dup key,
-            "23"=key not found, "35"=file not found, "47"=not open).
-    data:   Populated on successful READ; None for write-side verbs.
+    condition: the driver's outcome; the lowering's IR maps it to a FILE STATUS.
+    data:      Populated on successful READ; None for write-side verbs.
     """
 
-    status: str
+    condition: AccessCondition
     data: str | None
     record_number: int = 0
 
@@ -54,7 +54,7 @@ _COBOL_IO_DISPATCH: dict[FuncName, str] = {
     FuncName("__cobol_rewrite_record"): "_rewrite_record",
     FuncName("__cobol_start_file"): "_start_file",
     FuncName("__cobol_delete_record"): "_delete_record",
-    FuncName("__cobol_io_status"): "_io_status",
+    FuncName("__cobol_io_outcome"): "_io_outcome",
     FuncName("__cobol_io_data"): "_io_data",
     FuncName("__cobol_io_record_number"): "_io_record_number",
     FuncName("__cobol_switch_status"): "_switch_status",
@@ -90,10 +90,10 @@ class CobolIOProvider(ABC):
         method = getattr(self, method_name)
         return method(*[a.value for a in args])
 
-    def _io_status(self, raw: Any, program: str) -> Any:
-        """Extract COBOL file status code from an IOResult."""
+    def _io_outcome(self, raw: Any, program: str) -> Any:
+        """The driver outcome of an IOResult, as its AccessCondition's value."""
         if isinstance(raw, IOResult):
-            return raw.status
+            return raw.condition.value
         return _UNCOMPUTABLE
 
     def _io_data(self, raw: Any, program: str) -> Any:
@@ -114,13 +114,13 @@ class CobolIOProvider(ABC):
     def _set_switch(self, environment_name: str, status: str) -> IOResult:
         """SET mnemonic-name TO ON|OFF. A provider that keeps no switch state
         ignores it."""
-        return IOResult("00", None)
+        return IOResult(AccessCondition.OK, None)
 
     def _sort_using(self, sort_file: str, filename: str, program: str) -> IOResult:
-        return IOResult("00", None)
+        return IOResult(AccessCondition.OK, None)
 
     def _sort_giving(self, sort_file: str, filename: str, program: str) -> IOResult:
-        return IOResult("00", None)
+        return IOResult(AccessCondition.OK, None)
 
     def _sort_file(
         self,
@@ -129,7 +129,7 @@ class CobolIOProvider(ABC):
         weights: str,
         *keys_then_program: int | str,
     ) -> IOResult:
-        return IOResult("00", None)
+        return IOResult(AccessCondition.OK, None)
 
     def _accept_area(
         self, from_device: str, length: int
@@ -148,7 +148,7 @@ class CobolIOProvider(ABC):
         """A program's declaration of one of its files, made once before any OPEN:
         the ``FileFrame`` record ``file_frame.frame_of`` reads. A provider that
         frames no records ignores it."""
-        return IOResult("00", None)
+        return IOResult(AccessCondition.OK, None)
 
     @abstractmethod
     def _open_file(self, filename: str, mode: str, program: str) -> IOResult:
@@ -206,16 +206,16 @@ class StubFile:
 
 
 class NullIOProvider(CobolIOProvider):
-    """Default provider — returns UNCOMPUTABLE for READ, IOResult("00", None) for all other ops."""
+    """Default provider — returns UNCOMPUTABLE for READ, IOResult(AccessCondition.OK, None) for all other ops."""
 
     def _accept(self, from_device: str) -> Any:
         return _UNCOMPUTABLE
 
     def _open_file(self, filename: str, mode: str, program: str) -> IOResult:
-        return IOResult("00", None)
+        return IOResult(AccessCondition.OK, None)
 
     def _close_file(self, filename: str, program: str) -> IOResult:
-        return IOResult("00", None)
+        return IOResult(AccessCondition.OK, None)
 
     def _read_record(self, filename: str, key: str, program: str) -> Any:
         return _UNCOMPUTABLE
@@ -223,20 +223,20 @@ class NullIOProvider(CobolIOProvider):
     def _write_record(
         self, filename: str, data: str, key: str, program: str
     ) -> IOResult:
-        return IOResult("00", None)
+        return IOResult(AccessCondition.OK, None)
 
     def _rewrite_record(
         self, filename: str, data: str, key: str, program: str
     ) -> IOResult:
-        return IOResult("00", None)
+        return IOResult(AccessCondition.OK, None)
 
     def _start_file(
         self, filename: str, key: str, relop: str, program: str
     ) -> IOResult:
-        return IOResult("00", None)
+        return IOResult(AccessCondition.OK, None)
 
     def _delete_record(self, filename: str, key: str, program: str) -> IOResult:
-        return IOResult("00", None)
+        return IOResult(AccessCondition.OK, None)
 
 
 class StubIOProvider(CobolIOProvider):
@@ -285,22 +285,22 @@ class StubIOProvider(CobolIOProvider):
         stub = self.get_file(filename)
         stub.is_open = True
         logger.info("StubIOProvider OPEN %s mode=%s", filename, mode)
-        return IOResult("00", None)
+        return IOResult(AccessCondition.OK, None)
 
     def _close_file(self, filename: str, program: str) -> IOResult:
         if filename in self._files:
             self._files[filename].is_open = False
         logger.info("StubIOProvider CLOSE %s", filename)
-        return IOResult("00", None)
+        return IOResult(AccessCondition.OK, None)
 
     def _read_record(self, filename: str, key: str, program: str) -> Any:
         stub = self._files.get(filename)
         if stub and stub.records:
             record = stub.records.pop(0)
             logger.info("StubIOProvider READ %s → %r", filename, record)
-            return IOResult("00", record)
+            return IOResult(AccessCondition.OK, record)
         logger.info("StubIOProvider READ %s → AT END", filename)
-        return IOResult("10", None)
+        return IOResult(AccessCondition.END_OF_FILE, None)
 
     def _write_record(
         self, filename: str, data: str, key: str, program: str
@@ -308,7 +308,7 @@ class StubIOProvider(CobolIOProvider):
         stub = self.get_file(filename)
         stub.written.append(data)
         logger.info("StubIOProvider WRITE %s ← %r", filename, data)
-        return IOResult("00", None)
+        return IOResult(AccessCondition.OK, None)
 
     def _rewrite_record(
         self, filename: str, data: str, key: str, program: str
@@ -319,7 +319,7 @@ class StubIOProvider(CobolIOProvider):
         else:
             stub.written.append(data)
         logger.info("StubIOProvider REWRITE %s ← %r", filename, data)
-        return IOResult("00", None)
+        return IOResult(AccessCondition.OK, None)
 
     def _start_file(
         self, filename: str, key: str, relop: str, program: str
@@ -327,7 +327,7 @@ class StubIOProvider(CobolIOProvider):
         logger.info(
             "StubIOProvider START %s key=%s relop=%s (no-op)", filename, key, relop
         )
-        return IOResult("00", None)
+        return IOResult(AccessCondition.OK, None)
 
     def _delete_record(self, filename: str, key: str, program: str) -> IOResult:
         stub = self._files.get(filename)
@@ -336,4 +336,4 @@ class StubIOProvider(CobolIOProvider):
             logger.info("StubIOProvider DELETE %s → removed %r", filename, removed)
         else:
             logger.info("StubIOProvider DELETE %s → no records", filename)
-        return IOResult("00", None)
+        return IOResult(AccessCondition.OK, None)

@@ -1,6 +1,6 @@
 """What lowering fixes about one READ: its file, the key register it reads by, whether it
 reads sequentially, whether the file is OPTIONAL, its RELATIVE KEY's digit count, and the
-prime key it keeps in sequence by, if any."""
+prime key it keeps in sequence by, if any, and whether it needs the record number."""
 
 from __future__ import annotations
 
@@ -18,3 +18,4 @@ class ReadPlan:
     optional: bool
     key_digits: int
     sequence: tuple[PrimeKey, ...]
+    numbered: bool

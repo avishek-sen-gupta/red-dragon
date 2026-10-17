@@ -18,7 +18,7 @@ _PRIMITIVES = (
     "__cobol_rewrite_record",
     "__cobol_start_file",
     "__cobol_delete_record",
-    "__cobol_io_status",
+    "__cobol_io_outcome",
     "__cobol_io_data",
     "__cobol_io_record_number",
     "__cobol_switch_status",

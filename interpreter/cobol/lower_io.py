@@ -38,7 +38,12 @@ from interpreter.cobol.file_facts import (
 from interpreter.cobol.file_logic_status import FileLogicStatus
 from interpreter.cobol.file_position import FilePosition
 from interpreter.cobol.file_state import file_state
-from interpreter.cobol.file_verb_ir import FileVerbIr, Refusal, VerbOutcome
+from interpreter.cobol.file_verb_ir import (
+    FileVerbIr,
+    Refusal,
+    VerbOutcome,
+    emit_closed,
+)
 from interpreter.cobol.ir_emitter import IrEmitter
 from interpreter.cobol.prime_key import PrimeKey
 from interpreter.cobol.program_object import program_name
@@ -46,6 +51,7 @@ from interpreter.cobol.read_plan import ReadPlan
 from interpreter.cobol.relative_key import addressing_key, reported_key
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.cobol.status_class import StatusClass
+from interpreter.cobol.write_plan import WritePlan
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Binop,
@@ -319,13 +325,16 @@ def _emit_open(
         "__cobol_open_file", outcome, v.e.text(entry.file_name), v.e.text(mode.value)
     )
     _emit_optional_absent(v, outcome, mode, entry)
-    v.when(v.successful(outcome), partial(_opened, v, mode))
+    v.when(v.successful(outcome), partial(_opened, v, mode, entry))
 
 
-def _opened(v: FileVerbIr, mode: OpenMode) -> None:
+def _opened(v: FileVerbIr, mode: OpenMode, entry: FileControlEntry) -> None:
     v.set_mode(mode.value)
     v.set_position(FilePosition.NO_CURRENT_RECORD)
     v.e.store(v.state.last_key, v.e.text(""))
+    v.e.store(v.state.read_refused, v.e.bool_(mode not in _READ_MODES))
+    v.e.store(v.state.write_refused, v.e.bool_(mode not in _write_modes(entry)))
+    v.e.store(v.state.update_refused, v.e.bool_(mode is not OpenMode.IO))
 
 
 def _emit_optional_absent(
@@ -437,9 +446,7 @@ def _emit_close(
 
 
 def _closed(v: FileVerbIr, with_lock: bool) -> None:
-    v.set_mode("")
-    v.e.store(v.state.locked, v.e.bool_(with_lock))
-    v.e.store(v.state.absent, v.e.bool_(False))
+    emit_closed(v.e, v.state, with_lock)
 
 
 def _emit_key_text(
@@ -473,7 +480,7 @@ def _emit_key_value(
 
 def _emit_record_number_report(
     ctx: EmitContext,
-    number_reg: Register,
+    number: Callable[[], Register],
     status_reg: Register,
     key: RefModOperand,
     materialised: MaterialisedSectionedLayout,
@@ -484,7 +491,7 @@ def _emit_record_number_report(
     record number it used to the RELATIVE KEY."""
     if not materialised.has_field(key.name):
         return
-    _emit_store_if_successful(ctx, status_reg, number_reg, key, materialised, span=span)
+    _emit_store_if_successful(ctx, status_reg, number(), key, materialised, span=span)
 
 
 def _emit_record_length_report(
@@ -739,51 +746,80 @@ def _emit_relative_key_overflow(
     v.when(v.e.binop(">=", v.e.load(outcome.number), v.e.int_(10**digits)), overflowed)
 
 
-def _emit_guarded_read(v: FileVerbIr, outcome: VerbOutcome, plan: ReadPlan) -> None:
-    def present() -> None:
-        raw = v.called(
-            "__cobol_read_record", outcome, v.e.text(plan.file_name), plan.key
-        )
-        v.keep_record(raw, outcome)
+def _read_present(v: FileVerbIr, outcome: VerbOutcome, plan: ReadPlan) -> None:
+    raw = v.called("__cobol_read_record", outcome, v.e.text(plan.file_name), plan.key)
+    v.keep_record(raw, outcome)
+    _keep_number_if(v, outcome, raw, plan.numbered)
+    _emit_relative_key_overflow(v, outcome, plan.key_digits)
+    _remember_key(v, v.e.load(outcome.data), plan.sequence)
+
+
+def _keep_number_if(
+    v: FileVerbIr, outcome: VerbOutcome, raw: Register, numbered: bool
+) -> None:
+    if numbered:
         v.keep_number(raw, outcome)
-        _emit_relative_key_overflow(v, outcome, plan.key_digits)
-        _remember_key(v, v.e.load(outcome.data), plan.sequence)
 
-    def perform() -> None:
-        v.unless_absent(
-            plan.optional,
-            lambda: v.set_status(
-                outcome,
-                (
-                    FileLogicStatus.AT_END
-                    if plan.sequential
-                    else FileLogicStatus.NOT_FOUND
-                ),
-            ),
-            present,
-        )
-        v.e.store(v.state.position, _read_position(v, outcome))
 
-    v.guarded(
-        (
-            Refusal(
-                lambda: v.mode_is_not(*_READ_MODES),
-                FileLogicStatus.READ_NOT_PERMITTED,
-            ),
-            *(
-                (
-                    Refusal(
-                        lambda: v.position_is(FilePosition.AT_END),
-                        FileLogicStatus.NO_NEXT_RECORD,
-                    ),
-                )
-                if plan.sequential
-                else ()
-            ),
-        ),
+def _start_numbered(v: FileVerbIr, outcome: VerbOutcome, numbered: bool) -> None:
+    if numbered:
+        v.with_number(outcome)
+
+
+def _read_absent(v: FileVerbIr, outcome: VerbOutcome, plan: ReadPlan) -> None:
+    v.set_status(
         outcome,
-        perform,
+        FileLogicStatus.AT_END if plan.sequential else FileLogicStatus.NOT_FOUND,
+    )
+
+
+def _read_performed(v: FileVerbIr, outcome: VerbOutcome, plan: ReadPlan) -> None:
+    v.unless_absent(
+        plan.optional,
+        partial(_read_absent, v, outcome, plan),
+        partial(_read_present, v, outcome, plan),
+    )
+    v.e.store(v.state.position, _read_position(v, outcome))
+
+
+def _read_refusals(v: FileVerbIr, sequential: bool) -> tuple[Refusal, ...]:
+    after_end = Refusal(
+        partial(v.position_is, FilePosition.AT_END), FileLogicStatus.NO_NEXT_RECORD
+    )
+    return (
+        Refusal(v.read_refused, FileLogicStatus.READ_NOT_PERMITTED),
+        *((after_end,) if sequential else ()),
+    )
+
+
+def _emit_guarded_read(v: FileVerbIr, outcome: VerbOutcome, plan: ReadPlan) -> None:
+    v.with_record(outcome)
+    _start_numbered(v, outcome, plan.numbered)
+    v.guarded(
+        _read_refusals(v, plan.sequential),
+        outcome,
+        partial(_read_performed, v, outcome, plan),
         v.forget_current_record,
+    )
+
+
+def _read_plan(
+    ctx: EmitContext,
+    stmt: ReadStatement,
+    key_reg: Register,
+    materialised: MaterialisedSectionedLayout,
+) -> ReadPlan:
+    entry = _entry(ctx, stmt.file_name)
+    digits = relative_key_digits(materialised, entry)
+    report = reported_key(ctx._asg, stmt.file_name, stmt.next_record)
+    return ReadPlan(
+        stmt.file_name,
+        key_reg,
+        _sequential_read(ctx, stmt, materialised),
+        entry.optional,
+        digits,
+        _key_sequence(ctx, stmt.file_name, materialised),
+        bool(digits) or materialised.has_field(report.name),
     )
 
 
@@ -797,24 +833,12 @@ def lower_read(
     key_str_reg = _read_key_reg(ctx, stmt, materialised)
     v = _verb(ctx, stmt.file_name, span=span)
     outcome = v.outcome()
-    entry = _entry(ctx, stmt.file_name)
-    _emit_guarded_read(
-        v,
-        outcome,
-        ReadPlan(
-            stmt.file_name,
-            key_str_reg,
-            _sequential_read(ctx, stmt, materialised),
-            entry.optional,
-            relative_key_digits(materialised, entry),
-            _key_sequence(ctx, stmt.file_name, materialised),
-        ),
-    )
+    _emit_guarded_read(v, outcome, _read_plan(ctx, stmt, key_str_reg, materialised))
     status_reg = v.e.load(outcome.status)
     ctx.emit_file_status_update(stmt.file_name, status_reg, materialised, span=span)
     _emit_record_number_report(
         ctx,
-        v.e.load(outcome.number),
+        partial(v.e.load, outcome.number),
         status_reg,
         reported_key(ctx._asg, stmt.file_name, stmt.next_record),
         materialised,
@@ -997,18 +1021,31 @@ def _write_source_reg(
 def _emit_guarded_update(
     v: FileVerbIr,
     outcome: VerbOutcome,
-    call: tuple[str, tuple[Register, ...], Callable[[], None]],
+    call: tuple[str, tuple[Register, ...], Callable[[Register], None]],
     refusals: Sequence[Refusal],
 ) -> None:
     primitive, args, performed = call
+    v.guarded(
+        refusals,
+        outcome,
+        lambda: performed(v.called(primitive, outcome, *args)),
+        v.forget_current_record,
+    )
 
-    def perform() -> None:
-        raw = v.called(primitive, outcome, *args)
-        v.keep_number(raw, outcome)
+
+def _no_current_record(v: FileVerbIr, raw: Register) -> None:
+    v.set_position(FilePosition.NO_CURRENT_RECORD)
+
+
+def _after_write(
+    v: FileVerbIr, outcome: VerbOutcome, plan: WritePlan, raw: Register
+) -> None:
+    """A WRITE leaves no current record, which only a file open I-O can have; it
+    reports its record number to a RELATIVE KEY, and keeps its prime key in sequence."""
+    _keep_number_if(v, outcome, raw, plan.numbered)
+    if plan.keyed:
         v.set_position(FilePosition.NO_CURRENT_RECORD)
-        performed()
-
-    v.guarded(refusals, outcome, perform, v.forget_current_record)
+    _remember_written_key(v, outcome, plan.record, plan.sequence)
 
 
 def _size_refusals(
@@ -1102,13 +1139,22 @@ def _remember_key(v: FileVerbIr, record: Register, keys: Sequence[PrimeKey]) -> 
     _ = [v.e.store(v.state.last_key, _key_of(v, record, key)) for key in keys]
 
 
+def _remember_written_key(
+    v: FileVerbIr, outcome: VerbOutcome, record: Register, keys: Sequence[PrimeKey]
+) -> None:
+    if not keys:
+        return
+    v.when(
+        v.status_is(outcome, FileLogicStatus.PERMITTED),
+        partial(_remember_key, v, record, keys),
+    )
+
+
 def _current_record_refusals(
     v: FileVerbIr, entry: FileControlEntry
 ) -> tuple[Refusal, ...]:
     return (
-        Refusal(
-            lambda: v.mode_is_not(OpenMode.IO), FileLogicStatus.UPDATE_NOT_PERMITTED
-        ),
+        Refusal(v.update_refused, FileLogicStatus.UPDATE_NOT_PERMITTED),
         *(
             (
                 Refusal(
@@ -1150,20 +1196,25 @@ def lower_write(
     outcome = v.outcome()
     entry = _entry(ctx, file_name)
     sequence = _key_sequence(ctx, file_name, materialised)
+    report = reported_key(ctx._asg, file_name, False)
+    plan = WritePlan(
+        data_reg,
+        sequence,
+        materialised.has_field(report.name),
+        entry.organization is not FileOrganization.SEQUENTIAL,
+    )
+    _start_numbered(v, outcome, plan.numbered)
     _emit_guarded_update(
         v,
         outcome,
         (
             "__cobol_write_record",
             (v.e.text(file_name), data_reg, key_reg),
-            lambda: v.when(
-                v.status_is(outcome, FileLogicStatus.PERMITTED),
-                partial(_remember_key, v, data_reg, sequence),
-            ),
+            partial(_after_write, v, outcome, plan),
         ),
         (
             Refusal(
-                lambda: v.mode_is_not(*_write_modes(entry)),
+                v.write_refused,
                 FileLogicStatus.WRITE_NOT_PERMITTED,
             ),
             *_size_refusals(ctx, v, file_name, data_reg, materialised),
@@ -1175,9 +1226,9 @@ def lower_write(
     ctx.emit_file_status_update(file_name, status_reg, materialised, span=span)
     _emit_record_number_report(
         ctx,
-        v.e.load(outcome.number),
+        partial(v.e.load, outcome.number),
         status_reg,
-        reported_key(ctx._asg, file_name, False),
+        report,
         materialised,
         span=span,
     )
@@ -1231,7 +1282,11 @@ def lower_rewrite(
     _emit_guarded_update(
         v,
         outcome,
-        ("__cobol_rewrite_record", (v.e.text(file_name), data_reg, key_reg), _nothing),
+        (
+            "__cobol_rewrite_record",
+            (v.e.text(file_name), data_reg, key_reg),
+            partial(_no_current_record, v),
+        ),
         (
             *_current_record_refusals(v, _entry(ctx, file_name)),
             *_size_refusals(ctx, v, file_name, data_reg, materialised),
@@ -1299,7 +1354,7 @@ def lower_start(
     v.guarded(
         (
             Refusal(
-                lambda: v.mode_is_not(*_READ_MODES),
+                v.read_refused,
                 FileLogicStatus.READ_NOT_PERMITTED,
             ),
         ),
@@ -1415,7 +1470,11 @@ def lower_delete(
     _emit_guarded_update(
         v,
         outcome,
-        ("__cobol_delete_record", (v.e.text(stmt.file_name), key_reg), _nothing),
+        (
+            "__cobol_delete_record",
+            (v.e.text(stmt.file_name), key_reg),
+            partial(_no_current_record, v),
+        ),
         _current_record_refusals(v, _entry(ctx, stmt.file_name)),
     )
     status_reg = v.e.load(outcome.status)

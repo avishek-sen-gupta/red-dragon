@@ -7,17 +7,16 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from cobol_asg.file_enums import OpenMode
+from interpreter.cobol.access_result import AccessCondition
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.file_logic_status import FileLogicStatus
 from interpreter.cobol.file_position import FilePosition
 from interpreter.cobol.file_state import FileState
 from interpreter.cobol.ir_emitter import IrEmitter
+from interpreter.cobol.outcome_status import OUTCOME_STATUS
 from interpreter.ir import CodeLabel
 from interpreter.register import Register
 from interpreter.var_name import VarName
-
-_SUCCESSFUL = FileLogicStatus.PERMITTED.value
 
 
 @dataclass(frozen=True)
@@ -47,10 +46,18 @@ class FileVerbIr:
 
     def outcome(self) -> VerbOutcome:
         return VerbOutcome(
-            status=self.e.var("io_status", self.e.text(_SUCCESSFUL)),
-            data=self.e.var("io_data", self.e.text("")),
-            number=self.e.var("io_number", self.e.int_(0)),
+            status=VarName(self.e.ctx.fresh_name("io_status")),
+            data=VarName(self.e.ctx.fresh_name("io_data")),
+            number=VarName(self.e.ctx.fresh_name("io_number")),
         )
+
+    def with_record(self, outcome: VerbOutcome) -> None:
+        """No record until the primitive returns one."""
+        self.e.store(outcome.data, self.e.text(""))
+
+    def with_number(self, outcome: VerbOutcome) -> None:
+        """No relative record number until the primitive returns one."""
+        self.e.store(outcome.number, self.e.int_(0))
 
     def guarded(
         self,
@@ -80,10 +87,33 @@ class FileVerbIr:
 
     def called(self, primitive: str, outcome: VerbOutcome, *args: Register) -> Register:
         raw = self.e.call(primitive, *args, self.program)
-        self.e.store(
-            outcome.status, self.e.call("__cobol_io_status", raw, self.program)
-        )
+        self.store_status(outcome, self.e.call("__cobol_io_outcome", raw, self.program))
         return raw
+
+    def store_status(self, outcome: VerbOutcome, driver_outcome: Register) -> None:
+        """The FILE STATUS the driver outcome reports."""
+        done = self.e.label("io_mapped")
+        _ = [
+            self._map_if(outcome, driver_outcome, pair, done) for pair in OUTCOME_STATUS
+        ]
+        self.e.place(done)
+
+    def _map_if(
+        self,
+        outcome: VerbOutcome,
+        driver_outcome: Register,
+        pair: tuple[AccessCondition, FileLogicStatus],
+        done: CodeLabel,
+    ) -> None:
+        condition, status = pair
+        hit, miss = self.e.label("io_outcome"), self.e.label("io_outcome_next")
+        self.e.branch_if(
+            self.e.binop("==", driver_outcome, self.e.text(condition.value)), hit, miss
+        )
+        self.e.place(hit)
+        self.set_status(outcome, status)
+        self.e.jump(done)
+        self.e.place(miss)
 
     def keep_record(self, raw: Register, outcome: VerbOutcome) -> None:
         self.e.store(outcome.data, self.e.call("__cobol_io_data", raw, self.program))
@@ -94,13 +124,14 @@ class FileVerbIr:
             self.e.call("__cobol_io_record_number", raw, self.program),
         )
 
-    def mode_is(self, *modes: OpenMode) -> Register:
-        mode = self.e.load(self.state.mode)
-        tests = [self.e.binop("==", mode, self.e.text(m.value)) for m in modes]
-        return self._any(tests)
+    def read_refused(self) -> Register:
+        return self.e.load(self.state.read_refused)
 
-    def mode_is_not(self, *modes: OpenMode) -> Register:
-        return self.e.binop("==", self.mode_is(*modes), self.e.bool_(False))
+    def write_refused(self) -> Register:
+        return self.e.load(self.state.write_refused)
+
+    def update_refused(self) -> Register:
+        return self.e.load(self.state.update_refused)
 
     def closed(self) -> Register:
         return self.e.binop("==", self.e.load(self.state.mode), self.e.text(""))
@@ -202,10 +233,14 @@ class FileVerbIr:
         )
 
 
-def emit_closed(e: IrEmitter, state: FileState) -> None:
-    """A file's state when it is not open: no mode, not locked, no current record."""
+def emit_closed(e: IrEmitter, state: FileState, locked: bool) -> None:
+    """A file's state when it is not open: no mode, no current record, every verb but
+    OPEN refused, and locked when it was closed WITH LOCK."""
     e.store(state.mode, e.text(""))
-    e.store(state.locked, e.bool_(False))
+    e.store(state.locked, e.bool_(locked))
+    e.store(state.read_refused, e.bool_(True))
+    e.store(state.write_refused, e.bool_(True))
+    e.store(state.update_refused, e.bool_(True))
     e.store(state.position, e.text(FilePosition.NO_CURRENT_RECORD.value))
     e.store(state.absent, e.bool_(False))
     e.store(state.last_key, e.text(""))

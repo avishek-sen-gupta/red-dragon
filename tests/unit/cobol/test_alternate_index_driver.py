@@ -8,6 +8,7 @@ from cobol_asg.file_enums import OpenMode
 from interpreter.cobol.access_result import AccessCondition, AccessResult
 from interpreter.cobol.alternate_index_driver import open_alternate_index_driver
 from interpreter.cobol.real_file_provider import to_ioresult
+from tests.unit.cobol.file_status_of import file_status_of
 
 _BASE = (b"001BBBxx", b"002AAAyy", b"003AAAzz", b"004CCCww")
 
@@ -105,4 +106,4 @@ def test_a_unique_alternate_key_rejects_a_repeat(tmp_path):
 def test_more_duplicates_follow_is_cobol_status_02():
     result = to_ioresult(AccessResult(AccessCondition.DUPLICATES_FOLLOW, b"x"))
 
-    assert (result.status, result.data) == ("02", "x")
+    assert (file_status_of(result.condition), result.data) == ("02", "x")

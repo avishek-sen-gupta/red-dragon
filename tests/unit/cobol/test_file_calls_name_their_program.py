@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from cobol_asg.file_enums import FileOrganization
+from interpreter.cobol.access_result import AccessCondition
 from interpreter.cobol.data_literals import text
 from interpreter.cobol.file_definitions_data import FILE_DEFINITIONS
 from interpreter.cobol.file_frame import FileFrame
@@ -80,9 +81,8 @@ _FILE_CALLS = frozenset(
         "__cobol_start_file",
         "__cobol_delete_record",
         "__cobol_close_file",
-        "__cobol_io_status",
+        "__cobol_io_outcome",
         "__cobol_io_data",
-        "__cobol_io_record_number",
     }
 )
 
@@ -144,23 +144,23 @@ class _Recording(NullIOProvider):
 
     def _declare_file(self, frame: DataRecord, program: str) -> IOResult:
         self._saw("declare_file", program)
-        return IOResult("00", None)
+        return IOResult(AccessCondition.OK, None)
 
     def _open_file(self, filename: str, mode: str, program: str) -> IOResult:
         self._saw("open_file", program)
-        return IOResult("00", None)
+        return IOResult(AccessCondition.OK, None)
 
     def _read_record(self, filename: str, key: str, program: str) -> IOResult:
         self._saw("read_record", program)
-        return IOResult("00", "RECORD0001")
+        return IOResult(AccessCondition.OK, "RECORD0001")
 
     def _close_file(self, filename: str, program: str) -> IOResult:
         self._saw("close_file", program)
-        return IOResult("00", None)
+        return IOResult(AccessCondition.OK, None)
 
-    def _io_status(self, raw: IOResult, program: str) -> str:
-        self._saw("io_status", program)
-        return raw.status
+    def _io_outcome(self, raw: IOResult, program: str) -> str:
+        self._saw("io_outcome", program)
+        return raw.condition.value
 
     def _io_data(self, raw: IOResult, program: str) -> str:
         self._saw("io_data", program)
@@ -193,23 +193,22 @@ def test_each_file_call_names_the_calling_program_last(tmp_path):
                 ),
             ),
             ("__cobol_open_file", ("F1", "INPUT", "PGMX")),
-            ("__cobol_io_status", ("<__cobol_open_file>", "PGMX")),
+            ("__cobol_io_outcome", ("<__cobol_open_file>", "PGMX")),
             ("__cobol_read_record", ("F1", "", "PGMX")),
-            ("__cobol_io_status", ("<__cobol_read_record>", "PGMX")),
+            ("__cobol_io_outcome", ("<__cobol_read_record>", "PGMX")),
             ("__cobol_io_data", ("<__cobol_read_record>", "PGMX")),
-            ("__cobol_io_record_number", ("<__cobol_read_record>", "PGMX")),
             ("__cobol_close_file", ("F1", "PGMX")),
-            ("__cobol_io_status", ("<__cobol_close_file>", "PGMX")),
+            ("__cobol_io_outcome", ("<__cobol_close_file>", "PGMX")),
         ],
         (
             ("declare_file", "PGMX"),
             ("open_file", "PGMX"),
-            ("io_status", "PGMX"),
+            ("io_outcome", "PGMX"),
             ("read_record", "PGMX"),
-            ("io_status", "PGMX"),
+            ("io_outcome", "PGMX"),
             ("io_data", "PGMX"),
             ("close_file", "PGMX"),
-            ("io_status", "PGMX"),
+            ("io_outcome", "PGMX"),
         ),
         text("PGMX"),
     )

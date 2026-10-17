@@ -29,32 +29,14 @@ from interpreter.cobol.variable_sequential_driver import VariableSequentialDrive
 from interpreter.data_value import DataRecord
 from interpreter.vm.vm import Operators
 
-_FILE_STATUS: dict[AccessCondition, str] = {
-    AccessCondition.OK: "00",
-    AccessCondition.DUPLICATES_FOLLOW: "02",
-    AccessCondition.END_OF_FILE: "10",
-    AccessCondition.DUPLICATE_KEY: "22",
-    AccessCondition.NOT_FOUND: "23",
-    AccessCondition.FILE_NOT_FOUND: "35",
-    AccessCondition.ATTRIBUTE_CONFLICT: "39",
-    AccessCondition.BOUNDARY_VIOLATION: "44",
-    AccessCondition.OPEN_MODE_NOT_SUPPORTED: "37",
-    AccessCondition.NOT_OPEN: "47",
-    AccessCondition.WRITE_NOT_PERMITTED: "48",
-}
-
-
-def _file_status(condition: AccessCondition) -> str:
-    return _FILE_STATUS[condition]
-
 
 def to_ioresult(result: AccessResult) -> IOResult:
     match result.data:
         case None:
-            return IOResult(_file_status(result.condition), None, result.record_number)
+            return IOResult(result.condition, None, result.record_number)
         case raw:
             return IOResult(
-                _file_status(result.condition),
+                result.condition,
                 raw.decode("latin-1"),
                 result.record_number,
             )
@@ -62,10 +44,10 @@ def to_ioresult(result: AccessResult) -> IOResult:
 
 logger = logging.getLogger(__name__)
 _UNCOMPUTABLE = Operators.UNCOMPUTABLE
+_SUCCESSFUL = frozenset({AccessCondition.OK, AccessCondition.DUPLICATES_FOLLOW})
 _PATH_MARKS = frozenset("/\\.")
 _RELATIVE_KEY_BYTES = 4
 _OPEN_FAILED = to_ioresult(AccessResult(AccessCondition.FILE_NOT_FOUND))
-_SUCCESSFUL_STATUS = _file_status(AccessCondition.OK)
 _VARIABLE_DRIVERS: dict[FileOrganization, Callable[[], FileOrganizationDriver]] = {
     FileOrganization.SEQUENTIAL: VariableSequentialDriver,
     FileOrganization.RELATIVE: lambda: RelativeDriver(DescribedSlot()),
@@ -74,7 +56,7 @@ _COPIED = to_ioresult(AccessResult(AccessCondition.OK))
 
 
 def _successful(result: IOResult) -> bool:
-    return result.status.startswith("0")
+    return result.condition in _SUCCESSFUL
 
 
 class RealFileIOProvider(CobolIOProvider):
@@ -136,7 +118,7 @@ class RealFileIOProvider(CobolIOProvider):
             **self._switches,
             environment_name.upper(): SwitchStatus(status),
         }
-        return IOResult("00", None)
+        return IOResult(AccessCondition.OK, None)
 
     def _accept(self, from_device: str) -> str | Operators._Uncomputable:
         return next(self._system_input, _UNCOMPUTABLE)

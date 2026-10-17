@@ -1,5 +1,9 @@
 threshold: low
 fileignoreconfig:
+- filename: interpreter/cobol/outcome_status.py
+  checksum: 1276ca8363282216f0f1bfd328419ff517144791eb81e2a5ef82bee87ff5b840
+- filename: interpreter/cobol/write_plan.py
+  checksum: caadac64410957ff293fd058c5e5ef6c379abd3f4ccf59f92b6f33448736eb92
 - filename: interpreter/cobol/file_verb_ir.py
   checksum: 24328c9dc0007a51273e9ab76b0ece0e2e4b0e4ba925e1c55d524254bedba252
 - filename: interpreter/cobol/file_state.py
@@ -7,7 +11,7 @@ fileignoreconfig:
 - filename: tests/unit/cobol/test_optional_files.py
   checksum: 757a439ee05cdba8f321e69e2626574b590168bd6c6f20fb0e68656406708e0f
 - filename: interpreter/cobol/read_plan.py
-  checksum: f9a38817cdb26c0d702db0d9159588d93712e59972fa229b28e07279551d2a41
+  checksum: e8c1cab865a21ba069154ddc372aa1762207e7b9e2e4bae0116678e3398b84f8
 - filename: interpreter/cobol/file_frame.py
   checksum: 0c7ca0ab4d415df128b188445752cc27c5ee6f80daad2e2a5761bb4dd1c54c35
 - filename: interpreter/cobol/file_facts.py
@@ -233,7 +237,7 @@ fileignoreconfig:
 - filename: tests/unit/cobol/test_recorded_memory_effects.py
   checksum: ba151292b7ee1a3f747628e5950297f904de1c1cd625307f762f7a98b570b3de
 - filename: docs/frontend-design/cobol.md
-  checksum: 49231ca3c56d73a8edeb5849e2731282c3184116aa5e9f99b671846d6484bbf8
+  checksum: bb2188ed1b38741bf927d37318ab7ac28dffe93d520ef443b57b7a1c204ba8a1
 - filename: tests/integration/test_cobol_call_using_addresses.py
   checksum: 353804977c7a3e5eb44a303f7e42a47ef1bdf9f837f41e396bf5033813c4fdb0
 - filename: tests/integration/test_cobol_call_using_slots.py
@@ -283,7 +287,7 @@ fileignoreconfig:
 - filename: proleap-bridge/src/main/java/org/reddragon/bridge/StatementSerializer.java
   checksum: f9a87946dec86a8815575eff56958f913885c76b3fb14f7f3db967b3686e1036
 - filename: interpreter/cobol/lower_io.py
-  checksum: fe3abb577681de1c73b00133612aeafae12898898dec7285f7d64c3361667400
+  checksum: a8ca1ad4eafcabb6f14660f9050fdda3075b897ba63872c430d146e20dd73232
 - filename: tests/integration/test_cobol_use_declaratives.py
   checksum: d0c6ea039a432d727fde9ea777b1c4945dff7c0f5c3a4599a626bfd8df390072
 - filename: interpreter/cobol/open_file.py

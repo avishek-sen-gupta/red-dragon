@@ -6,6 +6,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from cobol_asg.file_enums import FileOrganization
+from interpreter.cobol.access_result import AccessCondition
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.file_frame import FileFrame
 from interpreter.cobol.io_provider import IOResult
@@ -18,8 +19,8 @@ from tests.unit.cobol.file_status_program import FileProgram, Step
 _REL = "RELATIVE"
 
 
-def _seen(result: IOResult) -> tuple[str, str, int]:
-    return (result.status, result.data or "", result.record_number)
+def _seen(result: IOResult) -> tuple[AccessCondition, str, int]:
+    return (result.condition, result.data or "", result.record_number)
 
 
 _KEYED = FileProgram(
@@ -105,5 +106,10 @@ def test_sequential_verbs_return_the_record_number_they_used(tmp_path: Path) -> 
     assert (written, extended, read) == (
         [1, 2],
         3,
-        [("00", "A  ", 1), ("00", "B  ", 2), ("00", "C  ", 3), ("10", "", 0)],
+        [
+            (AccessCondition.OK, "A  ", 1),
+            (AccessCondition.OK, "B  ", 2),
+            (AccessCondition.OK, "C  ", 3),
+            (AccessCondition.END_OF_FILE, "", 0),
+        ],
     )
