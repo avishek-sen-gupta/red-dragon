@@ -275,26 +275,6 @@ def lower_condition(
     )
 
 
-def _extract_implied_relation(node: dict) -> tuple[bool, str, dict] | None:
-    """Return (not_flag, op, left_expr_dict) from the rightmost full relation
-    in a condition subtree, or None if no relation is found.
-
-    Used to repair abbreviated-operand nodes that ProLeap mis-serialises as
-    {"condition_name": X} when X is a plain data field (not level-88): COBOL
-    abbreviated conditions inherit the comparison subject and operator from the
-    most recently stated full relation on the left of the compound.
-    """
-    if "relation" in node:
-        rel = node["relation"]
-        return (node.get("not", False), rel.get("op", "=="), rel.get("left", {}))
-    if "op" in node:
-        result = _extract_implied_relation(node["right"])
-        if result is not None:
-            return result
-        return _extract_implied_relation(node["left"])
-    return None
-
-
 def _lower_condition_node(
     ctx: EmitContext,
     node: dict,
@@ -310,31 +290,8 @@ def _lower_condition_node(
         left_reg = _lower_condition_node(
             ctx, node["left"], materialised, condition_index, span=span
         )
-        right_node = node["right"]
-        # COBOL abbreviated conditions: ProLeap sometimes serialises a plain
-        # data field as {"condition_name": X} (rather than an abbreviated
-        # relation) when X is not a level-88.  Detect this and repair by
-        # inheriting the comparison subject and operator from the nearest full
-        # relation on the left side of the compound.
-        if "condition_name" in right_node and not condition_index.has_condition(
-            right_node["condition_name"]
-        ):
-            implied = _extract_implied_relation(node["left"])
-            if implied is not None:
-                implied_not, implied_op, implied_left = implied
-                right_node = {
-                    "not": implied_not,
-                    "relation": {
-                        "left": implied_left,
-                        "op": implied_op,
-                        "right": {
-                            "kind": "ref",
-                            "name": right_node["condition_name"],
-                        },
-                    },
-                }
         right_reg = _lower_condition_node(
-            ctx, right_node, materialised, condition_index, span=span
+            ctx, node["right"], materialised, condition_index, span=span
         )
         result = ctx.fresh_reg()
         ctx.emit_inst(
@@ -364,6 +321,22 @@ def _lower_condition_node(
                 materialised,
                 subscripts=subscripts,
                 qualifiers=tuple(node.get("condition_qualifiers", ())),
+                span=span,
+            )
+        elif "abbreviation" in node:
+            inner = _lower_relation_node(
+                ctx,
+                {
+                    "left": node["abbreviation"]["left"],
+                    "op": node["abbreviation"]["op"],
+                    "right": {
+                        "kind": "ref",
+                        "name": name,
+                        "subscripts": node.get("condition_subscripts", []),
+                        "qualifiers": node.get("condition_qualifiers", []),
+                    },
+                },
+                materialised,
                 span=span,
             )
         else:
