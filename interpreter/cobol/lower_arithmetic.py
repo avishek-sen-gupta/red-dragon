@@ -72,6 +72,7 @@ from cobol_numeric.scale import (
     mul_scale,
 )
 from interpreter.cobol.de_edit_ir import emit_de_edit
+from interpreter.cobol.digit_image_ir import emit_display_image, emit_field_digit_image
 from interpreter.cobol.ir_emitter import IrEmitter
 from interpreter.cobol.arithmetic_precision import ArithmeticPrecision
 from interpreter.cobol.arithmetic_receiver import ArithmeticReceiver
@@ -889,12 +890,12 @@ def lower_move(
         and not stmt.source.is_reference_modified
         and source_fl.type_descriptor.category in _FIXED_POINT_CATEGORIES
     ):
-        digit_image_reg = ctx.emit_numeric_digit_image(
+        digit_image_reg = emit_field_digit_image(
+            IrEmitter(ctx=ctx, span=span),
             source_rr,
             source_fl,
             source_ref.offset_reg,
-            extent=source_ref.extent,
-            span=span,
+            source_ref.extent,
         )
 
     de_edited_reg: Register = NO_REGISTER
@@ -2341,18 +2342,12 @@ def _lower_display_operand(
         )
         td = ref.fl.type_descriptor
         display_reg = (
-            _call_builtin(
-                ctx,
-                BuiltinName.COBOL_ZONED_DISPLAY_IMAGE,
-                (
-                    ctx.emit_decode_field(
-                        rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
-                    ),
-                    ctx.const_to_reg(td.total_digits, span=span),
-                    ctx.const_to_reg(td.decimal_digits, span=span),
-                    ctx.const_to_reg(td.scale, span=span),
+            emit_display_image(
+                IrEmitter(ctx=ctx, span=span),
+                ctx.emit_decode_field(
+                    rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
                 ),
-                span=span,
+                td,
             )
             if td.category in _DISPLAYED_AS_ZONED
             else ctx.emit_decode_field_characters(

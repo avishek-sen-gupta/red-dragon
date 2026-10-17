@@ -2094,6 +2094,59 @@ class TestTier2Lowering:
             == set()
         )
 
+    @covers(
+        CobolFeature.DISPLAY,
+        CobolFeature.INSPECT_REPLACING,
+        CobolFeature.COMPARISON_OPERATORS,
+        CobolFeature.SIGN_CLAUSE,
+    )
+    def test_sign_and_digit_images_lower_to_ir_without_an_image_builtin(self):
+        fields = [
+            CobolField(name="WS-Z", level=77, pic="S9(3)", usage="DISPLAY", offset=0),
+            CobolField(name="WS-B", level=77, pic="S9(4)", usage="COMP", offset=3),
+            CobolField(name="WS-X", level=77, pic="X(4)", usage="DISPLAY", offset=5),
+        ]
+        stmts = [
+            DisplayStatement(operands=(RefModOperand(name="WS-B"),)),
+            InspectStatement(
+                inspect_type="REPLACING",
+                source=RefModOperand(name="WS-Z"),
+                replacings=[
+                    Replacing(
+                        mode="ALL",
+                        from_pattern=RefModOperand(name="'1'"),
+                        to_pattern=RefModOperand(name="'2'"),
+                    )
+                ],
+            ),
+            IfStatement(
+                condition={
+                    "not": False,
+                    "relation": {
+                        "left": {"kind": "ref", "name": "WS-B"},
+                        "op": "=",
+                        "right": {"kind": "ref", "name": "WS-X"},
+                    },
+                },
+                children=[DisplayStatement(operands=(RefModOperand(name="'EQ'"),))],
+            ),
+        ]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        called = {
+            c.operands[0]
+            for c in _find_opcodes(instructions, Opcode.CALL_FUNCTION)
+            if c.operands
+        }
+        assert called & {
+            "__cobol_digit_image",
+            "__cobol_zoned_display_image",
+            "__cobol_zoned_strip_sign",
+            "__cobol_zoned_restore_sign",
+            "__cobol_prepare_digits",
+            "__nibble_set",
+        } == {"__cobol_prepare_digits", "__nibble_set"}
+
 
 class TestSearchLowering:
     """Tests for SEARCH IR lowering."""

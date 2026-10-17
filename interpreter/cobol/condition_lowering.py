@@ -31,7 +31,9 @@ from interpreter.cobol.arithmetic_scale import (
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.condition_name_index import ConditionNameIndex
 from interpreter.cobol.emit_context import EmitContext, strip_cobol_literal
+from interpreter.cobol.digit_image_ir import emit_field_digit_image
 from interpreter.cobol.figurative_constants import repeat_to_width
+from interpreter.cobol.ir_emitter import IrEmitter
 from interpreter.cobol.pointer_lowering import PointerLowering
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.cobol.switch_condition import SwitchCondition
@@ -630,8 +632,8 @@ def _lower_numeric_field_characters(
         subscripts=tuple(expr_from_dict(s) for s in expr.get("subscripts", [])),
         span=span,
     )
-    return ctx.emit_numeric_digit_image(
-        rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
+    return emit_field_digit_image(
+        IrEmitter(ctx=ctx, span=span), rr, ref.fl, ref.offset_reg, ref.extent
     )
 
 
