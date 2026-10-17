@@ -48,7 +48,7 @@ def test_lower_call_emits_call_with_memory():
     stmt = CallStatement(
         target=CallTarget.of_literal("SUBPROG"),
         using=[CallUsingParam(name="WS-PARAM", param_type="REFERENCE")],
-        giving="",
+        giving=RefModOperand(name=""),
     )
     lower_call(ctx, stmt, materialised)
     opcodes = [i.opcode for i in ctx.instructions]
@@ -62,7 +62,7 @@ def test_lower_call_giving_result_written_back():
     stmt = CallStatement(
         target=CallTarget.of_literal("SUBPROG"),
         using=[],
-        giving="WS-RESULT",
+        giving=RefModOperand(name="WS-RESULT"),
     )
     lower_call(ctx, stmt, materialised)
     opcodes = [i.opcode for i in ctx.instructions]
@@ -100,7 +100,7 @@ def test_lower_call_by_value_no_copy_back():
     stmt = CallStatement(
         target=CallTarget.of_literal("SUBPROG"),
         using=[CallUsingParam(name="WS-INPUT", param_type="VALUE")],
-        giving="",
+        giving=RefModOperand(name=""),
     )
     lower_call(ctx, stmt, materialised)
     _ws_layout, ws_reg = materialised.working_storage
@@ -116,7 +116,7 @@ def test_lower_call_by_content_no_copy_back():
     stmt = CallStatement(
         target=CallTarget.of_literal("SUBPROG"),
         using=[CallUsingParam(name="WS-INPUT", param_type="CONTENT")],
-        giving="",
+        giving=RefModOperand(name=""),
     )
     lower_call(ctx, stmt, materialised)
     _ws_layout, ws_reg = materialised.working_storage
@@ -156,7 +156,7 @@ def test_lower_call_passes_an_argument_array_with_its_count():
                 CallUsingParam(name="WS-PARAM", param_type="REFERENCE"),
                 CallUsingParam(name="", param_type="REFERENCE", omitted=True),
             ],
-            giving="",
+            giving=RefModOperand(name=""),
         ),
         materialised,
     )
@@ -189,7 +189,7 @@ def _call_region_traffic(param_type: str) -> list[tuple[Opcode, str]]:
         CallStatement(
             target=CallTarget.of_literal("DOUBLIT"),
             using=[CallUsingParam(name="WS-INPUT", param_type=param_type)],
-            giving="",
+            giving=RefModOperand(name=""),
         ),
         materialised,
     )
@@ -248,7 +248,7 @@ def test_a_by_reference_argument_passes_its_own_sections_region():
             CallStatement(
                 target=CallTarget.of_literal("SUBPROG"),
                 using=[CallUsingParam(name=name, param_type="REFERENCE")],
-                giving="",
+                giving=RefModOperand(name=""),
             ),
             materialised,
         )
@@ -271,7 +271,7 @@ def test_a_literal_call_looks_up_the_callee_entry_var():
     stmt = CallStatement(
         target=CallTarget.of_literal("subprog"),
         using=[CallUsingParam(name="WS-PARAM", param_type="REFERENCE")],
-        giving="",
+        giving=RefModOperand(name=""),
     )
     lower_call(ctx, stmt, materialised)
     (call,) = [i for i in ctx.instructions if isinstance(i, CallWithMemory)]
@@ -287,7 +287,7 @@ def test_a_data_name_call_computes_the_entry_var_in_ir():
     stmt = CallStatement(
         target=CallTarget.of_identifier(RefModOperand(name="WS-PROG")),
         using=[],
-        giving="",
+        giving=RefModOperand(name=""),
     )
     lower_call(ctx, stmt, materialised)
     calls = {i.result_reg: i for i in ctx.instructions if isinstance(i, CallFunction)}

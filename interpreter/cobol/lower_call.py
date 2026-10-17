@@ -222,9 +222,13 @@ def lower_call(
         StoreVar(name=VarName("__ws_region"), value_reg=caller_ws_reg), span=span
     )
 
-    if stmt.giving and ctx.has_field(stmt.giving, materialised):
+    if stmt.giving.name and ctx.has_field(stmt.giving.name, materialised):
         giving_ref, giving_rr = ctx.resolve_field_ref(
-            stmt.giving, materialised, span=span
+            stmt.giving.name,
+            materialised,
+            stmt.giving.qualifiers,
+            stmt.giving.subscripts,
+            span=span,
         )
         str_reg = ctx.emit_to_string(result_reg, span=span)
         ctx.emit_encode_and_write(
@@ -303,6 +307,7 @@ def _address(
         return (
             PointerLowering(ctx, materialised, span).address_argument(
                 param.name,
+                param.qualifiers,
                 _copy_extent(
                     ctx.addressing_mode.pointer_type.byte_length, LITERAL_ARGUMENT
                 ),
@@ -310,7 +315,9 @@ def _address(
             if param.address_of
             else _literal_copy(ctx, param, span=span)
         )
-    ref, region_reg = ctx.resolve_field_ref(param.name, materialised, span=span)
+    ref, region_reg = ctx.resolve_field_ref(
+        param.name, materialised, param.qualifiers, param.subscripts, span=span
+    )
     if param.param_type == "REFERENCE":
         return region_reg, ref.offset_reg
     return _content_copy(ctx, ref, region_reg, param.name, span=span)

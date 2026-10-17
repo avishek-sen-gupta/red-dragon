@@ -1246,13 +1246,19 @@ class SearchStatement:
 
 @dataclass(frozen=True)
 class CallUsingParam:
-    """A single USING parameter in a CALL statement."""
+    """A single USING parameter in a CALL statement.
+
+    A data-item argument carries the ``OF``/``IN`` qualifiers and subscripts
+    written on it; a literal's text is its ``name``.
+    """
 
     name: str
     param_type: str = "REFERENCE"  # REFERENCE, CONTENT, or VALUE
     omitted: bool = False
     is_literal: bool = False
     address_of: bool = False
+    qualifiers: tuple[str, ...] = ()
+    subscripts: tuple[ExprNode, ...] = ()
 
     @classmethod
     def from_dict(cls, data: dict) -> CallUsingParam:
@@ -1262,6 +1268,8 @@ class CallUsingParam:
             omitted=data.get("omitted", False),
             is_literal=data.get("is_literal", False),
             address_of=data.get("address_of", False),
+            qualifiers=tuple(data.get("qualifiers", ())),
+            subscripts=tuple(expr_from_dict(s) for s in data.get("subscripts", [])),
         )
 
     def to_dict(self) -> dict:
@@ -1274,6 +1282,12 @@ class CallUsingParam:
             "name": self.name,
             "type": self.param_type,
             **{flag: True for flag, on in flags.items() if on},
+            **({"qualifiers": list(self.qualifiers)} if self.qualifiers else {}),
+            **(
+                {"subscripts": [expr_to_dict(s) for s in self.subscripts]}
+                if self.subscripts
+                else {}
+            ),
         }
 
 
@@ -1288,7 +1302,7 @@ class CallStatement:
 
     target: CallTarget = field(default_factory=CallTarget)
     using: list[CallUsingParam] = field(default_factory=list)
-    giving: str = ""
+    giving: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
     on_exception: list[CobolStatementType] = field(default_factory=list)
     not_on_exception: list[CobolStatementType] = field(default_factory=list)
     span: SourceSpan | None = None
@@ -1298,7 +1312,7 @@ class CallStatement:
         return cls(
             target=CallTarget.from_dict(data),
             using=[CallUsingParam.from_dict(p) for p in data.get("using", [])],
-            giving=data.get("giving", ""),
+            giving=_operand(data, "giving"),
             on_exception=[parse_statement(c) for c in data.get("on_exception", [])],
             not_on_exception=[
                 parse_statement(c) for c in data.get("not_on_exception", [])
@@ -1319,8 +1333,8 @@ class CallStatement:
         self.target.write_into(result)
         if self.using:
             result["using"] = [p.to_dict() for p in self.using]
-        if self.giving:
-            result["giving"] = self.giving
+        if self.giving.name:
+            result["giving"] = self.giving.to_dict()
         if self.span is not None:
             self.span.write_into(result)
         return result

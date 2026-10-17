@@ -12,7 +12,9 @@ from interpreter.run import run
 from tests.covers import covers
 from tests.integration.cobol_helpers import (
     bridge_jar,  # noqa: F401
+    run_cobol_programs,
     to_fixed,
+    ws_region,
 )
 
 pytestmark = pytest.mark.usefixtures("bridge_jar")
@@ -435,3 +437,49 @@ class TestQualifiedStatementOperands:
             ],
         )
         assert shown == "06"
+
+
+_CALLER = [
+    "IDENTIFICATION DIVISION.",
+    "PROGRAM-ID. MAINQ.",
+    "DATA DIVISION.",
+    "WORKING-STORAGE SECTION.",
+    '01 R1. 02 F PIC XX VALUE "AA". 02 G PIC XX VALUE "GG".',
+    '01 R2. 02 F PIC XX VALUE "BB". 02 G PIC XX VALUE "HH".',
+    '01 T. 02 E PIC XX OCCURS 2 VALUE "EE".',
+    "PROCEDURE DIVISION.",
+    "    CALL 'SUBQ' USING F OF R2 E OF T (2)",
+    "        BY CONTENT G IN R1 ADDRESS OF F OF R2.",
+    "    STOP RUN.",
+]
+
+_CALLEE = [
+    "IDENTIFICATION DIVISION.",
+    "PROGRAM-ID. SUBQ.",
+    "DATA DIVISION.",
+    "WORKING-STORAGE SECTION.",
+    "01 SEEN PIC XX.",
+    "LINKAGE SECTION.",
+    "01 LK-A PIC XX.",
+    "01 LK-B PIC XX.",
+    "01 LK-C PIC XX.",
+    "01 LK-P POINTER.",
+    "01 LK-R2. 02 LK-F PIC XX. 02 LK-G PIC XX.",
+    "PROCEDURE DIVISION USING LK-A LK-B LK-C LK-P.",
+    "    MOVE LK-C TO SEEN.",
+    '    MOVE "XY" TO LK-A.',
+    '    MOVE "ZZ" TO LK-B.',
+    '    MOVE "QQ" TO LK-C.',
+    "    SET ADDRESS OF LK-R2 TO LK-P.",
+    '    MOVE "PP" TO LK-G.',
+    "    GOBACK.",
+]
+
+
+class TestQualifiedCallArguments:
+    @covers(CobolFeature.CALL_USING, CobolFeature.USING_BY_REFERENCE)
+    def test_call_using_passes_the_qualified_and_subscripted_items(self):
+        ws = bytes(
+            ws_region(run_cobol_programs(_CALLER, {"SUBQ": _CALLEE}), "MAINQ")
+        ).decode("cp037")
+        assert ws == "AAGGXYPPEEZZ"
