@@ -39,6 +39,12 @@ public final class DataFieldSerializer {
     /** Bytes a USAGE INDEX data item occupies: a fullword (IBM Enterprise COBOL LR, USAGE INDEX). */
     private static final int INDEX_ITEM_SIZE = 4;
 
+    /** Bytes a COMP-1 item occupies: short floating point (IBM Enterprise COBOL LR, USAGE COMP-1). */
+    private static final int COMP_1_SIZE = 4;
+
+    /** Bytes a COMP-2 item occupies: long floating point (IBM Enterprise COBOL LR, USAGE COMP-2). */
+    private static final int COMP_2_SIZE = 8;
+
     /** Running counter for disambiguating FILLER fields within a serialization session. */
     private int fillerCount = 0;
 
@@ -578,6 +584,12 @@ public final class DataFieldSerializer {
         }
         if ("INDEX".equals(usage)) {
             return INDEX_ITEM_SIZE;
+        }
+        if ("COMP-1".equals(usage)) {
+            return COMP_1_SIZE;
+        }
+        if ("COMP-2".equals(usage)) {
+            return COMP_2_SIZE;
         }
         if (pic.isEmpty()) {
             return 0;

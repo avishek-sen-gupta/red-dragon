@@ -602,6 +602,20 @@ public class AsgSerializerTest {
         assertEquals(4, printChildren.get(1).getAsJsonObject().get("offset").getAsInt());
     }
 
+    @Test
+    public void testFloatingPointItems_occupyFourAndEightBytesWithoutAPicture() throws Exception {
+        JsonObject asg = parseFixture("float_items.cbl");
+
+        StringBuilder placed = new StringBuilder();
+        for (JsonElement elem : asg.getAsJsonArray("data_fields")) {
+            JsonObject item = elem.getAsJsonObject();
+            placed.append(item.get("name").getAsString()).append('@')
+                    .append(item.get("offset").getAsInt()).append(' ');
+        }
+
+        assertEquals("G@0 H@8 GRP@12 F1@24 ", placed.toString());
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────
 
     private JsonObject parseFixture(String filename) throws Exception {
