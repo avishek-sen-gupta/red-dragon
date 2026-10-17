@@ -139,6 +139,7 @@ CobolStatementType = Union[
     "DeleteStatement",
     "XmlGenerateStatement",
     "SortStatement",
+    "MergeStatement",
     "ReleaseStatement",
     "ReturnStatement",
 ]
@@ -1743,7 +1744,7 @@ class RewriteStatement:
     span: SourceSpan | None = None
 
     @classmethod
-    def from_dict(cls, data: dict) -> RewriteStatement:
+    def from_dict(cls, data: Mapping) -> RewriteStatement:
         return cls(
             record_name=data.get("record_name", ""),
             from_field=_operand(data, "from_field"),
@@ -1905,6 +1906,41 @@ class SortStatement:
             "file_name": self.file_name,
             "keys": [k.to_dict() for k in self.keys],
             **_sort_source_to_dict(self.source, "using", "input_procedure"),
+            **_sort_source_to_dict(self.sink, "giving", "output_procedure"),
+        }
+        match self.span:
+            case SourceSpan() as span:
+                span.write_into(result)
+        return result
+
+
+@dataclass(frozen=True)
+class MergeStatement:
+    """MERGE file ON ASCENDING|DESCENDING KEY k ... USING f1 f2 ...
+    GIVING g ... | OUTPUT PROCEDURE q."""
+
+    file_name: str
+    keys: tuple[SortKey, ...]
+    using: SortFiles
+    sink: SortSource
+    span: SourceSpan | None
+
+    @classmethod
+    def from_dict(cls, data: Mapping) -> MergeStatement:
+        return cls(
+            file_name=data["file_name"],
+            keys=tuple(SortKey.from_dict(k) for k in data["keys"]),
+            using=SortFiles(tuple(data["using"])),
+            sink=_sort_source(data, "giving", "output_procedure"),
+            span=SourceSpan.from_dict(data),
+        )
+
+    def to_dict(self) -> dict:
+        result: dict = {
+            "type": "MERGE",
+            "file_name": self.file_name,
+            "keys": [k.to_dict() for k in self.keys],
+            "using": list(self.using.names),
             **_sort_source_to_dict(self.sink, "giving", "output_procedure"),
         }
         match self.span:
@@ -2183,6 +2219,7 @@ _DISPATCH_TABLE: dict[str, type] = {
     "DELETE": DeleteStatement,
     "XML_GENERATE": XmlGenerateStatement,
     "SORT": SortStatement,
+    "MERGE": MergeStatement,
     "RELEASE": ReleaseStatement,
     "RETURN": ReturnStatement,
 }

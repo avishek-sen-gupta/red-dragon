@@ -5,6 +5,8 @@ import com.google.gson.JsonObject;
 import io.proleap.cobol.asg.metamodel.call.Call;
 import io.proleap.cobol.asg.metamodel.procedure.AtEndPhrase;
 import io.proleap.cobol.asg.metamodel.procedure.NotAtEndPhrase;
+import io.proleap.cobol.asg.metamodel.procedure.merge.MergeStatement;
+import io.proleap.cobol.asg.metamodel.procedure.merge.OutputProcedurePhrase;
 import io.proleap.cobol.asg.metamodel.procedure.release.ReleaseStatement;
 import io.proleap.cobol.asg.metamodel.procedure.returnstmt.ReturnStatement;
 import io.proleap.cobol.asg.metamodel.procedure.sort.Giving;
@@ -16,7 +18,7 @@ import io.proleap.cobol.asg.metamodel.procedure.sort.SortStatement;
 import io.proleap.cobol.asg.metamodel.procedure.sort.UsingPhrase;
 import java.util.List;
 
-/** Serialises the sort-merge module's statements: SORT, RELEASE and RETURN. */
+/** Serialises the sort-merge module's statements: SORT, MERGE, RELEASE and RETURN. */
 final class SortSerializer {
 
     private SortSerializer() {}
@@ -39,6 +41,47 @@ final class SortSerializer {
                                     : input.getInputThrough().getProcedureCall()));
         }
         OutputProcedure output = stmt.getOutputProcedure();
+        if (output != null) {
+            obj.add(
+                    "output_procedure",
+                    procedure(
+                            output.getProcedureCall(),
+                            output.getOutputThrough() == null
+                                    ? null
+                                    : output.getOutputThrough().getProcedureCall()));
+        }
+        return obj;
+    }
+
+    static JsonObject serializeMerge(MergeStatement stmt) {
+        JsonObject obj = new JsonObject();
+        obj.addProperty("type", "MERGE");
+        obj.addProperty("file_name", StatementSerializer.extractCallName(stmt.getFileCall()));
+        JsonArray keys = new JsonArray();
+        for (io.proleap.cobol.asg.metamodel.procedure.merge.OnKey onKey : stmt.getOnKeys()) {
+            for (Call keyCall : onKey.getKeyCalls()) {
+                JsonObject key = new JsonObject();
+                key.addProperty("direction", onKey.getOnKeyType().name());
+                key.add("key", StatementSerializer.serializeRef(keyCall));
+                keys.add(key);
+            }
+        }
+        obj.add("keys", keys);
+        JsonArray using = new JsonArray();
+        for (io.proleap.cobol.asg.metamodel.procedure.merge.UsingPhrase phrase : stmt.getUsingPhrases()) {
+            for (Call fileCall : phrase.getFileCalls()) {
+                using.add(StatementSerializer.extractCallName(fileCall));
+            }
+        }
+        obj.add("using", using);
+        JsonArray giving = new JsonArray();
+        for (io.proleap.cobol.asg.metamodel.procedure.merge.GivingPhrase phrase : stmt.getGivingPhrases()) {
+            for (io.proleap.cobol.asg.metamodel.procedure.merge.Giving g : phrase.getGivings()) {
+                giving.add(StatementSerializer.extractCallName(g.getFileCall()));
+            }
+        }
+        obj.add("giving", giving);
+        OutputProcedurePhrase output = stmt.getOutputProcedurePhrase();
         if (output != null) {
             obj.add(
                     "output_procedure",
