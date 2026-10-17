@@ -98,6 +98,35 @@ public final class DataFieldSerializer {
     }
 
     /**
+     * Serializes the records of one FD. Every 01 under an FD describes the same
+     * record area (an implicit redefinition), so each starts at {@code base}.
+     */
+    public static JsonArray serializeRecordArea(List<DataDescriptionEntry> records, int base) {
+        DataFieldSerializer instance = new DataFieldSerializer();
+        JsonArray fields = new JsonArray();
+        for (DataDescriptionEntry entry : records) {
+            if (entry instanceof DataDescriptionEntryGroup group) {
+                fields.add(instance.serializeGroup(group, base));
+            } else if (entry instanceof DataDescriptionEntryRename rename) {
+                fields.add(instance.serializeRename(rename));
+            } else if (!(entry instanceof DataDescriptionEntryExecSql)) {
+                LOG.warning("Unhandled DataDescriptionEntry subtype: "
+                        + entry.getClass().getName() + " -- dropped from file_fields");
+            }
+        }
+        return fields;
+    }
+
+    /** Bytes an FD's record area occupies: the length of its largest record. */
+    public static int recordAreaLength(List<DataDescriptionEntry> records) {
+        return records.stream()
+                .filter(e -> e instanceof DataDescriptionEntryGroup)
+                .mapToInt(e -> computeByteLength((DataDescriptionEntryGroup) e))
+                .max()
+                .orElse(0);
+    }
+
+    /**
      * Recursively collects every EXEC SQL data-description entry (e.g. a
      * DECLARE CURSOR written in WORKING-STORAGE rather than PROCEDURE
      * DIVISION) found anywhere under {@code entries}, including nested

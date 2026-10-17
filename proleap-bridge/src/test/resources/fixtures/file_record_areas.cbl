@@ -1,0 +1,21 @@
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. RECAREAS.
+       ENVIRONMENT DIVISION.
+       INPUT-OUTPUT SECTION.
+       FILE-CONTROL.
+           SELECT PRINT-FILE ASSIGN TO PRTDD.
+           SELECT DATA-FILE ASSIGN TO DATDD.
+       DATA DIVISION.
+       FILE SECTION.
+       FD  PRINT-FILE.
+       01  PRINT-REC.
+           05  PRINT-TEXT  PIC X(4).
+           05  PRINT-REST  PIC X(6).
+       01  DUMMY-RECORD    PIC X(12).
+       01  SHORT-REC       PIC X(3).
+       FD  DATA-FILE.
+       01  DATA-REC        PIC X(5).
+       01  DATA-ALT        PIC X(2).
+       PROCEDURE DIVISION.
+       MAIN-PARA.
+           STOP RUN.

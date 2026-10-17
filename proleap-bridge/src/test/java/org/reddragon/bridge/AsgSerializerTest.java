@@ -581,6 +581,27 @@ public class AsgSerializerTest {
         assertEquals("LOCAL-STORAGE", execSqlEntries.get(0).getAsJsonObject().get("section").getAsString());
     }
 
+    @Test
+    public void testFileSection_recordsOfOneFdShareItsAreaAndFdsDoNotOverlap() throws Exception {
+        JsonObject asg = parseFixture("file_record_areas.cbl");
+        JsonArray fields = asg.getAsJsonArray("file_fields");
+
+        StringBuilder placed = new StringBuilder();
+        for (JsonElement elem : fields) {
+            JsonObject record = elem.getAsJsonObject();
+            placed.append(record.get("fd_name").getAsString()).append(':')
+                    .append(record.get("name").getAsString()).append('@')
+                    .append(record.get("offset").getAsInt()).append(' ');
+        }
+        JsonArray printChildren = fields.get(0).getAsJsonObject().getAsJsonArray("children");
+
+        assertEquals(
+                "PRINT-FILE:PRINT-REC@0 PRINT-FILE:DUMMY-RECORD@0 PRINT-FILE:SHORT-REC@0 "
+                        + "DATA-FILE:DATA-REC@12 DATA-FILE:DATA-ALT@12 ",
+                placed.toString());
+        assertEquals(4, printChildren.get(1).getAsJsonObject().get("offset").getAsInt());
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────
 
     private JsonObject parseFixture(String filename) throws Exception {
