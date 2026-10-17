@@ -46,6 +46,108 @@ def _shown(
     return capsys.readouterr().out
 
 
+def _run_with_files(
+    capsys: pytest.CaptureFixture[str],
+    environment: Sequence[str],
+    file_section: Sequence[str],
+    working_storage: Sequence[str],
+    procedure: Sequence[str],
+    provider: StubIOProvider,
+) -> str:
+    source = to_fixed(
+        [
+            "IDENTIFICATION DIVISION.",
+            "PROGRAM-ID. QUALIO.",
+            "ENVIRONMENT DIVISION.",
+            "INPUT-OUTPUT SECTION.",
+            "FILE-CONTROL.",
+            *environment,
+            "DATA DIVISION.",
+            "FILE SECTION.",
+            *file_section,
+            "WORKING-STORAGE SECTION.",
+            *working_storage,
+            "PROCEDURE DIVISION.",
+            "MAIN-PARA.",
+            *procedure,
+            "    STOP RUN.",
+        ]
+    )
+    run(source=source, language="cobol", max_steps=5000, io_provider=provider)
+    return capsys.readouterr().out
+
+
+def _ebcdic(text: str) -> str:
+    return text.encode("cp037").decode("latin-1")
+
+
+_TWO_RECORDS = [
+    '01 R1. 02 F PIC X(4) VALUE "AAAA". 02 K PIC XX VALUE "K1".',
+    '01 R2. 02 F PIC X(4) VALUE "BBBB".',
+    '01 ST1. 02 FS PIC XX VALUE "S1".',
+    '01 ST2. 02 FS PIC XX VALUE "S2".',
+]
+
+
+class TestQualifiedFileOperands:
+    @covers(
+        CobolFeature.READ_INTO,
+        CobolFeature.WRITE_FROM,
+        CobolFeature.REWRITE,
+        CobolFeature.OPEN,
+    )
+    def test_file_statements_and_select_clauses_use_the_qualified_items(self, capsys):
+        provider = StubIOProvider(
+            files={
+                "INF": {"records": [_ebcdic("WXYZ")]},
+                "IOF": {"records": [_ebcdic("QQQQ")]},
+                "KF": {"records": [_ebcdic("-ZZ-")]},
+            }
+        )
+        shown = _run_with_files(
+            capsys,
+            [
+                '    SELECT INF ASSIGN TO "INF" ORGANIZATION SEQUENTIAL',
+                "        FILE STATUS IS FS OF ST2.",
+                '    SELECT OUTF ASSIGN TO "OUTF" ORGANIZATION SEQUENTIAL.',
+                '    SELECT IOF ASSIGN TO "IOF" ORGANIZATION SEQUENTIAL.',
+                '    SELECT KF ASSIGN TO "KF" ORGANIZATION INDEXED',
+                "        ACCESS MODE IS RANDOM RECORD KEY IS K OF KREC",
+                "        FILE STATUS IS FS IN ST1.",
+            ],
+            [
+                "FD INF. 01 INREC PIC X(4).",
+                "FD OUTF. 01 OUTREC PIC X(4).",
+                "FD IOF. 01 IOREC PIC X(4).",
+                "FD KF. 01 KREC. 02 PAD PIC X. 02 K PIC XX. 02 TAIL PIC X.",
+            ],
+            _TWO_RECORDS,
+            [
+                "    OPEN INPUT INF KF OUTPUT OUTF I-O IOF.",
+                '    MOVE "ZZ" TO K OF KREC.',
+                "    READ KF KEY IS K OF KREC.",
+                "    MOVE KREC TO F OF R2.",
+                "    DISPLAY F OF R2.",
+                "    READ INF INTO F OF R2.",
+                "    WRITE OUTREC FROM F OF R1.",
+                "    WRITE OUTREC FROM F OF R2.",
+                "    READ IOF.",
+                "    REWRITE IOREC FROM F OF R1.",
+                "    DISPLAY F OF R2 FS OF ST1 FS OF ST2.",
+            ],
+            provider,
+        )
+        assert (
+            shown,
+            provider.get_file("OUTF").written,
+            provider.get_file("IOF").written,
+        ) == (
+            "-ZZ-WXYZ0000",
+            [_ebcdic("AAAA"), _ebcdic("WXYZ")],
+            [_ebcdic("AAAA")],
+        )
+
+
 class TestQualifiedReferenceResolution:
     @covers(CobolFeature.MOVE)
     def test_every_qualifier_selects_and_subscripts_stride_the_selected_item(

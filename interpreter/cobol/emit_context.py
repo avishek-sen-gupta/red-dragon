@@ -1855,12 +1855,17 @@ class EmitContext:
         fce: FileControlEntry | None = next(
             (e for e in self._asg.file_control if e.file_name == file_name), None
         )
-        if fce is None or not fce.file_status_var:
+        if fce is None or not fce.file_status_var.name:
             return
-        if not materialised.has_field(fce.file_status_var):
+        status_item = fce.file_status_var
+        if not materialised.has_field(status_item.name):
             return
         target_ref, target_rr = self.resolve_field_ref(
-            fce.file_status_var, materialised, span=span
+            status_item.name,
+            materialised,
+            status_item.qualifiers,
+            status_item.subscripts,
+            span=span,
         )
         str_reg = self.emit_to_string(status_reg, span=span)
         self.emit_encode_and_write(

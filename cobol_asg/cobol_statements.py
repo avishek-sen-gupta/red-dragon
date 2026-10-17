@@ -1451,9 +1451,11 @@ class FileControlEntry:
     assign_to: str = ""
     organization: FileOrganization = FileOrganization.SEQUENTIAL
     access_mode: AccessMode = AccessMode.SEQUENTIAL
-    record_key: str = ""
-    relative_key: str = ""
-    file_status_var: str = ""
+    record_key: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
+    relative_key: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
+    file_status_var: RefModOperand = field(
+        default_factory=lambda: RefModOperand(name="")
+    )
 
     @classmethod
     def from_dict(cls, data: dict) -> FileControlEntry:
@@ -1462,9 +1464,9 @@ class FileControlEntry:
             assign_to=data.get("assign_to", ""),
             organization=FileOrganization(data.get("organization", "SEQUENTIAL")),
             access_mode=AccessMode(data.get("access_mode", "SEQUENTIAL")),
-            record_key=data.get("record_key", ""),
-            relative_key=data.get("relative_key", ""),
-            file_status_var=data.get("file_status_var", ""),
+            record_key=RefModOperand.from_dict(data.get("record_key", {})),
+            relative_key=RefModOperand.from_dict(data.get("relative_key", {})),
+            file_status_var=RefModOperand.from_dict(data.get("file_status_var", {})),
         )
 
     def to_dict(self) -> dict:
@@ -1473,9 +1475,9 @@ class FileControlEntry:
             "assign_to": self.assign_to,
             "organization": self.organization.value,
             "access_mode": self.access_mode.value,
-            "record_key": self.record_key,
-            "relative_key": self.relative_key,
-            "file_status_var": self.file_status_var,
+            "record_key": self.record_key.to_dict(),
+            "relative_key": self.relative_key.to_dict(),
+            "file_status_var": self.file_status_var.to_dict(),
         }
 
 
@@ -1616,8 +1618,8 @@ class ReadStatement:
     """READ file-name [INTO target] [KEY key] [AT END ...] [INVALID KEY ...]."""
 
     file_name: str = ""
-    into: str = ""
-    key: str = ""
+    into: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
+    key: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
     at_end: list[CobolStatementType] = field(default_factory=list)
     not_at_end: list[CobolStatementType] = field(default_factory=list)
     invalid_key: list[CobolStatementType] = field(default_factory=list)
@@ -1628,8 +1630,8 @@ class ReadStatement:
     def from_dict(cls, data: dict) -> ReadStatement:
         return cls(
             file_name=data.get("file_name", ""),
-            into=data.get("into", ""),
-            key=data.get("key", ""),
+            into=_operand(data, "into"),
+            key=_operand(data, "key"),
             at_end=[parse_statement(c) for c in data.get("at_end", [])],
             not_at_end=[parse_statement(c) for c in data.get("not_at_end", [])],
             invalid_key=[parse_statement(c) for c in data.get("invalid_key", [])],
@@ -1641,10 +1643,10 @@ class ReadStatement:
 
     def to_dict(self) -> dict:
         result: dict = {"type": "READ", "file_name": self.file_name}
-        if self.into:
-            result["into"] = self.into
-        if self.key:
-            result["key"] = self.key
+        if self.into.name:
+            result["into"] = self.into.to_dict()
+        if self.key.name:
+            result["key"] = self.key.to_dict()
         if self.at_end:
             result["at_end"] = [c.to_dict() for c in self.at_end]
         if self.not_at_end:
@@ -1663,7 +1665,7 @@ class WriteStatement:
     """WRITE record-name [FROM field] [INVALID KEY ...] [NOT INVALID KEY ...]."""
 
     record_name: str = ""
-    from_field: str = ""
+    from_field: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
     invalid_key: list[CobolStatementType] = field(default_factory=list)
     not_invalid_key: list[CobolStatementType] = field(default_factory=list)
     span: SourceSpan | None = None
@@ -1672,7 +1674,7 @@ class WriteStatement:
     def from_dict(cls, data: dict) -> WriteStatement:
         return cls(
             record_name=data.get("record_name", ""),
-            from_field=data.get("from_field", ""),
+            from_field=_operand(data, "from_field"),
             invalid_key=[parse_statement(c) for c in data.get("invalid_key", [])],
             not_invalid_key=[
                 parse_statement(c) for c in data.get("not_invalid_key", [])
@@ -1682,8 +1684,8 @@ class WriteStatement:
 
     def to_dict(self) -> dict:
         result: dict = {"type": "WRITE", "record_name": self.record_name}
-        if self.from_field:
-            result["from_field"] = self.from_field
+        if self.from_field.name:
+            result["from_field"] = self.from_field.to_dict()
         if self.invalid_key:
             result["invalid_key"] = [c.to_dict() for c in self.invalid_key]
         if self.not_invalid_key:
@@ -1698,7 +1700,7 @@ class RewriteStatement:
     """REWRITE record-name [FROM field] [INVALID KEY ...] [NOT INVALID KEY ...]."""
 
     record_name: str = ""
-    from_field: str = ""
+    from_field: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
     invalid_key: list[CobolStatementType] = field(default_factory=list)
     not_invalid_key: list[CobolStatementType] = field(default_factory=list)
     span: SourceSpan | None = None
@@ -1707,7 +1709,7 @@ class RewriteStatement:
     def from_dict(cls, data: dict) -> RewriteStatement:
         return cls(
             record_name=data.get("record_name", ""),
-            from_field=data.get("from_field", ""),
+            from_field=_operand(data, "from_field"),
             invalid_key=[parse_statement(c) for c in data.get("invalid_key", [])],
             not_invalid_key=[
                 parse_statement(c) for c in data.get("not_invalid_key", [])
@@ -1717,8 +1719,8 @@ class RewriteStatement:
 
     def to_dict(self) -> dict:
         result: dict = {"type": "REWRITE", "record_name": self.record_name}
-        if self.from_field:
-            result["from_field"] = self.from_field
+        if self.from_field.name:
+            result["from_field"] = self.from_field.to_dict()
         if self.invalid_key:
             result["invalid_key"] = [c.to_dict() for c in self.invalid_key]
         if self.not_invalid_key:

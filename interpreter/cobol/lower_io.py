@@ -14,6 +14,7 @@ from cobol_asg.cobol_statements import (
     StartStatement,
     WriteStatement,
 )
+from cobol_asg.ref_mod import RefModOperand
 from cobol_asg.source_span import SourceSpan
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.emit_context import EmitContext
@@ -225,9 +226,11 @@ def lower_open(
 
             # Resolve key offset/length from FileControlEntry.record_key
             key_offset, key_length = 0, 0
-            if fce and fce.record_key:
+            if fce and fce.record_key.name:
                 try:
-                    key_fl, _ = materialised.resolve(fce.record_key)
+                    key_fl, _ = materialised.resolve(
+                        fce.record_key.name, fce.record_key.qualifiers
+                    )
                     key_offset = key_fl.offset
                     key_length = key_fl.byte_length
                 except KeyError:
@@ -322,8 +325,14 @@ def lower_read(
     fn_reg = ctx.const_to_reg(stmt.file_name, span=span)
 
     # Key for random access
-    if stmt.key and materialised.has_field(stmt.key):
-        key_ref, key_rr = ctx.resolve_field_ref(stmt.key, materialised, span=span)
+    if stmt.key.name and materialised.has_field(stmt.key.name):
+        key_ref, key_rr = ctx.resolve_field_ref(
+            stmt.key.name,
+            materialised,
+            stmt.key.qualifiers,
+            stmt.key.subscripts,
+            span=span,
+        )
         key_val_reg = ctx.emit_decode_field(
             key_rr, key_ref.fl, key_ref.offset_reg, extent=key_ref.extent, span=span
         )
@@ -409,9 +418,13 @@ def lower_read(
             pass
 
     # INTO copy — byte-faithful region move (record bytes → INTO receiver).
-    if stmt.into and materialised.has_field(stmt.into):
+    if stmt.into.name and materialised.has_field(stmt.into.name):
         target_ref, target_rr = ctx.resolve_field_ref(
-            stmt.into, materialised, span=span
+            stmt.into.name,
+            materialised,
+            stmt.into.qualifiers,
+            stmt.into.subscripts,
+            span=span,
         )
         ctx.emit_write_region_raw(
             target_rr,
@@ -481,7 +494,7 @@ def lower_read(
         ctx.emit_inst(Branch(label=after_label), span=span)
 
     ctx.emit_inst(Label_(label=after_label), span=span)
-    logger.info("READ %s INTO %s", stmt.file_name, stmt.into or "(none)")
+    logger.info("READ %s INTO %s", stmt.file_name, stmt.into.name or "(none)")
 
 
 def _emit_invalid_key_branch(
@@ -525,7 +538,7 @@ def _emit_invalid_key_branch(
 
 def _write_source_reg(
     ctx: EmitContext,
-    from_field: str | None,
+    from_field: RefModOperand,
     record_name: str,
     materialised: MaterialisedSectionedLayout,
     *,
@@ -544,14 +557,13 @@ def _write_source_reg(
     feeders that never register the record).
     """
     if not ctx.has_field(record_name, materialised):
-        return ctx.const_to_reg(from_field or record_name, span=span)
-    if from_field:
+        return ctx.const_to_reg(from_field.name or record_name, span=span)
+    if from_field.name:
         from cobol_asg.cobol_statements import MoveStatement
-        from cobol_asg.ref_mod import RefModOperand
 
         ctx.lower_statement(
             MoveStatement(
-                source=RefModOperand(name=from_field),
+                source=from_field,
                 targets=[RefModOperand(name=record_name)],
                 span=span,
             ),
@@ -624,7 +636,7 @@ def lower_write(
         span=span,
     )
     ctx.emit_inst(Label_(label=after_label), span=span)
-    logger.info("WRITE %s FROM %s", stmt.record_name, stmt.from_field or "(none)")
+    logger.info("WRITE %s FROM %s", stmt.record_name, stmt.from_field.name or "(none)")
 
 
 def lower_rewrite(
@@ -687,7 +699,9 @@ def lower_rewrite(
         span=span,
     )
     ctx.emit_inst(Label_(label=after_label), span=span)
-    logger.info("REWRITE %s FROM %s", stmt.record_name, stmt.from_field or "(none)")
+    logger.info(
+        "REWRITE %s FROM %s", stmt.record_name, stmt.from_field.name or "(none)"
+    )
 
 
 def lower_start(

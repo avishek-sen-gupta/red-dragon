@@ -112,9 +112,9 @@ def _file(asg: CobolASG, entry: FileControlEntry) -> DataRecord:
             named("assign_to", text(entry.assign_to)),
             named("organization", text(entry.organization.value)),
             named("access_mode", text(entry.access_mode.value)),
-            named("record_key", text(entry.record_key)),
-            named("relative_key", text(entry.relative_key)),
-            named("file_status", text(entry.file_status_var)),
+            named("record_key", text(entry.record_key.name.upper())),
+            named("relative_key", text(entry.relative_key.name.upper())),
+            named("file_status", text(entry.file_status_var.name.upper())),
             named("fd", _fds(asg, entry)),
         )
     )

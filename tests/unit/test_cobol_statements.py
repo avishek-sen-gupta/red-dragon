@@ -803,45 +803,61 @@ class TestParseStatementDispatch:
         stmt = parse_statement({"type": "READ", "file_name": "CUST-FILE"})
         assert isinstance(stmt, ReadStatement)
         assert stmt.file_name == "CUST-FILE"
-        assert stmt.into == ""
+        assert stmt.into == RefModOperand(name="")
 
     @covers(CobolFeature.READ, CobolFeature.READ_INTO)
     def test_read_with_into(self):
         stmt = parse_statement(
-            {"type": "READ", "file_name": "CUST-FILE", "into": "WS-RECORD"}
+            {
+                "type": "READ",
+                "file_name": "CUST-FILE",
+                "into": {"name": "WS-RECORD", "qualifiers": ["WS-AREA"]},
+            }
         )
         assert isinstance(stmt, ReadStatement)
-        assert stmt.into == "WS-RECORD"
+        assert stmt.into == RefModOperand(name="WS-RECORD", qualifiers=("WS-AREA",))
 
     @covers(CobolFeature.WRITE)
     def test_write_basic(self):
         stmt = parse_statement({"type": "WRITE", "record_name": "CUST-REC"})
         assert isinstance(stmt, WriteStatement)
         assert stmt.record_name == "CUST-REC"
-        assert stmt.from_field == ""
+        assert stmt.from_field == RefModOperand(name="")
 
     @covers(CobolFeature.WRITE, CobolFeature.WRITE_FROM)
     def test_write_with_from(self):
         stmt = parse_statement(
-            {"type": "WRITE", "record_name": "CUST-REC", "from_field": "WS-OUTPUT"}
+            {
+                "type": "WRITE",
+                "record_name": "CUST-REC",
+                "from_field": {"name": "WS-OUTPUT", "qualifiers": ["WS-AREA"]},
+            }
         )
         assert isinstance(stmt, WriteStatement)
-        assert stmt.from_field == "WS-OUTPUT"
+        assert stmt.from_field == RefModOperand(
+            name="WS-OUTPUT", qualifiers=("WS-AREA",)
+        )
 
     @covers(CobolFeature.REWRITE)
     def test_rewrite_basic(self):
         stmt = parse_statement({"type": "REWRITE", "record_name": "CUST-REC"})
         assert isinstance(stmt, RewriteStatement)
         assert stmt.record_name == "CUST-REC"
-        assert stmt.from_field == ""
+        assert stmt.from_field == RefModOperand(name="")
 
     @covers(CobolFeature.REWRITE, CobolFeature.WRITE_FROM)
     def test_rewrite_with_from(self):
         stmt = parse_statement(
-            {"type": "REWRITE", "record_name": "CUST-REC", "from_field": "WS-OUTPUT"}
+            {
+                "type": "REWRITE",
+                "record_name": "CUST-REC",
+                "from_field": {"name": "WS-OUTPUT", "qualifiers": ["WS-AREA"]},
+            }
         )
         assert isinstance(stmt, RewriteStatement)
-        assert stmt.from_field == "WS-OUTPUT"
+        assert stmt.from_field == RefModOperand(
+            name="WS-OUTPUT", qualifiers=("WS-AREA",)
+        )
 
     @covers(CobolFeature.START)
     def test_start_basic(self):
@@ -1694,7 +1710,11 @@ class TestRoundTrip:
 
     @covers(CobolFeature.READ, CobolFeature.READ_INTO)
     def test_read_with_into_round_trip(self):
-        data = {"type": "READ", "file_name": "CUST-FILE", "into": "WS-RECORD"}
+        data = {
+            "type": "READ",
+            "file_name": "CUST-FILE",
+            "into": {"name": "WS-RECORD", "qualifiers": ["WS-AREA"]},
+        }
         assert self._round_trip(data) == data
 
     @covers(CobolFeature.WRITE)
@@ -1704,7 +1724,11 @@ class TestRoundTrip:
 
     @covers(CobolFeature.WRITE, CobolFeature.WRITE_FROM)
     def test_write_with_from_round_trip(self):
-        data = {"type": "WRITE", "record_name": "CUST-REC", "from_field": "WS-OUTPUT"}
+        data = {
+            "type": "WRITE",
+            "record_name": "CUST-REC",
+            "from_field": {"name": "WS-OUTPUT", "qualifiers": ["WS-AREA"]},
+        }
         assert self._round_trip(data) == data
 
     @covers(CobolFeature.REWRITE)
@@ -1714,7 +1738,11 @@ class TestRoundTrip:
 
     @covers(CobolFeature.REWRITE, CobolFeature.WRITE_FROM)
     def test_rewrite_with_from_round_trip(self):
-        data = {"type": "REWRITE", "record_name": "CUST-REC", "from_field": "WS-OUTPUT"}
+        data = {
+            "type": "REWRITE",
+            "record_name": "CUST-REC",
+            "from_field": {"name": "WS-OUTPUT"},
+        }
         assert self._round_trip(data) == data
 
     @covers(CobolFeature.START)
