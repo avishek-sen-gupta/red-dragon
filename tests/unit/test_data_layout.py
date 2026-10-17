@@ -1266,10 +1266,11 @@ def _indexed_table(
     table_name: str = "TBL-ROW",
     index_names: list[str] | None = None,
     occurs: int = 3,
+    record_name: str = "TBL",
 ) -> CobolField:
     return CobolField.from_dict(
         {
-            "name": "TBL",
+            "name": record_name,
             "level": 1,
             "pic": "",
             "usage": "DISPLAY",
@@ -1345,8 +1346,8 @@ class TestIndexItemLayout:
         layout = build_index_layout(
             [_indexed_table(table_name="Tbl-Row", index_names=["Tbl-Ix", "Tbl-Jx"])]
         )
-        assert layout.first_index_for("TBL-ROW") == "Tbl-Ix"
-        assert layout.first_index_for("NO-SUCH-TABLE") is None
+        assert layout.first_index_for(RefModOperand(name="TBL-ROW")) == "Tbl-Ix"
+        assert layout.first_index_for(RefModOperand(name="NO-SUCH-TABLE")) is None
 
     @covers(CobolFeature.SEARCH_VARYING)
     def test_is_index_of_names_only_the_tables_own_indexes(self):
@@ -1357,11 +1358,27 @@ class TestIndexItemLayout:
             ]
         )
         assert [
-            layout.is_index_of("TBL-JX", "tbl-row"),
-            layout.is_index_of("Tbl-Ix", "TBL-ROW"),
-            layout.is_index_of("OTH-IX", "TBL-ROW"),
-            layout.is_index_of("NO-SUCH-IX", "TBL-ROW"),
+            layout.is_index_of("TBL-JX", RefModOperand(name="tbl-row")),
+            layout.is_index_of("Tbl-Ix", RefModOperand(name="TBL-ROW")),
+            layout.is_index_of("OTH-IX", RefModOperand(name="TBL-ROW")),
+            layout.is_index_of("NO-SUCH-IX", RefModOperand(name="TBL-ROW")),
         ] == [True, True, False, False]
+
+    @covers(CobolFeature.SEARCH_VARYING)
+    def test_a_qualified_table_owns_only_the_indexes_declared_on_it(self):
+        layout = build_index_layout(
+            [
+                _indexed_table("ROW", ["IX"], record_name="R1"),
+                _indexed_table("ROW", ["IY", "JY"], record_name="R2"),
+            ]
+        )
+        row_of_r2 = RefModOperand(name="ROW", qualifiers=("R2",))
+        assert [
+            layout.first_index_for(row_of_r2),
+            layout.first_index_for(RefModOperand(name="ROW", qualifiers=("R1",))),
+            layout.is_index_of("JY", row_of_r2),
+            layout.is_index_of("IX", row_of_r2),
+        ] == ["IY", "IX", True, False]
 
 
 def _group(

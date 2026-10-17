@@ -1945,8 +1945,8 @@ class TestSearchLowering:
         ]
         stmts = [
             SearchStatement(
-                table="WS-TABLE",
-                varying="WS-IDX",
+                table=RefModOperand(name="WS-TABLE"),
+                varying=RefModOperand(name="WS-IDX"),
                 whens=[
                     SearchWhen(
                         condition="WS-IDX = 5",
@@ -1995,8 +1995,8 @@ class TestSearchLowering:
         ]
         stmts = [
             SearchStatement(
-                table="WS-TABLE",
-                varying="WS-IDX",
+                table=RefModOperand(name="WS-TABLE"),
+                varying=RefModOperand(name="WS-IDX"),
                 whens=[SearchWhen(condition="WS-IDX = 5")],
             )
         ]
@@ -2029,7 +2029,7 @@ class TestSearchLowering:
         ]
         stmts = [
             SearchStatement(
-                table="WS-TABLE",
+                table=RefModOperand(name="WS-TABLE"),
                 whens=[SearchWhen(condition="WS-IDX = 5")],
                 at_end=[DisplayStatement(operands=(RefModOperand(name="NOT FOUND"),))],
             )
@@ -2063,8 +2063,8 @@ class TestSearchLowering:
         ]
         stmts = [
             SearchStatement(
-                table="WS-TABLE",
-                varying="WS-IDX",
+                table=RefModOperand(name="WS-TABLE"),
+                varying=RefModOperand(name="WS-IDX"),
                 whens=[
                     SearchWhen(condition="WS-IDX = 3"),
                     SearchWhen(condition="WS-IDX = 7"),

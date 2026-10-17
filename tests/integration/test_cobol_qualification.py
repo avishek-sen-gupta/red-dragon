@@ -310,3 +310,26 @@ class TestQualifiedStatementOperands:
             ],
         )
         assert shown == "  XY  0607ABCD"
+
+    @covers(CobolFeature.SEARCH_LINEAR, CobolFeature.SEARCH_VARYING)
+    def test_search_advances_the_qualified_tables_index_and_varying_item(self, capsys):
+        shown = _shown(
+            capsys,
+            [
+                '01 T1. 02 E PIC X OCCURS 3 INDEXED BY IX VALUE "Q".',
+                '01 T2. 02 E PIC X OCCURS 3 INDEXED BY IY VALUE "Q".',
+                "01 C1. 02 CNT PIC 9 VALUE 0.",
+                "01 C2. 02 CNT PIC 9 VALUE 0.",
+            ],
+            [
+                '    MOVE "Z" TO E OF T2 (2).',
+                "    SET IX TO 1.",
+                "    SET IY TO 1.",
+                "    MOVE 5 TO CNT OF C2.",
+                "    SEARCH E OF T2 VARYING CNT IN C2",
+                "        AT END MOVE 9 TO CNT OF C1",
+                '        WHEN E OF T2 (IY) = "Z" CONTINUE.',
+                "    DISPLAY CNT OF C1 CNT OF C2.",
+            ],
+        )
+        assert shown == "06"

@@ -1703,7 +1703,7 @@ public final class StatementSerializer {
         try {
             // Table being searched
             if (stmt.getDataCall() != null) {
-                obj.addProperty("table", extractCallName(stmt.getDataCall()));
+                obj.add("table", serializeRef(stmt.getDataCall()));
             }
 
             // SEARCH ALL: the whole table is searched, whatever its index holds.
@@ -1713,7 +1713,7 @@ public final class StatementSerializer {
 
             // VARYING index variable (optional)
             if (stmt.getVaryingPhrase() != null && stmt.getVaryingPhrase().getDataCall() != null) {
-                obj.addProperty("varying", extractCallName(stmt.getVaryingPhrase().getDataCall()));
+                obj.add("varying", serializeRef(stmt.getVaryingPhrase().getDataCall()));
             }
 
             // WHEN clauses

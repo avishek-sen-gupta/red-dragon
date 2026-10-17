@@ -1212,8 +1212,8 @@ class SearchStatement:
     index holds on entry.
     """
 
-    table: str = ""
-    varying: str = ""
+    table: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
+    varying: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
     whens: list[SearchWhen] = field(default_factory=list)
     at_end: list[CobolStatementType] = field(default_factory=list)
     span: SourceSpan | None = None
@@ -1222,20 +1222,20 @@ class SearchStatement:
     @classmethod
     def from_dict(cls, data: dict) -> SearchStatement:
         return cls(
-            table=data.get("table", ""),
+            table=_operand(data, "table"),
             search_all=data.get("all", False),
-            varying=data.get("varying", ""),
+            varying=_operand(data, "varying"),
             whens=[SearchWhen.from_dict(w) for w in data.get("whens", [])],
             at_end=[parse_statement(c) for c in data.get("at_end", [])],
             span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
-        result: dict = {"type": "SEARCH", "table": self.table} | (
+        result: dict = {"type": "SEARCH", "table": self.table.to_dict()} | (
             {"all": True} if self.search_all else {}
         )
-        if self.varying:
-            result["varying"] = self.varying
+        if self.varying.name:
+            result["varying"] = self.varying.to_dict()
         result["whens"] = [w.to_dict() for w in self.whens]
         if self.at_end:
             result["at_end"] = [c.to_dict() for c in self.at_end]

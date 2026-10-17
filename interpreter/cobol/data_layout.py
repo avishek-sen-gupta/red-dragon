@@ -156,7 +156,8 @@ class DataLayout:
         total_bytes: Total record size in bytes (meaningful at root level).
         occurs_count: OCCURS count if this group is an OCCURS table.
         element_size: Per-element byte size for OCCURS group tables.
-        index_owner: index name -> the OCCURS item it indexes. Populated only
+        index_owner: index name -> the name path, outermost first, of the OCCURS
+            item it indexes. Populated only
             on the index-item layout built by :func:`build_index_layout`; a
             Format 1 SEARCH names only the table, so this is how its implicit
             index is found. Query it via :meth:`first_index_for`, never by
@@ -173,7 +174,7 @@ class DataLayout:
     occurs_count: int = 0
     element_size: int = 0
     conditions: list[ConditionName] = field(default_factory=list)
-    index_owner: dict[str, str] = field(default_factory=dict)
+    index_owner: dict[str, tuple[str, ...]] = field(default_factory=dict)
     span: SourceSpan | None = None
     value: str = ""
     value_is_figurative: bool = False
@@ -218,16 +219,18 @@ class DataLayout:
         :meth:`qualified_matches` to resolve a reference to one item."""
         return any(match.name.upper() == name.upper() for match in self.items())
 
-    def is_index_of(self, index_name: str, table_name: str) -> bool:
-        """Whether ``index_name`` is one of the ``INDEXED BY`` names of ``table_name``,
-        compared case-insensitively as :meth:`first_index_for` does."""
+    def is_index_of(self, index_name: str, table: RefModOperand) -> bool:
+        """Whether ``index_name`` is one of the ``INDEXED BY`` names of the table
+        ``table`` (qualified as written) denotes, compared case-insensitively as
+        :meth:`first_index_for` does."""
         return any(
-            name.upper() == index_name.upper() and owner.upper() == table_name.upper()
+            name.upper() == index_name.upper() and _owned_by(owner, table)
             for name, owner in self.index_owner.items()
         )
 
-    def first_index_for(self, table_name: str) -> str | None:
-        """Return the first ``INDEXED BY`` name declared on ``table_name``, or None.
+    def first_index_for(self, table: RefModOperand) -> str | None:
+        """Return the first ``INDEXED BY`` name declared on the table ``table``
+        (qualified as written) denotes, or None.
 
         A Format 1 SEARCH names only the table and implicitly uses its first
         index; ``index_owner`` preserves declaration order, so the first match
@@ -235,12 +238,11 @@ class DataLayout:
         lexed from a SEARCH statement and need not match the DATA DIVISION's
         casing.
         """
-        wanted = table_name.upper()
         return next(
             (
                 index_name
                 for index_name, owner in self.index_owner.items()
-                if owner.upper() == wanted
+                if _owned_by(owner, table)
             ),
             None,
         )
@@ -813,12 +815,25 @@ def build_data_layout(fields: list[CobolField]) -> DataLayout:
     return DataLayout(fields=top_fields, groups=renamed_groups, total_bytes=total)
 
 
-def _index_declarations(fields: list[CobolField]) -> Iterator[tuple[str, str]]:
-    """Yield (index name, indexed table name) for every INDEXED BY, in source order."""
+def _index_declarations(
+    fields: Sequence[CobolField], enclosing: tuple[str, ...] = ()
+) -> Iterator[tuple[str, tuple[str, ...]]]:
+    """Yield (index name, indexed table's name path, outermost first) for every
+    INDEXED BY, in source order."""
     for f in fields:
+        path = (*enclosing, f.name)
         for index_name in f.indexed_by:
-            yield index_name, f.name
-        yield from _index_declarations(f.children)
+            yield index_name, path
+        yield from _index_declarations(f.children, path)
+
+
+def _owned_by(owner: tuple[str, ...], table: RefModOperand) -> bool:
+    """Whether the table at name path ``owner`` is the one ``table``, qualified
+    as written (innermost qualifier first), can denote."""
+    enclosing = iter(name.upper() for name in reversed(owner[:-1]))
+    return owner[-1].upper() == table.name.upper() and all(
+        qualifier.upper() in enclosing for qualifier in table.qualifiers
+    )
 
 
 def build_index_layout(*sections: list[CobolField]) -> DataLayout:
@@ -837,16 +852,16 @@ def build_index_layout(*sections: list[CobolField]) -> DataLayout:
     one are both errors.
     """
     items: dict[str, FieldLayout] = {}
-    owners: dict[str, str] = {}
+    owners: dict[str, tuple[str, ...]] = {}
     offset = 0
     for section in sections:
-        for index_name, table_name in _index_declarations(section):
+        for index_name, table_path in _index_declarations(section):
             items[index_name] = FieldLayout(
                 name=index_name,
                 type_descriptor=INDEX_ITEM,
                 offset=offset,
                 byte_length=INDEX_ITEM.byte_length,
             )
-            owners[index_name] = table_name
+            owners[index_name] = table_path
             offset += INDEX_ITEM.byte_length
     return DataLayout(fields=items, total_bytes=offset, index_owner=owners)

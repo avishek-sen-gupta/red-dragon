@@ -638,8 +638,8 @@ class TestParseStatementDispatch:
         stmt = parse_statement(
             {
                 "type": "SEARCH",
-                "table": "WS-TABLE",
-                "varying": "WS-IDX",
+                "table": {"name": "WS-TABLE", "qualifiers": ["WS-REC"]},
+                "varying": {"name": "WS-IDX"},
                 "whens": [
                     {
                         "condition": "WS-IDX = 5",
@@ -651,8 +651,10 @@ class TestParseStatementDispatch:
             }
         )
         assert isinstance(stmt, SearchStatement)
-        assert stmt.table == "WS-TABLE"
-        assert stmt.varying == "WS-IDX"
+        assert (stmt.table, stmt.varying) == (
+            RefModOperand(name="WS-TABLE", qualifiers=("WS-REC",)),
+            RefModOperand(name="WS-IDX"),
+        )
         assert len(stmt.whens) == 1
         assert stmt.whens[0].condition == "WS-IDX = 5"
         assert len(stmt.whens[0].children) == 1
@@ -662,7 +664,7 @@ class TestParseStatementDispatch:
         stmt = parse_statement(
             {
                 "type": "SEARCH",
-                "table": "WS-TABLE",
+                "table": {"name": "WS-TABLE"},
                 "whens": [{"condition": "WS-A = 1"}],
                 "at_end": [{"type": "DISPLAY", "operands": [{"name": "NOT FOUND"}]}],
             }
@@ -1578,8 +1580,8 @@ class TestRoundTrip:
     def test_search_round_trip(self):
         data = {
             "type": "SEARCH",
-            "table": "WS-TABLE",
-            "varying": "WS-IDX",
+            "table": {"name": "WS-TABLE", "qualifiers": ["WS-REC"]},
+            "varying": {"name": "WS-IDX", "qualifiers": ["WS-CTL"]},
             "whens": [
                 {
                     "condition": "WS-IDX = 5",
@@ -1593,7 +1595,7 @@ class TestRoundTrip:
     def test_search_all_round_trip(self):
         data = {
             "type": "SEARCH",
-            "table": "WS-TABLE",
+            "table": {"name": "WS-TABLE"},
             "all": True,
             "whens": [{"condition": "WS-A = 1"}],
             "at_end": [{"type": "DISPLAY", "operands": [{"name": "NOT FOUND"}]}],
@@ -1605,7 +1607,7 @@ class TestRoundTrip:
     def test_search_with_at_end_round_trip(self):
         data = {
             "type": "SEARCH",
-            "table": "WS-TABLE",
+            "table": {"name": "WS-TABLE"},
             "whens": [{"condition": "WS-A = 1"}],
             "at_end": [{"type": "DISPLAY", "operands": [{"name": "NOT FOUND"}]}],
         }
