@@ -1,13 +1,13 @@
-"""A field of a CORRESPONDING sending group and the like-named field of the receiving group."""
+"""An item of a CORRESPONDING sending group and its counterpart in the receiving group, each as a qualified, subscripted operand."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from interpreter.cobol.data_layout import FieldLayout
+from cobol_asg.ref_mod import RefModOperand
 
 
 @dataclass(frozen=True)
 class CorrespondingPair:
-    source: FieldLayout
-    target: FieldLayout
+    source: RefModOperand
+    target: RefModOperand

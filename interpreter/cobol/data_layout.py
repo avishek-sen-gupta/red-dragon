@@ -142,6 +142,7 @@ class DataLayout:
             exact-match dict access.
         occurs_depending_on: The OCCURS DEPENDING ON object of a variable
             table; empty for a fixed one.
+        redefines: Name of the item this group redefines, or empty string.
     """
 
     fields: dict[str, FieldLayout] = field(default_factory=dict)
@@ -157,6 +158,7 @@ class DataLayout:
     value_is_figurative: bool = False
     occurs_depending_on: str = ""
     renames: dict[str, FieldLayout] = field(default_factory=dict)
+    redefines: str = ""
 
     def lookup(self, name: str) -> FieldLayout | None:
         """Search for a leaf field by bare name within this subtree.
@@ -478,6 +480,7 @@ def _flatten_field(
             value=_sized_value(cobol_field, group_length),
             value_is_figurative=cobol_field.value_is_figurative,
             occurs_depending_on=cobol_field.occurs_depending_on,
+            redefines=cobol_field.redefines,
         )
         return cobol_field.name, group_layout
 
