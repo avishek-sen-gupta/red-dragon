@@ -20,22 +20,24 @@ _DYNAMIC = "DYNAMIC"
 def test_an_absent_optional_file_opens_with_status_05(tmp_path: Path) -> None:
     prov = RealFileIOProvider(base_dir=tmp_path)
     statuses = [
-        prov._open_file("IN", "INPUT", 2, _INDEXED, 0, 2, _DYNAMIC, 0, True, "P"),
+        prov._open_file(
+            "IN", "INPUT", 2, _INDEXED, 0, 2, _DYNAMIC, 0, True, False, "P"
+        ),
         prov._read_record("IN", "", "P"),
         prov._read_record("IN", "AB", "P"),
         prov._start_file("IN", "AB", ">=", "P"),
         prov._close_file("IN", "P"),
-        prov._open_file("IO", "I-O", 2, _INDEXED, 0, 2, _DYNAMIC, 0, True, "P"),
+        prov._open_file("IO", "I-O", 2, _INDEXED, 0, 2, _DYNAMIC, 0, True, False, "P"),
         prov._write_record("IO", "AB", "", "P"),
         prov._close_file("IO", "P"),
-        prov._open_file("EX", "EXTEND", 2, _INDEXED, 0, 2, _SEQ, 0, True, "P"),
+        prov._open_file("EX", "EXTEND", 2, _INDEXED, 0, 2, _SEQ, 0, True, False, "P"),
         prov._write_record("EX", "CD", "", "P"),
         prov._close_file("EX", "P"),
-        prov._open_file("EX", "EXTEND", 2, _INDEXED, 0, 2, _SEQ, 0, True, "P"),
+        prov._open_file("EX", "EXTEND", 2, _INDEXED, 0, 2, _SEQ, 0, True, False, "P"),
         prov._write_record("EX", "EF", "", "P"),
         prov._close_file("EX", "P"),
-        prov._open_file("NO", "EXTEND", 2, _SEQ, 0, 0, _SEQ, 0, False, "P"),
-        prov._open_file("NO", "I-O", 2, _INDEXED, 0, 2, _DYNAMIC, 0, False, "P"),
+        prov._open_file("NO", "EXTEND", 2, _SEQ, 0, 0, _SEQ, 0, False, False, "P"),
+        prov._open_file("NO", "I-O", 2, _INDEXED, 0, 2, _DYNAMIC, 0, False, False, "P"),
     ]
     assert (
         [result.status for result in statuses],

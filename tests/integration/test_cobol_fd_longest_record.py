@@ -1,5 +1,6 @@
 """End-to-end: a file's record area is as long as its largest record, so a longer
-record of the FD is written and read whole."""
+record of the FD is written and read whole (its records differ in length, so the
+file holds them behind record descriptor words)."""
 
 from __future__ import annotations
 
@@ -60,5 +61,5 @@ def test_records_longer_than_the_first_are_kept_whole(
     )
     assert (capsys.readouterr().out, (tmp_path / "fda").read_bytes()) == (
         "[ABCDE]\n",
-        b"\xc1\xc2\xc3\xc4\xc5",
+        b"\x00\x09\x00\x00\xc1\xc2\xc3\xc4\xc5",
     )

@@ -15,11 +15,12 @@ from typing import BinaryIO, Protocol, runtime_checkable
 
 from cobol_asg.file_enums import FileOrganization, OpenMode
 from interpreter.cobol.access_result import AccessCondition, AccessResult
+from interpreter.cobol.flagged_slot import FlaggedSlot
+from interpreter.cobol.relative_slot import RelativeSlot
 
 logger = logging.getLogger(__name__)
 
-_ACTIVE = b"\xff"
-_EMPTY = b"\x00"
+_FLAGGED = FlaggedSlot()
 
 # Open modes that permit a WRITE statement. A WRITE attempted on a file open
 # in any other mode (e.g. INPUT) yields COBOL file status 48.
@@ -322,16 +323,16 @@ class IndexedDriver:
 
 
 class RelativeDriver:
-    """Flat file: [1-byte flag | record_length bytes] per slot.
-
-    flag 0xFF = active, 0x00 = empty.
+    """Flat file of fixed-size slots, one per relative record number; how a
+    slot holds its record is the injected RelativeSlot's choice.
     Record number passed as 4-byte big-endian key bytes.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, slot: RelativeSlot = _FLAGGED) -> None:
+        self._format = slot
         self._fh: BinaryIO | None = None
         self._rl = 0
-        self._slot = 0  # slot size = 1 + record_length
+        self._slot = 0
         self._cursor = 0  # current slot index for sequential read
         self._last_slot = 0
         self._mode = OpenMode.INPUT
@@ -345,7 +346,7 @@ class RelativeDriver:
         key_length: int,
     ) -> None:
         self._rl = record_length
-        self._slot = 1 + record_length
+        self._slot = self._format.size(record_length)
         self._cursor = 0
         self._mode = mode
         if mode == OpenMode.OUTPUT:
@@ -374,50 +375,46 @@ class RelativeDriver:
     def _pos(self, n: int) -> int:
         return (n - 1) * self._slot
 
-    def read_key(self, key: bytes) -> AccessResult:
+    def _record_at(self, n: int) -> tuple[bytes, ...]:
         assert self._fh is not None
-        n = self._n(key)
-        if n < 1:
-            return AccessResult(condition=AccessCondition.NOT_FOUND)
         self._fh.seek(self._pos(n))
-        flag = self._fh.read(1)
-        if not flag or flag == _EMPTY:
+        return self._format.record(self._fh.read(self._slot))
+
+    def read_key(self, key: bytes) -> AccessResult:
+        n = self._n(key)
+        found = self._record_at(n) if n >= 1 else ()
+        if not found:
             return AccessResult(condition=AccessCondition.NOT_FOUND)
-        data = self._fh.read(self._rl)
         self._last_slot = n
-        return AccessResult(condition=AccessCondition.OK, data=data, record_number=n)
+        return AccessResult(
+            condition=AccessCondition.OK, data=found[0], record_number=n
+        )
 
     def read_seq(self) -> AccessResult:
-        assert self._fh is not None
         total = self._total_slots()
         while self._cursor < total:
-            slot = self._cursor
             self._cursor += 1
-            self._fh.seek(slot * self._slot)
-            flag = self._fh.read(1)
-            if flag == _ACTIVE:
-                data = self._fh.read(self._rl)
-                self._last_slot = slot + 1
+            found = self._record_at(self._cursor)
+            if found:
+                self._last_slot = self._cursor
                 return AccessResult(
-                    condition=AccessCondition.OK, data=data, record_number=slot + 1
+                    condition=AccessCondition.OK,
+                    data=found[0],
+                    record_number=self._cursor,
                 )
         return AccessResult(condition=AccessCondition.END_OF_FILE)
 
     def read_prev(self) -> AccessResult:
-        assert self._fh is not None
         # Mirror of read_seq: scan backward from one slot before the cursor,
         # skipping empty slots. The cursor sits one slot past the last forward
         # read, so the first READPREV after a READNEXT re-reads it (browse
         # reversal). Past the first active slot -> END_OF_FILE.
         while self._cursor > 0:
+            found = self._record_at(self._cursor)
             self._cursor -= 1
-            slot = self._cursor
-            self._fh.seek(slot * self._slot)
-            flag = self._fh.read(1)
-            if flag == _ACTIVE:
-                data = self._fh.read(self._rl)
-                self._last_slot = slot + 1
-                return AccessResult(condition=AccessCondition.OK, data=data)
+            if found:
+                self._last_slot = self._cursor + 1
+                return AccessResult(condition=AccessCondition.OK, data=found[0])
         return AccessResult(condition=AccessCondition.END_OF_FILE)
 
     def start(self, key: bytes, relop: str) -> AccessResult:
@@ -432,35 +429,28 @@ class RelativeDriver:
         n = self._n(key) if key else self._total_slots() + 1
         if n < 1:
             return AccessResult(condition=AccessCondition.NOT_FOUND)
-        # Ensure file is large enough
         total = self._total_slots()
         if n > total:
             self._fh.seek(0, 2)
             self._fh.write(b"\x00" * self._slot * (n - total))
-        self._fh.seek(self._pos(n))
-        flag = self._fh.read(1)
-        if flag == _ACTIVE:
+        if self._record_at(n):
             return AccessResult(condition=AccessCondition.DUPLICATE_KEY)
         self._fh.seek(self._pos(n))
-        self._fh.write(_ACTIVE)
-        self._fh.write(data[: self._rl].ljust(self._rl))
+        self._fh.write(self._format.packed(data, self._rl))
         return AccessResult(condition=AccessCondition.OK, record_number=n)
 
     def rewrite(self, data: bytes, key: bytes = b"") -> AccessResult:
         assert self._fh is not None
         n = self._n(key) if key else self._last_slot
-        if n < 1:
+        if n < 1 or not self._record_at(n):
             return AccessResult(condition=AccessCondition.NOT_FOUND)
         self._fh.seek(self._pos(n))
-        flag = self._fh.read(1)
-        if not flag or flag == _EMPTY:
-            return AccessResult(condition=AccessCondition.NOT_FOUND)
-        self._fh.write(data[: self._rl].ljust(self._rl))
+        self._fh.write(self._format.packed(data, self._rl))
         return AccessResult(condition=AccessCondition.OK)
 
     def delete(self, key: bytes = b"") -> AccessResult:
         assert self._fh is not None
         n = self._n(key) if key else self._last_slot
         self._fh.seek(self._pos(n))
-        self._fh.write(_EMPTY)
+        self._fh.write(self._format.vacant())
         return AccessResult(condition=AccessCondition.OK)

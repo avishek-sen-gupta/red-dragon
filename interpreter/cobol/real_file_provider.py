@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import logging
 import os
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from itertools import count, takewhile
 from pathlib import Path
 from types import MappingProxyType
@@ -15,9 +15,11 @@ from cobol_asg.file_enums import AccessMode, FileOrganization, OpenMode
 from cobol_asg.switch_status import SwitchStatus
 from interpreter.cobol.absent_file_driver import AbsentFileDriver
 from interpreter.cobol.access_result import AccessCondition, AccessResult
+from interpreter.cobol.described_slot import DescribedSlot
 from interpreter.cobol.file_attributes import FileAttributes
 from interpreter.cobol.file_drivers import (
     FileOrganizationDriver,
+    RelativeDriver,
     open_driver,
 )
 from interpreter.cobol.file_logic_status import FileLogicStatus
@@ -27,6 +29,7 @@ from interpreter.cobol.open_file import OpenFile
 from interpreter.cobol.prime_key import PrimeKey
 from interpreter.cobol.sort_field import sort_fields
 from interpreter.cobol.sort_order import ordered
+from interpreter.cobol.variable_sequential_driver import VariableSequentialDriver
 from interpreter.vm.vm import Operators
 
 _FILE_STATUS: dict[AccessCondition, str] = {
@@ -66,6 +69,10 @@ _PATH_MARKS = frozenset("/\\.")
 _OPEN_FAILED = to_ioresult(AccessResult(AccessCondition.FILE_NOT_FOUND))
 _SUCCESSFUL_STATUS = _file_status(AccessCondition.OK)
 _OPTIONAL_ABSENT = IOResult("05", None)
+_VARIABLE_DRIVERS: dict[FileOrganization, Callable[[], FileOrganizationDriver]] = {
+    FileOrganization.SEQUENTIAL: VariableSequentialDriver,
+    FileOrganization.RELATIVE: lambda: RelativeDriver(DescribedSlot()),
+}
 _COPIED = to_ioresult(AccessResult(AccessCondition.OK))
 
 
@@ -185,6 +192,28 @@ class RealFileIOProvider(CobolIOProvider):
             key_length,
         )
 
+    def _driver_for(
+        self,
+        filename: str,
+        attributes: FileAttributes,
+        path: Path,
+        mode: OpenMode,
+        record_length: int,
+    ) -> FileOrganizationDriver:
+        if attributes.variable and attributes.organization in _VARIABLE_DRIVERS:
+            drv = _VARIABLE_DRIVERS[attributes.organization]()
+            drv.open(path, mode, record_length, 0, 0)
+            return drv
+        return self._driver(
+            filename,
+            attributes.organization,
+            path,
+            mode,
+            record_length,
+            attributes.prime_key.offset,
+            attributes.prime_key.length,
+        )
+
     def _assign_to(self, filename: str) -> str:
         return self._fce[filename].assign_to if filename in self._fce else ""
 
@@ -199,6 +228,7 @@ class RealFileIOProvider(CobolIOProvider):
         access_mode: str,
         relative_key_digits: int,
         optional: bool,
+        variable: bool,
         program: str,
     ) -> IOResult:
         attributes = FileAttributes(
@@ -207,6 +237,7 @@ class RealFileIOProvider(CobolIOProvider):
             PrimeKey(key_offset, key_length),
             relative_key_digits,
             optional,
+            variable,
         )
         refusals = self._open_refusals(filename, OpenMode(mode), optional)
         if refusals:
@@ -267,15 +298,7 @@ class RealFileIOProvider(CobolIOProvider):
     ) -> IOResult:
         path = self._path(filename)
         try:
-            drv = self._driver(
-                filename,
-                attributes.organization,
-                path,
-                mode,
-                record_length,
-                attributes.prime_key.offset,
-                attributes.prime_key.length,
-            )
+            drv = self._driver_for(filename, attributes, path, mode, record_length)
         except OSError as exc:
             logger.warning("OPEN %s at %s failed: %s", filename, path, exc)
             return _OPEN_FAILED
@@ -430,6 +453,7 @@ class RealFileIOProvider(CobolIOProvider):
             0,
             AccessMode.SEQUENTIAL.value,
             0,
+            False,
             False,
             program,
         )
