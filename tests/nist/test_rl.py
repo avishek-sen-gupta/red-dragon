@@ -2,9 +2,10 @@
 
 Run: uv run python -m pytest tests/nist/test_rl.py -m nist -v
 
-A program passes only when it runs to its END OF TEST banner and its CCVS summary reports
-zero failed tests (tests/nist/conftest.py). Excluded from the default test run; run on
-demand with `-m nist`.
+A program passes only when it runs to its END OF TEST banner and its CCVS summary
+reports zero failed tests (tests/nist/conftest.py). A SUBPRG member runs after the run
+units before it in its CCVS job, which create the files it reads. Excluded from the
+default test run; run on demand with `-m nist`.
 """
 
 from __future__ import annotations
@@ -14,21 +15,10 @@ from pathlib import Path
 import pytest
 
 from interpreter.cobol.features import CobolFeature
-from interpreter.run import run
 from tests.covers import covers
-from tests.nist.conftest import NIST_DIR, assert_nist_pass, make_provider
+from tests.nist.conftest import run_nist
 
 pytestmark = pytest.mark.nist
-
-
-def _run_nist(prog: str, tmp_path: Path) -> None:
-    src_path = NIST_DIR / f"{prog}.CBL"
-    if not src_path.exists():
-        pytest.skip(f"NIST source not found: {src_path}")
-    src = src_path.read_text()
-    provider, print_path = make_provider(src, tmp_path)
-    run(src, language="cobol", io_provider=provider, max_steps=1_000_000)
-    assert_nist_pass(print_path, prog)
 
 
 @covers(CobolFeature.READ)
@@ -76,4 +66,4 @@ def _run_nist(prog: str, tmp_path: Path) -> None:
     ],
 )
 def test_rl_program(prog: str, tmp_path: Path) -> None:
-    _run_nist(prog, tmp_path)
+    run_nist(prog, tmp_path)

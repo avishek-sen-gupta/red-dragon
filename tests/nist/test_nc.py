@@ -16,30 +16,10 @@ from pathlib import Path
 import pytest
 
 from interpreter.cobol.features import CobolFeature
-from interpreter.run import run
 from tests.covers import covers
-from tests.nist.conftest import (
-    NIST_DIR,
-    assert_nist_pass,
-    input_deck,
-    make_provider,
-    skip_flagger_program,
-    substitute_x_cards,
-)
+from tests.nist.conftest import run_nist, skip_flagger_program
 
 pytestmark = pytest.mark.nist
-
-
-def _run_nist(prog: str, tmp_path: Path) -> None:
-    src_path = NIST_DIR / f"{prog}.CBL"
-    if not src_path.exists():
-        pytest.skip(f"NIST source not found: {src_path}")
-    src = substitute_x_cards(src_path.read_text())
-    provider, print_path = make_provider(
-        src, tmp_path, input_deck(NIST_DIR / f"{prog}.DAT")
-    )
-    run(src, language="cobol", io_provider=provider, max_steps=2_000_000)
-    assert_nist_pass(print_path, prog)
 
 
 @covers(CobolFeature.MOVE)
@@ -145,7 +125,7 @@ def _run_nist(prog: str, tmp_path: Path) -> None:
     ],
 )
 def test_nc_program(prog: str, tmp_path: Path) -> None:
-    _run_nist(prog, tmp_path)
+    run_nist(prog, tmp_path)
 
 
 @pytest.mark.parametrize(
