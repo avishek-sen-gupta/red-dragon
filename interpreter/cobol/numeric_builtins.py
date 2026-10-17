@@ -137,13 +137,14 @@ def _builtin_cobol_parse_number(args: list[TypedValue], vm: VMState) -> BuiltinR
 def _builtin_cobol_binary_unscaled(
     args: list[TypedValue], vm: VMState
 ) -> BuiltinResult:
-    """Integer stored in a COMP/BINARY field: value × 10^(decimal_digits − scale),
-    truncated toward zero; an unsigned field stores its magnitude. No digit-count
-    truncation (byte width bounds BINARY)."""
-    if len(args) < 4 or any(_is_symbolic(a.value) for a in args):
+    """Integer stored in a COMP/BINARY field: value * 10^(decimal_digits - scale),
+    truncated toward zero and cut to the field's PICTURE digits (high-order
+    digits are lost, ANSI X3.23-1985 MOVE; IBM TRUNC(STD)); an unsigned field
+    stores its magnitude."""
+    if len(args) < 5 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    decimals, scale = _int_arg(args[1].value), _int_arg(args[2].value)
-    if decimals is None or scale is None:
+    decimals, scale, digits = (_int_arg(args[i].value) for i in (1, 2, 4))
+    if decimals is None or scale is None or digits is None:
         return BuiltinResult(value=_UNCOMPUTABLE)
     try:
         stored = truncate_to(scale_by(to_number(args[0].value), -scale), decimals)
@@ -152,7 +153,13 @@ def _builtin_cobol_binary_unscaled(
     unscaled = as_whole_int(scale_by(stored, decimals))
     if unscaled is None:
         return BuiltinResult(value=_UNCOMPUTABLE)
-    return BuiltinResult(value=unscaled if args[3].value else abs(unscaled))
+    kept = _low_order_digits(unscaled, digits)
+    return BuiltinResult(value=kept if args[3].value else abs(kept))
+
+
+def _low_order_digits(value: int, digits: int) -> int:
+    magnitude = abs(value) % 10**digits
+    return -magnitude if value < 0 else magnitude
 
 
 def _builtin_cobol_size_error(args: list[TypedValue], vm: VMState) -> BuiltinResult:
