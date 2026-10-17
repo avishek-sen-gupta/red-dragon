@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from cobol_asg.switch_status import SwitchStatus
+from interpreter.data_value import DataRecord
 from interpreter.func_name import FuncName
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.vm import Operators
@@ -45,6 +46,7 @@ class IOResult:
 # Dispatch table mapping __cobol_* function names to provider method names.
 _COBOL_IO_DISPATCH: dict[FuncName, str] = {
     FuncName("__cobol_accept"): "_accept_area",
+    FuncName("__cobol_declare_file"): "_declare_file",
     FuncName("__cobol_open_file"): "_open_file",
     FuncName("__cobol_close_file"): "_close_file",
     FuncName("__cobol_close_file_with_lock"): "_close_file_with_lock",
@@ -148,26 +150,16 @@ class CobolIOProvider(ABC):
         """ACCEPT — read input from a device (e.g. CONSOLE)."""
         ...
 
+    def _declare_file(self, frame: DataRecord, program: str) -> IOResult:
+        """A program's declaration of one of its files, made once before any OPEN:
+        the ``FileFrame`` record ``file_frame.frame_of`` reads. A provider that
+        frames no records ignores it."""
+        return IOResult("00", None)
+
     @abstractmethod
-    def _open_file(
-        self,
-        filename: str,
-        mode: str,
-        record_length: int,
-        organization: str,
-        key_offset: int,
-        key_length: int,
-        access_mode: str,
-        relative_key_digits: int,
-        optional: bool,
-        variable: bool,
-        minimum_record_length: int,
-        program: str,
-    ) -> IOResult:
-        """OPEN file in given mode (INPUT/OUTPUT/I-O/EXTEND), with its SELECT entry's
-        ACCESS MODE, its RELATIVE KEY's digit count (0 without one) and
-        whether SELECT names it OPTIONAL, whether its FD's records vary in
-        length, and its smallest record's size (record_length is the largest)."""
+    def _open_file(self, filename: str, mode: str, program: str) -> IOResult:
+        """OPEN file in given mode (INPUT/OUTPUT/I-O/EXTEND), as its declaration
+        frames it."""
         ...
 
     @abstractmethod
@@ -229,21 +221,7 @@ class NullIOProvider(CobolIOProvider):
     def _accept(self, from_device: str) -> Any:
         return _UNCOMPUTABLE
 
-    def _open_file(
-        self,
-        filename: str,
-        mode: str,
-        record_length: int,
-        organization: str,
-        key_offset: int,
-        key_length: int,
-        access_mode: str,
-        relative_key_digits: int,
-        optional: bool,
-        variable: bool,
-        minimum_record_length: int,
-        program: str,
-    ) -> IOResult:
+    def _open_file(self, filename: str, mode: str, program: str) -> IOResult:
         return IOResult("00", None)
 
     def _close_file(self, filename: str, program: str) -> IOResult:
@@ -313,21 +291,7 @@ class StubIOProvider(CobolIOProvider):
         )
         return _UNCOMPUTABLE
 
-    def _open_file(
-        self,
-        filename: str,
-        mode: str,
-        record_length: int,
-        organization: str,
-        key_offset: int,
-        key_length: int,
-        access_mode: str,
-        relative_key_digits: int,
-        optional: bool,
-        variable: bool,
-        minimum_record_length: int,
-        program: str,
-    ) -> IOResult:
+    def _open_file(self, filename: str, mode: str, program: str) -> IOResult:
         stub = self.get_file(filename)
         stub.is_open = True
         logger.info("StubIOProvider OPEN %s mode=%s", filename, mode)

@@ -21,14 +21,10 @@ from cobol_asg.file_enums import AccessMode, FileOrganization, OpenMode
 from cobol_asg.ref_mod import RefModOperand
 from cobol_asg.source_span import SourceSpan
 from interpreter.cobol.cobol_constants import BuiltinName
-from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.emit_context import EmitContext
-from interpreter.cobol.fd_record_format import (
-    depending_on,
-    minimum_length,
-    records_vary,
-)
+from interpreter.cobol.fd_record_format import depending_on
 from interpreter.cobol.field_resolution import whole_field_extent
+from interpreter.cobol.file_facts import largest_record
 from interpreter.cobol.program_object import program_name
 from interpreter.cobol.relative_key import addressing_key, reported_key
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
@@ -58,17 +54,6 @@ _CLOSE_BUILTINS = {
 
 def _program(ctx: EmitContext, *, span: SourceSpan | None) -> Register:
     return Register(str(ctx.const_to_reg(program_name(ctx._asg), span=span)))
-
-
-def _largest_record(
-    ctx: EmitContext, filename: str, materialised: MaterialisedSectionedLayout
-) -> str:
-    records = [
-        materialised.resolve(record)[0]
-        for record, selected in ctx._asg.file_record_to_select.items()
-        if selected == filename.upper() and materialised.has_field(record)
-    ]
-    return max(records, key=lambda fl: fl.byte_length).name if records else ""
 
 
 def _emit_status_class(
@@ -272,78 +257,6 @@ def _emit_accept_call(ctx: EmitContext, stmt: AcceptStatement, length: int) -> R
     return result_reg
 
 
-def _record_area(
-    ctx: EmitContext, filename: str, materialised: MaterialisedSectionedLayout
-) -> tuple[FieldLayout, ...]:
-    rec_name = _largest_record(ctx, filename, materialised)
-    if not rec_name:
-        return ()
-    fl, _ = materialised.resolve(rec_name)
-    return (fl,)
-
-
-def _declared_key(
-    materialised: MaterialisedSectionedLayout, key: RefModOperand
-) -> tuple[FieldLayout, ...]:
-    if not (key.name and materialised.has_field(key.name)):
-        return ()
-    fl, _ = materialised.resolve(key.name, key.qualifiers)
-    return (fl,)
-
-
-def _prime_key_extent(
-    record: Sequence[FieldLayout],
-    materialised: MaterialisedSectionedLayout,
-    entry: FileControlEntry,
-) -> tuple[int, int]:
-    return next(
-        (
-            (key.offset - area.offset, key.byte_length)
-            for area in record
-            for key in _declared_key(materialised, entry.record_key)
-        ),
-        (0, 0),
-    )
-
-
-def _relative_key_digits(
-    materialised: MaterialisedSectionedLayout, entry: FileControlEntry
-) -> int:
-    if entry.organization is not FileOrganization.RELATIVE:
-        return 0
-    return next(
-        (
-            fl.type_descriptor.total_digits
-            for fl in _declared_key(materialised, entry.relative_key)
-        ),
-        0,
-    )
-
-
-def _open_arguments(
-    ctx: EmitContext,
-    filename: str,
-    mode: OpenMode,
-    materialised: MaterialisedSectionedLayout,
-) -> tuple[str | int | bool, ...]:
-    entry = _file_entries(ctx).get(filename, FileControlEntry(file_name=filename))
-    record = _record_area(ctx, filename, materialised)
-    key_offset, key_length = _prime_key_extent(record, materialised, entry)
-    return (
-        filename,
-        mode.value,
-        next((area.byte_length for area in record), 0),
-        entry.organization.value,
-        key_offset,
-        key_length,
-        entry.access_mode.value,
-        _relative_key_digits(materialised, entry),
-        entry.optional,
-        records_vary(ctx._asg, filename),
-        minimum_length(ctx._asg, filename),
-    )
-
-
 def _lower_open_file(
     ctx: EmitContext,
     filename: str,
@@ -358,10 +271,8 @@ def _lower_open_file(
             result_reg=raw_reg,
             func_name=FuncName("__cobol_open_file"),
             args=(
-                *(
-                    Register(str(ctx.const_to_reg(value, span=span)))
-                    for value in _open_arguments(ctx, filename, mode, materialised)
-                ),
+                Register(str(ctx.const_to_reg(filename, span=span))),
+                Register(str(ctx.const_to_reg(mode.value, span=span))),
                 _program(ctx, span=span),
             ),
         ),
@@ -386,8 +297,7 @@ def lower_open(
     stmt: OpenStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """OPEN [mode file1 ...] ... — emit __cobol_open_file per file with the
-    attributes its SELECT entry declares."""
+    """OPEN [mode file1 ...] ... — emit __cobol_open_file per file."""
     _ = [
         _lower_open_file(ctx, filename, mode, materialised, span=stmt.span)
         for mode, files in stmt.mode_groups
@@ -520,7 +430,7 @@ def _emit_record_of_its_length(
         item_rr, item_ref.fl, item_ref.offset_reg, extent=item_ref.extent, span=span
     )
     area_ref, area_rr = ctx.resolve_field_ref(
-        _largest_record(ctx, file_name, materialised), materialised, span=span
+        largest_record(ctx._asg, file_name, materialised), materialised, span=span
     )
     area_reg = ctx.emit_read_region_raw(
         area_rr, area_ref.fl, area_ref.offset_reg, extent=area_ref.extent, span=span
@@ -751,7 +661,7 @@ def lower_read(
     )
 
     # Write data into file section region via the FD record name for this file
-    rec_name = _largest_record(ctx, stmt.file_name, materialised)
+    rec_name = largest_record(ctx._asg, stmt.file_name, materialised)
     if rec_name:
         try:
             file_fl, file_rr, file_region = materialised.resolve_with_region(rec_name)

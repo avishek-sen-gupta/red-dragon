@@ -16,12 +16,12 @@ from cobol_asg.switch_status import SwitchStatus
 from interpreter.cobol.absent_file_driver import AbsentFileDriver
 from interpreter.cobol.access_result import AccessCondition, AccessResult
 from interpreter.cobol.described_slot import DescribedSlot
-from interpreter.cobol.file_attributes import FileAttributes
 from interpreter.cobol.file_drivers import (
     FileOrganizationDriver,
     RelativeDriver,
     open_driver,
 )
+from interpreter.cobol.file_frame import FileFrame, frame_of
 from interpreter.cobol.file_logic_status import FileLogicStatus
 from interpreter.cobol.file_verb import FileVerb
 from interpreter.cobol.io_provider import CobolIOProvider, IOResult
@@ -30,6 +30,7 @@ from interpreter.cobol.prime_key import PrimeKey
 from interpreter.cobol.sort_field import sort_fields
 from interpreter.cobol.sort_order import ordered
 from interpreter.cobol.variable_sequential_driver import VariableSequentialDriver
+from interpreter.data_value import DataRecord
 from interpreter.vm.vm import Operators
 
 _FILE_STATUS: dict[AccessCondition, str] = {
@@ -84,13 +85,6 @@ def _successful(result: IOResult) -> bool:
     return result.status.startswith("0")
 
 
-def _organization_of(organization: str) -> FileOrganization:
-    try:
-        return FileOrganization(organization)
-    except ValueError:
-        return FileOrganization.SEQUENTIAL
-
-
 class RealFileIOProvider(CobolIOProvider):
     """Disk-backed COBOL I/O provider.
 
@@ -120,6 +114,7 @@ class RealFileIOProvider(CobolIOProvider):
         self._fce: dict[str, FileControlEntry] = {e.file_name: e for e in file_control}
         self._overrides: Mapping[str, Path] = path_overrides
         self._files: dict[str, OpenFile] = {}
+        self._frames: dict[str, FileFrame] = {}
         self._locked: frozenset[str] = frozenset()
 
     def _overridden(self, file_name: str, assign_to: str) -> list[Path]:
@@ -174,83 +169,43 @@ class RealFileIOProvider(CobolIOProvider):
                 return received
 
     def _driver(
-        self,
-        filename: str,
-        org: FileOrganization,
-        path: Path,
-        mode: OpenMode,
-        record_length: int,
-        key_offset: int,
-        key_length: int,
+        self, frame: FileFrame, path: Path, mode: OpenMode
     ) -> FileOrganizationDriver:
         return open_driver(
-            org,
+            frame.organization,
             path,
             mode,
-            record_length,
-            key_offset,
-            key_length,
+            frame.maximum_record_length,
+            frame.prime_key.offset,
+            frame.prime_key.length,
         )
 
     def _driver_for(
-        self,
-        filename: str,
-        attributes: FileAttributes,
-        path: Path,
-        mode: OpenMode,
-        record_length: int,
+        self, frame: FileFrame, path: Path, mode: OpenMode
     ) -> FileOrganizationDriver:
-        if attributes.variable and attributes.organization in _VARIABLE_DRIVERS:
-            drv = _VARIABLE_DRIVERS[attributes.organization]()
-            drv.open(path, mode, record_length, 0, 0)
+        if frame.variable and frame.organization in _VARIABLE_DRIVERS:
+            drv = _VARIABLE_DRIVERS[frame.organization]()
+            drv.open(path, mode, frame.maximum_record_length, 0, 0)
             return drv
-        return self._driver(
-            filename,
-            attributes.organization,
-            path,
-            mode,
-            record_length,
-            attributes.prime_key.offset,
-            attributes.prime_key.length,
-        )
+        return self._driver(frame, path, mode)
 
     def _assign_to(self, filename: str) -> str:
         return self._fce[filename].assign_to if filename in self._fce else ""
 
-    def _open_file(
-        self,
-        filename: str,
-        mode: str,
-        record_length: int,
-        organization: str,
-        key_offset: int,
-        key_length: int,
-        access_mode: str,
-        relative_key_digits: int,
-        optional: bool,
-        variable: bool,
-        minimum_record_length: int,
-        program: str,
-    ) -> IOResult:
-        attributes = FileAttributes(
-            _organization_of(organization),
-            AccessMode(access_mode),
-            PrimeKey(key_offset, key_length),
-            relative_key_digits,
-            optional,
-            variable,
-            minimum_record_length,
-            record_length,
-        )
-        refusals = self._open_refusals(filename, OpenMode(mode), optional)
+    def _declare_file(self, frame: DataRecord, program: str) -> IOResult:
+        declared = frame_of(frame)
+        self._frames = {**self._frames, declared.file_name: declared}
+        return to_ioresult(AccessResult(AccessCondition.OK))
+
+    def _open_file(self, filename: str, mode: str, program: str) -> IOResult:
+        frame = self._frames[filename]
+        refusals = self._open_refusals(filename, OpenMode(mode), frame.optional)
         if refusals:
             logger.warning("OPEN %s %s refused: %s", mode, filename, refusals[0].status)
             return refusals[0]
-        if self._optional_absent(filename, OpenMode(mode), optional):
-            return self._open_absent(
-                filename, OpenMode(mode), attributes, record_length
-            )
-        return self._open_closed(filename, OpenMode(mode), attributes, record_length)
+        if self._optional_absent(filename, OpenMode(mode), frame.optional):
+            return self._open_absent(filename, OpenMode(mode), frame)
+        return self._open_closed(filename, OpenMode(mode), frame)
 
     def _open_refusals(
         self, filename: str, mode: OpenMode, optional: bool
@@ -274,38 +229,26 @@ class RealFileIOProvider(CobolIOProvider):
         absent = not self._path(filename).exists()
         return optional and absent and mode is not OpenMode.OUTPUT
 
-    def _open_absent(
-        self,
-        filename: str,
-        mode: OpenMode,
-        attributes: FileAttributes,
-        record_length: int,
-    ) -> IOResult:
+    def _open_absent(self, filename: str, mode: OpenMode, frame: FileFrame) -> IOResult:
         logger.info("OPEN %s %s: optional file absent", mode.value, filename)
         if mode is OpenMode.INPUT:
             self._files = {
                 **self._files,
-                filename: OpenFile(AbsentFileDriver(), mode, attributes),
+                filename: OpenFile(AbsentFileDriver(), mode, frame),
             }
             return _OPTIONAL_ABSENT
         self._path(filename).touch()
-        opened = self._open_closed(filename, mode, attributes, record_length)
+        opened = self._open_closed(filename, mode, frame)
         return _OPTIONAL_ABSENT if opened.status == _SUCCESSFUL_STATUS else opened
 
-    def _open_closed(
-        self,
-        filename: str,
-        mode: OpenMode,
-        attributes: FileAttributes,
-        record_length: int,
-    ) -> IOResult:
+    def _open_closed(self, filename: str, mode: OpenMode, frame: FileFrame) -> IOResult:
         path = self._path(filename)
         try:
-            drv = self._driver_for(filename, attributes, path, mode, record_length)
+            drv = self._driver_for(frame, path, mode)
         except OSError as exc:
             logger.warning("OPEN %s at %s failed: %s", filename, path, exc)
             return _OPEN_FAILED
-        return self._opened(filename, OpenFile(drv, mode, attributes), path)
+        return self._opened(filename, OpenFile(drv, mode, frame), path)
 
     def _opened(self, filename: str, file: OpenFile, path: Path) -> IOResult:
         self._files = {**self._files, filename: file}
@@ -447,20 +390,21 @@ class RealFileIOProvider(CobolIOProvider):
         self, sort_file: str, mode: OpenMode, record_length: int, program: str
     ) -> IOResult:
         self._close_file(sort_file, program)
-        return self._open_file(
-            sort_file,
-            mode.value,
-            record_length,
-            FileOrganization.SEQUENTIAL.value,
-            0,
-            0,
-            AccessMode.SEQUENTIAL.value,
-            0,
-            False,
-            False,
-            record_length,
-            program,
-        )
+        self._frames = {
+            **self._frames,
+            sort_file: FileFrame(
+                sort_file,
+                FileOrganization.SEQUENTIAL,
+                AccessMode.SEQUENTIAL,
+                PrimeKey(),
+                0,
+                False,
+                False,
+                record_length,
+                record_length,
+            ),
+        }
+        return self._open_file(sort_file, mode.value, program)
 
     def _sort_file(
         self,
