@@ -650,34 +650,8 @@ def lower_move(
     ):
         fill_byte = ctx.figuratives.raw_byte(stmt.source.name)
         for target in stmt.targets:
-            if not ctx.has_field(target.name, materialised):
-                if _is_special_register(target.name):
-                    logger.warning(
-                        "MOVE into special register %r is not modelled — skipping",
-                        target.name,
-                    )
-                continue
-            if target.is_reference_modified:
-                # Ref-modified receiver: fall back to the character path so the
-                # SPLICE write still works (rare combination).
-                raw_str = chr(fill_byte)
-                src_reg = ctx.const_to_reg(raw_str, span=span)
-                _store_move_value(ctx, target, src_reg, materialised, span=span)
-                continue
-            target_ref, target_rr = ctx.resolve_field_ref(
-                target.name,
-                materialised,
-                target.qualifiers,
-                subscripts=target.subscripts,
-                span=span,
-            )
-            ctx.emit_fill_raw_byte(
-                target_rr,
-                target_ref.fl,
-                fill_byte,
-                target_ref.offset_reg,
-                extent=target_ref.extent,
-                span=span,
+            _move_raw_figurative(
+                ctx, target, stmt.source.name, fill_byte, materialised, span=span
             )
         return
 
@@ -844,6 +818,72 @@ def lower_move(
             and not stmt.source.is_reference_modified,
             span=span,
         )
+
+
+def _move_raw_figurative(
+    ctx: EmitContext,
+    target: RefModOperand,
+    name: str,
+    fill_byte: int,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> None:
+    """Fill one receiver with HIGH-VALUE's or LOW-VALUE's raw byte; a
+    reference-modified receiver takes the byte's character through the SPLICE
+    path."""
+    if not ctx.has_field(target.name, materialised):
+        _warn_unmodelled_special_register(target.name)
+        return
+    if target.is_reference_modified:
+        src_reg = ctx.const_to_reg(chr(fill_byte), span=span)
+        _store_move_value(ctx, target, src_reg, materialised, span=span)
+        return
+    _fill_whole_receiver(ctx, target, name, fill_byte, materialised, span=span)
+
+
+def _fill_whole_receiver(
+    ctx: EmitContext,
+    target: RefModOperand,
+    name: str,
+    fill_byte: int,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> None:
+    """An alphanumeric-edited receiver takes the figurative as a literal of its
+    size, edited in; any other takes the raw byte in every position."""
+    target_ref, target_rr = ctx.resolve_field_ref(
+        target.name,
+        materialised,
+        target.qualifiers,
+        subscripts=target.subscripts,
+        span=span,
+    )
+    if target_ref.fl.type_descriptor.category == CobolDataCategory.ALPHANUMERIC_EDITED:
+        fill = _figurative_literal(ctx, name, target_ref.fl.byte_length)
+        _store_move_value(
+            ctx, target, ctx.const_to_reg(fill, span=span), materialised, span=span
+        )
+        return
+    ctx.emit_fill_raw_byte(
+        target_rr,
+        target_ref.fl,
+        fill_byte,
+        target_ref.offset_reg,
+        extent=target_ref.extent,
+        span=span,
+    )
+
+
+def _warn_unmodelled_special_register(name: str) -> None:
+    if _is_special_register(name):
+        logger.warning("MOVE into special register %r is not modelled — skipping", name)
+
+
+def _figurative_literal(ctx: EmitContext, name: str, width: int) -> str:
+    """A figurative constant as the alphanumeric literal of the given size."""
+    return repeat_to_width(ctx.figuratives.characters[name.upper()], width)
 
 
 def _emit_de_edit(
