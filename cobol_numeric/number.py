@@ -120,10 +120,6 @@ def round_half_up(value: NumberLike, decimal_places: int) -> CobolNumber:
     return _from_scaled_int(-magnitude if numerator < 0 else magnitude, decimal_places)
 
 
-def reaches_magnitude(value: NumberLike, bound: NumberLike) -> bool:
-    return abs(_exact(value)) >= _exact(bound)
-
-
 def add(a: NumberLike, b: NumberLike, result_decimals: int) -> CobolNumber:
     an, ad = _ratio(a)
     bn, bd = _ratio(b)

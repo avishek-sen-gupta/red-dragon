@@ -514,7 +514,6 @@ class TestByteBuiltinsRegistration:
             "__cobol_scale_by",
             "__cobol_parse_number",
             "__cobol_binary_unscaled",
-            "__cobol_size_error",
         ]
         expected_func_names = [FuncName(n) for n in expected_names]
         for name in expected_func_names:

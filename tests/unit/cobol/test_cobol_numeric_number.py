@@ -14,7 +14,6 @@ from cobol_numeric.number import (
     from_literal,
     is_cobol_number,
     multiply,
-    reaches_magnitude,
     round_half_up,
     scale_by,
     subtract,
@@ -116,17 +115,6 @@ def test_round_half_up_to_negative_places_rounds_to_tens_and_beyond():
     assert round_half_up(from_literal("1249.9"), -2) == 1200
     assert round_half_up(1250, -2) == 1300
     assert round_half_up(10**26 + 65, -1) == 10**26 + 70
-
-
-@covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_reaches_magnitude_ignores_the_sign():
-    assert reaches_magnitude(from_literal("99.9"), 100) is False
-    assert reaches_magnitude(100, 100) is True
-    assert reaches_magnitude(from_literal("-99.9"), 100) is False
-    assert reaches_magnitude(-100, 100) is True
-    assert reaches_magnitude(from_literal("-4.57"), 1) is True
-    assert reaches_magnitude(from_literal("-0.99"), 1) is False
-    assert reaches_magnitude(from_literal("-4486.72"), 10) is True
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
