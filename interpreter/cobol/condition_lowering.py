@@ -21,7 +21,9 @@ from cobol_asg.cobol_expression import (
 from cobol_asg.condition_name import ConditionValue
 from cobol_asg.ref_mod import FunctionCallOperand, RefModOperand
 from cobol_asg.source_span import SourceSpan
+from interpreter.cobol.arithmetic_precision import ArithmeticPrecision
 from interpreter.cobol.arithmetic_scale import (
+    FieldTypes,
     expression_is_floating,
     node_scale,
     operand_dmax,
@@ -1324,14 +1326,15 @@ def _lower_expr_node_body(
         # FUNCTION UPPER-CASE(A) = FUNCTION UPPER-CASE(B), or COMPUTE X =
         # FUNCTION TRIM(WS-A)). Each arg is lowered to a string-valued register
         # then passed to the COBOL-layer builtin (red-dragon-ge72).
-        from interpreter.cobol.lower_arithmetic import lower_function_operand
+        from interpreter.cobol.lower_arithmetic import lower_function_in_expression
 
-        result_reg = lower_function_operand(
+        result_reg = lower_function_in_expression(
             ctx,
             FunctionCallOperand(
                 name=node.name, args=tuple(expr_to_dict(arg) for arg in node.args)
             ),
             materialised,
+            ArithmeticPrecision(dmax=dmax, floating=floating),
             span=span,
         )
         return _float_operand(ctx, result_reg, floating, span=span)
@@ -1385,15 +1388,32 @@ def lower_expr_node(
     or a floating intrinsic, is computed in IEEE floating point.
     """
 
+    field_types = _field_types(ctx, materialised)
+    floating = floating_receiver or expression_is_floating(node, field_types)
+    dmax = max(receiver_decimals, operand_dmax(node, field_types))
+    return _lower_expr_node_body(
+        ctx, node, materialised, dmax, floating, field_types, span=span
+    )
+
+
+def _field_types(
+    ctx: EmitContext, materialised: MaterialisedSectionedLayout
+) -> FieldTypes:
     def field_types(name: str, qualifiers: tuple[str, ...] = ()):
         if not ctx.has_field(name, materialised):
             return None
         return materialised.resolve(name, qualifiers)[0].type_descriptor
 
-    floating = floating_receiver or expression_is_floating(node, field_types)
-    dmax = max(receiver_decimals, operand_dmax(node, field_types))
-    return _lower_expr_node_body(
-        ctx, node, materialised, dmax, floating, field_types, span=span
+    return field_types
+
+
+def standalone_precision(
+    ctx: EmitContext, node: ExprNode, materialised: MaterialisedSectionedLayout
+) -> ArithmeticPrecision:
+    field_types = _field_types(ctx, materialised)
+    return ArithmeticPrecision(
+        dmax=operand_dmax(node, field_types),
+        floating=expression_is_floating(node, field_types),
     )
 
 

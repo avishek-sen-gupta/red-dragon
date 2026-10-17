@@ -160,3 +160,35 @@ def test_parenthesised_first_argument_is_never_a_subscript_base(bridge_jar):
     assert len(node["args"]) == 2
     assert "subscripts" not in node["args"][0]
     assert "subscripts" not in node["args"][1]
+
+
+@covers(CobolFeature.INTRINSIC_FUNCTION, CobolFeature.SUBSCRIPT_ACCESS)
+def test_subscript_leading_an_arithmetic_argument_rejoins_inside_the_expression(
+    bridge_jar,
+):
+    """`FUNCTION MAX(TX(5) / 9 - TX(I) * 2)` reaches ANTLR as `TX` and
+    `(5) / 9 - TX(I) * 2`: the group leading the second argument subscripts the
+    name before it, and the operators after it apply to the subscripted item."""
+    node = _function_node(
+        "COMPUTE N = FUNCTION MAX(TX(5) / 9 - TX(I) * 2).", bridge_jar
+    )
+    tx5 = {"kind": "ref", "name": "TX", "subscripts": [{"kind": "lit", "value": "5"}]}
+    txi = {"kind": "ref", "name": "TX", "subscripts": [{"kind": "ref", "name": "I"}]}
+    assert node["args"] == [
+        {
+            "kind": "binop",
+            "op": "-",
+            "left": {
+                "kind": "binop",
+                "op": "/",
+                "left": tx5,
+                "right": {"kind": "lit", "value": "9"},
+            },
+            "right": {
+                "kind": "binop",
+                "op": "*",
+                "left": txi,
+                "right": {"kind": "lit", "value": "2"},
+            },
+        }
+    ]
