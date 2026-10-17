@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from cobol_asg.subprocess_runner import RealSubprocessRunner
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
@@ -47,9 +49,14 @@ _PREAMBLE = [
 ]
 
 
-def _function_node(statement_line: str, bridge_jar: str) -> dict:
+@pytest.fixture
+def jar(bridge_jar: str) -> str:
+    return bridge_jar
+
+
+def _function_node(statement_line: str, jar: str) -> dict:
     raw = RealSubprocessRunner().run(
-        ["java", "-jar", bridge_jar],
+        ["java", "-jar", jar],
         _fixed([*_PREAMBLE, f"    {statement_line}", "    STOP RUN."]),
     )
     statement = json.loads(raw)["paragraphs"][0]["statements"][0]
@@ -57,9 +64,9 @@ def _function_node(statement_line: str, bridge_jar: str) -> dict:
 
 
 @covers(CobolFeature.INTRINSIC_FUNCTION, CobolFeature.SUBSCRIPT_ACCESS)
-def test_variable_subscript_rejoined_to_its_identifier(bridge_jar):
+def test_variable_subscript_rejoined_to_its_identifier(jar):
     """FUNCTION TRIM(TX(I)) is ONE argument carrying a structured subscript."""
-    node = _function_node("MOVE FUNCTION TRIM(TX(I)) TO D.", bridge_jar)
+    node = _function_node("MOVE FUNCTION TRIM(TX(I)) TO D.", jar)
     assert node["name"] == "TRIM"
     assert len(node["args"]) == 1
     arg = node["args"][0]
@@ -69,16 +76,16 @@ def test_variable_subscript_rejoined_to_its_identifier(bridge_jar):
 
 
 @covers(CobolFeature.INTRINSIC_FUNCTION, CobolFeature.SUBSCRIPT_ACCESS)
-def test_literal_subscript_rejoined_to_its_identifier(bridge_jar):
-    node = _function_node("MOVE FUNCTION TRIM(TX(5)) TO D.", bridge_jar)
+def test_literal_subscript_rejoined_to_its_identifier(jar):
+    node = _function_node("MOVE FUNCTION TRIM(TX(5)) TO D.", jar)
     assert len(node["args"]) == 1
     assert node["args"][0]["name"] == "TX"
     assert node["args"][0]["subscripts"] == [{"kind": "lit", "value": "5"}]
 
 
 @covers(CobolFeature.INTRINSIC_FUNCTION, CobolFeature.SUBSCRIPT_ACCESS)
-def test_arithmetic_subscript_rejoined_to_its_identifier(bridge_jar):
-    node = _function_node("MOVE FUNCTION TRIM(TX(I + 1)) TO D.", bridge_jar)
+def test_arithmetic_subscript_rejoined_to_its_identifier(jar):
+    node = _function_node("MOVE FUNCTION TRIM(TX(I + 1)) TO D.", jar)
     assert len(node["args"]) == 1
     arg = node["args"][0]
     assert arg["name"] == "TX"
@@ -87,10 +94,10 @@ def test_arithmetic_subscript_rejoined_to_its_identifier(bridge_jar):
 
 
 @covers(CobolFeature.INTRINSIC_FUNCTION, CobolFeature.SUBSCRIPT_ACCESS)
-def test_two_dimensional_subscripts_survive_as_structured_nodes(bridge_jar):
+def test_two_dimensional_subscripts_survive_as_structured_nodes(jar):
     """A comma keeps ProLeap on the tableCall alternative, but the serializer
     still has to emit the indices instead of gluing them into the name."""
-    node = _function_node("MOVE FUNCTION TRIM(X2(I, J)) TO D.", bridge_jar)
+    node = _function_node("MOVE FUNCTION TRIM(X2(I, J)) TO D.", jar)
     assert len(node["args"]) == 1
     arg = node["args"][0]
     assert arg["name"] == "X2"
@@ -101,8 +108,8 @@ def test_two_dimensional_subscripts_survive_as_structured_nodes(bridge_jar):
 
 
 @covers(CobolFeature.INTRINSIC_FUNCTION, CobolFeature.SUBSCRIPT_ACCESS)
-def test_space_separated_two_dimensional_subscripts(bridge_jar):
-    node = _function_node("MOVE FUNCTION TRIM(X2(I J)) TO D.", bridge_jar)
+def test_space_separated_two_dimensional_subscripts(jar):
+    node = _function_node("MOVE FUNCTION TRIM(X2(I J)) TO D.", jar)
     arg = node["args"][0]
     assert arg["name"] == "X2"
     assert arg["subscripts"] == [
@@ -112,10 +119,8 @@ def test_space_separated_two_dimensional_subscripts(bridge_jar):
 
 
 @covers(CobolFeature.INTRINSIC_FUNCTION, CobolFeature.SUBSCRIPT_ACCESS)
-def test_nested_function_argument_keeps_its_subscript(bridge_jar):
-    node = _function_node(
-        "MOVE FUNCTION UPPER-CASE(FUNCTION TRIM(TX(I))) TO D.", bridge_jar
-    )
+def test_nested_function_argument_keeps_its_subscript(jar):
+    node = _function_node("MOVE FUNCTION UPPER-CASE(FUNCTION TRIM(TX(I))) TO D.", jar)
     assert node["name"] == "UPPER-CASE"
     inner = node["args"][0]
     assert inner["kind"] == "function"
@@ -126,16 +131,16 @@ def test_nested_function_argument_keeps_its_subscript(bridge_jar):
 
 
 @covers(CobolFeature.INTRINSIC_FUNCTION, CobolFeature.SUBSCRIPT_ACCESS)
-def test_several_subscripted_arguments_each_keep_their_own_index(bridge_jar):
-    node = _function_node("COMPUTE N = FUNCTION MAX(TX(I) TX(J)).", bridge_jar)
+def test_several_subscripted_arguments_each_keep_their_own_index(jar):
+    node = _function_node("COMPUTE N = FUNCTION MAX(TX(I) TX(J)).", jar)
     assert [arg["name"] for arg in node["args"]] == ["TX", "TX"]
     assert node["args"][0]["subscripts"] == [{"kind": "ref", "name": "I"}]
     assert node["args"][1]["subscripts"] == [{"kind": "ref", "name": "J"}]
 
 
 @covers(CobolFeature.INTRINSIC_FUNCTION)
-def test_genuine_two_argument_call_is_not_mangled(bridge_jar):
-    node = _function_node("COMPUTE N = FUNCTION MAX(A B).", bridge_jar)
+def test_genuine_two_argument_call_is_not_mangled(jar):
+    node = _function_node("COMPUTE N = FUNCTION MAX(A B).", jar)
     assert node["args"] == [
         {"kind": "ref", "name": "A"},
         {"kind": "ref", "name": "B"},
@@ -143,20 +148,20 @@ def test_genuine_two_argument_call_is_not_mangled(bridge_jar):
 
 
 @covers(CobolFeature.INTRINSIC_FUNCTION)
-def test_comma_separated_parenthesised_argument_is_not_a_subscript(bridge_jar):
+def test_comma_separated_parenthesised_argument_is_not_a_subscript(jar):
     """`FUNCTION MAX(A, (B))` is two arguments — the COMMA forbids the re-join.
     Without the comma the same token sequence IS a subscripted read, so the
     serializer must discriminate on the separator, not on the paren alone."""
-    node = _function_node("COMPUTE N = FUNCTION MAX(A, (B)).", bridge_jar)
+    node = _function_node("COMPUTE N = FUNCTION MAX(A, (B)).", jar)
     assert len(node["args"]) == 2
     assert node["args"][0] == {"kind": "ref", "name": "A"}
     assert "subscripts" not in node["args"][0]
 
 
 @covers(CobolFeature.INTRINSIC_FUNCTION)
-def test_parenthesised_first_argument_is_never_a_subscript_base(bridge_jar):
+def test_parenthesised_first_argument_is_never_a_subscript_base(jar):
     """`FUNCTION MAX((A) (B))` — a parenthesised expression cannot be subscripted."""
-    node = _function_node("COMPUTE N = FUNCTION MAX((A) (B)).", bridge_jar)
+    node = _function_node("COMPUTE N = FUNCTION MAX((A) (B)).", jar)
     assert len(node["args"]) == 2
     assert "subscripts" not in node["args"][0]
     assert "subscripts" not in node["args"][1]
@@ -164,14 +169,12 @@ def test_parenthesised_first_argument_is_never_a_subscript_base(bridge_jar):
 
 @covers(CobolFeature.INTRINSIC_FUNCTION, CobolFeature.SUBSCRIPT_ACCESS)
 def test_subscript_leading_an_arithmetic_argument_rejoins_inside_the_expression(
-    bridge_jar,
+    jar,
 ):
     """`FUNCTION MAX(TX(5) / 9 - TX(I) * 2)` reaches ANTLR as `TX` and
     `(5) / 9 - TX(I) * 2`: the group leading the second argument subscripts the
     name before it, and the operators after it apply to the subscripted item."""
-    node = _function_node(
-        "COMPUTE N = FUNCTION MAX(TX(5) / 9 - TX(I) * 2).", bridge_jar
-    )
+    node = _function_node("COMPUTE N = FUNCTION MAX(TX(5) / 9 - TX(I) * 2).", jar)
     tx5 = {"kind": "ref", "name": "TX", "subscripts": [{"kind": "lit", "value": "5"}]}
     txi = {"kind": "ref", "name": "TX", "subscripts": [{"kind": "ref", "name": "I"}]}
     assert node["args"] == [
@@ -190,5 +193,17 @@ def test_subscript_leading_an_arithmetic_argument_rejoins_inside_the_expression(
                 "left": txi,
                 "right": {"kind": "lit", "value": "2"},
             },
+        }
+    ]
+
+
+@covers(CobolFeature.INTRINSIC_FUNCTION, CobolFeature.SUBSCRIPT_ACCESS)
+def test_all_subscript_is_its_own_node_kind(jar):
+    node = _function_node("COMPUTE N = FUNCTION MAX(X2(ALL, 2)).", jar)
+    assert node["args"] == [
+        {
+            "kind": "ref",
+            "name": "X2",
+            "subscripts": [{"kind": "all"}, {"kind": "lit", "value": "2"}],
         }
     ]

@@ -49,3 +49,40 @@ def test_a_division_argument_keeps_the_statements_decimal_places():
         decode_zoned_with_decimal(region, 7, 1, 6),
         decode_zoned_with_decimal(region, 14, 1, 2),
     ) == (Decimal("1.133893"), Decimal("0"), Decimal("0"))
+
+
+@covers(CobolFeature.INTRINSIC_FUNCTION, CobolFeature.SUBSCRIPT_ACCESS)
+def test_all_subscript_expands_to_every_occurrence_rightmost_fastest():
+    """IBM Enterprise COBOL LR, "ALL subscripting": T(ALL, ALL) is T(1, 1)
+    T(1, 2) ... T(2, 1) ..., so the 9 at C2(1, 2) is the second argument."""
+    region = ws_region(
+        run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNALL.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '01 ARR VALUE "126".',
+                "   02 IND OCCURS 3 TIMES PIC 9.",
+                '01 T2 VALUE "193456".',
+                "   02 R2 OCCURS 2 TIMES.",
+                "      03 C2 OCCURS 3 TIMES PIC 9.",
+                "01 WS-SUM PIC 99 VALUE 0.",
+                "01 WS-ORD PIC 99 VALUE 0.",
+                "01 WS-COL PIC 99 VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-SUM = FUNCTION SUM(IND(ALL)).",
+                "    COMPUTE WS-ORD = FUNCTION ORD-MAX(C2(ALL, ALL)).",
+                "    COMPUTE WS-COL = FUNCTION SUM(C2(ALL, 2) 1).",
+                "    STOP RUN.",
+            ],
+            max_steps=4000,
+        ),
+        "FNALL",
+    )
+    assert (
+        decode_zoned_with_decimal(region, 9, 2, 0),
+        decode_zoned_with_decimal(region, 11, 2, 0),
+        decode_zoned_with_decimal(region, 13, 2, 0),
+    ) == (Decimal("9"), Decimal("2"), Decimal("15"))

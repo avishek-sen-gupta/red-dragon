@@ -8,8 +8,19 @@ import logging
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 from functools import partial, reduce
+from itertools import chain, product
 
-from cobol_asg.cobol_expression import FunctionNode, expr_from_dict
+from cobol_asg.asg_types import NO_ODO_OBJECT
+from cobol_asg.cobol_expression import (
+    AllSubscriptNode,
+    ExprNode,
+    FieldRefNode,
+    FunctionNode,
+    LiteralNode,
+    RefModNode,
+    expr_from_dict,
+    expr_to_dict,
+)
 from cobol_asg.cobol_statements import (
     ArithmeticCorrespondingStatement,
     ArithmeticStatement,
@@ -536,7 +547,57 @@ def lower_function_in_expression(
     span: SourceSpan | None,
 ) -> Register:
     lowering = _STATEFUL_FUNCTIONS.get(operand.name.upper(), _lower_builtin_function)
-    return lowering(ctx, operand, materialised, precision, span=span)
+    expanded = replace(
+        operand,
+        args=tuple(
+            chain.from_iterable(
+                _all_subscripts_expanded(arg, materialised) for arg in operand.args
+            )
+        ),
+    )
+    return lowering(ctx, expanded, materialised, precision, span=span)
+
+
+def _all_subscripts_expanded(
+    arg: dict, materialised: MaterialisedSectionedLayout
+) -> tuple[dict, ...]:
+    return tuple(
+        expr_to_dict(node)
+        for node in _occurrences_named(expr_from_dict(arg), materialised)
+    )
+
+
+def _occurrences_named(
+    node: ExprNode, materialised: MaterialisedSectionedLayout
+) -> tuple[ExprNode, ...]:
+    if not isinstance(node, (FieldRefNode, RefModNode)) or not any(
+        isinstance(sub, AllSubscriptNode) for sub in node.subscripts
+    ):
+        return (node,)
+    match = materialised.resolve_match(node.name, node.qualifiers)[0]
+    dimensions = match.occurs_items[-len(node.subscripts) :]
+    choices = tuple(
+        _subscript_choices(sub, dimension)
+        for sub, dimension in zip(node.subscripts, dimensions, strict=True)
+    )
+    return tuple(replace(node, subscripts=combo) for combo in product(*choices))
+
+
+def _subscript_choices(
+    sub: ExprNode, dimension: FieldLayout | DataLayout
+) -> tuple[ExprNode, ...]:
+    if not isinstance(sub, AllSubscriptNode):
+        return (sub,)
+    if dimension.occurs_depending_on != NO_ODO_OBJECT:
+        raise ValueError(
+            "the subscript ALL over an OCCURS DEPENDING ON table needs its "
+            "run-time occurrence count, which an argument list fixed at "
+            "lowering cannot carry"
+        )
+    return tuple(
+        LiteralNode(str(occurrence))
+        for occurrence in range(1, dimension.occurs_count + 1)
+    )
 
 
 def _lower_builtin_function(

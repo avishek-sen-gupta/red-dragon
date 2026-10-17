@@ -2,6 +2,7 @@
 import pytest
 
 from cobol_asg.cobol_expression import (
+    AllSubscriptNode,
     BinOpNode,
     DfhRespNode,
     FieldRefNode,
@@ -199,3 +200,13 @@ class TestExprFromDict:
             {"kind": "dfhresp", "condition": "NOTFND"},
         ):
             assert expr_to_dict(expr_from_dict(d)) == d
+
+
+@covers(CobolFeature.INTRINSIC_FUNCTION, CobolFeature.SUBSCRIPT_ACCESS)
+def test_all_subscript_round_trips() -> None:
+    data = {"kind": "ref", "name": "TBL", "subscripts": [{"kind": "all"}]}
+    node = expr_from_dict(data)
+    assert (node, expr_to_dict(node)) == (
+        FieldRefNode(name="TBL", subscripts=(AllSubscriptNode(),)),
+        data,
+    )
