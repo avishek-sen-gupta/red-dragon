@@ -204,6 +204,9 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 | `REWRITE rec FROM var` | Decode FROM field → `CALL_FUNCTION __cobol_rewrite_record(filename, data, key, program)`, `key` as for WRITE |
 | `START file KEY key` | `CALL_FUNCTION __cobol_start_file(filename, key, relop, program)` — `key` is the KEY item's bytes (indexed) or value (relative); without KEY, the RECORD KEY or RELATIVE KEY's, with `=` |
 | `DELETE file` | `CALL_FUNCTION __cobol_delete_record(filename, key, program)` — `key` is the RECORD KEY's bytes or the RELATIVE KEY's value in random or dynamic access, empty in sequential access |
+| `SORT sd ON ASCENDING/DESCENDING KEY k ... USING f ... GIVING g ...` | `OPEN OUTPUT sd`; per USING file `OPEN INPUT f`, `__cobol_sort_using(sd, f, program)`, `CLOSE f`; then `__cobol_sort_file(sd, record_length, weights, offset, length, encoding, direction, ..., program)`; per GIVING file `OPEN INPUT sd`, `OPEN OUTPUT g`, `__cobol_sort_giving(sd, g, program)`, `CLOSE g`, `CLOSE sd` |
+
+The sort file (SD) is a sequential work file at its ASSIGN path, opened and closed by the same lowering as any file. `__cobol_sort_file` puts its records in key order: keys major to minor as written, each by its own direction, alphanumeric keys byte by byte through `weights` (a 256-character string, character b the weight of native byte b; the program collating sequence), with a stable sort so records with equal keys keep the order they were released in. Each key's offset is relative to the sort record.
 
 Each file verb's status is `__cobol_io_status(result, program)`. A sequential READ or WRITE of a relative file MOVEs `__cobol_io_record_number(result, program)` to its RELATIVE KEY when the status is successful. `RealFileIOProvider` reports the ANSI X3.23-1985 logic-error statuses itself: 41 OPEN of an open file, 42 CLOSE of a closed one, 43 REWRITE/DELETE in sequential access without a preceding successful READ (any statement in between, even a failed one, clears the current record), 46 READ after at end, 21 in sequential access to an indexed file for a REWRITE whose prime key differs from the record read or a WRITE whose prime key is below the last one written, 14 for a sequential READ of a relative file whose record number has more digits than the RELATIVE KEY, 47/48/49 a verb the open mode does not permit, 38 OPEN after CLOSE WITH LOCK, and 35 for OPEN EXTEND of an absent file. AT END runs for any class 1 status (10 or 14). A USE declarative fires for any unsuccessful status the statement's own AT END (class 1) or INVALID KEY (class 2) phrase does not handle; one scoped by open mode is chosen by the mode an OPEN attempts, and for other verbs by `__cobol_file_open_mode(filename, program)`. `program` is the calling program's PROGRAM-ID, upper-cased, a constant the lowering emits as the last argument of every file call, and each `CobolIOProvider` method takes it as its last parameter; red-dragon's providers accept and ignore it (ADR-185).
 
@@ -215,7 +218,7 @@ Each FD's `RECORDING MODE` and `RECORD` clause (`CONTAINS n`, `CONTAINS m TO n`,
 
 ### Remaining 19 types
 
-Not yet implemented in the bridge. Includes communication (SEND, RECEIVE), embedded SQL (EXEC SQL), and less common statements (GENERATE, SORT, etc.).
+Not yet implemented in the bridge. Includes communication (SEND, RECEIVE), embedded SQL (EXEC SQL), and less common statements (GENERATE, MERGE, etc.).
 
 ## PERFORM Semantics
 
@@ -318,7 +321,7 @@ An ALL literal (`ALL "AB"`) is its literal repeated to the size of the associate
 ## Known Gaps
 
 - **Exponentiation (`**`) is not parsed or lowered** (red-dragon-wxur). Fixed-point arithmetic itself is exact: values, IBM `ARITH(COMPAT)` intermediate scales and every conversion live behind the `cobol_numeric` boundary (ADR-148, ADR-149), and only COMP-1/COMP-2 fields and floating intrinsics use IEEE floats.
-- **SORT/MERGE/RELEASE/RETURN are entirely unlowered** (red-dragon-429q).
+- **MERGE, RELEASE, RETURN and SORT's INPUT/OUTPUT PROCEDURE phrases are unlowered**, and SORT keys must be alphanumeric (red-dragon-sl30.66).
 - **CANCEL is a no-op** — doesn't reset the cancelled subprogram's WORKING-STORAGE on next CALL (red-dragon-8dpn).
 - **SEARCH ALL is lowered as a whole-table linear scan**, not a binary search (red-dragon-c32s); for a correctly ordered table the result is the same.
 - **Index items hold occurrence numbers, not byte displacements**, for `INDEXED BY` names and USAGE INDEX items alike (red-dragon-zm9w); no conforming program can observe the difference.

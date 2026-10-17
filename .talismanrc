@@ -229,7 +229,7 @@ fileignoreconfig:
 - filename: interpreter/project/coprocessor_compile.py
   checksum: 714d190d3e5796ba9643cabfef9e1559d8358dfb701b9a0a8ac38aaec40e20d2
 - filename: interpreter/cobol/io_provider.py
-  checksum: 4a7dad54d53fd458de9ec959555272b1f0cb3cbc93eef5b878f584a67cf060ec
+  checksum: e73a863c6533eec17052cbdaffd562aeb97032d1d276da3964d5fd8b30cee0da
 - filename: tests/unit/cobol/test_file_calls_name_their_program.py
   checksum: 032f77764c218b3cbf098fc5c124d653095bc86b075e58a7c4b2510061d5a7b9
 - filename: tests/unit/cobol/test_nist_pass_check.py
@@ -249,7 +249,7 @@ fileignoreconfig:
 - filename: tests/unit/cobol/test_io_statements.py
   checksum: f1d7f78a6301dacfe3155f92ed416c901afbc010bf1b94cef82098ebeb690d43
 - filename: cobol_asg/cobol_statements.py
-  checksum: 3731ff7c20dc843b559d7586aa847bcc61a8cd29f71f482ad7f11e87d2d45b36
+  checksum: 41358acfb76a681da8a0fda797e068f44e48e489228a4286f9890dffbff4e441
 - filename: proleap-bridge/src/main/java/org/reddragon/bridge/StatementSerializer.java
   checksum: f9a87946dec86a8815575eff56958f913885c76b3fb14f7f3db967b3686e1036
 - filename: interpreter/cobol/lower_io.py
@@ -270,4 +270,20 @@ fileignoreconfig:
   checksum: cbd628750b27f39c1a24b2588c92abebe9ff4e614030ca641ab30e98252c8a6a
 - filename: interpreter/cobol/relative_key.py
   checksum: 212e195f124838817df731cef0fdf1a3334c0f3002abed4d57aed906b5c8bc64
+- filename: interpreter/cobol/sort_key_layout.py
+  checksum: 5e943a6fb6709b9de4c5de06e4b0a57c010c4a866155cff1f580640a2f91d2f7
+- filename: cobol_asg/sort_key.py
+  checksum: 8fadfb327f2c8bf974066015fb9329886b1515ee12ad65c575e605f5561a4bc5
+- filename: interpreter/cobol/sort_field.py
+  checksum: b57c7fe8231b7f613d599584d1e20d29d65f7609ca032d0cfac72b0900d67d4c
+- filename: tests/unit/cobol/test_sort_order.py
+  checksum: f13442010d0cbc75df0d8c7c570ebb5336d9a5bd3bb055728c22c5dbc1acfbc9
+- filename: interpreter/cobol/sort_order.py
+  checksum: 5f10b4cb8c18af98a412e8ba2b97dc6c75db820d00c7edebabaa065df399cdea
+- filename: tests/integration/test_cobol_sort.py
+  checksum: 60cfddc7e5e8f35e3d298194458ff60543f370e917a3437b8f8365453fc2d51d
+- filename: proleap-bridge/src/main/java/org/reddragon/bridge/SortSerializer.java
+  checksum: 8a7c03eeb4cb38f5baa36ea398d113ce6fdab5bf92b31595667dacda2df9f481
+- filename: interpreter/cobol/lower_sort.py
+  checksum: 663e9db868dbdf34e13b714ad2233e1881994c4f65e7c7c7b6f6ceb8469ecd1a
 version: "1.0"
