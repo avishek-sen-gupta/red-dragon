@@ -15,7 +15,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Union
 
-from cobol_asg.cobol_expression import ExprNode, expr_from_dict, expr_to_dict
+from cobol_asg.cobol_expression import (
+    ExprNode,
+    JsonExpr,
+    expr_from_dict,
+    expr_to_dict,
+)
 
 
 @dataclass(frozen=True)
@@ -44,9 +49,11 @@ class RefModLengthOf:
 
     Resolves to the byte length of the named field (a compile-time constant),
     NOT a decode of the field's value. Example: WS-DEST(LENGTH OF G + 1 : ...).
+    ``qualifiers`` are the measured item's ``OF``/``IN`` group names.
     """
 
     name: str
+    qualifiers: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -80,6 +87,18 @@ RefModExpr = Union[
 ]
 
 
+def length_of_from_dict(data: JsonExpr) -> RefModLengthOf:
+    """The ``LENGTH OF`` node the bridge writes: the measured item's name and
+    qualifiers."""
+    qualifiers = data.get("qualifiers", ())
+    return RefModLengthOf(
+        name=str(data.get("name", "")),
+        qualifiers=(
+            tuple(str(q) for q in qualifiers) if isinstance(qualifiers, list) else ()
+        ),
+    )
+
+
 def ref_mod_expr_from_dict(data: dict) -> RefModExpr:
     """Construct RefModExpr from JSON dict representation.
 
@@ -101,7 +120,7 @@ def ref_mod_expr_from_dict(data: dict) -> RefModExpr:
         )
 
     elif kind == "length_of":
-        return RefModLengthOf(name=data.get("name", ""))
+        return length_of_from_dict(data)
 
     elif kind == "function":
         return RefModFunction(
@@ -128,7 +147,11 @@ def ref_mod_expr_to_dict(expr: RefModExpr) -> dict:
             ref["qualifiers"] = list(expr.qualifiers)
         return ref
     elif isinstance(expr, RefModLengthOf):
-        return {"kind": "length_of", "name": expr.name}
+        return {
+            "kind": "length_of",
+            "name": expr.name,
+            **({"qualifiers": list(expr.qualifiers)} if expr.qualifiers else {}),
+        }
     elif isinstance(expr, RefModFunction):
         return {"kind": "function", "name": expr.name, "args": list(expr.args)}
     elif isinstance(expr, RefModBinOp):
@@ -180,7 +203,7 @@ class RefModOperand:
     name: str
     ref_mod_start: RefModExpr | None = None
     ref_mod_length: RefModExpr | None = None
-    length_of: str = ""
+    length_of: RefModLengthOf = RefModLengthOf(name="")
     qualifiers: tuple[str, ...] = ()
     subscripts: tuple[ExprNode, ...] = ()
     rounded: bool = False
@@ -199,8 +222,8 @@ class RefModOperand:
           {"name": "WS-FIELD", "ref_mod_start": {...}, "ref_mod_length": {...}}
           {"kind": "length_of", "name": "WS-FIELD"}  (a ``LENGTH OF`` source)
 
-        A ``LENGTH OF X`` source operand carries ``length_of="X"`` (the data
-        name whose byte length is the source value), with ``name`` left empty so
+        A ``LENGTH OF X`` source operand carries ``length_of`` (the qualified
+        data name whose byte length is the source value), with ``name`` left empty so
         it never resolves as a field. This mirrors the bridge's structured
         ``length_of`` node already used for PERFORM VARYING FROM (red-dragon).
         """
@@ -209,7 +232,7 @@ class RefModOperand:
             return cls(name=data)
 
         if data.get("kind") == "length_of":
-            return cls(name="", length_of=data.get("name", ""))
+            return cls(name="", length_of=length_of_from_dict(data))
 
         name = data.get("name", "")
         ref_mod_start_data = data.get("ref_mod_start")
@@ -239,8 +262,8 @@ class RefModOperand:
 
     def to_dict(self) -> dict:
         """Serialize RefModOperand to JSON dict format."""
-        if self.length_of:
-            return {"kind": "length_of", "name": self.length_of}
+        if self.length_of.name:
+            return ref_mod_expr_to_dict(self.length_of)
         result: dict = {
             "name": self.name,
             **({"all": True} if self.all_literal else {}),

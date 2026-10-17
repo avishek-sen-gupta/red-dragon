@@ -186,8 +186,8 @@ class MoveStatement:
         )
 
     def _operand_dict(self, operand: RefModOperand) -> dict:
-        if operand.length_of:
-            return {"kind": "length_of", "name": operand.length_of}
+        if operand.length_of.name:
+            return ref_mod_expr_to_dict(operand.length_of)
         d: dict = {"name": operand.name}
         if operand.ref_mod_start is not None:
             d["ref_mod_start"] = ref_mod_expr_to_dict(operand.ref_mod_start)

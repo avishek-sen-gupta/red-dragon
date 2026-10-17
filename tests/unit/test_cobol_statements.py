@@ -1146,7 +1146,10 @@ class TestRoundTrip:
         Without a matching writer this operand serialises to {"name": ""} -- an
         operand that resolves as no field at all.
         """
-        operands = [{"kind": "length_of", "name": "REC-MASTER"}, {"name": "FLD-N"}]
+        operands = [
+            {"kind": "length_of", "name": "REC-MASTER", "qualifiers": ["FILE-A"]},
+            {"name": "FLD-N"},
+        ]
         assert self._round_tripped(operands) == operands
 
     @covers(CobolFeature.MOVE)

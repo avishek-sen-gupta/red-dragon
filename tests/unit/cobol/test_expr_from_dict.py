@@ -153,9 +153,10 @@ class TestExprFromDict:
     def test_length_of_operand_deserializes(self) -> None:
         """LENGTH OF is the field's byte length, a compile-time constant -- not a
         read of the field, so it is not a FieldRefNode."""
-        result = expr_from_dict({"kind": "length_of", "name": "WS-A"})
-        assert isinstance(result, LengthOfNode)
-        assert result.name == "WS-A"
+        result = expr_from_dict(
+            {"kind": "length_of", "name": "WS-A", "qualifiers": ["G1", "R1"]}
+        )
+        assert result == LengthOfNode(name="WS-A", qualifiers=("G1", "R1"))
 
     @covers(CobolFeature.EXEC_CICS)
     def test_dfhresp_operand_deserializes(self) -> None:
@@ -194,6 +195,7 @@ class TestExprFromDict:
         for d in (
             {"kind": "figurative", "value": "ZEROS"},
             {"kind": "length_of", "name": "WS-A"},
+            {"kind": "length_of", "name": "WS-A", "qualifiers": ["G1"]},
             {"kind": "dfhresp", "condition": "NOTFND"},
         ):
             assert expr_to_dict(expr_from_dict(d)) == d

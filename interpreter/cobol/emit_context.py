@@ -723,12 +723,13 @@ class EmitContext:
         self,
         name: str,
         materialised: MaterialisedSectionedLayout,
+        qualifiers: tuple[str, ...] = (),
         *,
         span: SourceSpan | None,
     ) -> Register:
         """LENGTH OF an item: its byte length, or the current length an item
         ending in an OCCURS DEPENDING ON table has from its object's value."""
-        ref, _ = self.resolve_field_ref(name, materialised, span=span)
+        ref, _ = self.resolve_field_ref(name, materialised, qualifiers, span=span)
         if ref.fl.current_length.is_present():
             return ref.fl.current_length
         return self.const_to_reg(ref.fl.byte_length, span=span)
