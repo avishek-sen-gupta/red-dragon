@@ -1687,12 +1687,8 @@ class TestTier2Lowering:
         stmts = [
             StringStatement(
                 sendings=[
-                    StringSending(
-                        value=RefModOperand(name="WS-FIRST"), delimited_by="SIZE"
-                    ),
-                    StringSending(
-                        value=RefModOperand(name="WS-LAST"), delimited_by="SIZE"
-                    ),
+                    StringSending(value=RefModOperand(name="WS-FIRST")),
+                    StringSending(value=RefModOperand(name="WS-LAST")),
                 ],
                 into=RefModOperand(name="WS-RESULT"),
             )
@@ -1734,7 +1730,10 @@ class TestTier2Lowering:
         stmts = [
             StringStatement(
                 sendings=[
-                    StringSending(value=RefModOperand(name="WS-SRC"), delimited_by=" "),
+                    StringSending(
+                        value=RefModOperand(name="WS-SRC"),
+                        delimiter=RefModOperand(name=" "),
+                    ),
                 ],
                 into=RefModOperand(name="WS-OUT"),
             )

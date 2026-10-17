@@ -529,8 +529,8 @@ class TestParseStatementDispatch:
             {
                 "type": "STRING",
                 "sendings": [
-                    {"value": {"name": "WS-FIRST"}, "delimited_by": "SPACES"},
-                    {"value": {"name": "WS-LAST"}, "delimited_by": "SIZE"},
+                    {"value": {"name": "WS-FIRST"}, "delimiter": {"name": "SPACES"}},
+                    {"value": {"name": "WS-LAST"}},
                 ],
                 "into": "WS-RESULT",
             }
@@ -538,7 +538,7 @@ class TestParseStatementDispatch:
         assert isinstance(stmt, StringStatement)
         assert len(stmt.sendings) == 2
         assert stmt.sendings[0].value.name == "WS-FIRST"
-        assert stmt.sendings[0].delimited_by == "SPACES"
+        assert stmt.sendings[0].delimiter.name == "SPACES"
         assert stmt.into.name == "WS-RESULT"
 
     @covers(CobolFeature.UNSTRING_VERB, CobolFeature.UNSTRING_DELIMITED_BY)
@@ -1447,8 +1447,8 @@ class TestRoundTrip:
         data = {
             "type": "STRING",
             "sendings": [
-                {"value": {"name": "WS-FIRST"}, "delimited_by": "SPACES"},
-                {"value": {"name": "WS-LAST"}, "delimited_by": "SIZE"},
+                {"value": {"name": "WS-FIRST"}, "delimiter": {"name": "SPACES"}},
+                {"value": {"name": "WS-LAST"}},
             ],
             "into": {"name": "WS-RESULT"},
         }
@@ -1458,7 +1458,7 @@ class TestRoundTrip:
     def test_string_into_ref_mod_round_trip(self):
         data = {
             "type": "STRING",
-            "sendings": [{"value": {"name": "WS-SRC"}, "delimited_by": "SIZE"}],
+            "sendings": [{"value": {"name": "WS-SRC"}}],
             "into": {
                 "name": "WS-DST",
                 "ref_mod_start": {"kind": "lit", "value": "3"},
@@ -1483,7 +1483,7 @@ class TestRoundTrip:
         not_on = [{"type": "DISPLAY", "operands": [{"name": "NOT ON"}]}]
         string_data = {
             "type": "STRING",
-            "sendings": [{"value": {"name": "WS-SRC"}, "delimited_by": "SIZE"}],
+            "sendings": [{"value": {"name": "WS-SRC"}}],
             "into": {"name": "WS-DST"},
             "on_overflow": on,
             "not_on_overflow": not_on,
@@ -1728,9 +1728,7 @@ class TestRoundTrip:
 class TestStringRefModAst:
     def test_string_sending_from_dict_plain_field(self):
         """StringSending with plain field name produces RefModOperand with no ref_mod."""
-        sending = StringSending.from_dict(
-            {"value": {"name": "WS-SRC"}, "delimited_by": "SIZE"}
-        )
+        sending = StringSending.from_dict({"value": {"name": "WS-SRC"}})
         assert isinstance(sending.value, RefModOperand)
         assert sending.value.name == "WS-SRC"
         assert sending.value.ref_mod_start is None
@@ -1744,7 +1742,6 @@ class TestStringRefModAst:
                     "ref_mod_start": {"kind": "lit", "value": "2"},
                     "ref_mod_length": {"kind": "lit", "value": "3"},
                 },
-                "delimited_by": "SIZE",
             }
         )
         assert isinstance(sending.value, RefModOperand)

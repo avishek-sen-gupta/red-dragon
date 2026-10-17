@@ -62,6 +62,7 @@ from interpreter.cobol.inspect_scan import (
 )
 from interpreter.cobol.numeric_builtins import NUMERIC_BUILTINS
 from interpreter.cobol.run_unit import advanced, restarted, value_of
+from interpreter.cobol.string_transfer import string_into
 from interpreter.func_name import FuncName
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.builtin import Builtin
@@ -660,6 +661,17 @@ def _builtin_cobol_inspect_tally(args: list[TypedValue], vm: VMState) -> Builtin
         str(args[0].value), _inspect_phrases(args[2:]), int(args[1].value)
     )
     return BuiltinResult(value=list(counts))
+
+
+def _builtin_cobol_string(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """Args: [receiver, pointer, delimited sendings...].
+    Returns [receiver characters, pointer, overflow]."""
+    if any(_is_symbolic(a.value) for a in args):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    outcome = string_into(
+        str(args[0].value), int(args[1].value), [str(a.value) for a in args[2:]]
+    )
+    return BuiltinResult(value=[outcome.image, outcome.pointer, outcome.overflow])
 
 
 def _builtin_cobol_inspect_replace(
@@ -1896,6 +1908,7 @@ BYTE_BUILTINS: Mapping[FuncName, Builtin] = MappingProxyType(
         ): _builtin_cobol_apply_alphanumeric_edit,
         FuncName(BuiltinName.COBOL_DE_EDIT): _builtin_cobol_de_edit,
         FuncName(BuiltinName.COBOL_INSPECT_TALLY): _builtin_cobol_inspect_tally,
+        FuncName(BuiltinName.COBOL_STRING): _builtin_cobol_string,
         FuncName(BuiltinName.COBOL_INSPECT_REPLACE): _builtin_cobol_inspect_replace,
         FuncName(BuiltinName.COBOL_INSPECT_CONVERT): _builtin_cobol_inspect_convert,
         FuncName(BuiltinName.STRING_SLICE): _builtin_string_slice,

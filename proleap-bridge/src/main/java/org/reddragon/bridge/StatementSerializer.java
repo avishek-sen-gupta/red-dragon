@@ -1384,14 +1384,14 @@ public final class StatementSerializer {
                 // same DELIMITED BY phrase, e.g. STRING A B(1:2) DELIMITED BY SIZE.
                 // Each operand must produce its own sending entry — taking only the
                 // first dropped the rest (red-dragon-zuhj).
+                // DELIMITED BY SIZE leaves "delimiter" out; any other delimiter is an
+                // operand, a data reference keeping its subscripts (red-dragon-sl30.41).
                 DelimitedByPhrase dbp = sending.getDelimitedByPhrase();
-                String delim = null;
-                if (dbp != null) {
-                    if (dbp.getDelimitedByType() == DelimitedByPhrase.DelimitedByType.SIZE) {
-                        delim = "SIZE";
-                    } else if (dbp.getCharactersValueStmt() != null) {
-                        delim = extractValueStmtText(dbp.getCharactersValueStmt());
-                    }
+                JsonObject delim = null;
+                if (dbp != null
+                        && dbp.getDelimitedByType() != DelimitedByPhrase.DelimitedByType.SIZE
+                        && dbp.getCharactersValueStmt() != null) {
+                    delim = inspectOperand(dbp.getCharactersValueStmt());
                 }
                 for (ValueStmt vs : sending.getSendingValueStmts()) {
                     JsonObject sendingObj = new JsonObject();
@@ -1410,7 +1410,7 @@ public final class StatementSerializer {
                         sendingObj.add("value", litObj);
                     }
                     if (delim != null) {
-                        sendingObj.addProperty("delimited_by", delim);
+                        sendingObj.add("delimiter", delim);
                     }
                     sendings.add(sendingObj);
                 }

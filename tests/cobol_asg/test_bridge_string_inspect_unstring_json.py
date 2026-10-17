@@ -62,7 +62,7 @@ def test_unstring_emits_pointer_and_tallying_target(bridge_jar):
     assert stmt["tallying_target"] == "WS-CNT"
 
 
-def test_string_emits_pointer(bridge_jar):
+def test_string_emits_pointer_and_delimiter_operands(bridge_jar):
     obj = _parse(
         [
             "IDENTIFICATION DIVISION.",
@@ -70,17 +70,33 @@ def test_string_emits_pointer(bridge_jar):
             "DATA DIVISION.",
             "WORKING-STORAGE SECTION.",
             "01 WS-A PIC X(5).",
+            "01 WS-T. 02 WS-D PIC X OCCURS 3.",
+            "01 WS-I PIC 9.",
             "01 WS-DST PIC X(10).",
             "01 WS-PTR PIC 9(4).",
             "PROCEDURE DIVISION.",
-            "    STRING WS-A DELIMITED BY SIZE INTO WS-DST",
+            "    STRING WS-A DELIMITED BY SIZE SPACE DELIMITED BY WS-D (WS-I)",
+            "        'X' DELIMITED BY QUOTE INTO WS-DST",
             "        WITH POINTER WS-PTR.",
             "    GOBACK.",
         ],
         bridge_jar,
     )
     stmt = _first_statement(obj)
-    assert stmt["pointer"] == "WS-PTR"
+    assert (stmt["pointer"], stmt["sendings"]) == (
+        "WS-PTR",
+        [
+            {"value": {"name": "WS-A"}},
+            {
+                "value": {"name": "SPACE"},
+                "delimiter": {
+                    "name": "WS-D",
+                    "subscripts": [{"kind": "ref", "name": "WS-I"}],
+                },
+            },
+            {"value": {"name": "'X'"}, "delimiter": {"name": "QUOTE"}},
+        ],
+    )
 
 
 def test_inspect_emits_tallying_groups_for_multiple_targets(bridge_jar):

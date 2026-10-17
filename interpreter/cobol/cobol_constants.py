@@ -100,6 +100,7 @@ class BuiltinName:
     COBOL_APPLY_ALPHANUMERIC_EDIT = "__cobol_apply_alphanumeric_edit"
     COBOL_DE_EDIT = "__cobol_de_edit"
     COBOL_INSPECT_TALLY = "__cobol_inspect_tally"
+    COBOL_STRING = "__cobol_string"
     COBOL_INSPECT_REPLACE = "__cobol_inspect_replace"
     COBOL_INSPECT_CONVERT = "__cobol_inspect_convert"
     STRING_SLICE = "__string_slice"
@@ -177,9 +178,3 @@ class InspectType:
     REPLACING = "REPLACING"
     CONVERTING = "CONVERTING"
     TALLYING_REPLACING = "TALLYING_REPLACING"
-
-
-class DelimiterMode:
-    """STRING DELIMITED BY mode identifiers."""
-
-    SIZE = "SIZE"

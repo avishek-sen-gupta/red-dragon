@@ -3,21 +3,24 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 
 from cobol_asg.cobol_statements import (
+    CobolStatementType,
     InspectStatement,
+    StringSending,
     StringStatement,
     UnstringStatement,
 )
 from cobol_asg.ref_mod import RefModOperand
 from cobol_asg.source_span import SourceSpan
-from interpreter.cobol.cobol_constants import BuiltinName, DelimiterMode, InspectType
+from interpreter.cobol.cobol_constants import BuiltinName, InspectType
 from interpreter.cobol.emit_context import EmitContext, strip_cobol_literal
-from interpreter.cobol.field_resolution import ResolvedFieldRef
 from interpreter.cobol.lower_arithmetic import eval_ref_mod_expr
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.func_name import FuncName
-from interpreter.instructions import Binop, CallFunction
+from interpreter.instructions import Binop, Branch, BranchIf, CallFunction, Label_
+from interpreter.ir import CodeLabel
 from interpreter.operator_kind import resolve_binop
 from interpreter.register import NO_REGISTER, Register
 
@@ -109,279 +112,271 @@ def lower_string(
     stmt: StringStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """STRING ... DELIMITED BY ... INTO target."""
+    """STRING sendings DELIMITED BY ... INTO receiver [WITH POINTER] [ON / NOT ON
+    OVERFLOW]. Every operand is evaluated once; one builtin then runs the
+    transfer (interpreter.cobol.string_transfer)."""
     span = stmt.span
-    part_regs: list[Register] = []
-    for sending in stmt.sendings:
-        # An intrinsic FUNCTION sending (e.g. FUNCTION TRIM(WS-VAR)) is evaluated
-        # by the shared function-operand lowering so its computed string — not the
-        # literal function name — is concatenated (red-dragon-zuhj).
-        if sending.function is not None:
-            from interpreter.cobol.lower_arithmetic import lower_function_operand
-
-            func_reg = lower_function_operand(
-                ctx, sending.function, materialised, span=span
-            )
-            part_regs.append(ctx.emit_to_string(func_reg, span=span))
-            continue
-
-        operand_name = sending.value.name
-        if ctx.has_field(operand_name, materialised):
-            # A sending operand's OF/IN qualifiers and subscripts must both be
-            # passed on, exactly as _write_ref_mod_target does for the INTO
-            # target. Dropping the qualifiers sends a name the program already
-            # qualified to the layout bare, which raises
-            # CobolAmbiguousReferenceError for any duplicated leaf name -- a legal
-            # program rejected. Dropping the subscripts is quieter and worse: the
-            # table's first element is read whatever index the program wrote, with
-            # no error at all. The bridge serializes a sending through
-            # serializeMoveOperand -> serializeRef, so both are in the JSON and
-            # already parsed onto RefModOperand.
-            source_ref, source_rr = ctx.resolve_field_ref(
-                operand_name,
-                materialised,
-                sending.value.qualifiers,
-                subscripts=sending.value.subscripts,
-                span=span,
-            )
-            src_str_reg = ctx.emit_stored_characters(
-                source_rr,
-                source_ref.fl,
-                source_ref.offset_reg,
-                extent=source_ref.extent,
-                span=span,
-            )
-        else:
-            src_str_reg = ctx.const_to_reg(
-                strip_cobol_literal(str(sending.value.name)), span=span
-            )
-
-        if sending.value.ref_mod_start is not None:
-            raw_start_reg = eval_ref_mod_expr(
-                ctx, sending.value.ref_mod_start, materialised, span=span
-            )
-            one_reg = ctx.const_to_reg(1, span=span)
-            start_0indexed_reg = ctx.fresh_reg()
-            ctx.emit_inst(
-                Binop(
-                    result_reg=start_0indexed_reg,
-                    operator=resolve_binop("-"),
-                    left=raw_start_reg,
-                    right=one_reg,
-                ),
-                span=span,
-            )
-            if sending.value.ref_mod_length is not None:
-                length_reg = eval_ref_mod_expr(
-                    ctx, sending.value.ref_mod_length, materialised, span=span
-                )
-            else:
-                length_reg = ctx.const_to_reg(9999, span=span)
-            sliced_reg = ctx.fresh_reg()
-            ctx.emit_inst(
-                CallFunction(
-                    result_reg=sliced_reg,
-                    func_name=FuncName(BuiltinName.STRING_SLICE),
-                    args=(src_str_reg, start_0indexed_reg, length_reg),
-                ),
-                span=span,
-            )
-            src_str_reg = sliced_reg
-
-        if sending.delimited_by == DelimiterMode.SIZE:
-            part_regs.append(src_str_reg)
-        else:
-            delim_reg = ctx.const_to_reg(
-                strip_cobol_literal(
-                    ctx.figuratives.translate(str(sending.delimited_by))
-                ),
-                span=span,
-            )
-            find_pos = ctx.fresh_reg()
-            ctx.emit_inst(
-                CallFunction(
-                    result_reg=find_pos,
-                    func_name=FuncName(BuiltinName.STRING_FIND),
-                    args=(src_str_reg, delim_reg),
-                ),
-                span=span,
-            )
-            parts = ctx.fresh_reg()
-            ctx.emit_inst(
-                CallFunction(
-                    result_reg=parts,
-                    func_name=FuncName(BuiltinName.STRING_SPLIT),
-                    args=(src_str_reg, delim_reg),
-                ),
-                span=span,
-            )
-            first_part = ctx.fresh_reg()
-            zero_reg = ctx.const_to_reg(0, span=span)
-            ctx.emit_inst(
-                CallFunction(
-                    result_reg=first_part,
-                    func_name=FuncName(BuiltinName.LIST_GET),
-                    args=(parts, zero_reg),
-                ),
-                span=span,
-            )
-            part_regs.append(first_part)
-
-    if not part_regs:
-        concat_reg = ctx.const_to_reg("", span=span)
-    elif len(part_regs) == 1:
-        concat_reg = part_regs[0]
-    else:
-        concat_reg = part_regs[0]
-        for next_reg in part_regs[1:]:
-            new_concat = ctx.fresh_reg()
-            ctx.emit_inst(
-                CallFunction(
-                    result_reg=new_concat,
-                    func_name=FuncName(BuiltinName.STRING_CONCAT_PAIR),
-                    args=(concat_reg, next_reg),
-                ),
-                span=span,
-            )
-            concat_reg = new_concat
-
-    if stmt.into.name and ctx.has_field(stmt.into.name, materialised):
-        if stmt.into.ref_mod_start is not None:
-            # INTO dest(start:length): splice into the sliced region only,
-            # leaving the rest of the field untouched (red-dragon-2fxq).
-            # WITH POINTER's own cursor-offset write is a distinct mechanism
-            # for the same "where to write" question; combining both on one
-            # statement is rare in practice and not modelled — ref-mod wins,
-            # and the pointer clause (if also present) is not applied.
-            if stmt.pointer:
-                logger.warning(
-                    "STRING INTO target %s has both reference modification "
-                    "and WITH POINTER; using reference modification, "
-                    "ignoring the pointer",
-                    stmt.into.name,
-                )
-            _write_ref_mod_target(ctx, stmt.into, concat_reg, materialised, span=span)
-            return
-        target_ref, target_rr = ctx.resolve_field_ref(
-            stmt.into.name,
+    if not ctx.has_field(stmt.into.name, materialised):
+        logger.warning("STRING INTO target %s not found in layout", stmt.into.name)
+        return
+    has_pointer = bool(stmt.pointer) and ctx.has_field(stmt.pointer, materialised)
+    outcome_reg = _string_outcome(ctx, stmt, has_pointer, materialised)
+    _write_ref_mod_target(
+        ctx,
+        stmt.into,
+        _list_item(ctx, outcome_reg, 0, span=span),
+        materialised,
+        span=span,
+    )
+    if has_pointer:
+        _write_number(
+            ctx,
+            stmt.pointer,
+            _list_item(ctx, outcome_reg, 1, span=span),
             materialised,
-            stmt.into.qualifiers,
-            subscripts=stmt.into.subscripts,
             span=span,
         )
-        if stmt.pointer and ctx.has_field(stmt.pointer, materialised):
-            # WITH POINTER: read the cursor (1-based), write starting there
-            # instead of at offset 0, then advance the cursor by the length of
-            # what was just written (red-dragon-4q25.15).
-            ptr_ref, ptr_rr = ctx.resolve_field_ref(
-                stmt.pointer, materialised, span=span
-            )
-            ptr_decoded_reg = ctx.emit_decode_field(
-                ptr_rr,
-                ptr_ref.fl,
-                ptr_ref.offset_reg,
-                extent=ptr_ref.extent,
-                span=span,
-            )
-            one_reg = ctx.const_to_reg(1, span=span)
-            start_0indexed_reg = ctx.fresh_reg()
-            ctx.emit_inst(
-                Binop(
-                    result_reg=start_0indexed_reg,
-                    operator=resolve_binop("-"),
-                    left=ptr_decoded_reg,
-                    right=one_reg,
-                ),
-                span=span,
-            )
-            _splice_into_receiver(
-                ctx, target_ref, target_rr, start_0indexed_reg, concat_reg, span=span
-            )
-            written_len_reg = ctx.fresh_reg()
-            ctx.emit_inst(
-                CallFunction(
-                    result_reg=written_len_reg,
-                    func_name=FuncName(BuiltinName.LENGTH),
-                    args=(concat_reg,),
-                ),
-                span=span,
-            )
-            new_ptr_reg = ctx.fresh_reg()
-            ctx.emit_inst(
-                Binop(
-                    result_reg=new_ptr_reg,
-                    operator=resolve_binop("+"),
-                    left=ptr_decoded_reg,
-                    right=written_len_reg,
-                ),
-                span=span,
-            )
-            new_ptr_str_reg = ctx.emit_to_string(new_ptr_reg, span=span)
-            ctx.emit_encode_and_write(
-                ptr_rr,
-                ptr_ref.fl,
-                new_ptr_str_reg,
-                ptr_ref.offset_reg,
-                extent=ptr_ref.extent,
-                span=span,
-            )
-        else:
-            _splice_into_receiver(
-                ctx,
-                target_ref,
-                target_rr,
-                ctx.const_to_reg(0, span=span),
-                concat_reg,
-                span=span,
-            )
-    else:
-        logger.warning("STRING INTO target %s not found in layout", stmt.into.name)
+    _lower_overflow_phrases(
+        ctx,
+        _list_item(ctx, outcome_reg, 2, span=span),
+        stmt.on_overflow,
+        stmt.not_on_overflow,
+        materialised,
+        span=span,
+    )
 
 
-def _splice_into_receiver(
+def _string_outcome(
     ctx: EmitContext,
-    target_ref: ResolvedFieldRef,
-    target_rr: Register,
-    start_reg: Register,
+    stmt: StringStatement,
+    has_pointer: bool,
+    materialised: MaterialisedSectionedLayout,
+) -> Register:
+    """[receiver characters, pointer, overflow] after the transfer; the pointer
+    starts at 1 without WITH POINTER."""
+    span = stmt.span
+    parts = tuple(
+        _delimited_sending(ctx, sending, materialised, span=span)
+        for sending in stmt.sendings
+    )
+    return _call(
+        ctx,
+        BuiltinName.COBOL_STRING,
+        (
+            _receiver_characters(ctx, stmt.into, materialised, span=span),
+            (
+                _read_pointer(ctx, stmt.pointer, materialised, span=span)
+                if has_pointer
+                else ctx.const_to_reg(1, span=span)
+            ),
+            *parts,
+        ),
+        span=span,
+    )
+
+
+def _delimited_sending(
+    ctx: EmitContext,
+    sending: StringSending,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> Register:
+    """The characters a sending contributes: all of them for DELIMITED BY SIZE,
+    else those before the delimiter's first occurrence."""
+    characters_reg = _sending_characters(ctx, sending, materialised, span=span)
+    if not sending.delimiter.name:
+        return characters_reg
+    pieces_reg = _call(
+        ctx,
+        BuiltinName.STRING_SPLIT,
+        (
+            characters_reg,
+            _resolve_inspect_operand(ctx, sending.delimiter, materialised, span=span),
+        ),
+        span=span,
+    )
+    return _list_item(ctx, pieces_reg, 0, span=span)
+
+
+def _sending_characters(
+    ctx: EmitContext,
+    sending: StringSending,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> Register:
+    """An intrinsic FUNCTION's value, a data item's stored characters (with its
+    qualifiers, subscripts and reference modification), a figurative constant's
+    single character, or a literal's text."""
+    if sending.function is not None:
+        from interpreter.cobol.lower_arithmetic import lower_function_operand
+
+        return ctx.emit_to_string(
+            lower_function_operand(ctx, sending.function, materialised, span=span),
+            span=span,
+        )
+    if not ctx.has_field(sending.value.name, materialised):
+        return ctx.const_to_reg(
+            strip_cobol_literal(ctx.figuratives.translate(sending.value.name)),
+            span=span,
+        )
+    ref, rr = ctx.resolve_field_ref(
+        sending.value.name,
+        materialised,
+        sending.value.qualifiers,
+        subscripts=sending.value.subscripts,
+        span=span,
+    )
+    stored_reg = ctx.emit_stored_characters(
+        rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
+    )
+    window = _ref_mod_window(ctx, sending.value, materialised, span=span)
+    return (
+        _call(ctx, BuiltinName.STRING_SLICE, (stored_reg, *window), span=span)
+        if window
+        else stored_reg
+    )
+
+
+def _receiver_characters(
+    ctx: EmitContext,
+    receiver: RefModOperand,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> Register:
+    """The receiving item's current characters, only its reference-modified
+    window when it has one."""
+    ref, rr = ctx.resolve_field_ref(
+        receiver.name,
+        materialised,
+        receiver.qualifiers,
+        subscripts=receiver.subscripts,
+        span=span,
+    )
+    current_reg = ctx.emit_decode_field_characters(
+        rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
+    )
+    window = _ref_mod_window(ctx, receiver, materialised, span=span)
+    return (
+        _call(ctx, BuiltinName.STRING_SLICE, (current_reg, *window), span=span)
+        if window
+        else current_reg
+    )
+
+
+def _ref_mod_window(
+    ctx: EmitContext,
+    operand: RefModOperand,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> tuple[Register, ...]:
+    """(0-based start, length) registers of a reference-modified operand, else ()."""
+    if operand.ref_mod_start is None:
+        return ()
+    start_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        Binop(
+            result_reg=start_reg,
+            operator=resolve_binop("-"),
+            left=eval_ref_mod_expr(ctx, operand.ref_mod_start, materialised, span=span),
+            right=ctx.const_to_reg(1, span=span),
+        ),
+        span=span,
+    )
+    length_reg = (
+        eval_ref_mod_expr(ctx, operand.ref_mod_length, materialised, span=span)
+        if operand.ref_mod_length is not None
+        else ctx.const_to_reg(9999, span=span)
+    )
+    return start_reg, length_reg
+
+
+def _read_pointer(
+    ctx: EmitContext,
+    name: str,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> Register:
+    ref, rr = ctx.resolve_field_ref(name, materialised, span=span)
+    return ctx.emit_decode_field(
+        rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
+    )
+
+
+def _write_number(
+    ctx: EmitContext,
+    name: str,
     value_reg: Register,
+    materialised: MaterialisedSectionedLayout,
     *,
     span: SourceSpan | None,
 ) -> None:
-    """Write value_reg into the receiver from 0-based start_reg, keeping every
-    character it does not reach: STRING changes only what it transfers."""
-    current_reg = ctx.emit_decode_field_characters(
-        target_rr,
-        target_ref.fl,
-        target_ref.offset_reg,
-        extent=target_ref.extent,
-        span=span,
-    )
-    length_reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        CallFunction(
-            result_reg=length_reg,
-            func_name=FuncName(BuiltinName.LENGTH),
-            args=(value_reg,),
-        ),
-        span=span,
-    )
-    spliced_reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        CallFunction(
-            result_reg=spliced_reg,
-            func_name=FuncName(BuiltinName.STRING_SPLICE),
-            args=(current_reg, start_reg, length_reg, value_reg),
-        ),
-        span=span,
-    )
+    ref, rr = ctx.resolve_field_ref(name, materialised, span=span)
     ctx.emit_encode_and_write(
-        target_rr,
-        target_ref.fl,
-        spliced_reg,
-        target_ref.offset_reg,
-        extent=target_ref.extent,
+        rr,
+        ref.fl,
+        ctx.emit_to_string(value_reg, span=span),
+        ref.offset_reg,
+        extent=ref.extent,
         span=span,
     )
+
+
+def _list_item(
+    ctx: EmitContext, list_reg: Register, index: int, *, span: SourceSpan | None
+) -> Register:
+    return _call(
+        ctx,
+        BuiltinName.LIST_GET,
+        (list_reg, ctx.const_to_reg(index, span=span)),
+        span=span,
+    )
+
+
+def _lower_overflow_phrases(
+    ctx: EmitContext,
+    overflow_reg: Register,
+    on_overflow: Sequence[CobolStatementType],
+    not_on_overflow: Sequence[CobolStatementType],
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> None:
+    """ON OVERFLOW runs when the overflow condition arose, NOT ON OVERFLOW when
+    it did not; control then passes to the end of the statement."""
+    if not (on_overflow or not_on_overflow):
+        return
+    on_label = ctx.fresh_label("on_overflow")
+    not_on_label = ctx.fresh_label("not_on_overflow")
+    end_label = ctx.fresh_label("overflow_end")
+    ctx.emit_inst(
+        BranchIf(cond_reg=overflow_reg, branch_targets=(on_label, not_on_label)),
+        span=span,
+    )
+    _lower_overflow_arm(ctx, on_label, on_overflow, end_label, materialised, span=span)
+    _lower_overflow_arm(
+        ctx, not_on_label, not_on_overflow, end_label, materialised, span=span
+    )
+    ctx.emit_inst(Label_(label=end_label), span=span)
+
+
+def _lower_overflow_arm(
+    ctx: EmitContext,
+    label: CodeLabel,
+    body: Sequence[CobolStatementType],
+    end_label: CodeLabel,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> None:
+    ctx.emit_inst(Label_(label=label), span=span)
+    for child in body:
+        ctx.lower_statement(child, materialised)
+    ctx.emit_inst(Branch(label=end_label), span=span)
 
 
 def _receiver_sizes(
