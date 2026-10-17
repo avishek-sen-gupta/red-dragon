@@ -36,6 +36,7 @@ from cobol_asg.cobol_statements import (
     PerformVaryingSpec,
     ProcedureRef,
     ReadStatement,
+    Replacing,
     RewriteStatement,
     SearchStatement,
     SetStatement,
@@ -44,6 +45,8 @@ from cobol_asg.cobol_statements import (
     StopRunStatement,
     StringSending,
     StringStatement,
+    TallyingFor,
+    TallyingGroup,
     UnstringStatement,
     WhenOtherStatement,
     WhenStatement,
@@ -562,18 +565,34 @@ class TestParseStatementDispatch:
                 "source": "WS-DATA",
                 "tallying_groups": [
                     {
-                        "target": "WS-COUNT",
-                        "patterns": [{"mode": "ALL", "pattern": "A"}],
+                        "target": {"name": "WS-COUNT"},
+                        "patterns": [
+                            {
+                                "mode": "ALL",
+                                "pattern": {"name": "'A'"},
+                                "after": {"name": "'X'"},
+                                "before": {"name": "'Y'"},
+                            }
+                        ],
                     }
                 ],
             }
         )
         assert isinstance(stmt, InspectStatement)
         assert stmt.inspect_type == "TALLYING"
-        assert len(stmt.tallying_groups) == 1
-        assert stmt.tallying_groups[0].target == "WS-COUNT"
-        assert len(stmt.tallying_groups[0].patterns) == 1
-        assert stmt.tallying_groups[0].patterns[0].mode == "ALL"
+        assert stmt.tallying_groups == [
+            TallyingGroup(
+                target=RefModOperand(name="WS-COUNT"),
+                patterns=[
+                    TallyingFor(
+                        mode="ALL",
+                        pattern=RefModOperand(name="'A'"),
+                        after=RefModOperand(name="'X'"),
+                        before=RefModOperand(name="'Y'"),
+                    )
+                ],
+            )
+        ]
 
     @covers(CobolFeature.INSPECT_REPLACING)
     def test_inspect_replacing(self):
@@ -582,14 +601,20 @@ class TestParseStatementDispatch:
                 "type": "INSPECT",
                 "inspect_type": "REPLACING",
                 "source": "WS-DATA",
-                "replacings": [{"mode": "ALL", "from": "A", "to": "B"}],
+                "replacings": [
+                    {"mode": "ALL", "from": {"name": "'A'"}, "to": {"name": "'B'"}}
+                ],
             }
         )
         assert isinstance(stmt, InspectStatement)
         assert stmt.inspect_type == "REPLACING"
-        assert len(stmt.replacings) == 1
-        assert stmt.replacings[0].from_pattern == "A"
-        assert stmt.replacings[0].to_pattern == "B"
+        assert stmt.replacings == [
+            Replacing(
+                mode="ALL",
+                from_pattern=RefModOperand(name="'A'"),
+                to_pattern=RefModOperand(name="'B'"),
+            )
+        ]
 
     @covers(
         CobolFeature.SEARCH_LINEAR,
@@ -1489,8 +1514,15 @@ class TestRoundTrip:
             "source": {"name": "WS-DATA"},
             "tallying_groups": [
                 {
-                    "target": "WS-COUNT",
-                    "patterns": [{"mode": "ALL", "pattern": "A"}],
+                    "target": {"name": "WS-COUNT"},
+                    "patterns": [
+                        {
+                            "mode": "CHARACTERS",
+                            "after": {"name": "'W'"},
+                            "before": {"name": "'D'"},
+                        },
+                        {"mode": "ALL", "pattern": {"name": "'A'"}},
+                    ],
                 }
             ],
         }
@@ -1500,9 +1532,18 @@ class TestRoundTrip:
     def test_inspect_replacing_round_trip(self):
         data = {
             "type": "INSPECT",
-            "inspect_type": "REPLACING",
+            "inspect_type": "TALLYING_REPLACING",
             "source": {"name": "WS-DATA"},
-            "replacings": [{"mode": "ALL", "from": "A", "to": "B"}],
+            "tallying_groups": [
+                {
+                    "target": {"name": "WS-COUNT"},
+                    "patterns": [{"mode": "ALL", "pattern": {"name": "'A'"}}],
+                }
+            ],
+            "replacings": [
+                {"mode": "ALL", "from": {"name": "'A'"}, "to": {"name": "'B'"}},
+                {"mode": "CHARACTERS", "to": {"name": "'Z'"}, "after": {"name": "'Q'"}},
+            ],
         }
         assert self._round_trip(data) == data
 

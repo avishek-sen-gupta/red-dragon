@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 
 from cobol_asg.cobol_statements import (
-    BeforeAfterBoundary,
     InspectStatement,
     StringStatement,
     UnstringStatement,
@@ -13,13 +12,8 @@ from cobol_asg.cobol_statements import (
 from cobol_asg.ref_mod import RefModOperand
 from cobol_asg.source_span import SourceSpan
 from interpreter.cobol.cobol_constants import BuiltinName, DelimiterMode, InspectType
-from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.emit_context import EmitContext, strip_cobol_literal
 from interpreter.cobol.field_resolution import ResolvedFieldRef
-from interpreter.cobol.ir_encoders import (
-    build_inspect_replace_ir,
-    build_inspect_tally_ir,
-)
 from interpreter.cobol.lower_arithmetic import eval_ref_mod_expr
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.func_name import FuncName
@@ -28,6 +22,8 @@ from interpreter.operator_kind import resolve_binop
 from interpreter.register import NO_REGISTER, Register
 
 logger = logging.getLogger(__name__)
+
+_NO_OPERAND = RefModOperand(name="")
 
 
 def _write_ref_mod_target(
@@ -650,338 +646,281 @@ def lower_inspect(
     stmt: InspectStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """INSPECT source TALLYING|REPLACING ..."""
+    """INSPECT source TALLYING | REPLACING | TALLYING ... REPLACING | CONVERTING.
+
+    The source, its subscripts and reference modification, and every operand
+    are evaluated once; one builtin then runs the standard's single
+    left-to-right scan (interpreter.cobol.inspect_scan). TALLYING ...
+    REPLACING tallies first and then replaces, as two statements would.
+    """
     span = stmt.span
     if not ctx.has_field(stmt.source.name, materialised):
         logger.warning("INSPECT source %s not found in layout", stmt.source.name)
         return
     source_ref, source_rr = ctx.resolve_field_ref(
-        stmt.source.name, materialised, span=span
+        stmt.source.name,
+        materialised,
+        stmt.source.qualifiers,
+        subscripts=stmt.source.subscripts,
+        span=span,
     )
-    source_fl = source_ref.fl
-    src_str_reg = ctx.emit_inspected_characters(
-        source_rr, source_fl, source_ref.offset_reg, extent=source_ref.extent, span=span
+    image_reg = ctx.emit_inspected_characters(
+        source_rr,
+        source_ref.fl,
+        source_ref.offset_reg,
+        extent=source_ref.extent,
+        span=span,
     )
-
-    if stmt.source.ref_mod_start is not None:
-        raw_start_reg = eval_ref_mod_expr(
-            ctx, stmt.source.ref_mod_start, materialised, span=span
-        )
-        one_reg = ctx.const_to_reg(1, span=span)
-        start_0indexed_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Binop(
-                result_reg=start_0indexed_reg,
-                operator=resolve_binop("-"),
-                left=raw_start_reg,
-                right=one_reg,
-            ),
-            span=span,
-        )
-        if stmt.source.ref_mod_length is not None:
-            length_reg = eval_ref_mod_expr(
-                ctx, stmt.source.ref_mod_length, materialised, span=span
+    window = _inspected_window(ctx, stmt, materialised)
+    inspected_reg = (
+        _call(ctx, BuiltinName.STRING_SLICE, (image_reg, *window), span=span)
+        if window
+        else image_reg
+    )
+    if stmt.tallying_groups:
+        _lower_inspect_tallying(ctx, stmt, inspected_reg, materialised)
+    rewritten_reg = _rewritten(ctx, stmt, inspected_reg, materialised)
+    if not rewritten_reg.is_present():
+        return
+    ctx.emit_write_inspected_characters(
+        source_rr,
+        source_ref.fl,
+        (
+            _call(
+                ctx,
+                BuiltinName.STRING_SPLICE,
+                (image_reg, *window, rewritten_reg),
+                span=span,
             )
-        else:
-            length_reg = ctx.const_to_reg(9999, span=span)
-        sliced_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            CallFunction(
-                result_reg=sliced_reg,
-                func_name=FuncName(BuiltinName.STRING_SLICE),
-                args=(src_str_reg, start_0indexed_reg, length_reg),
+            if window
+            else rewritten_reg
+        ),
+        source_ref.offset_reg,
+        extent=source_ref.extent,
+        span=span,
+    )
+
+
+def _inspected_window(
+    ctx: EmitContext,
+    stmt: InspectStatement,
+    materialised: MaterialisedSectionedLayout,
+) -> tuple[Register, ...]:
+    """(start, length) registers of a reference-modified source, else ()."""
+    if stmt.source.ref_mod_start is None:
+        return ()
+    span = stmt.span
+    start_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        Binop(
+            result_reg=start_reg,
+            operator=resolve_binop("-"),
+            left=eval_ref_mod_expr(
+                ctx, stmt.source.ref_mod_start, materialised, span=span
+            ),
+            right=ctx.const_to_reg(1, span=span),
+        ),
+        span=span,
+    )
+    length_reg = (
+        eval_ref_mod_expr(ctx, stmt.source.ref_mod_length, materialised, span=span)
+        if stmt.source.ref_mod_length is not None
+        else ctx.const_to_reg(9999, span=span)
+    )
+    return start_reg, length_reg
+
+
+def _rewritten(
+    ctx: EmitContext,
+    stmt: InspectStatement,
+    inspected_reg: Register,
+    materialised: MaterialisedSectionedLayout,
+) -> Register:
+    """The new characters REPLACING or CONVERTING give, or NO_REGISTER."""
+    span = stmt.span
+    if stmt.inspect_type == InspectType.CONVERTING:
+        return _call(
+            ctx,
+            BuiltinName.COBOL_INSPECT_CONVERT,
+            (
+                inspected_reg,
+                *(
+                    _resolve_inspect_operand(ctx, operand, materialised, span=span)
+                    for operand in (
+                        stmt.converting_from,
+                        stmt.converting_to,
+                        stmt.converting_after,
+                        stmt.converting_before,
+                    )
+                ),
             ),
             span=span,
         )
-        src_str_reg = sliced_reg
+    if not stmt.replacings:
+        return NO_REGISTER
+    phrase_args = tuple(
+        arg
+        for replacing in stmt.replacings
+        for arg in _phrase_args(
+            ctx,
+            replacing.mode,
+            (
+                replacing.from_pattern,
+                replacing.to_pattern,
+                replacing.after,
+                replacing.before,
+            ),
+            0,
+            materialised,
+            span=span,
+        )
+    )
+    return _call(
+        ctx, BuiltinName.COBOL_INSPECT_REPLACE, (inspected_reg, *phrase_args), span=span
+    )
 
-    if stmt.inspect_type == InspectType.TALLYING:
-        lower_inspect_tallying(ctx, stmt, src_str_reg, materialised)
-    elif stmt.inspect_type == InspectType.REPLACING:
-        lower_inspect_replacing(ctx, stmt, src_str_reg, source_fl, materialised)
-    elif stmt.inspect_type == InspectType.CONVERTING:
-        lower_inspect_converting(ctx, stmt, src_str_reg, source_fl, materialised)
+
+def _phrase_args(
+    ctx: EmitContext,
+    mode: str,
+    operands: tuple[RefModOperand, RefModOperand, RefModOperand, RefModOperand],
+    counter: int,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> tuple[Register, ...]:
+    """One phrase as the builtins take it: mode, pattern, BY value, AFTER
+    operand, BEFORE operand (empty when absent) and counter number."""
+    return (
+        ctx.const_to_reg(mode, span=span),
+        *(
+            _resolve_inspect_operand(ctx, operand, materialised, span=span)
+            for operand in operands
+        ),
+        ctx.const_to_reg(counter, span=span),
+    )
+
+
+def _call(
+    ctx: EmitContext,
+    builtin: str,
+    args: tuple[Register, ...],
+    *,
+    span: SourceSpan | None,
+) -> Register:
+    result_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(result_reg=result_reg, func_name=FuncName(builtin), args=args),
+        span=span,
+    )
+    return result_reg
 
 
 def _resolve_inspect_operand(
     ctx: EmitContext,
-    operand: str,
+    operand: RefModOperand,
     materialised: MaterialisedSectionedLayout,
     *,
-    span: SourceSpan | None = None,
+    span: SourceSpan | None,
 ) -> Register:
-    """Resolve an INSPECT operand shared by CONVERTING (from/to), TALLYING
-    (FOR ALL/LEADING pattern, BEFORE/AFTER INITIAL boundary text), and
-    REPLACING (from/to pattern, BEFORE/AFTER INITIAL boundary text): a
-    data-item name is decoded at runtime; otherwise it is a figurative /
-    quoted-literal constant (red-dragon-twn — TALLYING and REPLACING
-    previously passed these straight through strip_cobol_literal, so a
-    figurative constant like SPACES matched/produced the literal text
-    "SPACES" instead of its value, and a field operand matched/produced its
-    name instead of its contents)."""
-    if ctx.has_field(operand, materialised):
-        ref, rr = ctx.resolve_field_ref(operand, materialised, span=span)
+    """An INSPECT operand's characters: a data item (with its qualifiers and
+    subscripts) decoded at run time, a figurative constant's character, or a
+    literal's text. An operand that was not written is the empty string."""
+    if ctx.has_field(operand.name, materialised):
+        ref, rr = ctx.resolve_field_ref(
+            operand.name,
+            materialised,
+            operand.qualifiers,
+            subscripts=operand.subscripts,
+            span=span,
+        )
         return ctx.emit_decode_field_characters(
             rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
         )
-    if operand in ("SPACES", "SPACE", "ZEROS", "ZEROES", "ZERO", "LOW-VALUES"):
-        return ctx.const_to_reg(ctx.figuratives.translate(operand), span=span)
-    return ctx.const_to_reg(strip_cobol_literal(str(operand)), span=span)
+    return ctx.const_to_reg(
+        strip_cobol_literal(ctx.figuratives.translate(operand.name)), span=span
+    )
 
 
-def lower_inspect_converting(
+def _lower_inspect_tallying(
     ctx: EmitContext,
     stmt: InspectStatement,
-    src_str_reg: Register,
-    source_fl: FieldLayout,
+    inspected_reg: Register,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """INSPECT source CONVERTING <from> TO <to>: positional character translate.
-
-    Builds the converted string via the STRING_CONVERT builtin and writes it back
-    to the source field (red-dragon-zuhj — unblocks CardDemo's alphabetic edits).
-    """
+    """Each TALLYING identifier gains the matches of its own phrases; the count
+    ACCUMULATES into its existing value (IBM Enterprise COBOL LR, INSPECT)."""
     span = stmt.span
-    from_reg = _resolve_inspect_operand(
-        ctx, str(stmt.converting_from), materialised, span=span
+    phrase_args = tuple(
+        arg
+        for counter, group in enumerate(stmt.tallying_groups)
+        for tally_for in group.patterns
+        for arg in _phrase_args(
+            ctx,
+            tally_for.mode,
+            (tally_for.pattern, _NO_OPERAND, tally_for.after, tally_for.before),
+            counter,
+            materialised,
+            span=span,
+        )
     )
-    to_reg = _resolve_inspect_operand(
-        ctx, str(stmt.converting_to), materialised, span=span
-    )
-    converted_reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        CallFunction(
-            result_reg=converted_reg,
-            func_name=FuncName(BuiltinName.STRING_CONVERT),
-            args=(src_str_reg, from_reg, to_reg),
+    counts_reg = _call(
+        ctx,
+        BuiltinName.COBOL_INSPECT_TALLY,
+        (
+            inspected_reg,
+            ctx.const_to_reg(len(stmt.tallying_groups), span=span),
+            *phrase_args,
         ),
         span=span,
     )
-    if ctx.has_field(stmt.source.name, materialised):
-        source_ref_wb, source_rr = ctx.resolve_field_ref(
-            stmt.source.name, materialised, span=span
-        )
-        # Write-back of the whole INSPECT source at its own offset — the
-        # re-resolved ref is unsubscripted, so its extent is the exact field.
-        ctx.emit_write_inspected_characters(
-            source_rr,
-            source_fl,
-            converted_reg,
-            source_ref_wb.offset_reg,
-            extent=source_ref_wb.extent,
-            span=span,
-        )
-    else:
-        logger.warning(
-            "INSPECT CONVERTING: source field %s not found in materialised layout;"
-            " skipping write-back",
-            stmt.source.name,
-        )
+    for counter, group in enumerate(stmt.tallying_groups):
+        if ctx.has_field(group.target.name, materialised):
+            _add_to_tally(ctx, stmt, group.target, counts_reg, counter, materialised)
 
 
-def lower_inspect_tallying(
+def _add_to_tally(
     ctx: EmitContext,
     stmt: InspectStatement,
-    src_str_reg: Register,
+    target: RefModOperand,
+    counts_reg: Register,
+    counter: int,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """INSPECT TALLYING — count pattern occurrences per independent target.
-
-    Each TallyingGroup gets its own accumulator and its own write-back, so
-    ``INSPECT src TALLYING cnt1 FOR ALL 'A' cnt2 FOR ALL 'B'`` updates both
-    counters independently in one statement (red-dragon-4q25.17).
-    """
     span = stmt.span
-    for group in stmt.tallying_groups:
-        has_target = bool(group.target) and ctx.has_field(group.target, materialised)
-        if has_target:
-            # Real INSPECT TALLYING semantics (IBM Enterprise COBOL Language
-            # Reference): the counter ACCUMULATES into its existing value
-            # across separate statement executions — it is not reset to zero
-            # each time (red-dragon-pvxc).
-            tally_ref, tally_rr = ctx.resolve_field_ref(
-                group.target, materialised, span=span
-            )
-            total_count_reg = ctx.emit_decode_field(
+    tally_ref, tally_rr = ctx.resolve_field_ref(
+        target.name,
+        materialised,
+        target.qualifiers,
+        subscripts=target.subscripts,
+        span=span,
+    )
+    total_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        Binop(
+            result_reg=total_reg,
+            operator=resolve_binop("+"),
+            left=ctx.emit_decode_field(
                 tally_rr,
                 tally_ref.fl,
                 tally_ref.offset_reg,
                 extent=tally_ref.extent,
                 span=span,
-            )
-        else:
-            total_count_reg = ctx.const_to_reg(0, span=span)
-        for tally_for in group.patterns:
-            bounded_str_reg = src_str_reg
-            if isinstance(tally_for.boundary, BeforeAfterBoundary):
-                boundary_text_reg = _resolve_inspect_operand(
-                    ctx,
-                    str(tally_for.boundary.boundary_text),
-                    materialised,
-                    span=span,
-                )
-                kind_reg = ctx.const_to_reg(tally_for.boundary.kind.lower(), span=span)
-                bounded_str_reg = ctx.fresh_reg()
-                ctx.emit_inst(
-                    CallFunction(
-                        result_reg=bounded_str_reg,
-                        func_name=FuncName(BuiltinName.STRING_BOUNDARY_SLICE),
-                        args=(src_str_reg, boundary_text_reg, kind_reg),
-                    ),
-                    span=span,
-                )
-            pattern_reg = _resolve_inspect_operand(
-                ctx, str(tally_for.pattern), materialised, span=span
-            )
-            mode_reg = ctx.const_to_reg(tally_for.mode.lower(), span=span)
-            ir = build_inspect_tally_ir(f"inspect_tally_{stmt.source}")
-            count_reg = ctx.inline_ir(
-                ir,
-                {
-                    "%p_source": bounded_str_reg,
-                    "%p_pattern": pattern_reg,
-                    "%p_mode": mode_reg,
-                },
-                span=span,
-            )
-            new_total = ctx.fresh_reg()
-            ctx.emit_inst(
-                Binop(
-                    result_reg=new_total,
-                    operator=resolve_binop("+"),
-                    left=total_count_reg,
-                    right=count_reg,
-                ),
-                span=span,
-            )
-            total_count_reg = new_total
-
-        if has_target:
-            tally_ref, tally_rr = ctx.resolve_field_ref(
-                group.target, materialised, span=span
-            )
-            count_str_reg = ctx.emit_to_string(total_count_reg, span=span)
-            ctx.emit_encode_and_write(
-                tally_rr,
-                tally_ref.fl,
-                count_str_reg,
-                tally_ref.offset_reg,
-                extent=tally_ref.extent,
-                span=span,
-            )
-
-
-def lower_inspect_replacing(
-    ctx: EmitContext,
-    stmt: InspectStatement,
-    src_str_reg: Register,
-    source_fl: FieldLayout,
-    materialised: MaterialisedSectionedLayout,
-) -> None:
-    """INSPECT REPLACING — apply replacements and write back."""
-    span = stmt.span
-    current_str_reg: Register = src_str_reg
-
-    for replacing in stmt.replacings:
-        remainder_reg: Register = NO_REGISTER
-        if isinstance(replacing.boundary, BeforeAfterBoundary):
-            boundary_text_reg = _resolve_inspect_operand(
+            ),
+            right=_call(
                 ctx,
-                str(replacing.boundary.boundary_text),
-                materialised,
+                BuiltinName.LIST_GET,
+                (counts_reg, ctx.const_to_reg(counter, span=span)),
                 span=span,
-            )
-            kind_reg = ctx.const_to_reg(replacing.boundary.kind.lower(), span=span)
-            split_reg = ctx.fresh_reg()
-            ctx.emit_inst(
-                CallFunction(
-                    result_reg=split_reg,
-                    func_name=FuncName(BuiltinName.STRING_BOUNDARY_SPLIT),
-                    args=(current_str_reg, boundary_text_reg, kind_reg),
-                ),
-                span=span,
-            )
-            zero_reg = ctx.const_to_reg(0, span=span)
-            one_reg = ctx.const_to_reg(1, span=span)
-            bounded_str_reg = ctx.fresh_reg()
-            ctx.emit_inst(
-                CallFunction(
-                    result_reg=bounded_str_reg,
-                    func_name=FuncName(BuiltinName.LIST_GET),
-                    args=(split_reg, zero_reg),
-                ),
-                span=span,
-            )
-            remainder_reg = ctx.fresh_reg()
-            ctx.emit_inst(
-                CallFunction(
-                    result_reg=remainder_reg,
-                    func_name=FuncName(BuiltinName.LIST_GET),
-                    args=(split_reg, one_reg),
-                ),
-                span=span,
-            )
-        else:
-            bounded_str_reg = current_str_reg
-
-        from_reg = _resolve_inspect_operand(
-            ctx, str(replacing.from_pattern), materialised, span=span
-        )
-        to_reg = _resolve_inspect_operand(
-            ctx, str(replacing.to_pattern), materialised, span=span
-        )
-        mode_reg = ctx.const_to_reg(replacing.mode.lower(), span=span)
-        ir = build_inspect_replace_ir(f"inspect_replace_{stmt.source}")
-        replaced_bounded_reg = ctx.inline_ir(
-            ir,
-            {
-                "%p_source": bounded_str_reg,
-                "%p_from": from_reg,
-                "%p_to": to_reg,
-                "%p_mode": mode_reg,
-            },
-            span=span,
-        )
-
-        if remainder_reg.is_present():
-            spliced_reg = ctx.fresh_reg()
-            # BEFORE: replaced prefix + untouched remainder (boundary onward).
-            # AFTER: untouched remainder (up to and including boundary) + replaced suffix.
-            args = (
-                (replaced_bounded_reg, remainder_reg)
-                if replacing.boundary.kind == "BEFORE"
-                else (remainder_reg, replaced_bounded_reg)
-            )
-            ctx.emit_inst(
-                CallFunction(
-                    result_reg=spliced_reg,
-                    func_name=FuncName(BuiltinName.STRING_CONCAT_PAIR),
-                    args=args,
-                ),
-                span=span,
-            )
-            current_str_reg = spliced_reg
-        else:
-            current_str_reg = replaced_bounded_reg
-
-    # Resolve the source region register for the write-back
-    if ctx.has_field(stmt.source.name, materialised):
-        source_ref_wb, source_rr = ctx.resolve_field_ref(
-            stmt.source.name, materialised, span=span
-        )
-        # Write-back of the whole INSPECT source at its own offset — the
-        # re-resolved ref is unsubscripted, so its extent is the exact field.
-        ctx.emit_write_inspected_characters(
-            source_rr,
-            source_fl,
-            current_str_reg,
-            source_ref_wb.offset_reg,
-            extent=source_ref_wb.extent,
-            span=span,
-        )
-    else:
-        # Fallback: source_fl carries offset; need a region register — skip write
-        logger.warning(
-            "INSPECT REPLACING: source field %s not found in materialised layout; skipping write-back",
-            stmt.source.name,
-        )
+            ),
+        ),
+        span=span,
+    )
+    ctx.emit_encode_and_write(
+        tally_rr,
+        tally_ref.fl,
+        ctx.emit_to_string(total_reg, span=span),
+        tally_ref.offset_reg,
+        extent=tally_ref.extent,
+        span=span,
+    )

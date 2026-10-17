@@ -2163,8 +2163,8 @@ class TestInspectRefMod:
         """INSPECT REPLACING with ref_mod replaces only within the sliced region.
 
         WS-DATA = 'XAAXX' (PIC X(5)). INSPECT WS-DATA(2:3) replaces 'A' by 'B'
-        in 0-indexed[1:4] = 'AAX' → 'BBX'. Wrong conversion (no -1) would act
-        on 0-indexed[2:5] = 'AXX' → 'BXX', giving byte[1] = X not B.
+        in positions 2-4 'AAX' -> 'BBX', in place: the characters outside the
+        reference-modified area are not touched, so the field is 'XBBXX'.
         """
         vm = _run_cobol(
             [
@@ -2180,12 +2180,7 @@ class TestInspectRefMod:
             ]
         )
         region = _first_region(vm)
-        # 0-indexed[1:4] = "AAX" → replaced → "BBX"
-        # Written back to PIC X(5) field → bytes [B, B, X, ...]
-        # EBCDIC: B=0xC2, X=0xE7
-        assert region[0] == 0xC2, f"byte[0] should be B (0xC2), got {hex(region[0])}"
-        assert region[1] == 0xC2, f"byte[1] should be B (0xC2), got {hex(region[1])}"
-        assert region[2] == 0xE7, f"byte[2] should be X (0xE7), got {hex(region[2])}"
+        assert bytes(region[:5]).decode("cp037") == "XBBXX"
 
     @covers(CobolFeature.INSPECT_TALLYING)
     def test_inspect_tallying_no_ref_mod_unchanged(self):

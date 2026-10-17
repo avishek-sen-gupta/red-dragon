@@ -1834,20 +1834,21 @@ class TestTier2Lowering:
                 source=RefModOperand(name="WS-DATA"),
                 tallying_groups=[
                     TallyingGroup(
-                        target="WS-COUNT",
-                        patterns=[TallyingFor(mode="ALL", pattern="A")],
+                        target=RefModOperand(name="WS-COUNT"),
+                        patterns=[
+                            TallyingFor(mode="ALL", pattern=RefModOperand(name="'A'"))
+                        ],
                     )
                 ],
             )
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
-        # Should use __string_count
         calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
         count_calls = [
-            c for c in calls if c.operands and c.operands[0] == "__string_count"
+            c for c in calls if c.operands and c.operands[0] == "__cobol_inspect_tally"
         ]
-        assert len(count_calls) >= 1
+        assert len(count_calls) == 1
 
         # Should produce WRITE_REGION for tally target
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
@@ -1874,17 +1875,24 @@ class TestTier2Lowering:
             InspectStatement(
                 inspect_type="REPLACING",
                 source=RefModOperand(name="WS-DATA"),
-                replacings=[Replacing(mode="ALL", from_pattern="A", to_pattern="B")],
+                replacings=[
+                    Replacing(
+                        mode="ALL",
+                        from_pattern=RefModOperand(name="'A'"),
+                        to_pattern=RefModOperand(name="'B'"),
+                    )
+                ],
             )
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
-        # Should use __string_replace
         calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
         replace_calls = [
-            c for c in calls if c.operands and c.operands[0] == "__string_replace"
+            c
+            for c in calls
+            if c.operands and c.operands[0] == "__cobol_inspect_replace"
         ]
-        assert len(replace_calls) >= 1
+        assert len(replace_calls) == 1
 
         # Should write back to source field
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)

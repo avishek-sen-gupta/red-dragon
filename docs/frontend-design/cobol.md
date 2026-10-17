@@ -163,7 +163,7 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 |---|---|
 | `STRING ... INTO` | Decode sources → concatenate (with optional delimiter truncation) → `__string_splice` into the target's current characters at offset 0, or at `pointer - 1` WITH POINTER → encode → write the target back whole. Characters STRING does not transfer keep their value. |
 | `UNSTRING ... INTO` | Decode source → `__multi_delimiter_split` (DELIMITED BY), or `__unstring_by_size` (no DELIMITED BY: each receiver takes its own size until the source is exhausted) → extract parts → encode → write to targets |
-| `INSPECT` | TALLYING: `__string_count` → write count. REPLACING: `__string_replace` → write back. |
+| `INSPECT` | TALLYING: `__cobol_inspect_tally` → add each identifier's count. REPLACING: `__cobol_inspect_replace` → write back. TALLYING ... REPLACING: both, tallying first. CONVERTING: `__cobol_inspect_convert` → write back. See INSPECT Lowering |
 
 ### Table Operations (1 type)
 
@@ -239,6 +239,10 @@ String operations use 7 low-level builtins registered in `byte_builtins.py`:
 | `__string_splice__` | `(source, start, length, replacement) → str` | Replace substring (0-based start); used for reference modification writes |
 
 These are composed into IR instruction sequences via builders in `ir_encoders.py` (`build_string_split_ir`, `build_inspect_tally_ir`, `build_inspect_replace_ir`). The composed IR is inlined at each lowering site, keeping all operations visible to data-flow analysis.
+
+## INSPECT Lowering
+
+The inspected item (with its qualifiers, subscripts and reference modification) and every operand are evaluated once, then one builtin runs the scan in `interpreter/cobol/inspect_scan.py`. Each phrase (CHARACTERS, ALL, LEADING, FIRST) has a region: it starts after the first occurrence of its AFTER operand (an AFTER operand that does not occur leaves the region empty) and ends before the first occurrence of its BEFORE operand at or after that start (one that does not occur leaves the region running to the end). The item is scanned left to right once; at each position the phrases are tried in the order written, and the first that matches inside its region is applied and consumes the matched characters. LEADING matches only contiguously from its region's start, FIRST at most once. TALLYING adds each identifier's matches to its value; REPLACING rewrites the matched characters (a one-character BY fills them all); TALLYING ... REPLACING tallies and then replaces; CONVERTING translates the characters inside its region. A reference-modified item is rewritten in place. The bridge serialises operands as data references, keeps phrases in written order, and starts a new ALL phrase where the grammar has read `ALL literal` as a figurative operand of the previous phrase.
 
 ## SEARCH Lowering
 
