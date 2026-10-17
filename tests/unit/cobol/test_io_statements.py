@@ -40,8 +40,10 @@ def test_file_control_entry_from_dict():
         "record_key": {"name": "CUST-ID", "qualifiers": ["CUST-REC"]},
         "relative_key": {"name": ""},
         "file_status_var": {"name": "WS-STATUS", "qualifiers": ["WS-AREA"]},
+        "optional": True,
     }
     e = FileControlEntry.from_dict(d)
+    assert e.optional is True
     assert e.organization == FileOrganization.INDEXED
     assert e.access_mode == AccessMode.DYNAMIC
     assert e.record_key == RefModOperand(name="CUST-ID", qualifiers=("CUST-REC",))

@@ -109,82 +109,41 @@ class TestExecutorIOProviderDispatch:
 
     @covers(CobolFeature.IO_PROVIDER, CobolFeature.OPEN, CobolFeature.CLOSE)
     def test_stub_open_close_lifecycle(self):
-        # Build IR: OPEN (with all 6 args), then CLOSE
+        open_args = (
+            ("%f", "MY-FILE"),
+            ("%m", "INPUT"),
+            ("%rl", 80),
+            ("%org", "SEQUENTIAL"),
+            ("%ko", 0),
+            ("%kl", 0),
+            ("%am", "SEQUENTIAL"),
+            ("%rk", 0),
+            ("%op", False),
+        )
         instructions = [
             IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
             IRInstruction(
                 opcode=Opcode.CONST, result_reg=Register("%p"), operands=["PGM"]
             ),
-        ]
-
-        instructions.append(
-            IRInstruction(
-                opcode=Opcode.CONST, result_reg=Register("%f"), operands=["MY-FILE"]
-            )
-        )
-        instructions.append(
-            IRInstruction(
-                opcode=Opcode.CONST, result_reg=Register("%m"), operands=["INPUT"]
-            )
-        )
-        instructions.append(
-            IRInstruction(
-                opcode=Opcode.CONST, result_reg=Register("%rl"), operands=[80]
-            )
-        )
-        instructions.append(
-            IRInstruction(
-                opcode=Opcode.CONST,
-                result_reg=Register("%org"),
-                operands=["SEQUENTIAL"],
-            )
-        )
-        instructions.append(
-            IRInstruction(opcode=Opcode.CONST, result_reg=Register("%ko"), operands=[0])
-        )
-        instructions.append(
-            IRInstruction(opcode=Opcode.CONST, result_reg=Register("%kl"), operands=[0])
-        )
-        instructions.append(
-            IRInstruction(
-                opcode=Opcode.CONST,
-                result_reg=Register("%am"),
-                operands=["SEQUENTIAL"],
-            )
-        )
-        instructions.append(
-            IRInstruction(opcode=Opcode.CONST, result_reg=Register("%rk"), operands=[0])
-        )
-        instructions.append(
+            *(
+                IRInstruction(
+                    opcode=Opcode.CONST, result_reg=Register(reg), operands=[value]
+                )
+                for reg, value in open_args
+            ),
             IRInstruction(
                 opcode=Opcode.CALL_FUNCTION,
                 result_reg=Register("%r1"),
-                operands=[
-                    "__cobol_open_file",
-                    "%f",
-                    "%m",
-                    "%rl",
-                    "%org",
-                    "%ko",
-                    "%kl",
-                    "%am",
-                    "%rk",
-                    "%p",
-                ],
-            )
-        )
-        instructions.append(
+                operands=["__cobol_open_file", *(reg for reg, _ in open_args), "%p"],
+            ),
             IRInstruction(
                 opcode=Opcode.CALL_FUNCTION,
                 result_reg=Register("%r2"),
                 operands=["__cobol_close_file", "%f", "%p"],
-            )
-        )
-
-        instructions.append(
-            IRInstruction(opcode=Opcode.CONST, result_reg=Register("%z"), operands=[0])
-        )
-        instructions.append(IRInstruction(opcode=Opcode.RETURN, operands=["%z"]))
+            ),
+            IRInstruction(opcode=Opcode.CONST, result_reg=Register("%z"), operands=[0]),
+            IRInstruction(opcode=Opcode.RETURN, operands=["%z"]),
+        ]
 
         provider = StubIOProvider()
         _execute_with_provider(instructions, provider)

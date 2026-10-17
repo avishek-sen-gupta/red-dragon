@@ -312,7 +312,7 @@ def _open_arguments(
     filename: str,
     mode: OpenMode,
     materialised: MaterialisedSectionedLayout,
-) -> tuple[str | int, ...]:
+) -> tuple[str | int | bool, ...]:
     entry = _file_entries(ctx).get(filename, FileControlEntry(file_name=filename))
     record = _record_area(ctx, filename, materialised)
     key_offset, key_length = _prime_key_extent(record, materialised, entry)
@@ -325,6 +325,7 @@ def _open_arguments(
         key_length,
         entry.access_mode.value,
         _relative_key_digits(materialised, entry),
+        entry.optional,
     )
 
 

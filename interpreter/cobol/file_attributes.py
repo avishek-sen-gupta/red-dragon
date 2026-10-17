@@ -1,5 +1,5 @@
 """What OPEN tells the provider about a file from its SELECT entry: organization,
-access mode, prime record key and RELATIVE KEY size."""
+access mode, prime record key, RELATIVE KEY size and whether it is OPTIONAL."""
 
 from __future__ import annotations
 
@@ -15,3 +15,4 @@ class FileAttributes:
     access: AccessMode
     prime_key: PrimeKey
     relative_key_digits: int
+    optional: bool

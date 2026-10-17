@@ -13,6 +13,7 @@ from types import MappingProxyType
 from cobol_asg.cobol_statements import FileControlEntry
 from cobol_asg.file_enums import AccessMode, FileOrganization, OpenMode
 from cobol_asg.switch_status import SwitchStatus
+from interpreter.cobol.absent_file_driver import AbsentFileDriver
 from interpreter.cobol.access_result import AccessCondition, AccessResult
 from interpreter.cobol.file_attributes import FileAttributes
 from interpreter.cobol.file_drivers import (
@@ -63,12 +64,13 @@ logger = logging.getLogger(__name__)
 _UNCOMPUTABLE = Operators.UNCOMPUTABLE
 _PATH_MARKS = frozenset("/\\.")
 _OPEN_FAILED = to_ioresult(AccessResult(AccessCondition.FILE_NOT_FOUND))
-_CLOSED_STATUS = _file_status(AccessCondition.OK)
+_SUCCESSFUL_STATUS = _file_status(AccessCondition.OK)
+_OPTIONAL_ABSENT = IOResult("05", None)
 _COPIED = to_ioresult(AccessResult(AccessCondition.OK))
 
 
 def _locked_by(filename: str, closed: IOResult) -> frozenset[str]:
-    return frozenset({filename}) if closed.status == _CLOSED_STATUS else frozenset()
+    return frozenset({filename}) if closed.status == _SUCCESSFUL_STATUS else frozenset()
 
 
 def _successful(result: IOResult) -> bool:
@@ -196,35 +198,65 @@ class RealFileIOProvider(CobolIOProvider):
         key_length: int,
         access_mode: str,
         relative_key_digits: int,
+        optional: bool,
         program: str,
     ) -> IOResult:
-        refusals = self._open_refusals(filename, OpenMode(mode))
+        attributes = FileAttributes(
+            _organization_of(organization),
+            AccessMode(access_mode),
+            PrimeKey(key_offset, key_length),
+            relative_key_digits,
+            optional,
+        )
+        refusals = self._open_refusals(filename, OpenMode(mode), optional)
         if refusals:
             logger.warning("OPEN %s %s refused: %s", mode, filename, refusals[0].status)
             return refusals[0]
-        return self._open_closed(
-            filename,
-            OpenMode(mode),
-            FileAttributes(
-                _organization_of(organization),
-                AccessMode(access_mode),
-                PrimeKey(key_offset, key_length),
-                relative_key_digits,
-            ),
-            record_length,
-        )
+        if self._optional_absent(filename, OpenMode(mode), optional):
+            return self._open_absent(
+                filename, OpenMode(mode), attributes, record_length
+            )
+        return self._open_closed(filename, OpenMode(mode), attributes, record_length)
 
-    def _open_refusals(self, filename: str, mode: OpenMode) -> list[IOResult]:
+    def _open_refusals(
+        self, filename: str, mode: OpenMode, optional: bool
+    ) -> list[IOResult]:
         checks = (
             (filename in self._files, FileLogicStatus.ALREADY_OPEN.result()),
             (filename in self._locked, FileLogicStatus.CLOSED_WITH_LOCK.result()),
-            (self._extending_absent(filename, mode), _OPEN_FAILED),
+            (
+                mode is OpenMode.EXTEND
+                and not optional
+                and not self._path(filename).exists(),
+                _OPEN_FAILED,
+            ),
         )
         return [result for refused, result in checks if refused]
 
-    def _extending_absent(self, filename: str, mode: OpenMode) -> bool:
-        path = self._resolve_path(filename, self._assign_to(filename))
-        return mode is OpenMode.EXTEND and not path.exists()
+    def _path(self, filename: str) -> Path:
+        return self._resolve_path(filename, self._assign_to(filename))
+
+    def _optional_absent(self, filename: str, mode: OpenMode, optional: bool) -> bool:
+        absent = not self._path(filename).exists()
+        return optional and absent and mode is not OpenMode.OUTPUT
+
+    def _open_absent(
+        self,
+        filename: str,
+        mode: OpenMode,
+        attributes: FileAttributes,
+        record_length: int,
+    ) -> IOResult:
+        logger.info("OPEN %s %s: optional file absent", mode.value, filename)
+        if mode is OpenMode.INPUT:
+            self._files = {
+                **self._files,
+                filename: OpenFile(AbsentFileDriver(), mode, attributes),
+            }
+            return _OPTIONAL_ABSENT
+        self._path(filename).touch()
+        opened = self._open_closed(filename, mode, attributes, record_length)
+        return _OPTIONAL_ABSENT if opened.status == _SUCCESSFUL_STATUS else opened
 
     def _open_closed(
         self,
@@ -233,7 +265,7 @@ class RealFileIOProvider(CobolIOProvider):
         attributes: FileAttributes,
         record_length: int,
     ) -> IOResult:
-        path = self._resolve_path(filename, self._assign_to(filename))
+        path = self._path(filename)
         try:
             drv = self._driver(
                 filename,
@@ -398,6 +430,7 @@ class RealFileIOProvider(CobolIOProvider):
             0,
             AccessMode.SEQUENTIAL.value,
             0,
+            False,
             program,
         )
 
