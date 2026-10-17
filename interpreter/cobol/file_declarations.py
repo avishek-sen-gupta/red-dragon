@@ -53,7 +53,9 @@ def _declare(
         )
     )
     emit_closed(
-        IrEmitter(ctx, None), file_state(program_name(ctx._asg), entry.file_name)
+        IrEmitter(ctx, None),
+        file_state(program_name(ctx._asg), entry.file_name),
+        False,
     )
 
 

@@ -11,6 +11,7 @@ import pytest
 
 from cobol_asg.cobol_statements import FileControlEntry
 from cobol_asg.file_enums import FileOrganization, OpenMode
+from interpreter.cobol.access_result import AccessCondition
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.file_drivers import FileOrganizationDriver, open_driver
 from interpreter.cobol.file_frame import FileFrame
@@ -56,7 +57,7 @@ class TestRealFileIOProvider:
         )
         r = prov2._read_record("SEQ-FILE", "", "PGM")
         prov2._close_file("SEQ-FILE", "PGM")
-        assert r.status == "00"
+        assert r.condition == AccessCondition.OK
         assert r.data == "HELLO     "
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
@@ -112,10 +113,10 @@ class TestRealFileIOProvider:
                 FileFrame(
                     "MISSING", FileOrganization("SEQUENTIAL"), PrimeKey(0, 0), False, 10
                 ),
-            ).status
+            ).condition
             for mode in ("INPUT", "I-O", "EXTEND")
         ]
-        assert statuses == ["35", "35", "35"]
+        assert statuses == [AccessCondition.FILE_NOT_FOUND] * 3
         assert not (tmp_path / "nonexistent.dat").exists()
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
@@ -164,7 +165,7 @@ class TestRealFileIOProvider:
         )
         r = prov2._read_record("IDX-FILE", "BBB", "PGM")
         prov2._close_file("IDX-FILE", "PGM")
-        assert r.status == "00"
+        assert r.condition == AccessCondition.OK
         assert r.data == "BBBFILLER "
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
@@ -187,7 +188,7 @@ class TestRealFileIOProvider:
         prov2._read_record("SEQ", "", "PGM")  # read the one record
         r = prov2._read_record("SEQ", "", "PGM")  # now EOF
         prov2._close_file("SEQ", "PGM")
-        assert r.status == "10"
+        assert r.condition == AccessCondition.END_OF_FILE
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_override_resolves_by_assign_name(self, tmp_path: Path) -> None:
@@ -212,7 +213,7 @@ class TestRealFileIOProvider:
                 "IN-FILE", FileOrganization("SEQUENTIAL"), PrimeKey(0, 0), False, 5
             ),
         )
-        assert r.status == "00"
+        assert r.condition == AccessCondition.OK
 
 
 class _WideRecords(RealFileIOProvider):
@@ -251,10 +252,10 @@ def test_a_subclass_chooses_the_driver_each_open_of_each_file_uses(
     prov._close_file("F1", "PGM")
     prov._close_file("F2", "PGM")
     assert (
-        [o.status for o in opens],
+        [o.condition for o in opens],
         (tmp_path / "F1.dat").read_bytes(),
         (tmp_path / "F2.dat").read_bytes(),
-    ) == (["00", "00"], b"HELLO     ", b"WORLD")
+    ) == ([AccessCondition.OK] * 2, b"HELLO     ", b"WORLD")
 
 
 @covers(CobolFeature.ACCEPT)

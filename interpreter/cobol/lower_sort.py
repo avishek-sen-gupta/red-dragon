@@ -235,7 +235,9 @@ def lower_sort(
     _fill(ctx, stmt, materialised)
     _emit_order(ctx, stmt, materialised)
     emit_closed(
-        IrEmitter(ctx, stmt.span), file_state(program_name(ctx._asg), stmt.file_name)
+        IrEmitter(ctx, stmt.span),
+        file_state(program_name(ctx._asg), stmt.file_name),
+        False,
     )
     _drain(ctx, stmt, materialised)
 

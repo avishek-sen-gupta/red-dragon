@@ -1,6 +1,7 @@
 """Unit tests — verify executor dispatches __cobol_* calls to io_provider."""
 
 from interpreter.cfg import build_cfg
+from interpreter.cobol.access_result import AccessCondition
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.io_provider import NullIOProvider, StubIOProvider
 from interpreter.instructions import InstructionBase
@@ -95,7 +96,7 @@ class TestExecutorIOProviderDispatch:
         vm = _execute_with_provider(ir, provider)
 
         result = unwrap(vm.current_frame.registers.get(Register("%result")))
-        assert result == IOResult("00", "RECORD-DATA")
+        assert result == IOResult(AccessCondition.OK, "RECORD-DATA")
 
     @covers(CobolFeature.IO_PROVIDER, CobolFeature.WRITE)
     def test_stub_write_captures_data(self):
