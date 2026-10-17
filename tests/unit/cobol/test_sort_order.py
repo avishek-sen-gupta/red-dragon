@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
-from cobol_asg.cobol_statements import SortStatement, parse_statement
+from cobol_asg.cobol_statements import (
+    ProcedureRange,
+    ProcedureRef,
+    SortStatement,
+    parse_statement,
+)
 from cobol_asg.ref_mod import RefModOperand
+from cobol_asg.sort_files import SortFiles
 from cobol_asg.sort_key import SortKey
 from cobol_asg.sort_key_direction import SortKeyDirection
 from interpreter.cobol.features import CobolFeature
@@ -44,7 +50,8 @@ def test_sort_statement_reads_and_writes_its_bridge_form() -> None:
             {"direction": "DESCENDING", "key": {"name": "K", "qualifiers": ["G"]}}
         ],
         "using": ["IN-F"],
-        "giving": ["OUT-F", "OUT-G"],
+        "giving": [],
+        "output_procedure": {"target": "P1", "thru": "P2", "thru_section": "S"},
     }
     stmt = parse_statement(data)
     assert stmt == SortStatement(
@@ -55,8 +62,8 @@ def test_sort_statement_reads_and_writes_its_bridge_form() -> None:
                 key=RefModOperand(name="K", qualifiers=("G",)),
             ),
         ),
-        using=("IN-F",),
-        giving=("OUT-F", "OUT-G"),
+        source=SortFiles(("IN-F",)),
+        sink=ProcedureRange(target=ProcedureRef("P1"), thru=ProcedureRef("P2", "S")),
         span=None,
     )
     assert stmt.to_dict() == data

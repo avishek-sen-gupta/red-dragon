@@ -135,6 +135,7 @@ class CobolFeature(Enum):
     START = "START file KEY relop field file positioning statements"
     DELETE_RECORD = "DELETE file RECORD file record deletion statements"
     SORT = "SORT file ON ASCENDING/DESCENDING KEY ... USING/GIVING sort statements"
+    SORT_PROCEDURE = "INPUT/OUTPUT PROCEDURE phrases on SORT, with RELEASE and RETURN"
 
     # ---------------------------------------------------------------------------
     # Data Division — PIC clause and types

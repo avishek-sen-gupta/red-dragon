@@ -205,6 +205,9 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 | `START file KEY key` | `CALL_FUNCTION __cobol_start_file(filename, key, relop, program)` — `key` is the KEY item's bytes (indexed) or value (relative); without KEY, the RECORD KEY or RELATIVE KEY's, with `=` |
 | `DELETE file` | `CALL_FUNCTION __cobol_delete_record(filename, key, program)` — `key` is the RECORD KEY's bytes or the RELATIVE KEY's value in random or dynamic access, empty in sequential access |
 | `SORT sd ON ASCENDING/DESCENDING KEY k ... USING f ... GIVING g ...` | `OPEN OUTPUT sd`; per USING file `OPEN INPUT f`, `__cobol_sort_using(sd, f, program)`, `CLOSE f`; then `__cobol_sort_file(sd, record_length, weights, offset, length, encoding, direction, ..., program)`; per GIVING file `OPEN INPUT sd`, `OPEN OUTPUT g`, `__cobol_sort_giving(sd, g, program)`, `CLOSE g`, `CLOSE sd` |
+| `SORT ... INPUT PROCEDURE p [THRU p2] ... OUTPUT PROCEDURE q [THRU q2]` | As above, with a procedure PERFORM of `p` in place of the USING copies (after `OPEN OUTPUT sd`) and of `q` in place of the GIVING copies (between `OPEN INPUT sd` and `CLOSE sd`) |
+| `RELEASE rec [FROM x]` | Lowered as `WRITE rec [FROM x]` on the sort file |
+| `RETURN sd [INTO x] AT END ... NOT AT END ...` | Lowered as `READ sd [INTO x] AT END ... NOT AT END ...` on the sort file |
 
 The sort file (SD) is a sequential work file at its ASSIGN path, opened and closed by the same lowering as any file. `__cobol_sort_file` puts its records in key order: keys major to minor as written, each by its own direction, numeric keys (zoned with any SIGN clause, packed, binary, COMP-1/COMP-2) by algebraic value, alphanumeric and edited keys byte by byte through `weights` (a 256-character string, character b the weight of native byte b; the program collating sequence), with a stable sort so records with equal keys keep the order they were released in. Each key's offset is relative to the sort record.
 
@@ -321,7 +324,7 @@ An ALL literal (`ALL "AB"`) is its literal repeated to the size of the associate
 ## Known Gaps
 
 - **Exponentiation (`**`) is not parsed or lowered** (red-dragon-wxur). Fixed-point arithmetic itself is exact: values, IBM `ARITH(COMPAT)` intermediate scales and every conversion live behind the `cobol_numeric` boundary (ADR-148, ADR-149), and only COMP-1/COMP-2 fields and floating intrinsics use IEEE floats.
-- **MERGE, RELEASE, RETURN and SORT's INPUT/OUTPUT PROCEDURE phrases are unlowered** (red-dragon-sl30.66).
+- **MERGE and SORT's COLLATING SEQUENCE phrase are unlowered** (red-dragon-sl30.66).
 - **CANCEL is a no-op** — doesn't reset the cancelled subprogram's WORKING-STORAGE on next CALL (red-dragon-8dpn).
 - **SEARCH ALL is lowered as a whole-table linear scan**, not a binary search (red-dragon-c32s); for a correctly ordered table the result is the same.
 - **Index items hold occurrence numbers, not byte displacements**, for `INDEXED BY` names and USAGE INDEX items alike (red-dragon-zm9w); no conforming program can observe the difference.

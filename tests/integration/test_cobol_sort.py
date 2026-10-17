@@ -134,3 +134,63 @@ def test_sort_keys_of_every_usage_order_major_to_minor_each_in_its_direction(
         len(inputs),
     )
     assert _sorted_output(source, tmp_path, capsys) == "5\n4\n3\n1\n2\n6\n7\n"
+
+
+@covers(CobolFeature.SORT_PROCEDURE)
+def test_sort_procedures_release_and_return_the_records_in_key_order(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    source = to_fixed(
+        [
+            "IDENTIFICATION DIVISION.",
+            "PROGRAM-ID. SORTPROC.",
+            "ENVIRONMENT DIVISION.",
+            "INPUT-OUTPUT SECTION.",
+            "FILE-CONTROL.",
+            '    SELECT SRT ASSIGN TO "SRT".',
+            "DATA DIVISION.",
+            "FILE SECTION.",
+            "SD SRT.",
+            "01 SRT-REC.",
+            "    05 S-1 PIC X.",
+            "    05 S-2 PIC X.",
+            "WORKING-STORAGE SECTION.",
+            '01 WS-A PIC XX VALUE "A2".',
+            '01 WS-B PIC XX VALUE "B4".',
+            "01 WS-OUT PIC XX.",
+            '01 EOF-FLAG PIC X VALUE "N".',
+            "PROCEDURE DIVISION.",
+            "MAIN-PARA.",
+            "    SORT SRT ON DESCENDING KEY S-1 INPUT PROCEDURE IS FEED",
+            "        OUTPUT PROCEDURE IS SHOW-1 THRU SHOW-2.",
+            '    DISPLAY "END".',
+            "    STOP RUN.",
+            "SHOW-1.",
+            "    RETURN SRT INTO WS-OUT",
+            '        AT END MOVE "Y" TO EOF-FLAG DISPLAY "AT END"',
+            '        NOT AT END DISPLAY WS-OUT " " SRT-REC',
+            "    END-RETURN.",
+            '    IF EOF-FLAG = "N" GO TO SHOW-1.',
+            "SHOW-2.",
+            '    DISPLAY "DRAINED".',
+            "FEED SECTION.",
+            "FEED-1.",
+            '    MOVE "B1" TO SRT-REC.',
+            "    RELEASE SRT-REC.",
+            "    RELEASE SRT-REC FROM WS-A.",
+            '    MOVE "C3" TO SRT-REC.',
+            "    RELEASE SRT-REC.",
+            "    RELEASE SRT-REC FROM WS-B.",
+        ]
+    )
+    run(
+        source=source,
+        language="cobol",
+        max_steps=50000,
+        io_provider=RealFileIOProvider(
+            base_dir=tmp_path, path_overrides={"SRT": tmp_path / "SRT"}
+        ),
+    )
+    assert capsys.readouterr().out == (
+        "C3 C3\nB1 B1\nB4 B4\nA2 A2\nAT END\nDRAINED\nEND\n"
+    )

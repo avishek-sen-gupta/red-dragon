@@ -32,6 +32,8 @@ from cobol_asg.cobol_statements import (
     OpenStatement,
     PerformStatement,
     ReadStatement,
+    ReleaseStatement,
+    ReturnStatement,
     RewriteStatement,
     SearchStatement,
     SetStatement,
@@ -80,7 +82,7 @@ from interpreter.cobol.lower_io import (
 )
 from interpreter.cobol.lower_perform import lower_perform
 from interpreter.cobol.lower_search import lower_search
-from interpreter.cobol.lower_sort import lower_sort
+from interpreter.cobol.lower_sort import lower_release, lower_return, lower_sort
 from interpreter.cobol.lower_string_inspect import (
     lower_inspect,
     lower_string,
@@ -167,6 +169,10 @@ def dispatch_statement(
         lower_delete(ctx, stmt, materialised)
     elif isinstance(stmt, SortStatement):
         lower_sort(ctx, stmt, materialised)
+    elif isinstance(stmt, ReleaseStatement):
+        lower_release(ctx, stmt, materialised)
+    elif isinstance(stmt, ReturnStatement):
+        lower_return(ctx, stmt, materialised)
     # ── Extension statements (EXEC CICS / EXEC SQL / …) routed via the array ──
     else:
         for strat in ctx.extension_strategies:
