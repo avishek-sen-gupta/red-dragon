@@ -213,7 +213,7 @@ fileignoreconfig:
 - filename: tests/unit/cobol/test_recorded_memory_effects.py
   checksum: ba151292b7ee1a3f747628e5950297f904de1c1cd625307f762f7a98b570b3de
 - filename: docs/frontend-design/cobol.md
-  checksum: 3a728dc07774b743706766d71e331fcf846f390876bb55e20f52c0cb371b074a
+  checksum: 80dd59c3790e0c49eb09650bcf3494d1e5aa2d731e3c7edf38523d9ae75d5155
 - filename: tests/integration/test_cobol_call_using_addresses.py
   checksum: 353804977c7a3e5eb44a303f7e42a47ef1bdf9f837f41e396bf5033813c4fdb0
 - filename: tests/integration/test_cobol_call_using_slots.py
@@ -263,7 +263,7 @@ fileignoreconfig:
 - filename: proleap-bridge/src/main/java/org/reddragon/bridge/StatementSerializer.java
   checksum: f9a87946dec86a8815575eff56958f913885c76b3fb14f7f3db967b3686e1036
 - filename: interpreter/cobol/lower_io.py
-  checksum: a242f026b40036eeaf593d6e9b8faeb674a0429d37626639a3ccd3953c5375de
+  checksum: d2a477e67c75c04d8d1a59cf051ca7765700eb0c484f465900906e4eb64ec2ac
 - filename: tests/integration/test_cobol_use_declaratives.py
   checksum: d0c6ea039a432d727fde9ea777b1c4945dff7c0f5c3a4599a626bfd8df390072
 - filename: interpreter/cobol/open_file.py
