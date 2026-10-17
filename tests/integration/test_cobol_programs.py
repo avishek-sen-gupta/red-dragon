@@ -5275,7 +5275,43 @@ class TestDisplayMultipleOperands:
             ]
         )
         out = capsys.readouterr().out
-        assert out == "SANDERS in dept. 20 is a manager\n", out
+        assert out == "SANDERS in dept. 0020 is a manager\n", out
+
+
+class TestDisplayBinaryAndPackedItems:
+    @covers(
+        CobolFeature.DISPLAY,
+        CobolFeature.USAGE_COMP,
+        CobolFeature.USAGE_COMP_3,
+    )
+    def test_a_binary_or_packed_item_displays_as_zoned_decimal_of_its_picture(
+        self, capsys
+    ):
+        """IBM Enterprise COBOL LR, DISPLAY statement: "Binary and internal decimal
+        items are converted to zoned decimal. Negative signed values cause a
+        low-order sign overpunch." Every digit position of the PICTURE shows; a
+        negative value's last digit carries the D zone (EBCDIC 0xD0-0xD9 shows as
+        } J K ... R).
+        """
+        _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-DISP-BIN.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 A PIC S9(4) COMP-5 VALUE 20.",
+                "01 B PIC 9(4) COMP VALUE 7.",
+                "01 C PIC S9(4) BINARY VALUE -20.",
+                "01 D PIC S9(3) COMP-3 VALUE -12.",
+                "01 E PIC 9(3) COMP-3 VALUE 12.",
+                "01 F PIC S99V9 COMP VALUE -1.5.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    DISPLAY A ' ' B ' ' C ' ' D ' ' E ' ' F.",
+                "    STOP RUN.",
+            ]
+        )
+        assert capsys.readouterr().out == "0020 0007 002} 01K 012 01N\n"
 
 
 class TestDisplayLinePositioning:

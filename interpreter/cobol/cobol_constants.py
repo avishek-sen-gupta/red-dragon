@@ -106,6 +106,7 @@ class BuiltinName:
     STRING_ZFILL = "__string_zfill"
     STRING_PAD_TO = "__string_pad_to"
     COBOL_DIGIT_IMAGE = "__cobol_digit_image"
+    COBOL_ZONED_DISPLAY_IMAGE = "__cobol_zoned_display_image"
     COBOL_ZONED_STRIP_SIGN = "__cobol_zoned_strip_sign"
     COBOL_ZONED_RESTORE_SIGN = "__cobol_zoned_restore_sign"
     UPPER_CASE = "__upper_case"

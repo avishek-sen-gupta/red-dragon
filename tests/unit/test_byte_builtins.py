@@ -20,6 +20,7 @@ from interpreter.cobol.byte_builtins import (
     _builtin_cobol_prepare_sign,
     _builtin_cobol_round,
     _builtin_cobol_trim,
+    _builtin_cobol_zoned_display_image,
     _builtin_concatenate,
     _builtin_cos,
     _builtin_current_date,
@@ -407,6 +408,24 @@ class TestMakeList:
         ).value == [0xF0, 0xF0, 0xF0]
 
 
+class TestZonedDisplayImage:
+    @covers(CobolFeature.DISPLAY, CobolFeature.USAGE_COMP)
+    def test_digits_of_the_picture_with_a_negative_value_overpunched(self):
+        def image(value: Decimal, digits: int, decimals: int, scale: int) -> str:
+            return _builtin_cobol_zoned_display_image(
+                [typed_from_runtime(a) for a in (value, digits, decimals, scale)],
+                VMState(),
+            ).value
+
+        assert [
+            image(Decimal(20), 4, 0, 0),
+            image(Decimal(-20), 4, 0, 0),
+            image(Decimal("-1.5"), 3, 1, 0),
+            image(Decimal(-9), 1, 0, 0),
+            image(Decimal(12300), 3, 0, 2),
+        ] == ["0020", "002}", "01N", "R", "123"]
+
+
 class TestByteBuiltinsRegistration:
     def test_all_builtins_registered(self):
         expected_names = [
@@ -447,6 +466,7 @@ class TestByteBuiltinsRegistration:
             "__string_zfill",
             "__string_pad_to",
             "__cobol_digit_image",
+            "__cobol_zoned_display_image",
             "__cobol_zoned_strip_sign",
             "__cobol_zoned_restore_sign",
             "__upper_case",
