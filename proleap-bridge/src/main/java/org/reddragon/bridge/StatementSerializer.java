@@ -2066,10 +2066,29 @@ public final class StatementSerializer {
                     .forEach(files::add);
             }
             obj.add("files", files);
+            JsonArray withLock = new JsonArray();
+            if (stmt.getCloseFiles() != null) {
+                stmt.getCloseFiles().stream()
+                    .filter(StatementSerializer::isClosedWithLock)
+                    .map(io.proleap.cobol.asg.metamodel.procedure.close.CloseFile::getFileCall)
+                    .filter(c -> c != null)
+                    .map(StatementSerializer::extractCallName)
+                    .forEach(withLock::add);
+            }
+            obj.add("with_lock", withLock);
         } catch (Exception e) {
             LOG.fine("Could not extract CLOSE operands: " + e.getMessage());
         }
         return obj;
+    }
+
+    private static boolean isClosedWithLock(
+            io.proleap.cobol.asg.metamodel.procedure.close.CloseFile closeFile) {
+        io.proleap.cobol.asg.metamodel.procedure.close.CloseRelativeStatement relative =
+            closeFile.getCloseRelativeStatement();
+        return relative != null
+            && relative.getWithType()
+                == io.proleap.cobol.asg.metamodel.procedure.close.CloseRelativeStatement.WithType.LOCK;
     }
 
     private static JsonObject serializeRead(ReadStatement stmt) {

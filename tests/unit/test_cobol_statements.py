@@ -794,9 +794,16 @@ class TestParseStatementDispatch:
 
     @covers(CobolFeature.CLOSE)
     def test_close(self):
-        stmt = parse_statement({"type": "CLOSE", "files": ["CUST-FILE", "ORDER-FILE"]})
-        assert isinstance(stmt, CloseStatement)
-        assert stmt.files == ["CUST-FILE", "ORDER-FILE"]
+        stmt = parse_statement(
+            {
+                "type": "CLOSE",
+                "files": ["CUST-FILE", "ORDER-FILE"],
+                "with_lock": ["ORDER-FILE"],
+            }
+        )
+        assert stmt == CloseStatement(
+            files=["CUST-FILE", "ORDER-FILE"], with_lock=["ORDER-FILE"]
+        )
 
     @covers(CobolFeature.READ)
     def test_read_basic(self):
@@ -1708,7 +1715,11 @@ class TestRoundTrip:
 
     @covers(CobolFeature.CLOSE)
     def test_close_round_trip(self):
-        data = {"type": "CLOSE", "files": ["CUST-FILE", "ORDER-FILE"]}
+        data = {
+            "type": "CLOSE",
+            "files": ["CUST-FILE", "ORDER-FILE"],
+            "with_lock": ["ORDER-FILE"],
+        }
         assert self._round_trip(data) == data
 
     @covers(CobolFeature.READ)
