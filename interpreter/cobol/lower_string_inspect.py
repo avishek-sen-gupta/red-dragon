@@ -17,6 +17,14 @@ from cobol_asg.source_span import SourceSpan
 from cobol_asg.unstring_receiver import UnstringReceiver
 from interpreter.cobol.cobol_constants import BuiltinName, InspectType
 from interpreter.cobol.emit_context import EmitContext, strip_cobol_literal
+from interpreter.cobol.inspect_ir import (
+    emit_inspect_convert,
+    emit_inspect_replace,
+    emit_inspect_tally,
+)
+from interpreter.cobol.inspect_mode import InspectMode
+from interpreter.cobol.inspect_phrase_registers import InspectPhraseRegisters
+from interpreter.cobol.ir_emitter import IrEmitter
 from interpreter.cobol.lower_arithmetic import eval_ref_mod_expr
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.func_name import FuncName
@@ -562,8 +570,8 @@ def lower_inspect(
     """INSPECT source TALLYING | REPLACING | TALLYING ... REPLACING | CONVERTING.
 
     The source, its subscripts and reference modification, and every operand
-    are evaluated once; one builtin then runs the standard's single
-    left-to-right scan (interpreter.cobol.inspect_scan). TALLYING ...
+    are evaluated once; IR then runs the standard's single left-to-right
+    scan (interpreter.cobol.inspect_ir). TALLYING ...
     REPLACING tallies first and then replaces, as two statements would.
     """
     span = stmt.span
@@ -650,50 +658,51 @@ def _rewritten(
     materialised: MaterialisedSectionedLayout,
 ) -> Register:
     """The new characters REPLACING or CONVERTING give, or NO_REGISTER."""
-    span = stmt.span
+    emitter = IrEmitter(ctx=ctx, span=stmt.span)
     if stmt.inspect_type == InspectType.CONVERTING:
-        return _call(
-            ctx,
-            BuiltinName.COBOL_INSPECT_CONVERT,
+        return emit_inspect_convert(
+            emitter,
+            inspected_reg,
             (
-                inspected_reg,
-                *(
-                    _resolve_inspect_operand(ctx, operand, materialised, span=span)
-                    for operand in (
-                        stmt.converting_from,
-                        stmt.converting_to,
-                        stmt.converting_after,
-                        stmt.converting_before,
-                    )
+                _written_operand(
+                    ctx, stmt.converting_from, materialised, span=stmt.span
+                ),
+                _written_operand(ctx, stmt.converting_to, materialised, span=stmt.span),
+            ),
+            (
+                _written_operand(
+                    ctx, stmt.converting_after, materialised, span=stmt.span
+                ),
+                _written_operand(
+                    ctx, stmt.converting_before, materialised, span=stmt.span
                 ),
             ),
-            span=span,
         )
     if not stmt.replacings:
         return NO_REGISTER
-    phrase_args = tuple(
-        arg
-        for replacing in stmt.replacings
-        for arg in _phrase_args(
-            ctx,
-            replacing.mode,
-            (
-                replacing.from_pattern,
-                replacing.to_pattern,
-                replacing.after,
-                replacing.before,
-            ),
-            0,
-            materialised,
-            span=span,
-        )
-    )
-    return _call(
-        ctx, BuiltinName.COBOL_INSPECT_REPLACE, (inspected_reg, *phrase_args), span=span
+    return emit_inspect_replace(
+        emitter,
+        inspected_reg,
+        tuple(
+            _phrase_registers(
+                ctx,
+                replacing.mode,
+                (
+                    replacing.from_pattern,
+                    replacing.to_pattern,
+                    replacing.after,
+                    replacing.before,
+                ),
+                0,
+                materialised,
+                span=stmt.span,
+            )
+            for replacing in stmt.replacings
+        ),
     )
 
 
-def _phrase_args(
+def _phrase_registers(
     ctx: EmitContext,
     mode: str,
     operands: tuple[RefModOperand, RefModOperand, RefModOperand, RefModOperand],
@@ -701,17 +710,33 @@ def _phrase_args(
     materialised: MaterialisedSectionedLayout,
     *,
     span: SourceSpan | None,
-) -> tuple[Register, ...]:
-    """One phrase as the builtins take it: mode, pattern, BY value, AFTER
-    operand, BEFORE operand (empty when absent) and counter number."""
-    return (
-        ctx.const_to_reg(mode, span=span),
-        *(
-            _resolve_inspect_operand(ctx, operand, materialised, span=span)
-            for operand in operands
-        ),
-        ctx.const_to_reg(counter, span=span),
+) -> InspectPhraseRegisters:
+    """One phrase's mode, its written operands' characters (pattern, BY value,
+    AFTER, BEFORE) and the counter it tallies into."""
+    pattern, replacement, after, before = (
+        _written_operand(ctx, operand, materialised, span=span) for operand in operands
     )
+    return InspectPhraseRegisters(
+        mode=InspectMode(mode),
+        pattern=pattern,
+        replacement=replacement,
+        after=after,
+        before=before,
+        counter=counter,
+    )
+
+
+def _written_operand(
+    ctx: EmitContext,
+    operand: RefModOperand,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> Register:
+    """The operand's characters, or NO_REGISTER when it was not written."""
+    if not operand.name:
+        return NO_REGISTER
+    return _resolve_inspect_operand(ctx, operand, materialised, span=span)
 
 
 def _call(
@@ -764,28 +789,22 @@ def _lower_inspect_tallying(
     """Each TALLYING identifier gains the matches of its own phrases; the count
     ACCUMULATES into its existing value (IBM Enterprise COBOL LR, INSPECT)."""
     span = stmt.span
-    phrase_args = tuple(
-        arg
-        for counter, group in enumerate(stmt.tallying_groups)
-        for tally_for in group.patterns
-        for arg in _phrase_args(
-            ctx,
-            tally_for.mode,
-            (tally_for.pattern, _NO_OPERAND, tally_for.after, tally_for.before),
-            counter,
-            materialised,
-            span=span,
-        )
-    )
-    counts_reg = _call(
-        ctx,
-        BuiltinName.COBOL_INSPECT_TALLY,
-        (
-            inspected_reg,
-            ctx.const_to_reg(len(stmt.tallying_groups), span=span),
-            *phrase_args,
+    counts_reg = emit_inspect_tally(
+        IrEmitter(ctx=ctx, span=span),
+        inspected_reg,
+        tuple(
+            _phrase_registers(
+                ctx,
+                tally_for.mode,
+                (tally_for.pattern, _NO_OPERAND, tally_for.after, tally_for.before),
+                counter,
+                materialised,
+                span=span,
+            )
+            for counter, group in enumerate(stmt.tallying_groups)
+            for tally_for in group.patterns
         ),
-        span=span,
+        len(stmt.tallying_groups),
     )
     for counter, group in enumerate(stmt.tallying_groups):
         if ctx.has_field(group.target.name, materialised):
