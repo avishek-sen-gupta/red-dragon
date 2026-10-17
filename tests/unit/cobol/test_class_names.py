@@ -7,12 +7,13 @@ from cobol_asg.alphabet_link import AlphabetLink
 from cobol_asg.alphabet_literal_kind import AlphabetLiteralKind
 from cobol_asg.asg_types import CobolASG
 from cobol_asg.class_definition import ClassDefinition
-from interpreter.cobol.byte_builtins import _builtin_is_in_class
 from interpreter.cobol.class_name_index import ClassNameIndex
+from interpreter.cobol.class_test_ir import emit_all_characters_in
 from interpreter.cobol.features import CobolFeature
-from interpreter.types.typed_value import typed_from_runtime
-from interpreter.vm.vm_types import VMState
+from interpreter.cobol.ir_emitter import IrEmitter
+from interpreter.register import Register
 from tests.covers import covers
+from tests.unit.cobol.emitted_ir import run_emitted
 
 
 def _item(link: str, kind: str, value: str) -> dict[str, str]:
@@ -77,10 +78,11 @@ def test_class_clauses_parse_round_trip_and_name_native_character_sets() -> None
 
 @covers(CobolFeature.CLASS_NAME)
 def test_class_test_is_true_only_when_every_character_is_in_the_set() -> None:
+    def emit(e: IrEmitter, registers: tuple[Register, ...]) -> Register:
+        text, characters = registers
+        return emit_all_characters_in(e, text, characters)
+
     results = [
-        _builtin_is_in_class(
-            [typed_from_runtime(value), typed_from_runtime("ABCD")], VMState()
-        ).value
-        for value in ("ADCBA", "ABCDE", "A B", "")
+        run_emitted(emit, (value, "ABCD")) for value in ("ADCBA", "ABCDE", "A B", "")
     ]
     assert results == [True, False, False, True]
