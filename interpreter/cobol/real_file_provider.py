@@ -326,7 +326,7 @@ class RealFileIOProvider(CobolIOProvider):
             FileVerb(
                 OpenFile.start_check,
                 lambda drv: drv.start(
-                    key.encode("latin-1") if key else b"", relop or ">="
+                    self._files[filename].key_bytes(key), relop or ">="
                 ),
                 OpenFile.after_other,
             ),

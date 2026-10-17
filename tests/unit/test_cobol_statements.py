@@ -871,15 +871,19 @@ class TestParseStatementDispatch:
         stmt = parse_statement({"type": "START", "file_name": "CUST-FILE"})
         assert isinstance(stmt, StartStatement)
         assert stmt.file_name == "CUST-FILE"
-        assert stmt.key == ""
+        assert stmt.key == RefModOperand(name="")
 
     @covers(CobolFeature.START)
     def test_start_with_key(self):
         stmt = parse_statement(
-            {"type": "START", "file_name": "CUST-FILE", "key": "CUST-ID"}
+            {
+                "type": "START",
+                "file_name": "CUST-FILE",
+                "key": {"name": "CUST-ID", "qualifiers": ["CUST-REC"]},
+            }
         )
         assert isinstance(stmt, StartStatement)
-        assert stmt.key == "CUST-ID"
+        assert stmt.key == RefModOperand(name="CUST-ID", qualifiers=("CUST-REC",))
 
     @covers(CobolFeature.DELETE_RECORD)
     def test_delete_basic(self):
@@ -1771,7 +1775,11 @@ class TestRoundTrip:
 
     @covers(CobolFeature.START)
     def test_start_with_key_round_trip(self):
-        data = {"type": "START", "file_name": "CUST-FILE", "key": "CUST-ID"}
+        data = {
+            "type": "START",
+            "file_name": "CUST-FILE",
+            "key": RefModOperand(name="CUST-ID", qualifiers=("CUST-REC",)).to_dict(),
+        }
         assert self._round_trip(data) == data
 
     @covers(CobolFeature.DELETE_RECORD)

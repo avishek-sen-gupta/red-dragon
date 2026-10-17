@@ -2221,7 +2221,7 @@ public final class StatementSerializer {
             }
             io.proleap.cobol.asg.metamodel.procedure.start.Key key = stmt.getKey();
             if (key != null && key.getComparisonCall() != null) {
-                obj.addProperty("key", extractCallName(key.getComparisonCall()));
+                obj.add("key", serializeRef(key.getComparisonCall()));
                 // Relational operator from KeyType enum
                 if (key.getKeyType() != null) {
                     String relop;

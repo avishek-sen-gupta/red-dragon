@@ -2538,7 +2538,9 @@ class TestCallAlterEntryCancelLowering:
         fields = [
             CobolField(name="WS-A", level=77, pic="9(1)", usage="DISPLAY", offset=0),
         ]
-        stmts = [StartStatement(file_name="CUST-FILE", key="CUST-ID")]
+        stmts = [
+            StartStatement(file_name="CUST-FILE", key=RefModOperand(name="CUST-ID"))
+        ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
