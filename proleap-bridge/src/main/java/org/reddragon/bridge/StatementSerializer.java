@@ -2568,10 +2568,24 @@ public final class StatementSerializer {
         if (sr == null) {
             return null;
         }
+        return lengthOfNode(sr.identifier());
+    }
+
+    /**
+     * The {@code length_of} node for the identifier a LENGTH OF measures: its leaf
+     * data-name and the OF/IN qualifiers written on it.
+     */
+    private static JsonObject lengthOfNode(CobolParser.IdentifierContext id) {
         JsonObject obj = new JsonObject();
         obj.addProperty("kind", "length_of");
-        CobolParser.IdentifierContext id = sr.identifier();
         obj.addProperty("name", id != null ? leafDataName(id) : "");
+        JsonArray qualifiers = new JsonArray();
+        if (id != null) {
+            collectInDataQualifiers(id, qualifiers);
+        }
+        if (qualifiers.size() > 0) {
+            obj.add("qualifiers", qualifiers);
+        }
         return obj;
     }
 
@@ -2588,15 +2602,7 @@ public final class StatementSerializer {
         if (ctx != null) {
             CobolParser.SpecialRegisterContext sr = lengthOfSpecialRegisterOperand(ctx);
             if (sr != null) {
-                JsonObject obj = new JsonObject();
-                obj.addProperty("kind", "length_of");
-                CobolParser.IdentifierContext id = sr.identifier();
-                // Use the LEAF data-name for a qualified operand (WS-SUB OF
-                // WS-GRP -> "WS-SUB"); getText() would glue it to
-                // "WS-SUBOFWS-GRP", which the frontend can't resolve (length 0).
-                // Mirrors serializeBasisCtx's length_of handling. (red-dragon)
-                obj.addProperty("name", id != null ? leafDataName(id) : "");
-                return obj;
+                return lengthOfNode(sr.identifier());
             }
         }
         if (vs instanceof ArithmeticValueStmt) {
@@ -3666,9 +3672,13 @@ public final class StatementSerializer {
             // is the item's length, not a data item named LENGTH (red-dragon-sl30.53).
             Call measured = lengthOfTarget(call);
             if (measured != null) {
+                JsonObject measuredRef = serializeRef(measured);
                 JsonObject lengthOf = new JsonObject();
                 lengthOf.addProperty("kind", "length_of");
-                lengthOf.add("name", serializeRef(measured).get("name"));
+                lengthOf.add("name", measuredRef.get("name"));
+                if (measuredRef.has("qualifiers")) {
+                    lengthOf.add("qualifiers", measuredRef.get("qualifiers"));
+                }
                 return lengthOf;
             }
             JsonObject ref = new JsonObject();
@@ -3951,11 +3961,7 @@ public final class StatementSerializer {
             // matching serializeFromValue's PERFORM-VARYING handling. (oq2c)
             CobolParser.SpecialRegisterContext sr = lengthOfSpecialRegisterOperand(id);
             if (sr != null) {
-                JsonObject obj = new JsonObject();
-                obj.addProperty("kind", "length_of");
-                CobolParser.IdentifierContext inner = sr.identifier();
-                obj.addProperty("name", inner != null ? leafDataName(inner) : "");
-                return obj;
+                return lengthOfNode(sr.identifier());
             }
             // OCCURS subscripts on a grammar-context identifier. The ASG-based
             // serializer emits these via extractSubscripts/serializeRef; this path

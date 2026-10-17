@@ -346,7 +346,7 @@ def eval_ref_mod_expr(
     elif isinstance(expr, RefModLengthOf):
         name = expr.name
         if ctx.has_field(name, materialised):
-            return ctx.emit_length_of(name, materialised, span=span)
+            return ctx.emit_length_of(name, materialised, expr.qualifiers, span=span)
         logging.warning("eval_ref_mod_expr: LENGTH OF unknown field %s → 0", name)
         return ctx.const_to_reg(0, span=span)
 
@@ -623,10 +623,12 @@ def lower_move(
             _store_move_value(ctx, target, source_value_reg, materialised, span=span)
         return
 
-    if stmt.source.length_of:
-        name = stmt.source.length_of
+    if stmt.source.length_of.name:
+        name = stmt.source.length_of.name
         if ctx.has_field(name, materialised):
-            source_value_reg = ctx.emit_length_of(name, materialised, span=span)
+            source_value_reg = ctx.emit_length_of(
+                name, materialised, stmt.source.length_of.qualifiers, span=span
+            )
         else:
             logger.warning("MOVE LENGTH OF unknown field %r — using 0", name)
             source_value_reg = ctx.const_to_reg(0, span=span)

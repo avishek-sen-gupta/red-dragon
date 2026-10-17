@@ -259,3 +259,28 @@ class TestQualifiedStatementOperands:
             ],
         )
         assert shown == "ABCVWXYZ"
+
+    @covers(
+        CobolFeature.MOVE, CobolFeature.COMPUTE, CobolFeature.REFERENCE_MODIFICATION
+    )
+    def test_length_of_measures_the_qualified_item(self, capsys):
+        shown = _shown(
+            capsys,
+            [
+                '01 R1. 02 F PIC X(4) VALUE "AAAA".',
+                '01 R2. 02 F PIC X(6) VALUE "BBBBBB".',
+                "01 D1 PIC 99.",
+                "01 D2 PIC 99.",
+                "01 D3 PIC 99.",
+            ],
+            [
+                "    MOVE LENGTH OF F OF R2 TO D1.",
+                "    COMPUTE D2 = LENGTH OF F IN R2 + 1.",
+                "    PERFORM VARYING D3 FROM LENGTH OF F OF R1 BY 1",
+                "        UNTIL D3 > 4",
+                "        CONTINUE",
+                "    END-PERFORM.",
+                "    DISPLAY D1 D2 D3 F OF R2 (1:LENGTH OF F OF R1).",
+            ],
+        )
+        assert shown == "060705BBBB"

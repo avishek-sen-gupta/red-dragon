@@ -53,9 +53,11 @@ class LengthOfNode:
 
     Not a read of the field's value, which is why this is not a FieldRefNode --
     a consumer counting data dependencies must not treat it as one.
+    ``qualifiers`` are the measured item's ``OF``/``IN`` group names.
     """
 
     name: str
+    qualifiers: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -171,7 +173,7 @@ def _qualifiers(d: JsonExpr) -> tuple[str, ...]:
 
 
 def _length_of(d: JsonExpr) -> ExprNode:
-    return LengthOfNode(name=_text(d, "name"))
+    return LengthOfNode(name=_text(d, "name"), qualifiers=_qualifiers(d))
 
 
 def _dfhresp(d: JsonExpr) -> ExprNode:
@@ -281,7 +283,11 @@ def _figurative_dict(node: FigurativeNode) -> dict:
 
 
 def _length_of_dict(node: LengthOfNode) -> dict:
-    return {"kind": "length_of", "name": node.name}
+    return {
+        "kind": "length_of",
+        "name": node.name,
+        **_qualifiers_dict(node.qualifiers),
+    }
 
 
 def _dfhresp_dict(node: DfhRespNode) -> dict:

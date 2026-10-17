@@ -136,10 +136,15 @@ def test_an_unqualified_expression_ref_emits_no_qualifiers_key(bridge_jar):
 
 
 @covers(CobolFeature.GROUP_ITEM, CobolFeature.INTRINSIC_FUNCTION)
-def test_a_length_of_register_still_carries_the_leaf_name_alone(bridge_jar):
-    """red-dragon-twfl's shape: a LENGTH OF register is not a field ref node."""
+def test_a_length_of_register_carries_its_leaf_name_and_qualifiers(bridge_jar):
+    """red-dragon-twfl's shape: a LENGTH OF register is not a field ref node; its
+    measured item keeps its qualifiers (red-dragon-sl30.56)."""
     stmt = _statement(bridge_jar, "COMPUTE D = FUNCTION MAX(LENGTH OF FLD OF GA 1).")
-    assert stmt["expression"]["args"][0] == {"kind": "length_of", "name": "FLD"}
+    assert stmt["expression"]["args"][0] == {
+        "kind": "length_of",
+        "name": "FLD",
+        "qualifiers": ["GA"],
+    }
 
 
 # -- The bytes the program actually reads ------------------------------------

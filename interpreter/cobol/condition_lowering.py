@@ -1291,7 +1291,7 @@ def _lower_expr_node_body(
         if ctx.has_field(node.name, materialised):
             return _float_operand(
                 ctx,
-                ctx.emit_length_of(node.name, materialised, span=span),
+                ctx.emit_length_of(node.name, materialised, node.qualifiers, span=span),
                 floating,
                 span=span,
             )
