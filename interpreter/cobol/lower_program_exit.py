@@ -128,3 +128,21 @@ def emit_return_code_store(
         extent=whole_field_extent(fl, RegionId.SPECIAL_REGISTERS),
         span=span,
     )
+
+
+def emit_return_code_value(
+    ctx: EmitContext,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> Register:
+    """Decode this program's RETURN-CODE to its numeric value, as a MOVE sends it."""
+    sr_layout, sr_reg = materialised.special_registers
+    fl = sr_layout.lookup_or_raise(RETURN_CODE_NAME)
+    return ctx.emit_decode_field(
+        sr_reg,
+        fl,
+        ctx.const_to_reg(fl.offset, span=span),
+        extent=whole_field_extent(fl, RegionId.SPECIAL_REGISTERS),
+        span=span,
+    )

@@ -263,13 +263,13 @@ def test_call_seeds_its_result_register_from_the_caller_return_code():
 
     call = next(i for i in ir if i.opcode.name == "CALL_WITH_MEMORY")
     preceding = ir[: ir.index(call)]
-    seed = next(
+    seeds = [
         i
-        for i in reversed(preceding)
+        for i in preceding
         if i.opcode.name == "LOAD_REGION" and i.result_reg == call.result_reg
-    )
+    ]
     assert (
-        seed is not None
+        len(seeds) == 1
     ), "the register CALL_WITH_MEMORY writes must be loaded from RETURN-CODE first"
 
 
@@ -334,3 +334,31 @@ def test_stop_run_inside_a_subprogram_decides_the_run_unit_return_code():
 
     assert return_code_of(vm, "RCSTOPPED") == 1, "the entry program never resumed"
     assert read_return_code(vm) == 8
+
+
+@covers(CobolFeature.CALL)
+def test_call_giving_stores_the_returned_value_as_a_numeric_move():
+    """GIVING receives the callee's returned value as a MOVE of that number to the
+    receiver would store it: right-aligned, zero-filled to the receiver's digits."""
+    caller = [
+        "IDENTIFICATION DIVISION.",
+        "PROGRAM-ID. RCGIVE.",
+        "DATA DIVISION.",
+        "WORKING-STORAGE SECTION.",
+        "01 WS-TWO PIC 99 VALUE 99.",
+        "01 WS-FOUR PIC 9(4) VALUE 9999.",
+        "PROCEDURE DIVISION.",
+        "    CALL 'RCSEVEN' GIVING WS-TWO.",
+        "    CALL 'RCSEVEN' GIVING WS-FOUR.",
+        "    GOBACK.",
+    ]
+    callee = [
+        "IDENTIFICATION DIVISION.",
+        "PROGRAM-ID. RCSEVEN.",
+        "PROCEDURE DIVISION.",
+        "    MOVE 7 TO RETURN-CODE.",
+        "    GOBACK.",
+    ]
+    vm = run_cobol_programs(caller, {"RCSEVEN": callee})
+
+    assert bytes(ws_region(vm, "RCGIVE")[:6]).decode("cp037") == "070007"

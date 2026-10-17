@@ -29,6 +29,7 @@ from interpreter.cobol.lower_arithmetic import eval_ref_mod_expr
 from interpreter.cobol.lower_program_exit import (
     emit_return_code_load,
     emit_return_code_store,
+    emit_return_code_value,
 )
 from interpreter.cobol.pointer_lowering import PointerLowering
 from interpreter.cobol.program_object import ENTRY_PREFIX, entry_var
@@ -230,7 +231,9 @@ def lower_call(
             stmt.giving.subscripts,
             span=span,
         )
-        str_reg = ctx.emit_to_string(result_reg, span=span)
+        str_reg = ctx.emit_to_string(
+            emit_return_code_value(ctx, materialised, span=span), span=span
+        )
         ctx.emit_encode_and_write(
             giving_rr,
             giving_ref.fl,
