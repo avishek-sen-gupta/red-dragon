@@ -77,3 +77,36 @@ class TestProgramCollatingSequence:
         HIGH-VALUE its last, here the highest native byte left unnamed."""
         region = first_region(run_cobol(_PROGRAM, max_steps=5000))
         assert (bytes(region[0:8]).decode("cp037"), region[8]) == ("11111101", 0xFE)
+
+
+_NATIVE_CONDITIONS = ["LOWER-A < UPPER-A", "UPPER-A < DIGIT-1", "UPPER-Z < DIGIT-1"]
+
+_NATIVE_PROGRAM = [
+    "IDENTIFICATION DIVISION.",
+    "PROGRAM-ID. NATIVESQ.",
+    "DATA DIVISION.",
+    "WORKING-STORAGE SECTION.",
+    "01 WS-R.",
+    *[f"   05 R{n} PIC 9 VALUE 9." for n in range(1, len(_NATIVE_CONDITIONS) + 1)],
+    '01 LOWER-A PIC X VALUE "a".',
+    '01 UPPER-A PIC X VALUE "A".',
+    '01 UPPER-Z PIC X VALUE "Z".',
+    '01 DIGIT-1 PIC X VALUE "1".',
+    "PROCEDURE DIVISION.",
+    "MAIN-PARA.",
+    *[
+        line
+        for n, condition in enumerate(_NATIVE_CONDITIONS, start=1)
+        for line in _if(condition, f"R{n}")
+    ],
+    "    STOP RUN.",
+]
+
+
+class TestNativeCollatingSequence:
+    @covers(CobolFeature.COMPARISON_OPERATORS)
+    def test_without_the_clause_comparisons_follow_ebcdic(self):
+        """IBM Enterprise COBOL: the native collating sequence is EBCDIC, where
+        lowercase letters sort before uppercase and letters before digits."""
+        region = first_region(run_cobol(_NATIVE_PROGRAM, max_steps=5000))
+        assert bytes(region[0:3]).decode("cp037") == "111"

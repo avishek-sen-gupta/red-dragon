@@ -28,7 +28,6 @@ from interpreter.cobol.arithmetic_scale import (
     operand_dmax,
 )
 from interpreter.cobol.cobol_constants import BuiltinName
-from interpreter.cobol.collating_sequences import NATIVE_SEQUENCE
 from interpreter.cobol.condition_name_index import ConditionNameIndex
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.pointer_lowering import PointerLowering
@@ -652,8 +651,6 @@ def _in_collating_order(
 ) -> Register:
     """The characters of a nonnumeric operand as their positions in the program
     collating sequence, so that comparing them compares in that sequence."""
-    if ctx.collating_sequence == NATIVE_SEQUENCE:
-        return value
     native, positions = ctx.collating_sequence.ordinal_alphabets()
     ordered = ctx.fresh_reg()
     ctx.emit_inst(
