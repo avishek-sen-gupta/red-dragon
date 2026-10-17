@@ -1427,8 +1427,8 @@ public final class StatementSerializer {
             // WITH POINTER (red-dragon-4q25.15)
             if (stmt.getWithPointerPhrase() != null
                     && stmt.getWithPointerPhrase().getPointerCall() != null) {
-                obj.addProperty("pointer",
-                        extractCallName(stmt.getWithPointerPhrase().getPointerCall()));
+                obj.add("pointer",
+                        serializeRef(stmt.getWithPointerPhrase().getPointerCall()));
             }
         } catch (Exception e) {
             LOG.fine("Could not extract STRING operands: " + e.getMessage());
@@ -1487,14 +1487,14 @@ public final class StatementSerializer {
             // WITH POINTER (red-dragon-4q25.15)
             if (stmt.getWithPointerPhrase() != null
                     && stmt.getWithPointerPhrase().getPointerCall() != null) {
-                obj.addProperty("pointer",
-                        extractCallName(stmt.getWithPointerPhrase().getPointerCall()));
+                obj.add("pointer",
+                        serializeRef(stmt.getWithPointerPhrase().getPointerCall()));
             }
             // TALLYING IN (red-dragon-4q25.14)
             if (stmt.getTallyingPhrase() != null
                     && stmt.getTallyingPhrase().getTallyCountDataItemCall() != null) {
-                obj.addProperty("tallying_target",
-                        extractCallName(stmt.getTallyingPhrase().getTallyCountDataItemCall()));
+                obj.add("tallying_target",
+                        serializeRef(stmt.getTallyingPhrase().getTallyCountDataItemCall()));
             }
         } catch (Exception e) {
             LOG.fine("Could not extract UNSTRING operands: " + e.getMessage());

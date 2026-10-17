@@ -76,18 +76,20 @@ def test_unstring_emits_pointer_and_tallying_target(bridge_jar):
             "WORKING-STORAGE SECTION.",
             "01 WS-SRC PIC X(10).",
             "01 WS-F1 PIC X(5).",
-            "01 WS-PTR PIC 9(4).",
-            "01 WS-CNT PIC 9(4).",
+            "01 WS-P. 02 WS-PTR PIC 9(4).",
+            "01 WS-C. 02 WS-CNT PIC 9(4).",
             "PROCEDURE DIVISION.",
             "    UNSTRING WS-SRC DELIMITED BY ',' INTO WS-F1",
-            "        WITH POINTER WS-PTR TALLYING IN WS-CNT.",
+            "        WITH POINTER WS-PTR OF WS-P TALLYING IN WS-CNT IN WS-C.",
             "    GOBACK.",
         ],
         bridge_jar,
     )
     stmt = _first_statement(obj)
-    assert stmt["pointer"] == "WS-PTR"
-    assert stmt["tallying_target"] == "WS-CNT"
+    assert (stmt["pointer"], stmt["tallying_target"]) == (
+        {"name": "WS-PTR", "qualifiers": ["WS-P"]},
+        {"name": "WS-CNT", "qualifiers": ["WS-C"]},
+    )
 
 
 def test_string_emits_pointer_and_delimiter_operands(bridge_jar):
@@ -112,7 +114,7 @@ def test_string_emits_pointer_and_delimiter_operands(bridge_jar):
     )
     stmt = _first_statement(obj)
     assert (stmt["pointer"], stmt["sendings"]) == (
-        "WS-PTR",
+        {"name": "WS-PTR"},
         [
             {"value": {"name": "WS-A"}},
             {

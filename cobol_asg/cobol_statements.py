@@ -900,7 +900,7 @@ class StringStatement:
 
     sendings: list[StringSending] = field(default_factory=list)
     into: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
-    pointer: str = ""
+    pointer: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
     on_overflow: list[CobolStatementType] = field(default_factory=list)
     not_on_overflow: list[CobolStatementType] = field(default_factory=list)
     span: SourceSpan | None = None
@@ -910,7 +910,7 @@ class StringStatement:
         return cls(
             sendings=[StringSending.from_dict(s) for s in data.get("sendings", [])],
             into=RefModOperand.from_dict(data.get("into", {})),
-            pointer=data.get("pointer", ""),
+            pointer=_operand(data, "pointer"),
             on_overflow=[parse_statement(c) for c in data.get("on_overflow", [])],
             not_on_overflow=[
                 parse_statement(c) for c in data.get("not_on_overflow", [])
@@ -930,8 +930,8 @@ class StringStatement:
                 }
             ),
         }
-        if self.pointer:
-            result["pointer"] = self.pointer
+        if self.pointer.name:
+            result["pointer"] = self.pointer.to_dict()
         if self.span is not None:
             self.span.write_into(result)
         return result
@@ -949,8 +949,10 @@ class UnstringStatement:
     source: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
     delimiters: list[UnstringDelimiter] = field(default_factory=list)
     into: list[UnstringReceiver] = field(default_factory=list)
-    tallying_target: str = ""
-    pointer: str = ""
+    tallying_target: RefModOperand = field(
+        default_factory=lambda: RefModOperand(name="")
+    )
+    pointer: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
     on_overflow: list[CobolStatementType] = field(default_factory=list)
     not_on_overflow: list[CobolStatementType] = field(default_factory=list)
     span: SourceSpan | None = None
@@ -974,8 +976,8 @@ class UnstringStatement:
                 )
                 for i in data.get("into", [])
             ],
-            tallying_target=data.get("tallying_target", ""),
-            pointer=data.get("pointer", ""),
+            tallying_target=_operand(data, "tallying_target"),
+            pointer=_operand(data, "pointer"),
             on_overflow=[parse_statement(c) for c in data.get("on_overflow", [])],
             not_on_overflow=[
                 parse_statement(c) for c in data.get("not_on_overflow", [])
@@ -1010,10 +1012,10 @@ class UnstringStatement:
                 }
             ),
         }
-        if self.tallying_target:
-            result["tallying_target"] = self.tallying_target
-        if self.pointer:
-            result["pointer"] = self.pointer
+        if self.tallying_target.name:
+            result["tallying_target"] = self.tallying_target.to_dict()
+        if self.pointer.name:
+            result["pointer"] = self.pointer.to_dict()
         if self.span is not None:
             self.span.write_into(result)
         return result
