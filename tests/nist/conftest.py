@@ -200,6 +200,16 @@ def run_nist(prog: str, tmp_path: Path) -> None:
     assert_nist_pass(_run_unit(prog, tmp_path, _MAX_STEPS), prog)
 
 
+def run_display_report(
+    prog: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> list[str]:
+    """Run a CCVS program that DISPLAYs its report instead of writing a PRINT-FILE,
+    and return the lines it displayed."""
+    capsys.readouterr()
+    _run_unit(prog, tmp_path, _MAX_STEPS)
+    return capsys.readouterr().out.splitlines()
+
+
 def make_provider(
     src: str, tmp_path: Path, system_input: Sequence[str] = ()
 ) -> tuple[RealFileIOProvider, Path]:
