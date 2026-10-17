@@ -75,6 +75,7 @@ from interpreter.cobol.byte_builtins import (
     _builtin_reverse,
     _builtin_sin,
     _builtin_sqrt,
+    _builtin_standard_deviation,
     _builtin_string_concat,
     _builtin_string_concat_pair,
     _builtin_string_convert,
@@ -509,6 +510,7 @@ class TestByteBuiltinsRegistration:
             "__median",
             "__midrange",
             "__variance",
+            "__standard_deviation",
             "__ord_max",
             "__ord_min",
             "__concatenate",
@@ -2630,8 +2632,8 @@ class TestMidrange:
 
 
 class TestVariance:
-    """FUNCTION VARIANCE(a, b, ...) -> sample variance (n-1 divisor); 0 for a
-    single argument."""
+    """FUNCTION VARIANCE(a, b, ...) -> population variance (divisor n, IBM
+    Enterprise COBOL LR, VARIANCE); 0 for a single argument."""
 
     @covers(CobolFeature.INTRINSIC_FUNCTION)
     def test_single_arg_is_zero(self):
@@ -2639,17 +2641,15 @@ class TestVariance:
 
     @covers(CobolFeature.INTRINSIC_FUNCTION)
     def test_basic(self):
-        assert (
-            _builtin_variance(
-                [
-                    typed_from_runtime(2),
-                    typed_from_runtime(4),
-                    typed_from_runtime(6),
-                ],
-                None,
-            ).value
-            == 4
-        )
+        assert _builtin_variance(
+            [
+                typed_from_runtime(5),
+                typed_from_runtime(-2),
+                typed_from_runtime(-14),
+                typed_from_runtime(0),
+            ],
+            None,
+        ).value == Decimal("48.6875")
 
     @covers(CobolFeature.INTRINSIC_FUNCTION)
     def test_no_args_uncomputable(self):
@@ -2658,6 +2658,21 @@ class TestVariance:
     @covers(CobolFeature.INTRINSIC_FUNCTION)
     def test_registered_in_builtins(self):
         assert FuncName(BuiltinName.VARIANCE) in BYTE_BUILTINS
+
+
+class TestStandardDeviation:
+    """FUNCTION STANDARD-DEVIATION(a, b, ...) -> the square root of the
+    population variance (IBM Enterprise COBOL LR, STANDARD-DEVIATION)."""
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_square_root_of_the_population_variance(self):
+        values = [typed_from_runtime(v) for v in (2, 4, 4, 4, 5, 5, 7, 9)]
+        assert (
+            _builtin_standard_deviation(values, None).value,
+            _builtin_standard_deviation([typed_from_runtime(5)], None).value,
+            _builtin_standard_deviation([], None).value,
+            FuncName(BuiltinName.STANDARD_DEVIATION) in BYTE_BUILTINS,
+        ) == (2, 0, _UNCOMPUTABLE, True)
 
 
 class TestOrdMax:

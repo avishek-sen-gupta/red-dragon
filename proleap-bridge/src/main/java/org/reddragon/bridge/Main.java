@@ -152,8 +152,13 @@ public final class Main {
         return Arrays.asList(args).contains("-expand-only");
     }
 
+    /** The compile stamp FUNCTION WHEN-COMPILED reports: local time with its offset. */
+    private static final java.time.format.DateTimeFormatter COMPILED_AT =
+            java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSxxx");
+
     private static String serializeAsg(Program program) {
         JsonObject asg = AsgSerializer.serialize(program);
+        asg.addProperty("compiled_at", java.time.OffsetDateTime.now().format(COMPILED_AT));
         Gson gson = new GsonBuilder().setPrettyPrinting().create();
         return gson.toJson(asg);
     }

@@ -14,6 +14,7 @@ import dataclasses
 import logging
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from cobol_asg.addressing_mode import AddressingMode
@@ -232,6 +233,10 @@ class EmitContext:
     @property
     def procedures(self) -> ProcedureLabels:
         return self._procedures
+
+    @property
+    def compiled_at(self) -> datetime:
+        return self._asg.compiled_at
 
     @procedures.setter
     def procedures(self, value: ProcedureLabels) -> None:

@@ -28,6 +28,7 @@ from cobol_numeric.intrinsics import (
     present_value,
     remainder,
     square_root,
+    standard_deviation,
     total,
     value_range,
     variance,
@@ -1488,7 +1489,7 @@ def _builtin_atan(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     return BuiltinResult(value=math.atan(x))
 
 
-def _coerce_intrinsic_decimal_list(args: list[TypedValue]):
+def _coerce_intrinsic_decimal_list(args: Sequence[TypedValue]):
     """Coerce every arg's value to Decimal, or return None if any fails/symbolic."""
     values = []
     for a in args:
@@ -1536,16 +1537,23 @@ def _builtin_midrange(args: list[TypedValue], vm: VMState) -> BuiltinResult:
 
 
 def _builtin_variance(args: list[TypedValue], vm: VMState) -> BuiltinResult:
-    """COBOL FUNCTION VARIANCE(a, b, ...): sample variance (n-1 divisor),
-    matching the ISO/IBM definition; a single argument yields 0 by convention
-    (avoids a division by zero)."""
+    """COBOL FUNCTION VARIANCE(a, b, ...): the population variance, whose
+    divisor is the number of values (IBM Enterprise COBOL LR, VARIANCE)."""
     values = _coerce_intrinsic_decimal_list(args)
     if not values:
         return BuiltinResult(value=_UNCOMPUTABLE)
-    n = len(values)
-    if n == 1:
-        return BuiltinResult(value=0)
     return BuiltinResult(value=_decimal_to_intrinsic(variance(values)))
+
+
+def _builtin_standard_deviation(
+    args: Sequence[TypedValue], vm: VMState
+) -> BuiltinResult:
+    """COBOL FUNCTION STANDARD-DEVIATION(a, b, ...): the square root of the
+    population variance (IBM Enterprise COBOL LR, STANDARD-DEVIATION)."""
+    values = _coerce_intrinsic_decimal_list(args)
+    if not values:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=_decimal_to_intrinsic(standard_deviation(values)))
 
 
 def _builtin_ord_max(args: list[TypedValue], vm: VMState) -> BuiltinResult:
@@ -1961,6 +1969,7 @@ BYTE_BUILTINS: Mapping[FuncName, Builtin] = MappingProxyType(
         FuncName(BuiltinName.MEDIAN): _builtin_median,
         FuncName(BuiltinName.MIDRANGE): _builtin_midrange,
         FuncName(BuiltinName.VARIANCE): _builtin_variance,
+        FuncName(BuiltinName.STANDARD_DEVIATION): _builtin_standard_deviation,
         FuncName(BuiltinName.ORD_MAX): _builtin_ord_max,
         FuncName(BuiltinName.ORD_MIN): _builtin_ord_min,
         FuncName(BuiltinName.CONCATENATE): _builtin_concatenate,

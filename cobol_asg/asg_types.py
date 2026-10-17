@@ -9,6 +9,7 @@ emits JSON to stdout; these types consume that JSON via from_dict().
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 
 from cobol_asg.addressing_mode import AddressingMode
 from cobol_asg.alphabet import NATIVE_ALPHABET, Alphabet
@@ -66,6 +67,7 @@ def _currency_from_special_names(data: dict) -> str:
 
 NOT_RENAMED = RefModOperand(name="")
 NO_ODO_OBJECT = RefModOperand(name="")
+NOT_COMPILED = datetime(1, 1, 1, tzinfo=UTC)
 
 
 @dataclass(frozen=True)
@@ -387,6 +389,9 @@ class CobolASG:
     collating_sequence: Alphabet = NATIVE_ALPHABET
     switches: list[ImplementorSwitch] = field(default_factory=list)
     classes: list[ClassDefinition] = field(default_factory=list)
+    # When the bridge compiled this program; NOT_COMPILED for an ASG built
+    # without it.
+    compiled_at: datetime = NOT_COMPILED
 
     @classmethod
     def from_dict(
@@ -454,6 +459,11 @@ class CobolASG:
                 ClassDefinition.from_parts(c["name"], c["items"])
                 for c in data.get("special_names", {}).get("classes", [])
             ],
+            compiled_at=(
+                datetime.fromisoformat(data["compiled_at"])
+                if "compiled_at" in data
+                else NOT_COMPILED
+            ),
         )
 
     def to_dict(self) -> dict:
@@ -475,7 +485,13 @@ class CobolASG:
             | {section: items for section, items in listed.items() if items}
             | self._procedure_using_dict()
             | self._file_descriptions_dict()
+            | self._compiled_at_dict()
         )
+
+    def _compiled_at_dict(self) -> dict:
+        if self.compiled_at == NOT_COMPILED:
+            return {}
+        return {"compiled_at": self.compiled_at.isoformat(timespec="milliseconds")}
 
     def _special_names_dict(self) -> dict:
         currency = (

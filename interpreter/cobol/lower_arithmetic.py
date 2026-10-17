@@ -106,6 +106,7 @@ from interpreter.cobol.lower_program_exit import (
 )
 from interpreter.cobol.run_unit import RANDOM_STATE, RUN_UNIT_LAYOUT, RUN_UNIT_VAR
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
+from interpreter.cobol.when_compiled import when_compiled_text
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Binop,
@@ -430,6 +431,7 @@ _INTRINSIC_FUNCTIONS = {
     "MEDIAN": BuiltinName.MEDIAN,
     "MIDRANGE": BuiltinName.MIDRANGE,
     "VARIANCE": BuiltinName.VARIANCE,
+    "STANDARD-DEVIATION": BuiltinName.STANDARD_DEVIATION,
     "ORD-MAX": BuiltinName.ORD_MAX,
     "ORD-MIN": BuiltinName.ORD_MIN,
     "CONCATENATE": BuiltinName.CONCATENATE,
@@ -704,7 +706,18 @@ def _call_builtin(
     return result_reg
 
 
-_STATEFUL_FUNCTIONS = {"RANDOM": _lower_random}
+def _lower_when_compiled(
+    ctx: EmitContext,
+    operand: FunctionCallOperand,
+    materialised: MaterialisedSectionedLayout,
+    precision: ArithmeticPrecision,
+    *,
+    span: SourceSpan | None,
+) -> Register:
+    return ctx.const_to_reg(when_compiled_text(ctx.compiled_at), span=span)
+
+
+_STATEFUL_FUNCTIONS = {"RANDOM": _lower_random, "WHEN-COMPILED": _lower_when_compiled}
 
 _FIXED_POINT_CATEGORIES: frozenset[CobolDataCategory] = frozenset(
     {
