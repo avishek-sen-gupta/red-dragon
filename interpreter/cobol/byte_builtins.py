@@ -54,7 +54,6 @@ from interpreter.cobol.cobol_constants import (
 )
 from interpreter.cobol.ebcdic_table import EbcdicTable
 from interpreter.cobol.numeric_builtins import NUMERIC_BUILTINS
-from interpreter.cobol.numeric_class import packed_is_numeric, zoned_is_numeric
 from interpreter.cobol.program_presence import program_present
 from interpreter.cobol.run_unit import advanced, restarted, value_of
 from interpreter.func_name import FuncName
@@ -682,47 +681,6 @@ def _builtin_is_numeric(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     return BuiltinResult(value=result)
 
 
-_DIGIT_CHARACTERS = frozenset("0123456789")
-
-
-def _builtin_is_digits(args: Sequence[TypedValue], vm: VMState) -> BuiltinResult:
-    """COBOL ``IS NUMERIC`` class test for an alphanumeric operand.
-
-    Args: [value: str]
-    Returns: bool — True when the value is non-empty and every character is 0-9.
-    """
-    if len(args) < 1 or _is_symbolic(args[0].value):
-        return BuiltinResult(value=_UNCOMPUTABLE)
-    value = args[0].value
-    if not isinstance(value, str):
-        return BuiltinResult(value=_UNCOMPUTABLE)
-    return BuiltinResult(value=bool(value) and set(value) <= _DIGIT_CHARACTERS)
-
-
-def _builtin_cobol_zoned_is_numeric(
-    args: Sequence[TypedValue], vm: VMState
-) -> BuiltinResult:
-    """Args: [stored: list[int], signed: bool, sign_index: int, separate: bool].
-    Returns: bool — IS NUMERIC on a zoned decimal item's stored bytes."""
-    data, signed, sign_index, separate = (a.value for a in args)
-    if not (isinstance(data, list) and isinstance(sign_index, int)):
-        return BuiltinResult(value=_UNCOMPUTABLE)
-    return BuiltinResult(
-        value=zoned_is_numeric(data, bool(signed), sign_index, bool(separate))
-    )
-
-
-def _builtin_cobol_packed_is_numeric(
-    args: Sequence[TypedValue], vm: VMState
-) -> BuiltinResult:
-    """Args: [stored: list[int], signed: bool].
-    Returns: bool — IS NUMERIC on a packed decimal item's stored bytes."""
-    data, signed = (a.value for a in args)
-    if not isinstance(data, list):
-        return BuiltinResult(value=_UNCOMPUTABLE)
-    return BuiltinResult(value=packed_is_numeric(data, bool(signed)))
-
-
 def _builtin_is_alphabetic(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """COBOL `IS ALPHABETIC` class test for an alphanumeric operand.
 
@@ -767,18 +725,6 @@ def _builtin_is_alphabetic_upper(args: list[TypedValue], vm: VMState) -> Builtin
     return BuiltinResult(
         value=all((ch.isalpha() and ch.isupper()) or ch == " " for ch in value)
     )
-
-
-def _builtin_is_in_class(args: Sequence[TypedValue], vm: VMState) -> BuiltinResult:
-    """COBOL ``IS class-name`` test.
-
-    Args: [value: str, characters: str — the class-name's character set]
-    Returns: bool — True when every character of the value is in the set.
-    """
-    value, characters = (a.value for a in args)
-    if _is_symbolic(value) or not isinstance(value, str):
-        return BuiltinResult(value=_UNCOMPUTABLE)
-    return BuiltinResult(value=set(value) <= set(str(characters)))
 
 
 def _numval_to_number(text: str):
@@ -1684,13 +1630,9 @@ BYTE_BUILTINS: Mapping[FuncName, Builtin] = MappingProxyType(
         FuncName(BuiltinName.TRIM): _builtin_cobol_trim,
         FuncName(BuiltinName.CURRENT_DATE): _builtin_current_date,
         FuncName(BuiltinName.IS_NUMERIC): _builtin_is_numeric,
-        FuncName(BuiltinName.IS_DIGITS): _builtin_is_digits,
-        FuncName(BuiltinName.COBOL_ZONED_IS_NUMERIC): _builtin_cobol_zoned_is_numeric,
-        FuncName(BuiltinName.COBOL_PACKED_IS_NUMERIC): _builtin_cobol_packed_is_numeric,
         FuncName(BuiltinName.IS_ALPHABETIC): _builtin_is_alphabetic,
         FuncName(BuiltinName.IS_ALPHABETIC_LOWER): _builtin_is_alphabetic_lower,
         FuncName(BuiltinName.IS_ALPHABETIC_UPPER): _builtin_is_alphabetic_upper,
-        FuncName(BuiltinName.IS_IN_CLASS): _builtin_is_in_class,
         FuncName(BuiltinName.LENGTH): _builtin_length,
         FuncName(BuiltinName.NUMVAL): _builtin_numval,
         FuncName(BuiltinName.NUMVAL_C): _builtin_numval_c,

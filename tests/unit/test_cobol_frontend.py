@@ -1,13 +1,17 @@
 """Tests for COBOL frontend — Data Division and Procedure Division lowering."""
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
+from cobol_asg.alphabet_item import AlphabetItem
+from cobol_asg.alphabet_link import AlphabetLink
+from cobol_asg.alphabet_literal_kind import AlphabetLiteralKind
 from cobol_asg.asg_types import (
     CobolASG,
     CobolField,
     CobolParagraph,
     CobolSection,
 )
+from cobol_asg.class_definition import ClassDefinition
 from cobol_asg.cobol_expression import FieldRefNode, LiteralNode, expr_from_dict
 from cobol_asg.cobol_parser import make_cobol_parser
 from cobol_asg.cobol_statements import (
@@ -2146,6 +2150,58 @@ class TestTier2Lowering:
             "__cobol_prepare_digits",
             "__nibble_set",
         } == {"__cobol_prepare_digits", "__nibble_set"}
+
+    @covers(CobolFeature.CLASS_CONDITION, CobolFeature.CLASS_NAME)
+    def test_class_conditions_lower_to_ir_without_a_class_builtin(self):
+        fields = [
+            CobolField(name="WS-Z", level=77, pic="S9(3)", usage="DISPLAY", offset=0),
+            CobolField(name="WS-P", level=77, pic="S9(3)", usage="COMP-3", offset=3),
+            CobolField(name="WS-X", level=77, pic="X(4)", usage="DISPLAY", offset=5),
+        ]
+
+        def tested(condition: Mapping[str, str | Mapping[str, str]]) -> IfStatement:
+            return IfStatement(
+                condition={"not": False, **condition},
+                children=[DisplayStatement(operands=(RefModOperand(name="'Y'"),))],
+            )
+
+        stmts = [
+            tested({"class": "NUMERIC", "operand": {"kind": "ref", "name": name}})
+            for name in ("WS-Z", "WS-P", "WS-X")
+        ] + [
+            tested(
+                {"class_name": "LETTERS", "operand": {"kind": "ref", "name": "WS-X"}}
+            )
+        ]
+        data = CobolASG(
+            data_fields=fields,
+            paragraphs=[CobolParagraph(name="MAIN", statements=list(stmts))],
+            classes=[
+                ClassDefinition(
+                    "LETTERS",
+                    (
+                        AlphabetItem(
+                            AlphabetLink.NONE, AlphabetLiteralKind.NONNUMERIC, "AB"
+                        ),
+                    ),
+                )
+            ],
+        ).to_dict()
+        instructions = CobolFrontend(make_cobol_parser()).lower_from_ast_dict(data)
+
+        called = {
+            c.operands[0]
+            for c in _find_opcodes(instructions, Opcode.CALL_FUNCTION)
+            if c.operands
+        }
+        assert called & {
+            "__is_digits",
+            "__is_in_class",
+            "__cobol_zoned_is_numeric",
+            "__cobol_packed_is_numeric",
+            "__string_find",
+            "__nibble_get",
+        } == {"__string_find", "__nibble_get"}
 
 
 class TestSearchLowering:

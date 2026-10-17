@@ -20,6 +20,7 @@ from cobol_asg.cobol_expression import (
 )
 from cobol_asg.condition_name import ConditionValue
 from cobol_asg.ref_mod import FunctionCallOperand, RefModOperand
+from cobol_asg.cobol_types import CobolDataCategory
 from cobol_asg.source_span import SourceSpan
 from interpreter.cobol.arithmetic_precision import ArithmeticPrecision
 from interpreter.cobol.arithmetic_scale import (
@@ -27,6 +28,12 @@ from interpreter.cobol.arithmetic_scale import (
     expression_is_floating,
     node_scale,
     operand_dmax,
+)
+from interpreter.cobol.class_test_ir import (
+    emit_all_characters_in,
+    emit_is_digits,
+    emit_packed_is_numeric,
+    emit_zoned_is_numeric,
 )
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.condition_name_index import ConditionNameIndex
@@ -37,6 +44,7 @@ from interpreter.cobol.ir_emitter import IrEmitter
 from interpreter.cobol.pointer_lowering import PointerLowering
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.cobol.switch_condition import SwitchCondition
+from interpreter.cobol.zoned_sign_ir import sign_index
 from interpreter.func_name import FuncName
 from interpreter.instructions import Binop, CallFunction, Const
 from interpreter.operator_kind import resolve_binop
@@ -366,22 +374,13 @@ def _lower_condition_node(
     elif "class_name" in node:
         # IS class-name: every character of the operand is in the set the
         # SPECIAL-NAMES CLASS clause names.
-        inner = ctx.fresh_reg()
-        ctx.emit_inst(
-            CallFunction(
-                result_reg=inner,
-                func_name=FuncName(BuiltinName.IS_IN_CLASS),
-                args=(
-                    ctx.emit_to_string(
-                        _lower_expr_dict(ctx, node["operand"], materialised, span=span),
-                        span=span,
-                    ),
-                    ctx.const_to_reg(
-                        ctx.class_names.characters(node["class_name"]), span=span
-                    ),
-                ),
+        inner = emit_all_characters_in(
+            IrEmitter(ctx=ctx, span=span),
+            ctx.emit_to_string(
+                _lower_expr_dict(ctx, node["operand"], materialised, span=span),
+                span=span,
             ),
-            span=span,
+            ctx.const_to_reg(ctx.class_names.characters(node["class_name"]), span=span),
         )
     elif "class" in node:
         # Class condition: {"class": "NUMERIC"|"ALPHABETIC"|..., "operand": <expr>}
@@ -747,34 +746,44 @@ def _lower_class_condition(
     """
     class_name = str(node.get("class", "")).upper()
     operand = node.get("operand", {})
-    if class_name == "NUMERIC" and _is_numeric_field(
-        ctx, operand, materialised, span=span
-    ):
+    e = IrEmitter(ctx=ctx, span=span)
+    if class_name == "NUMERIC":
+        return _lower_numeric_class(e, operand, materialised)
+    return _lower_class_builtin(e, class_name, operand, materialised)
+
+
+def _lower_numeric_class(
+    e: IrEmitter, operand: dict, materialised: MaterialisedSectionedLayout
+) -> Register:
+    ctx, span = e.ctx, e.span
+    if _is_numeric_field(ctx, operand, materialised, span=span):
         return _lower_numeric_item_class(ctx, operand, materialised, span=span)
-    builtin = (
-        BuiltinName.IS_DIGITS
-        if class_name == "NUMERIC"
-        and _is_nonnumeric_operand(ctx, operand, materialised, span=span)
-        else _CLASS_BUILTIN.get(class_name, "")
-    )
+    if _is_nonnumeric_operand(ctx, operand, materialised, span=span):
+        return emit_is_digits(
+            e,
+            ctx.emit_to_string(
+                _lower_expr_dict(ctx, operand, materialised, span=span), span=span
+            ),
+        )
+    return _lower_class_builtin(e, "NUMERIC", operand, materialised)
+
+
+def _lower_class_builtin(
+    e: IrEmitter,
+    class_name: str,
+    operand: dict,
+    materialised: MaterialisedSectionedLayout,
+) -> Register:
+    builtin = _CLASS_BUILTIN.get(class_name, "")
     if not builtin:
         logger.warning("unknown class condition %r — never matching", class_name)
-        result = ctx.fresh_reg()
-        ctx.emit_inst(Const.bool_(result, False), span=span)
-        return result
-
-    value_reg = _lower_expr_dict(ctx, operand, materialised, span=span)
-    value_str_reg = ctx.emit_to_string(value_reg, span=span)
-    result = ctx.fresh_reg()
-    ctx.emit_inst(
-        CallFunction(
-            result_reg=result,
-            func_name=FuncName(builtin),
-            args=(Register(str(value_str_reg)),),
+        return e.bool_(False)
+    return e.call(
+        builtin,
+        e.ctx.emit_to_string(
+            _lower_expr_dict(e.ctx, operand, materialised, span=e.span), span=e.span
         ),
-        span=span,
     )
-    return result
 
 
 def _lower_numeric_item_class(
@@ -791,9 +800,23 @@ def _lower_numeric_item_class(
         subscripts=tuple(expr_from_dict(s) for s in expr.get("subscripts", [])),
         span=span,
     )
-    return ctx.emit_numeric_item_class(
+    td = ref.fl.type_descriptor
+    if td.category not in _STORED_CLASS_TESTS:
+        return ctx.emit_decoded_is_numeric(
+            rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
+        )
+    e = IrEmitter(ctx=ctx, span=span)
+    stored = ctx.emit_load_field_bytes(
         rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
     )
+    if td.category == CobolDataCategory.COMP3:
+        return emit_packed_is_numeric(e, stored, td, ref.fl.byte_length)
+    return emit_zoned_is_numeric(e, stored, td, ref.fl.byte_length, sign_index(ref.fl))
+
+
+_STORED_CLASS_TESTS = frozenset(
+    {CobolDataCategory.ZONED_DECIMAL, CobolDataCategory.COMP3}
+)
 
 
 _SIGN_OP: dict[str, str] = {"POSITIVE": ">", "NEGATIVE": "<", "ZERO": "=="}

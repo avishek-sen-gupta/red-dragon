@@ -109,16 +109,6 @@ DispatchFn = Callable[
 ]  # Any: CobolStatementType, circular-import boundary
 
 
-_STORED_CLASS_TEST = {
-    CobolDataCategory.ZONED_DECIMAL: BuiltinName.COBOL_ZONED_IS_NUMERIC,
-    CobolDataCategory.COMP3: BuiltinName.COBOL_PACKED_IS_NUMERIC,
-}
-
-
-def _sign_index(fl: FieldLayout) -> int:
-    return 0 if fl.type_descriptor.sign_leading else fl.byte_length - 1
-
-
 def _decode_ir(fl: FieldLayout) -> list[InstructionBase]:
     td = fl.type_descriptor
     if td.holds_characters or td.category == CobolDataCategory.NUMERIC_EDITED:
@@ -1214,48 +1204,7 @@ class EmitContext:
             region_reg, fl, offset_reg, extent=extent, span=span
         )
 
-    def emit_numeric_item_class(
-        self,
-        region_reg: Register,
-        fl: FieldLayout,
-        offset_reg: Register = NO_REGISTER,
-        *,
-        extent: FieldExtent,
-        span: SourceSpan | None,
-    ) -> Register:
-        """IS NUMERIC on an item described as numeric: a zoned or packed decimal
-        item's stored bytes, the decoded value's text for any other."""
-        td = fl.type_descriptor
-        if td.category not in _STORED_CLASS_TEST:
-            return self._emit_decoded_is_numeric(
-                region_reg, fl, offset_reg, extent=extent, span=span
-            )
-        stored = self.emit_load_field_bytes(
-            region_reg, fl, offset_reg, extent=extent, span=span
-        )
-        signed = self.const_to_reg(td.signed, span=span)
-        args = (
-            (stored, signed)
-            if td.category == CobolDataCategory.COMP3
-            else (
-                stored,
-                signed,
-                self.const_to_reg(_sign_index(fl), span=span),
-                self.const_to_reg(td.sign_separate, span=span),
-            )
-        )
-        result = self.fresh_reg()
-        self.emit_inst(
-            CallFunction(
-                result_reg=result,
-                func_name=FuncName(_STORED_CLASS_TEST[td.category]),
-                args=args,
-            ),
-            span=span,
-        )
-        return result
-
-    def _emit_decoded_is_numeric(
+    def emit_decoded_is_numeric(
         self,
         region_reg: Register,
         fl: FieldLayout,
