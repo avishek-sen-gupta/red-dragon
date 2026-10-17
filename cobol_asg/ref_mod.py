@@ -186,6 +186,10 @@ class RefModOperand:
     rounded: bool = False
     all_literal: bool = False
 
+    @property
+    def is_reference_modified(self) -> bool:
+        return self.ref_mod_start is not None
+
     @classmethod
     def from_dict(cls, data: dict) -> RefModOperand:
         """Construct RefModOperand from JSON dict representation.

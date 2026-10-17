@@ -104,6 +104,8 @@ class FieldLayout:
     receives_at_maximum: bool = False
     """That item contains its own ODO object, so as a receiver it is its
     maximum length (ANSI X3.23-1985 OCCURS, from memory)."""
+    is_group: bool = False
+    """The storage synthesised over a group item, not an elementary item's."""
     span: SourceSpan | None = None
     """Where this field was declared, or None for compiler-allocated items.
 
@@ -111,6 +113,17 @@ class FieldLayout:
     its declaration share a source line. Index items have none — they
     correspond to no source text.
     """
+
+    def as_characters(self) -> FieldLayout:
+        """This storage as one alphanumeric item of its length: what a group
+        move fills, "without consideration for the individual elementary items"
+        (IBM Enterprise COBOL LR, group moves)."""
+        return replace(
+            self,
+            type_descriptor=CobolTypeDescriptor(
+                category=CobolDataCategory.ALPHANUMERIC, total_digits=self.byte_length
+            ),
+        )
 
 
 @dataclass(frozen=True)
@@ -344,6 +357,7 @@ class DataLayout:
                 value=grp.value,
                 value_is_figurative=grp.value_is_figurative,
                 occurs_depending_on=grp.occurs_depending_on,
+                is_group=True,
             )
             # Recurse into group's children
             yield from grp.all_fields()
@@ -440,6 +454,7 @@ def _group_storage(name: str, group: DataLayout) -> FieldLayout:
         ),
         span=group.span,
         occurs_depending_on=group.occurs_depending_on,
+        is_group=True,
     )
 
 
