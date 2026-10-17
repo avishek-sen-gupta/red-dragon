@@ -1,10 +1,12 @@
 """What lowering fixes about one READ: its file, the key register it reads by, whether it
-reads sequentially, whether the file is OPTIONAL, and its RELATIVE KEY's digit count."""
+reads sequentially, whether the file is OPTIONAL, its RELATIVE KEY's digit count, and the
+prime key it keeps in sequence by, if any."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
+from interpreter.cobol.prime_key import PrimeKey
 from interpreter.register import Register
 
 
@@ -15,3 +17,4 @@ class ReadPlan:
     sequential: bool
     optional: bool
     key_digits: int
+    sequence: tuple[PrimeKey, ...]

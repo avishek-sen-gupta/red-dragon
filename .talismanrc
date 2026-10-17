@@ -1,9 +1,13 @@
 threshold: low
 fileignoreconfig:
+- filename: interpreter/cobol/file_verb_ir.py
+  checksum: 24328c9dc0007a51273e9ab76b0ece0e2e4b0e4ba925e1c55d524254bedba252
+- filename: interpreter/cobol/file_state.py
+  checksum: 08d7242edbc480c0e4498f6b39216d9ed94113de7c988da8e7a686e523fc85fc
 - filename: tests/unit/cobol/test_optional_files.py
   checksum: 757a439ee05cdba8f321e69e2626574b590168bd6c6f20fb0e68656406708e0f
 - filename: interpreter/cobol/read_plan.py
-  checksum: a2aef2be4c1eb0da4417d9db5bebe328f74f06d0a2ea5615a733f76b3035c09a
+  checksum: f9a38817cdb26c0d702db0d9159588d93712e59972fa229b28e07279551d2a41
 - filename: interpreter/cobol/file_frame.py
   checksum: 0c7ca0ab4d415df128b188445752cc27c5ee6f80daad2e2a5761bb4dd1c54c35
 - filename: interpreter/cobol/file_facts.py
@@ -229,7 +233,7 @@ fileignoreconfig:
 - filename: tests/unit/cobol/test_recorded_memory_effects.py
   checksum: ba151292b7ee1a3f747628e5950297f904de1c1cd625307f762f7a98b570b3de
 - filename: docs/frontend-design/cobol.md
-  checksum: d64d5bfa2f543d957a60b5bb853c85d79e44316bcf739ddc7ea4102c89ddae15
+  checksum: 49231ca3c56d73a8edeb5849e2731282c3184116aa5e9f99b671846d6484bbf8
 - filename: tests/integration/test_cobol_call_using_addresses.py
   checksum: 353804977c7a3e5eb44a303f7e42a47ef1bdf9f837f41e396bf5033813c4fdb0
 - filename: tests/integration/test_cobol_call_using_slots.py
@@ -245,7 +249,7 @@ fileignoreconfig:
 - filename: interpreter/cobol/alternate_index_driver.py
   checksum: 240441d2833179ea7f9c01beb2e9b61ee4d584d205c34eade4b773ee14630c2c
 - filename: interpreter/cobol/real_file_provider.py
-  checksum: a874d911d7a1d41f9fee950392c0dfc1bfdf1c1825598561162049bd50670b72
+  checksum: d0e98bcfd02dd4e89f4a16e0d1fe2613835cd36aba6cf1bacfb830fcf3358e17
 - filename: interpreter/cobol/file_definitions_data.py
   checksum: bcdbc3926594a79c8cfa61c2308ddc900ef57bc3d79be23c385ae9543e9a7602
 - filename: tests/unit/cobol/test_file_definitions_data.py
@@ -279,7 +283,7 @@ fileignoreconfig:
 - filename: proleap-bridge/src/main/java/org/reddragon/bridge/StatementSerializer.java
   checksum: f9a87946dec86a8815575eff56958f913885c76b3fb14f7f3db967b3686e1036
 - filename: interpreter/cobol/lower_io.py
-  checksum: c2e1f48032f156ceaf2de409db8aefba499504dd86b6b95a4c2fca36ae6e42ad
+  checksum: fe3abb577681de1c73b00133612aeafae12898898dec7285f7d64c3361667400
 - filename: tests/integration/test_cobol_use_declaratives.py
   checksum: d0c6ea039a432d727fde9ea777b1c4945dff7c0f5c3a4599a626bfd8df390072
 - filename: interpreter/cobol/open_file.py

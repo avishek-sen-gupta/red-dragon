@@ -208,3 +208,4 @@ def emit_closed(e: IrEmitter, state: FileState) -> None:
     e.store(state.locked, e.bool_(False))
     e.store(state.position, e.text(FilePosition.NO_CURRENT_RECORD.value))
     e.store(state.absent, e.bool_(False))
+    e.store(state.last_key, e.text(""))
