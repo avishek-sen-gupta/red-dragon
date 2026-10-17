@@ -460,6 +460,7 @@ class TestByteBuiltinsRegistration:
             "__is_alphabetic",
             "__is_alphabetic_lower",
             "__is_alphabetic_upper",
+            "__is_in_class",
             "__length",
             "__numval",
             "__numval_c",

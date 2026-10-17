@@ -359,6 +359,26 @@ def _lower_condition_node(
     elif "relation" in node:
         # Structured relation: {"left": <expr>, "op": "...", "right": <expr>}
         inner = _lower_relation_node(ctx, node["relation"], materialised, span=span)
+    elif "class_name" in node:
+        # IS class-name: every character of the operand is in the set the
+        # SPECIAL-NAMES CLASS clause names.
+        inner = ctx.fresh_reg()
+        ctx.emit_inst(
+            CallFunction(
+                result_reg=inner,
+                func_name=FuncName(BuiltinName.IS_IN_CLASS),
+                args=(
+                    ctx.emit_to_string(
+                        _lower_expr_dict(ctx, node["operand"], materialised, span=span),
+                        span=span,
+                    ),
+                    ctx.const_to_reg(
+                        ctx.class_names.characters(node["class_name"]), span=span
+                    ),
+                ),
+            ),
+            span=span,
+        )
     elif "class" in node:
         # Class condition: {"class": "NUMERIC"|"ALPHABETIC"|..., "operand": <expr>}
         inner = _lower_class_condition(ctx, node, materialised, span=span)

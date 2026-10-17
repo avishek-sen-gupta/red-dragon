@@ -33,6 +33,8 @@ _X_CARDS = {
     "XXXXX051": "SWITCH-1",
     "XXXXX052": "SWITCH-2",
     "XXXXX081": '"12345678"',
+    "XXXXX090": "194",
+    "XXXXX091": "197",
 }
 _SWITCH_SETTINGS = {"SWITCH-1": SwitchStatus.ON, "SWITCH-2": SwitchStatus.OFF}
 

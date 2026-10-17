@@ -21,6 +21,7 @@ from cobol_asg.cobol_statements import (
 )
 from cobol_asg.cobol_types import CobolTypeDescriptor
 from cobol_asg.condition_name import ConditionName, ConditionValue
+from cobol_asg.class_definition import ClassDefinition
 from cobol_asg.implementor_switch import ImplementorSwitch
 from cobol_asg.edit_picture import (
     DEFAULT_CURRENCY,
@@ -196,6 +197,10 @@ class CobolField:
         )
 
     def to_dict(self) -> dict:
+        sign = {
+            "position": "LEADING" if self.sign_leading else "TRAILING",
+            "separate": self.sign_separate,
+        }
         result: dict = {
             "name": self.name,
             "level": self.level,
@@ -205,46 +210,46 @@ class CobolField:
             **({"value_is_all": True} if self.value_is_all else {}),
             **({"value_is_numeric": True} if self.value_is_numeric else {}),
             **({"filler": True} if self.filler else {}),
+            **({"value": self.value} if self.value else {}),
+            **({"value_is_figurative": True} if self.value_is_figurative else {}),
+            **({"redefines": self.redefines} if self.redefines else {}),
+            **(
+                {"children": [c.to_dict() for c in self.children]}
+                if self.children
+                else {}
+            ),
+            **({"occurs": self.occurs} if self.occurs else {}),
+            **({"element_size": self.element_size} if self.element_size else {}),
+            **(
+                {"conditions": [c.to_dict() for c in self.conditions]}
+                if self.conditions
+                else {}
+            ),
+            **({"values": [v.to_dict() for v in self.values]} if self.values else {}),
+            **({"sign": sign} if self.sign_leading or self.sign_separate else {}),
+            **({"justified_right": True} if self.justified_right else {}),
+            **({"synchronized": True} if self.synchronized else {}),
+            **(
+                {"occurs_depending_on": self.occurs_depending_on.to_dict()}
+                if self.occurs_depending_on.name
+                else {}
+            ),
+            **({"occurs_min": self.occurs_min} if self.occurs_min else {}),
+            **({"indexed_by": list(self.indexed_by)} if self.indexed_by else {}),
+            **(
+                {"renames_from": self.renames_from.to_dict()}
+                if self.renames_from.name
+                else {}
+            ),
+            **(
+                {"renames_thru": self.renames_thru.to_dict()}
+                if self.renames_thru.name
+                else {}
+            ),
+            **({"blank_when_zero": True} if self.blank_when_zero else {}),
         }
         if self.span is not None:
             self.span.write_into(result)
-        if self.value:
-            result["value"] = self.value
-        if self.value_is_figurative:
-            result["value_is_figurative"] = True
-        if self.redefines:
-            result["redefines"] = self.redefines
-        if self.children:
-            result["children"] = [c.to_dict() for c in self.children]
-        if self.occurs:
-            result["occurs"] = self.occurs
-        if self.element_size:
-            result["element_size"] = self.element_size
-        if self.conditions:
-            result["conditions"] = [c.to_dict() for c in self.conditions]
-        if self.values:
-            result["values"] = [v.to_dict() for v in self.values]
-        if self.sign_leading or self.sign_separate:
-            result["sign"] = {
-                "position": "LEADING" if self.sign_leading else "TRAILING",
-                "separate": self.sign_separate,
-            }
-        if self.justified_right:
-            result["justified_right"] = True
-        if self.synchronized:
-            result["synchronized"] = True
-        if self.occurs_depending_on.name:
-            result["occurs_depending_on"] = self.occurs_depending_on.to_dict()
-        if self.occurs_min:
-            result["occurs_min"] = self.occurs_min
-        if self.indexed_by:
-            result["indexed_by"] = list(self.indexed_by)
-        if self.renames_from.name:
-            result["renames_from"] = self.renames_from.to_dict()
-        if self.renames_thru.name:
-            result["renames_thru"] = self.renames_thru.to_dict()
-        if self.blank_when_zero:
-            result["blank_when_zero"] = True
         return result
 
 
@@ -381,6 +386,7 @@ class CobolASG:
     # the native sequence when the clause is absent.
     collating_sequence: Alphabet = NATIVE_ALPHABET
     switches: list[ImplementorSwitch] = field(default_factory=list)
+    classes: list[ClassDefinition] = field(default_factory=list)
 
     @classmethod
     def from_dict(
@@ -444,6 +450,10 @@ class CobolASG:
                 ImplementorSwitch.from_dict(s)
                 for s in data.get("special_names", {}).get("switches", [])
             ],
+            classes=[
+                ClassDefinition.from_parts(c["name"], c["items"])
+                for c in data.get("special_names", {}).get("classes", [])
+            ],
         )
 
     def to_dict(self) -> dict:
@@ -473,8 +483,14 @@ class CobolASG:
             if self.currency_symbol != DEFAULT_CURRENCY
             else {}
         ) | ({"decimal_point_is_comma": True} if self.decimal_point_is_comma else {})
-        clauses = currency | (
-            {"switches": [s.to_dict() for s in self.switches]} if self.switches else {}
+        clauses = (
+            currency
+            | (
+                {"switches": [s.to_dict() for s in self.switches]}
+                if self.switches
+                else {}
+            )
+            | ({"classes": [c.to_dict() for c in self.classes]} if self.classes else {})
         )
         if self.collating_sequence == NATIVE_ALPHABET:
             return clauses
