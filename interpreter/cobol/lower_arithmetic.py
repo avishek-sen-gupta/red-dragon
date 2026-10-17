@@ -344,13 +344,9 @@ def eval_ref_mod_expr(
             return ctx.const_to_reg(0, span=span)
 
     elif isinstance(expr, RefModLengthOf):
-        # LENGTH OF <field>: the field's byte length (a compile-time constant),
-        # NOT a decode of its value. Used in ref-mod start/length expressions
-        # such as DEST(LENGTH OF G + 1 : LENGTH OF H) (red-dragon-oq2c).
         name = expr.name
         if ctx.has_field(name, materialised):
-            field_ref, _ = ctx.resolve_field_ref(name, materialised, span=span)
-            return ctx.const_to_reg(field_ref.fl.byte_length, span=span)
+            return ctx.emit_length_of(name, materialised, span=span)
         logging.warning("eval_ref_mod_expr: LENGTH OF unknown field %s → 0", name)
         return ctx.const_to_reg(0, span=span)
 
@@ -627,19 +623,13 @@ def lower_move(
             _store_move_value(ctx, target, source_value_reg, materialised, span=span)
         return
 
-    # LENGTH OF <field> source: the field's byte length (a compile-time constant
-    # numeric value), distributed to every receiver. CardDemo CSUTLDTC uses
-    # `MOVE LENGTH OF LS-DATE TO VSTRING-LENGTH` to set the ODO length before the
-    # CEEDAYS CALL (red-dragon). Mirrors the ref-mod LENGTH OF handling above.
     if stmt.source.length_of:
         name = stmt.source.length_of
         if ctx.has_field(name, materialised):
-            field_ref, _ = ctx.resolve_field_ref(name, materialised, span=span)
-            length_value = field_ref.fl.byte_length
+            source_value_reg = ctx.emit_length_of(name, materialised, span=span)
         else:
             logger.warning("MOVE LENGTH OF unknown field %r — using 0", name)
-            length_value = 0
-        source_value_reg = ctx.const_to_reg(length_value, span=span)
+            source_value_reg = ctx.const_to_reg(0, span=span)
         for target in stmt.targets:
             _store_move_value(ctx, target, source_value_reg, materialised, span=span)
         return

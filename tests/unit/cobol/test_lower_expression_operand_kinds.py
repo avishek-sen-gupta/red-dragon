@@ -23,7 +23,7 @@ from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.lower_data_division import lower_sectioned_data_division
 from interpreter.cobol.sectioned_layout import build_sectioned_layout
 from interpreter.cobol.statement_dispatch import dispatch_statement
-from interpreter.instructions import Const
+from interpreter.instructions import Const, LoadRegion
 
 
 def _ctx():
@@ -50,6 +50,48 @@ def test_length_of_lowers_to_the_fields_byte_length_not_a_decode():
     n = len(ctx.instructions)
     lower_expr_node(ctx, LengthOfNode(name="WS-A"), materialised)
     assert 8 in _consts_after(ctx, n)
+
+
+def test_length_of_an_item_ending_in_an_odo_table_reads_the_object():
+    """LENGTH OF such an item is its current length: the one load it makes is
+    of the one-byte object, and the result is computed, not a constant."""
+    asg = CobolASG(
+        data_fields=[
+            CobolField(name="WS-N", level=77, pic="9", usage="DISPLAY", offset=0),
+            CobolField(
+                name="G",
+                level=1,
+                pic="",
+                usage="DISPLAY",
+                offset=1,
+                children=[
+                    CobolField(
+                        name="H", level=2, pic="X(2)", usage="DISPLAY", offset=0
+                    ),
+                    CobolField(
+                        name="T",
+                        level=2,
+                        pic="X(4)",
+                        usage="DISPLAY",
+                        offset=2,
+                        occurs=5,
+                        element_size=4,
+                        occurs_depending_on="WS-N",
+                        occurs_min=1,
+                    ),
+                ],
+            ),
+        ]
+    )
+    ctx = EmitContext(dispatch_fn=dispatch_statement)
+    materialised = lower_sectioned_data_division(ctx, build_sectioned_layout(asg), "T")
+    n = len(ctx.instructions)
+    result = lower_expr_node(ctx, LengthOfNode(name="G"), materialised)
+    emitted = ctx.instructions[n:]
+    assert (
+        [i.length for i in emitted if isinstance(i, LoadRegion)],
+        [type(i).__name__ for i in emitted if i.result_reg == result],
+    ) == ([1], ["Binop"])
 
 
 def test_length_of_an_unknown_field_is_zero_and_warns(caplog):
@@ -89,5 +131,5 @@ def test_an_unresolved_dfhresp_refuses_to_invent_a_response_code():
     exists. Reaching lowering means that pre-pass did not run; guessing a code
     would silently mis-compare every EIBRESP test in the program."""
     ctx, materialised = _ctx()
-    with pytest.raises(ValueError, match="DFHRESP.*pre-pass did not run"):
+    with pytest.raises(ValueError, match=r"DFHRESP.*pre-pass did not run"):
         lower_expr_node(ctx, DfhRespNode(condition="NOTFND"), materialised)

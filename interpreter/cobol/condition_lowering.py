@@ -1263,14 +1263,10 @@ def _lower_expr_node_body(
             ctx, _lower_figurative_operand(ctx, node, span=span), floating, span=span
         )
     if isinstance(node, LengthOfNode):
-        # LENGTH OF <field> is the field's byte length, a compile-time constant
-        # and NOT a decode of its value -- the same reading eval_ref_mod_expr
-        # gives it inside a ref-mod subscript (red-dragon-oq2c).
         if ctx.has_field(node.name, materialised):
-            field_ref, _ = ctx.resolve_field_ref(node.name, materialised, span=span)
             return _float_operand(
                 ctx,
-                ctx.const_to_reg(field_ref.fl.byte_length, span=span),
+                ctx.emit_length_of(node.name, materialised, span=span),
                 floating,
                 span=span,
             )
