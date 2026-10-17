@@ -63,6 +63,7 @@ FLOAT_INTRINSICS = frozenset(
         "MEDIAN",
         "MIDRANGE",
         "VARIANCE",
+        "STANDARD-DEVIATION",
         "ANNUITY",
         "PRESENT-VALUE",
         "RANDOM",

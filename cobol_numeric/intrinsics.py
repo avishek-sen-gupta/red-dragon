@@ -67,10 +67,13 @@ def value_range(values: Sequence[CobolNumber]) -> CobolNumber:
 
 
 def variance(values: Sequence[CobolNumber]) -> CobolNumber:
-    """Sample variance (n - 1 divisor); callers handle n == 1."""
-    n = len(values)
-    average = total(values) / n
-    return sum(((v - average) ** 2 for v in values), Decimal(0)) / (n - 1)
+    """Population variance: the divisor is the number of values."""
+    average = mean(values)
+    return sum(((v - average) ** 2 for v in values), Decimal(0)) / len(values)
+
+
+def standard_deviation(values: Sequence[CobolNumber]) -> CobolNumber:
+    return square_root(variance(values))
 
 
 def square_root(value: CobolNumber) -> CobolNumber:

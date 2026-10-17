@@ -13,6 +13,7 @@ Each test cites the Beads issue it pins.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
@@ -429,7 +430,9 @@ class TestIntrinsicFunctions:
 
     @covers(CobolFeature.INTRINSIC_FUNCTION)
     def test_variance(self):
-        """FUNCTION VARIANCE(2 4 6) must yield 4 (sample variance, n-1 divisor)."""
+        """FUNCTION VARIANCE(2 4 6) is the population variance 8/3, stored as 2
+        (IBM Enterprise COBOL LR, VARIANCE: the divisor is the number of
+        values)."""
         vm = _run(
             [
                 "IDENTIFICATION DIVISION.",
@@ -443,7 +446,51 @@ class TestIntrinsicFunctions:
                 "    STOP RUN.",
             ]
         )
-        assert _decode(_first_region(vm), 0, 2) == 4
+        assert _decode(_first_region(vm), 0, 2) == 2
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_when_compiled(self):
+        """FUNCTION WHEN-COMPILED is the bridge's compile stamp in its 21
+        characters, so it falls between the instants either side of the
+        compile; the clock is the bridge's, so the value itself is not known
+        in advance."""
+        before = datetime.now(UTC).replace(microsecond=0)
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNWHC.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-W PIC X(21) VALUE SPACES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE FUNCTION WHEN-COMPILED TO WS-W.",
+                "    STOP RUN.",
+            ]
+        )
+        after = datetime.now(UTC)
+        text = bytes(_first_region(vm)[0:21]).decode("cp037")
+        stamp = datetime.strptime(text[:14] + text[16:], "%Y%m%d%H%M%S%z")
+        assert (before <= stamp <= after, text[14:16].isdigit()) == (True, True)
+
+    @covers(CobolFeature.INTRINSIC_FUNCTION)
+    def test_standard_deviation(self):
+        """FUNCTION STANDARD-DEVIATION(2 4 4 4 5 5 7 9) is 2; unrecognised, it
+        fell back to its first argument."""
+        vm = _run(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. FNSTD.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-R PIC 9V9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    COMPUTE WS-R = FUNCTION STANDARD-DEVIATION(2 4 4 4 5 5 7 9).",
+                "    STOP RUN.",
+            ]
+        )
+        assert _decode_dec(_first_region(vm), 0, 1, 4) == Decimal("2")
 
     @covers(CobolFeature.INTRINSIC_FUNCTION)
     def test_ord_max(self):
