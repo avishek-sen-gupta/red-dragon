@@ -170,3 +170,63 @@ class TestCobolFieldOccursSerialization:
         d = field.to_dict()
         assert "occurs" not in d
         assert "element_size" not in d
+
+
+class TestInitialisedOccurrences:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_a_valued_item_is_placed_at_every_occurrence_of_every_table(self):
+        """A VALUE under OCCURS 2 and on its own OCCURS 3 lands six times, one
+        element wide each, at offset + row * 4 + column * 1."""
+        fields = [
+            CobolField(
+                name="WS-GRID",
+                level=1,
+                pic="",
+                usage="DISPLAY",
+                offset=0,
+                children=[
+                    CobolField(
+                        name="WS-LINE",
+                        level=3,
+                        pic="",
+                        usage="DISPLAY",
+                        offset=0,
+                        occurs=2,
+                        element_size=4,
+                        children=[
+                            CobolField(
+                                name="WS-TAG",
+                                level=5,
+                                pic="X",
+                                usage="DISPLAY",
+                                offset=0,
+                                value="T",
+                            ),
+                            CobolField(
+                                name="WS-CELL",
+                                level=5,
+                                pic="X",
+                                usage="DISPLAY",
+                                offset=1,
+                                occurs=3,
+                                element_size=1,
+                                value="Q",
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        ]
+        layout = build_data_layout(fields)
+
+        def placed(name: str) -> list[tuple[int, int, str, int]]:
+            (match,) = layout.qualified_matches(name, ())
+            return [
+                (fl.offset, fl.byte_length, fl.value, fl.occurs_count)
+                for fl in match.initialised_occurrences
+            ]
+
+        assert (placed("WS-TAG"), placed("WS-CELL")) == (
+            [(0, 1, "T", 0), (4, 1, "T", 0)],
+            [(c, 1, "Q", 0) for c in (1, 2, 3, 5, 6, 7)],
+        )

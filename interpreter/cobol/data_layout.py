@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field, replace
-from itertools import accumulate, chain
+from itertools import accumulate, chain, product
 from typing import TypeVar
 
 from cobol_asg.asg_types import CobolField
@@ -347,9 +347,45 @@ class DataItemMatch:
         )
 
     @property
+    def initialised_occurrences(self) -> tuple[FieldLayout, ...]:
+        """The item's VALUE-bearing storage once per occurrence of every OCCURS
+        it has or is subordinate to, each at that occurrence's own offset."""
+        element = self._valued_element
+        displacements = product(
+            *(range(0, t.total_bytes, t.element_size) for t in self.tables)
+        )
+        return tuple(
+            replace(element, offset=element.offset + sum(steps))
+            for steps in displacements
+        )
+
+    @property
+    def _valued_element(self) -> FieldLayout:
+        if isinstance(self.item, FieldLayout):
+            return _one_occurrence(self.item)
+        storage = _group_storage(self.name, self.item)
+        return replace(
+            storage,
+            type_descriptor=CobolTypeDescriptor(
+                category=CobolDataCategory.ALPHANUMERIC,
+                total_digits=storage.element_size,
+            ),
+            byte_length=storage.element_size,
+            occurs_count=0,
+            value=self.item.value,
+            value_is_figurative=self.item.value_is_figurative,
+        )
+
+    @property
     def record_extent(self) -> tuple[int, int]:
         record = _group_storage(*self.ancestors[0]) if self.ancestors else self.storage
         return record.offset, record.byte_length
+
+
+def _one_occurrence(fl: FieldLayout) -> FieldLayout:
+    if fl.occurs_count == 0:
+        return fl
+    return replace(fl, byte_length=fl.element_size, occurs_count=0)
 
 
 def _group_storage(name: str, group: DataLayout) -> FieldLayout:
