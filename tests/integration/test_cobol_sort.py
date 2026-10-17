@@ -21,9 +21,28 @@ pytestmark = pytest.mark.usefixtures("bridge_jar")
 
 _FILES = ("IN-F", "OUT-F", "SRT")
 
+_MIXED_FIELDS = (
+    "PIC X.",
+    "PIC S9(3) COMP-3.",
+    "PIC S9(4) COMP.",
+    "PIC S9(2) SIGN LEADING SEPARATE.",
+    "PIC S99.",
+    "PIC X.",
+)
+
+
+def _record(level01: str, prefix: str, pictures: Sequence[str]) -> list[str]:
+    return [
+        f"01 {level01}.",
+        *(f"    05 {prefix}-{n} {pic}" for n, pic in enumerate(pictures, start=1)),
+    ]
+
 
 def _program(
-    sort_record: Sequence[str], inputs: Sequence[str], sort: Sequence[str]
+    pictures: Sequence[str],
+    writes: Sequence[str],
+    sort: Sequence[str],
+    records: int,
 ) -> str:
     return to_fixed(
         [
@@ -36,19 +55,19 @@ def _program(
             "DATA DIVISION.",
             "FILE SECTION.",
             "FD IN-F.",
-            "01 IN-REC PIC X(6).",
+            *_record("IN-REC", "I", pictures),
             "FD OUT-F.",
-            "01 OUT-REC PIC X(6).",
+            *_record("OUT-REC", "O", pictures),
             "SD SRT.",
-            *sort_record,
+            *_record("SRT-REC", "S", pictures),
             "PROCEDURE DIVISION.",
             "MAIN-PARA.",
             "    OPEN OUTPUT IN-F.",
-            *(f'    MOVE "{record}" TO IN-REC. WRITE IN-REC.' for record in inputs),
+            *writes,
             "    CLOSE IN-F.",
             *sort,
             "    OPEN INPUT OUT-F.",
-            *("    READ OUT-F. DISPLAY OUT-REC." for _ in inputs),
+            *(f"    READ OUT-F. DISPLAY O-{len(pictures)}." for _ in range(records)),
             "    CLOSE OUT-F.",
             "    STOP RUN.",
         ]
@@ -61,7 +80,7 @@ def _sorted_output(
     run(
         source=source,
         language="cobol",
-        max_steps=20000,
+        max_steps=50000,
         io_provider=RealFileIOProvider(
             base_dir=tmp_path,
             path_overrides={name: tmp_path / name for name in _FILES},
@@ -70,15 +89,48 @@ def _sorted_output(
     return capsys.readouterr().out
 
 
+def _write(values: Sequence[str]) -> list[str]:
+    return [
+        *(f"    MOVE {value} TO I-{n}." for n, value in enumerate(values, start=1)),
+        "    WRITE IN-REC.",
+    ]
+
+
 @covers(CobolFeature.SORT)
 def test_sort_using_giving_orders_by_key_keeping_equal_keys_in_input_order(
     capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:
+    inputs = (("CCC", "1"), ("AAA", "2"), ("BBB", "3"), ("AAA", "4"))
     source = _program(
-        ["01 SRT-REC.", "    05 SRT-KEY PIC X(3).", "    05 SRT-TAG PIC X(3)."],
-        ["CCC001", "AAA002", "BBB003", "AAA004"],
-        ["    SORT SRT ON ASCENDING KEY SRT-KEY USING IN-F GIVING OUT-F."],
+        ("PIC X(3).", "PIC X."),
+        [line for key, tag in inputs for line in _write((f'"{key}"', f'"{tag}"'))],
+        ["    SORT SRT ON ASCENDING KEY S-1 USING IN-F GIVING OUT-F."],
+        len(inputs),
     )
-    assert _sorted_output(source, tmp_path, capsys) == (
-        "AAA002\nAAA004\nBBB003\nCCC001\n"
+    assert _sorted_output(source, tmp_path, capsys) == "2\n4\n3\n1\n"
+
+
+@covers(CobolFeature.SORT)
+def test_sort_keys_of_every_usage_order_major_to_minor_each_in_its_direction(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    inputs = (
+        ('"A"', "5", "1", "0", "0", '"1"'),
+        ('"A"', "-5", "-9", "0", "0", '"2"'),
+        ('"A"', "5", "-1", "0", "0", '"3"'),
+        ('"A"', "5", "-1", "-3", "0", '"4"'),
+        ('"A"', "5", "-1", "-3", "7", '"5"'),
+        ('"B"', "-99", "0", "0", "0", '"6"'),
+        ('"0"', "0", "0", "0", "0", '"7"'),
     )
+    source = _program(
+        _MIXED_FIELDS,
+        [line for values in inputs for line in _write(values)],
+        [
+            "    SORT SRT ON ASCENDING KEY S-1 DESCENDING S-2",
+            "        ASCENDING S-3 S-4 DESCENDING KEY S-5",
+            "        USING IN-F GIVING OUT-F.",
+        ],
+        len(inputs),
+    )
+    assert _sorted_output(source, tmp_path, capsys) == "5\n4\n3\n1\n2\n6\n7\n"

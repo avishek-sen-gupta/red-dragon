@@ -279,11 +279,15 @@ fileignoreconfig:
 - filename: tests/unit/cobol/test_sort_order.py
   checksum: f13442010d0cbc75df0d8c7c570ebb5336d9a5bd3bb055728c22c5dbc1acfbc9
 - filename: interpreter/cobol/sort_order.py
-  checksum: 5f10b4cb8c18af98a412e8ba2b97dc6c75db820d00c7edebabaa065df399cdea
+  checksum: b5a27a5d0a55e05a9ef80738a93378a90f3b4d646dddc93b1416a41a06c23f54
 - filename: tests/integration/test_cobol_sort.py
-  checksum: 60cfddc7e5e8f35e3d298194458ff60543f370e917a3437b8f8365453fc2d51d
+  checksum: 38a912ce898287be7cafef8783b5c1bc05418c85daa95859070bc113fde3178c
 - filename: proleap-bridge/src/main/java/org/reddragon/bridge/SortSerializer.java
   checksum: 8a7c03eeb4cb38f5baa36ea398d113ce6fdab5bf92b31595667dacda2df9f481
 - filename: interpreter/cobol/lower_sort.py
   checksum: 663e9db868dbdf34e13b714ad2233e1881994c4f65e7c7c7b6f6ceb8469ecd1a
+- filename: tests/unit/cobol/test_sort_key_values.py
+  checksum: 624f02640dfca23ca6d2004236d8d1459cfc519d8a9267bcc811f0af25888b18
+- filename: interpreter/cobol/sort_key_values.py
+  checksum: be38fee64e0a81abe929aee76f049c1a5d66b1fbc12e340362d4d9cb9233e449
 version: "1.0"

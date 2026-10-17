@@ -3,14 +3,12 @@ records in the order they were released."""
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from functools import cmp_to_key, partial
 
 from cobol_asg.sort_key_direction import SortKeyDirection
 from interpreter.cobol.sort_field import SortField
-from interpreter.cobol.sort_key_encoding import SortKeyEncoding
-
-KeyValue = tuple[int, ...]
+from interpreter.cobol.sort_key_values import KEY_VALUES, KeyValue
 
 _DIRECTION_SIGN: Mapping[SortKeyDirection, int] = {
     SortKeyDirection.ASCENDING: 1,
@@ -18,17 +16,8 @@ _DIRECTION_SIGN: Mapping[SortKeyDirection, int] = {
 }
 
 
-def _collated(image: bytes, weights: Sequence[int]) -> KeyValue:
-    return tuple(weights[b] for b in image)
-
-
-_VALUES: Mapping[SortKeyEncoding, Callable[[bytes, Sequence[int]], KeyValue]] = {
-    SortKeyEncoding.ALPHANUMERIC: _collated,
-}
-
-
 def _value(sort_field: SortField, record: bytes, weights: Sequence[int]) -> KeyValue:
-    return _VALUES[sort_field.encoding](sort_field.image(record), weights)
+    return KEY_VALUES[sort_field.encoding](sort_field.image(record), weights)
 
 
 def _compare_field(
