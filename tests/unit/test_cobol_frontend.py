@@ -59,6 +59,8 @@ from cobol_asg.cobol_statements import (
 from cobol_asg.operand_kind import OperandKind
 from cobol_asg.ref_mod import RefModOperand
 from cobol_asg.set_operand import SetOperand
+from cobol_asg.unstring_delimiter import UnstringDelimiter
+from cobol_asg.unstring_receiver import UnstringReceiver
 from interpreter.cobol.cobol_frontend import CobolFrontend
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.field_position import FieldPosition
@@ -1782,21 +1784,20 @@ class TestTier2Lowering:
         stmts = [
             UnstringStatement(
                 source=RefModOperand(name="WS-FULL"),
-                delimiters=[" "],
-                into=[RefModOperand(name="WS-FIRST"), RefModOperand(name="WS-LAST")],
+                delimiters=[UnstringDelimiter(operand=RefModOperand(name=" "))],
+                into=[
+                    UnstringReceiver(target=RefModOperand(name="WS-FIRST")),
+                    UnstringReceiver(target=RefModOperand(name="WS-LAST")),
+                ],
             )
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
-        # Should produce a __multi_delimiter_split call (Task 2's new builtin
-        # replaces the old single-delimiter __string_split path entirely).
         calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
         split_calls = [
-            c
-            for c in calls
-            if c.operands and c.operands[0] == "__multi_delimiter_split"
+            c for c in calls if c.operands and c.operands[0] == "__cobol_unstring"
         ]
-        assert len(split_calls) >= 1
+        assert len(split_calls) == 1
 
         # Should produce WRITE_REGION for each INTO target
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)

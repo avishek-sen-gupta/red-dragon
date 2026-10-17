@@ -14,6 +14,7 @@ from cobol_asg.cobol_statements import (
 )
 from cobol_asg.ref_mod import RefModOperand
 from cobol_asg.source_span import SourceSpan
+from cobol_asg.unstring_receiver import UnstringReceiver
 from interpreter.cobol.cobol_constants import BuiltinName, InspectType
 from interpreter.cobol.emit_context import EmitContext, strip_cobol_literal
 from interpreter.cobol.lower_arithmetic import eval_ref_mod_expr
@@ -379,261 +380,168 @@ def _lower_overflow_arm(
     ctx.emit_inst(Branch(label=end_label), span=span)
 
 
-def _receiver_sizes(
-    ctx: EmitContext,
-    stmt: UnstringStatement,
-    materialised: MaterialisedSectionedLayout,
-) -> tuple[Register, ...]:
-    """Each INTO receiver's size: without DELIMITED BY, what it takes from the source."""
-    return tuple(
-        ctx.const_to_reg(
-            materialised.resolve(target.name, target.qualifiers)[0].byte_length,
-            span=stmt.span,
-        )
-        for target in stmt.into
-        if ctx.has_field(target.name, materialised)
-    )
-
-
 def lower_unstring(
     ctx: EmitContext,
     stmt: UnstringStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """UNSTRING source DELIMITED BY ... INTO targets."""
+    """UNSTRING source [DELIMITED BY [ALL] d1 OR ...] INTO receivers [WITH
+    POINTER] [TALLYING IN] [ON / NOT ON OVERFLOW]. The source, pointer and
+    delimiters are evaluated once; one builtin then examines the source
+    (interpreter.cobol.unstring_scan) and each receiver it acted on is written."""
     span = stmt.span
-    source_name = stmt.source.name
-    if ctx.has_field(source_name, materialised):
-        source_ref, source_rr = ctx.resolve_field_ref(
-            source_name, materialised, span=span
+    if not ctx.has_field(stmt.source.name, materialised):
+        logger.warning("UNSTRING source %s not found in layout", stmt.source.name)
+        return
+    has_pointer = bool(stmt.pointer) and ctx.has_field(stmt.pointer, materialised)
+    outcome_reg = _unstring_outcome(ctx, stmt, has_pointer, materialised)
+    acted_reg = _list_item(ctx, outcome_reg, 2, span=span)
+    for index, receiver in enumerate(stmt.into):
+        _write_unstring_receiver(
+            ctx, receiver, outcome_reg, acted_reg, index, materialised, span=span
         )
-        src_str_reg = ctx.emit_decode_field_characters(
-            source_rr,
-            source_ref.fl,
-            source_ref.offset_reg,
-            extent=source_ref.extent,
+    if has_pointer:
+        _write_number(
+            ctx,
+            stmt.pointer,
+            _list_item(ctx, outcome_reg, 0, span=span),
+            materialised,
             span=span,
         )
-    else:
-        src_str_reg = ctx.const_to_reg(
-            strip_cobol_literal(str(stmt.source.name)), span=span
-        )
-
-    if stmt.source.ref_mod_start is not None:
-        raw_start_reg = eval_ref_mod_expr(
-            ctx, stmt.source.ref_mod_start, materialised, span=span
-        )
-        one_reg = ctx.const_to_reg(1, span=span)
-        start_0indexed_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Binop(
-                result_reg=start_0indexed_reg,
-                operator=resolve_binop("-"),
-                left=raw_start_reg,
-                right=one_reg,
-            ),
-            span=span,
-        )
-        if stmt.source.ref_mod_length is not None:
-            length_reg = eval_ref_mod_expr(
-                ctx, stmt.source.ref_mod_length, materialised, span=span
-            )
-        else:
-            length_reg = ctx.const_to_reg(9999, span=span)
-        sliced_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            CallFunction(
-                result_reg=sliced_reg,
-                func_name=FuncName(BuiltinName.STRING_SLICE),
-                args=(src_str_reg, start_0indexed_reg, length_reg),
-            ),
-            span=span,
-        )
-        src_str_reg = sliced_reg
-
-    if stmt.pointer and ctx.has_field(stmt.pointer, materialised):
-        # WITH POINTER: the scan begins at the pointer's current 1-based
-        # position, not offset 0 — narrows src_str_reg the same way ref-mod
-        # slicing does above, so the split (and later the consumed-length
-        # calc, which operates on this same sliced string) both scan from
-        # the cursor onward, not from the start of the field
-        # (red-dragon-4q25.15). The pointer-advance block further down
-        # re-resolves/re-decodes this same field independently rather than
-        # threading state out of this block — cheap since nothing writes to
-        # it in between, and keeps each block independently readable (the
-        # same tradeoff already made for WITH POINTER's own part-length
-        # recomputation above).
-        ptr_ref, ptr_rr = ctx.resolve_field_ref(stmt.pointer, materialised, span=span)
-        ptr_decoded_reg = ctx.emit_decode_field(
-            ptr_rr, ptr_ref.fl, ptr_ref.offset_reg, extent=ptr_ref.extent, span=span
-        )
-        one_reg = ctx.const_to_reg(1, span=span)
-        ptr_start_0indexed_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Binop(
-                result_reg=ptr_start_0indexed_reg,
-                operator=resolve_binop("-"),
-                left=ptr_decoded_reg,
-                right=one_reg,
-            ),
-            span=span,
-        )
-        rest_len_reg = ctx.const_to_reg(9999, span=span)
-        ptr_sliced_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            CallFunction(
-                result_reg=ptr_sliced_reg,
-                func_name=FuncName(BuiltinName.STRING_SLICE),
-                args=(src_str_reg, ptr_start_0indexed_reg, rest_len_reg),
-            ),
-            span=span,
-        )
-        src_str_reg = ptr_sliced_reg
-
-    # One or more candidate delimiters (DELIMITED BY x OR y OR z): each is
-    # known statically at lowering time (literal COBOL text), so each becomes
-    # its own constant register; MULTI_DELIMITER_SPLIT does the correct
-    # repeated-nearest-match scan across all of them at runtime — a single
-    # delimiter is just the N=1 case of the same builtin (red-dragon-4q25.12).
-    delim_regs = tuple(
-        ctx.const_to_reg(
-            strip_cobol_literal(ctx.figuratives.translate(str(d))), span=span
-        )
-        for d in stmt.delimiters
+    if stmt.tallying_target and ctx.has_field(stmt.tallying_target, materialised):
+        _add_to_number(ctx, stmt.tallying_target, acted_reg, materialised, span=span)
+    _lower_overflow_phrases(
+        ctx,
+        _list_item(ctx, outcome_reg, 1, span=span),
+        stmt.on_overflow,
+        stmt.not_on_overflow,
+        materialised,
+        span=span,
     )
-    parts_reg = ctx.fresh_reg()
-    ctx.emit_inst(
+
+
+def _unstring_outcome(
+    ctx: EmitContext,
+    stmt: UnstringStatement,
+    has_pointer: bool,
+    materialised: MaterialisedSectionedLayout,
+) -> Register:
+    """The builtin's result for this statement; the pointer starts at 1
+    without WITH POINTER."""
+    span = stmt.span
+    delimiter_args = tuple(
+        arg
+        for delimiter in stmt.delimiters
+        for arg in (
+            _resolve_inspect_operand(ctx, delimiter.operand, materialised, span=span),
+            ctx.const_to_reg(delimiter.all, span=span),
+        )
+    )
+    return _call(
+        ctx,
+        BuiltinName.COBOL_UNSTRING,
         (
-            CallFunction(
-                result_reg=parts_reg,
-                func_name=FuncName(BuiltinName.MULTI_DELIMITER_SPLIT),
-                args=(src_str_reg, *delim_regs),
-            )
-            if delim_regs
-            else CallFunction(
-                result_reg=parts_reg,
-                func_name=FuncName(BuiltinName.UNSTRING_BY_SIZE),
-                args=(src_str_reg, *_receiver_sizes(ctx, stmt, materialised)),
-            )
+            _receiver_characters(ctx, stmt.source, materialised, span=span),
+            (
+                _read_pointer(ctx, stmt.pointer, materialised, span=span)
+                if has_pointer
+                else ctx.const_to_reg(1, span=span)
+            ),
+            ctx.const_to_reg(len(stmt.delimiters), span=span),
+            *delimiter_args,
+            *(
+                ctx.const_to_reg(
+                    materialised.resolve(
+                        receiver.target.name, receiver.target.qualifiers
+                    )[0].byte_length,
+                    span=span,
+                )
+                for receiver in stmt.into
+            ),
         ),
         span=span,
     )
 
-    for i, target_operand in enumerate(stmt.into):
-        if not ctx.has_field(target_operand.name, materialised):
-            logger.warning(
-                "UNSTRING INTO target %s not found in layout", target_operand.name
-            )
-            continue
-        idx_reg = ctx.const_to_reg(i, span=span)
-        part_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            CallFunction(
-                result_reg=part_reg,
-                func_name=FuncName(BuiltinName.LIST_GET),
-                args=(parts_reg, idx_reg),
-            ),
-            span=span,
-        )
-        # INTO dest(start:length) splices into the sliced region only,
-        # leaving the rest of the field untouched (red-dragon-2fxq); a bare
-        # target writes the whole field, as before.
-        _write_ref_mod_target(ctx, target_operand, part_reg, materialised, span=span)
 
-    if stmt.pointer and ctx.has_field(stmt.pointer, materialised):
-        # WITH POINTER: advance the cursor past however much of the source
-        # was actually consumed by the split (delimiter included), via the
-        # same repeated-nearest-match scan MULTI_DELIMITER_SPLIT already
-        # performs — not an assumed fixed delimiter width (red-dragon-4q25.15).
-        # delim_regs is already in scope from the MULTI_DELIMITER_SPLIT call
-        # earlier in this same function (Task 2).
-        ptr_ref, ptr_rr = ctx.resolve_field_ref(stmt.pointer, materialised, span=span)
-        ptr_decoded_reg = ctx.emit_decode_field(
-            ptr_rr, ptr_ref.fl, ptr_ref.offset_reg, extent=ptr_ref.extent, span=span
+def _write_unstring_receiver(
+    ctx: EmitContext,
+    receiver: UnstringReceiver,
+    outcome_reg: Register,
+    acted_reg: Register,
+    index: int,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> None:
+    """Receiver ``index`` and its DELIMITER IN and COUNT IN items get their
+    piece when the examination reached that receiver, and are untouched when
+    it did not."""
+    write_label = ctx.fresh_label("unstring_receive")
+    skip_label = ctx.fresh_label("unstring_skip")
+    reached_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        Binop(
+            result_reg=reached_reg,
+            operator=resolve_binop(">"),
+            left=acted_reg,
+            right=ctx.const_to_reg(index, span=span),
+        ),
+        span=span,
+    )
+    ctx.emit_inst(
+        BranchIf(cond_reg=reached_reg, branch_targets=(write_label, skip_label)),
+        span=span,
+    )
+    ctx.emit_inst(Label_(label=write_label), span=span)
+    first = 3 + 3 * index
+    _write_ref_mod_target(
+        ctx,
+        receiver.target,
+        _list_item(ctx, outcome_reg, first, span=span),
+        materialised,
+        span=span,
+    )
+    if receiver.delimiter_in.name:
+        _write_ref_mod_target(
+            ctx,
+            receiver.delimiter_in,
+            _list_item(ctx, outcome_reg, first + 1, span=span),
+            materialised,
+            span=span,
         )
-        target_count_reg = ctx.const_to_reg(len(stmt.into), span=span)
-        consumed_len_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            CallFunction(
-                result_reg=consumed_len_reg,
-                func_name=FuncName(BuiltinName.MULTI_DELIMITER_CONSUMED_LENGTH),
-                args=(src_str_reg, target_count_reg, *delim_regs),
+    if receiver.count_in.name:
+        _write_ref_mod_target(
+            ctx,
+            receiver.count_in,
+            ctx.emit_to_string(
+                _list_item(ctx, outcome_reg, first + 2, span=span), span=span
             ),
+            materialised,
             span=span,
         )
-        new_ptr_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Binop(
-                result_reg=new_ptr_reg,
-                operator=resolve_binop("+"),
-                left=ptr_decoded_reg,
-                right=consumed_len_reg,
-            ),
-            span=span,
-        )
-        new_ptr_str_reg = ctx.emit_to_string(new_ptr_reg, span=span)
-        ctx.emit_encode_and_write(
-            ptr_rr,
-            ptr_ref.fl,
-            new_ptr_str_reg,
-            ptr_ref.offset_reg,
-            extent=ptr_ref.extent,
-            span=span,
-        )
+    ctx.emit_inst(Branch(label=skip_label), span=span)
+    ctx.emit_inst(Label_(label=skip_label), span=span)
 
-    if stmt.tallying_target and ctx.has_field(stmt.tallying_target, materialised):
-        tally_ref, tally_rr = ctx.resolve_field_ref(
-            stmt.tallying_target, materialised, span=span
-        )
-        # Real UNSTRING TALLYING IN semantics (IBM Enterprise COBOL Language
-        # Reference): the counter ACCUMULATES — final value = initial value +
-        # number of receiving areas actually populated, capped at len(into)
-        # when there are more delimited substrings than INTO targets.
-        len_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            CallFunction(
-                result_reg=len_reg,
-                func_name=FuncName(BuiltinName.LIST_LEN),
-                args=(parts_reg,),
-            ),
-            span=span,
-        )
-        into_count_reg = ctx.const_to_reg(len(stmt.into), span=span)
-        populated_count_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            CallFunction(
-                result_reg=populated_count_reg,
-                func_name=FuncName(BuiltinName.MIN),
-                args=(len_reg, into_count_reg),
-            ),
-            span=span,
-        )
-        existing_decoded_reg = ctx.emit_decode_field(
-            tally_rr,
-            tally_ref.fl,
-            tally_ref.offset_reg,
-            extent=tally_ref.extent,
-            span=span,
-        )
-        new_total_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Binop(
-                result_reg=new_total_reg,
-                operator=resolve_binop("+"),
-                left=existing_decoded_reg,
-                right=populated_count_reg,
-            ),
-            span=span,
-        )
-        count_str_reg = ctx.emit_to_string(new_total_reg, span=span)
-        ctx.emit_encode_and_write(
-            tally_rr,
-            tally_ref.fl,
-            count_str_reg,
-            tally_ref.offset_reg,
-            extent=tally_ref.extent,
-            span=span,
-        )
+
+def _add_to_number(
+    ctx: EmitContext,
+    name: str,
+    addend_reg: Register,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> None:
+    total_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        Binop(
+            result_reg=total_reg,
+            operator=resolve_binop("+"),
+            left=_read_pointer(ctx, name, materialised, span=span),
+            right=addend_reg,
+        ),
+        span=span,
+    )
+    _write_number(ctx, name, total_reg, materialised, span=span)
 
 
 def lower_inspect(
