@@ -779,10 +779,8 @@ class EmitContext:
     ) -> Register:
         """Emit inline IR to encode a value per the field's type. Returns result register."""
         td = fl.type_descriptor
-        if td.blank_when_zero and self._is_zero_value(value):
-            return self._emit_ebcdic_spaces(fl.byte_length, span=span)
         if td.category == CobolDataCategory.NUMERIC_EDITED and fl.value_is_numeric:
-            return self.emit_encode_from_string(
+            return self._emit_numeric_edit(
                 fl, self.const_to_reg(from_literal(value), span=span), span=span
             )
         if td.holds_characters or td.category == CobolDataCategory.NUMERIC_EDITED:
@@ -810,13 +808,6 @@ class EmitContext:
             justified_right=td.justified_right,
             span=span,
         )
-
-    def _is_zero_value(self, value: str) -> bool:
-        """Check if a literal value is numerically zero."""
-        try:
-            return from_literal(value) == 0
-        except ValueError:
-            return False
 
     def _emit_hex_literal_bytes(
         self, raw: bytes, byte_length: int, *, span: SourceSpan | None = None
@@ -874,23 +865,6 @@ class EmitContext:
             extent=extent,
             span=span,
         )
-
-    def _emit_ebcdic_spaces(
-        self, byte_length: int, *, span: SourceSpan | None = None
-    ) -> Register:
-        """Emit IR to create a list of EBCDIC spaces (0x40). Returns result register."""
-        length_reg = self.const_to_reg(byte_length, span=span)
-        space_reg = self.const_to_reg(ByteConstants.EBCDIC_SPACE, span=span)
-        result = self.fresh_reg()
-        self.emit_inst(
-            CallFunction(
-                result_reg=result,
-                func_name=FuncName(BuiltinName.MAKE_LIST),
-                args=(length_reg, space_reg),
-            ),
-            span=span,
-        )
-        return result
 
     def emit_encode_alphanumeric(
         self,
@@ -1384,6 +1358,29 @@ class EmitContext:
         )
         return result
 
+    def _emit_numeric_edit(
+        self,
+        fl: FieldLayout,
+        value_reg: Register,
+        *,
+        span: SourceSpan | None = None,
+    ) -> Register:
+        """Edit a number by the item's PICTURE; the edited characters are its content."""
+        td = fl.type_descriptor
+        formatted_reg = self.fresh_reg()
+        pic_reg = self.const_to_reg(td.pic_string, span=span)
+        currency_reg = self.const_to_reg(td.currency, span=span)
+        self.emit_inst(
+            CallFunction(
+                result_reg=formatted_reg,
+                func_name=FuncName(BuiltinName.COBOL_APPLY_EDIT_PICTURE),
+                args=(value_reg, pic_reg, currency_reg),
+            ),
+            span=span,
+        )
+        ir = build_encode_alphanumeric_ir(f"enc_edited_{fl.name}", td.total_digits)
+        return self.inline_ir(ir, {"%p_value": formatted_reg}, span=span)
+
     def emit_encode_from_string(
         self,
         fl: FieldLayout,
@@ -1394,22 +1391,12 @@ class EmitContext:
         """Emit encoding IR from a string value register."""
         td = fl.type_descriptor
         if td.category == CobolDataCategory.NUMERIC_EDITED:
-            # Apply the edit mask to the numeric value, then store the resulting
-            # character string as alphanumeric (the formatted bytes ARE the
-            # field's content). Mirrors GnuCOBOL's cob_move_edited.
-            formatted_reg = self.fresh_reg()
-            pic_reg = self.const_to_reg(td.pic_string, span=span)
-            currency_reg = self.const_to_reg(td.currency, span=span)
-            self.emit_inst(
-                CallFunction(
-                    result_reg=formatted_reg,
-                    func_name=FuncName(BuiltinName.COBOL_APPLY_EDIT_PICTURE),
-                    args=(value_str_reg, pic_reg, currency_reg),
-                ),
-                span=span,
-            )
-            ir = build_encode_alphanumeric_ir(f"enc_edited_{fl.name}", td.total_digits)
-            return self.inline_ir(ir, {"%p_value": formatted_reg}, span=span)
+            edited = self._emit_numeric_edit(fl, value_str_reg, span=span)
+            if td.blank_when_zero:
+                return self._emit_blank_when_zero_wrap(
+                    edited, value_str_reg, fl.byte_length, span=span
+                )
+            return edited
 
         if td.category == CobolDataCategory.ALPHANUMERIC_EDITED:
             # Insertion editing: the sender's characters go into the A/X/9

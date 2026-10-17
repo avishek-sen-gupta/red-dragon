@@ -80,3 +80,18 @@ def test_initialize_edits_zero_and_spaces_into_edited_items() -> None:
     assert _chars(_program(fields, ["    INITIALIZE REC."]), 31) == (
         "  $0.00" "       .00" "     /  " "   " "000"
     )
+
+
+@covers(CobolFeature.BLANK_WHEN_ZERO, CobolFeature.NUMERIC_EDITED)
+def test_blank_when_zero_blanks_a_move_of_zero_but_not_a_value() -> None:
+    fields = [
+        "    05 M1 PIC $99,999.99 BLANK WHEN ZERO.",
+        "    05 M2 PIC $9999 BLANK WHEN ZERO.",
+        "    05 V1 PIC ZZ9.99 BLANK WHEN ZERO VALUE 0.",
+        '    05 V2 PIC 999 VALUE "000" BLANK WHEN ZERO.',
+        "    05 M3 PIC $9999 BLANK WHEN ZERO.",
+    ]
+    statements = ["    MOVE 0 TO M1.", "    MOVE 0 TO M2.", "    MOVE 12 TO M3."]
+    assert _chars(_program(fields, statements), 29) == (
+        "          " "     " "  0.00" "000" "$0012"
+    )
