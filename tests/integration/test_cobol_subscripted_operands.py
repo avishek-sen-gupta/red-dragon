@@ -122,3 +122,30 @@ class TestSubscriptedOperands:
             ],
             3,
         ) == [1, 1, 1]
+
+    @covers(CobolFeature.LEVEL_88_CONDITION, CobolFeature.OCCURS_FIXED)
+    def test_set_condition_name_to_true_sets_the_subscripted_occurrence(self):
+        assert _results(
+            [
+                "01 S PIC 9 VALUE 3.",
+                "01 TB.",
+                "   02 E PIC 99 OCCURS 3.",
+                "      88 HIT VALUE 42.",
+                "01 TU.",
+                "   02 G OCCURS 2.",
+                "      03 F PIC 99 OCCURS 2.",
+                "         88 F-HIT VALUE 7.",
+            ],
+            [
+                "MAIN-PARA.",
+                "    MOVE 0 TO E (1) E (2) E (3).",
+                "    MOVE 0 TO F (1, 1) F (1, 2) F (2, 1) F (2, 2).",
+                "    SET HIT (2) TO TRUE. SET HIT (S) TO TRUE.",
+                "    SET F-HIT (2, 1) TO TRUE.",
+                "    MOVE E (1) TO R0. MOVE E (2) TO R1. MOVE E (3) TO R2.",
+                "    MOVE F (1, 1) TO R3. MOVE F (1, 2) TO R4.",
+                "    MOVE F (2, 1) TO R5. MOVE F (2, 2) TO R6.",
+                "    STOP RUN.",
+            ],
+            7,
+        ) == [0, 42, 42, 0, 0, 7, 0]
