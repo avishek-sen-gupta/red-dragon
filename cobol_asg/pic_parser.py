@@ -38,7 +38,7 @@ from __future__ import annotations
 
 from functools import cache
 
-from lark import Lark
+from lark import Lark, Tree
 from lark.exceptions import UnexpectedInput
 
 from cobol_asg import picture
@@ -47,6 +47,7 @@ from cobol_asg.edit_picture import (
     DEFAULT_CURRENCY,
     UnsupportedEditPictureError,
 )
+from cobol_asg.index_types import INDEX_ITEM
 from cobol_asg.pointer_types import FULLWORD_POINTER
 
 _USAGE_TO_CATEGORY = {
@@ -79,6 +80,9 @@ _PICTURE_CATEGORY = {
 
 # Categories the grammar recognises and sizes correctly but that no encode /
 # decode path can represent, mapped to the spec's name for the diagnostic.
+_PICTURELESS_USAGES = frozenset({"POINTER", "INDEX"})
+_FLOAT_CATEGORIES = frozenset({CobolDataCategory.COMP1, CobolDataCategory.COMP2})
+
 _UNSUPPORTED_CATEGORIES = {
     "external_float": "external floating-point",
 }
@@ -147,6 +151,54 @@ def _digit_counts(
     return stored_digits, min(analysis.fraction_digits, stored_digits)
 
 
+def _has_no_picture(pic: str, usage: str) -> bool:
+    return (
+        not pic
+        or usage in _PICTURELESS_USAGES
+        or pic.upper() == "POINTER"
+        or _USAGE_TO_CATEGORY.get(usage) in _FLOAT_CATEGORIES
+    )
+
+
+def _pictureless_descriptor(
+    pic: str, usage: str, pointer_type: CobolTypeDescriptor
+) -> CobolTypeDescriptor:
+    """USAGE POINTER and INDEX have fixed types; COMP-1, COMP-2 and a group with
+    no PICTURE carry only their USAGE category."""
+    if usage == "POINTER" or pic.upper() == "POINTER":
+        return pointer_type
+    if usage == "INDEX":
+        return INDEX_ITEM
+    return CobolTypeDescriptor(
+        category=_USAGE_TO_CATEGORY.get(usage, CobolDataCategory.ZONED_DECIMAL),
+        total_digits=0,
+    )
+
+
+def _parse_tree(pic: str, currency: str, decimal_point_is_comma: bool) -> Tree:
+    try:
+        return _parser_for(currency, decimal_point_is_comma).parse(pic)
+    except UnexpectedInput as exc:
+        raise ValueError(f"Cannot parse PIC clause: {pic!r}") from exc
+
+
+def _checked_analysis(
+    pic: str, tree: Tree, sign_separate: bool
+) -> picture.PictureAnalysis:
+    """The picture's analysis, refusing a string that breaks a rule depending on
+    a repeat count or a run's length (see picture.analyse), and a category with
+    no runtime representation."""
+    analysis = picture.analyse(tree, sign_separate=sign_separate)
+    if analysis.errors:
+        raise ValueError(f"Invalid PIC clause: {pic!r}: " + "; ".join(analysis.errors))
+    if analysis.category in _UNSUPPORTED_CATEGORIES:
+        raise UnsupportedEditPictureError(
+            f"{_UNSUPPORTED_CATEGORIES[analysis.category]} PICTURE is not supported: "
+            f"{pic!r}"
+        )
+    return analysis
+
+
 @cache
 def parse_pic(
     pic: str,
@@ -185,35 +237,12 @@ def parse_pic(
         UnsupportedEditPictureError: if the picture's category has no runtime
             representation (a ValueError subclass, so existing handling holds).
     """
-    if usage == "POINTER" or pic.upper() == "POINTER":
-        return pointer_type
+    if _has_no_picture(pic, usage):
+        return _pictureless_descriptor(pic, usage, pointer_type)
+    analysis = _checked_analysis(
+        pic, _parse_tree(pic, currency, decimal_point_is_comma), sign_separate
+    )
     usage_category = _USAGE_TO_CATEGORY.get(usage, CobolDataCategory.ZONED_DECIMAL)
-
-    # COMP-1 and COMP-2 have no PIC clause — return immediately with fixed size.
-    if usage_category in (CobolDataCategory.COMP1, CobolDataCategory.COMP2):
-        return CobolTypeDescriptor(category=usage_category, total_digits=0)
-
-    if not pic:
-        return CobolTypeDescriptor(category=usage_category, total_digits=0)
-
-    try:
-        tree = _parser_for(currency, decimal_point_is_comma).parse(pic)
-    except UnexpectedInput as exc:
-        raise ValueError(f"Cannot parse PIC clause: {pic!r}") from exc
-
-    analysis = picture.analyse(tree, sign_separate=sign_separate)
-    if analysis.errors:
-        # The string has the shape of a picture but breaks a rule that depends on
-        # a repeat count or on a run's length, so it would not compile (see
-        # picture.analyse for the rules and their spec citations).
-        raise ValueError(f"Invalid PIC clause: {pic!r}: " + "; ".join(analysis.errors))
-
-    unsupported = _UNSUPPORTED_CATEGORIES.get(analysis.category)
-    if unsupported is not None:
-        raise UnsupportedEditPictureError(
-            f"{unsupported} PICTURE is not supported: {pic!r}"
-        )
-
     # USAGE governs the category for numeric pictures; the picture governs it for
     # every other category, because those are DISPLAY-only.
     category = _PICTURE_CATEGORY.get(analysis.category, usage_category)

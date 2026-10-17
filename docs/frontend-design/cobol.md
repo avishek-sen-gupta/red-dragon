@@ -156,6 +156,7 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 | `SET p UP/DOWN BY n` | A POINTER target: decode → `BINOP +/-` n bytes → write the address back. |
 | `ADDRESS OF x` in a condition | x's region register `BINOP +` its offset; NULL is 0, so `ADDRESS OF lk = NULL` tests for an OMITTED or unsupplied parameter. |
 | `USAGE POINTER` | A signed binary of the addressing mode's width; the `LP` option given to `compile_cobol` sets it, and reaches the bridge's offsets as `-pointer-size`. |
+| `USAGE INDEX` | An unsigned fullword binary holding an occurrence number, like an `INDEXED BY` index; `SET` moves one into and out of it. A USAGE written on a group applies to every elementary item in it (the bridge resolves the nearest enclosing USAGE). |
 
 ### String Operations (3 types)
 
@@ -303,7 +304,7 @@ An ALL literal (`ALL "AB"`) is its literal repeated to the size of the associate
 - **SORT/MERGE/RELEASE/RETURN are entirely unlowered** (red-dragon-429q).
 - **CANCEL is a no-op** — doesn't reset the cancelled subprogram's WORKING-STORAGE on next CALL (red-dragon-8dpn).
 - **SEARCH ALL is lowered as a whole-table linear scan**, not a binary search (red-dragon-c32s); for a correctly ordered table the result is the same.
-- **`USAGE IS INDEX` / `INDEXED BY` are not modeled** as a distinct type (red-dragon-zm9w).
+- **Index items hold occurrence numbers, not byte displacements**, for `INDEXED BY` names and USAGE INDEX items alike (red-dragon-zm9w); no conforming program can observe the difference.
 - **Most intrinsic `FUNCTION`s fall back to their first argument** instead of being implemented (red-dragon-clpn, deprioritized — `MOD` and `DATE-OF-INTEGER` are implemented, the only ones observed in real corpora so far).
 
 ## Differences from Tree-Sitter Frontends
