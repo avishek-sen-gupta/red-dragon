@@ -5,60 +5,43 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from cobol_asg.file_enums import AccessMode, FileOrganization
 from interpreter.cobol.features import CobolFeature
-from interpreter.cobol.file_frame import FileFrame
-from interpreter.cobol.prime_key import PrimeKey
-from interpreter.cobol.real_file_provider import RealFileIOProvider
 from tests.covers import covers
-from tests.unit.cobol.declared_files import opened
+from tests.unit.cobol.file_status_program import FileProgram, Step
 
-_SEQ = "SEQUENTIAL"
+_PROGRAM = FileProgram(
+    selects=("    SELECT VF ASSIGN TO VDD FILE STATUS IS FS-V.",),
+    fds=(
+        "FD  VF RECORD IS VARYING IN SIZE FROM 2 TO 4 CHARACTERS",
+        "    DEPENDING ON V-LEN.",
+        "01  V-REC PIC X(4).",
+    ),
+    working_storage=("01  FS-V PIC XX.", "01  V-LEN PIC 9."),
+)
+
+
+def _v(statement: str) -> Step:
+    return Step(statement, ("FS-V",))
 
 
 @covers(CobolFeature.WRITE)
 @covers(CobolFeature.REWRITE)
 def test_a_record_outside_the_files_sizes_is_status_44(tmp_path: Path) -> None:
-    prov = RealFileIOProvider(base_dir=tmp_path)
-    opened(
-        prov,
-        "OUTPUT",
-        FileFrame(
-            "V",
-            FileOrganization(_SEQ),
-            AccessMode(_SEQ),
-            PrimeKey(0, 0),
-            0,
-            False,
-            True,
-            2,
-            4,
+    statuses = _PROGRAM.statuses(
+        tmp_path,
+        (
+            _v("OPEN OUTPUT VF."),
+            _v("MOVE 1 TO V-LEN MOVE 'A' TO V-REC WRITE V-REC."),
+            _v("MOVE 5 TO V-LEN MOVE 'ABCD' TO V-REC WRITE V-REC."),
+            _v("MOVE 3 TO V-LEN MOVE 'ABC' TO V-REC WRITE V-REC."),
+            _v("CLOSE VF."),
+            _v("OPEN I-O VF."),
+            _v("READ VF."),
+            _v("MOVE 5 TO V-LEN REWRITE V-REC."),
+            _v("CLOSE VF."),
         ),
     )
-    writes = [
-        prov._write_record("V", data, "", "P").status for data in ("A", "ABCDE", "ABC")
-    ]
-    prov._close_file("V", "P")
-    opened(
-        prov,
-        "I-O",
-        FileFrame(
-            "V",
-            FileOrganization(_SEQ),
-            AccessMode(_SEQ),
-            PrimeKey(0, 0),
-            0,
-            False,
-            True,
-            2,
-            4,
-        ),
-    )
-    prov._read_record("V", "", "P")
-    rewrite = prov._rewrite_record("V", "ABCDE", "", "P").status
-    prov._close_file("V", "P")
-    assert (writes, rewrite, (tmp_path / "v.dat").read_bytes()) == (
-        ["44", "44", "00"],
-        "44",
-        b"\x00\x07\x00\x00ABC",
+    assert (statuses, (tmp_path / "vf.dat").read_bytes()) == (
+        ["00", "44", "44", "00", "00", "00", "00", "44", "00"],
+        b"\x00\x07\x00\x00" + "ABC".encode("cp037"),
     )
