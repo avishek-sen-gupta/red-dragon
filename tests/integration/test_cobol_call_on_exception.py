@@ -73,7 +73,8 @@ def test_on_exception_runs_only_when_the_program_cannot_be_made_available(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """IBM Enterprise COBOL LR, CALL, ON EXCEPTION and NOT ON EXCEPTION
-    phrases; ON OVERFLOW has the same effect as ON EXCEPTION."""
+    phrases; ON OVERFLOW has the same effect as ON EXCEPTION. A DISPLAY inside
+    ON EXCEPTION leaves the NOT ON EXCEPTION that follows it to the CALL."""
     _run_strict(
         _main(
             [
@@ -87,12 +88,16 @@ def test_on_exception_runs_only_when_the_program_cannot_be_made_available(
                 "    DISPLAY WS-W.",
                 '    CALL "SUBP" NOT ON EXCEPTION MOVE "AGAIN" TO WS-W END-CALL.',
                 "    DISPLAY WS-W.",
+                '    CALL "SUBP" ON EXCEPTION DISPLAY "MISSING"',
+                '        NOT ON EXCEPTION MOVE "FOUND" TO WS-W END-CALL.',
+                "    DISPLAY WS-W.",
             ]
         ),
         {"SUBP": _SUBPROGRAM},
     )
     assert capsys.readouterr().out == (
-        "EXCEPTION\nOVERFLOW \nIN SUBP\nCALLED   \nIN SUBP\nAGAIN    \nEND\n"
+        "EXCEPTION\nOVERFLOW \nIN SUBP\nCALLED   \nIN SUBP\nAGAIN    \n"
+        "IN SUBP\nFOUND    \nEND\n"
     )
 
 
