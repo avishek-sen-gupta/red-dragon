@@ -10,6 +10,7 @@ from dataclasses import replace
 from functools import partial, reduce
 from itertools import chain, product
 
+from cobol_asg.edit_picture import de_edit_plan
 from cobol_asg.asg_types import NO_ODO_OBJECT
 from cobol_asg.cobol_expression import (
     AllSubscriptNode,
@@ -70,6 +71,8 @@ from cobol_numeric.scale import (
     literal_scale,
     mul_scale,
 )
+from interpreter.cobol.de_edit_ir import emit_de_edit
+from interpreter.cobol.ir_emitter import IrEmitter
 from interpreter.cobol.arithmetic_precision import ArithmeticPrecision
 from interpreter.cobol.arithmetic_receiver import ArithmeticReceiver
 from interpreter.cobol.arithmetic_scale import (
@@ -1020,20 +1023,15 @@ def _emit_de_edit(
     source_fl: FieldLayout,
     stmt: MoveStatement,
 ) -> Register:
-    span = stmt.span
+    """The value of a numeric-edited source, de-edited by IR fixed by its
+    PICTURE (interpreter.cobol.de_edit_ir)."""
     td = source_fl.type_descriptor
-    value = _call_builtin(
-        ctx,
-        BuiltinName.COBOL_DE_EDIT,
-        (
-            image_reg,
-            ctx.const_to_reg(td.pic_string, span=span),
-            ctx.const_to_reg(td.currency, span=span),
-            ctx.const_to_reg(td.decimal_point_is_comma, span=span),
-        ),
-        span=span,
+    value = emit_de_edit(
+        IrEmitter(ctx=ctx, span=stmt.span),
+        image_reg,
+        de_edit_plan(td.pic_string, td.currency, td.decimal_point_is_comma),
     )
-    return ctx.emit_to_string(value, span=span)
+    return ctx.emit_to_string(value, span=stmt.span)
 
 
 def _receiving_storage(fl: FieldLayout, group_move: bool) -> FieldLayout:

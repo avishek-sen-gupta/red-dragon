@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
+from decimal import Decimal
 from itertools import accumulate
 
 from interpreter.cobol.emit_context import EmitContext
@@ -20,7 +21,7 @@ from interpreter.vm.vm_types import StackFrame, SymbolicValue
 _STEP_LIMIT = 100_000
 _FALL_THROUGH = CodeLabel("")
 
-type ParamValue = str | int | bool | SymbolicValue | list[int]
+type ParamValue = str | int | bool | Decimal | SymbolicValue | list[int]
 
 
 def run_emitted(

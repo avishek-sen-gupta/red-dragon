@@ -97,7 +97,6 @@ class BuiltinName:
     COBOL_SIZE_ERROR = "__cobol_size_error"
     COBOL_APPLY_EDIT_PICTURE = "__cobol_apply_edit_picture"
     COBOL_APPLY_ALPHANUMERIC_EDIT = "__cobol_apply_alphanumeric_edit"
-    COBOL_DE_EDIT = "__cobol_de_edit"
     STRING_SLICE = "__string_slice"
     STRING_SPLICE = "__string_splice"
     STRING_ZFILL = "__string_zfill"

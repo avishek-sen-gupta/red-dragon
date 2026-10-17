@@ -1,9 +1,10 @@
-"""Tests for de-editing: the numeric value recovered from a numeric-edited image."""
+"""Tests for de-editing as IR: the numeric value recovered from a numeric-edited image."""
 
-from cobol_asg.edit_picture import de_edit
 from cobol_numeric.number import from_literal
 from interpreter.cobol.features import CobolFeature
+from interpreter.vm.vm_types import SymbolicValue
 from tests.covers import covers
+from tests.unit.cobol.de_edit_run import de_edit
 
 
 @covers(CobolFeature.NUMERIC_EDITED, CobolFeature.MOVE)
@@ -29,4 +30,16 @@ def test_de_edit_recovers_value_and_sign_from_the_edited_image():
     ]
     assert results == [
         (image, pic, from_literal(expected)) for image, pic, _, expected in cases
+    ]
+
+
+@covers(CobolFeature.NUMERIC_EDITED, CobolFeature.MOVE)
+def test_a_symbolic_image_flows_through_the_digit_arithmetic():
+    value = de_edit(SymbolicValue("image"), "9.9")
+    assert isinstance(value, SymbolicValue)
+    assert value.constraints == [
+        "__cobol_from_digits(0 BinopKind.ADD __string_find('0123456789',"
+        " __string_slice(image, 0, 1)) BinopKind.MUL 10 BinopKind.ADD"
+        " __string_find('0123456789', __string_slice(image, 2, 1))"
+        " BinopKind.MUL 1, 1)"
     ]
