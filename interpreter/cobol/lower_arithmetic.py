@@ -1374,7 +1374,11 @@ def _any_flag(
         )
         return combined
 
-    return reduce(_or, flags[1:], flags[0])
+    match flags:
+        case [first, *rest]:
+            return reduce(_or, rest, first)
+        case _:
+            return ctx.const_to_reg(False, span=span)
 
 
 def _emit_zero_divisor_guard(
