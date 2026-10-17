@@ -271,12 +271,27 @@ public final class AsgSerializer {
         String name = clause.getAlphaNumeric() != null
                 ? clause.getAlphaNumeric()
                 : clause.getAlphabetNames().get(0);
+        JsonObject alphabet = alphabetNamed(snp, name);
+        if (alphabet != null) {
+            result.add("program_collating_sequence", alphabet);
+        }
+    }
+
+    /** The format-1 ALPHABET clause of a program's SPECIAL-NAMES with this name, or null. */
+    static JsonObject alphabetNamed(ProgramUnit pu, String name) {
+        EnvironmentDivision env = pu.getEnvironmentDivision();
+        if (env == null || env.getSpecialNamesParagraph() == null) return null;
+        return alphabetNamed(env.getSpecialNamesParagraph(), name);
+    }
+
+    private static JsonObject alphabetNamed(SpecialNamesParagraph snp, String name) {
         for (AlphabetClause alphabet : snp.getAlphabetClauses()) {
             if (alphabet.getCtx() instanceof CobolParser.AlphabetClauseFormat1Context ctx
                     && ctx.alphabetName().getText().equalsIgnoreCase(name)) {
-                result.add("program_collating_sequence", serializeAlphabet(ctx));
+                return serializeAlphabet(ctx);
             }
         }
+        return null;
     }
 
     /**

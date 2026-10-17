@@ -7,6 +7,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from functools import partial
 
+from cobol_asg.alphabet import Alphabet
 from cobol_asg.cobol_statements import (
     CloseStatement,
     MergeStatement,
@@ -16,12 +17,15 @@ from cobol_asg.cobol_statements import (
     ReadStatement,
     ReleaseStatement,
     ReturnStatement,
+    SortCollation,
     SortStatement,
     WriteStatement,
 )
 from cobol_asg.file_enums import OpenMode
+from cobol_asg.program_collation import ProgramCollation
 from cobol_asg.sort_files import SortFiles
 from cobol_asg.sort_key import SortKey
+from interpreter.cobol.collating_sequences import collating_sequence_of
 from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.lower_io import lower_close, lower_open, lower_read, lower_write
@@ -201,12 +205,20 @@ def _sort_field(
     )
 
 
+def _weights(ctx: EmitContext, collation: SortCollation) -> tuple[int, ...]:
+    match collation:
+        case Alphabet():
+            return collating_sequence_of(collation).weights
+        case ProgramCollation():
+            return ctx.collating_sequence.weights
+
+
 def _emit_order(
     ctx: EmitContext, stmt: SortStatement, materialised: MaterialisedSectionedLayout
 ) -> None:
     record, _ = materialised.resolve(_first_record(ctx, stmt.file_name))
     fields = (_sort_field(key, record, materialised) for key in stmt.keys)
-    weights = "".join(chr(w) for w in ctx.collating_sequence.weights)
+    weights = "".join(chr(w) for w in _weights(ctx, stmt.collating_sequence))
     arguments = tuple(a for f in fields for a in sort_field_arguments(f))
     _emit_call(
         ctx, stmt, _SORT_FILE, (stmt.file_name, record.byte_length, weights, *arguments)
@@ -230,6 +242,7 @@ def lower_merge(
         SortStatement(
             file_name=stmt.file_name,
             keys=stmt.keys,
+            collating_sequence=stmt.collating_sequence,
             source=stmt.using,
             sink=stmt.sink,
             span=stmt.span,
