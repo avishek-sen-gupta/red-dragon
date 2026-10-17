@@ -22,30 +22,3 @@ COBOL_FIGURATIVE_CONSTANTS: dict[str, str] = {
     "HIGH-VALUE": _HIGH_VALUE,
     "HIGH-VALUES": _HIGH_VALUE,
 }
-
-
-def translate_cobol_figurative(value: str) -> str:
-    """Translate COBOL figurative constants to their Python equivalents."""
-    return COBOL_FIGURATIVE_CONSTANTS.get(value, value)
-
-
-# Figurative constants whose semantics are RAW bytes, not character data:
-# HIGH-VALUES is 0xFF in every receiver position (the highest collating byte),
-# LOW-VALUES is 0x00, whatever the receiver's category -- a MOVE into a numeric
-# receiver writes these bytes, not a number converted from them
-# (red-dragon-raxa). SPACES/ZEROS/QUOTES remain character data.
-COBOL_RAW_FIGURATIVE_BYTES: dict[str, int] = {
-    "HIGH-VALUE": 0xFF,
-    "HIGH-VALUES": 0xFF,
-    "LOW-VALUE": 0x00,
-    "LOW-VALUES": 0x00,
-}
-
-
-def raw_figurative_byte(value: str) -> int | None:
-    """Return the raw fill byte for HIGH-VALUES/LOW-VALUES, else ``None``.
-
-    A non-None result means the figurative constant denotes raw bytes that must
-    fill the receiver's full width verbatim (no EBCDIC translation).
-    """
-    return COBOL_RAW_FIGURATIVE_BYTES.get(value.upper())

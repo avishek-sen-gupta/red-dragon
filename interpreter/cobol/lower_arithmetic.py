@@ -73,11 +73,6 @@ from interpreter.cobol.condition_lowering import (
 from interpreter.cobol.data_layout import DataLayout, FieldLayout
 from interpreter.cobol.emit_context import EmitContext, strip_cobol_literal
 from interpreter.cobol.field_resolution import ResolvedFieldRef, whole_field_extent
-from interpreter.cobol.figurative_constants import (
-    COBOL_FIGURATIVE_CONSTANTS,
-    raw_figurative_byte,
-    translate_cobol_figurative,
-)
 from interpreter.cobol.lower_pointer import is_pointer_set, lower_pointer_set
 from interpreter.cobol.lower_program_exit import (
     emit_publish_run_unit_return_code,
@@ -152,10 +147,10 @@ def _operand_scale(
     if td is not None:
         return field_scale(td)
     try:
-        from_literal(translate_cobol_figurative(name))
+        from_literal(ctx.figuratives.translate(name))
     except ValueError:
         return Scale(1, 0)
-    return literal_scale(translate_cobol_figurative(name))
+    return literal_scale(ctx.figuratives.translate(name))
 
 
 _VERB_SCALES: Mapping[str, Callable[[Scale, Scale, int], Scale]] = {
@@ -630,8 +625,8 @@ def lower_move(
         not ctx.has_field(stmt.source.name, materialised)
         and stmt.source.ref_mod_start is None
     ):
-        fill_byte = raw_figurative_byte(stmt.source.name)
-        if fill_byte is not None:
+        if ctx.figuratives.is_raw(stmt.source.name):
+            fill_byte = ctx.figuratives.raw_byte(stmt.source.name)
             for target in stmt.targets:
                 if not ctx.has_field(target.name, materialised):
                     if _is_special_register(target.name):
@@ -703,7 +698,7 @@ def lower_move(
             )
             value_str_reg = ctx.emit_to_string(decoded_reg, span=span)
     else:
-        literal = strip_cobol_literal(translate_cobol_figurative(stmt.source.name))
+        literal = strip_cobol_literal(ctx.figuratives.translate(stmt.source.name))
         value_str_reg = ctx.const_to_reg(literal, span=span)
         # COBOL figurative constants (SPACES/ZEROS/ZEROES/QUOTES) fill ALL
         # receiver positions with the same character — MOVE ZEROES TO X(3)
@@ -712,7 +707,7 @@ def lower_move(
         # HIGH-VALUES/LOW-VALUES are already handled by the raw-byte path above.
         # Only applies when no source reference modification is present.
         if stmt.source.ref_mod_start is None:
-            _figurative_fill_char = COBOL_FIGURATIVE_CONSTANTS.get(
+            _figurative_fill_char = ctx.figuratives.characters.get(
                 stmt.source.name.upper()
             )
 
@@ -1231,7 +1226,7 @@ def _decode_operand(
     span: SourceSpan | None = None,
 ) -> ArithmeticValue:
     if not ctx.has_field(operand.name, materialised):
-        literal = ctx.parse_literal(translate_cobol_figurative(operand.name))
+        literal = ctx.parse_literal(ctx.figuratives.translate(operand.name))
         return _operand_value(
             ctx, operand, ctx.const_to_reg(literal, span=span), materialised
         )
@@ -1895,7 +1890,7 @@ def _set_condition_name(
     # expand to its fill character repeated to the parent's byte length — NOT be
     # written as the literal text 'LOW-VALUES' (CardDemo COACTUPC
     # ACUP-DETAILS-NOT-FETCHED VALUES LOW-VALUES, SPACES).
-    fig_fill = COBOL_FIGURATIVE_CONSTANTS.get(cv.from_val.upper())
+    fig_fill = ctx.figuratives.characters.get(cv.from_val.upper())
     if parent_ref.fl.type_descriptor.holds_characters:
         if fig_fill is not None:
             filled = fig_fill * max(parent_ref.fl.byte_length, 1)

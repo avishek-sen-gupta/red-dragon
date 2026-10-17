@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from interpreter.cobol.alphanumeric import encode_alphanumeric
 from interpreter.cobol.features import CobolFeature
-from interpreter.cobol.figurative_constants import translate_cobol_figurative
+from interpreter.cobol.collating_sequences import NATIVE_SEQUENCE
 from tests.covers import NotLanguageFeature, covers
+
+translate_cobol_figurative = NATIVE_SEQUENCE.figuratives().translate
 
 
 class TestFigurativeConstantTranslation:

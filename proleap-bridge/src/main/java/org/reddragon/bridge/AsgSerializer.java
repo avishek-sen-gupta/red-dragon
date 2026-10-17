@@ -13,6 +13,9 @@ import io.proleap.cobol.asg.metamodel.data.linkage.LinkageSection;
 import io.proleap.cobol.asg.metamodel.data.localstorage.LocalStorageSection;
 import io.proleap.cobol.asg.metamodel.data.workingstorage.WorkingStorageSection;
 import io.proleap.cobol.asg.metamodel.environment.EnvironmentDivision;
+import io.proleap.cobol.asg.metamodel.environment.configuration.ConfigurationSection;
+import io.proleap.cobol.asg.metamodel.environment.configuration.object.CollatingSequenceClause;
+import io.proleap.cobol.asg.metamodel.environment.specialnames.AlphabetClause;
 import io.proleap.cobol.asg.metamodel.environment.specialnames.CurrencySignClause;
 import io.proleap.cobol.asg.metamodel.environment.specialnames.SpecialNamesParagraph;
 import io.proleap.cobol.asg.metamodel.environment.inputoutput.InputOutputSection;
@@ -107,9 +110,13 @@ public final class AsgSerializer {
     }
 
     /**
-     * Serializes the SPECIAL-NAMES paragraph clauses RedDragon consumes.
+     * Serializes the SPECIAL-NAMES paragraph clauses RedDragon consumes, with
+     * OBJECT-COMPUTER's PROGRAM COLLATING SEQUENCE beside them.
      *
-     * <p>Currently only CURRENCY SIGN IS. ProLeap's {@code CurrencySignClause}
+     * <p>The ALPHABET clause the program collating sequence names is emitted as
+     * {@code "program_collating_sequence"}.
+     *
+     * <p>For CURRENCY SIGN IS, ProLeap's {@code CurrencySignClause}
      * exposes both {@code getCurrencyLiteral()} and
      * {@code getPictureSymbolLiteral()}; both are emitted so the Python side can
      * REFUSE the multi-character PICTURE SYMBOL form loudly rather than silently
@@ -124,25 +131,109 @@ public final class AsgSerializer {
      */
     private static JsonObject serializeSpecialNames(ProgramUnit pu) {
         JsonObject result = new JsonObject();
-        try {
-            EnvironmentDivision env = pu.getEnvironmentDivision();
-            if (env == null) return result;
-            SpecialNamesParagraph snp = env.getSpecialNamesParagraph();
-            if (snp == null) return result;
-            CurrencySignClause csc = snp.getCurrencySignClause();
-            if (csc == null) return result;
-            if (csc.getCurrencyLiteral() != null) {
-                result.addProperty("currency_sign",
-                        literalText(csc.getCurrencyLiteral()));
-            }
-            if (csc.getPictureSymbolLiteral() != null) {
-                result.addProperty("currency_picture_symbol",
-                        literalText(csc.getPictureSymbolLiteral()));
-            }
-        } catch (Exception e) {
-            LOG.fine("No SPECIAL-NAMES: " + e.getMessage());
+        EnvironmentDivision env = pu.getEnvironmentDivision();
+        if (env == null) return result;
+        SpecialNamesParagraph snp = env.getSpecialNamesParagraph();
+        if (snp == null) return result;
+        serializeProgramCollatingSequence(env, snp, result);
+        CurrencySignClause csc = snp.getCurrencySignClause();
+        if (csc == null) return result;
+        if (csc.getCurrencyLiteral() != null) {
+            result.addProperty("currency_sign",
+                    literalText(csc.getCurrencyLiteral()));
+        }
+        if (csc.getPictureSymbolLiteral() != null) {
+            result.addProperty("currency_picture_symbol",
+                    literalText(csc.getPictureSymbolLiteral()));
         }
         return result;
+    }
+
+    /**
+     * OBJECT-COMPUTER's PROGRAM COLLATING SEQUENCE IS alphabet-name (FOR
+     * ALPHANUMERIC when written), as the format-1 ALPHABET clause it names.
+     */
+    private static void serializeProgramCollatingSequence(
+            EnvironmentDivision env, SpecialNamesParagraph snp, JsonObject result) {
+        ConfigurationSection config = env.getConfigurationSection();
+        if (config == null || config.getObjectComputerParagraph() == null) return;
+        CollatingSequenceClause clause =
+                config.getObjectComputerParagraph().getCollatingSequenceClause();
+        if (clause == null) return;
+        String name = clause.getAlphaNumeric() != null
+                ? clause.getAlphaNumeric()
+                : clause.getAlphabetNames().get(0);
+        for (AlphabetClause alphabet : snp.getAlphabetClauses()) {
+            if (alphabet.getCtx() instanceof CobolParser.AlphabetClauseFormat1Context ctx
+                    && ctx.alphabetName().getText().equalsIgnoreCase(name)) {
+                result.add("program_collating_sequence", serializeAlphabet(ctx));
+            }
+        }
+    }
+
+    /**
+     * A format-1 ALPHABET clause: its name and either a named character set
+     * ({@code "kind"}: NATIVE, EBCDIC, ASCII, STANDARD-1, STANDARD-2, ALIAS for an
+     * implementor-name) or, for the literal phrase, {@code "kind": "LITERALS"}
+     * with the literals in source order, each tagged with what links it to the
+     * literal before it (NONE, THRU or ALSO). The flat order is kept because the
+     * grammar's grouping of ALSO operands is not the standard's: every ALSO takes
+     * exactly one literal.
+     */
+    private static JsonObject serializeAlphabet(CobolParser.AlphabetClauseFormat1Context ctx) {
+        JsonObject alphabet = new JsonObject();
+        alphabet.addProperty("name", ctx.alphabetName().getText().toUpperCase());
+        alphabet.addProperty("kind", alphabetKind(ctx));
+        JsonArray items = new JsonArray();
+        for (CobolParser.AlphabetLiteralsContext lits : ctx.alphabetLiterals()) {
+            items.add(alphabetItem(lits.literal(), "NONE"));
+            if (lits.alphabetThrough() != null) {
+                items.add(alphabetItem(lits.alphabetThrough().literal(), "THRU"));
+            }
+            for (CobolParser.AlphabetAlsoContext also : lits.alphabetAlso()) {
+                List<CobolParser.LiteralContext> operands = also.literal();
+                items.add(alphabetItem(operands.get(0), "ALSO"));
+                for (CobolParser.LiteralContext operand : operands.subList(1, operands.size())) {
+                    items.add(alphabetItem(operand, "NONE"));
+                }
+            }
+        }
+        if (items.size() > 0) {
+            alphabet.add("items", items);
+        }
+        return alphabet;
+    }
+
+    private static String alphabetKind(CobolParser.AlphabetClauseFormat1Context ctx) {
+        if (ctx.EBCDIC() != null) return "EBCDIC";
+        if (ctx.ASCII() != null) return "ASCII";
+        if (ctx.STANDARD_1() != null) return "STANDARD-1";
+        if (ctx.STANDARD_2() != null) return "STANDARD-2";
+        if (ctx.NATIVE() != null) return "NATIVE";
+        if (ctx.cobolWord() != null) return "ALIAS";
+        return "LITERALS";
+    }
+
+    private static JsonObject alphabetItem(CobolParser.LiteralContext lit, String link) {
+        JsonObject item = new JsonObject();
+        item.addProperty("link", link);
+        if (lit.figurativeConstant() != null) {
+            item.addProperty("kind", "FIGURATIVE");
+            item.addProperty("value", lit.figurativeConstant().getText().toUpperCase());
+        } else if (lit.numericLiteral() != null) {
+            item.addProperty("kind", "NUMERIC");
+            item.addProperty("value", lit.numericLiteral().getText());
+        } else {
+            item.addProperty("kind", "NONNUMERIC");
+            item.addProperty("value", nonnumericCharacters(lit.getText()));
+        }
+        return item;
+    }
+
+    /** A nonnumeric literal's characters: delimiters removed, doubled delimiters undone. */
+    private static String nonnumericCharacters(String text) {
+        String delimiter = text.substring(0, 1);
+        return text.substring(1, text.length() - 1).replace(delimiter + delimiter, delimiter);
     }
 
     /** Literal text with COBOL quote delimiters stripped. */

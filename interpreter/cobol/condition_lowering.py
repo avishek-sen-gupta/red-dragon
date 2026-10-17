@@ -28,9 +28,9 @@ from interpreter.cobol.arithmetic_scale import (
     operand_dmax,
 )
 from interpreter.cobol.cobol_constants import BuiltinName
+from interpreter.cobol.collating_sequences import NATIVE_SEQUENCE
 from interpreter.cobol.condition_name_index import ConditionNameIndex
 from interpreter.cobol.emit_context import EmitContext
-from interpreter.cobol.figurative_constants import COBOL_FIGURATIVE_CONSTANTS
 from interpreter.cobol.pointer_lowering import PointerLowering
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.func_name import FuncName
@@ -65,7 +65,7 @@ def _emit_88_value_reg(
     the read-side counterpart of SET <88-figurative> TO TRUE (CardDemo COACTUPC
     ACUP-DETAILS-NOT-FETCHED VALUES LOW-VALUES, SPACES).
     """
-    fill = COBOL_FIGURATIVE_CONSTANTS.get(raw.upper())
+    fill = ctx.figuratives.characters.get(raw.upper())
     if fill is not None:
         # Numeric parent + ZEROS -> integer 0; otherwise build the fill string
         # sized to the parent field so equality holds against the decoded field.
@@ -449,7 +449,7 @@ def _lower_figurative(
         and _is_numeric_field(ctx, sibling, materialised, span=span)
     ):
         return ctx.const_to_reg(0, span=span)
-    fill = COBOL_FIGURATIVE_CONSTANTS.get(value, " ")
+    fill = ctx.figuratives.characters.get(value, " ")
     length = _field_byte_length(ctx, sibling, materialised, span=span)
     if length is None:
         length = _DEFAULT_FIGURATIVE_LEN
@@ -638,9 +638,37 @@ def _lower_relation_registers(
     left_reg = _lower_nonnumeric_operand(ctx, left, right, materialised, span=span)
     right_reg = _lower_nonnumeric_operand(ctx, right, left, materialised, span=span)
     return (
-        _pad_to(ctx, left_reg, right_reg, span=span),
-        _pad_to(ctx, right_reg, left_reg, span=span),
+        _in_collating_order(
+            ctx, _pad_to(ctx, left_reg, right_reg, span=span), span=span
+        ),
+        _in_collating_order(
+            ctx, _pad_to(ctx, right_reg, left_reg, span=span), span=span
+        ),
     )
+
+
+def _in_collating_order(
+    ctx: EmitContext, value: Register, *, span: SourceSpan | None
+) -> Register:
+    """The characters of a nonnumeric operand as their positions in the program
+    collating sequence, so that comparing them compares in that sequence."""
+    if ctx.collating_sequence == NATIVE_SEQUENCE:
+        return value
+    native, positions = ctx.collating_sequence.ordinal_alphabets()
+    ordered = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=ordered,
+            func_name=FuncName(BuiltinName.STRING_CONVERT),
+            args=(
+                value,
+                ctx.const_to_reg(native, span=span),
+                ctx.const_to_reg(positions, span=span),
+            ),
+        ),
+        span=span,
+    )
+    return ordered
 
 
 def _lower_relation_node(
@@ -1320,7 +1348,7 @@ def _lower_figurative_operand(
     raw = node.value.upper()
     if raw in ("ZERO", "ZEROS", "ZEROES"):
         return ctx.const_to_reg(0, span=span)
-    fill = COBOL_FIGURATIVE_CONSTANTS.get(raw)
+    fill = ctx.figuratives.characters.get(raw)
     if fill is None:
         logger.warning("Unknown figurative constant %r -> 0", node.value)
         return ctx.const_to_reg(0, span=span)
