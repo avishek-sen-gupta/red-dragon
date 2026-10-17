@@ -161,7 +161,7 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 
 | Statement | IR Pattern |
 |---|---|
-| `STRING ... INTO` | Decode sources → concatenate (with optional delimiter truncation) → `__string_splice` into the target's current characters at offset 0, or at `pointer - 1` WITH POINTER → encode → write the target back whole. Characters STRING does not transfer keep their value. |
+| `STRING ... INTO` | Each sending is evaluated once: a data item's stored characters, a figurative constant's single character, or a literal's text, cut at the first occurrence of its DELIMITED BY operand (a literal, figurative constant or data item; SIZE keeps it whole) → `__cobol_string` moves the parts into the receiver's current characters from the pointer (1 without WITH POINTER) until the receiver is full → write the receiver and the pointer back → branch to ON / NOT ON OVERFLOW. The pointer advances by the characters moved; overflow is a pointer below 1 or past the receiver, or characters left over. Characters STRING does not transfer keep their value. |
 | `UNSTRING ... INTO` | Decode source → `__multi_delimiter_split` (DELIMITED BY), or `__unstring_by_size` (no DELIMITED BY: each receiver takes its own size until the source is exhausted) → extract parts → encode → write to targets |
 | `INSPECT` | TALLYING: `__cobol_inspect_tally` → add each identifier's count. REPLACING: `__cobol_inspect_replace` → write back. TALLYING ... REPLACING: both, tallying first. CONVERTING: `__cobol_inspect_convert` → write back. See INSPECT Lowering |
 

@@ -852,10 +852,11 @@ class StringSending:
     it may also be an intrinsic ``FUNCTION`` call — e.g.
     ``STRING FUNCTION TRIM(WS-VAR) ' ...' INTO WS-MSG`` — in which case
     ``function`` is populated and lowering evaluates the call (red-dragon-zuhj).
+    ``delimiter`` is the DELIMITED BY operand; DELIMITED BY SIZE leaves it unwritten.
     """
 
     value: RefModOperand
-    delimited_by: str  # e.g. "SIZE", "SPACES", or a literal
+    delimiter: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
     function: FunctionCallOperand | None = None
 
     @classmethod
@@ -868,12 +869,15 @@ class StringSending:
         )
         return cls(
             value=RefModOperand.from_dict(raw_value),
-            delimited_by=data.get("delimited_by", "SIZE"),
+            delimiter=_operand(data, "delimiter"),
             function=function,
         )
 
     def to_dict(self) -> dict:
-        result = {"value": self.value.to_dict(), "delimited_by": self.delimited_by}
+        result = {
+            "value": self.value.to_dict(),
+            **({"delimiter": self.delimiter.to_dict()} if self.delimiter.name else {}),
+        }
         if self.function is not None:
             result["value"] = {
                 "kind": "function",
