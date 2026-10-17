@@ -174,6 +174,26 @@ class TestIndexedDriver:
         drv3.close()
         assert r.condition is AccessCondition.NOT_FOUND
 
+    @covers(CobolFeature.DELETE_RECORD)
+    @covers(CobolFeature.WRITE)
+    def test_a_scan_continues_past_records_deleted_or_inserted_behind_it(
+        self, tmp_path: Path
+    ) -> None:
+        path = tmp_path / "idx.dat"
+        drv = IndexedDriver()
+        drv.open(path, OpenMode.OUTPUT, RL, self.KO, self.KL)
+        [drv.write(_b(k)) for k in ("BBB", "DDD", "FFF", "HHH")]
+        drv.close()
+        drv2 = IndexedDriver()
+        drv2.open(path, OpenMode.IO, RL, self.KO, self.KL)
+        first = drv2.read_seq().data
+        drv2.delete()
+        after_delete = drv2.read_seq().data
+        drv2.write(_b("AAA"))
+        after_insert = drv2.read_seq().data
+        drv2.close()
+        assert (first, after_delete, after_insert) == (_b("BBB"), _b("DDD"), _b("FFF"))
+
     @covers(CobolFeature.WRITE)
     def test_write_in_input_mode_returns_48(self, tmp_path: Path) -> None:
         path = tmp_path / "idx.dat"
