@@ -53,9 +53,15 @@ def _program(ctx: EmitContext, *, span: SourceSpan | None) -> Register:
     return Register(str(ctx.const_to_reg(program_name(ctx._asg), span=span)))
 
 
-def _select_to_record(ctx: EmitContext) -> dict[str, str]:
-    """Return SELECT-file-name → first-FD-record-name (both uppercased)."""
-    return {sel: rec for rec, sel in reversed(ctx._asg.file_record_to_select.items())}
+def _largest_record(
+    ctx: EmitContext, filename: str, materialised: MaterialisedSectionedLayout
+) -> str:
+    records = [
+        materialised.resolve(record)[0]
+        for record, selected in ctx._asg.file_record_to_select.items()
+        if selected == filename.upper() and materialised.has_field(record)
+    ]
+    return max(records, key=lambda fl: fl.byte_length).name if records else ""
 
 
 def _emit_status_class(
@@ -262,8 +268,8 @@ def _emit_accept_call(ctx: EmitContext, stmt: AcceptStatement, length: int) -> R
 def _record_area(
     ctx: EmitContext, filename: str, materialised: MaterialisedSectionedLayout
 ) -> tuple[FieldLayout, ...]:
-    rec_name = _select_to_record(ctx).get(filename.upper(), "")
-    if not (rec_name and materialised.has_field(rec_name)):
+    rec_name = _largest_record(ctx, filename, materialised)
+    if not rec_name:
         return ()
     fl, _ = materialised.resolve(rec_name)
     return (fl,)
@@ -598,8 +604,7 @@ def lower_read(
     )
 
     # Write data into file section region via the FD record name for this file
-    s2r = _select_to_record(ctx)
-    rec_name = s2r.get(stmt.file_name.upper())
+    rec_name = _largest_record(ctx, stmt.file_name, materialised)
     if rec_name:
         try:
             file_fl, file_rr, file_region = materialised.resolve_with_region(rec_name)

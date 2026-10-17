@@ -1,63 +1,64 @@
-"""Every 01 under one FD describes the same record area, and each FD has its own:
-a MOVE to one record of a file is what WRITE of another record of that file
-sends, and records of different files never share storage."""
+"""End-to-end: a file's record area is as long as its largest record, so a longer
+record of the FD is written and read whole."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from interpreter.cobol.ebcdic_table import EbcdicTable
+import pytest
+
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.real_file_provider import RealFileIOProvider
 from interpreter.run import run
 from tests.covers import covers
-from tests.integration.cobol_helpers import to_fixed
+from tests.integration.cobol_helpers import (
+    bridge_jar,  # noqa: F401
+    to_fixed,
+)
 
-_LINES = [
-    "IDENTIFICATION DIVISION.",
-    "PROGRAM-ID. RECAREA.",
-    "ENVIRONMENT DIVISION.",
-    "INPUT-OUTPUT SECTION.",
-    "FILE-CONTROL.",
-    "    SELECT PRINT-FILE ASSIGN TO PRTDD",
-    "        ORGANIZATION IS SEQUENTIAL.",
-    "    SELECT DATA-FILE ASSIGN TO DATDD",
-    "        ORGANIZATION IS SEQUENTIAL.",
-    "DATA DIVISION.",
-    "FILE SECTION.",
-    "FD  PRINT-FILE.",
-    "01  PRINT-REC        PIC X(10).",
-    "01  DUMMY-RECORD     PIC X(10).",
-    "FD  DATA-FILE.",
-    "01  DATA-REC         PIC X(10).",
-    "WORKING-STORAGE SECTION.",
-    "01  WS-DUMMY         PIC X.",
-    "PROCEDURE DIVISION.",
-    "MAIN-PARA.",
-    "    OPEN OUTPUT PRINT-FILE DATA-FILE.",
-    '    MOVE "HELLO" TO PRINT-REC.',
-    '    MOVE "WORLD" TO DATA-REC.',
-    "    WRITE DUMMY-RECORD.",
-    "    WRITE DATA-REC.",
-    "    CLOSE PRINT-FILE DATA-FILE.",
-    "    STOP RUN.",
-]
+pytestmark = pytest.mark.usefixtures("bridge_jar")
 
 
 @covers(CobolFeature.WRITE)
-def test_records_of_one_fd_share_its_area_and_fds_do_not_overlap(
-    tmp_path: Path,
+@covers(CobolFeature.READ)
+def test_a_records_longer_than_the_first_are_kept_whole(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:
-    print_path = tmp_path / "prtdd.dat"
-    data_path = tmp_path / "datdd.dat"
-    provider = RealFileIOProvider(
-        base_dir=tmp_path,
-        file_control=[],
-        path_overrides={"PRINT-FILE": print_path, "DATA-FILE": data_path},
+    source = to_fixed(
+        [
+            "IDENTIFICATION DIVISION.",
+            "PROGRAM-ID. FDAREA.",
+            "ENVIRONMENT DIVISION.",
+            "INPUT-OUTPUT SECTION.",
+            "FILE-CONTROL.",
+            '    SELECT F ASSIGN TO "fda".',
+            "DATA DIVISION.",
+            "FILE SECTION.",
+            "FD F.",
+            "01 F-SHORT PIC X(3).",
+            "01 F-LONG.",
+            "   05 F-HEAD PIC X(3).",
+            "   05 F-TAIL PIC X(2).",
+            "PROCEDURE DIVISION.",
+            "MAIN-PARA.",
+            "    OPEN OUTPUT F.",
+            '    MOVE "ABCDE" TO F-LONG. WRITE F-LONG.',
+            "    CLOSE F.",
+            "    OPEN INPUT F.",
+            '    MOVE SPACES TO F-LONG. READ F. DISPLAY "[" F-LONG "]".',
+            "    CLOSE F.",
+            "    STOP RUN.",
+        ]
     )
-    run(to_fixed(_LINES), language="cobol", io_provider=provider, max_steps=50_000)
-
-    assert (print_path.read_bytes(), data_path.read_bytes()) == (
-        bytes(EbcdicTable.ascii_to_ebcdic(b"HELLO     ")),
-        bytes(EbcdicTable.ascii_to_ebcdic(b"WORLD     ")),
+    run(
+        source=source,
+        language="cobol",
+        max_steps=20000,
+        io_provider=RealFileIOProvider(
+            base_dir=tmp_path, path_overrides={"F": tmp_path / "fda"}
+        ),
+    )
+    assert (capsys.readouterr().out, (tmp_path / "fda").read_bytes()) == (
+        "[ABCDE]\n",
+        b"\xc1\xc2\xc3\xc4\xc5",
     )
