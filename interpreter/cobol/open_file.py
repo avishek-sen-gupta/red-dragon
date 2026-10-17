@@ -79,9 +79,15 @@ class OpenFile:
             self.mode not in _READ_MODES, FileLogicStatus.READ_NOT_PERMITTED
         )
 
-    def write_check(self, record: bytes) -> FileLogicStatus:
+    def _before_first_record(self, key: str) -> bool:
+        relative = self.attributes.organization is FileOrganization.RELATIVE
+        return relative and bool(key) and int(key) < 1
+
+    def write_check(self, record: bytes, key: str) -> FileLogicStatus:
         if self.mode not in self._write_modes():
             return FileLogicStatus.WRITE_NOT_PERMITTED
+        if self._before_first_record(key):
+            return FileLogicStatus.BOUNDARY_VIOLATION
         return _permitted_unless(
             self._indexed_in_sequence()
             and self.attributes.prime_key.of(record) < self.last_key,

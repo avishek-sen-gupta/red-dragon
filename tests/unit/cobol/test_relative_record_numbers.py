@@ -42,7 +42,7 @@ def test_keyed_verbs_address_the_record_number_they_are_given(tmp_path: Path) ->
     ]
     after = [_seen(prov._read_record("F", key, "P")) for key in ("1", "3")]
     assert (writes, reads, updates, after) == (
-        ["00", "00", "22", "23"],
+        ["00", "00", "22", "24"],
         [("23", "", 0), ("23", "", 0), ("23", "", 0), ("00", "TWO", 3)],
         ["23", "00", "00"],
         [("00", "NEW", 1), ("23", "", 0)],
