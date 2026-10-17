@@ -726,11 +726,11 @@ class TestParseStatementDispatch:
                     {"name": "WS-A", "type": "CONTENT"},
                     {"name": "WS-B", "type": "VALUE"},
                 ],
-                "giving": "WS-RESULT",
+                "giving": {"name": "WS-RESULT", "qualifiers": ["WS-OUT"]},
             }
         )
         assert isinstance(stmt, CallStatement)
-        assert stmt.giving == "WS-RESULT"
+        assert stmt.giving == RefModOperand(name="WS-RESULT", qualifiers=("WS-OUT",))
         assert len(stmt.using) == 2
 
     @covers(CobolFeature.ALTER)
@@ -1639,8 +1639,16 @@ class TestRoundTrip:
         data = {
             "type": "CALL",
             "program": "SUBPROG",
-            "using": [{"name": "WS-A", "type": "REFERENCE"}],
-            "giving": "WS-RESULT",
+            "using": [
+                {"name": "WS-A", "type": "REFERENCE"},
+                {
+                    "name": "WS-B",
+                    "type": "CONTENT",
+                    "qualifiers": ["WS-REC"],
+                    "subscripts": [{"kind": "lit", "value": "2"}],
+                },
+            ],
+            "giving": {"name": "WS-RESULT", "qualifiers": ["WS-OUT"]},
         }
         assert self._round_trip(data) == data
 

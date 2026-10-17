@@ -11,6 +11,7 @@ from cobol_asg.cobol_statements import (
     DisplayStatement,
     StopRunStatement,
 )
+from cobol_asg.ref_mod import RefModOperand
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.lower_data_division import (
     lower_sectioned_data_division,
@@ -301,7 +302,9 @@ class TestLowerCallWithMaterialised:
         materialised = lower_sectioned_data_division(ctx, sl, "TESTPGM")
 
         stmt = CallStatement(
-            target=CallTarget.of_literal("MY-PROG"), using=[], giving=""
+            target=CallTarget.of_literal("MY-PROG"),
+            using=[],
+            giving=RefModOperand(name=""),
         )
         lower_call(ctx, stmt, materialised)
 

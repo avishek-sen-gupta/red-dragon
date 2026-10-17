@@ -2160,7 +2160,7 @@ class TestCallAlterEntryCancelLowering:
             CallStatement(
                 target=CallTarget.of_literal("CALC"),
                 using=[CallUsingParam(name="WS-A")],
-                giving="WS-RESULT",
+                giving=RefModOperand(name="WS-RESULT"),
             )
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)

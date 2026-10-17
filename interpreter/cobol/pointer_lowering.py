@@ -58,7 +58,7 @@ class PointerLowering:
         return address
 
     def address_argument(
-        self, name: str, extent: FieldExtent
+        self, name: str, qualifiers: Sequence[str], extent: FieldExtent
     ) -> tuple[Register, Register]:
         """ADDRESS OF an item as a CALL argument: a fresh copy holding the address
         as the addressing mode's binary, and its offset 0."""
@@ -71,7 +71,9 @@ class PointerLowering:
             span=self.span,
         )
         zero = self.ctx.const_to_reg(0, span=self.span)
-        self.write_address(copy, zero, self.address_of(name, (), ()), width, extent)
+        self.write_address(
+            copy, zero, self.address_of(name, qualifiers, ()), width, extent
+        )
         return copy, zero
 
     def address(self, operand: SetOperand) -> Register:

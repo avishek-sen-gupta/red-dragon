@@ -1365,14 +1365,37 @@ public final class StatementSerializer {
         return litNode(extractValueStmtText(vs));
     }
 
-    /** The item named by a CALL USING ... ADDRESS OF operand. */
-    private static String addressOfName(ValueStmt vs) {
+    /** The item named by a CALL USING ... ADDRESS OF operand, as a structured reference. */
+    private static JsonObject addressOfOperand(ValueStmt vs) {
         if (vs instanceof CallValueStmt && ((CallValueStmt) vs).getCall() != null) {
             Call call = ((CallValueStmt) vs).getCall();
             Call target = addressOfTarget(call);
-            return extractCallName(target != null ? target : call);
+            return serializeRef(target != null ? target : call);
         }
-        return extractValueStmtText(vs);
+        return textOperand(vs);
+    }
+
+    /** A CALL USING argument: a data reference with its qualifiers and subscripts, or a literal's text. */
+    private static JsonObject usingOperand(ValueStmt vs) {
+        if (vs instanceof CallValueStmt && ((CallValueStmt) vs).getCall() != null) {
+            return serializeRef(((CallValueStmt) vs).getCall());
+        }
+        return textOperand(vs);
+    }
+
+    private static JsonObject textOperand(ValueStmt vs) {
+        JsonObject text = new JsonObject();
+        text.addProperty("name", extractValueStmtText(vs));
+        return text;
+    }
+
+    /** Copies a USING operand's name, qualifiers and subscripts onto its parameter object. */
+    private static void addUsingOperand(JsonObject paramObj, JsonObject operand) {
+        for (String key : new String[] {"name", "qualifiers", "subscripts"}) {
+            if (operand.has(key)) {
+                paramObj.add(key, operand.get(key));
+            }
+        }
     }
 
     private static JsonObject serializeString(StringStatement stmt) {
@@ -1792,10 +1815,10 @@ public final class StatementSerializer {
                             if (br.getByReferenceType() == ByReference.ByReferenceType.OMITTED) {
                                 paramObj.addProperty("omitted", true);
                             } else if (br.getByReferenceType() == ByReference.ByReferenceType.ADDRESS_OF) {
-                                paramObj.addProperty("name", addressOfName(br.getValueStmt()));
+                                addUsingOperand(paramObj, addressOfOperand(br.getValueStmt()));
                                 paramObj.addProperty("address_of", true);
                             } else {
-                                paramObj.addProperty("name", extractValueStmtText(br.getValueStmt()));
+                                addUsingOperand(paramObj, usingOperand(br.getValueStmt()));
                                 if (br.getByReferenceType() == ByReference.ByReferenceType.STRING
                                         || br.getByReferenceType() == ByReference.ByReferenceType.INTEGER) {
                                     paramObj.addProperty("is_literal", true);
@@ -1809,10 +1832,10 @@ public final class StatementSerializer {
                             JsonObject paramObj = new JsonObject();
                             paramObj.addProperty("type", "CONTENT");
                             if (bc.getByContentType() == ByContent.ByContentType.ADDRESS_OF) {
-                                paramObj.addProperty("name", addressOfName(bc.getValueStmt()));
+                                addUsingOperand(paramObj, addressOfOperand(bc.getValueStmt()));
                                 paramObj.addProperty("address_of", true);
                             } else {
-                                paramObj.addProperty("name", extractValueStmtText(bc.getValueStmt()));
+                                addUsingOperand(paramObj, usingOperand(bc.getValueStmt()));
                             }
                             if (bc.getValueStmt() instanceof io.proleap.cobol.asg.metamodel.valuestmt.LiteralValueStmt) {
                                 paramObj.addProperty("is_literal", true);
@@ -1825,10 +1848,10 @@ public final class StatementSerializer {
                             JsonObject paramObj = new JsonObject();
                             paramObj.addProperty("type", "VALUE");
                             if (bv.getByValueType() == ByValue.ByValueType.ADDRESS_OF) {
-                                paramObj.addProperty("name", addressOfName(bv.getValueStmt()));
+                                addUsingOperand(paramObj, addressOfOperand(bv.getValueStmt()));
                                 paramObj.addProperty("address_of", true);
                             } else {
-                                paramObj.addProperty("name", extractValueStmtText(bv.getValueStmt()));
+                                addUsingOperand(paramObj, usingOperand(bv.getValueStmt()));
                             }
                             if (bv.getValueStmt() instanceof io.proleap.cobol.asg.metamodel.valuestmt.LiteralValueStmt) {
                                 paramObj.addProperty("is_literal", true);
@@ -1841,7 +1864,7 @@ public final class StatementSerializer {
             }
             // GIVING
             if (stmt.getGivingPhrase() != null && stmt.getGivingPhrase().getGivingCall() != null) {
-                obj.addProperty("giving", extractCallName(stmt.getGivingPhrase().getGivingCall()));
+                obj.add("giving", serializeRef(stmt.getGivingPhrase().getGivingCall()));
             }
         } catch (Exception e) {
             LOG.fine("Could not extract CALL operands: " + e.getMessage());
