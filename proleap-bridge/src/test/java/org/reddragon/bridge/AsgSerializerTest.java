@@ -297,6 +297,9 @@ public class AsgSerializerTest {
         assertEquals(2, DataFieldSerializer.computePicByteLength("9(3)", "COMP"));
         assertEquals(4, DataFieldSerializer.computePicByteLength("9(5)", "COMP"));
         assertEquals(8, DataFieldSerializer.computePicByteLength("9(15)", "COMP"));
+        assertEquals(2, DataFieldSerializer.computePicByteLength("S9(4)", "COMP-5"));
+        assertEquals(4, DataFieldSerializer.computePicByteLength("S9(9)", "COMP-5"));
+        assertEquals(8, DataFieldSerializer.computePicByteLength("9(18)", "COMP-5"));
     }
 
     /**

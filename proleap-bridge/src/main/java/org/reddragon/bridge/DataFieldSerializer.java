@@ -576,7 +576,7 @@ public final class DataFieldSerializer {
      *
      * <p>For DISPLAY usage: count of storage characters (9, X, A) with repetition.
      * For COMP-3: ceil((digits + 1) / 2).
-     * For COMP/BINARY: 2 for ≤4 digits, 4 for ≤9, 8 for ≤18.
+     * For COMP/BINARY/COMP-5: 2 for ≤4 digits, 4 for ≤9, 8 for ≤18.
      */
     public static int computePicByteLength(String pic, String usage) {
         if ("POINTER".equals(usage)) {
@@ -599,7 +599,7 @@ public final class DataFieldSerializer {
 
         return switch (usage) {
             case "COMP-3", "PACKED-DECIMAL" -> (digitCount / 2) + 1;
-            case "COMP", "COMP-4", "BINARY" -> {
+            case "COMP", "COMP-4", "BINARY", "COMP-5" -> {
                 if (digitCount <= 4) yield 2;
                 else if (digitCount <= 9) yield 4;
                 else yield 8;
