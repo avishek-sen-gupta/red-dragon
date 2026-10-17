@@ -11,6 +11,7 @@ from cobol_asg.cobol_expression import (
     LiteralNode,
 )
 from cobol_asg.cobol_types import CobolDataCategory
+from cobol_asg.pic_parser import parse_pic
 from cobol_numeric.number import from_literal
 from cobol_numeric.scale import Scale
 from interpreter.cobol.arithmetic_scale import (
@@ -65,6 +66,18 @@ def test_receiver_capacity_is_the_first_magnitude_its_integer_digits_cannot_hold
     assert receiver_capacity(_td(2, 0)) == 100
     assert receiver_capacity(_td(3, 3)) == 1
     assert receiver_capacity(_td(12, 12)) == 1
+
+
+@covers(CobolFeature.ON_SIZE_ERROR, CobolFeature.NUMERIC_EDITED)
+def test_a_numeric_edited_capacity_counts_only_its_integer_digit_positions():
+    assert receiver_capacity(parse_pic("$9999.00", "DISPLAY")) == 10000
+    assert receiver_capacity(parse_pic("ZZZ9.99", "DISPLAY")) == 10000
+    assert receiver_capacity(parse_pic("$$$9.99", "DISPLAY")) == 1000
+    assert receiver_capacity(parse_pic("-9(4).99", "DISPLAY")) == 10000
+    assert receiver_capacity(parse_pic("9(3),9(3)", "DISPLAY")) == 1000000
+    assert receiver_capacity(parse_pic("ZZZPP", "DISPLAY")) == 100000
+    comma = parse_pic("ZZ9,99", "DISPLAY", decimal_point_is_comma=True)
+    assert receiver_capacity(comma) == 1000
 
 
 @covers(CobolFeature.ON_SIZE_ERROR, CobolFeature.ROUNDED_CLAUSE)

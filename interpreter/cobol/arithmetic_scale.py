@@ -27,6 +27,7 @@ from cobol_asg.cobol_expression import (
     RefModNode,
 )
 from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
+from cobol_asg.edit_picture import integer_digit_positions
 from cobol_numeric.number import CobolNumber, from_literal, scale_by
 from cobol_numeric.scale import (
     Scale,
@@ -114,7 +115,15 @@ def receiver_decimals(td: CobolTypeDescriptor, rounded: bool) -> int:
 
 
 def receiver_capacity(td: CobolTypeDescriptor) -> CobolNumber:
-    return scale_by(10 ** (td.total_digits - td.decimal_digits), td.scale)
+    return scale_by(10 ** _integer_digit_positions(td), td.scale)
+
+
+def _integer_digit_positions(td: CobolTypeDescriptor) -> int:
+    if td.category == CobolDataCategory.NUMERIC_EDITED:
+        return integer_digit_positions(
+            td.pic_string, td.currency, td.decimal_point_is_comma
+        )
+    return td.total_digits - td.decimal_digits
 
 
 def receiver_rounding_places(td: CobolTypeDescriptor) -> int:

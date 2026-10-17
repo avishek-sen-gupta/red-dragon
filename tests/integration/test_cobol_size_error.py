@@ -273,3 +273,32 @@ class TestCorresponding:
             ["H2", "H3", "H5", "H6", "F1", "F2", "F3"],
         )
         assert shown == ["13995", "505", "1200", "07", "E", "N", "N"]
+
+
+class TestNumericEditedReceiver:
+    @covers(
+        CobolFeature.SUBTRACT, CobolFeature.ON_SIZE_ERROR, CobolFeature.NUMERIC_EDITED
+    )
+    def test_capacity_counts_digit_positions_not_insertion_characters(self, capsys):
+        shown = _display_after(
+            capsys,
+            [
+                "01 N PIC 9999V9 VALUE 9999.9.",
+                "01 E1 PIC $9999.00 VALUE ZERO.",
+                "01 E2 PIC ZZZ9.99 VALUE ZERO.",
+                "01 E3 PIC $$$9.99 VALUE ZERO.",
+                "01 F1 PIC X VALUE 'P'.",
+                "01 F2 PIC X VALUE 'P'.",
+                "01 F3 PIC X VALUE 'P'.",
+            ],
+            [
+                "    SUBTRACT -9 FROM N GIVING E1 ROUNDED",
+                "        ON SIZE ERROR MOVE 'E' TO F1.",
+                "    SUBTRACT 1 FROM N GIVING E2",
+                "        ON SIZE ERROR MOVE 'E' TO F2.",
+                "    SUBTRACT 9000 FROM N GIVING E3",
+                "        ON SIZE ERROR MOVE 'E' TO F3.",
+            ],
+            ["E1", "E2", "E3", "F1", "F2", "F3"],
+        )
+        assert shown == ["$0000.00", "9998.90", "$999.90", "E", "P", "P"]

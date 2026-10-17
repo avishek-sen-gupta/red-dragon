@@ -271,6 +271,16 @@ def parse_edit_picture(pic: str, currency: str = DEFAULT_CURRENCY) -> EditPictur
     )
 
 
+def integer_digit_positions(
+    pic: str, currency: str = DEFAULT_CURRENCY, decimal_point_is_comma: bool = False
+) -> int:
+    """The digit positions left of the numeric-edited ``pic``'s decimal point:
+    9, Z, * and every floating symbol but the first, never an insertion
+    character."""
+    swap = _POINT_SWAP if decimal_point_is_comma else _NO_SWAP
+    return parse_edit_picture(pic.translate(swap), currency).int_digits
+
+
 def _digit_string(value: CobolNumber, ep: EditPicture) -> str:
     """The picture's digits, zero-padded/truncated to its digit-position counts.
     Truncates toward zero (no ROUNDED); on overflow the low-order integer digits
