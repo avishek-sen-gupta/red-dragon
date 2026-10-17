@@ -24,6 +24,7 @@ from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.field_resolution import whole_field_extent
 from interpreter.cobol.program_object import program_name
+from interpreter.cobol.relative_key import addressing_key, reported_key
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.cobol.status_class import StatusClass
 from interpreter.func_name import FuncName
@@ -54,6 +55,25 @@ def _program(ctx: EmitContext, *, span: SourceSpan | None) -> Register:
 def _select_to_record(ctx: EmitContext) -> dict[str, str]:
     """Return SELECT-file-name → first-FD-record-name (both uppercased)."""
     return {sel: rec for rec, sel in reversed(ctx._asg.file_record_to_select.items())}
+
+
+def _emit_status_class(
+    ctx: EmitContext, status_reg: Register, *, span: SourceSpan | None
+) -> Register:
+    first_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=first_reg,
+            func_name=FuncName(BuiltinName.STRING_SLICE),
+            args=(
+                Register(str(status_reg)),
+                Register(str(ctx.const_to_reg(0, span=span))),
+                Register(str(ctx.const_to_reg(1, span=span))),
+            ),
+        ),
+        span=span,
+    )
+    return first_reg
 
 
 def _emit_skip_if_class(
@@ -92,19 +112,7 @@ def _emit_conditional_use_perform(
     """Emit: unless the status is successful or of a class the statement's own
     AT END / INVALID KEY phrase handles, PERFORM the USE section and return to
     the point of the I/O verb."""
-    first_reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        CallFunction(
-            result_reg=first_reg,
-            func_name=FuncName(BuiltinName.STRING_SLICE),
-            args=(
-                Register(str(status_reg)),
-                Register(str(ctx.const_to_reg(0, span=span))),
-                Register(str(ctx.const_to_reg(1, span=span))),
-            ),
-        ),
-        span=span,
-    )
+    first_reg = _emit_status_class(ctx, status_reg, span=span)
     skip_lbl = ctx.fresh_label("use_skip")
     _ = [
         _emit_skip_if_class(ctx, first_reg, status_class, skip_lbl, span=span)
@@ -371,6 +379,79 @@ def lower_close(
         logger.info("CLOSE %s", filename)
 
 
+def _emit_key_text(
+    ctx: EmitContext,
+    key: RefModOperand,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> Register:
+    if not materialised.has_field(key.name):
+        return Register(str(ctx.const_to_reg("", span=span)))
+    key_ref, key_rr = ctx.resolve_field_ref(
+        key.name, materialised, key.qualifiers, key.subscripts, span=span
+    )
+    key_val_reg = ctx.emit_decode_field(
+        key_rr, key_ref.fl, key_ref.offset_reg, extent=key_ref.extent, span=span
+    )
+    return ctx.emit_to_string(key_val_reg, span=span)
+
+
+def _emit_record_number_report(
+    ctx: EmitContext,
+    raw_reg: Register,
+    status_reg: Register,
+    key: RefModOperand,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> None:
+    """After a successful sequential READ or WRITE of a relative file, MOVE the
+    record number it used to the RELATIVE KEY."""
+    if not materialised.has_field(key.name):
+        return
+    number_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=number_reg,
+            func_name=FuncName("__cobol_io_record_number"),
+            args=(raw_reg, _program(ctx, span=span)),
+        ),
+        span=span,
+    )
+    ok_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        Binop(
+            result_reg=ok_reg,
+            operator=resolve_binop("=="),
+            left=_emit_status_class(ctx, status_reg, span=span),
+            right=Register(
+                str(ctx.const_to_reg(StatusClass.SUCCESSFUL.value, span=span))
+            ),
+        ),
+        span=span,
+    )
+    store_lbl = ctx.fresh_label("record_number_store")
+    skip_lbl = ctx.fresh_label("record_number_skip")
+    ctx.emit_inst(
+        BranchIf(cond_reg=ok_reg, branch_targets=(store_lbl, skip_lbl)), span=span
+    )
+    ctx.emit_inst(Label_(label=store_lbl), span=span)
+    key_ref, key_rr = ctx.resolve_field_ref(
+        key.name, materialised, key.qualifiers, key.subscripts, span=span
+    )
+    ctx.emit_encode_and_write(
+        key_rr,
+        key_ref.fl,
+        ctx.emit_to_string(number_reg, span=span),
+        key_ref.offset_reg,
+        extent=key_ref.extent,
+        span=span,
+    )
+    ctx.emit_inst(Branch(label=skip_lbl), span=span)
+    ctx.emit_inst(Label_(label=skip_lbl), span=span)
+
+
 def lower_read(
     ctx: EmitContext,
     stmt: ReadStatement,
@@ -380,21 +461,16 @@ def lower_read(
     span = stmt.span
     fn_reg = ctx.const_to_reg(stmt.file_name, span=span)
 
-    # Key for random access
-    if stmt.key.name and materialised.has_field(stmt.key.name):
-        key_ref, key_rr = ctx.resolve_field_ref(
-            stmt.key.name,
-            materialised,
-            stmt.key.qualifiers,
-            stmt.key.subscripts,
-            span=span,
-        )
-        key_val_reg = ctx.emit_decode_field(
-            key_rr, key_ref.fl, key_ref.offset_reg, extent=key_ref.extent, span=span
-        )
-        key_str_reg = ctx.emit_to_string(key_val_reg, span=span)
-    else:
-        key_str_reg = ctx.const_to_reg("", span=span)
+    key_str_reg = _emit_key_text(
+        ctx,
+        (
+            stmt.key
+            if stmt.key.name
+            else addressing_key(ctx._asg, stmt.file_name, stmt.next_record)
+        ),
+        materialised,
+        span=span,
+    )
 
     raw_reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -423,6 +499,14 @@ def lower_read(
         span=span,
     )
     ctx.emit_file_status_update(stmt.file_name, status_reg, materialised, span=span)
+    _emit_record_number_report(
+        ctx,
+        raw_reg,
+        status_reg,
+        reported_key(ctx._asg, stmt.file_name, stmt.next_record),
+        materialised,
+        span=span,
+    )
     emit_use_trigger(
         ctx,
         stmt.file_name,
@@ -644,6 +728,9 @@ def lower_write(
     r2s = ctx._asg.file_record_to_select
     file_name = r2s.get(stmt.record_name.upper(), stmt.record_name)
     fn_reg = ctx.const_to_reg(file_name, span=span)
+    key_reg = _emit_key_text(
+        ctx, addressing_key(ctx._asg, file_name, False), materialised, span=span
+    )
     raw_reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(
@@ -652,6 +739,7 @@ def lower_write(
             args=(
                 Register(str(fn_reg)),
                 Register(str(data_reg)),
+                key_reg,
                 _program(ctx, span=span),
             ),
         ),
@@ -670,6 +758,14 @@ def lower_write(
         span=span,
     )
     ctx.emit_file_status_update(file_name, status_reg, materialised, span=span)
+    _emit_record_number_report(
+        ctx,
+        raw_reg,
+        status_reg,
+        reported_key(ctx._asg, file_name, False),
+        materialised,
+        span=span,
+    )
     emit_use_trigger(
         ctx,
         file_name,
@@ -707,6 +803,9 @@ def lower_rewrite(
     r2s = ctx._asg.file_record_to_select
     file_name = r2s.get(stmt.record_name.upper(), stmt.record_name)
     fn_reg = ctx.const_to_reg(file_name, span=span)
+    key_reg = _emit_key_text(
+        ctx, addressing_key(ctx._asg, file_name, False), materialised, span=span
+    )
     raw_reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(
@@ -715,6 +814,7 @@ def lower_rewrite(
             args=(
                 Register(str(fn_reg)),
                 Register(str(data_reg)),
+                key_reg,
                 _program(ctx, span=span),
             ),
         ),

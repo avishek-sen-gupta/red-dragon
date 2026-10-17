@@ -1731,6 +1731,11 @@ class TestRoundTrip:
         data = {"type": "READ", "file_name": "CUST-FILE"}
         assert self._round_trip(data) == data
 
+    @covers(CobolFeature.READ)
+    def test_read_next_round_trip(self):
+        data = {"type": "READ", "file_name": "CUST-FILE", "next_record": True}
+        assert self._round_trip(data) == data
+
     @covers(CobolFeature.READ, CobolFeature.READ_INTO)
     def test_read_with_into_round_trip(self):
         data = {

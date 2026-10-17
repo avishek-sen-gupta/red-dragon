@@ -20,7 +20,7 @@ def _loaded(
     prov: RealFileIOProvider, name: str, organization: str, records: Sequence[str]
 ) -> None:
     prov._open_file(name, "OUTPUT", 4, organization, 0, 2, "P")
-    [prov._write_record(name, record, "P") for record in records]
+    [prov._write_record(name, record, "", "P") for record in records]
     prov._close_file(name, "P")
     prov._open_file(name, "I-O", 4, organization, 0, 2, "P")
 

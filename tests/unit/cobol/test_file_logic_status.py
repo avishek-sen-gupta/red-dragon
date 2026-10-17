@@ -17,7 +17,7 @@ def _provider(tmp_path: Path) -> RealFileIOProvider:
 
 def _one_record_file(prov: RealFileIOProvider) -> None:
     prov._open_file("F", "OUTPUT", 4, _SEQ, 0, 0, "P")
-    prov._write_record("F", "AAAA", "P")
+    prov._write_record("F", "AAAA", "", "P")
     prov._close_file("F", "P")
 
 
@@ -58,20 +58,20 @@ def test_write_and_rewrite_need_their_open_modes_and_a_current_record(
     prov = _provider(tmp_path)
     _one_record_file(prov)
     statuses = [
-        prov._write_record("F", "BBBB", "P").status,
-        prov._rewrite_record("F", "BBBB", "P").status,
+        prov._write_record("F", "BBBB", "", "P").status,
+        prov._rewrite_record("F", "BBBB", "", "P").status,
         prov._delete_record("F", "", "P").status,
         prov._open_file("F", "INPUT", 4, _SEQ, 0, 0, "P").status,
-        prov._rewrite_record("F", "BBBB", "P").status,
+        prov._rewrite_record("F", "BBBB", "", "P").status,
         prov._close_file("F", "P").status,
         prov._open_file("F", "I-O", 4, _SEQ, 0, 0, "P").status,
-        prov._write_record("F", "BBBB", "P").status,
-        prov._rewrite_record("F", "BBBB", "P").status,
+        prov._write_record("F", "BBBB", "", "P").status,
+        prov._rewrite_record("F", "BBBB", "", "P").status,
         prov._read_record("F", "", "P").status,
-        prov._rewrite_record("F", "CCCC", "P").status,
-        prov._rewrite_record("F", "DDDD", "P").status,
+        prov._rewrite_record("F", "CCCC", "", "P").status,
+        prov._rewrite_record("F", "DDDD", "", "P").status,
         prov._read_record("F", "", "P").status,
-        prov._rewrite_record("F", "EEEE", "P").status,
+        prov._rewrite_record("F", "EEEE", "", "P").status,
     ]
     assert statuses == [
         "48",

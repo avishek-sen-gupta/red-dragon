@@ -1646,6 +1646,7 @@ class ReadStatement:
     file_name: str = ""
     into: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
     key: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
+    next_record: bool = False
     at_end: list[CobolStatementType] = field(default_factory=list)
     not_at_end: list[CobolStatementType] = field(default_factory=list)
     invalid_key: list[CobolStatementType] = field(default_factory=list)
@@ -1658,6 +1659,7 @@ class ReadStatement:
             file_name=data.get("file_name", ""),
             into=_operand(data, "into"),
             key=_operand(data, "key"),
+            next_record=bool(data.get("next_record", False)),
             at_end=[parse_statement(c) for c in data.get("at_end", [])],
             not_at_end=[parse_statement(c) for c in data.get("not_at_end", [])],
             invalid_key=[parse_statement(c) for c in data.get("invalid_key", [])],
@@ -1668,7 +1670,11 @@ class ReadStatement:
         )
 
     def to_dict(self) -> dict:
-        result: dict = {"type": "READ", "file_name": self.file_name}
+        result: dict = {
+            "type": "READ",
+            "file_name": self.file_name,
+            **({"next_record": True} if self.next_record else {}),
+        }
         if self.into.name:
             result["into"] = self.into.to_dict()
         if self.key.name:

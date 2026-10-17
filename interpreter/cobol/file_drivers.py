@@ -367,13 +367,15 @@ class RelativeDriver:
     def read_key(self, key: bytes) -> AccessResult:
         assert self._fh is not None
         n = self._n(key)
+        if n < 1:
+            return AccessResult(condition=AccessCondition.NOT_FOUND)
         self._fh.seek(self._pos(n))
         flag = self._fh.read(1)
         if not flag or flag == _EMPTY:
             return AccessResult(condition=AccessCondition.NOT_FOUND)
         data = self._fh.read(self._rl)
         self._last_slot = n
-        return AccessResult(condition=AccessCondition.OK, data=data)
+        return AccessResult(condition=AccessCondition.OK, data=data, record_number=n)
 
     def read_seq(self) -> AccessResult:
         assert self._fh is not None
@@ -386,7 +388,9 @@ class RelativeDriver:
             if flag == _ACTIVE:
                 data = self._fh.read(self._rl)
                 self._last_slot = slot + 1
-                return AccessResult(condition=AccessCondition.OK, data=data)
+                return AccessResult(
+                    condition=AccessCondition.OK, data=data, record_number=slot + 1
+                )
         return AccessResult(condition=AccessCondition.END_OF_FILE)
 
     def read_prev(self) -> AccessResult:
@@ -415,11 +419,9 @@ class RelativeDriver:
         assert self._fh is not None
         if self._mode not in _WRITE_MODES:
             return AccessResult(condition=AccessCondition.WRITE_NOT_PERMITTED)
-        if key:
-            n = self._n(key)
-        else:
-            # Sequential write: append to next slot
-            n = self._total_slots() + 1
+        n = self._n(key) if key else self._total_slots() + 1
+        if n < 1:
+            return AccessResult(condition=AccessCondition.NOT_FOUND)
         # Ensure file is large enough
         total = self._total_slots()
         if n > total:
@@ -432,11 +434,13 @@ class RelativeDriver:
         self._fh.seek(self._pos(n))
         self._fh.write(_ACTIVE)
         self._fh.write(data[: self._rl].ljust(self._rl))
-        return AccessResult(condition=AccessCondition.OK)
+        return AccessResult(condition=AccessCondition.OK, record_number=n)
 
     def rewrite(self, data: bytes, key: bytes = b"") -> AccessResult:
         assert self._fh is not None
         n = self._n(key) if key else self._last_slot
+        if n < 1:
+            return AccessResult(condition=AccessCondition.NOT_FOUND)
         self._fh.seek(self._pos(n))
         flag = self._fh.read(1)
         if not flag or flag == _EMPTY:

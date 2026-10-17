@@ -45,9 +45,13 @@ def _file_status(condition: AccessCondition) -> str:
 def to_ioresult(result: AccessResult) -> IOResult:
     match result.data:
         case None:
-            return IOResult(_file_status(result.condition), None)
+            return IOResult(_file_status(result.condition), None, result.record_number)
         case raw:
-            return IOResult(_file_status(result.condition), raw.decode("latin-1"))
+            return IOResult(
+                _file_status(result.condition),
+                raw.decode("latin-1"),
+                result.record_number,
+            )
 
 
 logger = logging.getLogger(__name__)
@@ -278,7 +282,7 @@ class RealFileIOProvider(CobolIOProvider):
         check = verb.check(file)
         if check is not FileLogicStatus.PERMITTED:
             return check.result()
-        result = verb.action(file.driver)
+        result = verb.action(file)
         self._files = {**self._files, filename: verb.after(file, result.condition)}
         return to_ioresult(result)
 
@@ -288,31 +292,41 @@ class RealFileIOProvider(CobolIOProvider):
             FileLogicStatus.READ_NOT_PERMITTED,
             FileVerb(
                 lambda file: file.read_check(not key),
-                lambda drv: (
-                    drv.read_key(key.encode("latin-1")) if key else drv.read_seq()
+                lambda file: (
+                    file.driver.read_key(file.key_bytes(key))
+                    if key
+                    else file.driver.read_seq()
                 ),
                 OpenFile.after_read,
             ),
         )
 
-    def _write_record(self, filename: str, data: str, program: str) -> IOResult:
+    def _write_record(
+        self, filename: str, data: str, key: str, program: str
+    ) -> IOResult:
         return self._verb(
             filename,
             FileLogicStatus.WRITE_NOT_PERMITTED,
             FileVerb(
                 OpenFile.write_check,
-                lambda drv: drv.write(data.encode("latin-1")),
+                lambda file: file.driver.write(
+                    data.encode("latin-1"), file.key_bytes(key)
+                ),
                 OpenFile.after_other,
             ),
         )
 
-    def _rewrite_record(self, filename: str, data: str, program: str) -> IOResult:
+    def _rewrite_record(
+        self, filename: str, data: str, key: str, program: str
+    ) -> IOResult:
         return self._verb(
             filename,
             FileLogicStatus.UPDATE_NOT_PERMITTED,
             FileVerb(
                 OpenFile.update_check,
-                lambda drv: drv.rewrite(data.encode("latin-1")),
+                lambda file: file.driver.rewrite(
+                    data.encode("latin-1"), file.key_bytes(key)
+                ),
                 OpenFile.after_other,
             ),
         )
@@ -325,9 +339,7 @@ class RealFileIOProvider(CobolIOProvider):
             FileLogicStatus.READ_NOT_PERMITTED,
             FileVerb(
                 OpenFile.start_check,
-                lambda drv: drv.start(
-                    self._files[filename].key_bytes(key), relop or ">="
-                ),
+                lambda file: file.driver.start(file.key_bytes(key), relop or ">="),
                 OpenFile.after_other,
             ),
         )
@@ -338,7 +350,7 @@ class RealFileIOProvider(CobolIOProvider):
             FileLogicStatus.UPDATE_NOT_PERMITTED,
             FileVerb(
                 lambda file: file.delete_check(key),
-                lambda drv: drv.delete(self._files[filename].key_bytes(key)),
+                lambda file: file.driver.delete(file.key_bytes(key)),
                 OpenFile.after_other,
             ),
         )
