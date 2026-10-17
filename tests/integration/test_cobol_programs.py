@@ -5256,7 +5256,9 @@ class TestDisplayMultipleOperands:
 
         Regression: the ASG kept only operands[0], so a multi-operand DISPLAY
         (alphanumeric + literals + a binary field, as in db2-samples cursor.sqb)
-        emitted just the first operand. All operands must appear, in order.
+        emitted just the first operand. All operands must appear, in order, and a
+        nonnumeric literal shows its characters without its delimiting quotation
+        marks (red-dragon-sl30.47).
         """
         _run_cobol(
             [
@@ -5273,12 +5275,7 @@ class TestDisplayMultipleOperands:
             ]
         )
         out = capsys.readouterr().out
-        # The bug dropped everything after the first operand; assert each part is
-        # present (the trailing literal proves the LAST operand rendered).
-        assert "SANDERS" in out, out
-        assert "in dept." in out, out
-        assert "20" in out, out
-        assert "is a manager" in out, out
+        assert out == "SANDERS in dept. 20 is a manager", out
 
 
 class TestArithmeticRefMod:
