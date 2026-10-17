@@ -89,7 +89,7 @@ class TestCorrespondingPairing:
                 "    DISPLAY D1 TD.",
             ],
         )
-        assert shown == "12XYZ   -----R---EF ----CD"
+        assert shown == "12XYZ   -----R---EF ----CD\n"
 
     @covers(CobolFeature.ADD, CobolFeature.SUBTRACT, CobolFeature.GROUP_ITEM)
     def test_add_and_subtract_pair_only_elementary_numeric_items(self, capsys):
@@ -119,4 +119,4 @@ class TestCorrespondingPairing:
                 "    DISPLAY T2 U2.",
             ],
         )
-        assert shown == "140304161224AB4413140908"
+        assert shown == "140304161224AB4413140908\n"

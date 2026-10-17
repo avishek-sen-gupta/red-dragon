@@ -53,4 +53,4 @@ def test_class_name_conditions_test_every_character(
         ]
     )
     run(source=source, language="cobol", max_steps=5000, io_provider=StubIOProvider())
-    assert capsys.readouterr().out == "YYYNNY"
+    assert capsys.readouterr().out == "YYYNNY\n"

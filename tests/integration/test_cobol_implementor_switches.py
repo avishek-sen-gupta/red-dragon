@@ -67,4 +67,4 @@ def test_switch_conditions_follow_the_supplied_settings_and_set(
             base_dir=tmp_path, switches={"SWITCH-1": SwitchStatus.ON}
         ),
     )
-    assert capsys.readouterr().out == "YNNNYNYY"
+    assert capsys.readouterr().out == "YNNNYNYY\n"

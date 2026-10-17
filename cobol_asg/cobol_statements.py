@@ -533,10 +533,11 @@ class EvaluateStatement:
 
 @dataclass(frozen=True)
 class DisplayStatement:
-    """DISPLAY operand [operand ...] — operands are concatenated onto one line."""
+    """DISPLAY operand [operand ...] [WITH NO ADVANCING] — operands share one line."""
 
     operands: tuple[RefModOperand, ...]
     span: SourceSpan | None = None
+    no_advancing: bool = False
 
     @classmethod
     def from_dict(cls, data: dict) -> DisplayStatement:
@@ -546,10 +547,15 @@ class DisplayStatement:
                 for raw in data.get("operands", [])
             ),
             span=SourceSpan.from_dict(data),
+            no_advancing=data.get("no_advancing", False),
         )
 
     def to_dict(self) -> dict:
-        result = {"type": "DISPLAY", "operands": [op.to_dict() for op in self.operands]}
+        result = {
+            "type": "DISPLAY",
+            "operands": [op.to_dict() for op in self.operands],
+            **({"no_advancing": True} if self.no_advancing else {}),
+        }
         if self.span is not None:
             self.span.write_into(result)
         return result

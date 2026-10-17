@@ -144,7 +144,7 @@ class TestQualifiedFileOperands:
             provider.get_file("OUTF").written,
             provider.get_file("IOF").written,
         ) == (
-            "-ZZ-WXYZ0000",
+            "-ZZ-\nWXYZ0000\n",
             [_ebcdic("AAAA"), _ebcdic("WXYZ")],
             [_ebcdic("AAAA")],
         )
@@ -195,7 +195,7 @@ class TestQualifiedReferenceResolution:
                 "    DISPLAY R1 R2 R3 R4 R5 G1.",
             ],
         )
-        assert shown == "324ABZ-----Z"
+        assert shown == "324ABZ-----Z\n"
 
 
 class TestQualifiedStatementOperands:
@@ -215,7 +215,7 @@ class TestQualifiedStatementOperands:
                 "    DISPLAY E1 OF G1 OF REC E2 IN G2 E1 OF TB (2) E1 IN G2 (1:1).",
             ],
         )
-        assert shown == "ADQC"
+        assert shown == "ADQC\n"
 
     @covers(CobolFeature.ACCEPT)
     def test_accept_stores_into_the_qualified_occurrence(self, capsys):
@@ -235,7 +235,7 @@ class TestQualifiedStatementOperands:
             ],
             ["XY", "Z"],
         )
-        assert shown == "  XY--Z"
+        assert shown == "  XY--Z\n"
 
     @covers(CobolFeature.LEVEL_88_CONDITION)
     def test_condition_names_test_and_set_their_own_qualified_parent(self, capsys):
@@ -260,7 +260,7 @@ class TestQualifiedStatementOperands:
                 "    DISPLAY R1 R2 R3 D32 D33.",
             ],
         )
-        assert shown == "YYN36"
+        assert shown == "YYN36\n"
 
     @covers(CobolFeature.RENAMES_CLAUSE)
     def test_renames_resolves_its_operands_within_its_own_record(self, capsys):
@@ -280,7 +280,7 @@ class TestQualifiedStatementOperands:
             ],
             ["    DISPLAY AL-BOB MIDR OF R2 MIDR IN R3 XR."],
         )
-        assert shown == "CCMDDDMXYQ"
+        assert shown == "CCMDDDMXYQ\n"
 
     @covers(CobolFeature.MOVE_CORRESPONDING, CobolFeature.ADD, CobolFeature.SUBTRACT)
     def test_corresponding_operands_are_the_qualified_groups(self, capsys):
@@ -301,7 +301,7 @@ class TestQualifiedStatementOperands:
                 "    DISPLAY DST T.",
             ],
         )
-        assert shown == "R2R12"
+        assert shown == "R2R12\n"
 
     @covers(CobolFeature.INITIALIZE)
     def test_initialize_resets_only_the_qualified_group(self, capsys):
@@ -317,7 +317,7 @@ class TestQualifiedStatementOperands:
                 "    DISPLAY R1 R2.",
             ],
         )
-        assert shown == "X7 0 "
+        assert shown == "X7 0 \n"
 
     @covers(CobolFeature.RENAMES_CLAUSE)
     def test_renames_takes_the_whole_span_or_the_renamed_item_s_attributes(
@@ -336,7 +336,7 @@ class TestQualifiedStatementOperands:
                 "    DISPLAY W.",
             ],
         )
-        assert shown == "5ABCD0077"
+        assert shown == "5ABCD0077\n"
 
     @covers(CobolFeature.OCCURS_DEPENDING_ON)
     def test_occurs_depending_on_object_is_the_qualified_item(self, capsys):
@@ -362,7 +362,7 @@ class TestQualifiedStatementOperands:
                 "    DISPLAY VTEXT OF GRP-A VTEXT OF GRP-B.",
             ],
         )
-        assert shown == "ABCVWXYZ"
+        assert shown == "ABCVWXYZ\n"
 
     @covers(
         CobolFeature.MOVE, CobolFeature.COMPUTE, CobolFeature.REFERENCE_MODIFICATION
@@ -387,7 +387,7 @@ class TestQualifiedStatementOperands:
                 "    DISPLAY D1 D2 D3 F OF R2 (1:LENGTH OF F OF R1).",
             ],
         )
-        assert shown == "060705BBBB"
+        assert shown == "060705BBBB\n"
 
     @covers(CobolFeature.STRING_VERB, CobolFeature.UNSTRING_VERB)
     def test_string_and_unstring_pointer_and_tally_are_the_qualified_items(
@@ -413,7 +413,7 @@ class TestQualifiedStatementOperands:
                 "    DISPLAY OUT1 N OF R1 N OF R2 O1 O2.",
             ],
         )
-        assert shown == "  XY  0607ABCD"
+        assert shown == "  XY  0607ABCD\n"
 
     @covers(CobolFeature.SEARCH_LINEAR, CobolFeature.SEARCH_VARYING)
     def test_search_advances_the_qualified_tables_index_and_varying_item(self, capsys):
@@ -436,7 +436,7 @@ class TestQualifiedStatementOperands:
                 "    DISPLAY CNT OF C1 CNT OF C2.",
             ],
         )
-        assert shown == "06"
+        assert shown == "06\n"
 
 
 _CALLER = [

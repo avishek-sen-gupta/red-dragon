@@ -955,6 +955,9 @@ public final class StatementSerializer {
         }
 
         obj.add("operands", operands);
+        if (stmt.getWith() != null && stmt.getWith().isNoAdvancing()) {
+            obj.addProperty("no_advancing", true);
+        }
         return obj;
     }
 

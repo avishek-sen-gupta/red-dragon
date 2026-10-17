@@ -2258,10 +2258,12 @@ def lower_display(
     stmt: DisplayStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """DISPLAY operand [operand ...] — concatenate every operand onto one line.
+    """DISPLAY operand [operand ...] [WITH NO ADVANCING] — one line per statement.
 
     COBOL concatenates the operands with no separator; we lower each to its
     display string, fold them with string-concat, and print the result ONCE.
+    The device then moves to the next line, unless WITH NO ADVANCING leaves it
+    where the last operand ended.
     """
     span = stmt.span
     operand_regs = [
@@ -2287,7 +2289,7 @@ def lower_display(
     ctx.emit_inst(
         CallFunction(
             result_reg=ctx.fresh_reg(),
-            func_name=FuncName("print"),
+            func_name=FuncName("print" if stmt.no_advancing else "println"),
             args=(combined_reg,),
         ),
         span=span,

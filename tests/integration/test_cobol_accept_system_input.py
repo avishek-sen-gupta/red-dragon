@@ -51,4 +51,4 @@ def test_accept_concatenates_records_and_stores_them_unedited(
             system_input=["ABCD", "EFGH", "IJKL", "MNOP", "0123456789", "12  "],
         ),
     )
-    assert capsys.readouterr().out == "ABCDEFGHIJMN01234567812  "
+    assert capsys.readouterr().out == "ABCDEFGHIJMN01234567812  \n"
