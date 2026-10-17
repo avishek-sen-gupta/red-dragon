@@ -236,4 +236,6 @@ fileignoreconfig:
   checksum: e6cac512f59e64b0eb6ef613edfd1a76df82a116b8d4d50f6c8a28fa45c4c04a
 - filename: tests/unit/cobol/test_procedure_labels.py
   checksum: 24c989197c91ad7ebec777da9532a3e246a93ce883e8ea85345516b397cccb6a
+- filename: tests/integration/test_cobol_corresponding_pairing.py
+  checksum: ef02d0bfaca7f4144496a0ab5339420205f597231b1946b0ee393591cdf78b25
 version: "1.0"
