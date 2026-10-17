@@ -35,6 +35,7 @@ from interpreter.cobol.collating_sequences import collating_sequence_of
 from interpreter.cobol.condition_name_index import ConditionNameIndex
 from interpreter.cobol.data_layout import DataItemMatch, DataLayout, FieldLayout
 from interpreter.cobol.field_resolution import ResolvedFieldRef, field_access_extent
+from interpreter.cobol.figurative_constants import FIGURATIVE_ZEROS
 from interpreter.cobol.ir_encoders import (
     build_decode_alphanumeric_ir,
     build_decode_binary_ir,
@@ -849,11 +850,21 @@ class EmitContext:
             return self._emit_numeric_edit(
                 fl, self.const_to_reg(from_literal(value), span=span), span=span
             )
+        if (
+            td.category == CobolDataCategory.NUMERIC_EDITED
+            and self._is_figurative_zero(fl, value)
+        ):
+            return self._emit_numeric_edit(
+                fl, self.const_to_reg(from_literal("0"), span=span), span=span
+            )
         if td.holds_characters or td.category == CobolDataCategory.NUMERIC_EDITED:
             return self._emit_encode_character_value(fl, value, span=span)
         if td.category in (CobolDataCategory.COMP1, CobolDataCategory.COMP2):
             return self.emit_encode_float(fl.name, value, td, span=span)
         return self.emit_encode_numeric(fl.name, value, td, span=span)
+
+    def _is_figurative_zero(self, fl: FieldLayout, value: str) -> bool:
+        return fl.value_is_figurative and value in FIGURATIVE_ZEROS
 
     def _emit_encode_character_value(
         self, fl: FieldLayout, value: str, *, span: SourceSpan | None = None
