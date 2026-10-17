@@ -618,7 +618,7 @@ class EmitContext:
             # Multi-dimensional: accumulate sum of (idx_k - 1) * stride_k, then
             # add the field's base offset once at the end.
             total_disp_reg = self.const_to_reg(0, span=span)
-            for sub_node, stride_k in zip(subscripts, strides):
+            for sub_node, stride_k in zip(subscripts, strides, strict=False):
                 idx_reg = lower_expr_node(self, sub_node, materialised, span=span)
                 idx_minus_one = self.fresh_reg()
                 self.emit_inst(
@@ -991,12 +991,13 @@ class EmitContext:
         ir = _decode_ir(fl)
 
         decoded = self.inline_ir(ir, {"%p_data": data_reg}, span=span)
-        if not td.scale:
+        if not td.scale or td.category == CobolDataCategory.NUMERIC_EDITED:
             return decoded
         # PIC P: the stored digits are the value divided by the scaling factor,
         # so reading multiplies back. Applied HERE rather than inside the four
         # build_decode_*_ir builders — one site instead of four, and those
-        # builders keep their existing signatures (red-dragon-qhtv).
+        # builders keep their existing signatures (red-dragon-qhtv). A
+        # numeric-edited item's content is its edited characters, never scaled.
         scaled = self.fresh_reg()
         scale_reg = self.const_to_reg(td.scale, span=span)
         self.emit_inst(
@@ -1370,11 +1371,12 @@ class EmitContext:
         formatted_reg = self.fresh_reg()
         pic_reg = self.const_to_reg(td.pic_string, span=span)
         currency_reg = self.const_to_reg(td.currency, span=span)
+        scale_reg = self.const_to_reg(td.scale, span=span)
         self.emit_inst(
             CallFunction(
                 result_reg=formatted_reg,
                 func_name=FuncName(BuiltinName.COBOL_APPLY_EDIT_PICTURE),
-                args=(value_reg, pic_reg, currency_reg),
+                args=(value_reg, pic_reg, currency_reg, scale_reg),
             ),
             span=span,
         )

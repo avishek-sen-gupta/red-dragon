@@ -196,3 +196,16 @@ class TestPreviouslyRejectedPictures:
         assert format_edited("12.3", "**,***.99") == "****12.30"
         assert format_edited("4.5", "ZZZ.99CR") == "  4.50  "
         assert format_edited("-4.5", "ZZZ.99CR") == "  4.50CR"
+
+
+class TestScaledEditPicture:
+    """Trailing P positions scale the value down before it is edited."""
+
+    @covers(CobolFeature.NUMERIC_EDITED, CobolFeature.PIC_CLAUSE)
+    def test_trailing_p_divides_the_value_before_editing(self):
+        assert (
+            format_edited("900", "ZZZPP", "$", 2),
+            format_edited("1200", "ZZZPP", "$", 2),
+            format_edited("123456", "Z,ZZ9PPP", "$", 3),
+            format_edited("1200", "ZZZ9", "$", 0),
+        ) == ("  9", " 12", "  123", "1200")

@@ -289,11 +289,10 @@ def _builtin_cobol_prepare_digits(args: list[TypedValue], vm: VMState) -> Builti
     """
     if len(args) < 4 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    value, total_digits, decimal_digits, signed = (
+    value, total_digits, decimal_digits = (
         args[0].value,
         args[1].value,
         args[2].value,
-        args[3].value,
     )
     scale = args[4].value if len(args) > 4 else 0
     if not isinstance(total_digits, int):
@@ -701,20 +700,19 @@ def _builtin_cobol_apply_edit_picture(
 ) -> BuiltinResult:
     """Apply a COBOL numeric edit picture to a numeric value string.
 
-    Args: [value_str: str, pic_string: str, currency: str (optional)]
+    Args: [value_str: str, pic_string: str, currency: str, scale: int]
     Returns: str — the edited display string, exactly the picture's width.
 
-    ``currency`` is the program's CURRENCY SIGN symbol. It is optional so that
-    IR emitted before red-dragon-3o5f (two-argument calls) still runs, falling
-    back to '$'.
+    ``currency`` is the program's CURRENCY SIGN symbol; ``scale`` the picture's
+    P scaling exponent.
     """
-    if len(args) < 2 or any(_is_symbolic(a.value) for a in args):
+    if len(args) < 4 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    from cobol_asg.edit_picture import DEFAULT_CURRENCY, format_edited
+    from cobol_asg.edit_picture import format_edited
 
     value_str, pic_string = str(args[0].value), str(args[1].value)
-    currency = str(args[2].value) if len(args) > 2 else DEFAULT_CURRENCY
-    return BuiltinResult(value=format_edited(value_str, pic_string, currency))
+    currency, scale = str(args[2].value), int(args[3].value)
+    return BuiltinResult(value=format_edited(value_str, pic_string, currency, scale))
 
 
 def _builtin_cobol_de_edit(args: list[TypedValue], vm: VMState) -> BuiltinResult:

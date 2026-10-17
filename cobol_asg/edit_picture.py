@@ -23,11 +23,9 @@ Supported edit constructs:
   - Trailing sign: ``CR`` / ``DB``, emitted only when the value is negative
   - Simple insertion: ``,`` ``.`` ``B`` ``0`` ``/``
 
-Still NOT supported: ``P`` scaling semantics (``P`` positions are correctly
-excluded from the byte width, but the implied decimal-point shift they denote
-is not applied to the value), and the ``CURRENCY SIGN IS`` /
-``DECIMAL-POINT IS COMMA`` clauses (red-dragon-3o5f), so ``$`` and ``.`` are
-hardcoded.
+``P`` positions occupy no width; the scaling they denote reaches
+:func:`format_edited` as its ``scale`` argument. Still NOT supported: the
+``DECIMAL-POINT IS COMMA`` clause, so ``.`` is hardcoded.
 
 Two rules here are counter-intuitive and are taken from the NIST-85
 conformance suite rather than from a reading of the standard — see
@@ -54,6 +52,7 @@ from cobol_numeric.number import (
     digits_for_encode,
     from_digits,
     from_literal,
+    scale_by,
 )
 
 _SIGN_SYMS = frozenset("+-")
@@ -311,15 +310,19 @@ def _digit_strings(value: CobolNumber, ep: EditPicture) -> tuple[str, str]:
     return digits[: ep.int_digits], digits[ep.int_digits :]
 
 
-def format_edited(value: str, pic: str, currency: str = DEFAULT_CURRENCY) -> str:
+def format_edited(
+    value: str, pic: str, currency: str = DEFAULT_CURRENCY, scale: int = 0
+) -> str:
     """Format a numeric ``value`` string per the numeric-edited ``pic``.
 
     ``value`` is a decimal string such as ``"123.45"``, ``"-0.5"``, ``"0"``.
+    ``scale`` is the picture's P scaling: the edited digits are the value
+    divided by ``10**scale``.
     Returns the edited display string, exactly ``width`` characters wide.
     """
     ep = parse_edit_picture(pic, currency)
     try:
-        dec = from_literal(str(value).strip() or "0")
+        dec = scale_by(from_literal(str(value).strip() or "0"), -scale)
     except ValueError:
         dec = from_digits(0, 0)
 
@@ -444,7 +447,7 @@ def _float_slot(ep: EditPicture, int_part: str) -> int:
         if i < decimal_index and (sym in ("9", "Z", "*") or i in float_digits)
     ]
 
-    for slot, digit in zip(int_slots, int_part):
+    for slot, digit in zip(int_slots, int_part, strict=False):
         if digit == "0":
             continue
         # Suppression ends here. If this digit sits in a float position the

@@ -16,13 +16,15 @@ import pytest
 
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
-from tests.integration.cobol_helpers import (
-    bridge_jar,  # noqa: F401
-    run_cobol,
-)
+from tests.integration import cobol_helpers
 from tests.integration.cobol_helpers import (
     first_region as _first_region,
 )
+from tests.integration.cobol_helpers import (
+    run_cobol,
+)
+
+bridge_jar = cobol_helpers.bridge_jar
 
 
 @pytest.fixture(autouse=True)
@@ -119,6 +121,34 @@ def test_field_source_whole_number():
     region = _first_region(vm)
     # WS-SRC is 9 bytes; WS-EDIT starts at offset 9.
     assert _decode_chars(region, 9, 12) == "+00000042.00"
+
+
+@covers(CobolFeature.NUMERIC_EDITED, CobolFeature.PIC_CLAUSE, CobolFeature.MOVE)
+def test_trailing_p_scales_the_edited_value_and_reads_back_its_characters():
+    vm = run_cobol(
+        [
+            "IDENTIFICATION DIVISION.",
+            "PROGRAM-ID. EDITP.",
+            "DATA DIVISION.",
+            "WORKING-STORAGE SECTION.",
+            "01 REC.",
+            "   05 W1 PIC 999PP VALUE 00900.",
+            "   05 A1 PIC ZZZPP VALUE ZERO.",
+            "   05 W2 PIC 999PP VALUE 01200.",
+            "   05 A2 PIC ZZZPP VALUE ZERO.",
+            "   05 X2 PIC X(5) VALUE SPACE.",
+            "   05 N2 PIC 9(5).",
+            "PROCEDURE DIVISION.",
+            "MAIN-PARA.",
+            "    MOVE W1 TO A1.",
+            "    MOVE W2 TO A2.",
+            "    MOVE A2 TO X2.",
+            "    MOVE A2 TO N2.",
+            "    STOP RUN.",
+        ],
+        max_steps=20000,
+    )
+    assert _decode_chars(_first_region(vm), 0, 22) == "009  9012 12 12  01200"
 
 
 class TestFloatingAndCheckProtectionEndToEnd:
