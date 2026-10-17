@@ -42,6 +42,16 @@ _DISPLAY_CATEGORIES = frozenset(
     }
 )
 
+_NUMERIC_CATEGORIES = frozenset(
+    {
+        CobolDataCategory.ZONED_DECIMAL,
+        CobolDataCategory.COMP3,
+        CobolDataCategory.BINARY,
+        CobolDataCategory.COMP1,
+        CobolDataCategory.COMP2,
+    }
+)
+
 # The categories whose CONTENT is characters, so a value read out of one is a
 # string and a value moved into one is aligned and space-filled rather than
 # converted. Numeric-edited is deliberately absent: its stored form is characters
@@ -113,6 +123,11 @@ class CobolTypeDescriptor:
         into the numeric paths.
         """
         return self.category in _CHARACTER_CATEGORIES
+
+    @property
+    def is_numeric(self) -> bool:
+        """True for the numeric categories: zoned, packed, binary and floating."""
+        return self.category in _NUMERIC_CATEGORIES
 
     @property
     def byte_length(self) -> int:

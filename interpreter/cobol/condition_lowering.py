@@ -510,17 +510,6 @@ def _is_alphanumeric_operand(expr: dict) -> bool:
     return False
 
 
-_NUMERIC_CATEGORIES: frozenset[CobolDataCategory] = frozenset(
-    {
-        CobolDataCategory.ZONED_DECIMAL,
-        CobolDataCategory.COMP3,
-        CobolDataCategory.BINARY,
-        CobolDataCategory.COMP1,
-        CobolDataCategory.COMP2,
-    }
-)
-
-
 def _is_numeric_field(
     ctx: EmitContext,
     expr: dict,
@@ -539,7 +528,7 @@ def _is_numeric_field(
     ref, _ = ctx.resolve_field_ref(
         name, materialised, tuple(expr.get("qualifiers", ())), span=span
     )
-    return ref.fl.type_descriptor.category in _NUMERIC_CATEGORIES
+    return ref.fl.type_descriptor.is_numeric
 
 
 def _is_nonnumeric_operand(

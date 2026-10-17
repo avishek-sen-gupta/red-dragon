@@ -71,8 +71,13 @@ from interpreter.cobol.condition_lowering import (
     lower_expr_node,
 )
 from interpreter.cobol.corresponding_pair import CorrespondingPair
-from interpreter.cobol.corresponding_regions import CorrespondingRegions
-from interpreter.cobol.data_layout import DataLayout, FieldLayout
+from interpreter.cobol.corresponding_paths import (
+    PairRule,
+    corresponding_paths,
+    pairs_for_arithmetic,
+    pairs_for_move,
+)
+from interpreter.cobol.data_layout import DataItemMatch, DataLayout, FieldLayout
 from interpreter.cobol.emit_context import EmitContext, strip_cobol_literal
 from interpreter.cobol.field_resolution import ResolvedFieldRef, whole_field_extent
 from interpreter.cobol.figurative_constants import repeat_to_width
@@ -932,45 +937,59 @@ def lower_move_corresponding(
     stmt: MoveCorrespondingStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """MOVE CORRESPONDING src TO dst — copy matching direct leaf fields, each
-    group found in whichever section declares it."""
-    span = stmt.span
-    src_group, src_rr, src_region = _require_group(stmt.source, materialised)
+    """MOVE CORRESPONDING src TO dst: each corresponding pair is a separate MOVE."""
+    moves = [
+        MoveStatement(source=pair.source, targets=[pair.target], span=stmt.span)
+        for target in stmt.targets
+        for pair in _corresponding_pairs(
+            stmt.source, target, pairs_for_move, materialised
+        )
+    ]
+    for move in moves:
+        lower_move(ctx, move, materialised)
 
-    for target in stmt.targets:
-        dst_group, dst_rr, dst_region = _require_group(target, materialised)
-        for name in src_group.fields.keys() & dst_group.fields.keys():
-            src_fl = src_group.fields[name]
-            dst_fl = dst_group.fields[name]
-            src_ref = ctx.resolve_field_ref_from(
-                src_fl, src_rr, src_region, materialised, span=span
-            )
-            decoded = ctx.emit_decode_field(
-                src_rr, src_fl, src_ref.offset_reg, extent=src_ref.extent, span=span
-            )
-            dst_ref = ctx.resolve_field_ref_from(
-                dst_fl, dst_rr, dst_region, materialised, span=span
-            )
-            ctx.emit_encode_and_write(
-                dst_rr,
-                dst_fl,
-                ctx.emit_to_string(decoded, span=span),
-                dst_ref.offset_reg,
-                extent=dst_ref.extent,
-                span=span,
-            )
+
+def _corresponding_pairs(
+    source: RefModOperand,
+    target: RefModOperand,
+    pairs_with: PairRule,
+    materialised: MaterialisedSectionedLayout,
+) -> tuple[CorrespondingPair, ...]:
+    source_match, source_group = _require_group(source, materialised)
+    target_match, target_group = _require_group(target, materialised)
+    return tuple(
+        CorrespondingPair(
+            source=_corresponding_operand(source, source_match, path),
+            target=_corresponding_operand(target, target_match, path),
+        )
+        for path in corresponding_paths(source_group, target_group, pairs_with)
+    )
+
+
+def _corresponding_operand(
+    group: RefModOperand, match: DataItemMatch, path: tuple[str, ...]
+) -> RefModOperand:
+    """The item at ``path`` below a CORRESPONDING operand, qualified by every
+    group above it and subscripted by the operand's own subscripts."""
+    return RefModOperand(
+        name=path[-1],
+        qualifiers=(
+            *reversed(path[:-1]),
+            match.name,
+            *(name for name, _ in reversed(match.ancestors)),
+        ),
+        subscripts=group.subscripts,
+        rounded=group.rounded,
+    )
 
 
 def _require_group(
     operand: RefModOperand, materialised: MaterialisedSectionedLayout
-) -> tuple[DataLayout, Register, RegionId]:
-    """The group a CORRESPONDING operand qualifies to, with its region register
-    and RegionId — carried out together because the caller builds field extents
-    from the group's FieldLayouts, comparable only within one region buffer."""
-    match, reg, region = materialised.resolve_match(operand.name, operand.qualifiers)
+) -> tuple[DataItemMatch, DataLayout]:
+    match, _, _ = materialised.resolve_match(operand.name, operand.qualifiers)
     if not isinstance(match.item, DataLayout):
         raise LookupError(f"CORRESPONDING operand is not a group: {operand.name!r}")
-    return match.item, reg, region
+    return match, match.item
 
 
 def lower_arithmetic_corresponding(
@@ -980,78 +999,23 @@ def lower_arithmetic_corresponding(
 ) -> None:
     """ADD/SUBTRACT CORRESPONDING: each pair is a separate ADD/SUBTRACT with the
     statement's ROUNDED, and its size error phrases run once after every pair."""
-    src_group, src_rr, src_region = _require_group(stmt.source, materialised)
-    dst_group, dst_rr, dst_region = _require_group(stmt.target, materialised)
-    pairs = [
-        CorrespondingPair(source=src_group.fields[name], target=dst_fl)
-        for name, dst_fl in dst_group.fields.items()
-        if name in src_group.fields
-    ]
-    step = partial(
-        _corresponding_step,
-        ctx,
-        stmt,
-        CorrespondingRegions(
-            source=src_rr,
-            source_region=src_region,
-            target=dst_rr,
-            target_region=dst_region,
-        ),
-        materialised,
+    pairs = _corresponding_pairs(
+        stmt.source, stmt.target, pairs_for_arithmetic, materialised
     )
+    step = partial(_corresponding_step, ctx, stmt, materialised)
     _store(ctx, stmt, _no_size_error_guard, pairs, step, _no_follow_up, materialised)
-
-
-def _corresponding_field(
-    ctx: EmitContext,
-    stmt: ArithmeticCorrespondingStatement,
-    fl: FieldLayout,
-    region: Register,
-    region_id: RegionId,
-    materialised: MaterialisedSectionedLayout,
-) -> tuple[ResolvedFieldRef, ArithmeticValue]:
-    ref = ctx.resolve_field_ref_from(
-        fl, region, region_id, materialised, span=stmt.span
-    )
-    value = ArithmeticValue(
-        register=ctx.emit_decode_field(
-            region, fl, ref.offset_reg, extent=ref.extent, span=stmt.span
-        ),
-        scale=field_scale(fl.type_descriptor),
-        floating=is_floating_type(fl.type_descriptor),
-    )
-    return ref, value
 
 
 def _corresponding_step(
     ctx: EmitContext,
     stmt: ArithmeticCorrespondingStatement,
-    regions: CorrespondingRegions,
     materialised: MaterialisedSectionedLayout,
     pair: CorrespondingPair,
 ) -> tuple[ArithmeticReceiver, Register]:
-    _, sending = _corresponding_field(
-        ctx, stmt, pair.source, regions.source, regions.source_region, materialised
+    sending = _decode_operand(ctx, pair.source, materialised, span=stmt.span)
+    return _in_place_step(
+        ctx, stmt.op, sending, materialised, span=stmt.span, target=pair.target
     )
-    dst_ref, current = _corresponding_field(
-        ctx, stmt, pair.target, regions.target, regions.target_region, materialised
-    )
-    td = pair.target.type_descriptor
-    result = _emit_scaled_operation(
-        ctx,
-        stmt.op,
-        current,
-        sending,
-        _receiver_decimals(td, stmt.target.rounded),
-        is_floating_type(td),
-        span=stmt.span,
-    )
-    receiver = ArithmeticReceiver(
-        operand=RefModOperand(name=pair.target.name, rounded=stmt.target.rounded),
-        ref=dst_ref,
-        region=regions.target,
-    )
-    return receiver, result.register
 
 
 def _emit_arithmetic_writeback(
