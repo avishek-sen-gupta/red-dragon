@@ -1484,6 +1484,7 @@ class FileControlEntry:
     file_status_var: RefModOperand = field(
         default_factory=lambda: RefModOperand(name="")
     )
+    optional: bool = False
 
     @classmethod
     def from_dict(cls, data: dict) -> FileControlEntry:
@@ -1495,6 +1496,7 @@ class FileControlEntry:
             record_key=RefModOperand.from_dict(data.get("record_key", {})),
             relative_key=RefModOperand.from_dict(data.get("relative_key", {})),
             file_status_var=RefModOperand.from_dict(data.get("file_status_var", {})),
+            optional=data.get("optional", False),
         )
 
     def to_dict(self) -> dict:
@@ -1506,6 +1508,7 @@ class FileControlEntry:
             "record_key": self.record_key.to_dict(),
             "relative_key": self.relative_key.to_dict(),
             "file_status_var": self.file_status_var.to_dict(),
+            "optional": self.optional,
         }
 
 

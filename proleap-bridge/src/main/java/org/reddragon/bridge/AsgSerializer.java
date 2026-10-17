@@ -719,7 +719,7 @@ public final class AsgSerializer {
     /**
      * Serializes FILE-CONTROL entries from the ENVIRONMENT DIVISION to a JSON array.
      * Each entry has: file_name, assign_to, organization, access_mode, record_key,
-     * relative_key, file_status_var.
+     * relative_key, file_status_var, optional.
      */
     /** The reference a FILE-CONTROL clause that is absent carries: no name. */
     private static JsonObject unnamedRef() {
@@ -781,6 +781,10 @@ public final class AsgSerializer {
                 } else {
                     entry.add("relative_key", unnamedRef());
                 }
+
+                // SELECT OPTIONAL
+                entry.addProperty("optional",
+                        fce.getSelectClause() != null && fce.getSelectClause().isOptional());
 
                 // FILE STATUS
                 if (fce.getFileStatusClause() != null && fce.getFileStatusClause().getDataCall() != null) {

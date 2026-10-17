@@ -24,6 +24,7 @@ _OPEN_ARGS = [
     typed_from_runtime(0),
     typed_from_runtime("SEQUENTIAL"),
     typed_from_runtime(0),
+    typed_from_runtime(False),
     _PROGRAM,
 ]
 
@@ -233,6 +234,7 @@ class TestStubIOProvider:
                 typed_from_runtime(0),
                 typed_from_runtime("SEQUENTIAL"),
                 typed_from_runtime(0),
+                typed_from_runtime(False),
                 _PROGRAM,
             ],
         )
@@ -253,6 +255,7 @@ class TestStubIOProvider:
                 typed_from_runtime(0),
                 typed_from_runtime("SEQUENTIAL"),
                 typed_from_runtime(0),
+                typed_from_runtime(False),
                 _PROGRAM,
             ],
         )

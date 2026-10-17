@@ -164,7 +164,7 @@ class IndexedDriver:
         self._mode = mode
         if mode == OpenMode.OUTPUT:
             self._fh = open(path, "w+b")
-        elif mode == OpenMode.IO:
+        elif mode in (OpenMode.IO, OpenMode.EXTEND):
             self._fh = open(path, "r+b")
         else:
             self._fh = open(path, "rb")

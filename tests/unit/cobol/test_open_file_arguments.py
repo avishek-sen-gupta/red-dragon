@@ -1,6 +1,6 @@
 """OPEN hands the provider each file's attributes from its SELECT entry and FD: record
-length, organization, prime key extent within the file's own record, access mode
-and RELATIVE KEY digits."""
+length, organization, prime key extent within the file's own record, access mode,
+RELATIVE KEY digits and OPTIONAL."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ _THREE_FILES = b"""\
        INPUT-OUTPUT SECTION.
        FILE-CONTROL.
            SELECT SQ ASSIGN TO SQDD.
-           SELECT IX ASSIGN TO IXDD ORGANIZATION INDEXED
+           SELECT OPTIONAL IX ASSIGN TO IXDD ORGANIZATION INDEXED
                ACCESS SEQUENTIAL RECORD KEY IX-ID.
            SELECT RL ASSIGN TO RLDD ORGANIZATION RELATIVE
                ACCESS RANDOM RELATIVE KEY RL-NO.
@@ -61,7 +61,7 @@ def test_open_passes_each_files_attributes(tmp_path: Path) -> None:
     parser.parse_to_file(_THREE_FILES, ast_path)
     ir = compile_cobol_module(_THREE_FILES, parser=parser, ast_path=ast_path).ir
     assert _open_arguments(ir) == [
-        ("SQ", "INPUT", 10, "SEQUENTIAL", 0, 0, "SEQUENTIAL", 0, "PGMX"),
-        ("IX", "INPUT", 12, "INDEXED", 3, 4, "SEQUENTIAL", 0, "PGMX"),
-        ("RL", "INPUT", 6, "RELATIVE", 0, 0, "RANDOM", 3, "PGMX"),
+        ("SQ", "INPUT", 10, "SEQUENTIAL", 0, 0, "SEQUENTIAL", 0, False, "PGMX"),
+        ("IX", "INPUT", 12, "INDEXED", 3, 4, "SEQUENTIAL", 0, True, "PGMX"),
+        ("RL", "INPUT", 6, "RELATIVE", 0, 0, "RANDOM", 3, False, "PGMX"),
     ]

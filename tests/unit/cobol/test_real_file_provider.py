@@ -34,14 +34,14 @@ class TestRealFileIOProvider:
     def test_sequential_write_and_read(self, tmp_path: Path) -> None:
         prov = _provider(tmp_path, [{"file_name": "SEQ-FILE", "assign_to": "seq.dat"}])
         prov._open_file(
-            "SEQ-FILE", "OUTPUT", 10, "SEQUENTIAL", 0, 0, "SEQUENTIAL", 0, "PGM"
+            "SEQ-FILE", "OUTPUT", 10, "SEQUENTIAL", 0, 0, "SEQUENTIAL", 0, False, "PGM"
         )
         prov._write_record("SEQ-FILE", "HELLO     ", "", "PGM")
         prov._close_file("SEQ-FILE", "PGM")
 
         prov2 = _provider(tmp_path, [{"file_name": "SEQ-FILE", "assign_to": "seq.dat"}])
         prov2._open_file(
-            "SEQ-FILE", "INPUT", 10, "SEQUENTIAL", 0, 0, "SEQUENTIAL", 0, "PGM"
+            "SEQ-FILE", "INPUT", 10, "SEQUENTIAL", 0, 0, "SEQUENTIAL", 0, False, "PGM"
         )
         r = prov2._read_record("SEQ-FILE", "", "PGM")
         prov2._close_file("SEQ-FILE", "PGM")
@@ -62,7 +62,9 @@ class TestRealFileIOProvider:
             file_control=[fce],
             path_overrides={"F1": custom},
         )
-        prov._open_file("F1", "OUTPUT", 5, "SEQUENTIAL", 0, 0, "SEQUENTIAL", 0, "PGM")
+        prov._open_file(
+            "F1", "OUTPUT", 5, "SEQUENTIAL", 0, 0, "SEQUENTIAL", 0, False, "PGM"
+        )
         prov._write_record("F1", "HELLO", "", "PGM")
         prov._close_file("F1", "PGM")
         assert custom.exists()
@@ -75,7 +77,7 @@ class TestRealFileIOProvider:
         monkeypatch.setenv("MYFILE", str(dat))
         prov = _provider(tmp_path, [{"file_name": "ENV-FILE", "assign_to": "MYFILE"}])
         prov._open_file(
-            "ENV-FILE", "OUTPUT", 5, "SEQUENTIAL", 0, 0, "SEQUENTIAL", 0, "PGM"
+            "ENV-FILE", "OUTPUT", 5, "SEQUENTIAL", 0, 0, "SEQUENTIAL", 0, False, "PGM"
         )
         prov._write_record("ENV-FILE", "HELLO", "", "PGM")
         prov._close_file("ENV-FILE", "PGM")
@@ -88,7 +90,7 @@ class TestRealFileIOProvider:
         )
         statuses = [
             prov._open_file(
-                "MISSING", mode, 10, "SEQUENTIAL", 0, 0, "SEQUENTIAL", 0, "PGM"
+                "MISSING", mode, 10, "SEQUENTIAL", 0, 0, "SEQUENTIAL", 0, False, "PGM"
             ).status
             for mode in ("INPUT", "I-O", "EXTEND")
         ]
@@ -115,7 +117,7 @@ class TestRealFileIOProvider:
             ],
         )
         prov._open_file(
-            "IDX-FILE", "OUTPUT", 10, "INDEXED", 0, 3, "SEQUENTIAL", 0, "PGM"
+            "IDX-FILE", "OUTPUT", 10, "INDEXED", 0, 3, "SEQUENTIAL", 0, False, "PGM"
         )
         prov._write_record("IDX-FILE", "AAAFILLER ", "", "PGM")
         prov._write_record("IDX-FILE", "BBBFILLER ", "", "PGM")
@@ -133,7 +135,7 @@ class TestRealFileIOProvider:
             ],
         )
         prov2._open_file(
-            "IDX-FILE", "INPUT", 10, "INDEXED", 0, 3, "SEQUENTIAL", 0, "PGM"
+            "IDX-FILE", "INPUT", 10, "INDEXED", 0, 3, "SEQUENTIAL", 0, False, "PGM"
         )
         r = prov2._read_record("IDX-FILE", "BBB", "PGM")
         prov2._close_file("IDX-FILE", "PGM")
@@ -143,12 +145,16 @@ class TestRealFileIOProvider:
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_sequential_eof_returns_10(self, tmp_path: Path) -> None:
         prov = _provider(tmp_path, [{"file_name": "SEQ", "assign_to": "s.dat"}])
-        prov._open_file("SEQ", "OUTPUT", 5, "SEQUENTIAL", 0, 0, "SEQUENTIAL", 0, "PGM")
+        prov._open_file(
+            "SEQ", "OUTPUT", 5, "SEQUENTIAL", 0, 0, "SEQUENTIAL", 0, False, "PGM"
+        )
         prov._write_record("SEQ", "HELLO", "", "PGM")
         prov._close_file("SEQ", "PGM")
 
         prov2 = _provider(tmp_path, [{"file_name": "SEQ", "assign_to": "s.dat"}])
-        prov2._open_file("SEQ", "INPUT", 5, "SEQUENTIAL", 0, 0, "SEQUENTIAL", 0, "PGM")
+        prov2._open_file(
+            "SEQ", "INPUT", 5, "SEQUENTIAL", 0, 0, "SEQUENTIAL", 0, False, "PGM"
+        )
         prov2._read_record("SEQ", "", "PGM")  # read the one record
         r = prov2._read_record("SEQ", "", "PGM")  # now EOF
         prov2._close_file("SEQ", "PGM")
@@ -171,7 +177,7 @@ class TestRealFileIOProvider:
             path_overrides={"INDD": data},
         )
         r = prov._open_file(
-            "IN-FILE", "INPUT", 5, "SEQUENTIAL", 0, 0, "SEQUENTIAL", 0, "PGM"
+            "IN-FILE", "INPUT", 5, "SEQUENTIAL", 0, 0, "SEQUENTIAL", 0, False, "PGM"
         )
         assert r.status == "00"
 
@@ -207,7 +213,9 @@ def test_a_subclass_chooses_the_driver_each_open_of_each_file_uses(
     ]
     prov = _WideRecords(base_dir=tmp_path, file_control=fce)
     opened = [
-        prov._open_file(n, "OUTPUT", 5, "SEQUENTIAL", 0, 0, "SEQUENTIAL", 0, "PGM")
+        prov._open_file(
+            n, "OUTPUT", 5, "SEQUENTIAL", 0, 0, "SEQUENTIAL", 0, False, "PGM"
+        )
         for n in ("F1", "F2")
     ]
     prov._write_record("F1", "HELLO", "", "PGM")
