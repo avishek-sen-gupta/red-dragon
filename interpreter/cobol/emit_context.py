@@ -30,13 +30,12 @@ from cobol_asg.source_span import SourceSpan
 from cobol_memory.field_extent import FieldExtent, Precision
 from cobol_memory.region_id import RegionId
 from cobol_numeric.number import from_literal, is_cobol_number
-from interpreter.cobol.binary_digits_ir import build_binary_picture_digits_ir
 from interpreter.cobol.alphanumeric import encode_hex_literal, parse_hex_literal
+from interpreter.cobol.binary_digits_ir import build_binary_picture_digits_ir
+from interpreter.cobol.class_name_index import ClassNameIndex
 from interpreter.cobol.cobol_constants import BuiltinName, ByteConstants, CobolEncoding
 from interpreter.cobol.collating_sequences import collating_sequence_of
 from interpreter.cobol.condition_name_index import ConditionNameIndex
-from interpreter.cobol.class_name_index import ClassNameIndex
-from interpreter.cobol.switch_index import SwitchIndex
 from interpreter.cobol.data_layout import DataItemMatch, DataLayout, FieldLayout
 from interpreter.cobol.field_resolution import ResolvedFieldRef, field_access_extent
 from interpreter.cobol.figurative_constants import FIGURATIVE_ZEROS
@@ -60,6 +59,7 @@ from interpreter.cobol.pic_scale import encode_digits
 from interpreter.cobol.procedure_labels import ProcedureLabels
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.cobol.source_spans import to_source_location
+from interpreter.cobol.switch_index import SwitchIndex
 from interpreter.constants import FoundationTypeName
 from interpreter.continuation_name import ContinuationName
 from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy
@@ -1391,20 +1391,11 @@ class EmitContext:
         span: SourceSpan | None = None,
     ) -> Register:
         """Edit a number by the item's PICTURE; the edited characters are its content."""
+        from interpreter.cobol.ir_emitter import IrEmitter
+        from interpreter.cobol.numeric_edit_ir import emit_numeric_edit
+
         td = fl.type_descriptor
-        formatted_reg = self.fresh_reg()
-        pic_reg = self.const_to_reg(td.pic_string, span=span)
-        currency_reg = self.const_to_reg(td.currency, span=span)
-        scale_reg = self.const_to_reg(td.scale, span=span)
-        comma_reg = self.const_to_reg(td.decimal_point_is_comma, span=span)
-        self.emit_inst(
-            CallFunction(
-                result_reg=formatted_reg,
-                func_name=FuncName(BuiltinName.COBOL_APPLY_EDIT_PICTURE),
-                args=(value_reg, pic_reg, currency_reg, scale_reg, comma_reg),
-            ),
-            span=span,
-        )
+        formatted_reg = emit_numeric_edit(IrEmitter(ctx=self, span=span), value_reg, td)
         ir = build_encode_alphanumeric_ir(f"enc_edited_{fl.name}", td.total_digits)
         return self.inline_ir(ir, {"%p_value": formatted_reg}, span=span)
 

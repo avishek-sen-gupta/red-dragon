@@ -286,8 +286,7 @@ def _builtin_cobol_prepare_digits(args: list[TypedValue], vm: VMState) -> Builti
 
     ``scale`` is the PIC P scaling exponent (Task 1's ``CobolTypeDescriptor.scale``).
     It is optional so that IR emitted before red-dragon-qhtv (4-argument calls)
-    still runs, defaulting to 0 (unscaled) — mirrors how ``currency`` was added
-    to COBOL_APPLY_EDIT_PICTURE in red-dragon-3o5f.
+    still runs, defaulting to 0 (unscaled).
     """
     if len(args) < 4 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
@@ -493,30 +492,6 @@ def _builtin_cobol_round(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     except (ValueError, TypeError):
         return BuiltinResult(value=_UNCOMPUTABLE)
     return BuiltinResult(value=to_plain_str(rounded))
-
-
-def _builtin_cobol_apply_edit_picture(
-    args: list[TypedValue], vm: VMState
-) -> BuiltinResult:
-    """Apply a COBOL numeric edit picture to a numeric value string.
-
-    Args: [value_str: str, pic_string: str, currency: str, scale: int,
-    decimal_point_is_comma: bool]
-    Returns: str — the edited display string, exactly the picture's width.
-
-    ``currency`` is the program's CURRENCY SIGN symbol; ``scale`` the picture's
-    P scaling exponent; ``decimal_point_is_comma`` SPECIAL-NAMES DECIMAL-POINT
-    IS COMMA.
-    """
-    if len(args) < 5 or any(_is_symbolic(a.value) for a in args):
-        return BuiltinResult(value=_UNCOMPUTABLE)
-    from cobol_asg.edit_picture import format_edited
-
-    value_str, pic_string = str(args[0].value), str(args[1].value)
-    currency, scale = str(args[2].value), int(args[3].value)
-    return BuiltinResult(
-        value=format_edited(value_str, pic_string, currency, scale, bool(args[4].value))
-    )
 
 
 def _builtin_cobol_apply_alphanumeric_edit(
@@ -1616,9 +1591,6 @@ BYTE_BUILTINS: Mapping[FuncName, Builtin] = MappingProxyType(
         FuncName(BuiltinName.BYTES_TO_FLOAT): _builtin_bytes_to_float,
         FuncName(BuiltinName.COBOL_BLANK_WHEN_ZERO): _builtin_cobol_blank_when_zero,
         FuncName(BuiltinName.COBOL_ROUND): _builtin_cobol_round,
-        FuncName(
-            BuiltinName.COBOL_APPLY_EDIT_PICTURE
-        ): _builtin_cobol_apply_edit_picture,
         FuncName(
             BuiltinName.COBOL_APPLY_ALPHANUMERIC_EDIT
         ): _builtin_cobol_apply_alphanumeric_edit,
