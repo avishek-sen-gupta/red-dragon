@@ -643,7 +643,7 @@ def lower_move(
     # reference-modified TARGET likewise needs the splice path and is excluded here.
     if (
         not ctx.has_field(stmt.source.name, materialised)
-        and stmt.source.ref_mod_start is None
+        and not stmt.source.is_reference_modified
         and ctx.figuratives.is_raw(stmt.source.name)
     ):
         fill_byte = ctx.figuratives.raw_byte(stmt.source.name)
@@ -655,7 +655,7 @@ def lower_move(
                         target.name,
                     )
                 continue
-            if target.ref_mod_start is not None:
+            if target.is_reference_modified:
                 # Ref-modified receiver: fall back to the character path so the
                 # SPLICE write still works (rare combination).
                 raw_str = chr(fill_byte)
@@ -699,7 +699,7 @@ def lower_move(
         # at offsets that have slid left (red-dragon-wlms). An unmodified source
         # keeps the decoded-value reading, which _store_move_value converts per
         # receiving category.
-        if stmt.source.ref_mod_start is not None:
+        if stmt.source.is_reference_modified:
             value_str_reg = ctx.emit_decode_field_characters(
                 source_rr,
                 source_ref.fl,
@@ -719,7 +719,7 @@ def lower_move(
     else:
         literal = strip_cobol_literal(ctx.figuratives.translate(stmt.source.name))
         value_str_reg = ctx.const_to_reg(literal, span=span)
-        if stmt.source.ref_mod_start is None:
+        if not stmt.source.is_reference_modified:
             _fill_pattern = (
                 literal
                 if stmt.source.all_literal
@@ -779,7 +779,7 @@ def lower_move(
     digit_image_reg: Register = NO_REGISTER
     if (
         source_fl is not None
-        and stmt.source.ref_mod_start is None
+        and not stmt.source.is_reference_modified
         and source_fl.type_descriptor.category in _FIXED_POINT_CATEGORIES
     ):
         digit_image_reg = ctx.emit_numeric_digit_image(
@@ -793,7 +793,7 @@ def lower_move(
     de_edited_reg: Register = NO_REGISTER
     if (
         source_fl is not None
-        and stmt.source.ref_mod_start is None
+        and not stmt.source.is_reference_modified
         and source_fl.type_descriptor.category == CobolDataCategory.NUMERIC_EDITED
     ):
         de_edited_reg = _emit_de_edit(ctx, value_str_reg, source_fl, stmt)
@@ -819,7 +819,7 @@ def lower_move(
         effective_source = source_value_reg
         if (
             _fill_pattern
-            and target.ref_mod_start is None
+            and not target.is_reference_modified
             and ctx.has_field(target.name, materialised)
         ):
             tgt_ref, _ = ctx.resolve_field_ref(
@@ -837,6 +837,9 @@ def lower_move(
             materialised,
             digit_image_reg,
             de_edited_reg=de_edited_reg,
+            group_source=isinstance(source_fl, FieldLayout)
+            and source_fl.is_group
+            and not stmt.source.is_reference_modified,
             span=span,
         )
 
@@ -863,6 +866,14 @@ def _emit_de_edit(
     return ctx.emit_to_string(value, span=span)
 
 
+def _receiving_storage(fl: FieldLayout, group_move: bool) -> FieldLayout:
+    """The receiver of a group move is filled as characters; an alphanumeric one
+    already is, and keeps its JUSTIFIED clause."""
+    if group_move and fl.type_descriptor.category != CobolDataCategory.ALPHANUMERIC:
+        return fl.as_characters()
+    return fl
+
+
 def _store_move_value(
     ctx: EmitContext,
     target: RefModOperand,
@@ -871,6 +882,7 @@ def _store_move_value(
     digit_image_reg: Register = NO_REGISTER,
     *,
     de_edited_reg: Register = NO_REGISTER,
+    group_source: bool = False,
     span: SourceSpan | None = None,
 ) -> None:
     """Store an already-evaluated MOVE source value into one receiving field.
@@ -885,6 +897,10 @@ def _store_move_value(
 
     A numeric-edited sender moved to a numeric or numeric-edited receiver is
     de-edited first; de_edited_reg carries the value recovered from its image.
+
+    A group sender is an alphanumeric move with no conversion (ANSI X3.23-1985
+    MOVE; IBM Enterprise COBOL LR, group moves): its characters fill the
+    receiver as one alphanumeric item, whatever the receiver's category.
     """
     target_ref, target_rr = ctx.resolve_field_ref(
         target.name,
@@ -896,14 +912,14 @@ def _store_move_value(
 
     if (
         digit_image_reg.is_present()
-        and target.ref_mod_start is None
+        and not target.is_reference_modified
         and target_ref.fl.type_descriptor.holds_characters
     ):
         source_value_reg = digit_image_reg
 
     if (
         de_edited_reg.is_present()
-        and target.ref_mod_start is None
+        and not target.is_reference_modified
         and not target_ref.fl.type_descriptor.holds_characters
     ):
         source_value_reg = de_edited_reg
@@ -965,7 +981,9 @@ def _store_move_value(
 
     ctx.emit_encode_and_write(
         target_rr,
-        target_ref.fl,
+        _receiving_storage(
+            target_ref.fl, group_source and not target.is_reference_modified
+        ),
         target_value_reg,
         target_ref.offset_reg,
         extent=target_ref.extent,

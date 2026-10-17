@@ -95,6 +95,44 @@ class TestBuildDataLayoutGroup:
         assert layout.lookup("WS-DAY").byte_length == 2  # type: ignore[union-attr]
 
 
+class TestGroupStorage:
+    @covers(CobolFeature.GROUP_ITEM)
+    def test_group_storage_is_marked_and_any_storage_reads_as_characters(self):
+        """A group's synthesised storage says it is a group, so a MOVE can treat
+        it as the alphanumeric sender it is; any storage can be viewed as one
+        alphanumeric item of its length, which is what a group move fills."""
+        layout = build_data_layout(
+            [
+                CobolField(
+                    name="GRP",
+                    level=1,
+                    pic="",
+                    usage="DISPLAY",
+                    offset=0,
+                    children=[
+                        CobolField(
+                            name="AMT",
+                            level=5,
+                            pic="S9(3)V99",
+                            usage="COMP-3",
+                            offset=0,
+                        ),
+                    ],
+                ),
+            ]
+        )
+        group = layout.qualified_matches("GRP", ())[0].storage
+        amount = layout.qualified_matches("AMT", ())[0].storage
+        characters = amount.as_characters()
+        assert (group.is_group, amount.is_group) == (True, False)
+        assert (
+            characters.type_descriptor.category,
+            characters.type_descriptor.byte_length,
+            characters.offset,
+            characters.byte_length,
+        ) == (CobolDataCategory.ALPHANUMERIC, 3, 0, 3)
+
+
 class TestGroupLengthFromPlacedExtent:
     """A group's byte length is derived from its children's PLACED extents
     (compiler-assigned offsets), not from summing our own length estimates.
