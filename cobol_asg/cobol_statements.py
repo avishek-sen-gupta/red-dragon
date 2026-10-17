@@ -1761,7 +1761,7 @@ class StartStatement:
     """START file-name [KEY relop key] [INVALID KEY ...] [NOT INVALID KEY ...]."""
 
     file_name: str = ""
-    key: str = ""
+    key: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
     relop: str = ""
     invalid_key: list[CobolStatementType] = field(default_factory=list)
     not_invalid_key: list[CobolStatementType] = field(default_factory=list)
@@ -1771,7 +1771,7 @@ class StartStatement:
     def from_dict(cls, data: dict) -> StartStatement:
         return cls(
             file_name=data.get("file_name", ""),
-            key=data.get("key", ""),
+            key=RefModOperand.from_dict(data.get("key", {})),
             relop=data.get("relop", ""),
             invalid_key=[parse_statement(c) for c in data.get("invalid_key", [])],
             not_invalid_key=[
@@ -1782,8 +1782,8 @@ class StartStatement:
 
     def to_dict(self) -> dict:
         result: dict = {"type": "START", "file_name": self.file_name}
-        if self.key:
-            result["key"] = self.key
+        if self.key.name:
+            result["key"] = self.key.to_dict()
         if self.relop:
             result["relop"] = self.relop
         if self.invalid_key:

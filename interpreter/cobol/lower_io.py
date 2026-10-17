@@ -10,6 +10,7 @@ from cobol_asg.cobol_statements import (
     CloseStatement,
     CobolStatementType,
     DeleteStatement,
+    FileControlEntry,
     OpenStatement,
     ReadStatement,
     RewriteStatement,
@@ -86,7 +87,7 @@ def _emit_conditional_use_perform(
     section: str,
     handled: Sequence[StatusClass],
     *,
-    span: SourceSpan | None = None,
+    span: SourceSpan | None,
 ) -> None:
     """Emit: unless the status is successful or of a class the statement's own
     AT END / INVALID KEY phrase handles, PERFORM the USE section and return to
@@ -135,7 +136,7 @@ def emit_use_trigger(
     handled: Sequence[StatusClass],
     materialised: MaterialisedSectionedLayout,
     *,
-    span: SourceSpan | None = None,
+    span: SourceSpan | None,
 ) -> None:
     """Inject a conditional PERFORM of the matching USE declarative when an I/O
     verb returns an error/exception status that the statement's own AT END /
@@ -765,7 +766,7 @@ def lower_start(
     """START file-name [KEY relop key] [INVALID KEY ...] — position via __cobol_start_file."""
     span = stmt.span
     fn_reg = ctx.const_to_reg(stmt.file_name, span=span)
-    key_reg = ctx.const_to_reg(stmt.key or "", span=span)
+    key_reg = _start_key_reg(ctx, stmt, materialised, span=span)
     relop_reg = ctx.const_to_reg(stmt.relop or "=", span=span)
     raw_reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -814,7 +815,19 @@ def lower_start(
         span=span,
     )
     ctx.emit_inst(Label_(label=after_label), span=span)
-    logger.info("START %s KEY %s %s", stmt.file_name, stmt.relop, stmt.key or "(none)")
+    logger.info(
+        "START %s KEY %s %s", stmt.file_name, stmt.relop, stmt.key.name or "(none)"
+    )
+
+
+def _file_entries(ctx: EmitContext) -> dict[str, FileControlEntry]:
+    return {entry.file_name: entry for entry in ctx._asg.file_control}
+
+
+def _file_key(entry: FileControlEntry) -> RefModOperand:
+    if entry.organization is FileOrganization.RELATIVE:
+        return entry.relative_key
+    return entry.record_key
 
 
 def _delete_key_reg(
@@ -824,29 +837,39 @@ def _delete_key_reg(
     *,
     span: SourceSpan | None,
 ) -> Register:
-    entries = {entry.file_name: entry for entry in ctx._asg.file_control}
+    entries = _file_entries(ctx)
     if (
         file_name not in entries
         or entries[file_name].access_mode is AccessMode.SEQUENTIAL
     ):
         return ctx.const_to_reg("", span=span)
     entry = entries[file_name]
-    if entry.organization is FileOrganization.RELATIVE:
-        return _relative_key_reg(ctx, entry.relative_key, materialised, span=span)
-    key_ref, key_rr = ctx.resolve_field_ref(
-        entry.record_key.name,
-        materialised,
-        entry.record_key.qualifiers,
-        entry.record_key.subscripts,
-        span=span,
-    )
-    return ctx.emit_read_region_raw(
-        key_rr, key_ref.fl, key_ref.offset_reg, extent=key_ref.extent, span=span
+    return _key_value_reg(
+        ctx, entry.organization, _file_key(entry), materialised, span=span
     )
 
 
-def _relative_key_reg(
+def _start_key_reg(
     ctx: EmitContext,
+    stmt: StartStatement,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> Register:
+    entries = _file_entries(ctx)
+    if (
+        stmt.file_name not in entries
+        or entries[stmt.file_name].organization is FileOrganization.SEQUENTIAL
+    ):
+        return ctx.const_to_reg("", span=span)
+    entry = entries[stmt.file_name]
+    key = stmt.key if stmt.key.name else _file_key(entry)
+    return _key_value_reg(ctx, entry.organization, key, materialised, span=span)
+
+
+def _key_value_reg(
+    ctx: EmitContext,
+    organization: FileOrganization,
     key: RefModOperand,
     materialised: MaterialisedSectionedLayout,
     *,
@@ -855,10 +878,14 @@ def _relative_key_reg(
     key_ref, key_rr = ctx.resolve_field_ref(
         key.name, materialised, key.qualifiers, key.subscripts, span=span
     )
-    value_reg = ctx.emit_decode_field(
+    if organization is FileOrganization.RELATIVE:
+        value_reg = ctx.emit_decode_field(
+            key_rr, key_ref.fl, key_ref.offset_reg, extent=key_ref.extent, span=span
+        )
+        return ctx.emit_to_string(value_reg, span=span)
+    return ctx.emit_read_region_raw(
         key_rr, key_ref.fl, key_ref.offset_reg, extent=key_ref.extent, span=span
     )
-    return ctx.emit_to_string(value_reg, span=span)
 
 
 def lower_delete(

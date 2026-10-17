@@ -129,14 +129,13 @@ def test_start_statement_relop_and_invalid_key():
     d = {
         "type": "START",
         "file_name": "CUST-FILE",
-        "key": "CUST-ID",
+        "key": {"name": "CUST-ID"},
         "relop": ">=",
         "invalid_key": [],
         "not_invalid_key": [],
     }
     stmt = StartStatement.from_dict(d)
-    assert stmt.relop == ">="
-    assert stmt.key == "CUST-ID"
+    assert (stmt.relop, stmt.key) == (">=", RefModOperand(name="CUST-ID"))
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
