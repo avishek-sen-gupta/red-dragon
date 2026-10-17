@@ -85,6 +85,22 @@ turns up something pertinent — a rejected approach, an edge case, a related is
   policy choices research cannot settle, such as which century-cutoff convention
   the project wants.
 
+### IR first: builtins at the irreducible minimum
+
+- **Everything a frontend means is lowered to IR.** That covers maths, data
+  representation (zoned, packed and binary images, signs, editing and de-editing,
+  class tests), data movement, and basic algorithms such as scanning, splitting
+  and padding text. Follow `interpreter/cobol/ir_encoders.py`: build an IR
+  function from the primitive builtins (nibble, byte, list and string
+  operations).
+- **A builtin is allowed only when it is irreducible, or when the IR form would
+  be too cumbersome to be worth having.** Irreducible means it reaches outside
+  the program: file and record I/O, run inputs such as switch settings, or
+  membership of the run unit. Too cumbersome means things like sort, merge and
+  search. Every new builtin's commit message states which of these applies.
+- **A builtin hides the program from analysis.** Symbolic input also collapses
+  to UNCOMPUTABLE there, whereas IR carries the symbolic value through.
+
 ### Tests
 
 - Unit tests assert **IR structure** — the expected opcodes, and no `SYMBOLIC`
