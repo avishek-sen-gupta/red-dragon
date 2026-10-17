@@ -650,21 +650,6 @@ def _lower_nonnumeric_operand(
     return _lower_relation_operand(ctx, expr, sibling, materialised, span=span)
 
 
-def _pad_to(
-    ctx: EmitContext, value: Register, other: Register, *, span: SourceSpan | None
-) -> Register:
-    padded = ctx.fresh_reg()
-    ctx.emit_inst(
-        CallFunction(
-            result_reg=padded,
-            func_name=FuncName(BuiltinName.STRING_PAD_TO),
-            args=(value, other),
-        ),
-        span=span,
-    )
-    return padded
-
-
 def _lower_relation_registers(
     ctx: EmitContext,
     rel: dict,
@@ -684,10 +669,10 @@ def _lower_relation_registers(
     right_reg = _lower_nonnumeric_operand(ctx, right, left, materialised, span=span)
     return (
         _in_collating_order(
-            ctx, _pad_to(ctx, left_reg, right_reg, span=span), span=span
+            ctx, ctx.emit_pad_to(left_reg, right_reg, span=span), span=span
         ),
         _in_collating_order(
-            ctx, _pad_to(ctx, right_reg, left_reg, span=span), span=span
+            ctx, ctx.emit_pad_to(right_reg, left_reg, span=span), span=span
         ),
     )
 

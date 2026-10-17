@@ -1933,7 +1933,7 @@ class TestSearchBounds:
                 "    END-SEARCH.",
                 "    STOP RUN.",
             ],
-            max_steps=60000,
+            max_steps=65000,
         )
         region = _first_region(vm)
         assert _decode_zoned_unsigned(region, 1500, 4) == 301

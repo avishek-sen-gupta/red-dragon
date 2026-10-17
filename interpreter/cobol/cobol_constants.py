@@ -49,6 +49,7 @@ class ByteConstants:
     SIGN_ZONE_POSITIVE = 0xC0
     SIGN_ZONE_NEGATIVE = 0xD0
     EBCDIC_SPACE = 0x40
+    LATIN1_SPACE = 0x20
     EBCDIC_PLUS = 0x4E
     EBCDIC_MINUS = 0x60
     EBCDIC_SIGN_OFFSET = 0x12  # EBCDIC_MINUS - EBCDIC_PLUS
@@ -97,12 +98,9 @@ class BuiltinName:
     COBOL_APPLY_EDIT_PICTURE = "__cobol_apply_edit_picture"
     COBOL_APPLY_ALPHANUMERIC_EDIT = "__cobol_apply_alphanumeric_edit"
     COBOL_DE_EDIT = "__cobol_de_edit"
-    COBOL_STRING = "__cobol_string"
-    COBOL_UNSTRING = "__cobol_unstring"
     STRING_SLICE = "__string_slice"
     STRING_SPLICE = "__string_splice"
     STRING_ZFILL = "__string_zfill"
-    STRING_PAD_TO = "__string_pad_to"
     COBOL_DIGIT_IMAGE = "__cobol_digit_image"
     COBOL_ZONED_DISPLAY_IMAGE = "__cobol_zoned_display_image"
     COBOL_ZONED_STRIP_SIGN = "__cobol_zoned_strip_sign"

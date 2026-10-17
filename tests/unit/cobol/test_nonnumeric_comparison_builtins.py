@@ -1,16 +1,16 @@
-"""Builtins behind a nonnumeric comparison: a numeric item's digit image and space padding."""
+"""What a nonnumeric comparison runs: a numeric item's digit image builtin and space padding in IR."""
 
 from __future__ import annotations
 
 from cobol_numeric.number import from_literal
-from interpreter.cobol.byte_builtins import (
-    _builtin_cobol_digit_image,
-    _builtin_string_pad_to,
-)
+from interpreter.cobol.byte_builtins import _builtin_cobol_digit_image
 from interpreter.cobol.features import CobolFeature
+from interpreter.cobol.ir_emitter import IrEmitter
+from interpreter.register import Register
 from interpreter.types.typed_value import typed_from_runtime
 from interpreter.vm.vm_types import VMState
 from tests.covers import covers
+from tests.unit.cobol.emitted_ir import run_emitted
 
 
 def _args(*values):
@@ -35,8 +35,12 @@ def test_digit_image_is_every_digit_position_without_the_sign_and_p_positions_as
 
 @covers(CobolFeature.COMPARISON_OPERATORS)
 def test_pad_to_extends_only_the_shorter_operand_with_spaces():
+    def pad(e: IrEmitter, registers: tuple[Register, ...]) -> Register:
+        value, other = registers
+        return e.ctx.emit_pad_to(value, other, span=None)
+
     padded = [
-        _builtin_string_pad_to(_args(value, other), VMState()).value
+        run_emitted(pad, (value, other))
         for value, other in (("AB", "ABCDE"), ("ABCDE", "AB"), ("", "XYZ"))
     ]
     assert padded == ["AB   ", "ABCDE", "   "]
