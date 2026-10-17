@@ -87,12 +87,15 @@ def strip_cobol_literal(value: str) -> str:
     passing such a value to ``const_to_reg`` so the stored value is the raw
     character content rather than a string with embedded quote chars.
 
+    A doubled delimiter inside the literal stands for one delimiter character
+    (ANSI X3.23-1985 nonnumeric literals): ``'"A""B"'`` is ``A"B``.
+
     Pure numeric strings (``"10"``, ``"0"``) pass through unchanged — they
     contain no surrounding delimiters and ``const_to_reg`` will emit them as
     strings (which is correct for alphanumeric operands).
     """
     if len(value) >= 2 and value[0] in ('"', "'") and value[-1] == value[0]:
-        return value[1:-1]
+        return value[1:-1].replace(value[0] * 2, value[0])
     return value
 
 
@@ -1450,11 +1453,12 @@ class EmitContext:
         pic_reg = self.const_to_reg(td.pic_string, span=span)
         currency_reg = self.const_to_reg(td.currency, span=span)
         scale_reg = self.const_to_reg(td.scale, span=span)
+        comma_reg = self.const_to_reg(td.decimal_point_is_comma, span=span)
         self.emit_inst(
             CallFunction(
                 result_reg=formatted_reg,
                 func_name=FuncName(BuiltinName.COBOL_APPLY_EDIT_PICTURE),
-                args=(value_reg, pic_reg, currency_reg, scale_reg),
+                args=(value_reg, pic_reg, currency_reg, scale_reg, comma_reg),
             ),
             span=span,
         )

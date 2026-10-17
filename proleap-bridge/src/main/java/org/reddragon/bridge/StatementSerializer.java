@@ -3112,7 +3112,7 @@ public final class StatementSerializer {
         }
         try {
             if (vs.getCtx() != null) {
-                return vs.getCtx().getText();
+                return NumericLiteralText.canonical(vs.getCtx().getText());
             }
         } catch (Exception e) {
             // fall through
@@ -4088,7 +4088,7 @@ public final class StatementSerializer {
     private static JsonObject litNode(String value) {
         JsonObject lit = new JsonObject();
         lit.addProperty("kind", "lit");
-        lit.addProperty("value", value);
+        lit.addProperty("value", NumericLiteralText.canonical(value));
         return lit;
     }
 

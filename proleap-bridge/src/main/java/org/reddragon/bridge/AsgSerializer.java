@@ -98,6 +98,7 @@ public final class AsgSerializer {
             asg.addProperty("program_id", cu.getName());
         }
 
+        NumericLiteralText.useDecimalPointIsComma(hasDecimalPointIsComma(pu));
         serializeDataDivision(pu, asg);
         serializeProcedureDivision(pu, asg);
         asg.add("file_control", serializeFileControl(pu));
@@ -123,8 +124,9 @@ public final class AsgSerializer {
      * mis-size fields — a multi-character currency literal changes every
      * affected field's byte width (red-dragon-3o5f).
      *
-     * <p>DECIMAL-POINT IS COMMA is deliberately NOT emitted: it changes numeric
-     * literals as well as pictures and is tracked separately.
+     * <p>DECIMAL-POINT IS COMMA is emitted as {@code "decimal_point_is_comma"}.
+     * Numeric literals are already written with a period by then (see
+     * {@link NumericLiteralText}); the flag is what the pictures need.
      *
      * <p>Returns an EMPTY object when there is no SPECIAL-NAMES paragraph, so
      * the caller can omit the key entirely and Python keeps its '$' default.
@@ -136,6 +138,9 @@ public final class AsgSerializer {
         SpecialNamesParagraph snp = env.getSpecialNamesParagraph();
         if (snp == null) return result;
         serializeProgramCollatingSequence(env, snp, result);
+        if (snp.getDecimalPointClause() != null) {
+            result.addProperty("decimal_point_is_comma", true);
+        }
         CurrencySignClause csc = snp.getCurrencySignClause();
         if (csc == null) return result;
         if (csc.getCurrencyLiteral() != null) {
@@ -147,6 +152,12 @@ public final class AsgSerializer {
                     literalText(csc.getPictureSymbolLiteral()));
         }
         return result;
+    }
+
+    private static boolean hasDecimalPointIsComma(ProgramUnit pu) {
+        EnvironmentDivision env = pu.getEnvironmentDivision();
+        return env != null && env.getSpecialNamesParagraph() != null
+                && env.getSpecialNamesParagraph().getDecimalPointClause() != null;
     }
 
     /**

@@ -293,6 +293,8 @@ Conditions are serialized by the Java bridge as recursive JSON trees (not raw so
 
 A relation with a nonnumeric operand (a nonnumeric literal or figurative, a reference-modified slice, or an alphanumeric, edited or group item) compares characters. A numeric operand there becomes its digit characters without the sign: an integer literal as written, an unsigned zoned item its own bytes, any other numeric item the digits of its value (`__cobol_digit_image`). The shorter operand is then extended on the right with spaces (`__string_pad_to`, at run time, so variable-length reference modification pads too). Two numeric operands compare by value.
 
+A doubled delimiter inside a nonnumeric literal stands for one delimiter character (`"A""B"` is `A"B`), in a VALUE and in the procedure division. Under SPECIAL-NAMES DECIMAL-POINT IS COMMA the bridge writes every numeric literal with a period for its point (`1234,56` reaches Python as `1234.56`) and emits `"decimal_point_is_comma": true`; the pictures are parsed with the period and comma exchanged, and an edited image swaps them back (`PIC 9.999.999,99` holding 1234567.89 is `1.234.567,89`).
+
 An ALL literal (`ALL "AB"`) is its literal repeated to the size of the associated item and truncated on the right: the receiver of a MOVE, the item a VALUE initialises, the parent of a level-88 VALUE, and the other operand of a relation (once, when that operand has no size of its own). The bridge carries the ALL as data (`"all"` on a MOVE source and a level-88 value, `value_is_all` on an item, `{"kind":"figurative","value":"ALL","literal":...}` in a relation); ALL with a figurative constant is that figurative constant.
 
 ## Known Gaps

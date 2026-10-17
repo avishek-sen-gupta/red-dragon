@@ -507,29 +507,36 @@ def _builtin_cobol_apply_edit_picture(
 ) -> BuiltinResult:
     """Apply a COBOL numeric edit picture to a numeric value string.
 
-    Args: [value_str: str, pic_string: str, currency: str, scale: int]
+    Args: [value_str: str, pic_string: str, currency: str, scale: int,
+    decimal_point_is_comma: bool]
     Returns: str — the edited display string, exactly the picture's width.
 
     ``currency`` is the program's CURRENCY SIGN symbol; ``scale`` the picture's
-    P scaling exponent.
+    P scaling exponent; ``decimal_point_is_comma`` SPECIAL-NAMES DECIMAL-POINT
+    IS COMMA.
     """
-    if len(args) < 4 or any(_is_symbolic(a.value) for a in args):
+    if len(args) < 5 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
     from cobol_asg.edit_picture import format_edited
 
     value_str, pic_string = str(args[0].value), str(args[1].value)
     currency, scale = str(args[2].value), int(args[3].value)
-    return BuiltinResult(value=format_edited(value_str, pic_string, currency, scale))
+    return BuiltinResult(
+        value=format_edited(value_str, pic_string, currency, scale, bool(args[4].value))
+    )
 
 
 def _builtin_cobol_de_edit(args: list[TypedValue], vm: VMState) -> BuiltinResult:
-    """Args: [image: str, pic_string: str, currency: str]. Returns the de-edited number."""
+    """Args: [image: str, pic_string: str, currency: str, decimal_point_is_comma:
+    bool]. Returns the de-edited number."""
     if any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
     from cobol_asg.edit_picture import de_edit
 
-    image, pic_string, currency = (str(a.value) for a in args)
-    return BuiltinResult(value=de_edit(image, pic_string, currency))
+    image, pic_string, currency = (str(a.value) for a in args[:3])
+    return BuiltinResult(
+        value=de_edit(image, pic_string, currency, bool(args[3].value))
+    )
 
 
 _INSPECT_PHRASE_ARGS = 6

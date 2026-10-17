@@ -866,6 +866,7 @@ def _emit_de_edit(
             image_reg,
             ctx.const_to_reg(td.pic_string, span=span),
             ctx.const_to_reg(td.currency, span=span),
+            ctx.const_to_reg(td.decimal_point_is_comma, span=span),
         ),
         span=span,
     )

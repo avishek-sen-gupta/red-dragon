@@ -114,6 +114,9 @@ class CobolField:
     # descriptor at construction, so it has to arrive as constructor state
     # (red-dragon-3o5f).
     currency_symbol: str = DEFAULT_CURRENCY
+    # SPECIAL-NAMES DECIMAL-POINT IS COMMA, program-wide constructor state for
+    # the same reason as the currency symbol.
+    decimal_point_is_comma: bool = False
     span: SourceSpan | None = None
     # The addressing mode's pointer type, for a USAGE POINTER item. Like the
     # currency symbol it is program-wide but arrives as constructor state,
@@ -134,6 +137,7 @@ class CobolField:
                 blank_when_zero=self.blank_when_zero,
                 currency=self.currency_symbol,
                 pointer_type=self.pointer_type,
+                decimal_point_is_comma=self.decimal_point_is_comma,
             )
         except UnsupportedEditPictureError as exc:
             # parse_pic sees only the picture. This is a load-time abort, so
@@ -148,6 +152,7 @@ class CobolField:
         data: dict,
         currency: str = DEFAULT_CURRENCY,
         pointer_type: CobolTypeDescriptor = FULLWORD_POINTER,
+        decimal_point_is_comma: bool = False,
     ) -> CobolField:
         sign_data = data.get("sign", {})
         return cls(
@@ -162,7 +167,7 @@ class CobolField:
             value_is_numeric=data.get("value_is_numeric", False),
             redefines=data.get("redefines", ""),
             children=[
-                CobolField.from_dict(c, currency, pointer_type)
+                CobolField.from_dict(c, currency, pointer_type, decimal_point_is_comma)
                 for c in data.get("children", [])
             ],
             occurs=data.get("occurs", 0),
@@ -182,6 +187,7 @@ class CobolField:
             filler=data.get("filler", False),
             currency_symbol=currency,
             pointer_type=pointer_type,
+            decimal_point_is_comma=decimal_point_is_comma,
             span=SourceSpan.from_dict(data),
         )
 
@@ -364,6 +370,9 @@ class CobolASG:
     # the ASG level so to_dict can round-trip it — without that, reviving a
     # serialised ASG silently reverts every edited field to '$'.
     currency_symbol: str = DEFAULT_CURRENCY
+    # SPECIAL-NAMES DECIMAL-POINT IS COMMA, held here to round-trip like the
+    # currency symbol.
+    decimal_point_is_comma: bool = False
     # OBJECT-COMPUTER PROGRAM COLLATING SEQUENCE: the ALPHABET clause it names,
     # the native sequence when the clause is absent.
     collating_sequence: Alphabet = NATIVE_ALPHABET
@@ -382,28 +391,29 @@ class CobolASG:
         currency = _currency_from_special_names(data)
         collating = data.get("special_names", {}).get("program_collating_sequence", {})
         pointer = addressing_mode.pointer_type
+        comma = bool(data.get("special_names", {}).get("decimal_point_is_comma", False))
         return cls(
             program_id=data.get("program_id", ""),
             file_control=[
                 FileControlEntry.from_dict(e) for e in data.get("file_control", [])
             ],
             data_fields=[
-                CobolField.from_dict(f, currency, pointer)
+                CobolField.from_dict(f, currency, pointer, comma)
                 for f in data.get("data_fields", [])
             ],
             linkage_fields=[
-                CobolField.from_dict(f, currency, pointer)
+                CobolField.from_dict(f, currency, pointer, comma)
                 for f in data.get("linkage_fields", [])
             ],
             procedure_using=[
                 CallUsingParam.from_dict(p) for p in data.get("procedure_using", [])
             ],
             local_storage_fields=[
-                CobolField.from_dict(f, currency, pointer)
+                CobolField.from_dict(f, currency, pointer, comma)
                 for f in data.get("local_storage_fields", [])
             ],
             file_fields=[
-                CobolField.from_dict(f, currency, pointer)
+                CobolField.from_dict(f, currency, pointer, comma)
                 for f in data.get("file_fields", [])
             ],
             file_descriptions=[
@@ -419,6 +429,7 @@ class CobolASG:
                 CobolSection.from_dict(s) for s in data.get("declaratives", [])
             ],
             currency_symbol=currency,
+            decimal_point_is_comma=comma,
             collating_sequence=Alphabet.from_parts(
                 collating.get("name", NATIVE_ALPHABET.name),
                 collating.get("kind", NATIVE_ALPHABET.kind),
@@ -460,7 +471,7 @@ class CobolASG:
             {"currency_sign": self.currency_symbol}
             if self.currency_symbol != DEFAULT_CURRENCY
             else {}
-        )
+        ) | ({"decimal_point_is_comma": True} if self.decimal_point_is_comma else {})
         if self.collating_sequence == NATIVE_ALPHABET:
             return currency
         return currency | {
