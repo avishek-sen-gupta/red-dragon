@@ -511,6 +511,7 @@ class TestByteBuiltinsRegistration:
             "__midrange",
             "__variance",
             "__standard_deviation",
+            "__cobol_program_present",
             "__ord_max",
             "__ord_min",
             "__concatenate",

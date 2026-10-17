@@ -76,6 +76,7 @@ class BuiltinName:
     STRING_SPLIT = "__string_split"
     STRING_CONCAT = "__string_concat"
     STRING_CONCAT_PAIR = "__string_concat_pair"
+    PROGRAM_PRESENT = "__cobol_program_present"
     INT_TO_BINARY_BYTES = "__int_to_binary_bytes"
     BINARY_BYTES_TO_INT = "__binary_bytes_to_int"
     FLOAT_TO_BYTES = "__float_to_bytes"

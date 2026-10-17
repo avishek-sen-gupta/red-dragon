@@ -183,6 +183,7 @@ def _run_unit(prog: str, tmp_path: Path, max_steps: int) -> Path:
         io_provider=provider,
         builtins=core_builtins(),
         initial_vm=initial_vm_state(io_provider=provider),
+        permit_unresolved_call_targets=False,
     )
     return print_path
 
