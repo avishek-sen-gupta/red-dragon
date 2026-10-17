@@ -446,6 +446,8 @@ class TestByteBuiltinsRegistration:
             "__string_boundary_split",
             "__string_splice",
             "__string_zfill",
+            "__string_pad_to",
+            "__cobol_digit_image",
             "__upper_case",
             "__lower_case",
             "__cobol_trim",
