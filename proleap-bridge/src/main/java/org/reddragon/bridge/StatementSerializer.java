@@ -2097,7 +2097,7 @@ public final class StatementSerializer {
             if (stmt.getFileCall() != null) {
                 obj.addProperty("file_name", extractCallName(stmt.getFileCall()));
             }
-            if (stmt.isNextRecord()) {
+            if (((CobolParser.ReadStatementContext) stmt.getCtx()).NEXT() != null) {
                 obj.addProperty("next_record", true);
             }
             io.proleap.cobol.asg.metamodel.procedure.read.Into into = stmt.getInto();
