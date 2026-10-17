@@ -36,6 +36,9 @@ public final class DataFieldSerializer {
     /** Bytes a USAGE POINTER item occupies: 4 under LP(32), 8 under LP(64). */
     private static int pointerSize = 4;
 
+    /** Bytes a USAGE INDEX data item occupies: a fullword (IBM Enterprise COBOL LR, USAGE INDEX). */
+    private static final int INDEX_ITEM_SIZE = 4;
+
     /** Running counter for disambiguating FILLER fields within a serialization session. */
     private int fillerCount = 0;
 
@@ -544,6 +547,9 @@ public final class DataFieldSerializer {
         if ("POINTER".equals(usage)) {
             return pointerSize;
         }
+        if ("INDEX".equals(usage)) {
+            return INDEX_ITEM_SIZE;
+        }
         if (pic.isEmpty()) {
             return 0;
         }
@@ -619,15 +625,17 @@ public final class DataFieldSerializer {
         return "";
     }
 
+    /**
+     * The item's USAGE: its own clause, else the nearest enclosing group's, else
+     * DISPLAY. "The USAGE clause written at the group level applies to each
+     * elementary item in the group" (ANSI X3.23-1985 / ISO 1989 USAGE clause).
+     */
     private static String extractUsage(DataDescriptionEntryGroup group) {
-        try {
-            if (group.getUsageClause() != null && group.getUsageClause().getUsageClauseType() != null) {
-                return mapUsageType(group.getUsageClause().getUsageClauseType().name());
-            }
-        } catch (Exception e) {
-            LOG.fine("No USAGE clause for " + group.getName());
+        if (group.getUsageClause() != null && group.getUsageClause().getUsageClauseType() != null) {
+            return mapUsageType(group.getUsageClause().getUsageClauseType().name());
         }
-        return "DISPLAY";
+        DataDescriptionEntryGroup parent = group.getParentDataDescriptionEntryGroup();
+        return parent != null ? extractUsage(parent) : "DISPLAY";
     }
 
     /**

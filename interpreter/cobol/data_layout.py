@@ -18,6 +18,7 @@ from typing import TypeVar
 from cobol_asg.asg_types import CobolField
 from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from cobol_asg.condition_name import ConditionName, ConditionValue
+from cobol_asg.index_types import INDEX_ITEM
 from cobol_asg.ref_mod import RefModOperand
 from cobol_asg.source_span import SourceSpan
 from interpreter.cobol.figurative_constants import repeat_to_width
@@ -797,11 +798,6 @@ def build_data_layout(fields: list[CobolField]) -> DataLayout:
     return DataLayout(fields=top_fields, groups=renamed_groups, total_bytes=total)
 
 
-_INDEX_ITEM_TYPE = CobolTypeDescriptor(
-    category=CobolDataCategory.BINARY, total_digits=9
-)
-
-
 def _index_declarations(fields: list[CobolField]) -> Iterator[tuple[str, str]]:
     """Yield (index name, indexed table name) for every INDEXED BY, in source order."""
     for f in fields:
@@ -832,10 +828,10 @@ def build_index_layout(*sections: list[CobolField]) -> DataLayout:
         for index_name, table_name in _index_declarations(section):
             items[index_name] = FieldLayout(
                 name=index_name,
-                type_descriptor=_INDEX_ITEM_TYPE,
+                type_descriptor=INDEX_ITEM,
                 offset=offset,
-                byte_length=_INDEX_ITEM_TYPE.byte_length,
+                byte_length=INDEX_ITEM.byte_length,
             )
             owners[index_name] = table_name
-            offset += _INDEX_ITEM_TYPE.byte_length
+            offset += INDEX_ITEM.byte_length
     return DataLayout(fields=items, total_bytes=offset, index_owner=owners)

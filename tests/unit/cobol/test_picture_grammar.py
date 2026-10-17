@@ -136,6 +136,19 @@ class TestTableTwelveSizes:
         assert parse_pic("ZZZ.99CR").byte_length == 8
 
 
+class TestUsageIndex:
+    @covers(CobolFeature.USAGE_INDEX)
+    def test_an_index_data_item_is_a_fullword_binary(self):
+        # An index data item has no PICTURE and occupies a fullword (IBM
+        # Enterprise COBOL LR, USAGE INDEX).
+        desc = parse_pic("", usage="INDEX")
+        assert (desc.category, desc.byte_length, desc.signed) == (
+            CobolDataCategory.BINARY,
+            4,
+            False,
+        )
+
+
 class TestRulesTheGrammarCannotEnforce:
     @covers(CobolFeature.PIC_CLAUSE)
     def test_too_many_digit_positions_raises(self):
