@@ -178,6 +178,9 @@ class RealFileIOProvider(CobolIOProvider):
     ) -> IOResult:
         if filename in self._files:
             return FileLogicStatus.ALREADY_OPEN.result()
+        if self._extending_absent(filename, OpenMode(mode)):
+            logger.warning("OPEN EXTEND %s: file not present", filename)
+            return _OPEN_FAILED
         return self._open_closed(
             filename,
             OpenMode(mode),
@@ -186,6 +189,10 @@ class RealFileIOProvider(CobolIOProvider):
             key_offset,
             key_length,
         )
+
+    def _extending_absent(self, filename: str, mode: OpenMode) -> bool:
+        path = self._resolve_path(filename, self._assign_to(filename))
+        return mode is OpenMode.EXTEND and not path.exists()
 
     def _open_closed(
         self,

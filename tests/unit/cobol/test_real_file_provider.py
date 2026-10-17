@@ -42,7 +42,7 @@ class TestRealFileIOProvider:
         r = prov2._read_record("SEQ-FILE", "", "PGM")
         prov2._close_file("SEQ-FILE", "PGM")
         assert r.status == "00"
-        assert r.data is not None and "HELLO" in r.data
+        assert r.data == "HELLO     "
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_path_override_takes_precedence(self, tmp_path: Path) -> None:
@@ -80,8 +80,12 @@ class TestRealFileIOProvider:
         prov = _provider(
             tmp_path, [{"file_name": "MISSING", "assign_to": "nonexistent.dat"}]
         )
-        r = prov._open_file("MISSING", "INPUT", 10, "SEQUENTIAL", 0, 0, "PGM")
-        assert r.status == "35"
+        statuses = [
+            prov._open_file("MISSING", mode, 10, "SEQUENTIAL", 0, 0, "PGM").status
+            for mode in ("INPUT", "I-O", "EXTEND")
+        ]
+        assert statuses == ["35", "35", "35"]
+        assert not (tmp_path / "nonexistent.dat").exists()
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_read_without_open_returns_47(self, tmp_path: Path) -> None:
@@ -122,7 +126,7 @@ class TestRealFileIOProvider:
         r = prov2._read_record("IDX-FILE", "BBB", "PGM")
         prov2._close_file("IDX-FILE", "PGM")
         assert r.status == "00"
-        assert r.data is not None and r.data[:3] == "BBB"
+        assert r.data == "BBBFILLER "
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_sequential_eof_returns_10(self, tmp_path: Path) -> None:

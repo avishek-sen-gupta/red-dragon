@@ -62,3 +62,40 @@ def test_misused_sequential_file_verbs_report_logic_errors(
         io_provider=RealFileIOProvider(base_dir=tmp_path),
     )
     assert capsys.readouterr().out == "48\n47\n41\n46\n42\n43\n48\n"
+
+
+@covers(CobolFeature.OPEN)
+def test_open_extend_of_an_absent_file_fails_with_35(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    source = to_fixed(
+        [
+            "IDENTIFICATION DIVISION.",
+            "PROGRAM-ID. FEXT.",
+            "ENVIRONMENT DIVISION.",
+            "INPUT-OUTPUT SECTION.",
+            "FILE-CONTROL.",
+            '    SELECT F ASSIGN TO "absent" FILE STATUS IS ST.',
+            "DATA DIVISION.",
+            "FILE SECTION.",
+            "FD F.",
+            "01 F-REC PIC X(4).",
+            "WORKING-STORAGE SECTION.",
+            "01 ST PIC XX.",
+            "PROCEDURE DIVISION.",
+            "MAIN-PARA.",
+            "    OPEN EXTEND F. DISPLAY ST.",
+            '    MOVE "AAAA" TO F-REC. WRITE F-REC. DISPLAY ST.',
+            "    STOP RUN.",
+        ]
+    )
+    run(
+        source=source,
+        language="cobol",
+        max_steps=5000,
+        io_provider=RealFileIOProvider(base_dir=tmp_path),
+    )
+    assert (capsys.readouterr().out, (tmp_path / "absent").exists()) == (
+        "35\n48\n",
+        False,
+    )
