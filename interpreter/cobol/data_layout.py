@@ -722,13 +722,27 @@ def _owned_renames(fields: Sequence[CobolField]) -> list[tuple[CobolField, str]]
 
 def laid_end_to_end(fields: Sequence[CobolField]) -> list[CobolField]:
     """Top-level items at consecutive offsets in the order given. A REDEFINES or
-    RENAMES item takes its position from what it names, so it keeps its own and
-    occupies no bytes of the run."""
-    spans = [0 if _positioned_by_name(f) else _compute_group_length(f) for f in fields]
+    RENAMES item takes its position from what it names, so it keeps its own; a
+    redefining item longer than the area it shares lengthens that area."""
     return [
-        f if _positioned_by_name(f) else replace(f, offset=end - span)
-        for f, span, end in zip(fields, spans, accumulate(spans), strict=True)
+        f if _positioned_by_name(f) else replace(f, offset=start)
+        for f, (start, _) in zip(fields, _storage_areas(fields), strict=True)
     ]
+
+
+def _storage_areas(fields: Sequence[CobolField]) -> list[tuple[int, int]]:
+    """For each top-level item, where the storage area it lies in starts and
+    where storage laid out so far ends."""
+    return list(accumulate(fields, _next_area, initial=(0, 0)))[1:]
+
+
+def _next_area(area: tuple[int, int], f: CobolField) -> tuple[int, int]:
+    start, end = area
+    if f.renames_from.name:
+        return area
+    if f.redefines:
+        return start, max(end, start + _compute_group_length(f))
+    return end, end + _compute_group_length(f)
 
 
 def _positioned_by_name(f: CobolField) -> bool:
@@ -767,8 +781,7 @@ def build_data_layout(fields: list[CobolField]) -> DataLayout:
         for name, group in top_groups.items()
     }
 
-    non_redefines_top = [f for f in non_renames_fields if not f.redefines]
-    total = sum(_compute_group_length(f) for f in non_redefines_top)
+    total = next(reversed(_storage_areas(non_renames_fields)), (0, 0))[1]
 
     logger.debug(
         "Data layout: %d top-level fields, %d top-level groups, %d total bytes",

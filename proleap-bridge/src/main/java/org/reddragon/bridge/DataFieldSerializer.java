@@ -57,15 +57,18 @@ public final class DataFieldSerializer {
         DataFieldSerializer instance = new DataFieldSerializer();
         JsonArray fields = new JsonArray();
         int runningOffset = 0;
+        int areaStart = 0;
 
         for (DataDescriptionEntry entry : entries) {
             if (entry instanceof DataDescriptionEntryGroup group) {
                 JsonObject field = instance.serializeGroup(group, runningOffset);
                 fields.add(field);
 
-                boolean isRedefines = group.getRedefinesClause() != null;
-                if (!isRedefines) {
+                if (group.getRedefinesClause() == null) {
+                    areaStart = runningOffset;
                     runningOffset += computeByteLength(group);
+                } else {
+                    runningOffset = Math.max(runningOffset, areaStart + computeByteLength(group));
                 }
             } else if (entry instanceof DataDescriptionEntryRename rename) {
                 JsonObject field = instance.serializeRename(rename);
