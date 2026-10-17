@@ -986,59 +986,55 @@ class UnstringStatement:
         return result
 
 
-@dataclass(frozen=True)
-class NoBoundary:
-    """No BEFORE/AFTER INITIAL clause present — the pattern scan is unbounded."""
+_NO_OPERAND = RefModOperand(name="")
 
 
-@dataclass(frozen=True)
-class BeforeAfterBoundary:
-    """A BEFORE INITIAL or AFTER INITIAL boundary limiting a scan region."""
-
-    kind: str  # "BEFORE" or "AFTER"
-    boundary_text: str
+def _operand(data: dict, field_name: str) -> RefModOperand:
+    return (
+        RefModOperand.from_dict(data[field_name]) if field_name in data else _NO_OPERAND
+    )
 
 
-BeforeAfter = NoBoundary | BeforeAfterBoundary
-
-
-def _before_after_from_dict(data: dict) -> BeforeAfter:
-    """A pattern/replacing entry carries at most one of "before"/"after" — the
-    grammar allows both (``inspectBeforeAfter*``) but real COBOL programs use
-    at most one per pattern; if both are present, BEFORE takes precedence."""
-    if "before" in data:
-        return BeforeAfterBoundary(kind="BEFORE", boundary_text=data["before"])
-    if "after" in data:
-        return BeforeAfterBoundary(kind="AFTER", boundary_text=data["after"])
-    return NoBoundary()
+def _bounds_to_dict(after: RefModOperand, before: RefModOperand) -> dict:
+    return {
+        **({"after": after.to_dict()} if after.name else {}),
+        **({"before": before.to_dict()} if before.name else {}),
+    }
 
 
 @dataclass(frozen=True)
 class TallyingFor:
-    """A single tallying pattern in INSPECT TALLYING."""
+    """A single tallying phrase in INSPECT TALLYING.
+
+    ``after`` / ``before`` are the AFTER and BEFORE INITIAL operands; one with
+    an empty name was not written. A phrase may carry both.
+    """
 
     mode: str  # "ALL", "LEADING", "CHARACTERS"
-    pattern: str = ""
-    boundary: BeforeAfter = field(default_factory=NoBoundary)
+    pattern: RefModOperand = _NO_OPERAND
+    after: RefModOperand = _NO_OPERAND
+    before: RefModOperand = _NO_OPERAND
 
     @classmethod
     def from_dict(cls, data: dict) -> TallyingFor:
         return cls(
             mode=data.get("mode", ""),
-            pattern=data.get("pattern", ""),
-            boundary=_before_after_from_dict(data),
+            pattern=_operand(data, "pattern"),
+            after=_operand(data, "after"),
+            before=_operand(data, "before"),
         )
 
     def to_dict(self) -> dict:
-        result = {"mode": self.mode, "pattern": self.pattern}
-        if isinstance(self.boundary, BeforeAfterBoundary):
-            result[self.boundary.kind.lower()] = self.boundary.boundary_text
-        return result
+        return {
+            "mode": self.mode,
+            **({"pattern": self.pattern.to_dict()} if self.pattern.name else {}),
+            **_bounds_to_dict(self.after, self.before),
+        }
 
 
 @dataclass(frozen=True)
 class TallyingGroup:
-    """One TALLYING target and the patterns counted into it.
+    """One TALLYING target and the phrases counted into it.
 
     INSPECT allows multiple independent targets in one statement:
     ``INSPECT src TALLYING cnt1 FOR ALL 'A' cnt2 FOR ALL 'B'`` — this mirrors
@@ -1046,58 +1042,64 @@ class TallyingGroup:
     carries its own tally target.
     """
 
-    target: str = ""
+    target: RefModOperand = _NO_OPERAND
     patterns: list[TallyingFor] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict) -> TallyingGroup:
         return cls(
-            target=data.get("target", ""),
+            target=_operand(data, "target"),
             patterns=[TallyingFor.from_dict(p) for p in data.get("patterns", [])],
         )
 
     def to_dict(self) -> dict:
         return {
-            "target": self.target,
+            "target": self.target.to_dict(),
             "patterns": [p.to_dict() for p in self.patterns],
         }
 
 
 @dataclass(frozen=True)
 class Replacing:
-    """A single replacing item in INSPECT REPLACING."""
+    """A single replacing phrase in INSPECT REPLACING."""
 
-    mode: str  # "ALL", "LEADING", "FIRST"
-    from_pattern: str = ""
-    to_pattern: str = ""
-    boundary: BeforeAfter = field(default_factory=NoBoundary)
+    mode: str  # "ALL", "LEADING", "FIRST", "CHARACTERS"
+    from_pattern: RefModOperand = _NO_OPERAND
+    to_pattern: RefModOperand = _NO_OPERAND
+    after: RefModOperand = _NO_OPERAND
+    before: RefModOperand = _NO_OPERAND
 
     @classmethod
     def from_dict(cls, data: dict) -> Replacing:
         return cls(
             mode=data.get("mode", ""),
-            from_pattern=data.get("from", ""),
-            to_pattern=data.get("to", ""),
-            boundary=_before_after_from_dict(data),
+            from_pattern=_operand(data, "from"),
+            to_pattern=_operand(data, "to"),
+            after=_operand(data, "after"),
+            before=_operand(data, "before"),
         )
 
     def to_dict(self) -> dict:
-        result = {"mode": self.mode, "from": self.from_pattern, "to": self.to_pattern}
-        if isinstance(self.boundary, BeforeAfterBoundary):
-            result[self.boundary.kind.lower()] = self.boundary.boundary_text
-        return result
+        return {
+            "mode": self.mode,
+            **({"from": self.from_pattern.to_dict()} if self.from_pattern.name else {}),
+            "to": self.to_pattern.to_dict(),
+            **_bounds_to_dict(self.after, self.before),
+        }
 
 
 @dataclass(frozen=True)
 class InspectStatement:
-    """INSPECT source TALLYING|REPLACING ..."""
+    """INSPECT source TALLYING|REPLACING|TALLYING ... REPLACING|CONVERTING ..."""
 
-    inspect_type: str = ""  # "TALLYING", "REPLACING", or "CONVERTING"
+    inspect_type: str = ""  # TALLYING, REPLACING, TALLYING_REPLACING, CONVERTING
     source: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
     tallying_groups: list[TallyingGroup] = field(default_factory=list)
     replacings: list[Replacing] = field(default_factory=list)
-    converting_from: str = ""  # INSPECT ... CONVERTING <from> TO <to>
-    converting_to: str = ""
+    converting_from: RefModOperand = _NO_OPERAND
+    converting_to: RefModOperand = _NO_OPERAND
+    converting_after: RefModOperand = _NO_OPERAND
+    converting_before: RefModOperand = _NO_OPERAND
     span: SourceSpan | None = None
 
     @classmethod
@@ -1109,8 +1111,10 @@ class InspectStatement:
                 TallyingGroup.from_dict(g) for g in data.get("tallying_groups", [])
             ],
             replacings=[Replacing.from_dict(r) for r in data.get("replacings", [])],
-            converting_from=data.get("converting_from", ""),
-            converting_to=data.get("converting_to", ""),
+            converting_from=_operand(data, "converting_from"),
+            converting_to=_operand(data, "converting_to"),
+            converting_after=_operand(data, "after"),
+            converting_before=_operand(data, "before"),
             span=SourceSpan.from_dict(data),
         )
 
@@ -1119,14 +1123,26 @@ class InspectStatement:
             "type": "INSPECT",
             "inspect_type": self.inspect_type,
             "source": self.source.to_dict(),
+            **(
+                {"tallying_groups": [g.to_dict() for g in self.tallying_groups]}
+                if self.tallying_groups
+                else {}
+            ),
+            **(
+                {"replacings": [r.to_dict() for r in self.replacings]}
+                if self.replacings
+                else {}
+            ),
+            **(
+                {
+                    "converting_from": self.converting_from.to_dict(),
+                    "converting_to": self.converting_to.to_dict(),
+                    **_bounds_to_dict(self.converting_after, self.converting_before),
+                }
+                if self.inspect_type == "CONVERTING"
+                else {}
+            ),
         }
-        if self.inspect_type == "TALLYING":
-            result["tallying_groups"] = [g.to_dict() for g in self.tallying_groups]
-        elif self.inspect_type == "REPLACING":
-            result["replacings"] = [r.to_dict() for r in self.replacings]
-        elif self.inspect_type == "CONVERTING":
-            result["converting_from"] = self.converting_from
-            result["converting_to"] = self.converting_to
         if self.span is not None:
             self.span.write_into(result)
         return result

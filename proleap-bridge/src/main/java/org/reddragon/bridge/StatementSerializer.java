@@ -1497,21 +1497,148 @@ public final class StatementSerializer {
     }
 
     /**
-     * Emits "before"/"after" string properties on obj from a BeforeAfterPhrase
-     * list (red-dragon-4q25.13). A pattern/replacing entry may carry zero, one,
-     * or (per the grammar's inspectBeforeAfter*) both.
+     * An INSPECT operand: a data reference with its qualifiers and subscripts,
+     * or {"name": text} for a literal or figurative constant (red-dragon-sl30.40).
      */
+    private static JsonObject inspectOperand(ValueStmt vs) {
+        if (vs instanceof CallValueStmt && ((CallValueStmt) vs).getCall() != null) {
+            return serializeRef(((CallValueStmt) vs).getCall());
+        }
+        CobolParser.LiteralContext repeated = allLiteralOf(vs);
+        JsonObject lit = new JsonObject();
+        lit.addProperty("name", repeated != null ? repeated.getText() : extractValueStmtText(vs));
+        return lit;
+    }
+
+    /**
+     * The literal of an {@code ALL literal} figurative pattern, else null. The
+     * grammar lets {@code ALL "A" ... ALL "B"} read the second {@code ALL "B"}
+     * as a figurative operand of the first phrase; it starts a new ALL phrase.
+     */
+    private static CobolParser.LiteralContext allLiteralOf(ValueStmt vs) {
+        if (!(vs instanceof LiteralValueStmt)) return null;
+        Literal lit = ((LiteralValueStmt) vs).getLiteral();
+        if (lit == null || !(lit.getCtx() instanceof CobolParser.LiteralContext)) return null;
+        return allRepeatedLiteral((CobolParser.LiteralContext) lit.getCtx());
+    }
+
+    /** Adds "before"/"after" operands; a phrase may carry both. */
     private static void addBeforeAfter(
             JsonObject obj,
             List<io.proleap.cobol.asg.metamodel.procedure.inspect.BeforeAfterPhrase> phrases) {
         for (io.proleap.cobol.asg.metamodel.procedure.inspect.BeforeAfterPhrase bap : phrases) {
-            String key = (bap.getBeforeAfterType()
+            String bound = (bap.getBeforeAfterType()
                     == io.proleap.cobol.asg.metamodel.procedure.inspect.BeforeAfterPhrase.BeforeAfterType.BEFORE)
                     ? "before" : "after";
             if (bap.getDataItemValueStmt() != null) {
-                obj.addProperty(key, extractValueStmtText(bap.getDataItemValueStmt()));
+                obj.add(bound, inspectOperand(bap.getDataItemValueStmt()));
             }
         }
+    }
+
+    /** A phrase and where it starts in the source, so phrases keep their written order. */
+    private record PositionedPhrase(int start, JsonObject phrase) {}
+
+    private static int startOf(io.proleap.cobol.asg.metamodel.ASGElement element) {
+        return element.getCtx().getStart().getTokenIndex();
+    }
+
+    /** The mode a pattern runs under: an {@code ALL literal} pattern switches it to ALL. */
+    private static String modeFor(String groupMode, ValueStmt pattern) {
+        return allLiteralOf(pattern) != null ? "ALL" : groupMode;
+    }
+
+    private static JsonArray tallyingPatterns(io.proleap.cobol.asg.metamodel.procedure.inspect.For forItem) {
+        List<PositionedPhrase> phrases = new java.util.ArrayList<>();
+        for (io.proleap.cobol.asg.metamodel.procedure.inspect.Characters chars : forItem.getCharacters()) {
+            JsonObject forObj = new JsonObject();
+            forObj.addProperty("mode", "CHARACTERS");
+            addBeforeAfter(forObj, chars.getBeforeAfterPhrases());
+            phrases.add(new PositionedPhrase(startOf(chars), forObj));
+        }
+        for (AllLeadingPhrase alp : forItem.getAllLeadingPhrase()) {
+            String mode = (alp.getAllLeadingsType() == AllLeadingPhrase.AllLeadingsType.ALL) ? "ALL" : "LEADING";
+            for (AllLeading al : alp.getAllLeadings()) {
+                ValueStmt pattern = al.getPatternDataItemValueStmt();
+                mode = modeFor(mode, pattern);
+                JsonObject forObj = new JsonObject();
+                forObj.addProperty("mode", mode);
+                if (pattern != null) {
+                    forObj.add("pattern", inspectOperand(pattern));
+                }
+                addBeforeAfter(forObj, al.getBeforeAfterPhrases());
+                phrases.add(new PositionedPhrase(startOf(al), forObj));
+            }
+        }
+        return inWrittenOrder(phrases);
+    }
+
+    private static JsonArray inWrittenOrder(List<PositionedPhrase> phrases) {
+        JsonArray out = new JsonArray();
+        phrases.stream()
+                .sorted(java.util.Comparator.comparingInt(PositionedPhrase::start))
+                .forEach(p -> out.add(p.phrase()));
+        return out;
+    }
+
+    private static JsonArray tallyingGroups(List<io.proleap.cobol.asg.metamodel.procedure.inspect.For> fors) {
+        JsonArray groups = new JsonArray();
+        for (io.proleap.cobol.asg.metamodel.procedure.inspect.For forItem : fors) {
+            JsonObject groupObj = new JsonObject();
+            if (forItem.getTallyCountDataItemCall() != null) {
+                groupObj.add("target", serializeRef(forItem.getTallyCountDataItemCall()));
+            }
+            groupObj.add("patterns", tallyingPatterns(forItem));
+            groups.add(groupObj);
+        }
+        return groups;
+    }
+
+    private static void addBy(JsonObject repObj, io.proleap.cobol.asg.metamodel.procedure.inspect.By by) {
+        if (by != null && by.getByValueStmt() != null) {
+            repObj.add("to", inspectOperand(by.getByValueStmt()));
+        }
+    }
+
+    private static List<PositionedPhrase> replacingPhrases(
+            io.proleap.cobol.asg.metamodel.procedure.inspect.Replacing replacing) {
+        List<PositionedPhrase> phrases = new java.util.ArrayList<>();
+        for (io.proleap.cobol.asg.metamodel.procedure.inspect.ReplacingCharacters chars : replacing.getCharacters()) {
+            JsonObject repObj = new JsonObject();
+            repObj.addProperty("mode", "CHARACTERS");
+            addBy(repObj, chars.getBy());
+            addBeforeAfter(repObj, chars.getBeforeAfterPhrases());
+            phrases.add(new PositionedPhrase(startOf(chars), repObj));
+        }
+        for (ReplacingAllLeadings rals : replacing.getAllLeadings()) {
+            String mode;
+            switch (rals.getReplacingAllLeadingsType()) {
+                case FIRST: mode = "FIRST"; break;
+                case LEADING: mode = "LEADING"; break;
+                default: mode = "ALL"; break;
+            }
+            for (ReplacingAllLeading ral : rals.getAllLeadings()) {
+                ValueStmt pattern = ral.getPatternDataItemValueStmt();
+                mode = modeFor(mode, pattern);
+                JsonObject repObj = new JsonObject();
+                repObj.addProperty("mode", mode);
+                if (pattern != null) {
+                    repObj.add("from", inspectOperand(pattern));
+                }
+                addBy(repObj, ral.getBy());
+                addBeforeAfter(repObj, ral.getBeforeAfterPhrases());
+                phrases.add(new PositionedPhrase(startOf(ral), repObj));
+            }
+        }
+        return phrases;
+    }
+
+    private static JsonArray replacings(List<io.proleap.cobol.asg.metamodel.procedure.inspect.Replacing> replacings) {
+        List<PositionedPhrase> phrases = new java.util.ArrayList<>();
+        for (io.proleap.cobol.asg.metamodel.procedure.inspect.Replacing replacing : replacings) {
+            phrases.addAll(replacingPhrases(replacing));
+        }
+        return inWrittenOrder(phrases);
     }
 
     private static JsonObject serializeInspect(InspectStatement stmt) {
@@ -1521,78 +1648,27 @@ public final class StatementSerializer {
                 obj.add("source", serializeMoveOperand(stmt.getDataItemCall()));
             }
             InspectStatement.InspectType inspType = stmt.getInspectType();
-            if (inspType == InspectStatement.InspectType.TALLYING) {
+            if (inspType == InspectStatement.InspectType.TALLYING && stmt.getTallying() != null) {
                 obj.addProperty("inspect_type", "TALLYING");
-                if (stmt.getTallying() != null) {
-                    JsonArray groups = new JsonArray();
-                    for (io.proleap.cobol.asg.metamodel.procedure.inspect.For forItem : stmt.getTallying().getFors()) {
-                        JsonObject groupObj = new JsonObject();
-                        if (forItem.getTallyCountDataItemCall() != null) {
-                            groupObj.addProperty("target",
-                                    extractCallName(forItem.getTallyCountDataItemCall()));
-                        }
-                        JsonArray patterns = new JsonArray();
-                        for (AllLeadingPhrase alp : forItem.getAllLeadingPhrase()) {
-                            String mode = (alp.getAllLeadingsType() == AllLeadingPhrase.AllLeadingsType.ALL) ? "ALL" : "LEADING";
-                            for (AllLeading al : alp.getAllLeadings()) {
-                                JsonObject forObj = new JsonObject();
-                                forObj.addProperty("mode", mode);
-                                if (al.getPatternDataItemValueStmt() != null) {
-                                    forObj.addProperty("pattern",
-                                            extractValueStmtText(al.getPatternDataItemValueStmt()));
-                                }
-                                addBeforeAfter(forObj, al.getBeforeAfterPhrases());
-                                patterns.add(forObj);
-                            }
-                        }
-                        groupObj.add("patterns", patterns);
-                        groups.add(groupObj);
-                    }
-                    obj.add("tallying_groups", groups);
-                }
-            } else if (inspType == InspectStatement.InspectType.REPLACING) {
+                obj.add("tallying_groups", tallyingGroups(stmt.getTallying().getFors()));
+            } else if (inspType == InspectStatement.InspectType.REPLACING && stmt.getReplacing() != null) {
                 obj.addProperty("inspect_type", "REPLACING");
-                if (stmt.getReplacing() != null) {
-                    JsonArray replacings = new JsonArray();
-                    for (ReplacingAllLeadings rals : stmt.getReplacing().getAllLeadings()) {
-                        String mode;
-                        switch (rals.getReplacingAllLeadingsType()) {
-                            case ALL: mode = "ALL"; break;
-                            case FIRST: mode = "FIRST"; break;
-                            case LEADING: mode = "LEADING"; break;
-                            default: mode = "ALL"; break;
-                        }
-                        for (ReplacingAllLeading ral : rals.getAllLeadings()) {
-                            JsonObject repObj = new JsonObject();
-                            repObj.addProperty("mode", mode);
-                            if (ral.getPatternDataItemValueStmt() != null) {
-                                repObj.addProperty("from",
-                                        extractValueStmtText(ral.getPatternDataItemValueStmt()));
-                            }
-                            if (ral.getBy() != null && ral.getBy().getByValueStmt() != null) {
-                                repObj.addProperty("to",
-                                        extractValueStmtText(ral.getBy().getByValueStmt()));
-                            }
-                            addBeforeAfter(repObj, ral.getBeforeAfterPhrases());
-                            replacings.add(repObj);
-                        }
-                    }
-                    obj.add("replacings", replacings);
-                }
-            } else if (inspType == InspectStatement.InspectType.CONVERTING) {
+                obj.add("replacings", replacings(List.of(stmt.getReplacing())));
+            } else if (inspType == InspectStatement.InspectType.TALLYING_REPLACING
+                    && stmt.getTallyingReplacing() != null) {
+                obj.addProperty("inspect_type", "TALLYING_REPLACING");
+                obj.add("tallying_groups", tallyingGroups(stmt.getTallyingReplacing().getFors()));
+                obj.add("replacings", replacings(stmt.getTallyingReplacing().getReplacings()));
+            } else if (inspType == InspectStatement.InspectType.CONVERTING && stmt.getConverting() != null) {
                 obj.addProperty("inspect_type", "CONVERTING");
-                io.proleap.cobol.asg.metamodel.procedure.inspect.Converting conv =
-                        stmt.getConverting();
-                if (conv != null) {
-                    if (conv.getFromValueStmt() != null) {
-                        obj.addProperty("converting_from",
-                                extractValueStmtText(conv.getFromValueStmt()));
-                    }
-                    if (conv.getTo() != null && conv.getTo().getToValueStmt() != null) {
-                        obj.addProperty("converting_to",
-                                extractValueStmtText(conv.getTo().getToValueStmt()));
-                    }
+                io.proleap.cobol.asg.metamodel.procedure.inspect.Converting conv = stmt.getConverting();
+                if (conv.getFromValueStmt() != null) {
+                    obj.add("converting_from", inspectOperand(conv.getFromValueStmt()));
                 }
+                if (conv.getTo() != null && conv.getTo().getToValueStmt() != null) {
+                    obj.add("converting_to", inspectOperand(conv.getTo().getToValueStmt()));
+                }
+                addBeforeAfter(obj, conv.getBeforeAfterPhrases());
             }
         } catch (Exception e) {
             LOG.fine("Could not extract INSPECT operands: " + e.getMessage());

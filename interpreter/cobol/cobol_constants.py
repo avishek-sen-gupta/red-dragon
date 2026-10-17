@@ -101,6 +101,9 @@ class BuiltinName:
     COBOL_APPLY_EDIT_PICTURE = "__cobol_apply_edit_picture"
     COBOL_APPLY_ALPHANUMERIC_EDIT = "__cobol_apply_alphanumeric_edit"
     COBOL_DE_EDIT = "__cobol_de_edit"
+    COBOL_INSPECT_TALLY = "__cobol_inspect_tally"
+    COBOL_INSPECT_REPLACE = "__cobol_inspect_replace"
+    COBOL_INSPECT_CONVERT = "__cobol_inspect_convert"
     STRING_SLICE = "__string_slice"
     STRING_BOUNDARY_SLICE = "__string_boundary_slice"
     STRING_BOUNDARY_SPLIT = "__string_boundary_split"
@@ -177,6 +180,7 @@ class InspectType:
     TALLYING = "TALLYING"
     REPLACING = "REPLACING"
     CONVERTING = "CONVERTING"
+    TALLYING_REPLACING = "TALLYING_REPLACING"
 
 
 class DelimiterMode:

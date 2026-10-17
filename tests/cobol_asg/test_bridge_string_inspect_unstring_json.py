@@ -103,10 +103,16 @@ def test_inspect_emits_tallying_groups_for_multiple_targets(bridge_jar):
     stmt = _first_statement(obj)
     groups = stmt["tallying_groups"]
     assert len(groups) == 2
-    assert groups[0]["target"] == "WS-CNT-A"
-    assert groups[0]["patterns"][0]["pattern"] == "'A'"
-    assert groups[1]["target"] == "WS-CNT-B"
-    assert groups[1]["patterns"][0]["pattern"] == "'B'"
+    assert groups == [
+        {
+            "target": {"name": "WS-CNT-A"},
+            "patterns": [{"mode": "ALL", "pattern": {"name": "'A'"}}],
+        },
+        {
+            "target": {"name": "WS-CNT-B"},
+            "patterns": [{"mode": "ALL", "pattern": {"name": "'B'"}}],
+        },
+    ]
 
 
 def test_inspect_tallying_emits_before_initial_boundary(bridge_jar):
@@ -127,7 +133,7 @@ def test_inspect_tallying_emits_before_initial_boundary(bridge_jar):
     )
     stmt = _first_statement(obj)
     pattern = stmt["tallying_groups"][0]["patterns"][0]
-    assert pattern["before"] == "'.'"
+    assert pattern["before"] == {"name": "'.'"}
 
 
 def test_inspect_replacing_emits_after_initial_boundary(bridge_jar):
@@ -146,4 +152,73 @@ def test_inspect_replacing_emits_after_initial_boundary(bridge_jar):
     )
     stmt = _first_statement(obj)
     replacing = stmt["replacings"][0]
-    assert replacing["after"] == "'.'"
+    assert replacing["after"] == {"name": "'.'"}
+
+
+def test_inspect_emits_every_phrase_form_in_written_order(bridge_jar):
+    obj = _parse(
+        [
+            "IDENTIFICATION DIVISION.",
+            "PROGRAM-ID. T.",
+            "DATA DIVISION.",
+            "WORKING-STORAGE SECTION.",
+            "01 W PIC X(10).",
+            "01 T. 02 E PIC X OCCURS 5 INDEXED BY IX.",
+            "01 C PIC 9 OCCURS 3.",
+            "01 I PIC 9.",
+            "PROCEDURE DIVISION.",
+            "    INSPECT W TALLYING C (I) FOR CHARACTERS AFTER 'W'",
+            "        ALL 'A' BEFORE 'X' ALL E (IX) ALL 'D'",
+            "        REPLACING FIRST 'A' BY 'O' ALL 'C' BY '2'",
+            "        CHARACTERS BY 'Z' BEFORE 'Q' AFTER 'R'.",
+            "    INSPECT W CONVERTING 'AU' TO '23' BEFORE 'B' AFTER 'Q'.",
+            "    GOBACK.",
+        ],
+        bridge_jar,
+    )
+    combined, converting = obj["statements"][0], obj["statements"][1]
+    index_ref = [{"kind": "ref", "name": "I"}]
+    assert (
+        combined["inspect_type"],
+        combined["tallying_groups"],
+        combined["replacings"],
+    ) == (
+        "TALLYING_REPLACING",
+        [
+            {
+                "target": {"name": "C", "subscripts": index_ref},
+                "patterns": [
+                    {"mode": "CHARACTERS", "after": {"name": "'W'"}},
+                    {
+                        "mode": "ALL",
+                        "pattern": {"name": "'A'"},
+                        "before": {"name": "'X'"},
+                    },
+                    {
+                        "mode": "ALL",
+                        "pattern": {
+                            "name": "E",
+                            "subscripts": [{"kind": "ref", "name": "IX"}],
+                        },
+                    },
+                    {"mode": "ALL", "pattern": {"name": "'D'"}},
+                ],
+            }
+        ],
+        [
+            {"mode": "FIRST", "from": {"name": "'A'"}, "to": {"name": "'O'"}},
+            {"mode": "ALL", "from": {"name": "'C'"}, "to": {"name": "'2'"}},
+            {
+                "mode": "CHARACTERS",
+                "to": {"name": "'Z'"},
+                "before": {"name": "'Q'"},
+                "after": {"name": "'R'"},
+            },
+        ],
+    )
+    assert (
+        converting["converting_from"],
+        converting["converting_to"],
+        converting["before"],
+        converting["after"],
+    ) == ({"name": "'AU'"}, {"name": "'23'"}, {"name": "'B'"}, {"name": "'Q'"})
