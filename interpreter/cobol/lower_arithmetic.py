@@ -2216,7 +2216,10 @@ def _lower_display_operand(
         )
     else:
         display_reg = ctx.const_to_reg(
-            strip_cobol_literal(str(operand.name)), span=span
+            ctx.figuratives.characters.get(
+                operand.name.upper(), strip_cobol_literal(operand.name)
+            ),
+            span=span,
         )
 
     if operand.ref_mod_start is not None:
