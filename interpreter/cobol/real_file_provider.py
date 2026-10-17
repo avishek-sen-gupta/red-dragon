@@ -332,11 +332,13 @@ class RealFileIOProvider(CobolIOProvider):
             ),
         )
 
-    def _delete_record(self, filename: str, program: str) -> IOResult:
+    def _delete_record(self, filename: str, key: str, program: str) -> IOResult:
         return self._verb(
             filename,
             FileLogicStatus.UPDATE_NOT_PERMITTED,
             FileVerb(
-                OpenFile.update_check, lambda drv: drv.delete(), OpenFile.after_other
+                lambda file: file.delete_check(key),
+                lambda drv: drv.delete(self._files[filename].key_bytes(key)),
+                OpenFile.after_other,
             ),
         )

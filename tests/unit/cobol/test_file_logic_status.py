@@ -60,7 +60,7 @@ def test_write_and_rewrite_need_their_open_modes_and_a_current_record(
     statuses = [
         prov._write_record("F", "BBBB", "P").status,
         prov._rewrite_record("F", "BBBB", "P").status,
-        prov._delete_record("F", "P").status,
+        prov._delete_record("F", "", "P").status,
         prov._open_file("F", "INPUT", 4, _SEQ, 0, 0, "P").status,
         prov._rewrite_record("F", "BBBB", "P").status,
         prov._close_file("F", "P").status,

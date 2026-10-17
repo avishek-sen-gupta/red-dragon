@@ -16,7 +16,7 @@ from cobol_asg.cobol_statements import (
     StartStatement,
     WriteStatement,
 )
-from cobol_asg.file_enums import OpenMode
+from cobol_asg.file_enums import AccessMode, FileOrganization, OpenMode
 from cobol_asg.ref_mod import RefModOperand
 from cobol_asg.source_span import SourceSpan
 from interpreter.cobol.cobol_constants import BuiltinName
@@ -559,7 +559,7 @@ def _emit_invalid_key_branch(
     materialised: MaterialisedSectionedLayout,
     after_label: object,
     *,
-    span: SourceSpan | None = None,
+    span: SourceSpan | None,
 ) -> None:
     if not (invalid_key or not_invalid_key):
         return
@@ -595,7 +595,7 @@ def _write_source_reg(
     record_name: str,
     materialised: MaterialisedSectionedLayout,
     *,
-    span: SourceSpan | None = None,
+    span: SourceSpan | None,
 ) -> Register:
     """Resolve the byte-faithful data register for WRITE/REWRITE.
 
@@ -817,6 +817,50 @@ def lower_start(
     logger.info("START %s KEY %s %s", stmt.file_name, stmt.relop, stmt.key or "(none)")
 
 
+def _delete_key_reg(
+    ctx: EmitContext,
+    file_name: str,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> Register:
+    entries = {entry.file_name: entry for entry in ctx._asg.file_control}
+    if (
+        file_name not in entries
+        or entries[file_name].access_mode is AccessMode.SEQUENTIAL
+    ):
+        return ctx.const_to_reg("", span=span)
+    entry = entries[file_name]
+    if entry.organization is FileOrganization.RELATIVE:
+        return _relative_key_reg(ctx, entry.relative_key, materialised, span=span)
+    key_ref, key_rr = ctx.resolve_field_ref(
+        entry.record_key.name,
+        materialised,
+        entry.record_key.qualifiers,
+        entry.record_key.subscripts,
+        span=span,
+    )
+    return ctx.emit_read_region_raw(
+        key_rr, key_ref.fl, key_ref.offset_reg, extent=key_ref.extent, span=span
+    )
+
+
+def _relative_key_reg(
+    ctx: EmitContext,
+    key: RefModOperand,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> Register:
+    key_ref, key_rr = ctx.resolve_field_ref(
+        key.name, materialised, key.qualifiers, key.subscripts, span=span
+    )
+    value_reg = ctx.emit_decode_field(
+        key_rr, key_ref.fl, key_ref.offset_reg, extent=key_ref.extent, span=span
+    )
+    return ctx.emit_to_string(value_reg, span=span)
+
+
 def lower_delete(
     ctx: EmitContext,
     stmt: DeleteStatement,
@@ -825,6 +869,7 @@ def lower_delete(
     """DELETE file-name [INVALID KEY ...] — delete record via __cobol_delete_record."""
     span = stmt.span
     fn_reg = ctx.const_to_reg(stmt.file_name, span=span)
+    key_reg = _delete_key_reg(ctx, stmt.file_name, materialised, span=span)
     raw_reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(
@@ -832,6 +877,7 @@ def lower_delete(
             func_name=FuncName("__cobol_delete_record"),
             args=(
                 Register(str(fn_reg)),
+                Register(str(key_reg)),
                 _program(ctx, span=span),
             ),
         ),
