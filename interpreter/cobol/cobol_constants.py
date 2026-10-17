@@ -119,6 +119,7 @@ class BuiltinName:
     IS_ALPHABETIC = "__is_alphabetic"
     IS_ALPHABETIC_LOWER = "__is_alphabetic_lower"
     IS_ALPHABETIC_UPPER = "__is_alphabetic_upper"
+    IS_IN_CLASS = "__is_in_class"
     LENGTH = "__length"
     NUMVAL = "__numval"
     NUMVAL_C = "__numval_c"

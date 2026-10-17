@@ -3449,6 +3449,17 @@ public final class StatementSerializer {
             obj.addProperty("text", insertSpaces(sc.getCtx().getText()));
             return;
         }
+        if (cls.getClassConditionType() == ClassCondition.ClassConditionType.CLASS_NAME
+                && cls.getIdentifierCall() != null
+                && cls.getCtx() instanceof CobolParser.ClassConditionContext ctx
+                && ctx.className() != null) {
+            obj.addProperty("not", ccNot ^ cls.getNot());
+            obj.addProperty("class_name", ctx.className().getText().toUpperCase());
+            JsonObject operand = serializeMoveOperand(cls.getIdentifierCall());
+            operand.addProperty("kind", "ref");
+            obj.add("operand", operand);
+            return;
+        }
         String className = classConditionTypeToString(cls.getClassConditionType());
         if (className == null || cls.getIdentifierCall() == null) {
             obj.addProperty("text", insertSpaces(sc.getCtx().getText()));

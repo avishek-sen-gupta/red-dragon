@@ -969,6 +969,18 @@ def _builtin_is_alphabetic_upper(args: list[TypedValue], vm: VMState) -> Builtin
     )
 
 
+def _builtin_is_in_class(args: Sequence[TypedValue], vm: VMState) -> BuiltinResult:
+    """COBOL ``IS class-name`` test.
+
+    Args: [value: str, characters: str — the class-name's character set]
+    Returns: bool — True when every character of the value is in the set.
+    """
+    value, characters = (a.value for a in args)
+    if _is_symbolic(value) or not isinstance(value, str):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=set(value) <= set(str(characters)))
+
+
 def _numval_to_number(text: str):
     """Parse a NUMVAL/NUMVAL-C cleaned numeric string to int or Decimal.
 
@@ -1894,6 +1906,7 @@ BYTE_BUILTINS: Mapping[FuncName, Builtin] = MappingProxyType(
         FuncName(BuiltinName.IS_ALPHABETIC): _builtin_is_alphabetic,
         FuncName(BuiltinName.IS_ALPHABETIC_LOWER): _builtin_is_alphabetic_lower,
         FuncName(BuiltinName.IS_ALPHABETIC_UPPER): _builtin_is_alphabetic_upper,
+        FuncName(BuiltinName.IS_IN_CLASS): _builtin_is_in_class,
         FuncName(BuiltinName.LENGTH): _builtin_length,
         FuncName(BuiltinName.NUMVAL): _builtin_numval,
         FuncName(BuiltinName.NUMVAL_C): _builtin_numval_c,

@@ -23,7 +23,8 @@ def _native_byte(character: str) -> int:
     return EbcdicTable.ASCII_TO_EBCDIC[ord(character)]
 
 
-def _literal_bytes(item: AlphabetItem) -> tuple[int, ...]:
+def literal_native_bytes(item: AlphabetItem) -> tuple[int, ...]:
+    """The native bytes a literal names: a numeric literal is an ordinal position."""
     if item.kind == AlphabetLiteralKind.NUMERIC:
         return (int(item.value) - 1,)
     if item.kind == AlphabetLiteralKind.FIGURATIVE:
@@ -32,17 +33,17 @@ def _literal_bytes(item: AlphabetItem) -> tuple[int, ...]:
 
 
 def _new_positions(positions: Positions, item: AlphabetItem) -> Positions:
-    return (*positions, *((b,) for b in _literal_bytes(item)))
+    return (*positions, *((b,) for b in literal_native_bytes(item)))
 
 
 def _through(positions: Positions, item: AlphabetItem) -> Positions:
-    start, end = positions[-1][-1], _literal_bytes(item)[0]
+    start, end = positions[-1][-1], literal_native_bytes(item)[0]
     step = 1 if end >= start else -1
     return (*positions, *((b,) for b in range(start + step, end + step, step)))
 
 
 def _also(positions: Positions, item: AlphabetItem) -> Positions:
-    return (*positions[:-1], (*positions[-1], *_literal_bytes(item)))
+    return (*positions[:-1], (*positions[-1], *literal_native_bytes(item)))
 
 
 _LINKS: Mapping[AlphabetLink, Callable[[Positions, AlphabetItem], Positions]] = {

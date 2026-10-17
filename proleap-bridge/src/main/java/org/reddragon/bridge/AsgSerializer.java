@@ -142,6 +142,7 @@ public final class AsgSerializer {
         if (snp == null) return result;
         serializeProgramCollatingSequence(env, snp, result);
         serializeSwitches(snp, result);
+        serializeClasses(snp, result);
         if (snp.getDecimalPointClause() != null) {
             result.addProperty("decimal_point_is_comma", true);
         }
@@ -198,6 +199,52 @@ public final class AsgSerializer {
             }
         }
         return sw;
+    }
+
+    /**
+     * Each CLASS clause as its class-name and its literals in source order,
+     * each tagged NONE or THRU like an ALPHABET literal. ProLeap's ASG keeps
+     * only one CLASS clause, so they are read from the parse tree. A clause
+     * with an operand that is not a literal (an unsubstituted placeholder) is
+     * left out, so its class-name stays undefined.
+     */
+    private static void serializeClasses(SpecialNamesParagraph snp, JsonObject result) {
+        if (!(snp.getCtx() instanceof CobolParser.SpecialNamesParagraphContext ctx)) return;
+        JsonArray classes = new JsonArray();
+        for (CobolParser.SpecialNameClauseContext clause : ctx.specialNameClause()) {
+            CobolParser.ClassClauseContext cls = clause.classClause();
+            if (cls != null && classLiteralsOnly(cls)) {
+                classes.add(serializeClass(cls));
+            }
+        }
+        if (classes.size() > 0) {
+            result.add("classes", classes);
+        }
+    }
+
+    private static boolean classLiteralsOnly(CobolParser.ClassClauseContext cls) {
+        for (CobolParser.ClassClauseThroughContext through : cls.classClauseThrough()) {
+            if (through.classClauseFrom().literal() == null
+                    || (through.classClauseTo() != null && through.classClauseTo().literal() == null)) {
+                LOG.warning("CLASS " + cls.className().getText() + " has a non-literal operand; left undefined");
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static JsonObject serializeClass(CobolParser.ClassClauseContext cls) {
+        JsonObject result = new JsonObject();
+        result.addProperty("name", cls.className().getText().toUpperCase());
+        JsonArray items = new JsonArray();
+        for (CobolParser.ClassClauseThroughContext through : cls.classClauseThrough()) {
+            items.add(alphabetItem(through.classClauseFrom().literal(), "NONE"));
+            if (through.classClauseTo() != null) {
+                items.add(alphabetItem(through.classClauseTo().literal(), "THRU"));
+            }
+        }
+        result.add("items", items);
+        return result;
     }
 
     private static String upperText(ParserRuleContext ctx) {
