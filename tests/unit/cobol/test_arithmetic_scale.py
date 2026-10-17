@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 from cobol_asg.cobol_expression import (
     BinOpNode,
     FieldRefNode,
     FunctionNode,
     LiteralNode,
 )
-from cobol_asg.cobol_types import CobolDataCategory
+from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from cobol_asg.pic_parser import parse_pic
 from cobol_numeric.number import from_literal
 from cobol_numeric.scale import Scale
@@ -28,10 +26,13 @@ from tests.covers import covers
 
 
 def _td(
-    total: int, decimals: int, category=CobolDataCategory.ZONED_DECIMAL, scale: int = 0
-):
-    return SimpleNamespace(
-        total_digits=total, decimal_digits=decimals, category=category, scale=scale
+    total: int,
+    decimals: int,
+    category: CobolDataCategory = CobolDataCategory.ZONED_DECIMAL,
+    scale: int = 0,
+) -> CobolTypeDescriptor:
+    return CobolTypeDescriptor(
+        category=category, total_digits=total, decimal_digits=decimals, scale=scale
     )
 
 
@@ -66,6 +67,15 @@ def test_receiver_capacity_is_the_first_magnitude_its_integer_digits_cannot_hold
     assert receiver_capacity(_td(2, 0)) == 100
     assert receiver_capacity(_td(3, 3)) == 1
     assert receiver_capacity(_td(12, 12)) == 1
+
+
+@covers(
+    CobolFeature.ON_SIZE_ERROR, CobolFeature.USAGE_COMP_1, CobolFeature.USAGE_COMP_2
+)
+def test_a_floating_point_capacity_is_the_first_magnitude_that_rounds_to_overflow():
+    comp1 = receiver_capacity(_td(0, 0, CobolDataCategory.COMP1))
+    comp2 = receiver_capacity(_td(0, 0, CobolDataCategory.COMP2))
+    assert (comp1, comp2) == (2**128 - 2**103, 2**1024 - 2**970)
 
 
 @covers(CobolFeature.ON_SIZE_ERROR, CobolFeature.NUMERIC_EDITED)

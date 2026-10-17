@@ -15,7 +15,8 @@ integer-valued; ARGUMENT_SCALED_INTRINSICS carry their arguments' decimals.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
+from types import MappingProxyType
 
 from cobol_asg.cobol_expression import (
     BinOpNode,
@@ -95,6 +96,14 @@ ARGUMENT_SCALED_INTRINSICS = frozenset(
 )
 
 _FLOATING_CATEGORIES = frozenset({CobolDataCategory.COMP1, CobolDataCategory.COMP2})
+_FIRST_OVERFLOWING_MAGNITUDE: Mapping[CobolDataCategory, CobolNumber] = (
+    MappingProxyType(
+        {
+            CobolDataCategory.COMP1: scale_by(2**128 - 2**103, 0),
+            CobolDataCategory.COMP2: scale_by(2**1024 - 2**970, 0),
+        }
+    )
+)
 _FUNCTION_INTEGER_PLACES = 18
 
 
@@ -115,6 +124,8 @@ def receiver_decimals(td: CobolTypeDescriptor, rounded: bool) -> int:
 
 
 def receiver_capacity(td: CobolTypeDescriptor) -> CobolNumber:
+    if td.category in _FIRST_OVERFLOWING_MAGNITUDE:
+        return _FIRST_OVERFLOWING_MAGNITUDE[td.category]
     return scale_by(10 ** _integer_digit_positions(td), td.scale)
 
 
