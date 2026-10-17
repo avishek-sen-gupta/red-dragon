@@ -197,9 +197,9 @@ def test_image_runs_each_program_entered_by_name(tmp_path, capsys):
         tuple(field_positions(traced.declarations)),
     ) == (
         [
-            ("BB", True, ("WS-B",)),
-            ("CCC", True, ("WS-C",)),
-            ("A", True, ("WS-A",)),
+            ("BB\n", True, ("WS-B",)),
+            ("CCC\n", True, ("WS-C",)),
+            ("A\n", True, ("WS-A",)),
         ],
         True,
         True,
@@ -269,7 +269,7 @@ def test_dynamic_call_resolves_in_image(tmp_path, capsys):
     with pytest.raises(UnresolvedProgramError):
         _entered(without_sub, "MAIN")
     assert (called, sorted(with_sub.programs), sorted(without_sub.programs)) == (
-        "IN SUB",
+        "IN SUB\n",
         ["MAIN", "SUB"],
         ["MAIN"],
     )
@@ -362,7 +362,7 @@ def test_a_resumed_run_holds_the_declarations_of_the_program_it_entered(
         resumed.declarations == declarations_of(image, "B"),
         tuple(field_positions(resumed.declarations)),
         capsys.readouterr().out,
-    ) == (CodeLabel("B.func_b_0"), True, ("WS-B",), "BB")
+    ) == (CodeLabel("B.func_b_0"), True, ("WS-B",), "BB\n")
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

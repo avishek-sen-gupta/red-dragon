@@ -468,7 +468,7 @@ class TestProcedureDivisionLowering:
 
         # Should have two print calls (one for THEN, one for ELSE)
         calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
-        print_calls = [c for c in calls if c.operands and c.operands[0] == "print"]
+        print_calls = [c for c in calls if c.operands and c.operands[0] == "println"]
         assert len(print_calls) == 2
 
         # Should have three labels: if_true, if_false, if_end
@@ -477,6 +477,27 @@ class TestProcedureDivisionLowering:
         assert any("if_true" in l for l in label_names)
         assert any("if_false" in l for l in label_names)
         assert any("if_end" in l for l in label_names)
+
+    @covers(CobolFeature.DISPLAY)
+    def test_display_ends_its_line_unless_with_no_advancing(self):
+        fields = [
+            CobolField(
+                name="WS-A", level=77, pic="9", usage="DISPLAY", offset=0, value="5"
+            ),
+        ]
+        stmts = [
+            DisplayStatement(operands=(RefModOperand(name="WS-A"),)),
+            DisplayStatement(operands=(RefModOperand(name="WS-A"),), no_advancing=True),
+        ]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        output_calls = [
+            str(inst.func_name)
+            for inst in instructions
+            if isinstance(inst, CallFunction)
+            and str(inst.func_name) in ("print", "println")
+        ]
+        assert output_calls == ["println", "print"]
 
     @covers(CobolFeature.DISPLAY)
     def test_display_sends_a_nonnumeric_literals_characters_not_its_quotes(self):
@@ -547,7 +568,7 @@ class TestProcedureDivisionLowering:
 
         # Only one print call (THEN branch only)
         calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
-        print_calls = [c for c in calls if c.operands and c.operands[0] == "print"]
+        print_calls = [c for c in calls if c.operands and c.operands[0] == "println"]
         assert len(print_calls) == 1
 
     @covers(CobolFeature.DISPLAY, CobolFeature.PIC_CLAUSE, CobolFeature.USAGE_DISPLAY)
@@ -559,8 +580,8 @@ class TestProcedureDivisionLowering:
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
-        print_calls = [c for c in calls if c.operands and c.operands[0] == "print"]
-        assert len(print_calls) >= 1
+        print_calls = [c for c in calls if c.operands and c.operands[0] == "println"]
+        assert len(print_calls) == 1
 
     @covers(
         CobolFeature.DISPLAY,
@@ -581,8 +602,8 @@ class TestProcedureDivisionLowering:
         loads = _find_opcodes(instructions, Opcode.LOAD_REGION)
         assert len(loads) >= 1
         calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
-        print_calls = [c for c in calls if c.operands and c.operands[0] == "print"]
-        assert len(print_calls) >= 1
+        print_calls = [c for c in calls if c.operands and c.operands[0] == "println"]
+        assert len(print_calls) == 1
 
     @covers(CobolFeature.STOP_RUN, CobolFeature.PIC_CLAUSE, CobolFeature.USAGE_DISPLAY)
     def test_stop_run_produces_halt(self):
@@ -1084,7 +1105,7 @@ class TestPerformLoopLowering:
             for i, inst in enumerate(instructions)
             if inst.opcode == Opcode.CALL_FUNCTION
             and inst.operands
-            and inst.operands[0] == "print"
+            and inst.operands[0] == "println"
         ]
         assert (
             branch_if_indices and print_indices
@@ -1136,7 +1157,7 @@ class TestPerformLoopLowering:
             for i, inst in enumerate(instructions)
             if inst.opcode == Opcode.CALL_FUNCTION
             and inst.operands
-            and inst.operands[0] == "print"
+            and inst.operands[0] == "println"
         ]
         branch_if_indices = [
             i for i, inst in enumerate(instructions) if inst.opcode == Opcode.BRANCH_IF
@@ -2076,9 +2097,9 @@ class TestSearchLowering:
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
-        # AT END should produce CALL_FUNCTION for DISPLAY (uses "print")
+        # AT END should produce CALL_FUNCTION for DISPLAY (uses "println")
         calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
-        print_calls = [c for c in calls if c.operands and c.operands[0] == "print"]
+        print_calls = [c for c in calls if c.operands and c.operands[0] == "println"]
         assert len(print_calls) >= 1
 
     @covers(
@@ -2551,7 +2572,7 @@ class TestBareStatements:
 
         # DISPLAY produces a CALL_FUNCTION for print
         calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
-        print_calls = [c for c in calls if c.operands and c.operands[0] == "print"]
+        print_calls = [c for c in calls if c.operands and c.operands[0] == "println"]
         assert len(print_calls) >= 1, "DISPLAY should emit a print CALL_FUNCTION"
 
     @covers(
@@ -2588,7 +2609,7 @@ class TestBareStatements:
 
         # DISPLAY should emit print
         calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
-        print_calls = [c for c in calls if c.operands and c.operands[0] == "print"]
+        print_calls = [c for c in calls if c.operands and c.operands[0] == "println"]
         assert len(print_calls) >= 1, "DISPLAY should emit a print CALL_FUNCTION"
 
     @covers(
@@ -2623,7 +2644,7 @@ class TestBareStatements:
                 for i, inst in enumerate(instructions)
                 if inst.opcode == Opcode.CALL_FUNCTION
                 and inst.operands
-                and inst.operands[0] == "print"
+                and inst.operands[0] == "println"
             ),
             -1,
         )

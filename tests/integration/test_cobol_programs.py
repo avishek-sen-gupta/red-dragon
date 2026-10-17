@@ -5205,7 +5205,7 @@ class TestDisplayRefMod:
             ]
         )
         out = capsys.readouterr().out
-        assert out == "AAA", f"Expected 'AAA', got {out!r}"
+        assert out == "AAA\n", out
 
     @covers(CobolFeature.DISPLAY_REF_MOD, CobolFeature.DISPLAY)
     def test_display_ref_mod_excludes_outside(self, capsys):
@@ -5227,7 +5227,7 @@ class TestDisplayRefMod:
             ]
         )
         out = capsys.readouterr().out
-        assert out == "AAAX", f"Expected 'AAAX', got {out!r}"
+        assert out == "AAAX\n", out
 
     @covers(CobolFeature.DISPLAY)
     def test_display_no_ref_mod_unchanged(self, capsys):
@@ -5246,7 +5246,7 @@ class TestDisplayRefMod:
             ]
         )
         out = capsys.readouterr().out
-        assert out == "HELLO", f"Expected 'HELLO', got {out!r}"
+        assert out == "HELLO\n", out
 
 
 class TestDisplayMultipleOperands:
@@ -5275,7 +5275,35 @@ class TestDisplayMultipleOperands:
             ]
         )
         out = capsys.readouterr().out
-        assert out == "SANDERS in dept. 20 is a manager", out
+        assert out == "SANDERS in dept. 20 is a manager\n", out
+
+
+class TestDisplayLinePositioning:
+    @covers(CobolFeature.DISPLAY)
+    def test_each_display_ends_its_line_unless_with_no_advancing(self, capsys):
+        """Each DISPLAY ends by moving to the next line; WITH NO ADVANCING leaves the
+        position where the last operand ended, so the next DISPLAY continues it
+        (ANSI X3.23-1985 DISPLAY GR8; IBM Enterprise COBOL LR, DISPLAY statement).
+        A nonnumeric literal shows without its quotation marks.
+        """
+        _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-DISP-LINES.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-NAME PIC X(3) VALUE "XYZ".',
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                '    DISPLAY "AB".',
+                "    DISPLAY WS-NAME.",
+                '    DISPLAY "C" WITH NO ADVANCING.',
+                '    DISPLAY "D" WS-NAME NO ADVANCING.',
+                '    DISPLAY "E".',
+                "    STOP RUN.",
+            ]
+        )
+        assert capsys.readouterr().out == "AB\nXYZ\nCDXYZE\n"
 
 
 class TestArithmeticRefMod:

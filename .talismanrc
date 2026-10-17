@@ -237,7 +237,7 @@ fileignoreconfig:
 - filename: tests/unit/cobol/test_procedure_labels.py
   checksum: 24c989197c91ad7ebec777da9532a3e246a93ce883e8ea85345516b397cccb6a
 - filename: tests/integration/test_cobol_corresponding_pairing.py
-  checksum: ef02d0bfaca7f4144496a0ab5339420205f597231b1946b0ee393591cdf78b25
+  checksum: 26c41dee8425dfb4944fc8e5f5ce636de552c1305b5a6b3b5b959433fa854ff2
 - filename: proleap-bridge/src/main/java/org/reddragon/bridge/AsgSerializer.java
   checksum: d5edc779d876fe8abb767853f45d5d9eafae5052c695b552770258f269c898e0
 - filename: tests/unit/cobol/test_io_statements.py

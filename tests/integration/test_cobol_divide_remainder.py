@@ -29,16 +29,15 @@ def _display_after(
             "DATA DIVISION.",
             "WORKING-STORAGE SECTION.",
             *working_storage,
-            "01 SEP PIC X VALUE '|'.",
             "PROCEDURE DIVISION.",
             "MAIN-PARA.",
             *procedure,
-            *[f"    DISPLAY {name} SEP." for name in shown],
+            *[f"    DISPLAY {name}." for name in shown],
             "    STOP RUN.",
         ],
         max_steps=5000,
     )
-    return capsys.readouterr().out.split("|")[:-1]
+    return capsys.readouterr().out.splitlines()
 
 
 class TestDivideRemainder:
