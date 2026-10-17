@@ -121,9 +121,11 @@ class FileVerbIr:
             "!=", self.e.load(self.state.position), self.e.text(position.value)
         )
 
-    def status_is(self, outcome: VerbOutcome, *codes: str) -> Register:
+    def status_is(self, outcome: VerbOutcome, *codes: FileLogicStatus) -> Register:
         status = self.e.load(outcome.status)
-        return self._any([self.e.binop("==", status, self.e.text(c)) for c in codes])
+        return self._any(
+            [self.e.binop("==", status, self.e.text(c.value)) for c in codes]
+        )
 
     def successful(self, outcome: VerbOutcome) -> Register:
         status = self.e.load(outcome.status)
@@ -137,6 +139,45 @@ class FileVerbIr:
 
     def set_mode(self, mode: str) -> None:
         self.e.store(self.state.mode, self.e.text(mode))
+
+    def absent(self) -> Register:
+        return self.e.load(self.state.absent)
+
+    def set_status(self, outcome: VerbOutcome, status: FileLogicStatus) -> None:
+        self.e.store(outcome.status, self.e.text(status.value))
+
+    def either(
+        self,
+        cond: Register,
+        then: Callable[[], None],
+        otherwise: Callable[[], None],
+    ) -> None:
+        do, other, done = (
+            self.e.label("io_then"),
+            self.e.label("io_else"),
+            self.e.label("io_end"),
+        )
+        self.e.branch_if(cond, do, other)
+        self.e.place(do)
+        then()
+        self.e.jump(done)
+        self.e.place(other)
+        otherwise()
+        self.e.jump(done)
+        self.e.place(done)
+
+    def unless_absent(
+        self,
+        optional: bool,
+        absent: Callable[[], None],
+        present: Callable[[], None],
+    ) -> None:
+        """``present`` for a file the provider opened; for an OPTIONAL file it could
+        also be ``absent`` instead, opened INPUT while missing."""
+        if not optional:
+            present()
+            return
+        self.either(self.absent(), absent, present)
 
     def when(self, cond: Register, then: Callable[[], None]) -> None:
         do, skip = self.e.label("io_when"), self.e.label("io_skip")
@@ -166,3 +207,4 @@ def emit_closed(e: IrEmitter, state: FileState) -> None:
     e.store(state.mode, e.text(""))
     e.store(state.locked, e.bool_(False))
     e.store(state.position, e.text(FilePosition.NO_CURRENT_RECORD.value))
+    e.store(state.absent, e.bool_(False))

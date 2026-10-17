@@ -10,7 +10,7 @@ from cobol_asg.cobol_statements import FileControlEntry
 from cobol_asg.file_enums import FileOrganization
 from cobol_asg.ref_mod import RefModOperand
 from interpreter.cobol.data_layout import FieldLayout
-from interpreter.cobol.fd_record_format import minimum_length, records_vary
+from interpreter.cobol.fd_record_format import records_vary
 from interpreter.cobol.file_frame import FileFrame
 from interpreter.cobol.prime_key import PrimeKey
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
@@ -84,9 +84,6 @@ def file_frame(
         organization=entry.organization,
         access=entry.access_mode,
         prime_key=prime_key(record, materialised, entry),
-        relative_key_digits=relative_key_digits(materialised, entry),
-        optional=entry.optional,
         variable=records_vary(asg, entry.file_name),
-        minimum_record_length=minimum_length(asg, entry.file_name),
-        maximum_record_length=next((area.byte_length for area in record), 0),
+        record_length=next((area.byte_length for area in record), 0),
     )

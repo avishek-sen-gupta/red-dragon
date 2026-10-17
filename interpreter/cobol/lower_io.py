@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from functools import partial
 from collections.abc import Sequence
 
 from cobol_asg.cobol_statements import (
@@ -22,15 +23,24 @@ from cobol_asg.ref_mod import RefModOperand
 from cobol_asg.source_span import SourceSpan
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.emit_context import EmitContext
-from interpreter.cobol.fd_record_format import depending_on
+from interpreter.cobol.fd_record_format import (
+    depending_on,
+    minimum_length,
+    records_vary,
+)
 from interpreter.cobol.field_resolution import whole_field_extent
-from interpreter.cobol.file_facts import largest_record
+from interpreter.cobol.file_facts import (
+    largest_record,
+    record_area,
+    relative_key_digits,
+)
 from interpreter.cobol.file_logic_status import FileLogicStatus
 from interpreter.cobol.file_position import FilePosition
 from interpreter.cobol.file_state import file_state
 from interpreter.cobol.file_verb_ir import FileVerbIr, Refusal, VerbOutcome
 from interpreter.cobol.ir_emitter import IrEmitter
 from interpreter.cobol.program_object import program_name
+from interpreter.cobol.read_plan import ReadPlan
 from interpreter.cobol.relative_key import addressing_key, reported_key
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.cobol.status_class import StatusClass
@@ -285,22 +295,13 @@ def _lower_open_file(
 ) -> None:
     v = _verb(ctx, filename, span=span)
     outcome = v.outcome()
-
-    def opened() -> None:
-        v.set_mode(mode.value)
-        v.set_position(FilePosition.NO_CURRENT_RECORD)
-
-    def perform() -> None:
-        v.called("__cobol_open_file", outcome, v.e.text(filename), v.e.text(mode.value))
-        v.when(v.successful(outcome), opened)
-
     v.guarded(
         (
             Refusal(v.open_, FileLogicStatus.ALREADY_OPEN),
             Refusal(v.locked, FileLogicStatus.CLOSED_WITH_LOCK),
         ),
         outcome,
-        perform,
+        partial(_emit_open, v, outcome, mode, _entry(ctx, filename)),
         _nothing,
     )
     status_reg = v.e.load(outcome.status)
@@ -309,7 +310,61 @@ def _lower_open_file(
     logger.info("OPEN %s %s", mode.value, filename)
 
 
+def _emit_open(
+    v: FileVerbIr, outcome: VerbOutcome, mode: OpenMode, entry: FileControlEntry
+) -> None:
+    v.called(
+        "__cobol_open_file", outcome, v.e.text(entry.file_name), v.e.text(mode.value)
+    )
+    _emit_optional_absent(v, outcome, mode, entry)
+    v.when(v.successful(outcome), partial(_opened, v, mode))
+
+
+def _opened(v: FileVerbIr, mode: OpenMode) -> None:
+    v.set_mode(mode.value)
+    v.set_position(FilePosition.NO_CURRENT_RECORD)
+
+
+def _emit_optional_absent(
+    v: FileVerbIr, outcome: VerbOutcome, mode: OpenMode, entry: FileControlEntry
+) -> None:
+    """An OPTIONAL file that is absent opens with 05: for INPUT as a file of no records,
+    left uncreated; for I-O and EXTEND created, by opening it OUTPUT and closing it."""
+    if not entry.optional or mode is OpenMode.OUTPUT:
+        return
+    v.when(
+        v.status_is(outcome, FileLogicStatus.FILE_ABSENT),
+        (
+            partial(_absent_input, v, outcome)
+            if mode is OpenMode.INPUT
+            else partial(_created, v, outcome, mode, entry.file_name)
+        ),
+    )
+
+
+def _absent_input(v: FileVerbIr, outcome: VerbOutcome) -> None:
+    v.e.store(v.state.absent, v.e.bool_(True))
+    v.set_status(outcome, FileLogicStatus.OPTIONAL_ABSENT)
+
+
+def _created(
+    v: FileVerbIr, outcome: VerbOutcome, mode: OpenMode, filename: str
+) -> None:
+    name = v.e.text(filename)
+    v.e.call("__cobol_open_file", name, v.e.text(OpenMode.OUTPUT.value), v.program)
+    v.e.call("__cobol_close_file", name, v.program)
+    v.called("__cobol_open_file", outcome, name, v.e.text(mode.value))
+    v.when(
+        v.status_is(outcome, FileLogicStatus.PERMITTED),
+        partial(v.set_status, outcome, FileLogicStatus.OPTIONAL_ABSENT),
+    )
+
+
 def _nothing() -> None:
+    return
+
+
+def _ignored(raw: Register) -> None:
     return
 
 
@@ -350,22 +405,38 @@ def _lower_close_file(
 ) -> None:
     v = _verb(ctx, filename, span=span)
     outcome = v.outcome()
-
-    def closed() -> None:
-        v.set_mode("")
-        v.e.store(v.state.locked, v.e.bool_(with_lock))
-
-    def perform() -> None:
-        v.called("__cobol_close_file", outcome, v.e.text(filename))
-        v.when(v.status_is(outcome, FileLogicStatus.PERMITTED.value), closed)
-
     v.guarded(
-        (Refusal(v.closed, FileLogicStatus.NOT_OPEN),), outcome, perform, _nothing
+        (Refusal(v.closed, FileLogicStatus.NOT_OPEN),),
+        outcome,
+        partial(_emit_close, v, outcome, _entry(ctx, filename), with_lock),
+        _nothing,
     )
     status_reg = v.e.load(outcome.status)
     ctx.emit_file_status_update(filename, status_reg, materialised, span=span)
     emit_use_trigger(ctx, filename, status_reg, (), materialised, span=span)
     logger.info("CLOSE %s", filename)
+
+
+def _emit_close(
+    v: FileVerbIr, outcome: VerbOutcome, entry: FileControlEntry, with_lock: bool
+) -> None:
+    v.unless_absent(
+        entry.optional,
+        partial(v.set_status, outcome, FileLogicStatus.PERMITTED),
+        lambda: _ignored(
+            v.called("__cobol_close_file", outcome, v.e.text(entry.file_name))
+        ),
+    )
+    v.when(
+        v.status_is(outcome, FileLogicStatus.PERMITTED),
+        partial(_closed, v, with_lock),
+    )
+
+
+def _closed(v: FileVerbIr, with_lock: bool) -> None:
+    v.set_mode("")
+    v.e.store(v.state.locked, v.e.bool_(with_lock))
+    v.e.store(v.state.absent, v.e.bool_(False))
 
 
 def _emit_key_text(
@@ -377,13 +448,24 @@ def _emit_key_text(
 ) -> Register:
     if not materialised.has_field(key.name):
         return Register(str(ctx.const_to_reg("", span=span)))
+    return ctx.emit_to_string(
+        _emit_key_value(ctx, key, materialised, span=span), span=span
+    )
+
+
+def _emit_key_value(
+    ctx: EmitContext,
+    key: RefModOperand,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> Register:
     key_ref, key_rr = ctx.resolve_field_ref(
         key.name, materialised, key.qualifiers, key.subscripts, span=span
     )
-    key_val_reg = ctx.emit_decode_field(
+    return ctx.emit_decode_field(
         key_rr, key_ref.fl, key_ref.offset_reg, extent=key_ref.extent, span=span
     )
-    return ctx.emit_to_string(key_val_reg, span=span)
 
 
 def _emit_record_number_report(
@@ -611,12 +693,12 @@ def _sequential_read(
         key = stmt.key if stmt.key.name else entry.record_key
         sequential = entry.access_mode is AccessMode.SEQUENTIAL or stmt.next_record
         return sequential or not materialised.has_field(key.name)
-    key = (
+    addressed = (
         stmt.key
         if stmt.key.name
         else addressing_key(ctx._asg, stmt.file_name, stmt.next_record)
     )
-    return not materialised.has_field(key.name)
+    return not materialised.has_field(addressed.name)
 
 
 def _read_position(v: FileVerbIr, outcome: VerbOutcome) -> Register:
@@ -624,29 +706,58 @@ def _read_position(v: FileVerbIr, outcome: VerbOutcome) -> Register:
     return e.choose(
         "read_position",
         e.text(FilePosition.CURRENT_RECORD.value),
-        v.status_is(outcome, "00", "02"),
+        v.status_is(
+            outcome, FileLogicStatus.PERMITTED, FileLogicStatus.DUPLICATES_FOLLOW
+        ),
         lambda: e.choose(
             "read_position",
             e.text(FilePosition.AT_END.value),
-            v.status_is(outcome, "10", "14"),
+            v.status_is(
+                outcome, FileLogicStatus.AT_END, FileLogicStatus.RELATIVE_KEY_TOO_SMALL
+            ),
             lambda: e.text(FilePosition.NO_CURRENT_RECORD.value),
         ),
     )
 
 
-def _emit_guarded_read(
-    v: FileVerbIr,
-    stmt: ReadStatement,
-    key_reg: Register,
-    outcome: VerbOutcome,
-    sequential: bool,
+def _emit_relative_key_overflow(
+    v: FileVerbIr, outcome: VerbOutcome, digits: int
 ) -> None:
-    def perform() -> None:
+    """A READ of a relative file whose record number has more digits than its RELATIVE
+    KEY gives 14, and neither the record nor its number."""
+    if not digits:
+        return
+
+    def overflowed() -> None:
+        v.set_status(outcome, FileLogicStatus.RELATIVE_KEY_TOO_SMALL)
+        v.e.store(outcome.data, v.e.text(""))
+        v.e.store(outcome.number, v.e.int_(0))
+
+    v.when(v.e.binop(">=", v.e.load(outcome.number), v.e.int_(10**digits)), overflowed)
+
+
+def _emit_guarded_read(v: FileVerbIr, outcome: VerbOutcome, plan: ReadPlan) -> None:
+    def present() -> None:
         raw = v.called(
-            "__cobol_read_record", outcome, v.e.text(stmt.file_name), key_reg
+            "__cobol_read_record", outcome, v.e.text(plan.file_name), plan.key
         )
         v.keep_record(raw, outcome)
         v.keep_number(raw, outcome)
+        _emit_relative_key_overflow(v, outcome, plan.key_digits)
+
+    def perform() -> None:
+        v.unless_absent(
+            plan.optional,
+            lambda: v.set_status(
+                outcome,
+                (
+                    FileLogicStatus.AT_END
+                    if plan.sequential
+                    else FileLogicStatus.NOT_FOUND
+                ),
+            ),
+            present,
+        )
         v.e.store(v.state.position, _read_position(v, outcome))
 
     v.guarded(
@@ -662,7 +773,7 @@ def _emit_guarded_read(
                         FileLogicStatus.NO_NEXT_RECORD,
                     ),
                 )
-                if sequential
+                if plan.sequential
                 else ()
             ),
         ),
@@ -682,8 +793,17 @@ def lower_read(
     key_str_reg = _read_key_reg(ctx, stmt, materialised)
     v = _verb(ctx, stmt.file_name, span=span)
     outcome = v.outcome()
+    entry = _entry(ctx, stmt.file_name)
     _emit_guarded_read(
-        v, stmt, key_str_reg, outcome, _sequential_read(ctx, stmt, materialised)
+        v,
+        outcome,
+        ReadPlan(
+            stmt.file_name,
+            key_str_reg,
+            _sequential_read(ctx, stmt, materialised),
+            entry.optional,
+            relative_key_digits(materialised, entry),
+        ),
     )
     status_reg = v.e.load(outcome.status)
     ctx.emit_file_status_update(stmt.file_name, status_reg, materialised, span=span)
@@ -871,17 +991,69 @@ def _write_source_reg(
 
 def _emit_guarded_update(
     v: FileVerbIr,
-    primitive: str,
     outcome: VerbOutcome,
+    call: tuple[str, tuple[Register, ...]],
     refusals: Sequence[Refusal],
-    args: tuple[Register, ...],
 ) -> None:
+    primitive, args = call
+
     def perform() -> None:
         raw = v.called(primitive, outcome, *args)
         v.keep_number(raw, outcome)
         v.set_position(FilePosition.NO_CURRENT_RECORD)
 
     v.guarded(refusals, outcome, perform, v.forget_current_record)
+
+
+def _size_refusals(
+    ctx: EmitContext,
+    v: FileVerbIr,
+    file_name: str,
+    data_reg: Register,
+    materialised: MaterialisedSectionedLayout,
+) -> tuple[Refusal, ...]:
+    """A variable-length record shorter than the file's smallest or longer than its
+    largest record is a boundary violation, 44."""
+    if not records_vary(ctx._asg, file_name):
+        return ()
+    smallest = minimum_length(ctx._asg, file_name)
+    largest = next(
+        (area.byte_length for area in record_area(ctx._asg, file_name, materialised)),
+        0,
+    )
+
+    def outside() -> Register:
+        size = v.e.call(BuiltinName.LENGTH, data_reg)
+        short = v.e.binop("<", size, v.e.int_(smallest))
+        return v.e.binop("or", short, v.e.binop(">", size, v.e.int_(largest)))
+
+    return (Refusal(outside, FileLogicStatus.RECORD_SIZE_VIOLATION),)
+
+
+def _boundary_refusals(
+    v: FileVerbIr, key_values: Sequence[Register]
+) -> tuple[Refusal, ...]:
+    """A WRITE of a relative file at a record number below 1 is a boundary violation, 24."""
+    return tuple(
+        Refusal(
+            lambda value=value: v.e.binop("<", value, v.e.int_(1)),
+            FileLogicStatus.BOUNDARY_VIOLATION,
+        )
+        for value in key_values
+    )
+
+
+def _addressed_key_values(
+    ctx: EmitContext,
+    file_name: str,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> tuple[Register, ...]:
+    key = addressing_key(ctx._asg, file_name, False)
+    if not materialised.has_field(key.name):
+        return ()
+    return (_emit_key_value(ctx, key, materialised, span=span),)
 
 
 def _current_record_refusals(
@@ -923,23 +1095,26 @@ def lower_write(
         materialised,
         span=span,
     )
-    key_reg = _emit_key_text(
-        ctx, addressing_key(ctx._asg, file_name, False), materialised, span=span
+    key_values = _addressed_key_values(ctx, file_name, materialised, span=span)
+    key_reg = next(
+        (ctx.emit_to_string(value, span=span) for value in key_values),
+        Register(str(ctx.const_to_reg("", span=span))),
     )
     v = _verb(ctx, file_name, span=span)
     outcome = v.outcome()
     entry = _entry(ctx, file_name)
     _emit_guarded_update(
         v,
-        "__cobol_write_record",
         outcome,
+        ("__cobol_write_record", (v.e.text(file_name), data_reg, key_reg)),
         (
             Refusal(
                 lambda: v.mode_is_not(*_write_modes(entry)),
                 FileLogicStatus.WRITE_NOT_PERMITTED,
             ),
+            *_size_refusals(ctx, v, file_name, data_reg, materialised),
+            *_boundary_refusals(v, key_values),
         ),
-        (v.e.text(file_name), data_reg, key_reg),
     )
     status_reg = v.e.load(outcome.status)
     ctx.emit_file_status_update(file_name, status_reg, materialised, span=span)
@@ -1000,10 +1175,12 @@ def lower_rewrite(
     outcome = v.outcome()
     _emit_guarded_update(
         v,
-        "__cobol_rewrite_record",
         outcome,
-        _current_record_refusals(v, _entry(ctx, file_name)),
-        (v.e.text(file_name), data_reg, key_reg),
+        ("__cobol_rewrite_record", (v.e.text(file_name), data_reg, key_reg)),
+        (
+            *_current_record_refusals(v, _entry(ctx, file_name)),
+            *_size_refusals(ctx, v, file_name, data_reg, materialised),
+        ),
     )
     status_reg = v.e.load(outcome.status)
     ctx.emit_file_status_update(file_name, status_reg, materialised, span=span)
@@ -1043,17 +1220,34 @@ def lower_start(
     relop_reg = Register(str(ctx.const_to_reg(stmt.relop or "=", span=span)))
     v = _verb(ctx, stmt.file_name, span=span)
     outcome = v.outcome()
-    _emit_guarded_update(
-        v,
-        "__cobol_start_file",
-        outcome,
+    optional = _entry(ctx, stmt.file_name).optional
+
+    def perform() -> None:
+        v.unless_absent(
+            optional,
+            lambda: v.set_status(outcome, FileLogicStatus.NOT_FOUND),
+            lambda: _ignored(
+                v.called(
+                    "__cobol_start_file",
+                    outcome,
+                    v.e.text(stmt.file_name),
+                    key_reg,
+                    relop_reg,
+                )
+            ),
+        )
+        v.set_position(FilePosition.NO_CURRENT_RECORD)
+
+    v.guarded(
         (
             Refusal(
                 lambda: v.mode_is_not(*_READ_MODES),
                 FileLogicStatus.READ_NOT_PERMITTED,
             ),
         ),
-        (v.e.text(stmt.file_name), key_reg, relop_reg),
+        outcome,
+        perform,
+        v.forget_current_record,
     )
     status_reg = v.e.load(outcome.status)
     ctx.emit_file_status_update(stmt.file_name, status_reg, materialised, span=span)
@@ -1162,10 +1356,9 @@ def lower_delete(
     outcome = v.outcome()
     _emit_guarded_update(
         v,
-        "__cobol_delete_record",
         outcome,
+        ("__cobol_delete_record", (v.e.text(stmt.file_name), key_reg)),
         _current_record_refusals(v, _entry(ctx, stmt.file_name)),
-        (v.e.text(stmt.file_name), key_reg),
     )
     status_reg = v.e.load(outcome.status)
     ctx.emit_file_status_update(stmt.file_name, status_reg, materialised, span=span)

@@ -18,8 +18,8 @@ _MAX_STEPS = 200_000
 
 @dataclass(frozen=True)
 class Step:
-    """One statement, and the two-character items logged after it: its FILE STATUS
-    item first."""
+    """One statement, its lines split at newlines, and the two-character items logged
+    after it: its FILE STATUS item first."""
 
     statement: str
     logged: Sequence[str]
@@ -65,7 +65,7 @@ class FileProgram:
                 line
                 for step, first in zip(steps, _firsts(steps), strict=True)
                 for line in (
-                    f"    {step.statement}",
+                    *(f"    {part}" for part in step.statement.split("\n")),
                     *(
                         f"    MOVE {item} TO LOGGED({first + n})."
                         for n, item in enumerate(step.logged)

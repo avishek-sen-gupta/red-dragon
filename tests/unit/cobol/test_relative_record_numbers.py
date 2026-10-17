@@ -1,4 +1,5 @@
-"""A relative file is addressed by relative record number, given and returned as text."""
+"""A relative file is addressed by relative record number, given and returned as text;
+the lowered IR refuses a WRITE below record 1 with 24."""
 
 from __future__ import annotations
 
@@ -12,6 +13,7 @@ from interpreter.cobol.prime_key import PrimeKey
 from interpreter.cobol.real_file_provider import RealFileIOProvider
 from tests.covers import covers
 from tests.unit.cobol.declared_files import opened
+from tests.unit.cobol.file_status_program import FileProgram, Step
 
 _REL = "RELATIVE"
 
@@ -20,65 +22,60 @@ def _seen(result: IOResult) -> tuple[str, str, int]:
     return (result.status, result.data or "", result.record_number)
 
 
+_KEYED = FileProgram(
+    selects=(
+        "    SELECT RLF ASSIGN TO RLFDD ORGANIZATION RELATIVE",
+        "        ACCESS DYNAMIC RELATIVE KEY RLF-NO FILE STATUS IS FS-R.",
+    ),
+    fds=("FD  RLF.", "01  RLF-REC PIC X(3)."),
+    working_storage=(
+        "01  FS-R PIC XX.",
+        "01  RLF-NO PIC 9(4).",
+        "01  SEEN PIC XX.",
+    ),
+)
+
+
+def _at(number: int, statement: str) -> Step:
+    return Step(f"MOVE {number} TO RLF-NO {statement}", ("FS-R",))
+
+
+def _read_at(number: int) -> Step:
+    return Step(
+        f"MOVE {number} TO RLF-NO MOVE SPACES TO RLF-REC\nREAD RLF MOVE RLF-REC TO SEEN.",
+        ("FS-R", "SEEN"),
+    )
+
+
 @covers(CobolFeature.WRITE)
 @covers(CobolFeature.READ)
 def test_keyed_verbs_address_the_record_number_they_are_given(tmp_path: Path) -> None:
-    prov = RealFileIOProvider(base_dir=tmp_path)
-    opened(
-        prov,
-        "OUTPUT",
-        FileFrame(
-            "F",
-            FileOrganization(_REL),
-            AccessMode("DYNAMIC"),
-            PrimeKey(0, 0),
-            0,
-            False,
-            False,
-            0,
-            3,
+    statuses = _KEYED.statuses(
+        tmp_path,
+        (
+            Step("OPEN OUTPUT RLF.", ("FS-R",)),
+            _at(1, "MOVE 'ONE' TO RLF-REC WRITE RLF-REC."),
+            _at(3, "MOVE 'TWO' TO RLF-REC WRITE RLF-REC."),
+            _at(3, "MOVE 'DUP' TO RLF-REC WRITE RLF-REC."),
+            _at(0, "MOVE 'NIL' TO RLF-REC WRITE RLF-REC."),
+            Step("CLOSE RLF.", ("FS-R",)),
+            Step("OPEN I-O RLF.", ("FS-R",)),
+            *(_read_at(n) for n in (0, 5, 2, 3)),
+            _at(0, "MOVE 'NIL' TO RLF-REC REWRITE RLF-REC."),
+            _at(1, "MOVE 'NEW' TO RLF-REC REWRITE RLF-REC."),
+            _at(3, "DELETE RLF."),
+            *(_read_at(n) for n in (1, 3)),
         ),
     )
-    writes = [
-        prov._write_record("F", "ONE", "1", "P").status,
-        prov._write_record("F", "TWO", "0003", "P").status,
-        prov._write_record("F", "DUP", "3", "P").status,
-        prov._write_record("F", "NIL", "0", "P").status,
+    assert statuses == [
+        "00",
+        *("00", "00", "22", "24"),
+        "00",
+        "00",
+        *("23", "  ", "23", "  ", "23", "  ", "00", "TW"),
+        *("23", "00", "00"),
+        *("00", "NE", "23", "  "),
     ]
-    prov._close_file("F", "P")
-    opened(
-        prov,
-        "I-O",
-        FileFrame(
-            "F",
-            FileOrganization(_REL),
-            AccessMode("DYNAMIC"),
-            PrimeKey(0, 0),
-            0,
-            False,
-            False,
-            0,
-            3,
-        ),
-    )
-    reads = [
-        _seen(prov._read_record("F", "0", "P")),
-        _seen(prov._read_record("F", "5", "P")),
-        _seen(prov._read_record("F", "2", "P")),
-        _seen(prov._read_record("F", "3", "P")),
-    ]
-    updates = [
-        prov._rewrite_record("F", "NIL", "0", "P").status,
-        prov._rewrite_record("F", "NEW", "1", "P").status,
-        prov._delete_record("F", "3", "P").status,
-    ]
-    after = [_seen(prov._read_record("F", key, "P")) for key in ("1", "3")]
-    assert (writes, reads, updates, after) == (
-        ["00", "00", "22", "24"],
-        [("23", "", 0), ("23", "", 0), ("23", "", 0), ("00", "TWO", 3)],
-        ["23", "00", "00"],
-        [("00", "NEW", 1), ("23", "", 0)],
-    )
 
 
 @covers(CobolFeature.WRITE)
@@ -93,10 +90,7 @@ def test_sequential_verbs_return_the_record_number_they_used(tmp_path: Path) -> 
             FileOrganization(_REL),
             AccessMode("SEQUENTIAL"),
             PrimeKey(0, 0),
-            0,
             False,
-            False,
-            0,
             3,
         ),
     )
@@ -110,10 +104,7 @@ def test_sequential_verbs_return_the_record_number_they_used(tmp_path: Path) -> 
             FileOrganization(_REL),
             AccessMode("SEQUENTIAL"),
             PrimeKey(0, 0),
-            0,
             False,
-            False,
-            0,
             3,
         ),
     )
@@ -127,10 +118,7 @@ def test_sequential_verbs_return_the_record_number_they_used(tmp_path: Path) -> 
             FileOrganization(_REL),
             AccessMode("SEQUENTIAL"),
             PrimeKey(0, 0),
-            0,
             False,
-            False,
-            0,
             3,
         ),
     )

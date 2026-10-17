@@ -13,7 +13,6 @@ from types import MappingProxyType
 from cobol_asg.cobol_statements import FileControlEntry
 from cobol_asg.file_enums import AccessMode, FileOrganization, OpenMode
 from cobol_asg.switch_status import SwitchStatus
-from interpreter.cobol.absent_file_driver import AbsentFileDriver
 from interpreter.cobol.access_result import AccessCondition, AccessResult
 from interpreter.cobol.described_slot import DescribedSlot
 from interpreter.cobol.file_drivers import (
@@ -69,7 +68,6 @@ _UNCOMPUTABLE = Operators.UNCOMPUTABLE
 _PATH_MARKS = frozenset("/\\.")
 _OPEN_FAILED = to_ioresult(AccessResult(AccessCondition.FILE_NOT_FOUND))
 _SUCCESSFUL_STATUS = _file_status(AccessCondition.OK)
-_OPTIONAL_ABSENT = IOResult("05", None)
 _VARIABLE_DRIVERS: dict[FileOrganization, Callable[[], FileOrganizationDriver]] = {
     FileOrganization.SEQUENTIAL: VariableSequentialDriver,
     FileOrganization.RELATIVE: lambda: RelativeDriver(DescribedSlot()),
@@ -174,7 +172,7 @@ class RealFileIOProvider(CobolIOProvider):
             frame.organization,
             path,
             mode,
-            frame.maximum_record_length,
+            frame.record_length,
             frame.prime_key.offset,
             frame.prime_key.length,
         )
@@ -184,7 +182,7 @@ class RealFileIOProvider(CobolIOProvider):
     ) -> FileOrganizationDriver:
         if frame.variable and frame.organization in _VARIABLE_DRIVERS:
             drv = _VARIABLE_DRIVERS[frame.organization]()
-            drv.open(path, mode, frame.maximum_record_length, 0, 0)
+            drv.open(path, mode, frame.record_length, 0, 0)
             return drv
         return self._driver(frame, path, mode)
 
@@ -197,46 +195,16 @@ class RealFileIOProvider(CobolIOProvider):
         return to_ioresult(AccessResult(AccessCondition.OK))
 
     def _open_file(self, filename: str, mode: str, program: str) -> IOResult:
-        frame = self._frames[filename]
-        refusals = self._open_refusals(filename, OpenMode(mode), frame.optional)
-        if refusals:
-            logger.warning("OPEN %s %s refused: %s", mode, filename, refusals[0].status)
-            return refusals[0]
-        if self._optional_absent(filename, OpenMode(mode), frame.optional):
-            return self._open_absent(filename, OpenMode(mode), frame)
-        return self._open_closed(filename, OpenMode(mode), frame)
+        if self._absent(filename, OpenMode(mode)):
+            logger.info("OPEN %s %s: no such file", mode, filename)
+            return _OPEN_FAILED
+        return self._open_closed(filename, OpenMode(mode), self._frames[filename])
 
-    def _open_refusals(
-        self, filename: str, mode: OpenMode, optional: bool
-    ) -> list[IOResult]:
-        checks = (
-            (
-                mode is OpenMode.EXTEND
-                and not optional
-                and not self._path(filename).exists(),
-                _OPEN_FAILED,
-            ),
-        )
-        return [result for refused, result in checks if refused]
+    def _absent(self, filename: str, mode: OpenMode) -> bool:
+        return mode is not OpenMode.OUTPUT and not self._path(filename).exists()
 
     def _path(self, filename: str) -> Path:
         return self._resolve_path(filename, self._assign_to(filename))
-
-    def _optional_absent(self, filename: str, mode: OpenMode, optional: bool) -> bool:
-        absent = not self._path(filename).exists()
-        return optional and absent and mode is not OpenMode.OUTPUT
-
-    def _open_absent(self, filename: str, mode: OpenMode, frame: FileFrame) -> IOResult:
-        logger.info("OPEN %s %s: optional file absent", mode.value, filename)
-        if mode is OpenMode.INPUT:
-            self._files = {
-                **self._files,
-                filename: OpenFile(AbsentFileDriver(), mode, frame),
-            }
-            return _OPTIONAL_ABSENT
-        self._path(filename).touch()
-        opened = self._open_closed(filename, mode, frame)
-        return _OPTIONAL_ABSENT if opened.status == _SUCCESSFUL_STATUS else opened
 
     def _open_closed(self, filename: str, mode: OpenMode, frame: FileFrame) -> IOResult:
         path = self._path(filename)
@@ -293,7 +261,6 @@ class RealFileIOProvider(CobolIOProvider):
                     else file.driver.read_seq()
                 ),
                 OpenFile.after_read,
-                OpenFile.read_outcome,
             ),
         )
 
@@ -304,7 +271,7 @@ class RealFileIOProvider(CobolIOProvider):
         return self._verb(
             filename,
             FileVerb(
-                lambda file: file.write_check(record, key),
+                lambda file: file.write_check(record),
                 lambda file: file.driver.write(record, file.key_bytes(key)),
                 lambda file, result: file.after_write(record, result),
             ),
@@ -373,10 +340,7 @@ class RealFileIOProvider(CobolIOProvider):
                 FileOrganization.SEQUENTIAL,
                 AccessMode.SEQUENTIAL,
                 PrimeKey(),
-                0,
                 False,
-                False,
-                record_length,
                 record_length,
             ),
         }

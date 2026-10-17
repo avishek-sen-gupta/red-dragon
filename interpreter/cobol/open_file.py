@@ -31,48 +31,19 @@ class OpenFile:
             and self.attributes.access is AccessMode.SEQUENTIAL
         )
 
-    def _exceeds_relative_key(self, result: AccessResult) -> bool:
-        digits = len(str(result.record_number))
-        return 0 < self.attributes.relative_key_digits < digits
-
     def permitted(self) -> FileLogicStatus:
         return FileLogicStatus.PERMITTED
-
-    def read_outcome(self, result: AccessResult) -> FileLogicStatus:
-        return _permitted_unless(
-            self._exceeds_relative_key(result),
-            FileLogicStatus.RELATIVE_KEY_TOO_SMALL,
-        )
-
-    def _before_first_record(self, key: str) -> bool:
-        relative = self.attributes.organization is FileOrganization.RELATIVE
-        return relative and bool(key) and int(key) < 1
-
-    def _outside_sizes(self, record: bytes) -> bool:
-        attributes = self.attributes
-        sizes = range(
-            attributes.minimum_record_length, attributes.maximum_record_length + 1
-        )
-        return attributes.variable and len(record) not in sizes
 
     def _out_of_sequence(self, record: bytes) -> bool:
         key = self.attributes.prime_key.of(record)
         return self._indexed_in_sequence() and key < self.last_key
 
-    def write_check(self, record: bytes, key: str) -> FileLogicStatus:
-        refusals = (
-            (self._outside_sizes(record), FileLogicStatus.RECORD_SIZE_VIOLATION),
-            (self._before_first_record(key), FileLogicStatus.BOUNDARY_VIOLATION),
-            (self._out_of_sequence(record), FileLogicStatus.SEQUENCE_ERROR),
-        )
-        return next(
-            (status for refused, status in refusals if refused),
-            FileLogicStatus.PERMITTED,
+    def write_check(self, record: bytes) -> FileLogicStatus:
+        return _permitted_unless(
+            self._out_of_sequence(record), FileLogicStatus.SEQUENCE_ERROR
         )
 
     def rewrite_check(self, record: bytes) -> FileLogicStatus:
-        if self._outside_sizes(record):
-            return FileLogicStatus.RECORD_SIZE_VIOLATION
         return _permitted_unless(
             self._indexed_in_sequence()
             and self.attributes.prime_key.of(record) != self.last_key,
