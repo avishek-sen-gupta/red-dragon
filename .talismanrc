@@ -1,5 +1,7 @@
 threshold: low
 fileignoreconfig:
+- filename: interpreter/cobol/file_drivers.py
+  checksum: 77889c04b63432a84e1559980cf19f582981f2353b944f95c17efd2dbfab7568
 - filename: tests/integration/test_cobol_indexed_random_read.py
   checksum: a2a3fed254307af309b32f738f52c96e6d5e647d25e536d59afb818468bc254c
 - filename: tests/unit/cobol/test_indexed_read_key.py
@@ -209,7 +211,7 @@ fileignoreconfig:
 - filename: tests/unit/cobol/test_recorded_memory_effects.py
   checksum: ba151292b7ee1a3f747628e5950297f904de1c1cd625307f762f7a98b570b3de
 - filename: docs/frontend-design/cobol.md
-  checksum: ede77742c1503686318285cbbb8ee221cf8b0e7e6823b833e4da74c993379566
+  checksum: 8d4153d1c3a849d6efe250a82fba62bfb1ca42638d45470517b36d804bb049c6
 - filename: tests/integration/test_cobol_call_using_addresses.py
   checksum: 353804977c7a3e5eb44a303f7e42a47ef1bdf9f837f41e396bf5033813c4fdb0
 - filename: tests/integration/test_cobol_call_using_slots.py

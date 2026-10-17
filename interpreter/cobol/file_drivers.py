@@ -7,7 +7,9 @@ file organizations. All use fixed-length records.
 
 from __future__ import annotations
 
+import bisect
 import logging
+from collections.abc import Callable
 from pathlib import Path
 from typing import BinaryIO, Protocol, runtime_checkable
 
@@ -237,27 +239,29 @@ class IndexedDriver:
         self._last_pos = slot * self._rl
         return AccessResult(condition=AccessCondition.OK, data=self._rec_at(slot))
 
+    def _leading(self, key: bytes) -> Callable[[int], bytes]:
+        return lambda slot: self._key_at(slot)[: len(key)]
+
+    def _start_slot(self, key: bytes, relop: str) -> tuple[int, bool]:
+        slots = range(self._count())
+        leading = self._leading(key)
+        if relop == ">":
+            slot = bisect.bisect_right(slots, key, key=leading)
+            return slot, slot < len(slots)
+        slot = bisect.bisect_left(slots, key, key=leading)
+        exists = slot < len(slots)
+        return slot, exists and (relop not in ("=", "==") or leading(slot) == key)
+
     def start(self, key: bytes, relop: str) -> AccessResult:
-        slot, found = self._find(key)
-        n = self._count()
-        if relop in ("=", "=="):
-            if not found:
-                return AccessResult(condition=AccessCondition.NOT_FOUND)
+        slot, found = self._start_slot(key, relop)
+        # Position the cursor at the GTEQ slot even when it is past end-of-file
+        # (slot == n): CICS seek-last browse (STARTBR past all keys, then
+        # READPREV) needs the cursor at EOF to walk back. The NOT_FOUND
+        # condition (COBOL START INVALID KEY) is unchanged.
+        if found or relop not in ("=", "==", ">"):
             self._cursor = slot * self._rl
-        elif relop == ">":
-            if found:
-                slot += 1
-            if slot >= n:
-                return AccessResult(condition=AccessCondition.NOT_FOUND)
-            self._cursor = slot * self._rl
-        else:  # >= or anything else
-            # Position the cursor at the GTEQ slot even when it is past end-of-file
-            # (slot == n): CICS seek-last browse (STARTBR past all keys, then
-            # READPREV) needs the cursor at EOF to walk back. The NOT_FOUND
-            # condition (COBOL START INVALID KEY) is unchanged.
-            self._cursor = slot * self._rl
-            if slot >= n:
-                return AccessResult(condition=AccessCondition.NOT_FOUND)
+        if not found:
+            return AccessResult(condition=AccessCondition.NOT_FOUND)
         return AccessResult(condition=AccessCondition.OK)
 
     def write(self, data: bytes, key: bytes = b"") -> AccessResult:

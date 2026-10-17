@@ -226,6 +226,32 @@ class TestIndexedDriver:
         assert r1.data is not None and r1.data[:3] == b"BBB"
         assert r2.data is not None and r2.data[:3] == b"CCC"
 
+    @covers(CobolFeature.START)
+    def test_start_compares_a_shorter_key_with_the_keys_leading_bytes(
+        self, tmp_path: Path
+    ) -> None:
+        path = tmp_path / "idx.dat"
+        drv = IndexedDriver()
+        drv.open(path, OpenMode.OUTPUT, RL, self.KO, self.KL)
+        [drv.write(_b(k)) for k in ("AAX", "BBA", "BBB", "CCA")]
+        drv.close()
+        drv2 = IndexedDriver()
+        drv2.open(path, OpenMode.INPUT, RL, self.KO, self.KL)
+        starts = [
+            (relop, prefix, drv2.start(prefix, relop).condition, drv2.read_seq().data)
+            for relop, prefix in (("=", b"BB"), (">", b"BB"), (">=", b"AB"))
+        ]
+        missing = drv2.start(b"BC", "=").condition
+        drv2.close()
+        assert (starts, missing) == (
+            [
+                ("=", b"BB", AccessCondition.OK, _b("BBA")),
+                (">", b"BB", AccessCondition.OK, _b("CCA")),
+                (">=", b"AB", AccessCondition.OK, _b("BBA")),
+            ],
+            AccessCondition.NOT_FOUND,
+        )
+
 
 class TestRelativeDriver:
     @covers(CobolFeature.WRITE)
