@@ -48,7 +48,8 @@ from interpreter.register import NO_REGISTER, Register
 
 logger = logging.getLogger(__name__)
 
-_PAST_THE_AREA = "\x40"
+_SPACE = "\x40"
+_PAST_THE_AREA = _SPACE
 _CLOSE_BUILTINS = {
     False: FuncName("__cobol_close_file"),
     True: FuncName("__cobol_close_file_with_lock"),
@@ -552,15 +553,50 @@ def _emit_record_of_its_length(
     return record_reg
 
 
-def _emit_store_if_successful(
+def _emit_read_into(
     ctx: EmitContext,
     status_reg: Register,
-    value_reg: Register,
-    target: RefModOperand,
+    data_reg: Register,
+    into: RefModOperand,
     materialised: MaterialisedSectionedLayout,
     *,
     span: SourceSpan | None,
 ) -> None:
+    if not (into.name and materialised.has_field(into.name)):
+        return
+    into_ref, into_rr = ctx.resolve_field_ref(
+        into.name, materialised, into.qualifiers, into.subscripts, span=span
+    )
+    filled_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=filled_reg,
+            func_name=FuncName(BuiltinName.STRING_CONCAT_PAIR),
+            args=(
+                data_reg,
+                Register(
+                    str(ctx.const_to_reg(_SPACE * into_ref.fl.byte_length, span=span))
+                ),
+            ),
+        ),
+        span=span,
+    )
+    skip_lbl = _emit_branch_if_successful(ctx, status_reg, span=span)
+    ctx.emit_write_region_raw(
+        into_rr,
+        into_ref.fl,
+        filled_reg,
+        into_ref.offset_reg,
+        extent=into_ref.extent,
+        span=span,
+    )
+    ctx.emit_inst(Branch(label=skip_lbl), span=span)
+    ctx.emit_inst(Label_(label=skip_lbl), span=span)
+
+
+def _emit_branch_if_successful(
+    ctx: EmitContext, status_reg: Register, *, span: SourceSpan | None
+) -> CodeLabel:
     ok_reg = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
@@ -579,6 +615,19 @@ def _emit_store_if_successful(
         BranchIf(cond_reg=ok_reg, branch_targets=(store_lbl, skip_lbl)), span=span
     )
     ctx.emit_inst(Label_(label=store_lbl), span=span)
+    return skip_lbl
+
+
+def _emit_store_if_successful(
+    ctx: EmitContext,
+    status_reg: Register,
+    value_reg: Register,
+    target: RefModOperand,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> None:
+    skip_lbl = _emit_branch_if_successful(ctx, status_reg, span=span)
     target_ref, target_rr = ctx.resolve_field_ref(
         target.name, materialised, target.qualifiers, target.subscripts, span=span
     )
@@ -726,23 +775,7 @@ def lower_read(
         except KeyError:
             pass
 
-    # INTO copy — byte-faithful region move (record bytes → INTO receiver).
-    if stmt.into.name and materialised.has_field(stmt.into.name):
-        target_ref, target_rr = ctx.resolve_field_ref(
-            stmt.into.name,
-            materialised,
-            stmt.into.qualifiers,
-            stmt.into.subscripts,
-            span=span,
-        )
-        ctx.emit_write_region_raw(
-            target_rr,
-            target_ref.fl,
-            data_reg,
-            target_ref.offset_reg,
-            extent=target_ref.extent,
-            span=span,
-        )
+    _emit_read_into(ctx, status_reg, data_reg, stmt.into, materialised, span=span)
 
     after_label = ctx.fresh_label("read_after")
     has_at_end = bool(stmt.at_end or stmt.not_at_end)
@@ -767,10 +800,10 @@ def lower_read(
             span=span,
         )
         ctx.emit_inst(Label_(label=at_end_lbl), span=span)
-        _ = [ctx.lower_statement(s, materialised) for s in stmt.at_end]
+        [ctx.lower_statement(s, materialised) for s in stmt.at_end]
         ctx.emit_inst(Branch(label=after_label), span=span)
         ctx.emit_inst(Label_(label=ok_lbl), span=span)
-        _ = [ctx.lower_statement(s, materialised) for s in stmt.not_at_end]
+        [ctx.lower_statement(s, materialised) for s in stmt.not_at_end]
         ctx.emit_inst(Branch(label=after_label), span=span)
 
     if has_inv_key:
@@ -792,10 +825,10 @@ def lower_read(
             span=span,
         )
         ctx.emit_inst(Label_(label=inv_lbl), span=span)
-        _ = [ctx.lower_statement(s, materialised) for s in stmt.invalid_key]
+        [ctx.lower_statement(s, materialised) for s in stmt.invalid_key]
         ctx.emit_inst(Branch(label=after_label), span=span)
         ctx.emit_inst(Label_(label=not_inv_lbl), span=span)
-        _ = [ctx.lower_statement(s, materialised) for s in stmt.not_invalid_key]
+        [ctx.lower_statement(s, materialised) for s in stmt.not_invalid_key]
         ctx.emit_inst(Branch(label=after_label), span=span)
 
     ctx.emit_inst(Label_(label=after_label), span=span)
@@ -832,10 +865,10 @@ def _emit_invalid_key_branch(
         BranchIf(cond_reg=cond_reg, branch_targets=(inv_lbl, not_inv_lbl)), span=span
     )
     ctx.emit_inst(Label_(label=inv_lbl), span=span)
-    _ = [ctx.lower_statement(s, materialised) for s in invalid_key]
+    [ctx.lower_statement(s, materialised) for s in invalid_key]
     ctx.emit_inst(Branch(label=after_label), span=span)  # type: ignore[arg-type]
     ctx.emit_inst(Label_(label=not_inv_lbl), span=span)
-    _ = [ctx.lower_statement(s, materialised) for s in not_invalid_key]
+    [ctx.lower_statement(s, materialised) for s in not_invalid_key]
     ctx.emit_inst(Branch(label=after_label), span=span)  # type: ignore[arg-type]
 
 
