@@ -13,13 +13,13 @@ fileignoreconfig:
 - filename: tests/unit/cobol/test_indexed_read_key.py
   checksum: 3e2bf689c2e8a6e60329cd3cded41030c59fbbf913f88d890e3b51045089cf5b
 - filename: tests/unit/cobol/test_open_file_arguments.py
-  checksum: 00fc7d565da37776702667a082cd7da6f3d7e31ca2af04c711f3d7590331dbfe
+  checksum: 45ec60a22a2256ee37a12fa099eddccc29d190792e8860eed8c9558160147c8c
 - filename: tests/unit/cobol/test_access_mode_status.py
   checksum: 5c13f6d7567a88d6d79d27b65ad973b5e9058b286839596c4e02a29765d27575
 - filename: tests/integration/test_cobol_access_mode_status.py
   checksum: 68b60edaed42c8400dbbef49ee48b66c832bc5274956137556a181b8d4bfc425
 - filename: interpreter/cobol/file_attributes.py
-  checksum: 6e8385383bc686ac9c79e4961c19634245fb76d4a39e8c46b6db63ed6fd9c90f
+  checksum: 9f55a572ee99d58c5761055f7affc6cdf8baa244b80690f2126fd80b31db3da9
 - filename: tests/unit/test_builtin_keys.py
   checksum: ab2b3d3d790fb1f9495a81a502b80af641887d71b09042ddba13cbc7bc7805fd
 - filename: interpreter/vm/builtins.py
@@ -217,7 +217,7 @@ fileignoreconfig:
 - filename: tests/unit/cobol/test_recorded_memory_effects.py
   checksum: ba151292b7ee1a3f747628e5950297f904de1c1cd625307f762f7a98b570b3de
 - filename: docs/frontend-design/cobol.md
-  checksum: 8c6ba28db60ad394cc9bcb87495a99ad462ae04a44273e49517c86fd442798e6
+  checksum: b53bc35226101f95998ed1c4b243afaa07291bd3b7d55fa86e8c05aa9d33aa51
 - filename: tests/integration/test_cobol_call_using_addresses.py
   checksum: 353804977c7a3e5eb44a303f7e42a47ef1bdf9f837f41e396bf5033813c4fdb0
 - filename: tests/integration/test_cobol_call_using_slots.py
@@ -271,7 +271,7 @@ fileignoreconfig:
 - filename: tests/integration/test_cobol_use_declaratives.py
   checksum: d0c6ea039a432d727fde9ea777b1c4945dff7c0f5c3a4599a626bfd8df390072
 - filename: interpreter/cobol/open_file.py
-  checksum: 1b6e7da59b4b7aafcb63b2b044357bfbea1b102059b8db0b0c8d9088106df3fd
+  checksum: 41146004c0455ab8f1f60d5377e80a5265837db8b5cc87e24809ccbec10a73ac
 - filename: tests/unit/cobol/test_keyed_delete.py
   checksum: cb8c9ea0d0035dd28468ce8f422dc7994e4fc55ea75301c94ae4b1e38573afcc
 - filename: tests/integration/test_cobol_file_logic_status.py

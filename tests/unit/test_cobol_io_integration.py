@@ -120,6 +120,7 @@ class TestExecutorIOProviderDispatch:
             ("%rk", 0),
             ("%op", False),
             ("%va", False),
+            ("%mn", 0),
         )
         instructions = [
             IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),

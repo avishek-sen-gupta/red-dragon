@@ -26,6 +26,7 @@ _OPEN_ARGS = [
     typed_from_runtime(0),
     typed_from_runtime(False),
     typed_from_runtime(False),
+    typed_from_runtime(0),
     _PROGRAM,
 ]
 
@@ -237,6 +238,7 @@ class TestStubIOProvider:
                 typed_from_runtime(0),
                 typed_from_runtime(False),
                 typed_from_runtime(False),
+                typed_from_runtime(0),
                 _PROGRAM,
             ],
         )
@@ -259,6 +261,7 @@ class TestStubIOProvider:
                 typed_from_runtime(0),
                 typed_from_runtime(False),
                 typed_from_runtime(False),
+                typed_from_runtime(0),
                 _PROGRAM,
             ],
         )

@@ -13,6 +13,7 @@ class FileLogicStatus(Enum):
     SEQUENCE_ERROR = "21"
     BOUNDARY_VIOLATION = "24"
     CLOSED_WITH_LOCK = "38"
+    RECORD_SIZE_VIOLATION = "44"
     ALREADY_OPEN = "41"
     NOT_OPEN = "42"
     NO_CURRENT_RECORD = "43"

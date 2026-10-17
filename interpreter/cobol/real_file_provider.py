@@ -229,6 +229,7 @@ class RealFileIOProvider(CobolIOProvider):
         relative_key_digits: int,
         optional: bool,
         variable: bool,
+        minimum_record_length: int,
         program: str,
     ) -> IOResult:
         attributes = FileAttributes(
@@ -238,6 +239,8 @@ class RealFileIOProvider(CobolIOProvider):
             relative_key_digits,
             optional,
             variable,
+            minimum_record_length,
+            record_length,
         )
         refusals = self._open_refusals(filename, OpenMode(mode), optional)
         if refusals:
@@ -455,6 +458,7 @@ class RealFileIOProvider(CobolIOProvider):
             0,
             False,
             False,
+            record_length,
             program,
         )
 
