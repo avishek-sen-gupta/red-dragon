@@ -324,7 +324,7 @@ class RealFileIOProvider(CobolIOProvider):
             filename,
             FileLogicStatus.WRITE_NOT_PERMITTED,
             FileVerb(
-                lambda file: file.write_check(record),
+                lambda file: file.write_check(record, key),
                 lambda file: file.driver.write(record, file.key_bytes(key)),
                 lambda file, result: file.after_write(record, result),
             ),

@@ -203,7 +203,7 @@ fileignoreconfig:
 - filename: tests/unit/cobol/test_recorded_memory_effects.py
   checksum: ba151292b7ee1a3f747628e5950297f904de1c1cd625307f762f7a98b570b3de
 - filename: docs/frontend-design/cobol.md
-  checksum: 14826b804c9ce89145c8ea9f98864572249c4688da7eafdc442adc0a24bfe893
+  checksum: d750494627ece063d74d4569ebacf3ca74f5ad14cfdcda9446b6e9974cfc9459
 - filename: tests/integration/test_cobol_call_using_addresses.py
   checksum: 353804977c7a3e5eb44a303f7e42a47ef1bdf9f837f41e396bf5033813c4fdb0
 - filename: tests/integration/test_cobol_call_using_slots.py
@@ -257,7 +257,7 @@ fileignoreconfig:
 - filename: tests/integration/test_cobol_use_declaratives.py
   checksum: d0c6ea039a432d727fde9ea777b1c4945dff7c0f5c3a4599a626bfd8df390072
 - filename: interpreter/cobol/open_file.py
-  checksum: 7d485d27643202a60e4fcf05a6e7b916a09ceb3ff07248aeeb029f2846a17501
+  checksum: 1b6e7da59b4b7aafcb63b2b044357bfbea1b102059b8db0b0c8d9088106df3fd
 - filename: tests/unit/cobol/test_keyed_delete.py
   checksum: cb8c9ea0d0035dd28468ce8f422dc7994e4fc55ea75301c94ae4b1e38573afcc
 - filename: tests/integration/test_cobol_file_logic_status.py

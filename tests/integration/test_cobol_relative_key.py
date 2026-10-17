@@ -112,6 +112,8 @@ def test_invalid_key_phrase_runs_for_every_invalid_key_status(
             '        NOT INVALID KEY DISPLAY "N " ST END-WRITE.',
             '    WRITE F-REC INVALID KEY DISPLAY "I " ST',
             '        NOT INVALID KEY DISPLAY "N " ST END-WRITE.',
+            '    MOVE 0 TO RK. WRITE F-REC INVALID KEY DISPLAY "I " ST',
+            '        NOT INVALID KEY DISPLAY "N " ST END-WRITE.',
             "    CLOSE F.",
             "    OPEN INPUT F.",
             '    MOVE 7 TO RK. READ F INVALID KEY DISPLAY "I " ST',
@@ -126,4 +128,4 @@ def test_invalid_key_phrase_runs_for_every_invalid_key_status(
         max_steps=20000,
         io_provider=RealFileIOProvider(base_dir=tmp_path),
     )
-    assert capsys.readouterr().out == "N 00\nI 22\nI 23\n"
+    assert capsys.readouterr().out == "N 00\nI 22\nI 24\nI 23\n"
