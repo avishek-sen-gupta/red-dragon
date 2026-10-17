@@ -194,3 +194,56 @@ def test_sort_procedures_release_and_return_the_records_in_key_order(
     assert capsys.readouterr().out == (
         "C3 C3\nB1 B1\nB4 B4\nA2 A2\nAT END\nDRAINED\nEND\n"
     )
+
+
+@covers(CobolFeature.MERGE)
+def test_merge_interleaves_ordered_files_with_equal_keys_in_using_order(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    files = ("IN-F", "IN-G", "OUT-F", "SRT")
+    source = to_fixed(
+        [
+            "IDENTIFICATION DIVISION.",
+            "PROGRAM-ID. MERGEP.",
+            "ENVIRONMENT DIVISION.",
+            "INPUT-OUTPUT SECTION.",
+            "FILE-CONTROL.",
+            *(f'    SELECT {name} ASSIGN TO "{name}".' for name in files),
+            "DATA DIVISION.",
+            "FILE SECTION.",
+            "FD IN-F.",
+            "01 F-REC PIC XX.",
+            "FD IN-G.",
+            "01 G-REC PIC XX.",
+            "FD OUT-F.",
+            "01 OUT-REC PIC XX.",
+            "SD SRT.",
+            "01 SRT-REC.",
+            "    05 S-KEY PIC X.",
+            "    05 S-TAG PIC X.",
+            "PROCEDURE DIVISION.",
+            "MAIN-PARA.",
+            "    OPEN OUTPUT IN-F IN-G.",
+            '    MOVE "A1" TO F-REC. WRITE F-REC.',
+            '    MOVE "C2" TO F-REC. WRITE F-REC.',
+            '    MOVE "A3" TO G-REC. WRITE G-REC.',
+            '    MOVE "B4" TO G-REC. WRITE G-REC.',
+            "    CLOSE IN-F IN-G.",
+            "    MERGE SRT ON ASCENDING KEY S-KEY USING IN-G IN-F",
+            "        GIVING OUT-F.",
+            "    OPEN INPUT OUT-F.",
+            *("    READ OUT-F. DISPLAY OUT-REC." for _ in range(4)),
+            "    CLOSE OUT-F.",
+            "    STOP RUN.",
+        ]
+    )
+    run(
+        source=source,
+        language="cobol",
+        max_steps=50000,
+        io_provider=RealFileIOProvider(
+            base_dir=tmp_path,
+            path_overrides={name: tmp_path / name for name in files},
+        ),
+    )
+    assert capsys.readouterr().out == "A3\nA1\nB4\nC2\n"

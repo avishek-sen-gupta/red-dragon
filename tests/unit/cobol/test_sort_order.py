@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from cobol_asg.cobol_statements import (
+    MergeStatement,
     ProcedureRange,
     ProcedureRef,
     SortStatement,
@@ -42,7 +43,7 @@ def test_alphanumeric_key_orders_by_collating_weight_and_keeps_ties_in_order() -
 
 
 @covers(CobolFeature.SORT)
-def test_sort_statement_reads_and_writes_its_bridge_form() -> None:
+def test_sort_and_merge_statements_read_and_write_their_bridge_form() -> None:
     data = {
         "type": "SORT",
         "file_name": "SRT",
@@ -67,3 +68,18 @@ def test_sort_statement_reads_and_writes_its_bridge_form() -> None:
         span=None,
     )
     assert stmt.to_dict() == data
+    merge = {
+        "type": "MERGE",
+        "file_name": "SRT",
+        "keys": [],
+        "using": ["A", "B"],
+        "giving": ["C"],
+    }
+    assert parse_statement(merge) == MergeStatement(
+        file_name="SRT",
+        keys=(),
+        using=SortFiles(("A", "B")),
+        sink=SortFiles(("C",)),
+        span=None,
+    )
+    assert parse_statement(merge).to_dict() == merge

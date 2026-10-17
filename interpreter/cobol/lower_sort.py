@@ -1,6 +1,6 @@
-"""SORT, RELEASE and RETURN lowering: the sort file is a sequential work file that
-the USING files or the input procedure's RELEASEs fill, that is put in key order,
-and that the GIVING files copy or the output procedure's RETURNs read."""
+"""SORT, MERGE, RELEASE and RETURN lowering: the sort file is a sequential work file
+that the USING files or the input procedure's RELEASEs fill, that is put in key
+order, and that the GIVING files copy or the output procedure's RETURNs read."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from functools import partial
 
 from cobol_asg.cobol_statements import (
     CloseStatement,
+    MergeStatement,
     OpenStatement,
     PerformStatement,
     ProcedureRange,
@@ -219,6 +220,22 @@ def lower_sort(
     _fill(ctx, stmt, materialised)
     _emit_order(ctx, stmt, materialised)
     _drain(ctx, stmt, materialised)
+
+
+def lower_merge(
+    ctx: EmitContext, stmt: MergeStatement, materialised: MaterialisedSectionedLayout
+) -> None:
+    lower_sort(
+        ctx,
+        SortStatement(
+            file_name=stmt.file_name,
+            keys=stmt.keys,
+            source=stmt.using,
+            sink=stmt.sink,
+            span=stmt.span,
+        ),
+        materialised,
+    )
 
 
 def lower_release(
