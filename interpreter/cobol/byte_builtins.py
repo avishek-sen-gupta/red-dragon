@@ -61,6 +61,7 @@ from interpreter.cobol.inspect_scan import (
     inspect_tally,
 )
 from interpreter.cobol.numeric_builtins import NUMERIC_BUILTINS
+from interpreter.cobol.numeric_class import packed_is_numeric, zoned_is_numeric
 from interpreter.cobol.run_unit import advanced, restarted, value_of
 from interpreter.cobol.string_transfer import string_into
 from interpreter.cobol.unstring_delimiter_text import UnstringDelimiterText
@@ -896,6 +897,30 @@ def _builtin_is_digits(args: Sequence[TypedValue], vm: VMState) -> BuiltinResult
     if not isinstance(value, str):
         return BuiltinResult(value=_UNCOMPUTABLE)
     return BuiltinResult(value=bool(value) and set(value) <= _DIGIT_CHARACTERS)
+
+
+def _builtin_cobol_zoned_is_numeric(
+    args: Sequence[TypedValue], vm: VMState
+) -> BuiltinResult:
+    """Args: [stored: list[int], signed: bool, sign_index: int, separate: bool].
+    Returns: bool — IS NUMERIC on a zoned decimal item's stored bytes."""
+    data, signed, sign_index, separate = (a.value for a in args)
+    if not (isinstance(data, list) and isinstance(sign_index, int)):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(
+        value=zoned_is_numeric(data, bool(signed), sign_index, bool(separate))
+    )
+
+
+def _builtin_cobol_packed_is_numeric(
+    args: Sequence[TypedValue], vm: VMState
+) -> BuiltinResult:
+    """Args: [stored: list[int], signed: bool].
+    Returns: bool — IS NUMERIC on a packed decimal item's stored bytes."""
+    data, signed = (a.value for a in args)
+    if not isinstance(data, list):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    return BuiltinResult(value=packed_is_numeric(data, bool(signed)))
 
 
 def _builtin_is_alphabetic(args: list[TypedValue], vm: VMState) -> BuiltinResult:
@@ -1864,6 +1889,8 @@ BYTE_BUILTINS: Mapping[FuncName, Builtin] = MappingProxyType(
         FuncName(BuiltinName.CURRENT_DATE): _builtin_current_date,
         FuncName(BuiltinName.IS_NUMERIC): _builtin_is_numeric,
         FuncName(BuiltinName.IS_DIGITS): _builtin_is_digits,
+        FuncName(BuiltinName.COBOL_ZONED_IS_NUMERIC): _builtin_cobol_zoned_is_numeric,
+        FuncName(BuiltinName.COBOL_PACKED_IS_NUMERIC): _builtin_cobol_packed_is_numeric,
         FuncName(BuiltinName.IS_ALPHABETIC): _builtin_is_alphabetic,
         FuncName(BuiltinName.IS_ALPHABETIC_LOWER): _builtin_is_alphabetic_lower,
         FuncName(BuiltinName.IS_ALPHABETIC_UPPER): _builtin_is_alphabetic_upper,

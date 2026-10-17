@@ -106,6 +106,12 @@ DispatchFn = Callable[
 ]  # Any: CobolStatementType, circular-import boundary
 
 
+_STORED_CLASS_TEST = {
+    CobolDataCategory.ZONED_DECIMAL: BuiltinName.COBOL_ZONED_IS_NUMERIC,
+    CobolDataCategory.COMP3: BuiltinName.COBOL_PACKED_IS_NUMERIC,
+}
+
+
 def _sign_index(fl: FieldLayout) -> int:
     return 0 if fl.type_descriptor.sign_leading else fl.byte_length - 1
 
@@ -168,16 +174,21 @@ _NUMERIC_DECODE_IR: Mapping[
 }
 
 
+_NULL_OBSERVER = NullFrontendObserver()
+_NO_CONDITION_NAMES = ConditionNameIndex({})
+_EMPTY_ASG = CobolASG()
+
+
 class EmitContext:
     """Shared state and emit primitives for COBOL IR lowering."""
 
     def __init__(
         self,
         dispatch_fn: DispatchFn,
-        observer: FrontendObserver = NullFrontendObserver(),
-        condition_index: ConditionNameIndex = ConditionNameIndex({}),
+        observer: FrontendObserver = _NULL_OBSERVER,
+        condition_index: ConditionNameIndex = _NO_CONDITION_NAMES,
         extension_strategies: Sequence[RedDragonExtensionLoweringStrategy] = (),
-        asg: CobolASG = CobolASG(),
+        asg: CobolASG = _EMPTY_ASG,
         tolerant: bool = False,
         addressing_mode: AddressingMode = LP32_MODE,
     ) -> None:
@@ -1275,6 +1286,73 @@ class EmitContext:
         )
         ir = build_decode_alphanumeric_ir(f"dec_inspected_{fl.name}")
         return self.inline_ir(ir, {"%p_data": digits}, span=span)
+
+    def emit_numeric_item_class(
+        self,
+        region_reg: Register,
+        fl: FieldLayout,
+        offset_reg: Register = NO_REGISTER,
+        *,
+        extent: FieldExtent,
+        span: SourceSpan | None,
+    ) -> Register:
+        """IS NUMERIC on an item described as numeric: a zoned or packed decimal
+        item's stored bytes, the decoded value's text for any other."""
+        td = fl.type_descriptor
+        if td.category not in _STORED_CLASS_TEST:
+            return self._emit_decoded_is_numeric(
+                region_reg, fl, offset_reg, extent=extent, span=span
+            )
+        stored = self._emit_load_field_bytes(
+            region_reg, fl, offset_reg, extent=extent, span=span
+        )
+        signed = self.const_to_reg(td.signed, span=span)
+        args = (
+            (stored, signed)
+            if td.category == CobolDataCategory.COMP3
+            else (
+                stored,
+                signed,
+                self.const_to_reg(_sign_index(fl), span=span),
+                self.const_to_reg(td.sign_separate, span=span),
+            )
+        )
+        result = self.fresh_reg()
+        self.emit_inst(
+            CallFunction(
+                result_reg=result,
+                func_name=FuncName(_STORED_CLASS_TEST[td.category]),
+                args=args,
+            ),
+            span=span,
+        )
+        return result
+
+    def _emit_decoded_is_numeric(
+        self,
+        region_reg: Register,
+        fl: FieldLayout,
+        offset_reg: Register,
+        *,
+        extent: FieldExtent,
+        span: SourceSpan | None,
+    ) -> Register:
+        text = self.emit_to_string(
+            self.emit_decode_field(
+                region_reg, fl, offset_reg, extent=extent, span=span
+            ),
+            span=span,
+        )
+        result = self.fresh_reg()
+        self.emit_inst(
+            CallFunction(
+                result_reg=result,
+                func_name=FuncName(BuiltinName.IS_NUMERIC),
+                args=(text,),
+            ),
+            span=span,
+        )
+        return result
 
     def emit_write_inspected_characters(
         self,

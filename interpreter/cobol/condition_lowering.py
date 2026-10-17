@@ -18,7 +18,6 @@ from cobol_asg.cobol_expression import (
     expr_from_dict,
     expr_to_dict,
 )
-from cobol_asg.cobol_types import CobolDataCategory
 from cobol_asg.condition_name import ConditionValue
 from cobol_asg.ref_mod import FunctionCallOperand, RefModOperand
 from cobol_asg.source_span import SourceSpan
@@ -261,11 +260,14 @@ def _expand_condition_name(
     return _emit_or_chain(ctx, value_regs, span=span)
 
 
+_NO_CONDITION_NAMES = ConditionNameIndex({})
+
+
 def lower_condition(
     ctx: EmitContext,
     condition: dict,
     materialised: MaterialisedSectionedLayout,
-    condition_index: ConditionNameIndex = ConditionNameIndex({}),
+    condition_index: ConditionNameIndex = _NO_CONDITION_NAMES,
     *,
     span: SourceSpan | None = None,
 ) -> Register:
@@ -704,13 +706,17 @@ def _lower_class_condition(
     """
     class_name = str(node.get("class", "")).upper()
     operand = node.get("operand", {})
+    if class_name == "NUMERIC" and _is_numeric_field(
+        ctx, operand, materialised, span=span
+    ):
+        return _lower_numeric_item_class(ctx, operand, materialised, span=span)
     builtin = (
         BuiltinName.IS_DIGITS
         if class_name == "NUMERIC"
         and _is_nonnumeric_operand(ctx, operand, materialised, span=span)
-        else _CLASS_BUILTIN.get(class_name)
+        else _CLASS_BUILTIN.get(class_name, "")
     )
-    if builtin is None:
+    if not builtin:
         logger.warning("unknown class condition %r — never matching", class_name)
         result = ctx.fresh_reg()
         ctx.emit_inst(Const.bool_(result, False), span=span)
@@ -728,6 +734,25 @@ def _lower_class_condition(
         span=span,
     )
     return result
+
+
+def _lower_numeric_item_class(
+    ctx: EmitContext,
+    expr: dict,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> Register:
+    ref, rr = ctx.resolve_field_ref(
+        expr.get("name", ""),
+        materialised,
+        qualifiers=tuple(expr.get("qualifiers", ())),
+        subscripts=tuple(expr_from_dict(s) for s in expr.get("subscripts", [])),
+        span=span,
+    )
+    return ctx.emit_numeric_item_class(
+        rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
+    )
 
 
 _SIGN_OP: dict[str, str] = {"POSITIVE": ">", "NEGATIVE": "<", "ZERO": "=="}

@@ -455,6 +455,8 @@ class TestByteBuiltinsRegistration:
             "__current_date",
             "__is_numeric",
             "__is_digits",
+            "__cobol_zoned_is_numeric",
+            "__cobol_packed_is_numeric",
             "__is_alphabetic",
             "__is_alphabetic_lower",
             "__is_alphabetic_upper",
