@@ -796,6 +796,14 @@ def lower_move(
             span=span,
         )
 
+    de_edited_reg: Register = NO_REGISTER
+    if (
+        source_fl is not None
+        and stmt.source.ref_mod_start is None
+        and source_fl.type_descriptor.category == CobolDataCategory.NUMERIC_EDITED
+    ):
+        de_edited_reg = _emit_de_edit(ctx, value_str_reg, source_fl, stmt)
+
     # Store the (once-evaluated) source value into each receiving field. Each
     # target gets its own reference modification and PICTURE conversion; the
     # base source value (source_value_reg) is never clobbered across targets.
@@ -829,8 +837,35 @@ def lower_move(
             )
             effective_source = filled
         _store_move_value(
-            ctx, target, effective_source, materialised, digit_image_reg, span=span
+            ctx,
+            target,
+            effective_source,
+            materialised,
+            digit_image_reg,
+            de_edited_reg=de_edited_reg,
+            span=span,
         )
+
+
+def _emit_de_edit(
+    ctx: EmitContext,
+    image_reg: Register,
+    source_fl: FieldLayout,
+    stmt: MoveStatement,
+) -> Register:
+    span = stmt.span
+    td = source_fl.type_descriptor
+    value = _call_builtin(
+        ctx,
+        BuiltinName.COBOL_DE_EDIT,
+        (
+            image_reg,
+            ctx.const_to_reg(td.pic_string, span=span),
+            ctx.const_to_reg(td.currency, span=span),
+        ),
+        span=span,
+    )
+    return ctx.emit_to_string(value, span=span)
 
 
 def _store_move_value(
@@ -840,6 +875,7 @@ def _store_move_value(
     materialised: MaterialisedSectionedLayout,
     digit_image_reg: Register = NO_REGISTER,
     *,
+    de_edited_reg: Register = NO_REGISTER,
     span: SourceSpan | None = None,
 ) -> None:
     """Store an already-evaluated MOVE source value into one receiving field.
@@ -851,6 +887,9 @@ def _store_move_value(
     unsigned integer of its digit positions, P positions as zeros) rather than
     its value; digit_image_reg carries it, and is used only for character
     receivers without target reference modification.
+
+    A numeric-edited sender moved to a numeric or numeric-edited receiver is
+    de-edited first; de_edited_reg carries the value recovered from its image.
     """
     target_ref, target_rr = ctx.resolve_field_ref(
         target.name,
@@ -866,6 +905,13 @@ def _store_move_value(
         and target_ref.fl.type_descriptor.holds_characters
     ):
         source_value_reg = digit_image_reg
+
+    if (
+        de_edited_reg.is_present()
+        and target.ref_mod_start is None
+        and not target_ref.fl.type_descriptor.holds_characters
+    ):
+        source_value_reg = de_edited_reg
 
     target_value_reg = source_value_reg
 
