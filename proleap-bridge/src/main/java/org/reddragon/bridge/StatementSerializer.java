@@ -2402,7 +2402,9 @@ public final class StatementSerializer {
         JsonArray arr = new JsonArray();
         if (subscripts != null) {
             for (Subscript sub : subscripts) {
-                arr.add(serializeFromValue(sub.getSubscriptValueStmt()));
+                arr.add(isAllSubscript(sub.getCtx())
+                        ? allSubscriptNode()
+                        : serializeFromValue(sub.getSubscriptValueStmt()));
             }
         }
         return arr;
@@ -4114,10 +4116,25 @@ public final class StatementSerializer {
         return arr;
     }
 
+    /** The subscript ALL of an intrinsic-function table argument. */
+    private static boolean isAllSubscript(org.antlr.v4.runtime.ParserRuleContext ctx) {
+        return ctx instanceof CobolParser.SubscriptContext
+                && ((CobolParser.SubscriptContext) ctx).ALL() != null;
+    }
+
+    private static JsonObject allSubscriptNode() {
+        JsonObject all = new JsonObject();
+        all.addProperty("kind", "all");
+        return all;
+    }
+
     /** Grammar: subscript : ALL | arithmeticExpression | integerLiteral | qualifiedDataName | indexName */
     private static JsonElement serializeSubscriptCtx(CobolParser.SubscriptContext sub) {
         if (sub == null) {
             return litNode("");
+        }
+        if (isAllSubscript(sub)) {
+            return allSubscriptNode();
         }
         if (sub.arithmeticExpression() != null) {
             return serializeArithExprCtx(sub.arithmeticExpression());

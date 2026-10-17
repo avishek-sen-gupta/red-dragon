@@ -396,6 +396,15 @@ class DataItemMatch:
     def tables(self) -> tuple[OccursTable, ...]:
         return tuple(
             OccursTable(group.offset, group.element_size, group.occurs_count)
+            for group in self.occurs_items
+        )
+
+    @property
+    def occurs_items(self) -> tuple[FieldLayout | DataLayout, ...]:
+        """The item and the groups containing it that carry OCCURS, outermost
+        first: one per subscript dimension."""
+        return tuple(
+            group
             for group in (*(group for _, group in self.ancestors), self.item)
             if group.occurs_count > 0 and group.element_size > 0
         )

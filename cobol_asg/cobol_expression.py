@@ -72,6 +72,12 @@ class DfhRespNode:
 
 
 @dataclass(frozen=True)
+class AllSubscriptNode:
+    """The subscript ALL in an intrinsic-function table argument: every
+    occurrence of that dimension."""
+
+
+@dataclass(frozen=True)
 class FieldRefNode:
     """Reference to a COBOL data field by name.
 
@@ -124,6 +130,7 @@ ExprNode = (
     | FigurativeNode
     | LengthOfNode
     | DfhRespNode
+    | AllSubscriptNode
     | FieldRefNode
     | RefModNode
     | BinOpNode
@@ -180,6 +187,10 @@ def _dfhresp(d: JsonExpr) -> ExprNode:
     return DfhRespNode(condition=_text(d, "condition"))
 
 
+def _all_subscript(d: JsonExpr) -> ExprNode:
+    return AllSubscriptNode()
+
+
 def _ref_mod(d: JsonExpr) -> ExprNode:
     return RefModNode(
         name=_text(d, "name"),
@@ -230,6 +241,7 @@ _BUILDERS: Mapping[str, Callable[[JsonExpr], ExprNode]] = {
     "figurative": _figurative,
     "length_of": _length_of,
     "dfhresp": _dfhresp,
+    "all": _all_subscript,
 }
 
 
@@ -247,6 +259,7 @@ def expr_from_dict(d: JsonExpr) -> ExprNode:
     - {"kind": "figurative", "value": "ZEROS"} — figurative constant operand
     - {"kind": "length_of", "name": "WS-A"} — LENGTH OF special register
     - {"kind": "dfhresp", "condition": "NORMAL"} — CICS response code
+    - {"kind": "all"} — the subscript ALL of a function's table argument
     """
     kind = _text(d, "kind")
     if kind not in _BUILDERS:
@@ -294,6 +307,10 @@ def _dfhresp_dict(node: DfhRespNode) -> dict:
     return {"kind": "dfhresp", "condition": node.condition}
 
 
+def _all_subscript_dict(node: AllSubscriptNode) -> dict:
+    return {"kind": "all"}
+
+
 def _field_ref_dict(node: FieldRefNode) -> dict:
     return {
         "kind": "ref",
@@ -336,6 +353,7 @@ _SERIALIZERS: Mapping[type, Callable[..., dict]] = {
     FigurativeNode: _figurative_dict,
     LengthOfNode: _length_of_dict,
     DfhRespNode: _dfhresp_dict,
+    AllSubscriptNode: _all_subscript_dict,
     FieldRefNode: _field_ref_dict,
     RefModNode: _ref_mod_dict,
     BinOpNode: _binop_dict,
