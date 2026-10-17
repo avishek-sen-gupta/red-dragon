@@ -519,19 +519,6 @@ def _builtin_cobol_apply_edit_picture(
     )
 
 
-def _builtin_cobol_de_edit(args: list[TypedValue], vm: VMState) -> BuiltinResult:
-    """Args: [image: str, pic_string: str, currency: str, decimal_point_is_comma:
-    bool]. Returns the de-edited number."""
-    if any(_is_symbolic(a.value) for a in args):
-        return BuiltinResult(value=_UNCOMPUTABLE)
-    from cobol_asg.edit_picture import de_edit
-
-    image, pic_string, currency = (str(a.value) for a in args[:3])
-    return BuiltinResult(
-        value=de_edit(image, pic_string, currency, bool(args[3].value))
-    )
-
-
 def _builtin_cobol_apply_alphanumeric_edit(
     args: list[TypedValue], vm: VMState
 ) -> BuiltinResult:
@@ -1795,7 +1782,6 @@ BYTE_BUILTINS: Mapping[FuncName, Builtin] = MappingProxyType(
         FuncName(
             BuiltinName.COBOL_APPLY_ALPHANUMERIC_EDIT
         ): _builtin_cobol_apply_alphanumeric_edit,
-        FuncName(BuiltinName.COBOL_DE_EDIT): _builtin_cobol_de_edit,
         FuncName(BuiltinName.STRING_SLICE): _builtin_string_slice,
         FuncName(BuiltinName.STRING_SPLICE): _builtin_string_splice,
         FuncName(BuiltinName.STRING_ZFILL): _builtin_string_zfill,

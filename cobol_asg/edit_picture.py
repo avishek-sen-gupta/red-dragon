@@ -46,7 +46,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from itertools import takewhile
+from types import MappingProxyType
 
+from cobol_asg.de_edit_plan import DeEditPlan
 from cobol_asg.edit_picture_shape import EditPicture
 from cobol_asg.edit_render import EditRender
 from cobol_numeric.number import (
@@ -391,19 +393,17 @@ def _float_string_end(ep: EditPicture, point: int) -> int:
 
 _DE_EDIT_DIGITS = frozenset("9Z*P")
 _POINT_SYMBOLS = frozenset(".V")
-_NEGATIVE_MARKS = frozenset({("+", "-"), ("-", "-"), ("C", "C"), ("D", "D")})
+_NEGATIVE_SIGNS = MappingProxyType({"+": "-", "-": "-", "C": "C", "D": "D"})
 
 
-def _de_edit_cells(image: str, template: Sequence[str]) -> tuple[tuple[str, str], ...]:
-    stored = iter(image.ljust(len(template)))
-    return tuple(
-        (sym, "0" if sym == "P" else "" if sym == "V" else next(stored))
-        for sym in template
-    )
+def _image_positions(template: Sequence[str]) -> tuple[int, ...]:
+    """Each template symbol's position in the stored image; P and V store no
+    character and get the position of the next symbol that does."""
+    consumes = [0 if sym in "PV" else 1 for sym in template]
+    return tuple(sum(consumes[:index]) for index in range(len(template)))
 
 
-def _integer_digit_count(cells: tuple[tuple[str, str], ...], digit_syms: str) -> int:
-    symbols = [sym for sym, _ in cells]
+def _integer_digit_count(symbols: Sequence[str], digit_syms: str) -> int:
     point = next(
         (i for i, sym in enumerate(symbols) if sym in _POINT_SYMBOLS), len(symbols)
     )
@@ -412,13 +412,12 @@ def _integer_digit_count(cells: tuple[tuple[str, str], ...], digit_syms: str) ->
     return sum(1 for sym in symbols[:integer_end] if sym in digit_syms)
 
 
-def de_edit(
-    image: str,
+def de_edit_plan(
     pic: str,
     currency: str = DEFAULT_CURRENCY,
     decimal_point_is_comma: bool = False,
-) -> CobolNumber:
-    """The numeric value a numeric-edited ``image`` of ``pic`` represents.
+) -> DeEditPlan:
+    """Where de-editing an image of ``pic`` finds its digits and sign.
 
     De-editing (ANSI X3.23-1985 MOVE; IBM Enterprise COBOL LR, "Elementary
     moves"): each digit position contributes its digit, a suppressed or
@@ -430,13 +429,18 @@ def de_edit(
     template = [sym for sym in _expand(pic.upper().translate(swap)) if sym != "S"]
     float_symbol, _ = find_float_string(template, currency)
     digit_syms = "".join(_DE_EDIT_DIGITS) + float_symbol
-    cells = _de_edit_cells(image, template)
-    digits = "".join(
-        char if char.isdigit() else "0" for sym, char in cells if sym in digit_syms
-    )
-    negative = any(cell in _NEGATIVE_MARKS for cell in cells)
-    magnitude = int(digits or "0")
-    return from_digits(
-        -magnitude if negative else magnitude,
-        len(digits) - _integer_digit_count(cells, digit_syms),
+    cells = tuple(zip(template, _image_positions(template), strict=True))
+    digit_cells = [(sym, position) for sym, position in cells if sym in digit_syms]
+    return DeEditPlan(
+        digit_terms=tuple(
+            (position, 10 ** (len(digit_cells) - 1 - index))
+            for index, (sym, position) in enumerate(digit_cells)
+            if sym != "P"
+        ),
+        negative_marks=tuple(
+            (position, _NEGATIVE_SIGNS[sym])
+            for sym, position in cells
+            if sym in _NEGATIVE_SIGNS
+        ),
+        scale=len(digit_cells) - _integer_digit_count(template, digit_syms),
     )

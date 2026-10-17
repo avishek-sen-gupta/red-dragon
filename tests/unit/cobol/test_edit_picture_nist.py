@@ -23,11 +23,12 @@ from __future__ import annotations
 import pytest
 
 from cobol_asg.cobol_types import CobolDataCategory
-from cobol_asg.edit_picture import de_edit, format_edited
+from cobol_asg.edit_picture import format_edited
 from cobol_asg.pic_parser import parse_pic
 from cobol_numeric.number import from_literal
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
+from tests.unit.cobol.de_edit_run import de_edit
 
 
 class TestNistFloatingCurrency:

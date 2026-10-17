@@ -334,6 +334,31 @@ class TestProcedureDivisionLowering:
         assert len(loads) >= 1
         assert len(writes) >= 1
 
+    @covers(CobolFeature.MOVE, CobolFeature.NUMERIC_EDITED)
+    def test_move_numeric_edited_to_numeric_de_edits_in_ir(self):
+        fields = [
+            CobolField(
+                name="WS-E", level=77, pic="+9(3).99", usage="DISPLAY", offset=0
+            ),
+            CobolField(
+                name="WS-N", level=77, pic="S9(3)V99", usage="DISPLAY", offset=7
+            ),
+        ]
+        stmts = [
+            MoveStatement(
+                source=RefModOperand(name="WS-E"), targets=[RefModOperand(name="WS-N")]
+            )
+        ]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        called = [
+            c.operands[0]
+            for c in _find_opcodes(instructions, Opcode.CALL_FUNCTION)
+            if c.operands
+            and c.operands[0] in {"__cobol_de_edit", "__cobol_from_digits"}
+        ]
+        assert called == ["__cobol_from_digits"]
+
     @covers(
         CobolFeature.ADD,
         CobolFeature.ARITHMETIC_EXPRESSION,
