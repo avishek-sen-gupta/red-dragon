@@ -25,35 +25,18 @@ import java.util.logging.Logger;
 /**
  * Serializes DATA DIVISION entries to JSON matching the CobolField contract.
  *
- * <p>Computes byte offsets using a running accumulator, mirroring the Python
- * {@code data_layout.py} offset logic. ProLeap does not compute offsets natively.
+ * <p>Emits structure only: the ASG reader (cobol_asg/storage_layout.py)
+ * computes every offset and size.
  */
 public final class DataFieldSerializer {
 
     private static final Logger LOG = Logger.getLogger(DataFieldSerializer.class.getName());
 
 
-    /** Bytes a USAGE POINTER item occupies: 4 under LP(32), 8 under LP(64). */
-    private static int pointerSize = 4;
-
-    /** Bytes a USAGE INDEX data item occupies: a fullword (IBM Enterprise COBOL LR, USAGE INDEX). */
-    private static final int INDEX_ITEM_SIZE = 4;
-
-    /** Bytes a COMP-1 item occupies: short floating point (IBM Enterprise COBOL LR, USAGE COMP-1). */
-    private static final int COMP_1_SIZE = 4;
-
-    /** Bytes a COMP-2 item occupies: long floating point (IBM Enterprise COBOL LR, USAGE COMP-2). */
-    private static final int COMP_2_SIZE = 8;
-
     /** Running counter for disambiguating FILLER fields within a serialization session. */
     private int fillerCount = 0;
 
     private DataFieldSerializer() {
-    }
-
-    /** Sets the USAGE POINTER size for this run, from the -pointer-size option. */
-    public static void setPointerSize(int bytes) {
-        pointerSize = bytes;
     }
 
     /**
@@ -65,24 +48,12 @@ public final class DataFieldSerializer {
     public static JsonArray serializeEntries(List<DataDescriptionEntry> entries) {
         DataFieldSerializer instance = new DataFieldSerializer();
         JsonArray fields = new JsonArray();
-        int runningOffset = 0;
-        int areaStart = 0;
 
         for (DataDescriptionEntry entry : entries) {
             if (entry instanceof DataDescriptionEntryGroup group) {
-                JsonObject field = instance.serializeGroup(group, runningOffset);
-                fields.add(field);
-
-                if (group.getRedefinesClause() == null) {
-                    areaStart = runningOffset;
-                    runningOffset += computeByteLength(group);
-                } else {
-                    runningOffset = Math.max(runningOffset, areaStart + computeByteLength(group));
-                }
+                fields.add(instance.serializeGroup(group));
             } else if (entry instanceof DataDescriptionEntryRename rename) {
-                JsonObject field = instance.serializeRename(rename);
-                fields.add(field);
-                // RENAMES does not allocate storage — no offset increment
+                fields.add(instance.serializeRename(rename));
             } else if (entry instanceof DataDescriptionEntryExecSql) {
                 // Deliberately not serialized here: it has no storage and does
                 // not belong in data_fields. Collected separately by
@@ -103,16 +74,13 @@ public final class DataFieldSerializer {
         return fields;
     }
 
-    /**
-     * Serializes the records of one FD. Every 01 under an FD describes the same
-     * record area (an implicit redefinition), so each starts at {@code base}.
-     */
-    public static JsonArray serializeRecordArea(List<DataDescriptionEntry> records, int base) {
+    /** Serializes the records of one FD. */
+    public static JsonArray serializeRecordArea(List<DataDescriptionEntry> records) {
         DataFieldSerializer instance = new DataFieldSerializer();
         JsonArray fields = new JsonArray();
         for (DataDescriptionEntry entry : records) {
             if (entry instanceof DataDescriptionEntryGroup group) {
-                fields.add(instance.serializeGroup(group, base));
+                fields.add(instance.serializeGroup(group));
             } else if (entry instanceof DataDescriptionEntryRename rename) {
                 fields.add(instance.serializeRename(rename));
             } else if (!(entry instanceof DataDescriptionEntryExecSql)) {
@@ -121,15 +89,6 @@ public final class DataFieldSerializer {
             }
         }
         return fields;
-    }
-
-    /** Bytes an FD's record area occupies: the length of its largest record. */
-    public static int recordAreaLength(List<DataDescriptionEntry> records) {
-        return records.stream()
-                .filter(e -> e instanceof DataDescriptionEntryGroup)
-                .mapToInt(e -> computeByteLength((DataDescriptionEntryGroup) e))
-                .max()
-                .orElse(0);
     }
 
     /**
@@ -191,7 +150,7 @@ public final class DataFieldSerializer {
     /**
      * Serializes a single DataDescriptionEntryGroup to a CobolField JSON object.
      */
-    private JsonObject serializeGroup(DataDescriptionEntryGroup group, int offset) {
+    private JsonObject serializeGroup(DataDescriptionEntryGroup group) {
         JsonObject obj = new JsonObject();
         String fieldName = disambiguateFiller(group.getName());
         obj.addProperty("name", fieldName);
@@ -201,7 +160,6 @@ public final class DataFieldSerializer {
         obj.addProperty("level", group.getLevelNumber());
         obj.addProperty("pic", extractPic(group));
         obj.addProperty("usage", extractUsage(group));
-        obj.addProperty("offset", offset);
         StatementSerializer.addSpan(obj, group.getCtx());
 
         String value = extractFirstValue(group);
@@ -235,8 +193,6 @@ public final class DataFieldSerializer {
         int occursCount = extractOccurs(group);
         if (occursCount > 0) {
             obj.addProperty("occurs", occursCount);
-            int elementSize = computeElementSize(group);
-            obj.addProperty("element_size", elementSize);
         }
 
         List<String> indexNames = extractIndexNames(group);
@@ -289,13 +245,12 @@ public final class DataFieldSerializer {
         }
 
         LOG.fine("Serialized field: " + fieldName + " level=" + group.getLevelNumber()
-                + " pic=" + extractPic(group) + " offset=" + offset);
+                + " pic=" + extractPic(group));
         return obj;
     }
 
     /**
      * Serializes a level-66 RENAMES entry to a CobolField JSON object.
-     * RENAMES does not allocate storage — offset is set to 0 (resolved in Python).
      * The renamed items are structured references, OF/IN qualifiers included.
      */
     private JsonObject serializeRename(DataDescriptionEntryRename rename) {
@@ -305,7 +260,6 @@ public final class DataFieldSerializer {
         obj.addProperty("level", 66);
         obj.addProperty("pic", "");
         obj.addProperty("usage", "DISPLAY");
-        obj.addProperty("offset", 0);
         StatementSerializer.addSpan(obj, rename.getCtx());
 
         if (rename.getRenamesClause() != null) {
@@ -339,54 +293,17 @@ public final class DataFieldSerializer {
         return name;
     }
 
-    /**
-     * Serializes child entries with running offset computation within the group.
-     */
+    /** Serializes child entries in order. */
     private JsonArray serializeChildren(List<DataDescriptionEntry> children) {
         JsonArray childArray = new JsonArray();
-        int childOffset = 0;
-
         for (DataDescriptionEntry child : children) {
             if (child instanceof DataDescriptionEntryGroup childGroup) {
-                // SYNCHRONIZED: align offset to natural boundary for COMP/BINARY fields
-                if (extractSynchronized(childGroup)) {
-                    int alignment = computeSyncAlignment(childGroup);
-                    if (alignment > 1 && childOffset % alignment != 0) {
-                        childOffset += alignment - (childOffset % alignment);
-                    }
-                }
-
-                int effectiveOffset = childOffset;
-                if (childGroup.getRedefinesClause() != null) {
-                    effectiveOffset = findRedefinesOffset(children, childGroup);
-                }
-
-                JsonObject childObj = serializeGroup(childGroup, effectiveOffset);
-                childArray.add(childObj);
-
-                if (childGroup.getRedefinesClause() == null) {
-                    childOffset += computeByteLength(childGroup);
-                }
+                childArray.add(serializeGroup(childGroup));
             } else if (child instanceof DataDescriptionEntryRename rename) {
-                JsonObject renameObj = serializeRename(rename);
-                childArray.add(renameObj);
-                // RENAMES does not allocate storage
+                childArray.add(serializeRename(rename));
             }
         }
         return childArray;
-    }
-
-    /**
-     * Computes the natural alignment boundary for a SYNCHRONIZED field.
-     * Returns the alignment in bytes (2, 4, or 8 for COMP/BINARY; 1 for others).
-     */
-    private static int computeSyncAlignment(DataDescriptionEntryGroup group) {
-        String usage = extractUsage(group);
-        return switch (usage) {
-            case "COMP", "COMP-4", "BINARY", "COMP-5" ->
-                    computePicByteLength(extractPic(group), usage);
-            default -> 1;
-        };
     }
 
     /**
@@ -510,156 +427,6 @@ public final class DataFieldSerializer {
             return raw.substring(1, raw.length() - 1).replace(delimiter + delimiter, delimiter);
         }
         return raw;
-    }
-
-    /**
-     * Finds the offset of the field being redefined.
-     */
-    private static int findRedefinesOffset(
-            List<DataDescriptionEntry> siblings,
-            DataDescriptionEntryGroup redefiningEntry) {
-        String targetName = extractRedefines(redefiningEntry);
-        int offset = 0;
-        for (DataDescriptionEntry sibling : siblings) {
-            if (sibling instanceof DataDescriptionEntryGroup siblingGroup) {
-                // An anonymous FILLER sibling has a null name; it can never be
-                // the redefines target, so skip the comparison (mirrors the
-                // null-safe FILLER handling in disambiguateFiller).
-                if (siblingGroup.getName() != null
-                        && siblingGroup.getName().equalsIgnoreCase(targetName)) {
-                    return offset;
-                }
-                if (siblingGroup.getRedefinesClause() == null) {
-                    offset += computeByteLength(siblingGroup);
-                }
-            }
-        }
-        return 0;
-    }
-
-    /**
-     * Computes byte length for a data entry.
-     * Elementary items: derived from PIC string.
-     * Group items: sum of non-REDEFINES children.
-     */
-    public static int computeByteLength(DataDescriptionEntryGroup group) {
-        int baseLength = computeElementSize(group);
-        int occursCount = extractOccurs(group);
-        return (occursCount > 0) ? baseLength * occursCount : baseLength;
-    }
-
-    /**
-     * Computes the byte length of a single element (without OCCURS multiplier).
-     * For group items: sum of non-REDEFINES children.
-     * For elementary items: derived from PIC string.
-     */
-    public static int computeElementSize(DataDescriptionEntryGroup group) {
-        List<DataDescriptionEntry> children = group.getDataDescriptionEntries();
-        if (children != null && !children.isEmpty()) {
-            // Only treat as group item if there are actual DataDescriptionEntryGroup children.
-            // Level-88 condition entries (DataDescriptionEntryCondition) are not real children
-            // for size purposes — they don't occupy storage.
-            List<DataDescriptionEntryGroup> groupChildren = children.stream()
-                    .filter(c -> c instanceof DataDescriptionEntryGroup)
-                    .map(c -> (DataDescriptionEntryGroup) c)
-                    .filter(c -> c.getRedefinesClause() == null)
-                    .collect(java.util.stream.Collectors.toList());
-            if (!groupChildren.isEmpty()) {
-                return groupChildren.stream()
-                        .mapToInt(DataFieldSerializer::computeByteLength)
-                        .sum();
-            }
-        }
-        int baseLength = computePicByteLength(extractPic(group), extractUsage(group));
-        JsonObject signObj = extractSign(group);
-        if (signObj != null && signObj.get("separate").getAsBoolean()) {
-            baseLength += 1;
-        }
-        return baseLength;
-    }
-
-    /**
-     * Computes byte length from a PIC string and usage.
-     *
-     * <p>For DISPLAY usage: count of storage characters (9, X, A) with repetition.
-     * For COMP-3: ceil((digits + 1) / 2).
-     * For COMP/BINARY/COMP-5: 2 for ≤4 digits, 4 for ≤9, 8 for ≤18.
-     */
-    public static int computePicByteLength(String pic, String usage) {
-        if ("POINTER".equals(usage)) {
-            return pointerSize;
-        }
-        if ("INDEX".equals(usage)) {
-            return INDEX_ITEM_SIZE;
-        }
-        if ("COMP-1".equals(usage)) {
-            return COMP_1_SIZE;
-        }
-        if ("COMP-2".equals(usage)) {
-            return COMP_2_SIZE;
-        }
-        if (pic.isEmpty()) {
-            return 0;
-        }
-
-        int digitCount = countStoragePositions(pic);
-
-        return switch (usage) {
-            case "COMP-3", "PACKED-DECIMAL" -> (digitCount / 2) + 1;
-            case "COMP", "COMP-4", "BINARY", "COMP-5" -> {
-                if (digitCount <= 4) yield 2;
-                else if (digitCount <= 9) yield 4;
-                else yield 8;
-            }
-            default -> digitCount;
-        };
-    }
-
-    /**
-     * Counts storage positions (digits/chars) from a PIC string.
-     * Handles: 9(5) → 5, X(3) → 3, S9(5)V99 → 7, etc.
-     *
-     * <p>Numeric-edited pictures (sign, Z suppression, comma/decimal insertion)
-     * store the formatted character string, so every position — including the
-     * sign, '.', and ',' — occupies a byte. These are sized by their full
-     * character width (mirroring Python edit_picture.parse_edit_picture().width).
-     */
-    public static int countStoragePositions(String pic) {
-        String upper = pic.toUpperCase();
-        int count = 0;
-        int i = 0;
-        char previous = 0;
-        while (i < upper.length()) {
-            char c = upper.charAt(i);
-            if (c == '(') {
-                int close = upper.indexOf(')', i);
-                int repeat = Integer.parseInt(upper.substring(i + 1, close));
-                // The preceding symbol already contributed 1 — add the remainder,
-                // but only if that symbol occupies storage at all (P(3) is still 0).
-                if (isStoredPosition(previous)) {
-                    count += repeat - 1;
-                }
-                i = close + 1;
-            } else {
-                if (isStoredPosition(c)) {
-                    count += 1;
-                }
-                previous = c;
-                i++;
-            }
-        }
-        return count;
-    }
-
-    /**
-     * True if a PIC symbol occupies a storage position.
-     *
-     * <p>S (operational sign), V (implied decimal point) and P (decimal scaling)
-     * are the only PIC symbols that occupy none. Everything else — digits, Z,
-     * currency, check protection, and every insertion character — is one byte.
-     */
-    private static boolean isStoredPosition(char c) {
-        return c != 'S' && c != 'V' && c != 'P';
     }
 
     private static String extractPic(DataDescriptionEntryGroup group) {

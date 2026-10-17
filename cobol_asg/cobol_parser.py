@@ -78,8 +78,7 @@ class ProLeapCobolParser(CobolParser):
     def _build_command(self) -> list[str]:
         dirs = [arg for d in self._copybook_dirs for arg in ("-copybook-dir", str(d))]
         exts = [arg for e in self._copybook_exts for arg in ("-copybook-ext", e)]
-        width = str(self._addressing_mode.pointer_type.byte_length)
-        return ["java", "-jar", self._bridge_jar, *dirs, *exts, "-pointer-size", width]
+        return ["java", "-jar", self._bridge_jar, *dirs, *exts]
 
     def parse(
         self,
@@ -92,7 +91,9 @@ class ProLeapCobolParser(CobolParser):
             json_str = self._runner.run(command, decode_source(source))
         except CobolParseError as e:
             raise self._enrich_copybook_error(e) from e
-        asg = CobolASG.from_dict(preprocessor(json.loads(json_str)))
+        asg = CobolASG.from_dict(
+            preprocessor(json.loads(json_str)), self._addressing_mode
+        )
         logger.debug(
             "Parsed ASG: %d data fields, %d sections, %d paragraphs",
             len(asg.data_fields),

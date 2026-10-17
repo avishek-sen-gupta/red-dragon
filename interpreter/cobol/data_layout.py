@@ -3,8 +3,9 @@
 
 Pure function: takes a list of CobolField trees and produces a recursive
 DataLayout with computed type descriptors and byte lengths.
-The ProLeap bridge provides byte offsets; this module validates them
-and attaches each field's CobolTypeDescriptor.
+The ASG reader (cobol_asg/storage_layout.py) provides byte offsets; this
+module resolves them to absolute positions and attaches each field's
+CobolTypeDescriptor.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from dataclasses import dataclass, field, replace
 from itertools import accumulate, chain, product
 from typing import TypeVar
 
-from cobol_asg.asg_types import NO_ODO_OBJECT, CobolField
+from cobol_asg.cobol_field import NO_ODO_OBJECT, CobolField
 from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from cobol_asg.condition_name import ConditionName, ConditionValue
 from cobol_asg.index_types import INDEX_ITEM
