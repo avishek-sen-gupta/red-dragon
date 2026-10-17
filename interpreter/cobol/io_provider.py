@@ -49,7 +49,6 @@ _COBOL_IO_DISPATCH: dict[FuncName, str] = {
     FuncName("__cobol_declare_file"): "_declare_file",
     FuncName("__cobol_open_file"): "_open_file",
     FuncName("__cobol_close_file"): "_close_file",
-    FuncName("__cobol_close_file_with_lock"): "_close_file_with_lock",
     FuncName("__cobol_read_record"): "_read_record",
     FuncName("__cobol_write_record"): "_write_record",
     FuncName("__cobol_rewrite_record"): "_rewrite_record",
@@ -58,7 +57,6 @@ _COBOL_IO_DISPATCH: dict[FuncName, str] = {
     FuncName("__cobol_io_status"): "_io_status",
     FuncName("__cobol_io_data"): "_io_data",
     FuncName("__cobol_io_record_number"): "_io_record_number",
-    FuncName("__cobol_file_open_mode"): "_open_mode",
     FuncName("__cobol_switch_status"): "_switch_status",
     FuncName("__cobol_set_switch"): "_set_switch",
     FuncName("__cobol_sort_using"): "_sort_using",
@@ -107,10 +105,6 @@ class CobolIOProvider(ABC):
     def _io_record_number(self, raw: IOResult, program: str) -> int:
         """The relative record number a relative-file verb used, 0 for others."""
         return raw.record_number
-
-    def _open_mode(self, filename: Any, program: str) -> Any:
-        """Current OPEN mode of a file ("INPUT"/"OUTPUT"/"I-O"/"EXTEND"), "" if closed."""
-        return ""
 
     def _switch_status(self, environment_name: str) -> str:
         """An implementor switch's status, "ON" or "OFF": OFF unless supplied, as
@@ -166,10 +160,6 @@ class CobolIOProvider(ABC):
     def _close_file(self, filename: str, program: str) -> IOResult:
         """CLOSE file."""
         ...
-
-    def _close_file_with_lock(self, filename: str, program: str) -> IOResult:
-        """CLOSE file WITH LOCK. A provider that keeps no lock state closes it."""
-        return self._close_file(filename, program)
 
     @abstractmethod
     def _read_record(

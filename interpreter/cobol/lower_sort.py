@@ -28,6 +28,9 @@ from cobol_asg.sort_key import SortKey
 from interpreter.cobol.collating_sequences import collating_sequence_of
 from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.cobol.file_state import file_state
+from interpreter.cobol.file_verb_ir import emit_closed
+from interpreter.cobol.ir_emitter import IrEmitter
 from interpreter.cobol.lower_io import lower_close, lower_open, lower_read, lower_write
 from interpreter.cobol.lower_perform import emit_perform_branch
 from interpreter.cobol.program_object import program_name
@@ -231,6 +234,9 @@ def lower_sort(
     _open(ctx, stmt, OpenMode.OUTPUT, stmt.file_name, materialised)
     _fill(ctx, stmt, materialised)
     _emit_order(ctx, stmt, materialised)
+    emit_closed(
+        IrEmitter(ctx, stmt.span), file_state(program_name(ctx._asg), stmt.file_name)
+    )
     _drain(ctx, stmt, materialised)
 
 

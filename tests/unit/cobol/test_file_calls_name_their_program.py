@@ -82,7 +82,7 @@ _FILE_CALLS = frozenset(
         "__cobol_close_file",
         "__cobol_io_status",
         "__cobol_io_data",
-        "__cobol_file_open_mode",
+        "__cobol_io_record_number",
     }
 )
 
@@ -175,7 +175,12 @@ def test_each_file_call_names_the_calling_program_last(tmp_path):
     )
     (f1,) = _items(_named(definitions, "files"))
     recording = _Recording()
-    run(source=_PGMX.decode(), language="cobol", io_provider=recording)
+    run(
+        source=_PGMX.decode(),
+        language="cobol",
+        io_provider=recording,
+        max_steps=1000,
+    )
     assert (_file_calls(ir), recording.seen, _named(f1, "program")) == (
         [
             (
@@ -200,6 +205,7 @@ def test_each_file_call_names_the_calling_program_last(tmp_path):
             ("__cobol_read_record", ("F1", "", "PGMX")),
             ("__cobol_io_status", ("<__cobol_read_record>", "PGMX")),
             ("__cobol_io_data", ("<__cobol_read_record>", "PGMX")),
+            ("__cobol_io_record_number", ("<__cobol_read_record>", "PGMX")),
             ("__cobol_close_file", ("F1", "PGMX")),
             ("__cobol_io_status", ("<__cobol_close_file>", "PGMX")),
         ],

@@ -161,12 +161,6 @@ class TestRealFileIOProvider:
         assert not (tmp_path / "nonexistent.dat").exists()
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
-    def test_read_without_open_returns_47(self, tmp_path: Path) -> None:
-        prov = _provider(tmp_path)
-        r = prov._read_record("UNOPENED", "", "PGM")
-        assert r.status == "47"
-
-    @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_indexed_write_and_keyed_read(self, tmp_path: Path) -> None:
         prov = _provider(
             tmp_path,
