@@ -90,6 +90,8 @@ STRING and UNSTRING `WITH POINTER` items and the UNSTRING `TALLYING IN` item are
 
 A SEARCH table and its VARYING item are qualified references; the index layout records each INDEXED BY name's table by its full name path, so `SEARCH E OF T2` advances T2's own index.
 
+READ `INTO` and `KEY IS`, WRITE and REWRITE `FROM`, and the SELECT entry's `RECORD KEY`, `RELATIVE KEY` and `FILE STATUS` items are qualified references (`RefModOperand`); `__cobol_file_definitions` still reports the three SELECT items by name.
+
 A level-88 condition-name is indexed with its parent qualified by every enclosing group (`ConditionEntry.parent`), so `IF B OF D32` and `SET B OF D32 TO TRUE` select among same-named 88s the same way. A level-66 RENAMES item belongs to the 01 record it follows (`DataLayout.renames`): its FROM/THRU operands, elementary or group and qualified as written, resolve within that record, and the 66 item is itself qualified by the record name.
 
 ### Variable-length items (OCCURS DEPENDING ON)

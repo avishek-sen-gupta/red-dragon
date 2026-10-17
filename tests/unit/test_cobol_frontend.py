@@ -2348,7 +2348,9 @@ class TestCallAlterEntryCancelLowering:
                 name="WS-RECORD", level=77, pic="X(10)", usage="DISPLAY", offset=0
             ),
         ]
-        stmts = [ReadStatement(file_name="CUST-FILE", into="WS-RECORD")]
+        stmts = [
+            ReadStatement(file_name="CUST-FILE", into=RefModOperand(name="WS-RECORD"))
+        ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
@@ -2396,7 +2398,11 @@ class TestCallAlterEntryCancelLowering:
                 name="CUST-REC", level=1, pic="X(10)", usage="DISPLAY", offset=10
             ),
         ]
-        stmts = [WriteStatement(record_name="CUST-REC", from_field="WS-OUTPUT")]
+        stmts = [
+            WriteStatement(
+                record_name="CUST-REC", from_field=RefModOperand(name="WS-OUTPUT")
+            )
+        ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         # The source field is loaded by the MOVE into the record area.

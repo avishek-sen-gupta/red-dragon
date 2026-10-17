@@ -2040,13 +2040,13 @@ public final class StatementSerializer {
             }
             io.proleap.cobol.asg.metamodel.procedure.read.Into into = stmt.getInto();
             if (into != null && into.getIntoCall() != null) {
-                obj.addProperty("into", extractCallName(into.getIntoCall()));
+                obj.add("into", serializeRef(into.getIntoCall()));
             }
 
             // KEY IS clause
             io.proleap.cobol.asg.metamodel.procedure.read.Key key = stmt.getKey();
             if (key != null && key.getKeyCall() != null) {
-                obj.addProperty("key", extractCallName(key.getKeyCall()));
+                obj.add("key", serializeRef(key.getKeyCall()));
             } else {
                 obj.addProperty("key", "");
             }
@@ -2092,7 +2092,7 @@ public final class StatementSerializer {
             }
             io.proleap.cobol.asg.metamodel.procedure.write.From from = stmt.getFrom();
             if (from != null && from.getFromValueStmt() != null) {
-                obj.addProperty("from_field", extractValueStmtText(from.getFromValueStmt()));
+                obj.add("from_field", writeFromOperand(from.getFromValueStmt()));
             }
 
             // INVALID KEY / NOT INVALID KEY
@@ -2114,6 +2114,16 @@ public final class StatementSerializer {
         return obj;
     }
 
+    /** A WRITE FROM sender: a data reference with its qualifiers, or a literal's text. */
+    private static JsonObject writeFromOperand(ValueStmt vs) {
+        if (vs instanceof CallValueStmt && ((CallValueStmt) vs).getCall() != null) {
+            return serializeRef(((CallValueStmt) vs).getCall());
+        }
+        JsonObject literal = new JsonObject();
+        literal.addProperty("name", extractValueStmtText(vs));
+        return literal;
+    }
+
     private static JsonObject serializeRewrite(RewriteStatement stmt) {
         JsonObject obj = newStatement("REWRITE");
         try {
@@ -2122,7 +2132,7 @@ public final class StatementSerializer {
             }
             io.proleap.cobol.asg.metamodel.procedure.rewrite.From from = stmt.getFrom();
             if (from != null && from.getFromCall() != null) {
-                obj.addProperty("from_field", extractCallName(from.getFromCall()));
+                obj.add("from_field", serializeRef(from.getFromCall()));
             }
 
             // INVALID KEY / NOT INVALID KEY

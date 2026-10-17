@@ -598,6 +598,13 @@ public final class AsgSerializer {
      * Each entry has: file_name, assign_to, organization, access_mode, record_key,
      * relative_key, file_status_var.
      */
+    /** The reference a FILE-CONTROL clause that is absent carries: no name. */
+    private static JsonObject unnamedRef() {
+        JsonObject ref = new JsonObject();
+        ref.addProperty("name", "");
+        return ref;
+    }
+
     private static JsonArray serializeFileControl(ProgramUnit pu) {
         JsonArray result = new JsonArray();
         try {
@@ -638,29 +645,26 @@ public final class AsgSerializer {
 
                 // RECORD KEY
                 if (fce.getRecordKeyClause() != null && fce.getRecordKeyClause().getRecordKeyCall() != null) {
-                    io.proleap.cobol.asg.metamodel.call.Call rkCall = fce.getRecordKeyClause().getRecordKeyCall();
-                    String rkName = rkCall.getName() != null ? rkCall.getName() : rkCall.toString();
-                    entry.addProperty("record_key", rkName.toUpperCase());
+                    entry.add("record_key",
+                            StatementSerializer.serializeRef(fce.getRecordKeyClause().getRecordKeyCall()));
                 } else {
-                    entry.addProperty("record_key", "");
+                    entry.add("record_key", unnamedRef());
                 }
 
                 // RELATIVE KEY
                 if (fce.getRelativeKeyClause() != null && fce.getRelativeKeyClause().getRelativeKeyCall() != null) {
-                    io.proleap.cobol.asg.metamodel.call.Call relCall = fce.getRelativeKeyClause().getRelativeKeyCall();
-                    String relName = relCall.getName() != null ? relCall.getName() : relCall.toString();
-                    entry.addProperty("relative_key", relName.toUpperCase());
+                    entry.add("relative_key",
+                            StatementSerializer.serializeRef(fce.getRelativeKeyClause().getRelativeKeyCall()));
                 } else {
-                    entry.addProperty("relative_key", "");
+                    entry.add("relative_key", unnamedRef());
                 }
 
                 // FILE STATUS
                 if (fce.getFileStatusClause() != null && fce.getFileStatusClause().getDataCall() != null) {
-                    io.proleap.cobol.asg.metamodel.call.Call fsCall = fce.getFileStatusClause().getDataCall();
-                    String fsName = fsCall.getName() != null ? fsCall.getName() : fsCall.toString();
-                    entry.addProperty("file_status_var", fsName.toUpperCase());
+                    entry.add("file_status_var",
+                            StatementSerializer.serializeRef(fce.getFileStatusClause().getDataCall()));
                 } else {
-                    entry.addProperty("file_status_var", "");
+                    entry.add("file_status_var", unnamedRef());
                 }
 
                 result.add(entry);

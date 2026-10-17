@@ -11,6 +11,7 @@ from cobol_asg.cobol_statements import (
     WriteStatement,
 )
 from cobol_asg.file_enums import AccessMode, FileOrganization, OpenMode
+from cobol_asg.ref_mod import RefModOperand
 from interpreter.cobol.features import CobolFeature
 from tests.covers import NotLanguageFeature, covers
 
@@ -22,9 +23,11 @@ def test_file_control_entry_defaults():
     assert e.assign_to == ""
     assert e.organization == FileOrganization.SEQUENTIAL
     assert e.access_mode == AccessMode.SEQUENTIAL
-    assert e.record_key == ""
-    assert e.relative_key == ""
-    assert e.file_status_var == ""
+    assert (e.record_key, e.relative_key, e.file_status_var) == (
+        RefModOperand(name=""),
+        RefModOperand(name=""),
+        RefModOperand(name=""),
+    )
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
@@ -34,15 +37,16 @@ def test_file_control_entry_from_dict():
         "assign_to": "custfile.dat",
         "organization": "INDEXED",
         "access_mode": "DYNAMIC",
-        "record_key": "CUST-ID",
-        "relative_key": "",
-        "file_status_var": "WS-STATUS",
+        "record_key": {"name": "CUST-ID", "qualifiers": ["CUST-REC"]},
+        "relative_key": {"name": ""},
+        "file_status_var": {"name": "WS-STATUS", "qualifiers": ["WS-AREA"]},
     }
     e = FileControlEntry.from_dict(d)
     assert e.organization == FileOrganization.INDEXED
     assert e.access_mode == AccessMode.DYNAMIC
-    assert e.record_key == "CUST-ID"
-    assert e.file_status_var == "WS-STATUS"
+    assert e.record_key == RefModOperand(name="CUST-ID", qualifiers=("CUST-REC",))
+    assert e.file_status_var == RefModOperand(name="WS-STATUS", qualifiers=("WS-AREA",))
+    assert FileControlEntry.from_dict(e.to_dict()) == e
 
 
 @covers(CobolFeature.OPEN)
@@ -71,14 +75,14 @@ def test_read_statement_conditional_fields():
     d = {
         "type": "READ",
         "file_name": "CUST-FILE",
-        "key": "CUST-ID",
+        "key": {"name": "CUST-ID", "qualifiers": ["CUST-REC"]},
         "at_end": [{"type": "CONTINUE"}],
         "not_at_end": [],
         "invalid_key": [],
         "not_invalid_key": [],
     }
     stmt = ReadStatement.from_dict(d)
-    assert stmt.key == "CUST-ID"
+    assert stmt.key == RefModOperand(name="CUST-ID", qualifiers=("CUST-REC",))
     assert len(stmt.at_end) == 1
     assert stmt.not_at_end == []
 
