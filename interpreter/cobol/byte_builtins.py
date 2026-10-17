@@ -63,6 +63,7 @@ from interpreter.cobol.inspect_scan import (
 )
 from interpreter.cobol.numeric_builtins import NUMERIC_BUILTINS
 from interpreter.cobol.numeric_class import packed_is_numeric, zoned_is_numeric
+from interpreter.cobol.program_presence import program_present
 from interpreter.cobol.run_unit import advanced, restarted, value_of
 from interpreter.cobol.string_transfer import string_into
 from interpreter.cobol.unstring_delimiter_text import UnstringDelimiterText
@@ -1970,6 +1971,7 @@ BYTE_BUILTINS: Mapping[FuncName, Builtin] = MappingProxyType(
         FuncName(BuiltinName.MIDRANGE): _builtin_midrange,
         FuncName(BuiltinName.VARIANCE): _builtin_variance,
         FuncName(BuiltinName.STANDARD_DEVIATION): _builtin_standard_deviation,
+        FuncName(BuiltinName.PROGRAM_PRESENT): program_present,
         FuncName(BuiltinName.ORD_MAX): _builtin_ord_max,
         FuncName(BuiltinName.ORD_MIN): _builtin_ord_min,
         FuncName(BuiltinName.CONCATENATE): _builtin_concatenate,

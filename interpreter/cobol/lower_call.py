@@ -10,6 +10,7 @@ from cobol_asg.cobol_statements import (
     CallStatement,
     CallUsingParam,
     CancelStatement,
+    CobolStatementType,
     EntryStatement,
     ProcedureRef,
 )
@@ -39,6 +40,8 @@ from interpreter.func_name import FuncName
 from interpreter.instructions import (
     AllocRegion,
     Binop,
+    Branch,
+    BranchIf,
     CallFunction,
     CallWithMemory,
     Label_,
@@ -181,16 +184,86 @@ def lower_call(
     copied back; BY CONTENT, BY VALUE and a literal pass a fresh copy; OMITTED
     passes a marker. The callee binds each LINKAGE 01 to its argument.
     """
-    span = stmt.span
-    args_reg = _argument_array(ctx, stmt.using, materialised, span=span)
-
-    target = stmt.target
+    args_reg = _argument_array(ctx, stmt.using, materialised, span=stmt.span)
     location = (
-        _emit_entry_var_name(ctx, target.identifier, materialised, span=span)
-        if target.identifier is not None
-        else entry_var(target.literal)
+        _emit_entry_var_name(ctx, stmt.target.identifier, materialised, span=stmt.span)
+        if stmt.target.identifier is not None
+        else entry_var(stmt.target.literal)
     )
 
+    if stmt.on_exception:
+        _lower_guarded_call(ctx, stmt, location, args_reg, materialised)
+    else:
+        _emit_program_call(ctx, stmt, location, args_reg, materialised)
+        _lower_statements(ctx, stmt.not_on_exception, materialised)
+
+    logger.info(
+        "CALL %s with %d params (CallWithMemory)",
+        stmt.target.describe(),
+        len(stmt.using),
+    )
+
+
+def _lower_guarded_call(
+    ctx: EmitContext,
+    stmt: CallStatement,
+    location: VarName | Register,
+    args_reg: Register,
+    materialised: MaterialisedSectionedLayout,
+) -> None:
+    call_label, exception_label, end_label = (
+        ctx.fresh_label(name)
+        for name in ("call_available", "call_exception", "call_end")
+    )
+    _emit_presence_branch(ctx, stmt, location, (call_label, exception_label))
+    ctx.emit_inst(Label_(label=exception_label), span=stmt.span)
+    _lower_statements(ctx, stmt.on_exception, materialised)
+    ctx.emit_inst(Branch(label=end_label), span=stmt.span)
+    ctx.emit_inst(Label_(label=call_label), span=stmt.span)
+    _emit_program_call(ctx, stmt, location, args_reg, materialised)
+    _lower_statements(ctx, stmt.not_on_exception, materialised)
+    ctx.emit_inst(Branch(label=end_label), span=stmt.span)
+    ctx.emit_inst(Label_(label=end_label), span=stmt.span)
+
+
+def _emit_presence_branch(
+    ctx: EmitContext,
+    stmt: CallStatement,
+    location: VarName | Register,
+    targets: tuple[CodeLabel, CodeLabel],
+) -> None:
+    span = stmt.span
+    name_reg = (
+        location
+        if isinstance(location, Register)
+        else ctx.const_to_reg(str(location), span=span)
+    )
+    present_reg = _emit_builtin(
+        ctx, BuiltinName.PROGRAM_PRESENT, (name_reg,), span=span
+    )
+    ctx.emit_inst(
+        BranchIf(cond_reg=present_reg, branch_targets=targets),
+        span=span,
+    )
+
+
+def _lower_statements(
+    ctx: EmitContext,
+    statements: Sequence[CobolStatementType],
+    materialised: MaterialisedSectionedLayout,
+) -> None:
+    for statement in statements:
+        ctx.lower_statement(statement, materialised)
+
+
+def _emit_program_call(
+    ctx: EmitContext,
+    stmt: CallStatement,
+    location: VarName | Register,
+    args_reg: Register,
+    materialised: MaterialisedSectionedLayout,
+) -> None:
+    span = stmt.span
     # The callee returns its RETURN-CODE in result_reg, and the copy-up below
     # writes it into the caller's. Seeding that same register with the caller's
     # OWN value first is what makes a callee that returns nothing harmless: a
@@ -223,12 +296,19 @@ def lower_call(
         StoreVar(name=VarName("__ws_region"), value_reg=caller_ws_reg), span=span
     )
 
-    if stmt.giving.name and ctx.has_field(stmt.giving.name, materialised):
+    _store_giving(ctx, stmt, materialised)
+
+
+def _store_giving(
+    ctx: EmitContext, stmt: CallStatement, materialised: MaterialisedSectionedLayout
+) -> None:
+    giving, span = stmt.giving, stmt.span
+    if giving.name and ctx.has_field(giving.name, materialised):
         giving_ref, giving_rr = ctx.resolve_field_ref(
-            stmt.giving.name,
+            giving.name,
             materialised,
-            stmt.giving.qualifiers,
-            stmt.giving.subscripts,
+            giving.qualifiers,
+            giving.subscripts,
             span=span,
         )
         str_reg = ctx.emit_to_string(
@@ -242,12 +322,6 @@ def lower_call(
             extent=giving_ref.extent,
             span=span,
         )
-
-    logger.info(
-        "CALL %s with %d params (CallWithMemory)",
-        target.describe(),
-        len(stmt.using),
-    )
 
 
 def _argument_array(
