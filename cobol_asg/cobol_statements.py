@@ -41,6 +41,7 @@ from cobol_asg.ref_mod import (
     ref_mod_expr_to_dict,
 )
 from cobol_asg.set_operand import SetOperand, set_operand_from_dict
+from cobol_asg.sort_files import SortFiles
 from cobol_asg.sort_key import SortKey
 from cobol_asg.source_span import SourceSpan
 from cobol_asg.unstring_delimiter import UnstringDelimiter
@@ -138,6 +139,8 @@ CobolStatementType = Union[
     "DeleteStatement",
     "XmlGenerateStatement",
     "SortStatement",
+    "ReleaseStatement",
+    "ReturnStatement",
 ]
 
 
@@ -1032,7 +1035,7 @@ class UnstringStatement:
 _NO_OPERAND = RefModOperand(name="")
 
 
-def _operand(data: dict, field_name: str) -> RefModOperand:
+def _operand(data: Mapping, field_name: str) -> RefModOperand:
     return (
         RefModOperand.from_dict(data[field_name]) if field_name in data else _NO_OPERAND
     )
@@ -1656,7 +1659,7 @@ class ReadStatement:
     span: SourceSpan | None = None
 
     @classmethod
-    def from_dict(cls, data: dict) -> ReadStatement:
+    def from_dict(cls, data: Mapping) -> ReadStatement:
         return cls(
             file_name=data.get("file_name", ""),
             into=_operand(data, "into"),
@@ -1705,7 +1708,7 @@ class WriteStatement:
     span: SourceSpan | None = None
 
     @classmethod
-    def from_dict(cls, data: dict) -> WriteStatement:
+    def from_dict(cls, data: Mapping) -> WriteStatement:
         return cls(
             record_name=data.get("record_name", ""),
             from_field=_operand(data, "from_field"),
@@ -1835,13 +1838,55 @@ class DeleteStatement:
 
 
 @dataclass(frozen=True)
+class ProcedureRange:
+    """A procedure-name [THRU procedure-name], as a SORT or MERGE procedure phrase
+    names it; ``thru`` has an empty paragraph without THRU."""
+
+    target: ProcedureRef
+    thru: ProcedureRef
+
+    @classmethod
+    def from_dict(cls, data: Mapping) -> ProcedureRange:
+        return cls(
+            target=ProcedureRef(data["target"], data.get("target_section", "")),
+            thru=ProcedureRef(data.get("thru", ""), data.get("thru_section", "")),
+        )
+
+    def to_dict(self) -> dict:
+        return {
+            "target": self.target.paragraph,
+            **({"target_section": self.target.section} if self.target.section else {}),
+            **({"thru": self.thru.paragraph} if self.thru.paragraph else {}),
+            **({"thru_section": self.thru.section} if self.thru.section else {}),
+        }
+
+
+SortSource = SortFiles | ProcedureRange
+
+
+def _sort_source(data: Mapping, files: str, procedure: str) -> SortSource:
+    if procedure in data:
+        return ProcedureRange.from_dict(data[procedure])
+    return SortFiles(tuple(data[files]))
+
+
+def _sort_source_to_dict(source: SortSource, files: str, procedure: str) -> dict:
+    match source:
+        case ProcedureRange():
+            return {files: [], procedure: source.to_dict()}
+        case SortFiles(names):
+            return {files: list(names)}
+
+
+@dataclass(frozen=True)
 class SortStatement:
-    """SORT file ON ASCENDING|DESCENDING KEY k ... USING f ... GIVING g ...."""
+    """SORT file ON ASCENDING|DESCENDING KEY k ... USING f ... | INPUT PROCEDURE p
+    GIVING g ... | OUTPUT PROCEDURE q."""
 
     file_name: str
     keys: tuple[SortKey, ...]
-    using: tuple[str, ...]
-    giving: tuple[str, ...]
+    source: SortSource
+    sink: SortSource
     span: SourceSpan | None
 
     @classmethod
@@ -1849,8 +1894,8 @@ class SortStatement:
         return cls(
             file_name=data["file_name"],
             keys=tuple(SortKey.from_dict(k) for k in data["keys"]),
-            using=tuple(data["using"]),
-            giving=tuple(data["giving"]),
+            source=_sort_source(data, "using", "input_procedure"),
+            sink=_sort_source(data, "giving", "output_procedure"),
             span=SourceSpan.from_dict(data),
         )
 
@@ -1859,8 +1904,70 @@ class SortStatement:
             "type": "SORT",
             "file_name": self.file_name,
             "keys": [k.to_dict() for k in self.keys],
-            "using": list(self.using),
-            "giving": list(self.giving),
+            **_sort_source_to_dict(self.source, "using", "input_procedure"),
+            **_sort_source_to_dict(self.sink, "giving", "output_procedure"),
+        }
+        match self.span:
+            case SourceSpan() as span:
+                span.write_into(result)
+        return result
+
+
+@dataclass(frozen=True)
+class ReleaseStatement:
+    """RELEASE sort-record [FROM identifier]."""
+
+    record_name: str
+    from_field: RefModOperand
+    span: SourceSpan | None
+
+    @classmethod
+    def from_dict(cls, data: Mapping) -> ReleaseStatement:
+        return cls(
+            record_name=data["record_name"],
+            from_field=_operand(data, "from"),
+            span=SourceSpan.from_dict(data),
+        )
+
+    def to_dict(self) -> dict:
+        result: dict = {
+            "type": "RELEASE",
+            "record_name": self.record_name,
+            **({"from": self.from_field.to_dict()} if self.from_field.name else {}),
+        }
+        match self.span:
+            case SourceSpan() as span:
+                span.write_into(result)
+        return result
+
+
+@dataclass(frozen=True)
+class ReturnStatement:
+    """RETURN sort-file [INTO identifier] AT END ... [NOT AT END ...]."""
+
+    file_name: str
+    into: RefModOperand
+    at_end: tuple[CobolStatementType, ...]
+    not_at_end: tuple[CobolStatementType, ...]
+    span: SourceSpan | None
+
+    @classmethod
+    def from_dict(cls, data: Mapping) -> ReturnStatement:
+        return cls(
+            file_name=data["file_name"],
+            into=_operand(data, "into"),
+            at_end=tuple(parse_statement(c) for c in data["at_end"]),
+            not_at_end=tuple(parse_statement(c) for c in data["not_at_end"]),
+            span=SourceSpan.from_dict(data),
+        )
+
+    def to_dict(self) -> dict:
+        result: dict = {
+            "type": "RETURN",
+            "file_name": self.file_name,
+            **({"into": self.into.to_dict()} if self.into.name else {}),
+            "at_end": [c.to_dict() for c in self.at_end],
+            "not_at_end": [c.to_dict() for c in self.not_at_end],
         }
         match self.span:
             case SourceSpan() as span:
@@ -2076,6 +2183,8 @@ _DISPATCH_TABLE: dict[str, type] = {
     "DELETE": DeleteStatement,
     "XML_GENERATE": XmlGenerateStatement,
     "SORT": SortStatement,
+    "RELEASE": ReleaseStatement,
+    "RETURN": ReturnStatement,
 }
 
 

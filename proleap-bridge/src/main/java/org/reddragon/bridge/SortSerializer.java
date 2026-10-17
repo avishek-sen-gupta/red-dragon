@@ -3,14 +3,20 @@ package org.reddragon.bridge;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import io.proleap.cobol.asg.metamodel.call.Call;
+import io.proleap.cobol.asg.metamodel.procedure.AtEndPhrase;
+import io.proleap.cobol.asg.metamodel.procedure.NotAtEndPhrase;
+import io.proleap.cobol.asg.metamodel.procedure.release.ReleaseStatement;
+import io.proleap.cobol.asg.metamodel.procedure.returnstmt.ReturnStatement;
 import io.proleap.cobol.asg.metamodel.procedure.sort.Giving;
 import io.proleap.cobol.asg.metamodel.procedure.sort.GivingPhrase;
+import io.proleap.cobol.asg.metamodel.procedure.sort.InputProcedure;
 import io.proleap.cobol.asg.metamodel.procedure.sort.OnKey;
+import io.proleap.cobol.asg.metamodel.procedure.sort.OutputProcedure;
 import io.proleap.cobol.asg.metamodel.procedure.sort.SortStatement;
 import io.proleap.cobol.asg.metamodel.procedure.sort.UsingPhrase;
 import java.util.List;
 
-/** Serialises the sort-merge module's statements: SORT. */
+/** Serialises the sort-merge module's statements: SORT, RELEASE and RETURN. */
 final class SortSerializer {
 
     private SortSerializer() {}
@@ -22,7 +28,70 @@ final class SortSerializer {
         obj.add("keys", keys(stmt.getOnKeys()));
         obj.add("using", using(stmt.getUsingPhrases()));
         obj.add("giving", giving(stmt.getGivingPhrases()));
+        InputProcedure input = stmt.getInputProcedure();
+        if (input != null) {
+            obj.add(
+                    "input_procedure",
+                    procedure(
+                            input.getProcedureCall(),
+                            input.getInputThrough() == null
+                                    ? null
+                                    : input.getInputThrough().getProcedureCall()));
+        }
+        OutputProcedure output = stmt.getOutputProcedure();
+        if (output != null) {
+            obj.add(
+                    "output_procedure",
+                    procedure(
+                            output.getProcedureCall(),
+                            output.getOutputThrough() == null
+                                    ? null
+                                    : output.getOutputThrough().getProcedureCall()));
+        }
         return obj;
+    }
+
+    static JsonObject serializeRelease(ReleaseStatement stmt) {
+        JsonObject obj = new JsonObject();
+        obj.addProperty("type", "RELEASE");
+        obj.addProperty("record_name", StatementSerializer.extractCallName(stmt.getRecordCall()));
+        if (stmt.getContentCall() != null) {
+            obj.add("from", StatementSerializer.serializeRef(stmt.getContentCall()));
+        }
+        return obj;
+    }
+
+    static JsonObject serializeReturn(ReturnStatement stmt) {
+        JsonObject obj = new JsonObject();
+        obj.addProperty("type", "RETURN");
+        obj.addProperty("file_name", StatementSerializer.extractCallName(stmt.getFileCall()));
+        if (stmt.getInto() != null && stmt.getInto().getIntoCall() != null) {
+            obj.add("into", StatementSerializer.serializeRef(stmt.getInto().getIntoCall()));
+        }
+        AtEndPhrase atEnd = stmt.getAtEndPhrase();
+        obj.add(
+                "at_end",
+                atEnd == null
+                        ? new JsonArray()
+                        : StatementSerializer.serializeStatements(atEnd.getStatements()));
+        NotAtEndPhrase notAtEnd = stmt.getNotAtEndPhrase();
+        obj.add(
+                "not_at_end",
+                notAtEnd == null
+                        ? new JsonArray()
+                        : StatementSerializer.serializeStatements(notAtEnd.getStatements()));
+        return obj;
+    }
+
+    private static JsonObject procedure(Call first, Call thru) {
+        JsonObject result = new JsonObject();
+        result.addProperty("target", StatementSerializer.extractCallName(first));
+        StatementSerializer.addProcedureSection(result, "target_section", first);
+        if (thru != null) {
+            result.addProperty("thru", StatementSerializer.extractCallName(thru));
+            StatementSerializer.addProcedureSection(result, "thru_section", thru);
+        }
+        return result;
     }
 
     private static JsonArray keys(List<OnKey> onKeys) {

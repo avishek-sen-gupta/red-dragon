@@ -50,6 +50,8 @@ import io.proleap.cobol.asg.metamodel.procedure.inspect.ReplacingAllLeadings;
 import io.proleap.cobol.asg.metamodel.procedure.open.OpenStatement;
 import io.proleap.cobol.asg.metamodel.procedure.read.ReadStatement;
 import io.proleap.cobol.asg.metamodel.procedure.sort.SortStatement;
+import io.proleap.cobol.asg.metamodel.procedure.release.ReleaseStatement;
+import io.proleap.cobol.asg.metamodel.procedure.returnstmt.ReturnStatement;
 import io.proleap.cobol.asg.metamodel.procedure.search.SearchStatement;
 import io.proleap.cobol.asg.metamodel.procedure.alter.AlterStatement;
 import io.proleap.cobol.asg.metamodel.procedure.alter.ProceedTo;
@@ -294,6 +296,8 @@ public final class StatementSerializer {
         if (stmtType == StatementTypeEnum.EXEC_SQL) return serializeExecSql((ExecSqlStatement) stmt);
         if (stmtType == StatementTypeEnum.XML_GENERATE) return serializeXmlGenerate((XmlGenerateStatement) stmt);
         if (stmtType == StatementTypeEnum.SORT) return SortSerializer.serializeSort((SortStatement) stmt);
+        if (stmtType == StatementTypeEnum.RELEASE) return SortSerializer.serializeRelease((ReleaseStatement) stmt);
+        if (stmtType == StatementTypeEnum.RETURN) return SortSerializer.serializeReturn((ReturnStatement) stmt);
 
         return serializeUnknown(stmtType);
     }
@@ -1000,7 +1004,7 @@ public final class StatementSerializer {
         return obj;
     }
 
-    private static void addProcedureSection(JsonObject obj, String property, Call call) {
+    static void addProcedureSection(JsonObject obj, String property, Call call) {
         String section = procedureSection(call);
         if (!section.isEmpty()) {
             obj.addProperty(property, section);
