@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from enum import Enum
 
-from interpreter.cobol.io_provider import IOResult
-
 
 class FileLogicStatus(Enum):
     PERMITTED = "00"
@@ -21,6 +19,3 @@ class FileLogicStatus(Enum):
     READ_NOT_PERMITTED = "47"
     WRITE_NOT_PERMITTED = "48"
     UPDATE_NOT_PERMITTED = "49"
-
-    def result(self) -> IOResult:
-        return IOResult(self.value, None)

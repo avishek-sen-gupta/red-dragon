@@ -1,10 +1,14 @@
-"""Declares each SELECT's frame to the file provider once, from the program's start-up code."""
+"""Declares each SELECT's frame to the file provider once, from the program's start-up
+code, and starts the file's state closed."""
 
 from __future__ import annotations
 
 from cobol_asg.cobol_statements import FileControlEntry
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.file_facts import file_frame
+from interpreter.cobol.file_state import file_state
+from interpreter.cobol.file_verb_ir import emit_closed
+from interpreter.cobol.ir_emitter import IrEmitter
 from interpreter.cobol.program_object import program_name
 from interpreter.cobol.sectioned_layout import (
     MaterialisedSectionedLayout,
@@ -47,6 +51,9 @@ def _declare(
             func_name=FuncName("__cobol_declare_file"),
             args=(frame_reg, program_reg),
         )
+    )
+    emit_closed(
+        IrEmitter(ctx, None), file_state(program_name(ctx._asg), entry.file_name)
     )
 
 

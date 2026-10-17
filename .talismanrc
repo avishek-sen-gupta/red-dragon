@@ -23,7 +23,7 @@ fileignoreconfig:
 - filename: tests/unit/cobol/test_open_file_arguments.py
   checksum: c90e3e46eaf4810fde4437a80d86c31533a8218b811581e7478d7aa90f763545
 - filename: tests/unit/cobol/test_access_mode_status.py
-  checksum: 5c13f6d7567a88d6d79d27b65ad973b5e9058b286839596c4e02a29765d27575
+  checksum: 628028451b910f6b8f2d2e543ee99cc2aa8e11da311e5257d95ef57234cd144a
 - filename: tests/integration/test_cobol_access_mode_status.py
   checksum: 68b60edaed42c8400dbbef49ee48b66c832bc5274956137556a181b8d4bfc425
 - filename: interpreter/cobol/file_attributes.py
@@ -225,7 +225,7 @@ fileignoreconfig:
 - filename: tests/unit/cobol/test_recorded_memory_effects.py
   checksum: ba151292b7ee1a3f747628e5950297f904de1c1cd625307f762f7a98b570b3de
 - filename: docs/frontend-design/cobol.md
-  checksum: 3f1d46b7777605ae67ea2d42e36f51d8a33763e66bf84b1b674db7225a1fe898
+  checksum: 95200bad7d70a81665418db123050f3ac479c5094519f0c36985456250e8e7fa
 - filename: tests/integration/test_cobol_call_using_addresses.py
   checksum: 353804977c7a3e5eb44a303f7e42a47ef1bdf9f837f41e396bf5033813c4fdb0
 - filename: tests/integration/test_cobol_call_using_slots.py
@@ -275,13 +275,13 @@ fileignoreconfig:
 - filename: proleap-bridge/src/main/java/org/reddragon/bridge/StatementSerializer.java
   checksum: f9a87946dec86a8815575eff56958f913885c76b3fb14f7f3db967b3686e1036
 - filename: interpreter/cobol/lower_io.py
-  checksum: 3b2925db4757f09428059362be0f2858b177065f7f84856529fa324377269398
+  checksum: 038219320c1ba05eebd86761f2528361385afccb7f533b9a7125df72ca65e55f
 - filename: tests/integration/test_cobol_use_declaratives.py
   checksum: d0c6ea039a432d727fde9ea777b1c4945dff7c0f5c3a4599a626bfd8df390072
 - filename: interpreter/cobol/open_file.py
-  checksum: 41146004c0455ab8f1f60d5377e80a5265837db8b5cc87e24809ccbec10a73ac
+  checksum: 15babdc98bbb201e8a6796adc12f21e6b395f01aab5c0423f6eea35d6d476667
 - filename: tests/unit/cobol/test_keyed_delete.py
-  checksum: cb8c9ea0d0035dd28468ce8f422dc7994e4fc55ea75301c94ae4b1e38573afcc
+  checksum: 2e9088fdf7c4dfe300021ba8fac18c4e52456d5b26fbb8bed85659827de35174
 - filename: tests/integration/test_cobol_file_logic_status.py
   checksum: a12613a611fd219e500367e146517a899b35041d99da8d45025a04e914ddfbde
 - filename: tests/unit/test_cobol_frontend.py

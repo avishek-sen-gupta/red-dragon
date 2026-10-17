@@ -25,6 +25,11 @@ from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.fd_record_format import depending_on
 from interpreter.cobol.field_resolution import whole_field_extent
 from interpreter.cobol.file_facts import largest_record
+from interpreter.cobol.file_logic_status import FileLogicStatus
+from interpreter.cobol.file_position import FilePosition
+from interpreter.cobol.file_state import file_state
+from interpreter.cobol.file_verb_ir import FileVerbIr, Refusal, VerbOutcome
+from interpreter.cobol.ir_emitter import IrEmitter
 from interpreter.cobol.program_object import program_name
 from interpreter.cobol.relative_key import addressing_key, reported_key
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
@@ -46,14 +51,38 @@ logger = logging.getLogger(__name__)
 
 _SPACE = "\x40"
 _PAST_THE_AREA = _SPACE
-_CLOSE_BUILTINS = {
-    False: FuncName("__cobol_close_file"),
-    True: FuncName("__cobol_close_file_with_lock"),
-}
+_READ_MODES = (OpenMode.INPUT, OpenMode.IO)
+_SEQUENTIAL_WRITE_MODES = (OpenMode.OUTPUT, OpenMode.EXTEND)
+_KEYED_WRITE_MODES = (OpenMode.OUTPUT, OpenMode.EXTEND, OpenMode.IO)
 
 
 def _program(ctx: EmitContext, *, span: SourceSpan | None) -> Register:
     return Register(str(ctx.const_to_reg(program_name(ctx._asg), span=span)))
+
+
+def _verb(ctx: EmitContext, file_name: str, *, span: SourceSpan | None) -> FileVerbIr:
+    return FileVerbIr(
+        IrEmitter(ctx, span),
+        file_state(program_name(ctx._asg), file_name),
+        _program(ctx, span=span),
+    )
+
+
+def _entry(ctx: EmitContext, file_name: str) -> FileControlEntry:
+    return _file_entries(ctx).get(file_name, FileControlEntry(file_name=file_name))
+
+
+def _sequential_access(entry: FileControlEntry) -> bool:
+    return (
+        entry.organization is FileOrganization.SEQUENTIAL
+        or entry.access_mode is AccessMode.SEQUENTIAL
+    )
+
+
+def _write_modes(entry: FileControlEntry) -> tuple[OpenMode, ...]:
+    if entry.organization is FileOrganization.SEQUENTIAL:
+        return _SEQUENTIAL_WRITE_MODES
+    return _KEYED_WRITE_MODES
 
 
 def _emit_status_class(
@@ -154,19 +183,8 @@ def emit_use_trigger(
         return
     if not ctx.use_by_mode:
         return
-    # Open-mode scoped: pick the USE section matching this file's CURRENT open
-    # mode — a runtime fact, queried via __cobol_file_open_mode.
-    mode_reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        CallFunction(
-            result_reg=mode_reg,
-            func_name=FuncName("__cobol_file_open_mode"),
-            args=(
-                Register(str(ctx.const_to_reg(file_name, span=span))),
-                _program(ctx, span=span),
-            ),
-        ),
-        span=span,
+    mode_reg = IrEmitter(ctx, span).load(
+        file_state(program_name(ctx._asg), file_name).mode
     )
     for mode_key, sec in ctx.use_by_mode.items():
         match_reg = ctx.fresh_reg()
@@ -265,31 +283,34 @@ def _lower_open_file(
     *,
     span: SourceSpan | None,
 ) -> None:
-    raw_reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        CallFunction(
-            result_reg=raw_reg,
-            func_name=FuncName("__cobol_open_file"),
-            args=(
-                Register(str(ctx.const_to_reg(filename, span=span))),
-                Register(str(ctx.const_to_reg(mode.value, span=span))),
-                _program(ctx, span=span),
-            ),
+    v = _verb(ctx, filename, span=span)
+    outcome = v.outcome()
+
+    def opened() -> None:
+        v.set_mode(mode.value)
+        v.set_position(FilePosition.NO_CURRENT_RECORD)
+
+    def perform() -> None:
+        v.called("__cobol_open_file", outcome, v.e.text(filename), v.e.text(mode.value))
+        v.when(v.successful(outcome), opened)
+
+    v.guarded(
+        (
+            Refusal(v.open_, FileLogicStatus.ALREADY_OPEN),
+            Refusal(v.locked, FileLogicStatus.CLOSED_WITH_LOCK),
         ),
-        span=span,
+        outcome,
+        perform,
+        _nothing,
     )
-    status_reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        CallFunction(
-            result_reg=status_reg,
-            func_name=FuncName("__cobol_io_status"),
-            args=(Register(str(raw_reg)), _program(ctx, span=span)),
-        ),
-        span=span,
-    )
+    status_reg = v.e.load(outcome.status)
     ctx.emit_file_status_update(filename, status_reg, materialised, span=span)
     _emit_open_use_trigger(ctx, filename, mode, status_reg, span=span)
     logger.info("OPEN %s %s", mode.value, filename)
+
+
+def _nothing() -> None:
+    return
 
 
 def lower_open(
@@ -311,38 +332,40 @@ def lower_close(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """CLOSE file1 file2 ... — close files via __cobol_close_file."""
-    span = stmt.span
-    for filename in stmt.files:
-        fn_reg = ctx.const_to_reg(filename, span=span)
-        raw_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            CallFunction(
-                result_reg=raw_reg,
-                func_name=_CLOSE_BUILTINS[filename in stmt.with_lock],
-                args=(
-                    Register(str(fn_reg)),
-                    _program(ctx, span=span),
-                ),
-            ),
-            span=span,
+    _ = [
+        _lower_close_file(
+            ctx, filename, filename in stmt.with_lock, materialised, span=stmt.span
         )
-        status_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            CallFunction(
-                result_reg=status_reg,
-                func_name=FuncName("__cobol_io_status"),
-                args=(
-                    Register(str(raw_reg)),
-                    _program(ctx, span=span),
-                ),
-            ),
-            span=span,
-        )
-        ctx.emit_file_status_update(filename, status_reg, materialised, span=span)
-        # CLOSE has no AT END / INVALID KEY clause, so a USE declarative fires
-        # on a non-success close status (red-dragon-m0oa.8).
-        emit_use_trigger(ctx, filename, status_reg, (), materialised, span=span)
-        logger.info("CLOSE %s", filename)
+        for filename in stmt.files
+    ]
+
+
+def _lower_close_file(
+    ctx: EmitContext,
+    filename: str,
+    with_lock: bool,
+    materialised: MaterialisedSectionedLayout,
+    *,
+    span: SourceSpan | None,
+) -> None:
+    v = _verb(ctx, filename, span=span)
+    outcome = v.outcome()
+
+    def closed() -> None:
+        v.set_mode("")
+        v.e.store(v.state.locked, v.e.bool_(with_lock))
+
+    def perform() -> None:
+        v.called("__cobol_close_file", outcome, v.e.text(filename))
+        v.when(v.status_is(outcome, FileLogicStatus.PERMITTED.value), closed)
+
+    v.guarded(
+        (Refusal(v.closed, FileLogicStatus.NOT_OPEN),), outcome, perform, _nothing
+    )
+    status_reg = v.e.load(outcome.status)
+    ctx.emit_file_status_update(filename, status_reg, materialised, span=span)
+    emit_use_trigger(ctx, filename, status_reg, (), materialised, span=span)
+    logger.info("CLOSE %s", filename)
 
 
 def _emit_key_text(
@@ -365,7 +388,7 @@ def _emit_key_text(
 
 def _emit_record_number_report(
     ctx: EmitContext,
-    raw_reg: Register,
+    number_reg: Register,
     status_reg: Register,
     key: RefModOperand,
     materialised: MaterialisedSectionedLayout,
@@ -376,15 +399,6 @@ def _emit_record_number_report(
     record number it used to the RELATIVE KEY."""
     if not materialised.has_field(key.name):
         return
-    number_reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        CallFunction(
-            result_reg=number_reg,
-            func_name=FuncName("__cobol_io_record_number"),
-            args=(raw_reg, _program(ctx, span=span)),
-        ),
-        span=span,
-    )
     _emit_store_if_successful(ctx, status_reg, number_reg, key, materialised, span=span)
 
 
@@ -589,6 +603,75 @@ def _indexed_read_key_reg(
     return _key_value_reg(ctx, entry.organization, key, materialised, span=span)
 
 
+def _sequential_read(
+    ctx: EmitContext, stmt: ReadStatement, materialised: MaterialisedSectionedLayout
+) -> bool:
+    entry = _entry(ctx, stmt.file_name)
+    if entry.organization is FileOrganization.INDEXED:
+        key = stmt.key if stmt.key.name else entry.record_key
+        sequential = entry.access_mode is AccessMode.SEQUENTIAL or stmt.next_record
+        return sequential or not materialised.has_field(key.name)
+    key = (
+        stmt.key
+        if stmt.key.name
+        else addressing_key(ctx._asg, stmt.file_name, stmt.next_record)
+    )
+    return not materialised.has_field(key.name)
+
+
+def _read_position(v: FileVerbIr, outcome: VerbOutcome) -> Register:
+    e = v.e
+    return e.choose(
+        "read_position",
+        e.text(FilePosition.CURRENT_RECORD.value),
+        v.status_is(outcome, "00", "02"),
+        lambda: e.choose(
+            "read_position",
+            e.text(FilePosition.AT_END.value),
+            v.status_is(outcome, "10", "14"),
+            lambda: e.text(FilePosition.NO_CURRENT_RECORD.value),
+        ),
+    )
+
+
+def _emit_guarded_read(
+    v: FileVerbIr,
+    stmt: ReadStatement,
+    key_reg: Register,
+    outcome: VerbOutcome,
+    sequential: bool,
+) -> None:
+    def perform() -> None:
+        raw = v.called(
+            "__cobol_read_record", outcome, v.e.text(stmt.file_name), key_reg
+        )
+        v.keep_record(raw, outcome)
+        v.keep_number(raw, outcome)
+        v.e.store(v.state.position, _read_position(v, outcome))
+
+    v.guarded(
+        (
+            Refusal(
+                lambda: v.mode_is_not(*_READ_MODES),
+                FileLogicStatus.READ_NOT_PERMITTED,
+            ),
+            *(
+                (
+                    Refusal(
+                        lambda: v.position_is(FilePosition.AT_END),
+                        FileLogicStatus.NO_NEXT_RECORD,
+                    ),
+                )
+                if sequential
+                else ()
+            ),
+        ),
+        outcome,
+        perform,
+        v.forget_current_record,
+    )
+
+
 def lower_read(
     ctx: EmitContext,
     stmt: ReadStatement,
@@ -596,40 +679,17 @@ def lower_read(
 ) -> None:
     """READ file [INTO target] [KEY k] [AT END ...] [INVALID KEY ...] — with IOResult branching."""
     span = stmt.span
-    fn_reg = ctx.const_to_reg(stmt.file_name, span=span)
-
     key_str_reg = _read_key_reg(ctx, stmt, materialised)
-
-    raw_reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        CallFunction(
-            result_reg=raw_reg,
-            func_name=FuncName("__cobol_read_record"),
-            args=(
-                Register(str(fn_reg)),
-                Register(str(key_str_reg)),
-                _program(ctx, span=span),
-            ),
-        ),
-        span=span,
+    v = _verb(ctx, stmt.file_name, span=span)
+    outcome = v.outcome()
+    _emit_guarded_read(
+        v, stmt, key_str_reg, outcome, _sequential_read(ctx, stmt, materialised)
     )
-
-    status_reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        CallFunction(
-            result_reg=status_reg,
-            func_name=FuncName("__cobol_io_status"),
-            args=(
-                Register(str(raw_reg)),
-                _program(ctx, span=span),
-            ),
-        ),
-        span=span,
-    )
+    status_reg = v.e.load(outcome.status)
     ctx.emit_file_status_update(stmt.file_name, status_reg, materialised, span=span)
     _emit_record_number_report(
         ctx,
-        raw_reg,
+        v.e.load(outcome.number),
         status_reg,
         reported_key(ctx._asg, stmt.file_name, stmt.next_record),
         materialised,
@@ -643,19 +703,7 @@ def lower_read(
         materialised,
         span=span,
     )
-
-    data_reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        CallFunction(
-            result_reg=data_reg,
-            func_name=FuncName("__cobol_io_data"),
-            args=(
-                Register(str(raw_reg)),
-                _program(ctx, span=span),
-            ),
-        ),
-        span=span,
-    )
+    data_reg = v.e.load(outcome.data)
     _emit_record_length_report(
         ctx, data_reg, status_reg, stmt.file_name, materialised, span=span
     )
@@ -821,6 +869,41 @@ def _write_source_reg(
     )
 
 
+def _emit_guarded_update(
+    v: FileVerbIr,
+    primitive: str,
+    outcome: VerbOutcome,
+    refusals: Sequence[Refusal],
+    args: tuple[Register, ...],
+) -> None:
+    def perform() -> None:
+        raw = v.called(primitive, outcome, *args)
+        v.keep_number(raw, outcome)
+        v.set_position(FilePosition.NO_CURRENT_RECORD)
+
+    v.guarded(refusals, outcome, perform, v.forget_current_record)
+
+
+def _current_record_refusals(
+    v: FileVerbIr, entry: FileControlEntry
+) -> tuple[Refusal, ...]:
+    return (
+        Refusal(
+            lambda: v.mode_is_not(OpenMode.IO), FileLogicStatus.UPDATE_NOT_PERMITTED
+        ),
+        *(
+            (
+                Refusal(
+                    lambda: v.position_is_not(FilePosition.CURRENT_RECORD),
+                    FileLogicStatus.NO_CURRENT_RECORD,
+                ),
+            )
+            if _sequential_access(entry)
+            else ()
+        ),
+    )
+
+
 def lower_write(
     ctx: EmitContext,
     stmt: WriteStatement,
@@ -840,40 +923,29 @@ def lower_write(
         materialised,
         span=span,
     )
-    fn_reg = ctx.const_to_reg(file_name, span=span)
     key_reg = _emit_key_text(
         ctx, addressing_key(ctx._asg, file_name, False), materialised, span=span
     )
-    raw_reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        CallFunction(
-            result_reg=raw_reg,
-            func_name=FuncName("__cobol_write_record"),
-            args=(
-                Register(str(fn_reg)),
-                Register(str(data_reg)),
-                key_reg,
-                _program(ctx, span=span),
+    v = _verb(ctx, file_name, span=span)
+    outcome = v.outcome()
+    entry = _entry(ctx, file_name)
+    _emit_guarded_update(
+        v,
+        "__cobol_write_record",
+        outcome,
+        (
+            Refusal(
+                lambda: v.mode_is_not(*_write_modes(entry)),
+                FileLogicStatus.WRITE_NOT_PERMITTED,
             ),
         ),
-        span=span,
+        (v.e.text(file_name), data_reg, key_reg),
     )
-    status_reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        CallFunction(
-            result_reg=status_reg,
-            func_name=FuncName("__cobol_io_status"),
-            args=(
-                Register(str(raw_reg)),
-                _program(ctx, span=span),
-            ),
-        ),
-        span=span,
-    )
+    status_reg = v.e.load(outcome.status)
     ctx.emit_file_status_update(file_name, status_reg, materialised, span=span)
     _emit_record_number_report(
         ctx,
-        raw_reg,
+        v.e.load(outcome.number),
         status_reg,
         reported_key(ctx._asg, file_name, False),
         materialised,
@@ -921,36 +993,19 @@ def lower_rewrite(
         materialised,
         span=span,
     )
-    fn_reg = ctx.const_to_reg(file_name, span=span)
     key_reg = _emit_key_text(
         ctx, addressing_key(ctx._asg, file_name, False), materialised, span=span
     )
-    raw_reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        CallFunction(
-            result_reg=raw_reg,
-            func_name=FuncName("__cobol_rewrite_record"),
-            args=(
-                Register(str(fn_reg)),
-                Register(str(data_reg)),
-                key_reg,
-                _program(ctx, span=span),
-            ),
-        ),
-        span=span,
+    v = _verb(ctx, file_name, span=span)
+    outcome = v.outcome()
+    _emit_guarded_update(
+        v,
+        "__cobol_rewrite_record",
+        outcome,
+        _current_record_refusals(v, _entry(ctx, file_name)),
+        (v.e.text(file_name), data_reg, key_reg),
     )
-    status_reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        CallFunction(
-            result_reg=status_reg,
-            func_name=FuncName("__cobol_io_status"),
-            args=(
-                Register(str(raw_reg)),
-                _program(ctx, span=span),
-            ),
-        ),
-        span=span,
-    )
+    status_reg = v.e.load(outcome.status)
     ctx.emit_file_status_update(file_name, status_reg, materialised, span=span)
     emit_use_trigger(
         ctx,
@@ -984,35 +1039,23 @@ def lower_start(
 ) -> None:
     """START file-name [KEY relop key] [INVALID KEY ...] — position via __cobol_start_file."""
     span = stmt.span
-    fn_reg = ctx.const_to_reg(stmt.file_name, span=span)
     key_reg = _start_key_reg(ctx, stmt, materialised, span=span)
-    relop_reg = ctx.const_to_reg(stmt.relop or "=", span=span)
-    raw_reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        CallFunction(
-            result_reg=raw_reg,
-            func_name=FuncName("__cobol_start_file"),
-            args=(
-                Register(str(fn_reg)),
-                Register(str(key_reg)),
-                Register(str(relop_reg)),
-                _program(ctx, span=span),
+    relop_reg = Register(str(ctx.const_to_reg(stmt.relop or "=", span=span)))
+    v = _verb(ctx, stmt.file_name, span=span)
+    outcome = v.outcome()
+    _emit_guarded_update(
+        v,
+        "__cobol_start_file",
+        outcome,
+        (
+            Refusal(
+                lambda: v.mode_is_not(*_READ_MODES),
+                FileLogicStatus.READ_NOT_PERMITTED,
             ),
         ),
-        span=span,
+        (v.e.text(stmt.file_name), key_reg, relop_reg),
     )
-    status_reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        CallFunction(
-            result_reg=status_reg,
-            func_name=FuncName("__cobol_io_status"),
-            args=(
-                Register(str(raw_reg)),
-                _program(ctx, span=span),
-            ),
-        ),
-        span=span,
-    )
+    status_reg = v.e.load(outcome.status)
     ctx.emit_file_status_update(stmt.file_name, status_reg, materialised, span=span)
     emit_use_trigger(
         ctx,
@@ -1114,33 +1157,17 @@ def lower_delete(
 ) -> None:
     """DELETE file-name [INVALID KEY ...] — delete record via __cobol_delete_record."""
     span = stmt.span
-    fn_reg = ctx.const_to_reg(stmt.file_name, span=span)
     key_reg = _delete_key_reg(ctx, stmt.file_name, materialised, span=span)
-    raw_reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        CallFunction(
-            result_reg=raw_reg,
-            func_name=FuncName("__cobol_delete_record"),
-            args=(
-                Register(str(fn_reg)),
-                Register(str(key_reg)),
-                _program(ctx, span=span),
-            ),
-        ),
-        span=span,
+    v = _verb(ctx, stmt.file_name, span=span)
+    outcome = v.outcome()
+    _emit_guarded_update(
+        v,
+        "__cobol_delete_record",
+        outcome,
+        _current_record_refusals(v, _entry(ctx, stmt.file_name)),
+        (v.e.text(stmt.file_name), key_reg),
     )
-    status_reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        CallFunction(
-            result_reg=status_reg,
-            func_name=FuncName("__cobol_io_status"),
-            args=(
-                Register(str(raw_reg)),
-                _program(ctx, span=span),
-            ),
-        ),
-        span=span,
-    )
+    status_reg = v.e.load(outcome.status)
     ctx.emit_file_status_update(stmt.file_name, status_reg, materialised, span=span)
     emit_use_trigger(
         ctx,

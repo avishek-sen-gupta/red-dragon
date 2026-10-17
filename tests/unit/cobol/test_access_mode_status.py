@@ -1,22 +1,53 @@
-"""RealFileIOProvider reports the I-O statuses that depend on a file's ACCESS MODE
-and on its RELATIVE KEY's size: 21, 43 on a keyed file, and 14."""
+"""The lowered IR reports the I-O statuses that depend on a file's ACCESS MODE and on
+its RELATIVE KEY's size: 21, 43 on a keyed file, and 14."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from cobol_asg.file_enums import AccessMode, FileOrganization
 from interpreter.cobol.features import CobolFeature
-from interpreter.cobol.file_frame import FileFrame
-from interpreter.cobol.prime_key import PrimeKey
-from interpreter.cobol.real_file_provider import RealFileIOProvider
 from tests.covers import covers
-from tests.unit.cobol.declared_files import opened
+from tests.unit.cobol.file_status_program import FileProgram, Step
 
-_INDEXED = "INDEXED"
-_RELATIVE = "RELATIVE"
-_SEQUENTIAL = "SEQUENTIAL"
-_RANDOM = "RANDOM"
+_INDEXED = FileProgram(
+    selects=(
+        "    SELECT IX ASSIGN TO IXDD ORGANIZATION INDEXED",
+        "        ACCESS SEQUENTIAL RECORD KEY IX-KEY FILE STATUS IS FS-IX.",
+        "    SELECT IR ASSIGN TO IRDD ORGANIZATION INDEXED",
+        "        ACCESS RANDOM RECORD KEY IR-KEY FILE STATUS IS FS-IR.",
+    ),
+    fds=(
+        "FD  IX.",
+        "01  IX-REC.",
+        "    05  FILLER PIC X.",
+        "    05  IX-KEY PIC XX.",
+        "    05  FILLER PIC X.",
+        "FD  IR.",
+        "01  IR-REC.",
+        "    05  FILLER PIC X.",
+        "    05  IR-KEY PIC XX.",
+        "    05  FILLER PIC X.",
+    ),
+    working_storage=("01  FS-IX PIC XX.", "01  FS-IR PIC XX."),
+    shared={"IR": "ix.dat"},
+)
+_RELATIVE = FileProgram(
+    selects=(
+        "    SELECT RL ASSIGN TO RLDD ORGANIZATION RELATIVE",
+        "        ACCESS MODE IS SEQUENTIAL RELATIVE KEY IS RL-NO",
+        "        FILE STATUS IS FS-RL.",
+    ),
+    fds=("FD  RL.", "01  RL-REC PIC X."),
+    working_storage=(
+        "01  FS-RL PIC XX.",
+        "01  RL-NO PIC 9.",
+        "01  NO-SEEN PIC 99.",
+    ),
+)
+
+
+def _ix(statement: str) -> Step:
+    return Step(statement, ("FS-IX",))
 
 
 @covers(CobolFeature.WRITE)
@@ -25,73 +56,50 @@ _RANDOM = "RANDOM"
 def test_sequential_access_to_an_indexed_file_follows_its_prime_key(
     tmp_path: Path,
 ) -> None:
-    prov = RealFileIOProvider(base_dir=tmp_path)
-    opened(
-        prov,
-        "OUTPUT",
-        FileFrame(
-            "IX",
-            FileOrganization(_INDEXED),
-            AccessMode(_SEQUENTIAL),
-            PrimeKey(1, 2),
-            0,
-            False,
-            False,
-            0,
-            4,
+    statuses = _INDEXED.statuses(
+        tmp_path,
+        (
+            _ix("OPEN OUTPUT IX."),
+            *(
+                _ix(f"MOVE '{record}' TO IX-REC WRITE IX-REC.")
+                for record in ("A10A", "B20B", "C15C", "D20D", "E30E")
+            ),
+            _ix("CLOSE IX."),
+            _ix("OPEN I-O IX."),
+            _ix("MOVE 'X10X' TO IX-REC REWRITE IX-REC."),
+            _ix("READ IX."),
+            _ix("MOVE 'X20X' TO IX-REC REWRITE IX-REC."),
+            _ix("DELETE IX."),
+            _ix("READ IX."),
+            _ix("MOVE 'Y20Y' TO IX-REC REWRITE IX-REC."),
+            _ix("CLOSE IX."),
+            Step("OPEN I-O IR.", ("FS-IR",)),
+            Step("MOVE 'Z30Z' TO IR-REC REWRITE IR-REC.", ("FS-IR",)),
+            Step("CLOSE IR.", ("FS-IR",)),
         ),
     )
-    writes = [
-        prov._write_record("IX", record, "", "P").status
-        for record in ("A10A", "B20B", "C15C", "D20D", "E30E")
-    ]
-    prov._close_file("IX", "P")
-    opened(
-        prov,
-        "I-O",
-        FileFrame(
-            "IX",
-            FileOrganization(_INDEXED),
-            AccessMode(_SEQUENTIAL),
-            PrimeKey(1, 2),
-            0,
-            False,
-            False,
-            0,
-            4,
-        ),
-    )
-    updates = [
-        prov._rewrite_record("IX", "X10X", "", "P").status,
-        prov._read_record("IX", "", "P").status,
-        prov._rewrite_record("IX", "X20X", "", "P").status,
-        prov._delete_record("IX", "", "P").status,
-        prov._read_record("IX", "", "P").status,
-        prov._rewrite_record("IX", "Y20Y", "", "P").status,
-    ]
-    prov._close_file("IX", "P")
-    opened(
-        prov,
-        "I-O",
-        FileFrame(
-            "IX",
-            FileOrganization(_INDEXED),
-            AccessMode(_RANDOM),
-            PrimeKey(1, 2),
-            0,
-            False,
-            False,
-            0,
-            4,
-        ),
-    )
-    keyed = prov._rewrite_record("IX", "Z30Z", "", "P").status
-    prov._close_file("IX", "P")
-    assert (writes, updates, keyed, (tmp_path / "ix.dat").read_bytes()) == (
-        ["00", "00", "21", "22", "00"],
-        ["43", "00", "21", "43", "00", "00"],
-        "00",
-        b"A10AY20YZ30Z",
+    assert (statuses, (tmp_path / "ix.dat").read_bytes()) == (
+        [
+            "00",
+            "00",
+            "00",
+            "21",
+            "22",
+            "00",
+            "00",
+            "00",
+            "43",
+            "00",
+            "21",
+            "43",
+            "00",
+            "00",
+            "00",
+            "00",
+            "00",
+            "00",
+        ],
+        "A10AY20YZ30Z".encode("cp037"),
     )
 
 
@@ -99,45 +107,26 @@ def test_sequential_access_to_an_indexed_file_follows_its_prime_key(
 def test_a_sequential_read_past_the_relative_keys_size_is_status_14(
     tmp_path: Path,
 ) -> None:
-    prov = RealFileIOProvider(base_dir=tmp_path)
-    opened(
-        prov,
-        "OUTPUT",
-        FileFrame(
-            "RL",
-            FileOrganization(_RELATIVE),
-            AccessMode(_SEQUENTIAL),
-            PrimeKey(0, 0),
-            0,
-            False,
-            False,
-            0,
-            1,
+    statuses = _RELATIVE.statuses(
+        tmp_path,
+        (
+            Step("OPEN OUTPUT RL.", ("FS-RL",)),
+            *(
+                Step(f"MOVE '{record}' TO RL-REC WRITE RL-REC.", ("FS-RL",))
+                for record in "ABCDEFGHIJK"
+            ),
+            Step("CLOSE RL.", ("FS-RL",)),
+            Step("OPEN INPUT RL.", ("FS-RL",)),
+            *(
+                Step("READ RL MOVE RL-NO TO NO-SEEN.", ("FS-RL", "NO-SEEN"))
+                for _ in range(11)
+            ),
         ),
     )
-    [prov._write_record("RL", record, "", "P") for record in "ABCDEFGHIJK"]
-    prov._close_file("RL", "P")
-    opened(
-        prov,
-        "INPUT",
-        FileFrame(
-            "RL",
-            FileOrganization(_RELATIVE),
-            AccessMode(_SEQUENTIAL),
-            PrimeKey(0, 0),
-            1,
-            False,
-            False,
-            0,
-            1,
-        ),
-    )
-    reads = [
-        (result.status, result.data or "", result.record_number)
-        for result in (prov._read_record("RL", "", "P") for _ in range(11))
-    ]
-    assert reads == [
-        *(("00", chr(64 + n), n) for n in range(1, 10)),
-        ("14", "", 0),
-        ("46", "", 0),
+    assert statuses == ["00"] * 14 + [
+        *(status for n in range(1, 10) for status in ("00", f"0{n}")),
+        "14",
+        "09",
+        "46",
+        "09",
     ]
