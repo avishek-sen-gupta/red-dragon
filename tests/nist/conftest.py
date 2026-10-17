@@ -25,7 +25,8 @@ NIST_DIR = (
 )
 
 _SELECT_ASSIGN_RE = re.compile(
-    r"\bSELECT\s+([\w-]+)(?:(?!\bSELECT\b).)*?\bASSIGN\b(?:\s+TO)?\s+([\w-]+)",
+    r"\bSELECT\s+(?:OPTIONAL\s+)?([\w-]+)"
+    r"(?:(?!\bSELECT\b).)*?\bASSIGN\b(?:\s+TO)?\s+([\w-]+)",
     re.IGNORECASE | re.DOTALL,
 )
 
