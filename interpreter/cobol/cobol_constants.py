@@ -111,6 +111,7 @@ class BuiltinName:
     TRIM = "__cobol_trim"
     CURRENT_DATE = "__current_date"
     IS_NUMERIC = "__is_numeric"
+    IS_DIGITS = "__is_digits"
     IS_ALPHABETIC = "__is_alphabetic"
     IS_ALPHABETIC_LOWER = "__is_alphabetic_lower"
     IS_ALPHABETIC_UPPER = "__is_alphabetic_upper"
