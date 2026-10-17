@@ -11,6 +11,7 @@ import math
 import struct
 from collections.abc import Mapping, Sequence
 from datetime import UTC
+from itertools import accumulate
 from types import MappingProxyType
 
 from cobol_numeric.intrinsics import (
@@ -356,6 +357,23 @@ def _builtin_string_split(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     if not delimiter:
         return BuiltinResult(value=[source])
     return BuiltinResult(value=source.split(delimiter))
+
+
+def _builtin_unstring_by_size(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """Args: [source: str, size1: int, ...]. The pieces an undelimited UNSTRING
+    moves: each receiver's size in turn, stopping once the source is exhausted."""
+    if any(_is_symbolic(a.value) for a in args):
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    source = str(args[0].value)
+    sizes = [int(a.value) for a in args[1:]]
+    starts = accumulate(sizes, initial=0)
+    return BuiltinResult(
+        value=[
+            source[start : start + size]
+            for start, size in zip(starts, sizes, strict=False)
+            if start < len(source)
+        ]
+    )
 
 
 def _builtin_multi_delimiter_split(
@@ -1916,6 +1934,7 @@ BYTE_BUILTINS: Mapping[FuncName, Builtin] = MappingProxyType(
         FuncName(BuiltinName.STRING_FIND): _builtin_string_find,
         FuncName(BuiltinName.STRING_SPLIT): _builtin_string_split,
         FuncName(BuiltinName.MULTI_DELIMITER_SPLIT): _builtin_multi_delimiter_split,
+        FuncName(BuiltinName.UNSTRING_BY_SIZE): _builtin_unstring_by_size,
         FuncName(
             BuiltinName.MULTI_DELIMITER_CONSUMED_LENGTH
         ): _builtin_multi_delimiter_consumed_length,

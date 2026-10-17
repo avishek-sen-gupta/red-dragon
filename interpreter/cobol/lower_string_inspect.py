@@ -388,6 +388,22 @@ def _splice_into_receiver(
     )
 
 
+def _receiver_sizes(
+    ctx: EmitContext,
+    stmt: UnstringStatement,
+    materialised: MaterialisedSectionedLayout,
+) -> tuple[Register, ...]:
+    """Each INTO receiver's size: without DELIMITED BY, what it takes from the source."""
+    return tuple(
+        ctx.const_to_reg(
+            materialised.resolve(target.name, target.qualifiers)[0].byte_length,
+            span=stmt.span,
+        )
+        for target in stmt.into
+        if ctx.has_field(target.name, materialised)
+    )
+
+
 def lower_unstring(
     ctx: EmitContext,
     stmt: UnstringStatement,
@@ -496,10 +512,18 @@ def lower_unstring(
     )
     parts_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(
-            result_reg=parts_reg,
-            func_name=FuncName(BuiltinName.MULTI_DELIMITER_SPLIT),
-            args=(src_str_reg, *delim_regs),
+        (
+            CallFunction(
+                result_reg=parts_reg,
+                func_name=FuncName(BuiltinName.MULTI_DELIMITER_SPLIT),
+                args=(src_str_reg, *delim_regs),
+            )
+            if delim_regs
+            else CallFunction(
+                result_reg=parts_reg,
+                func_name=FuncName(BuiltinName.UNSTRING_BY_SIZE),
+                args=(src_str_reg, *_receiver_sizes(ctx, stmt, materialised)),
+            )
         ),
         span=span,
     )
