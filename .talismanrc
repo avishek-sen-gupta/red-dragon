@@ -229,7 +229,7 @@ fileignoreconfig:
 - filename: tests/unit/cobol/test_nist_pass_check.py
   checksum: 3b583ba63de1eda902820bb4480539f5720855e82f6905d03dc2d095293da89a
 - filename: tests/nist/test_nc.py
-  checksum: f74457ef3ece3bc6a72bbf97238e1b3d06aa84c99bdc07473b104a24aa1d4df0
+  checksum: 164b3de065ac8fb0b0884dbcc166350473801ff472fddeaa630d7ab26df91026
 - filename: tests/nist/conftest.py
   checksum: c78525b4aa6812db40d108bce7c7180b6cc5293662b2138c6523073c1e73c093
 - filename: interpreter/cobol/lower_perform.py
