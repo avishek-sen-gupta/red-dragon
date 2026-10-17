@@ -1,5 +1,9 @@
 threshold: low
 fileignoreconfig:
+- filename: tests/integration/test_cobol_indexed_random_read.py
+  checksum: a2a3fed254307af309b32f738f52c96e6d5e647d25e536d59afb818468bc254c
+- filename: tests/unit/cobol/test_indexed_read_key.py
+  checksum: 3e2bf689c2e8a6e60329cd3cded41030c59fbbf913f88d890e3b51045089cf5b
 - filename: tests/unit/cobol/test_open_file_arguments.py
   checksum: b73dcc0c4361713d877db0b48bf5e139e53347938d5b33f09c2f7be22cf576bd
 - filename: tests/unit/cobol/test_access_mode_status.py
@@ -205,7 +209,7 @@ fileignoreconfig:
 - filename: tests/unit/cobol/test_recorded_memory_effects.py
   checksum: ba151292b7ee1a3f747628e5950297f904de1c1cd625307f762f7a98b570b3de
 - filename: docs/frontend-design/cobol.md
-  checksum: 0bb8e36d3f2ffa4935597dbde7c4a2a592b41b60198d723388d3e66bd1aeb0e0
+  checksum: ede77742c1503686318285cbbb8ee221cf8b0e7e6823b833e4da74c993379566
 - filename: tests/integration/test_cobol_call_using_addresses.py
   checksum: 353804977c7a3e5eb44a303f7e42a47ef1bdf9f837f41e396bf5033813c4fdb0
 - filename: tests/integration/test_cobol_call_using_slots.py
@@ -255,7 +259,7 @@ fileignoreconfig:
 - filename: proleap-bridge/src/main/java/org/reddragon/bridge/StatementSerializer.java
   checksum: f9a87946dec86a8815575eff56958f913885c76b3fb14f7f3db967b3686e1036
 - filename: interpreter/cobol/lower_io.py
-  checksum: 989d55fdffbf0abf75c76847f2f13a43bc859db74118528f1ee2804ae7bcd43e
+  checksum: a242f026b40036eeaf593d6e9b8faeb674a0429d37626639a3ccd3953c5375de
 - filename: tests/integration/test_cobol_use_declaratives.py
   checksum: d0c6ea039a432d727fde9ea777b1c4945dff7c0f5c3a4599a626bfd8df390072
 - filename: interpreter/cobol/open_file.py

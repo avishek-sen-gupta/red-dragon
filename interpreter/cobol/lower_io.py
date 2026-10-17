@@ -492,6 +492,42 @@ def _emit_record_number_report(
     ctx.emit_inst(Label_(label=skip_lbl), span=span)
 
 
+def _read_key_reg(
+    ctx: EmitContext,
+    stmt: ReadStatement,
+    materialised: MaterialisedSectionedLayout,
+) -> Register:
+    entry = _file_entries(ctx).get(
+        stmt.file_name, FileControlEntry(file_name=stmt.file_name)
+    )
+    if entry.organization is FileOrganization.INDEXED:
+        return _indexed_read_key_reg(ctx, entry, stmt, materialised)
+    return _emit_key_text(
+        ctx,
+        (
+            stmt.key
+            if stmt.key.name
+            else addressing_key(ctx._asg, stmt.file_name, stmt.next_record)
+        ),
+        materialised,
+        span=stmt.span,
+    )
+
+
+def _indexed_read_key_reg(
+    ctx: EmitContext,
+    entry: FileControlEntry,
+    stmt: ReadStatement,
+    materialised: MaterialisedSectionedLayout,
+) -> Register:
+    span = stmt.span
+    sequential = entry.access_mode is AccessMode.SEQUENTIAL or stmt.next_record
+    key = stmt.key if stmt.key.name else entry.record_key
+    if sequential or not materialised.has_field(key.name):
+        return Register(str(ctx.const_to_reg("", span=span)))
+    return _key_value_reg(ctx, entry.organization, key, materialised, span=span)
+
+
 def lower_read(
     ctx: EmitContext,
     stmt: ReadStatement,
@@ -501,16 +537,7 @@ def lower_read(
     span = stmt.span
     fn_reg = ctx.const_to_reg(stmt.file_name, span=span)
 
-    key_str_reg = _emit_key_text(
-        ctx,
-        (
-            stmt.key
-            if stmt.key.name
-            else addressing_key(ctx._asg, stmt.file_name, stmt.next_record)
-        ),
-        materialised,
-        span=span,
-    )
+    key_str_reg = _read_key_reg(ctx, stmt, materialised)
 
     raw_reg = ctx.fresh_reg()
     ctx.emit_inst(
