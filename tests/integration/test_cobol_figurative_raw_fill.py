@@ -1,6 +1,8 @@
 """MOVE HIGH-VALUES / LOW-VALUES fills every receiver with the raw byte 0xFF /
 0x00, whatever its category: a numeric, packed or binary receiver takes the
-bytes as they are, not a number converted from them."""
+bytes as they are, not a number converted from them. An alphanumeric-edited
+receiver is the exception: the figurative is an alphanumeric literal its size,
+edited in, so the insertion characters keep their positions."""
 
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
@@ -16,9 +18,12 @@ _PROGRAM = [
     "01 WS-BINARY PIC S9(4) COMP VALUE 7.",
     "01 WS-CHARS  PIC X(2).",
     "01 WS-LOW    PIC 9(2) VALUE 56.",
+    "01 WS-EDHIGH PIC XX0XXBXXX.",
+    "01 WS-EDLOW  PIC XX0XXBXXX.",
     "PROCEDURE DIVISION.",
-    "    MOVE HIGH-VALUES TO WS-ZONED WS-PACKED WS-BINARY WS-CHARS.",
-    "    MOVE LOW-VALUES TO WS-LOW.",
+    "    MOVE HIGH-VALUES TO WS-ZONED WS-PACKED WS-BINARY WS-CHARS",
+    "        WS-EDHIGH.",
+    "    MOVE LOW-VALUES TO WS-LOW WS-EDLOW.",
     "    STOP RUN.",
 ]
 
@@ -27,4 +32,6 @@ _PROGRAM = [
 def test_high_and_low_values_fill_any_receiver_with_the_raw_byte() -> None:
     ws = bytes(ws_region(run_cobol_programs(_PROGRAM, {}), "RAWFIL"))
 
-    assert ws[:10] == bytes.fromhex("FFFF" "FFFF" "FFFF" "FFFF" "0000")
+    assert ws[:28] == bytes.fromhex(
+        "FFFF" "FFFF" "FFFF" "FFFF" "0000" "FFFFF0FFFF40FFFFFF" "0000F0000040000000"
+    )

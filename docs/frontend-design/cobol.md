@@ -116,7 +116,7 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 
 | Statement | IR Pattern |
 |---|---|
-| `MOVE X TO Y` | Decode X → encode as Y's type → `WRITE_REGION`. A group sender is an alphanumeric move with no conversion: its characters fill a numeric or edited receiver as one alphanumeric item, left to right, space-padded or truncated, with no editing (`MOVE` of a group holding `123ABC` to `PIC 99` stores `12`). |
+| `MOVE X TO Y` | Decode X → encode as Y's type → `WRITE_REGION`. A group sender is an alphanumeric move with no conversion: its characters fill a numeric or edited receiver as one alphanumeric item, left to right, space-padded or truncated, with no editing (`MOVE` of a group holding `123ABC` to `PIC 99` stores `12`). HIGH-VALUE and LOW-VALUE fill any receiver with their raw byte, except an alphanumeric-edited one, which takes them as a literal of its size, edited in (`PIC XX0XX` gets `FF FF F0 FF FF`). |
 | `ADD X W TO Y Z` | Sum the sending operands once (X + W), then for each receiver in turn: decode it → add the sum → encode → write. The bridge emits the sending operands as `operands` and the receivers, each with its own `rounded`, as `targets`. |
 | `SUBTRACT X W FROM Y Z` | As ADD: each receiver loses the sum X + W. |
 | `MULTIPLY X BY Y Z` | Each receiver in turn becomes receiver × X. |
