@@ -184,6 +184,7 @@ class RefModOperand:
     qualifiers: tuple[str, ...] = ()
     subscripts: tuple[ExprNode, ...] = ()
     rounded: bool = False
+    all_literal: bool = False
 
     @classmethod
     def from_dict(cls, data: dict) -> RefModOperand:
@@ -229,13 +230,17 @@ class RefModOperand:
             qualifiers=qualifiers,
             subscripts=subscripts,
             rounded=rounded,
+            all_literal=data.get("all", False),
         )
 
     def to_dict(self) -> dict:
         """Serialize RefModOperand to JSON dict format."""
         if self.length_of:
             return {"kind": "length_of", "name": self.length_of}
-        result: dict = {"name": self.name}
+        result: dict = {
+            "name": self.name,
+            **({"all": True} if self.all_literal else {}),
+        }
         if self.ref_mod_start is not None:
             result["ref_mod_start"] = ref_mod_expr_to_dict(self.ref_mod_start)
         if self.ref_mod_length is not None:

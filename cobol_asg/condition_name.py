@@ -27,16 +27,22 @@ class ConditionValue:
 
     from_val: str
     to_val: str = ""
+    is_all: bool = False
 
     @classmethod
     def from_dict(cls, data: dict) -> ConditionValue:
         return cls(
             from_val=data.get("from", ""),
             to_val=data.get("to", ""),
+            is_all=data.get("all", False),
         )
 
     def to_dict(self) -> dict:
-        return {"from": self.from_val, "to": self.to_val}
+        return {
+            "from": self.from_val,
+            "to": self.to_val,
+            **({"all": True} if self.is_all else {}),
+        }
 
     @property
     def is_range(self) -> bool:
@@ -63,7 +69,7 @@ class ConditionName:
         )
 
     def to_dict(self) -> dict:
-        result: dict = {"name": self.name}
-        if self.values:
-            result["values"] = [v.to_dict() for v in self.values]
-        return result
+        return {
+            "name": self.name,
+            **({"values": [v.to_dict() for v in self.values]} if self.values else {}),
+        }

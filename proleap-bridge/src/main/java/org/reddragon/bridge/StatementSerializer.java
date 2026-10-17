@@ -336,7 +336,14 @@ public final class StatementSerializer {
                     functionNode = serializeFunctionNodeFromValueStmt(vs);
                 }
                 JsonObject lengthOfNode = serializeMoveLengthOfSource(vs);
-                if (functionNode != null) {
+                CobolParser.LiteralContext sendingLiteral =
+                        sendingArea.getCtx() instanceof CobolParser.MoveToSendingAreaContext areaCtx
+                                ? areaCtx.literal() : null;
+                boolean moveAll = stmt.getCtx() instanceof CobolParser.MoveStatementContext moveCtx
+                        && moveCtx.ALL() != null;
+                if (moveAll && sendingLiteral != null) {
+                    operands.add(moveAllSource(sendingLiteral));
+                } else if (functionNode != null) {
                     operands.add(functionNode);
                 } else if (lengthOfNode != null) {
                     // `MOVE LENGTH OF <field> TO ...` — emit a structured
@@ -3545,6 +3552,9 @@ public final class StatementSerializer {
             JsonObject dfh = serializeDfhrespLit((LiteralValueStmt) vs);
             if (dfh != null) return dfh;
             Literal lit = ((LiteralValueStmt) vs).getLiteral();
+            if (lit != null && allRepeatedLiteral(lit.getCtx()) != null) {
+                return allLiteralNode(allRepeatedLiteral(lit.getCtx()));
+            }
             if (lit != null && lit.getLiteralType() == Literal.LiteralType.FIGURATIVE_CONSTANT
                     && lit.getFigurativeConstant() != null) {
                 String canonical = canonicalFigurative(lit.getFigurativeConstant().getFigurativeConstantType());
@@ -3840,6 +3850,10 @@ public final class StatementSerializer {
 
     /** A literal operand as a {@code lit} node, or a {@code figurative} one. */
     private static JsonElement serializeLiteralCtx(CobolParser.LiteralContext lit) {
+        CobolParser.LiteralContext repeated = allRepeatedLiteral(lit);
+        if (repeated != null) {
+            return allLiteralNode(repeated);
+        }
         if (lit != null && lit.figurativeConstant() != null) {
             String canonical = canonicalFigurativeCtx(lit.figurativeConstant());
             if (canonical != null) {
@@ -3910,6 +3924,33 @@ public final class StatementSerializer {
         if (fc.HIGH_VALUE() != null || fc.HIGH_VALUES() != null) return "HIGH-VALUES";
         if (fc.QUOTE() != null || fc.QUOTES() != null) return "QUOTES";
         return null;
+    }
+
+    static CobolParser.LiteralContext allRepeatedLiteral(CobolParser.LiteralContext lit) {
+        if (lit == null || lit.figurativeConstant() == null || lit.figurativeConstant().ALL() == null) {
+            return null;
+        }
+        return lit.figurativeConstant().literal();
+    }
+
+    private static JsonElement allLiteralNode(CobolParser.LiteralContext repeated) {
+        if (repeated.figurativeConstant() != null) {
+            return serializeLiteralCtx(repeated);
+        }
+        JsonObject fig = new JsonObject();
+        fig.addProperty("kind", "figurative");
+        fig.addProperty("value", "ALL");
+        fig.addProperty("literal", repeated.getText());
+        return fig;
+    }
+
+    private static JsonObject moveAllSource(CobolParser.LiteralContext literal) {
+        JsonObject src = new JsonObject();
+        src.addProperty("name", literal.getText());
+        if (literal.figurativeConstant() == null) {
+            src.addProperty("all", true);
+        }
+        return src;
     }
 
     private static JsonObject litNode(String value) {

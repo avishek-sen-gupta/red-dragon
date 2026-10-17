@@ -2,6 +2,7 @@ package org.reddragon.bridge;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import io.proleap.cobol.CobolParser;
 import io.proleap.cobol.asg.metamodel.data.datadescription.DataDescriptionEntry;
 import io.proleap.cobol.asg.metamodel.data.datadescription.DataDescriptionEntryCondition;
 import io.proleap.cobol.asg.metamodel.data.datadescription.DataDescriptionEntryExecSql;
@@ -169,6 +170,9 @@ public final class DataFieldSerializer {
         // in source (red-dragon-zuhj).
         if (isFigurativeValue(group)) {
             obj.addProperty("value_is_figurative", true);
+        }
+        if (isAllValue(group)) {
+            obj.addProperty("value_is_all", true);
         }
 
         JsonArray valuesArray = extractAllValues(group);
@@ -374,21 +378,48 @@ public final class DataFieldSerializer {
     private static JsonObject serializeValueInterval(ValueInterval interval) {
         JsonObject intervalObj = new JsonObject();
 
-        ValueStmt fromVs = interval.getFromValueStmt();
-        if (fromVs != null && fromVs.getCtx() != null) {
-            intervalObj.addProperty("from", stripQuotes(fromVs.getCtx().getText()));
-        } else {
-            intervalObj.addProperty("from", "");
+        intervalObj.addProperty("from",
+                stripQuotes(rawBoundText(fromLiteral(interval), interval.getFromValueStmt())));
+        intervalObj.addProperty("to",
+                stripQuotes(rawBoundText(toLiteral(interval), interval.getToValueStmt())));
+        if (isAllLiteral(fromLiteral(interval))) {
+            intervalObj.addProperty("all", true);
         }
-
-        ValueStmt toVs = interval.getToValueStmt();
-        if (toVs != null && toVs.getCtx() != null) {
-            intervalObj.addProperty("to", stripQuotes(toVs.getCtx().getText()));
-        } else {
-            intervalObj.addProperty("to", "");
-        }
-
         return intervalObj;
+    }
+
+    private static CobolParser.LiteralContext fromLiteral(ValueInterval interval) {
+        return interval.getCtx() instanceof CobolParser.DataValueIntervalContext ctx
+                ? ctx.dataValueIntervalFrom().literal() : null;
+    }
+
+    private static CobolParser.LiteralContext toLiteral(ValueInterval interval) {
+        return interval.getCtx() instanceof CobolParser.DataValueIntervalContext ctx
+                && ctx.dataValueIntervalTo() != null
+                ? ctx.dataValueIntervalTo().literal() : null;
+    }
+
+    private static CobolParser.LiteralContext unwrapAll(CobolParser.LiteralContext lit) {
+        CobolParser.LiteralContext repeated = StatementSerializer.allRepeatedLiteral(lit);
+        return repeated != null ? unwrapAll(repeated) : lit;
+    }
+
+    private static String rawBoundText(CobolParser.LiteralContext lit, ValueStmt vs) {
+        if (lit != null) {
+            return unwrapAll(lit).getText();
+        }
+        return vs != null && vs.getCtx() != null ? vs.getCtx().getText() : "";
+    }
+
+    private static boolean isAllLiteral(CobolParser.LiteralContext lit) {
+        return StatementSerializer.allRepeatedLiteral(lit) != null
+                && unwrapAll(lit).figurativeConstant() == null;
+    }
+
+    private static boolean isAllValue(DataDescriptionEntryGroup group) {
+        return group.getValueClause() != null
+                && !group.getValueClause().getValueIntervals().isEmpty()
+                && isAllLiteral(fromLiteral(group.getValueClause().getValueIntervals().get(0)));
     }
 
     /**
@@ -591,10 +622,7 @@ public final class DataFieldSerializer {
         try {
             if (group.getValueClause() != null && !group.getValueClause().getValueIntervals().isEmpty()) {
                 ValueInterval interval = group.getValueClause().getValueIntervals().get(0);
-                ValueStmt fromVs = interval.getFromValueStmt();
-                if (fromVs != null && fromVs.getCtx() != null) {
-                    return stripQuotes(fromVs.getCtx().getText());
-                }
+                return stripQuotes(rawBoundText(fromLiteral(interval), interval.getFromValueStmt()));
             }
         } catch (Exception e) {
             LOG.fine("No VALUE clause for " + group.getName());
@@ -616,14 +644,11 @@ public final class DataFieldSerializer {
             if (group.getValueClause() != null
                     && !group.getValueClause().getValueIntervals().isEmpty()) {
                 ValueInterval interval = group.getValueClause().getValueIntervals().get(0);
-                ValueStmt fromVs = interval.getFromValueStmt();
-                if (fromVs != null && fromVs.getCtx() != null) {
-                    String raw = fromVs.getCtx().getText();
-                    boolean quoted = raw.length() >= 2
-                            && ((raw.startsWith("'") && raw.endsWith("'"))
-                            || (raw.startsWith("\"") && raw.endsWith("\"")));
-                    return !quoted && FIGURATIVE_KEYWORDS.contains(raw.toUpperCase());
-                }
+                String raw = rawBoundText(fromLiteral(interval), interval.getFromValueStmt());
+                boolean quoted = raw.length() >= 2
+                        && ((raw.startsWith("'") && raw.endsWith("'"))
+                        || (raw.startsWith("\"") && raw.endsWith("\"")));
+                return !quoted && FIGURATIVE_KEYWORDS.contains(raw.toUpperCase());
             }
         } catch (Exception e) {
             LOG.fine("Could not determine figurative VALUE for " + group.getName());

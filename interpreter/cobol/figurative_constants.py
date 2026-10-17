@@ -22,3 +22,7 @@ COBOL_FIGURATIVE_CONSTANTS: dict[str, str] = {
     "HIGH-VALUE": _HIGH_VALUE,
     "HIGH-VALUES": _HIGH_VALUE,
 }
+
+
+def repeat_to_width(pattern: str, width: int) -> str:
+    return (pattern * (width // len(pattern) + 1))[:width]
