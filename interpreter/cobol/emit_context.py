@@ -781,36 +781,35 @@ class EmitContext:
         td = fl.type_descriptor
         if td.blank_when_zero and self._is_zero_value(value):
             return self._emit_ebcdic_spaces(fl.byte_length, span=span)
-        if td.holds_characters:
-            # An alphanumeric-edited item's VALUE literal is stored verbatim: a
-            # VALUE clause literal "is not edited" (LR, "VALUE clause"), unlike
-            # the same characters arriving by MOVE.
-            raw = parse_hex_literal(value)
-            if raw is not None:
-                return self._emit_hex_literal_bytes(raw, fl.byte_length, span=span)
-            # A figurative VALUE (SPACES / ZEROS / LOW-VALUES / ...) fills the
-            # WHOLE field with its fill character, not the literal keyword text
-            # (e.g. PIC X(52) VALUE SPACES is 52 spaces, not "SPACES" + padding).
-            # Gated on value_is_figurative so a quoted literal VALUE 'SPACE' is
-            # left verbatim. red-dragon-zuhj: surfaced via INSPECT CONVERTING.
-            if fl.value_is_figurative and value in self.figuratives.characters:
-                return self.emit_encode_alphanumeric(
-                    fl.name,
-                    self.figuratives.characters[value] * fl.byte_length,
-                    td.total_digits,
-                    justified_right=td.justified_right,
-                    span=span,
-                )
-            return self.emit_encode_alphanumeric(
-                fl.name,
-                value,
-                td.total_digits,
-                justified_right=td.justified_right,
-                span=span,
+        if td.category == CobolDataCategory.NUMERIC_EDITED and fl.value_is_numeric:
+            return self.emit_encode_from_string(
+                fl, self.const_to_reg(from_literal(value), span=span), span=span
             )
+        if td.holds_characters or td.category == CobolDataCategory.NUMERIC_EDITED:
+            return self._emit_encode_character_value(fl, value, span=span)
         if td.category in (CobolDataCategory.COMP1, CobolDataCategory.COMP2):
             return self.emit_encode_float(fl.name, value, td, span=span)
         return self.emit_encode_numeric(fl.name, value, td, span=span)
+
+    def _emit_encode_character_value(
+        self, fl: FieldLayout, value: str, *, span: SourceSpan | None = None
+    ) -> Register:
+        """Encode a VALUE literal stored as its characters, unedited."""
+        td = fl.type_descriptor
+        raw = parse_hex_literal(value)
+        if raw is not None:
+            return self._emit_hex_literal_bytes(raw, fl.byte_length, span=span)
+        figurative = fl.value_is_figurative and value in self.figuratives.characters
+        text = (
+            self.figuratives.characters[value] * fl.byte_length if figurative else value
+        )
+        return self.emit_encode_alphanumeric(
+            fl.name,
+            text,
+            td.total_digits,
+            justified_right=td.justified_right,
+            span=span,
+        )
 
     def _is_zero_value(self, value: str) -> bool:
         """Check if a literal value is numerically zero."""
