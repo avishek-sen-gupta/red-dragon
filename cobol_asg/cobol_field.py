@@ -3,7 +3,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from collections.abc import Mapping
+from dataclasses import dataclass, field, replace
 
 from cobol_asg.cobol_types import CobolTypeDescriptor
 from cobol_asg.condition_name import ConditionName, ConditionValue
@@ -11,11 +12,14 @@ from cobol_asg.decimal_point import DecimalPoint
 from cobol_asg.edit_picture import DEFAULT_CURRENCY, UnsupportedEditPictureError
 from cobol_asg.pic_parser import parse_pic
 from cobol_asg.pointer_types import FULLWORD_POINTER
+from cobol_asg.program_conventions import DEFAULT_CONVENTIONS, ProgramConventions
 from cobol_asg.ref_mod import RefModOperand
+from cobol_asg.sign_clause import NO_SIGN_CLAUSE, SignClause
 from cobol_asg.source_span import SourceSpan
 
 NOT_RENAMED = RefModOperand(name="")
 NO_ODO_OBJECT = RefModOperand(name="")
+_DISPLAY = "DISPLAY"
 
 
 @dataclass(frozen=True)
@@ -50,6 +54,7 @@ class CobolField:
     values: list[ConditionValue] = field(default_factory=list)
     sign_leading: bool = False
     sign_separate: bool = False
+    sign_written: bool = field(default=False, compare=False)
     justified_right: bool = False
     synchronized: bool = False
     occurs_depending_on: RefModOperand = NO_ODO_OBJECT
@@ -103,12 +108,35 @@ class CobolField:
     def from_dict(
         cls,
         data: dict,
-        currency: str = DEFAULT_CURRENCY,
-        pointer_type: CobolTypeDescriptor = FULLWORD_POINTER,
-        decimal_point_is_comma: bool = False,
+        conventions: ProgramConventions = DEFAULT_CONVENTIONS,
+        enclosing_sign: SignClause = NO_SIGN_CLAUSE,
     ) -> CobolField:
-        sign_data = data.get("sign", {})
-        decimal_point = DecimalPoint(decimal_point_is_comma)
+        """The entry, a signed numeric DISPLAY item taking the nearest SIGN clause.
+
+        "The SIGN clause specified at group level applies to each signed numeric
+        data description entry subordinate to that group; one specified at a
+        subordinate level takes precedence" (ANSI X3.23-1985 SIGN clause).
+        """
+        own_sign = SignClause.from_dict(data)
+        written = cls._written(data, conventions, own_sign.nearest(enclosing_sign))
+        if own_sign.written or not written.is_signed_display_numeric:
+            return written
+        return replace(
+            written,
+            sign_leading=enclosing_sign.leading,
+            sign_separate=enclosing_sign.separate,
+        )
+
+    @property
+    def is_signed_display_numeric(self) -> bool:
+        return self.usage == _DISPLAY and self.type_descriptor.signed
+
+    @classmethod
+    def _written(
+        cls, data: Mapping, conventions: ProgramConventions, children_sign: SignClause
+    ) -> CobolField:
+        own_sign = SignClause.from_dict(data)
+        decimal_point = DecimalPoint(conventions.decimal_point_is_comma)
         value = data.get("value", "")
         return cls(
             name=data["name"],
@@ -126,7 +154,7 @@ class CobolField:
             value_is_numeric=data.get("value_is_numeric", False),
             redefines=data.get("redefines", ""),
             children=[
-                CobolField.from_dict(c, currency, pointer_type, decimal_point_is_comma)
+                CobolField.from_dict(c, conventions, children_sign)
                 for c in data.get("children", [])
             ],
             occurs=data.get("occurs", 0),
@@ -139,8 +167,9 @@ class CobolField:
                 ConditionValue.from_dict(v, decimal_point)
                 for v in data.get("values", [])
             ],
-            sign_leading=sign_data.get("position", "") == "LEADING",
-            sign_separate=sign_data.get("separate", False),
+            sign_leading=own_sign.leading,
+            sign_separate=own_sign.separate,
+            sign_written=own_sign.written,
             justified_right=data.get("justified_right", False),
             synchronized=data.get("synchronized", False),
             occurs_depending_on=RefModOperand.from_dict(
@@ -152,9 +181,9 @@ class CobolField:
             renames_thru=RefModOperand.from_dict(data.get("renames_thru", {})),
             blank_when_zero=data.get("blank_when_zero", False),
             filler=data.get("filler", False),
-            currency_symbol=currency,
-            pointer_type=pointer_type,
-            decimal_point_is_comma=decimal_point_is_comma,
+            currency_symbol=conventions.currency,
+            pointer_type=conventions.pointer_type,
+            decimal_point_is_comma=conventions.decimal_point_is_comma,
             span=SourceSpan.from_dict(data),
         )
 
@@ -188,7 +217,13 @@ class CobolField:
                 else {}
             ),
             **({"values": [v.to_dict() for v in self.values]} if self.values else {}),
-            **({"sign": sign} if self.sign_leading or self.sign_separate else {}),
+            **(
+                {"sign": sign}
+                if self.sign_leading
+                or self.sign_separate
+                or (self.sign_written and self.children)
+                else {}
+            ),
             **({"justified_right": True} if self.justified_right else {}),
             **({"synchronized": True} if self.synchronized else {}),
             **(
