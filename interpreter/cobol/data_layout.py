@@ -10,7 +10,7 @@ and attaches each field's CobolTypeDescriptor.
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from itertools import accumulate, chain, product
 from typing import TypeVar
@@ -21,6 +21,8 @@ from cobol_asg.condition_name import ConditionName, ConditionValue
 from cobol_asg.ref_mod import RefModOperand
 from cobol_asg.source_span import SourceSpan
 from interpreter.cobol.figurative_constants import repeat_to_width
+from interpreter.cobol.odo_tail import NO_ODO_TAIL, OdoTail
+from interpreter.register import NO_REGISTER, Register
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +47,7 @@ class CobolAmbiguousReferenceError(Exception):
 _V = TypeVar("_V")
 
 
-def _ci_get(mapping: dict[str, _V], name: str) -> _V | None:
+def _ci_get(mapping: Mapping[str, _V], name: str) -> _V | None:
     """Look up ``name`` in ``mapping`` case-insensitively.
 
     COBOL identifiers are case-insensitive, but the layout preserves the
@@ -54,14 +56,11 @@ def _ci_get(mapping: dict[str, _V], name: str) -> _V | None:
     whose upper-case form matches ``name`` upper-cased is returned. Field names
     are unique within a record, so at most one case-insensitive match exists.
     """
-    direct = mapping.get(name)
-    if direct is not None:
-        return direct
     upper = name.upper()
-    for key, value in mapping.items():
-        if key.upper() == upper:
-            return value
-    return None
+    return mapping.get(
+        name,
+        next((item for named, item in mapping.items() if named.upper() == upper), None),
+    )
 
 
 @dataclass(frozen=True)
@@ -97,6 +96,12 @@ class FieldLayout:
     renames_from: str = ""
     renames_thru: str = ""
     holds_address: bool = False
+    current_length: Register = NO_REGISTER
+    """For one reference to an item ending in an OCCURS DEPENDING ON table: the
+    register holding its length under the ODO object's current value."""
+    receives_at_maximum: bool = False
+    """That item contains its own ODO object, so as a receiver it is its
+    maximum length (ANSI X3.23-1985 OCCURS, from memory)."""
     span: SourceSpan | None = None
     """Where this field was declared, or None for compiler-allocated items.
 
@@ -183,13 +188,13 @@ class DataLayout:
 
     def _find_all(self, name: str) -> list[FieldLayout]:
         """Collect every leaf field matching ``name`` (case-insensitive) in this subtree."""
-        results = []
-        direct = _ci_get(self.fields, name)
-        if direct is not None:
-            results.append(direct)
-        for sub in self.groups.values():
-            results.extend(sub._find_all(name))
-        return results
+        exact = [leaf for named, leaf in self.fields.items() if named == name]
+        folded = [
+            leaf for named, leaf in self.fields.items() if named.upper() == name.upper()
+        ]
+        return (exact or folded)[:1] + [
+            match for sub in self.groups.values() for match in sub._find_all(name)
+        ]
 
     def exists(self, name: str) -> bool:
         """True if ``name`` names at least one item here, elementary, group or
@@ -215,10 +220,14 @@ class DataLayout:
         casing.
         """
         wanted = table_name.upper()
-        for index_name, owner in self.index_owner.items():
-            if owner.upper() == wanted:
-                return index_name
-        return None
+        return next(
+            (
+                index_name
+                for index_name, owner in self.index_owner.items()
+                if owner.upper() == wanted
+            ),
+            None,
+        )
 
     def lookup_or_raise(self, name: str) -> FieldLayout:
         result = self.lookup(name)
@@ -279,6 +288,32 @@ class DataLayout:
             except KeyError:
                 pass
         raise KeyError(f"Group not found in layout: {name!r}")
+
+    def odo_tail(self) -> OdoTail:
+        """The OCCURS DEPENDING ON table this item ends with, or NO_ODO_TAIL."""
+        return next(
+            chain(
+                (self._own_odo_tail(),) if self.occurs_depending_on else (),
+                (
+                    OdoTail(
+                        leaf.occurs_depending_on, leaf.element_size, leaf.occurs_count
+                    )
+                    for leaf in self.fields.values()
+                    if leaf.occurs_depending_on
+                ),
+                (
+                    tail
+                    for group in self.groups.values()
+                    for tail in (group.odo_tail(),)
+                    if tail.is_present()
+                ),
+            ),
+            NO_ODO_TAIL,
+        )
+
+    def _own_odo_tail(self) -> OdoTail:
+        element_size = self.element_size or self.total_bytes // self.occurs_count
+        return OdoTail(self.occurs_depending_on, element_size, self.occurs_count)
 
     def all_leaves(self) -> Iterator[FieldLayout]:
         """Yield all leaf FieldLayouts depth-first."""
