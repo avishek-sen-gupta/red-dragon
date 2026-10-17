@@ -5,7 +5,8 @@ Run: uv run python -m pytest tests/nist/test_nc.py -m nist -v
 
 A program passes only when it runs to its END OF TEST banner and its CCVS summary reports
 zero failed tests (tests/nist/conftest.py). Known gaps are tracked under the NIST NC
-conformance epic in beads. Excluded from the default test run; run on demand with `-m nist`.
+conformance epic in beads. The FIPS flagger programs (NC302M, NC303M, NC401M) are
+classified, not run: their verdict is compile-time flagging messages. Excluded from the default test run; run on demand with `-m nist`.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ from tests.nist.conftest import (
     assert_nist_pass,
     input_deck,
     make_provider,
+    skip_flagger_program,
     substitute_x_cards,
 )
 
@@ -140,10 +142,19 @@ def _run_nist(prog: str, tmp_path: Path) -> None:
         "NC252A",
         "NC253A",
         "NC254A",
-        "NC302M",
-        "NC303M",
-        "NC401M",
     ],
 )
 def test_nc_program(prog: str, tmp_path: Path) -> None:
     _run_nist(prog, tmp_path)
+
+
+@pytest.mark.parametrize(
+    "prog, header, flags_expected",
+    [
+        ("NC302M", "THE FOLLOWING PROGRAM TESTS THE FLAGGING OF OBSOLETE", 7),
+        ("NC303M", "OBSOLETE HIGH SUBSET NUCLEUS FEATURES.", 4),
+        ("NC401M", "THIS PROGRAM TESTS THE FLAGGING OF HIGH SUBSET NUCLEUS", 40),
+    ],
+)
+def test_nc_flagger_program(prog: str, header: str, flags_expected: int) -> None:
+    skip_flagger_program(prog, header, flags_expected)

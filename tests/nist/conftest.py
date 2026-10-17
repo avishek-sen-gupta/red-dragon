@@ -174,3 +174,39 @@ def assert_nist_pass(print_path: Path, prog: str) -> None:
     assert not inline_fails, f"{prog}: inline FAIL* records:\n" + "\n".join(
         inline_fails
     )
+
+
+_FLAGS_EXPECTED_RE = re.compile(r"TOTAL NUMBER OF FLAGS EXPECTED = (\d+)\.")
+
+
+def _comment_lines(src: str) -> list[str]:
+    return [
+        line[_TEXT_AREA_START:_TEXT_AREA_END].rstrip()
+        for line in src.splitlines()
+        if len(line) > 6 and line[6] == "*"
+    ]
+
+
+def skip_flagger_program(prog: str, header: str, flags_expected: int) -> None:
+    """Classify a CCVS flagger program and skip it with a reason quoting its header.
+
+    A flagger program's verdict is the compiler's FIPS flagging messages, each
+    announced by a 'Message expected for above statement' comment and totalled by
+    'TOTAL NUMBER OF FLAGS EXPECTED = N.'; it writes no report. The cited header and
+    flag total are checked against the source, so the classification cannot drift.
+    """
+    src_path = NIST_DIR / f"{prog}.CBL"
+    if not src_path.exists():
+        pytest.skip(f"NIST source not found: {src_path}")
+    comments = _comment_lines(src_path.read_text())
+    totals = [int(m[1]) for c in comments if (m := _FLAGS_EXPECTED_RE.search(c))]
+    assert (header in comments, totals) == (
+        True,
+        [flags_expected],
+    ), f"{prog}: not the flagger program it is classified as"
+    pytest.skip(
+        f"{prog}: FIPS flagger test (program header: '{header}'; "
+        f"'TOTAL NUMBER OF FLAGS EXPECTED = {flags_expected}.') -- its verdict is "
+        f"compile-time flagging messages, not run-time output; red-dragon has no "
+        f"FIPS flagger"
+    )
