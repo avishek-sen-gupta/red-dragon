@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import logging
 import os
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
 from types import MappingProxyType
 
@@ -17,7 +17,10 @@ from interpreter.cobol.file_drivers import (
     FileOrganizationDriver,
     open_driver,
 )
+from interpreter.cobol.file_logic_status import FileLogicStatus
+from interpreter.cobol.file_verb import FileVerb
 from interpreter.cobol.io_provider import CobolIOProvider, IOResult
+from interpreter.cobol.open_file import OpenFile
 from interpreter.vm.vm import Operators
 
 _FILE_STATUS: dict[AccessCondition, str] = {
@@ -50,7 +53,6 @@ def to_ioresult(result: AccessResult) -> IOResult:
 logger = logging.getLogger(__name__)
 _UNCOMPUTABLE = Operators.UNCOMPUTABLE
 _PATH_MARKS = frozenset("/\\.")
-_NOT_OPEN = to_ioresult(AccessResult(AccessCondition.NOT_OPEN))
 _OPEN_FAILED = to_ioresult(AccessResult(AccessCondition.FILE_NOT_FOUND))
 
 
@@ -89,8 +91,7 @@ class RealFileIOProvider(CobolIOProvider):
         }
         self._fce: dict[str, FileControlEntry] = {e.file_name: e for e in file_control}
         self._overrides: Mapping[str, Path] = path_overrides
-        self._drivers: dict[str, FileOrganizationDriver] = {}
-        self._open_modes: dict[str, str] = {}
+        self._files: dict[str, OpenFile] = {}
 
     def _overridden(self, file_name: str, assign_to: str) -> list[Path]:
         names = [file_name, *([assign_to] if assign_to else [])]
@@ -116,7 +117,10 @@ class RealFileIOProvider(CobolIOProvider):
         return self._switches.get(environment_name.upper(), SwitchStatus.OFF).value
 
     def _set_switch(self, environment_name: str, status: str) -> IOResult:
-        self._switches[environment_name.upper()] = SwitchStatus(status)
+        self._switches = {
+            **self._switches,
+            environment_name.upper(): SwitchStatus(status),
+        }
         return IOResult("00", None)
 
     def _accept(self, from_device: str) -> str | Operators._Uncomputable:
@@ -172,6 +176,26 @@ class RealFileIOProvider(CobolIOProvider):
         key_length: int,
         program: str,
     ) -> IOResult:
+        if filename in self._files:
+            return FileLogicStatus.ALREADY_OPEN.result()
+        return self._open_closed(
+            filename,
+            OpenMode(mode),
+            record_length,
+            organization,
+            key_offset,
+            key_length,
+        )
+
+    def _open_closed(
+        self,
+        filename: str,
+        mode: OpenMode,
+        record_length: int,
+        organization: str,
+        key_offset: int,
+        key_length: int,
+    ) -> IOResult:
         org = _organization_of(organization)
         path = self._resolve_path(filename, self._assign_to(filename))
         try:
@@ -179,7 +203,7 @@ class RealFileIOProvider(CobolIOProvider):
                 filename,
                 org,
                 path,
-                OpenMode(mode),
+                mode,
                 record_length,
                 key_offset,
                 key_length,
@@ -195,59 +219,99 @@ class RealFileIOProvider(CobolIOProvider):
     def _opened(
         self,
         filename: str,
-        mode: str,
+        mode: OpenMode,
         org: FileOrganization,
         path: Path,
         drv: FileOrganizationDriver,
     ) -> IOResult:
-        self._drivers = {**self._drivers, filename: drv}
-        self._open_modes = {**self._open_modes, filename.upper(): mode}
-        logger.info("OPEN %s mode=%s org=%s path=%s", filename, mode, org.value, path)
+        self._files = {**self._files, filename: OpenFile(drv, mode, org)}
+        logger.info(
+            "OPEN %s mode=%s org=%s path=%s", filename, mode.value, org.value, path
+        )
         return to_ioresult(AccessResult(AccessCondition.OK))
 
     def _close_file(self, filename: str, program: str) -> IOResult:
-        drv = self._drivers.pop(filename, None)
-        if drv:
-            drv.close()
-        self._open_modes.pop(filename.upper(), None)
+        if filename not in self._files:
+            return FileLogicStatus.NOT_OPEN.result()
+        self._files[filename].driver.close()
+        self._files = {k: f for k, f in self._files.items() if k != filename}
         logger.info("CLOSE %s", filename)
         return to_ioresult(AccessResult(AccessCondition.OK))
 
     def _open_mode(self, filename: str, program: str) -> str:
-        return self._open_modes.get(str(filename).upper(), "")
+        return self._files[filename].mode.value if filename in self._files else ""
 
-    def _with_driver(
+    def _verb(
         self,
         filename: str,
-        action: Callable[[FileOrganizationDriver], AccessResult],
+        refused_when_closed: FileLogicStatus,
+        verb: FileVerb,
     ) -> IOResult:
-        if filename not in self._drivers:
-            return _NOT_OPEN
-        return to_ioresult(action(self._drivers[filename]))
+        if filename not in self._files:
+            return refused_when_closed.result()
+        file = self._files[filename]
+        check = verb.check(file)
+        if check is not FileLogicStatus.PERMITTED:
+            return check.result()
+        result = verb.action(file.driver)
+        self._files = {**self._files, filename: verb.after(file, result.condition)}
+        return to_ioresult(result)
 
     def _read_record(self, filename: str, key: str, program: str) -> IOResult:
-        return self._with_driver(
+        return self._verb(
             filename,
-            lambda drv: drv.read_key(key.encode("latin-1")) if key else drv.read_seq(),
+            FileLogicStatus.READ_NOT_PERMITTED,
+            FileVerb(
+                lambda file: file.read_check(not key),
+                lambda drv: (
+                    drv.read_key(key.encode("latin-1")) if key else drv.read_seq()
+                ),
+                OpenFile.after_read,
+            ),
         )
 
     def _write_record(self, filename: str, data: str, program: str) -> IOResult:
-        return self._with_driver(
-            filename, lambda drv: drv.write(data.encode("latin-1"))
+        return self._verb(
+            filename,
+            FileLogicStatus.WRITE_NOT_PERMITTED,
+            FileVerb(
+                OpenFile.write_check,
+                lambda drv: drv.write(data.encode("latin-1")),
+                OpenFile.after_other,
+            ),
         )
 
     def _rewrite_record(self, filename: str, data: str, program: str) -> IOResult:
-        return self._with_driver(
-            filename, lambda drv: drv.rewrite(data.encode("latin-1"))
+        return self._verb(
+            filename,
+            FileLogicStatus.UPDATE_NOT_PERMITTED,
+            FileVerb(
+                OpenFile.update_check,
+                lambda drv: drv.rewrite(data.encode("latin-1")),
+                OpenFile.after_other,
+            ),
         )
 
     def _start_file(
         self, filename: str, key: str, relop: str, program: str
     ) -> IOResult:
-        return self._with_driver(
+        return self._verb(
             filename,
-            lambda drv: drv.start(key.encode("latin-1") if key else b"", relop or ">="),
+            FileLogicStatus.READ_NOT_PERMITTED,
+            FileVerb(
+                OpenFile.start_check,
+                lambda drv: drv.start(
+                    key.encode("latin-1") if key else b"", relop or ">="
+                ),
+                OpenFile.after_other,
+            ),
         )
 
     def _delete_record(self, filename: str, program: str) -> IOResult:
-        return self._with_driver(filename, lambda drv: drv.delete())
+        return self._verb(
+            filename,
+            FileLogicStatus.UPDATE_NOT_PERMITTED,
+            FileVerb(
+                OpenFile.update_check, lambda drv: drv.delete(), OpenFile.after_other
+            ),
+        )

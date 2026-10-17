@@ -213,7 +213,7 @@ fileignoreconfig:
 - filename: interpreter/cobol/alternate_index_driver.py
   checksum: 240441d2833179ea7f9c01beb2e9b61ee4d584d205c34eade4b773ee14630c2c
 - filename: interpreter/cobol/real_file_provider.py
-  checksum: e1667c525f69d71af1512a15a5a761bceb2279f7b114a0984ceb219de1b9a4c5
+  checksum: 0bbd35e1690798e932de628680de40888273829ba143d19d35babc85fe777bb0
 - filename: interpreter/cobol/file_definitions_data.py
   checksum: bcdbc3926594a79c8cfa61c2308ddc900ef57bc3d79be23c385ae9543e9a7602
 - filename: tests/unit/cobol/test_file_definitions_data.py
