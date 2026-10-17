@@ -208,6 +208,8 @@ Each file verb's status is `__cobol_io_status(result, program)`; a USE declarati
 
 I/O statements dispatch to an injectable `CobolIOProvider` (ABC in `io_provider.py`). `NullIOProvider` returns `UNCOMPUTABLE` (symbolic fallthrough). `StubIOProvider` returns queued test data for concrete execution without real files or console. Provider is injected via `VMConfig(io_provider=stub)`.
 
+Every 01 under one FD starts at that FD's record area (an implicit redefinition), so a MOVE to one record is what a WRITE of another record of the same file sends. Each FD has its own area, as long as its largest record; the bridge places the areas one after another in the FILE region (red-dragon-sl30.31).
+
 Each FD's `RECORDING MODE` and `RECORD` clause (`CONTAINS n`, `CONTAINS m TO n`, `IS VARYING [FROM m] [TO n] [DEPENDING ON x]`) reach `CobolASG.file_descriptions` as `FileDescription` values, for an I/O provider to derive the file's record format from. The runtime does not act on them: a `WRITE` hands the provider the whole record area (red-dragon-1hc3).
 
 ### Remaining 19 types
