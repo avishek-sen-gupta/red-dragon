@@ -26,7 +26,7 @@ def _field(pic: str, value: str, *, value_is_numeric: bool) -> FieldLayout:
 
 def _edit_calls(ctx: EmitContext) -> list[str]:
     edit_builtins = {
-        BuiltinName.COBOL_APPLY_EDIT_PICTURE,
+        BuiltinName.COBOL_PREPARE_DIGITS,
         BuiltinName.COBOL_BLANK_WHEN_ZERO,
     }
     return [
@@ -44,6 +44,6 @@ def test_blank_when_zero_wraps_the_edited_move_and_skips_the_value() -> None:
     edited_value_ctx = EmitContext(dispatch_fn=dispatch_statement)
     edited_value_ctx.emit_encode_value(_field("ZZ9", "0", value_is_numeric=True), "0")
     assert (_edit_calls(move_ctx), _edit_calls(edited_value_ctx)) == (
-        [BuiltinName.COBOL_APPLY_EDIT_PICTURE, BuiltinName.COBOL_BLANK_WHEN_ZERO],
-        [BuiltinName.COBOL_APPLY_EDIT_PICTURE],
+        [BuiltinName.COBOL_PREPARE_DIGITS, BuiltinName.COBOL_BLANK_WHEN_ZERO],
+        [BuiltinName.COBOL_PREPARE_DIGITS],
     )

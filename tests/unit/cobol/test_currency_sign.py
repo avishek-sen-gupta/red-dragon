@@ -25,12 +25,12 @@ from cobol_asg.asg_types import CobolASG, CobolField
 from cobol_asg.cobol_types import CobolDataCategory
 from cobol_asg.edit_picture import (
     UnsupportedEditPictureError,
-    format_edited,
     parse_edit_picture,
 )
 from cobol_asg.pic_parser import parse_pic
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
+from tests.unit.cobol.edited_ir import edited
 
 
 class TestCurrencySymbolFloats:
@@ -39,7 +39,7 @@ class TestCurrencySymbolFloats:
     @covers(CobolFeature.NUMERIC_EDITED)
     def test_nist_floating_w_currency(self):
         """NIST NC107A: PIC WWWWW holding 12 is '  W12'."""
-        assert format_edited("12", "WWWWW", currency="W") == "  W12"
+        assert edited("12", "WWWWW", currency="W") == "  W12"
 
     @covers(CobolFeature.NUMERIC_EDITED)
     @pytest.mark.parametrize(
@@ -57,12 +57,12 @@ class TestCurrencySymbolFloats:
         ],
     )
     def test_mirrors_dollar_behaviour(self, value: str, pic: str, expected: str):
-        assert format_edited(value, pic, currency="W") == expected
+        assert edited(value, pic, currency="W") == expected
 
     @covers(CobolFeature.NUMERIC_EDITED)
     def test_single_configured_symbol_is_fixed_insertion(self):
         """A run of ONE is fixed insertion for 'W' just as for '$'."""
-        assert format_edited("1234.5", "WZZZ,ZZZ.99", currency="W") == "W  1,234.50"
+        assert edited("1234.5", "WZZZ,ZZZ.99", currency="W") == "W  1,234.50"
 
     @covers(CobolFeature.NUMERIC_EDITED)
     def test_dollar_is_not_special_when_another_symbol_is_configured(self):
@@ -76,7 +76,7 @@ class TestCurrencySymbolFloats:
     def test_default_currency_is_dollar(self):
         """A program with no CURRENCY SIGN clause keeps '$' — the parameter
         must default, or every existing caller changes behaviour."""
-        assert format_edited("1234", "$$,$$$.99") == "$1,234.00"
+        assert edited("1234", "$$,$$$.99") == "$1,234.00"
         assert parse_edit_picture("$$$$.99").float_symbol == "$"
 
 

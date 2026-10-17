@@ -12,13 +12,11 @@ Expected values follow IBM Enterprise COBOL editing rules.
 from __future__ import annotations
 
 from cobol_asg.cobol_types import CobolDataCategory
-from cobol_asg.edit_picture import (
-    format_edited,
-    parse_edit_picture,
-)
+from cobol_asg.edit_picture import parse_edit_picture
 from cobol_asg.pic_parser import parse_pic
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
+from tests.unit.cobol.edited_ir import edited
 
 
 def _category(pic: str) -> CobolDataCategory:
@@ -88,20 +86,20 @@ class TestFormatFixedSignNoSuppression:
 
     @covers(CobolFeature.NUMERIC_EDITED)
     def test_zero(self):
-        assert format_edited("0", "+99999999.99") == "+00000000.00"
+        assert edited("0", "+99999999.99") == "+00000000.00"
 
     @covers(CobolFeature.NUMERIC_EDITED)
     def test_positive(self):
-        assert format_edited("12345.67", "+99999999.99") == "+00012345.67"
+        assert edited("12345.67", "+99999999.99") == "+00012345.67"
 
     @covers(CobolFeature.NUMERIC_EDITED)
     def test_negative(self):
-        assert format_edited("-12345.67", "+99999999.99") == "-00012345.67"
+        assert edited("-12345.67", "+99999999.99") == "-00012345.67"
 
     @covers(CobolFeature.NUMERIC_EDITED)
     def test_truncates_excess_fraction(self):
         # COBOL truncates (no ROUNDED): .679 -> .67
-        assert format_edited("1.679", "+99999999.99") == "+00000001.67"
+        assert edited("1.679", "+99999999.99") == "+00000001.67"
 
 
 class TestFormatZeroSuppressionWithCommas:
@@ -109,17 +107,17 @@ class TestFormatZeroSuppressionWithCommas:
 
     @covers(CobolFeature.NUMERIC_EDITED)
     def test_small_positive_suppresses_leading_and_commas(self):
-        assert format_edited("1234.56", "+ZZZ,ZZZ,ZZZ.99") == "+      1,234.56"
+        assert edited("1234.56", "+ZZZ,ZZZ,ZZZ.99") == "+      1,234.56"
 
     @covers(CobolFeature.NUMERIC_EDITED)
     def test_zero_suppresses_integer_keeps_fraction(self):
         # Fraction is '99' (not Z) so it always shows; integer all suppressed.
         # Width 15: '+' + 11 suppressed (ZZZ,ZZZ,ZZZ) + '.00'.
-        assert format_edited("0", "+ZZZ,ZZZ,ZZZ.99") == "+           .00"
+        assert edited("0", "+ZZZ,ZZZ,ZZZ.99") == "+           .00"
 
     @covers(CobolFeature.NUMERIC_EDITED)
     def test_large_value_fills_all_positions(self):
-        assert format_edited("123456789.12", "+ZZZ,ZZZ,ZZZ.99") == "+123,456,789.12"
+        assert edited("123456789.12", "+ZZZ,ZZZ,ZZZ.99") == "+123,456,789.12"
 
 
 class TestFormatTrailingSign:
@@ -127,11 +125,11 @@ class TestFormatTrailingSign:
 
     @covers(CobolFeature.NUMERIC_EDITED)
     def test_negative_shows_trailing_minus(self):
-        assert format_edited("-123.45", "Z(9).99-") == "      123.45-"
+        assert edited("-123.45", "Z(9).99-") == "      123.45-"
 
     @covers(CobolFeature.NUMERIC_EDITED)
     def test_positive_shows_trailing_space(self):
-        assert format_edited("123.45", "Z(9).99-") == "      123.45 "
+        assert edited("123.45", "Z(9).99-") == "      123.45 "
 
 
 class TestFormatAllZeroSuppressible:
@@ -139,12 +137,12 @@ class TestFormatAllZeroSuppressible:
 
     @covers(CobolFeature.NUMERIC_EDITED)
     def test_zero_blanks_entire_field(self):
-        result = format_edited("0", "-ZZZ,ZZZ,ZZZ.ZZ")
+        result = edited("0", "-ZZZ,ZZZ,ZZZ.ZZ")
         assert result == " " * 15
 
     @covers(CobolFeature.NUMERIC_EDITED)
     def test_negative_nonzero_suppresses_only_left_of_decimal(self):
-        assert format_edited("-1234.50", "-ZZZ,ZZZ,ZZZ.ZZ") == "-      1,234.50"
+        assert edited("-1234.50", "-ZZZ,ZZZ,ZZZ.ZZ") == "-      1,234.50"
 
 
 class TestInsertionEditSymbols:
@@ -166,14 +164,14 @@ class TestInsertionEditSymbols:
         assert _category("9(3)09") == CobolDataCategory.NUMERIC_EDITED
 
     @covers(CobolFeature.NUMERIC_EDITED)
-    def test_format_edited_slash_date(self):
-        """format_edited formats a date value into 99/99/9999 template."""
-        assert format_edited("12311994", "99/99/9999") == "12/31/1994"
+    def test_editing_a_slash_date(self):
+        """Editing lays a date value into a 99/99/9999 template."""
+        assert edited("12311994", "99/99/9999") == "12/31/1994"
 
     @covers(CobolFeature.NUMERIC_EDITED)
-    def test_format_edited_blank_insertion(self):
-        """format_edited emits a space for B insertion positions."""
-        assert format_edited("123456", "9(5)BB9") == "12345  6"
+    def test_editing_a_blank_insertion(self):
+        """Editing emits a space for B insertion positions."""
+        assert edited("123456", "9(5)BB9") == "12345  6"
 
 
 class TestPreviouslyRejectedPictures:
@@ -192,10 +190,10 @@ class TestPreviouslyRejectedPictures:
     @covers(CobolFeature.NUMERIC_EDITED)
     def test_previously_rejected_pictures_now_format(self):
         """The exact pictures 0599 refused now produce correct output."""
-        assert format_edited("1234", "$$,$$$.99") == "$1,234.00"
-        assert format_edited("12.3", "**,***.99") == "****12.30"
-        assert format_edited("4.5", "ZZZ.99CR") == "  4.50  "
-        assert format_edited("-4.5", "ZZZ.99CR") == "  4.50CR"
+        assert edited("1234", "$$,$$$.99") == "$1,234.00"
+        assert edited("12.3", "**,***.99") == "****12.30"
+        assert edited("4.5", "ZZZ.99CR") == "  4.50  "
+        assert edited("-4.5", "ZZZ.99CR") == "  4.50CR"
 
 
 class TestScaledEditPicture:
@@ -204,8 +202,8 @@ class TestScaledEditPicture:
     @covers(CobolFeature.NUMERIC_EDITED, CobolFeature.PIC_CLAUSE)
     def test_trailing_p_divides_the_value_before_editing(self):
         assert (
-            format_edited("900", "ZZZPP", "$", 2),
-            format_edited("1200", "ZZZPP", "$", 2),
-            format_edited("123456", "Z,ZZ9PPP", "$", 3),
-            format_edited("1200", "ZZZ9", "$", 0),
+            edited("900", "ZZZPP", "$", 2),
+            edited("1200", "ZZZPP", "$", 2),
+            edited("123456", "Z,ZZ9PPP", "$", 3),
+            edited("1200", "ZZZ9", "$", 0),
         ) == ("  9", " 12", "  123", "1200")

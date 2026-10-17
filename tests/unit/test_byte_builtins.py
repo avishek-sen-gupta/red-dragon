@@ -433,7 +433,6 @@ class TestByteBuiltinsRegistration:
             "__bytes_to_float",
             "__cobol_blank_when_zero",
             "__cobol_round",
-            "__cobol_apply_edit_picture",
             "__cobol_apply_alphanumeric_edit",
             "__string_slice",
             "__string_splice",
@@ -863,8 +862,7 @@ class TestCobolPrepareDigits:
 
     def test_scale_defaults_to_zero_when_omitted(self):
         """Backward compatibility: IR emitted before red-dragon-qhtv (4-argument
-        calls) still runs unscaled, same as the currency arg on
-        COBOL_APPLY_EDIT_PICTURE (red-dragon-3o5f)."""
+        calls) still runs unscaled."""
         assert _builtin_cobol_prepare_digits(
             [
                 typed_from_runtime("10"),

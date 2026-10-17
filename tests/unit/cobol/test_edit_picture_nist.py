@@ -23,12 +23,12 @@ from __future__ import annotations
 import pytest
 
 from cobol_asg.cobol_types import CobolDataCategory
-from cobol_asg.edit_picture import format_edited
 from cobol_asg.pic_parser import parse_pic
 from cobol_numeric.number import from_literal
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
 from tests.unit.cobol.de_edit_run import de_edit
+from tests.unit.cobol.edited_ir import edited, edited_with_comma_point
 
 
 class TestNistFloatingCurrency:
@@ -71,7 +71,7 @@ class TestNistFloatingCurrency:
         ],
     )
     def test_matches_nist(self, value: str, pic: str, expected: str):
-        assert format_edited(value, pic) == expected
+        assert edited(value, pic) == expected
 
 
 class TestNistFloatingSign:
@@ -146,7 +146,7 @@ class TestNistFloatingSign:
         ],
     )
     def test_matches_nist(self, value: str, pic: str, expected: str):
-        assert format_edited(value, pic) == expected
+        assert edited(value, pic) == expected
 
 
 class TestNistCheckProtection:
@@ -195,7 +195,7 @@ class TestNistCheckProtection:
         ],
     )
     def test_matches_nist(self, value: str, pic: str, expected: str):
-        assert format_edited(value, pic) == expected
+        assert edited(value, pic) == expected
 
 
 class TestNistTrailingSignCrDb:
@@ -222,7 +222,7 @@ class TestNistTrailingSignCrDb:
         ],
     )
     def test_matches_nist(self, value: str, pic: str, expected: str):
-        assert format_edited(value, pic) == expected
+        assert edited(value, pic) == expected
 
 
 class TestParsePicAcceptsImplementedSymbols:
@@ -257,7 +257,7 @@ class TestParsePicAcceptsImplementedSymbols:
     def test_single_fixed_currency_still_accepted(self):
         """A run of one is fixed insertion and always worked; the floating
         implementation must not have disturbed it."""
-        assert format_edited("1234.5", "$ZZZ,ZZZ.99") == "$  1,234.50"
+        assert edited("1234.5", "$ZZZ,ZZZ.99") == "$  1,234.50"
 
 
 class TestScalingPositionsAreNotStored:
@@ -329,7 +329,7 @@ class TestNistSuppressionRegions:
         ],
     )
     def test_matches_nist(self, value: str, pic: str, expected: str):
-        assert format_edited(value, pic) == expected
+        assert edited(value, pic) == expected
 
 
 class TestNistInsertionRightOfAFloatingString:
@@ -349,7 +349,7 @@ class TestNistInsertionRightOfAFloatingString:
         ],
     )
     def test_matches_nist(self, value: str, pic: str, expected: str):
-        assert format_edited(value, pic) == expected
+        assert edited(value, pic) == expected
 
 
 class TestDecimalPointIsComma:
@@ -378,10 +378,8 @@ class TestDecimalPointIsComma:
             ("0", "*.***,**", "*****,**"),
         ],
     )
-    def test_format_edited_swaps_point_and_comma(
-        self, value: str, pic: str, expected: str
-    ):
-        assert format_edited(value, pic, decimal_point_is_comma=True) == expected
+    def test_editing_swaps_point_and_comma(self, value: str, pic: str, expected: str):
+        assert edited_with_comma_point(value, pic) == expected
 
     @covers(CobolFeature.NUMERIC_EDITED)
     def test_de_edit_reads_the_comma_as_the_point(self):

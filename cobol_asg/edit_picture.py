@@ -2,7 +2,8 @@
 
 Applies COBOL editing rules when a value is MOVEd into an edited receiving item.
 Two categories are edited: numeric-edited (e.g. ``PIC +99999999.99``,
-``+ZZZ,ZZZ,ZZZ.99``, ``Z(9).99-``), handled by :func:`format_edited`, and
+``+ZZZ,ZZZ,ZZZ.99``, ``Z(9).99-``), planned by :func:`edit_plan` and shown by
+the IR interpreter/cobol/numeric_edit_ir.py emits from the plan, and
 alphanumeric-edited (e.g. ``PIC XXBXXBXX``, ``XX/XX/XXXX``), handled by
 :func:`format_alphanumeric_edited`. This is the software analogue of GnuCOBOL's
 ``cob_move_edited`` (libcob) and IBM's hardware ``ED``/``EDMK`` instructions: a
@@ -24,7 +25,7 @@ Supported edit constructs:
   - Simple insertion: ``,`` ``.`` ``B`` ``0`` ``/``
 
 ``P`` positions occupy no width; the scaling they denote reaches
-:func:`format_edited` as its ``scale`` argument. ``DECIMAL-POINT IS COMMA``
+the IR as the item's scale. ``DECIMAL-POINT IS COMMA``
 exchanges ``.`` and ``,`` in the picture and in the edited image.
 
 Two rules here are counter-intuitive and are taken from the NIST-85
@@ -44,25 +45,25 @@ expected values:
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import replace
 from itertools import takewhile
 from types import MappingProxyType
 
 from cobol_asg.de_edit_plan import DeEditPlan
+from cobol_asg.edit_cell import EditCell
+from cobol_asg.edit_cell_kind import EditCellKind
 from cobol_asg.edit_picture_shape import EditPicture
-from cobol_asg.edit_render import EditRender
-from cobol_numeric.number import (
-    CobolNumber,
-    digits_for_encode,
-    from_digits,
-    from_literal,
-    scale_by,
-)
+from cobol_asg.edit_plan import EditPlan
+from cobol_asg.edit_slot import EditSlot
 
 _SIGN_SYMS = frozenset("+-")
 _POINT_SWAP = str.maketrans(".,", ",.")
 _NO_SWAP = str.maketrans("", "")
 _SIMPLE_INSERTIONS = frozenset(",B0/")
+_SUPPRESSION_SYMS = frozenset("Z*")
+_DIGIT_SYMS = frozenset("9Z*")
+_SIGNIFICANCE_SYMS = frozenset(".9")
 
 # The default currency symbol. A program may replace it via
 # SPECIAL-NAMES CURRENCY SIGN IS <literal> (red-dragon-3o5f), so every entry
@@ -283,56 +284,35 @@ def integer_digit_positions(
     return parse_edit_picture(pic.translate(swap), currency).int_digits
 
 
-def _digit_string(value: CobolNumber, ep: EditPicture) -> str:
-    """The picture's digits, zero-padded/truncated to its digit-position counts.
-    Truncates toward zero (no ROUNDED); on overflow the low-order integer digits
-    win (COBOL high-order truncation)."""
-    _, digits = digits_for_encode(value, ep.int_digits + ep.frac_digits, ep.frac_digits)
-    return digits
-
-
-def format_edited(
-    value: str,
-    pic: str,
-    currency: str = DEFAULT_CURRENCY,
-    scale: int = 0,
-    decimal_point_is_comma: bool = False,
-) -> str:
-    """Format a numeric ``value`` string per the numeric-edited ``pic``.
-
-    ``value`` is a decimal string such as ``"123.45"``, ``"-0.5"``, ``"0"``.
-    ``scale`` is the picture's P scaling: the edited digits are the value
-    divided by ``10**scale``. ``decimal_point_is_comma`` is SPECIAL-NAMES
-    DECIMAL-POINT IS COMMA, which exchanges the functions of the period and the
-    comma in the picture and therefore in the edited image.
-    Returns the edited display string, exactly ``width`` characters wide.
-    """
+def edit_plan(
+    pic: str, currency: str = DEFAULT_CURRENCY, decimal_point_is_comma: bool = False
+) -> EditPlan:
+    """What the numeric-edited ``pic`` fixes about every image it shows, so that
+    only the value is left to run time. DECIMAL-POINT IS COMMA exchanges the
+    period and the comma in the picture and in the image."""
     swap = _POINT_SWAP if decimal_point_is_comma else _NO_SWAP
-    return _format_edited(value, pic.translate(swap), currency, scale).translate(swap)
-
-
-def _format_edited(value: str, pic: str, currency: str, scale: int) -> str:
-    ep = parse_edit_picture(pic, currency)
-    dec = _edited_value(value, scale)
-    if ep.all_suppressible and dec == 0:
-        return _zero_image(ep)
-    body = ep.template[:-2] if ep.trailing_sign else ep.template
-    digits = _position_digits(ep, body, _digit_string(dec, ep))
-    render = EditRender(
-        picture=ep,
-        body=body,
-        digits=digits,
-        float_slot=_float_slot(ep, digits),
-        negative=dec < 0,
+    ep = parse_edit_picture(pic.translate(swap), currency)
+    body = _body(ep)
+    return EditPlan(
+        cells=tuple(
+            replace(cell, char=cell.char.translate(swap))
+            for cell in (_edit_cell(ep, body, index) for index in range(len(body)))
+        ),
+        digit_count=ep.int_digits + ep.frac_digits,
+        fraction_digits=ep.frac_digits,
+        integer_digits=ep.int_digits,
+        signed=ep.signed,
+        all_suppressible=ep.all_suppressible,
+        zero_image=_zero_image(ep).translate(swap),
+        fill=ep.fill_char,
+        float_symbol=ep.float_symbol,
+        float_digits=tuple(digit for _, digit in _floating_digits(ep)),
+        trailing_sign=ep.trailing_sign,
     )
-    return render.image() + _trailing_sign_image(ep, dec < 0)
 
 
-def _edited_value(value: str, scale: int) -> CobolNumber:
-    try:
-        return scale_by(from_literal(str(value).strip() or "0"), -scale)
-    except ValueError:
-        return from_digits(0, 0)
+def _body(ep: EditPicture) -> tuple[str, ...]:
+    return ep.template[:-2] if ep.trailing_sign else ep.template
 
 
 def _zero_image(ep: EditPicture) -> str:
@@ -344,44 +324,122 @@ def _zero_image(ep: EditPicture) -> str:
     return " " * ep.width
 
 
-def _position_digits(
-    ep: EditPicture, body: Sequence[str], digits: str
-) -> Mapping[int, str]:
+def _digit_positions(ep: EditPicture) -> tuple[int, ...]:
     float_digits = frozenset(ep.float_positions[1:])
-    positions = [
+    return tuple(
         index
-        for index, sym in enumerate(body)
-        if sym in ("9", "Z", "*") or index in float_digits
-    ]
-    return dict(zip(positions, digits, strict=True))
-
-
-def _trailing_sign_image(ep: EditPicture, negative: bool) -> str:
-    if not ep.trailing_sign:
-        return ""
-    return ep.trailing_sign if negative else "  "
-
-
-def _float_slot(ep: EditPicture, digits: Mapping[int, str]) -> int:
-    """Return the template index where the floating symbol is emitted.
-
-    The symbol sits immediately to the LEFT of the first significant integer
-    digit when that digit is in the floating string. Otherwise it takes the
-    floating string's rightmost position, and "any simple-insertion symbols
-    (B 0 / ,) within or to the immediate right of the string of floating
-    insertion symbols are considered part of the floating character-string"
-    (IBM LR, "Floating insertion editing"): "$$$,999.99" holding 987.65 is
-    "   $987.65" (NIST-85 NC105A). Returns -1 when there is no floating string.
-    """
-    if not ep.float_symbol:
-        return -1
-    point = ep.template.index(".") if "." in ep.template else len(ep.template)
-    first = next(
-        (i for i, digit in sorted(digits.items()) if i < point and digit != "0"), -1
+        for index, sym in enumerate(_body(ep))
+        if sym in _DIGIT_SYMS or index in float_digits
     )
-    if first in ep.float_positions[1:]:
-        return first - 1
-    return _float_string_end(ep, point)
+
+
+def _point(ep: EditPicture) -> int:
+    return ep.template.index(".") if "." in ep.template else len(ep.template)
+
+
+def _floating_digits(ep: EditPicture) -> tuple[tuple[int, int], ...]:
+    """Each floating digit position left of the point, with its digit number."""
+    digit_of = {position: digit for digit, position in enumerate(_digit_positions(ep))}
+    return tuple(
+        (position, digit_of[position])
+        for position in ep.float_positions[1:]
+        if position < _point(ep)
+    )
+
+
+def _slots(ep: EditPicture) -> Mapping[int, tuple[EditSlot, int]]:
+    """Where the floating symbol can land. It sits immediately to the LEFT of
+    the first significant integer digit when that digit is in the floating
+    string. Otherwise it takes the floating string's rightmost position, and
+    "any simple-insertion symbols (B 0 / ,) within or to the immediate right of
+    the string of floating insertion symbols are considered part of the floating
+    character-string" (IBM LR, "Floating insertion editing"): "$$$,999.99"
+    holding 987.65 is "   $987.65" (NIST-85 NC105A)."""
+    if not ep.float_symbol:
+        return {}
+    return {
+        _float_string_end(ep, _point(ep)): (EditSlot.FLOAT_END, 0),
+        **{
+            position - 1: (EditSlot.BEFORE_DIGIT, digit)
+            for position, digit in _floating_digits(ep)
+        },
+    }
+
+
+def _edit_cell(ep: EditPicture, body: tuple[str, ...], index: int) -> EditCell:
+    kind, char = _cell_kind(ep, body, index)
+    slot, slot_digit = _slots(ep).get(index, (EditSlot.NONE, 0))
+    return EditCell(
+        kind=kind,
+        char=char,
+        digits_before=sum(1 for position in _digit_positions(ep) if position < index),
+        slot=slot,
+        slot_digit=slot_digit,
+    )
+
+
+def _cell_kind(
+    ep: EditPicture, body: tuple[str, ...], index: int
+) -> tuple[EditCellKind, str]:
+    significant = any(sym in _SIGNIFICANCE_SYMS for sym in body[:index])
+    if index in ep.float_positions:
+        return _float_cell(ep, index, significant)
+    zoned = any(
+        sym in _SUPPRESSION_SYMS or position in ep.float_positions
+        for position, sym in enumerate(body[:index])
+    )
+    sym = body[index]
+    return _SYMBOL_CELLS.get(sym, _verbatim_cell)(sym, significant, zoned)
+
+
+def _float_cell(
+    ep: EditPicture, index: int, significant: bool
+) -> tuple[EditCellKind, str]:
+    if index == ep.float_positions[0]:
+        return EditCellKind.FIXED, ep.fill_char
+    return _suppression_cell("", significant, False)
+
+
+def _sign_cell(sym: str, significant: bool, zoned: bool) -> tuple[EditCellKind, str]:
+    return EditCellKind.SIGN, "+" if sym == "+" else " "
+
+
+def _digit_cell(sym: str, significant: bool, zoned: bool) -> tuple[EditCellKind, str]:
+    return EditCellKind.DIGIT, ""
+
+
+def _suppression_cell(
+    sym: str, significant: bool, zoned: bool
+) -> tuple[EditCellKind, str]:
+    return (EditCellKind.DIGIT if significant else EditCellKind.SUPPRESSED), ""
+
+
+def _insertion_cell(
+    sym: str, significant: bool, zoned: bool
+) -> tuple[EditCellKind, str]:
+    char = " " if sym == "B" else sym
+    if significant or not zoned:
+        return EditCellKind.FIXED, char
+    return EditCellKind.INSERTION, char
+
+
+def _verbatim_cell(
+    sym: str, significant: bool, zoned: bool
+) -> tuple[EditCellKind, str]:
+    return EditCellKind.FIXED, sym
+
+
+_SYMBOL_CELLS: Mapping[str, Callable[[str, bool, bool], tuple[EditCellKind, str]]] = (
+    MappingProxyType(
+        {
+            "+": _sign_cell,
+            "-": _sign_cell,
+            "9": _digit_cell,
+            **{sym: _suppression_cell for sym in _SUPPRESSION_SYMS},
+            **{sym: _insertion_cell for sym in _SIMPLE_INSERTIONS},
+        }
+    )
+)
 
 
 def _float_string_end(ep: EditPicture, point: int) -> int:

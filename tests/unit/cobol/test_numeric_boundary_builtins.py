@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from cobol_asg.edit_picture import format_edited
 from cobol_numeric.number import from_digits, from_literal
 from interpreter.cobol.byte_builtins import (
     _builtin_cobol_blank_when_zero,
@@ -16,6 +15,7 @@ from interpreter.cobol.features import CobolFeature
 from interpreter.types.typed_value import typed_from_runtime
 from interpreter.vm.vm import Operators
 from tests.covers import covers
+from tests.unit.cobol.edited_ir import edited
 
 
 def _args(*values):
@@ -69,5 +69,5 @@ def test_integer_argument_coercion_accepts_exact_whole_values():
 
 @covers(CobolFeature.NUMERIC_EDITED)
 def test_edit_picture_formats_exact_value_text():
-    assert format_edited("1.50", "ZZ9.99") == "  1.50"
-    assert format_edited("0.50", ".99") == ".50"
+    assert edited("1.50", "ZZ9.99") == "  1.50"
+    assert edited("0.50", ".99") == ".50"
