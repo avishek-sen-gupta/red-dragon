@@ -1840,6 +1840,9 @@ class TestTier2Lowering:
             c for c in calls if c.operands and c.operands[0] == "__string_split"
         ]
         assert len(split_calls) >= 1
+        assert [
+            c for c in calls if c.operands and c.operands[0] == "__cobol_string"
+        ] == []
 
     @covers(
         CobolFeature.UNSTRING_VERB,
@@ -1887,9 +1890,11 @@ class TestTier2Lowering:
 
         calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
         split_calls = [
-            c for c in calls if c.operands and c.operands[0] == "__cobol_unstring"
+            c.operands[0]
+            for c in calls
+            if c.operands and c.operands[0] in {"__cobol_unstring", "__string_find"}
         ]
-        assert len(split_calls) == 1
+        assert split_calls == ["__string_find", "__string_find"]
 
         # Should produce WRITE_REGION for each INTO target
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)

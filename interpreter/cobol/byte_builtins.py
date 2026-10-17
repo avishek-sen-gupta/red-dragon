@@ -58,9 +58,6 @@ from interpreter.cobol.numeric_builtins import NUMERIC_BUILTINS
 from interpreter.cobol.numeric_class import packed_is_numeric, zoned_is_numeric
 from interpreter.cobol.program_presence import program_present
 from interpreter.cobol.run_unit import advanced, restarted, value_of
-from interpreter.cobol.string_transfer import string_into
-from interpreter.cobol.unstring_delimiter_text import UnstringDelimiterText
-from interpreter.cobol.unstring_scan import unstring
 from interpreter.func_name import FuncName
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.builtin import Builtin
@@ -535,50 +532,6 @@ def _builtin_cobol_de_edit(args: list[TypedValue], vm: VMState) -> BuiltinResult
     )
 
 
-def _builtin_cobol_string(args: list[TypedValue], vm: VMState) -> BuiltinResult:
-    """Args: [receiver, pointer, delimited sendings...].
-    Returns [receiver characters, pointer, overflow]."""
-    if any(_is_symbolic(a.value) for a in args):
-        return BuiltinResult(value=_UNCOMPUTABLE)
-    outcome = string_into(
-        str(args[0].value), int(args[1].value), [str(a.value) for a in args[2:]]
-    )
-    return BuiltinResult(value=[outcome.image, outcome.pointer, outcome.overflow])
-
-
-def _builtin_cobol_unstring(args: list[TypedValue], vm: VMState) -> BuiltinResult:
-    """Args: [source, pointer, delimiter count, (delimiter, ALL flag)...,
-    receiver sizes...]. Returns [pointer, overflow, receivers acted on,
-    (characters, delimiter, count) for each receiver acted on...]."""
-    if any(_is_symbolic(a.value) for a in args):
-        return BuiltinResult(value=_UNCOMPUTABLE)
-    delimiter_end = 3 + 2 * int(args[2].value)
-    delimiter_args = args[3:delimiter_end]
-    outcome = unstring(
-        str(args[0].value),
-        int(args[1].value),
-        [
-            UnstringDelimiterText(text=str(text.value), all=bool(flag.value))
-            for text, flag in zip(
-                delimiter_args[::2], delimiter_args[1::2], strict=True
-            )
-        ],
-        [int(a.value) for a in args[delimiter_end:]],
-    )
-    return BuiltinResult(
-        value=[
-            outcome.pointer,
-            outcome.overflow,
-            len(outcome.pieces),
-            *(
-                item
-                for piece in outcome.pieces
-                for item in (piece.text, piece.delimiter, piece.count)
-            ),
-        ]
-    )
-
-
 def _builtin_cobol_apply_alphanumeric_edit(
     args: list[TypedValue], vm: VMState
 ) -> BuiltinResult:
@@ -645,13 +598,6 @@ def _builtin_string_zfill(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     if not isinstance(value, str):
         return BuiltinResult(value=_UNCOMPUTABLE)
     return BuiltinResult(value=value.zfill(width))
-
-
-def _builtin_string_pad_to(args: list[TypedValue], vm: VMState) -> BuiltinResult:
-    value, other = args[0].value, args[1].value
-    if not (isinstance(value, str) and isinstance(other, str)):
-        return BuiltinResult(value=_UNCOMPUTABLE)
-    return BuiltinResult(value=value.ljust(len(other)))
 
 
 def _builtin_cobol_digit_image(args: list[TypedValue], vm: VMState) -> BuiltinResult:
@@ -1850,12 +1796,9 @@ BYTE_BUILTINS: Mapping[FuncName, Builtin] = MappingProxyType(
             BuiltinName.COBOL_APPLY_ALPHANUMERIC_EDIT
         ): _builtin_cobol_apply_alphanumeric_edit,
         FuncName(BuiltinName.COBOL_DE_EDIT): _builtin_cobol_de_edit,
-        FuncName(BuiltinName.COBOL_STRING): _builtin_cobol_string,
-        FuncName(BuiltinName.COBOL_UNSTRING): _builtin_cobol_unstring,
         FuncName(BuiltinName.STRING_SLICE): _builtin_string_slice,
         FuncName(BuiltinName.STRING_SPLICE): _builtin_string_splice,
         FuncName(BuiltinName.STRING_ZFILL): _builtin_string_zfill,
-        FuncName(BuiltinName.STRING_PAD_TO): _builtin_string_pad_to,
         FuncName(BuiltinName.COBOL_DIGIT_IMAGE): _builtin_cobol_digit_image,
         FuncName(
             BuiltinName.COBOL_ZONED_DISPLAY_IMAGE

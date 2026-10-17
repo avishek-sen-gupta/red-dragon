@@ -1796,9 +1796,7 @@ class EmitContext:
             extent=extent,
             span=span,
         )
-        padded = self._emit_call(
-            BuiltinName.STRING_PAD_TO, (value_str_reg, stored), span=span
-        )
+        padded = self.emit_pad_to(value_str_reg, stored, span=span)
         head = self._emit_slice(
             padded, self.const_to_reg(0, span=span), fl.current_length, span=span
         )
@@ -1809,6 +1807,41 @@ class EmitContext:
             span=span,
         )
         return self._emit_call(BuiltinName.STRING_CONCAT_PAIR, (head, tail), span=span)
+
+    def emit_pad_to(
+        self, value: Register, other: Register, *, span: SourceSpan | None
+    ) -> Register:
+        """``value`` extended on the right with spaces to the length of
+        ``other``; a longer value is left whole. The spaces are a list of
+        space bytes as long as the shortfall, which is empty when there is none."""
+        shortfall = self.fresh_reg()
+        self.emit_inst(
+            Binop(
+                result_reg=shortfall,
+                operator=resolve_binop("-"),
+                left=self._emit_call(BuiltinName.LENGTH, (other,), span=span),
+                right=self._emit_call(BuiltinName.LENGTH, (value,), span=span),
+            ),
+            span=span,
+        )
+        spaces = self._emit_call(
+            BuiltinName.BYTES_TO_STRING,
+            (
+                self._emit_call(
+                    BuiltinName.MAKE_LIST,
+                    (
+                        shortfall,
+                        self.const_to_reg(ByteConstants.LATIN1_SPACE, span=span),
+                    ),
+                    span=span,
+                ),
+                self.const_to_reg(CobolEncoding.LATIN1.value, span=span),
+            ),
+            span=span,
+        )
+        return self._emit_call(
+            BuiltinName.STRING_CONCAT_PAIR, (value, spaces), span=span
+        )
 
     def _emit_slice(
         self,

@@ -29,10 +29,19 @@ def run_emitted(
 ) -> ParamValue:
     """Emit IR with ``emit`` over registers preloaded with ``params``, run it
     through the VM, and return the value of the register ``emit`` returned."""
+    (value,) = run_emitted_values(lambda e, registers: (emit(e, registers),), params)
+    return value
+
+
+def run_emitted_values(
+    emit: Callable[[IrEmitter, tuple[Register, ...]], tuple[Register, ...]],
+    params: tuple[ParamValue, ...],
+) -> tuple[ParamValue, ...]:
+    """Like ``run_emitted`` for an emitter that leaves several results."""
     ctx = EmitContext(dispatch_fn=dispatch_statement)
     registers = tuple(ctx.fresh_reg() for _ in params)
-    result = emit(IrEmitter(ctx=ctx, span=None), registers)
-    ctx.emit_inst(Return_(value_reg=result))
+    results = emit(IrEmitter(ctx=ctx, span=None), registers)
+    ctx.emit_inst(Return_(value_reg=results[0]))
     vm = VMState(
         call_stack=[
             StackFrame(
@@ -45,7 +54,7 @@ def run_emitted(
         ]
     )
     _run_to_return(ctx.instructions, vm)
-    return unwrap(vm.call_stack[-1].registers[result])
+    return tuple(unwrap(vm.call_stack[-1].registers[result]) for result in results)
 
 
 def _run_to_return(instructions: Sequence[InstructionBase], vm: VMState) -> None:

@@ -27,6 +27,11 @@ from interpreter.cobol.inspect_phrase_registers import InspectPhraseRegisters
 from interpreter.cobol.ir_emitter import IrEmitter
 from interpreter.cobol.lower_arithmetic import eval_ref_mod_expr
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
+from interpreter.cobol.string_ir import emit_string
+from interpreter.cobol.string_ir_outcome import StringIrOutcome
+from interpreter.cobol.unstring_ir import emit_unstring
+from interpreter.cobol.unstring_ir_outcome import UnstringIrOutcome
+from interpreter.cobol.unstring_ir_piece import UnstringIrPiece
 from interpreter.func_name import FuncName
 from interpreter.instructions import Binop, Branch, BranchIf, CallFunction, Label_
 from interpreter.ir import CodeLabel
@@ -122,8 +127,8 @@ def lower_string(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """STRING sendings DELIMITED BY ... INTO receiver [WITH POINTER] [ON / NOT ON
-    OVERFLOW]. Every operand is evaluated once; one builtin then runs the
-    transfer (interpreter.cobol.string_transfer)."""
+    OVERFLOW]. Every operand is evaluated once; IR then runs the transfer
+    (interpreter.cobol.string_ir)."""
     span = stmt.span
     if not ctx.has_field(stmt.into.name, materialised):
         logger.warning("STRING INTO target %s not found in layout", stmt.into.name)
@@ -131,25 +136,13 @@ def lower_string(
     has_pointer = bool(stmt.pointer.name) and ctx.has_field(
         stmt.pointer.name, materialised
     )
-    outcome_reg = _string_outcome(ctx, stmt, has_pointer, materialised)
-    _write_ref_mod_target(
-        ctx,
-        stmt.into,
-        _list_item(ctx, outcome_reg, 0, span=span),
-        materialised,
-        span=span,
-    )
+    outcome = _string_outcome(ctx, stmt, has_pointer, materialised)
+    _write_ref_mod_target(ctx, stmt.into, outcome.image, materialised, span=span)
     if has_pointer:
-        _write_number(
-            ctx,
-            stmt.pointer,
-            _list_item(ctx, outcome_reg, 1, span=span),
-            materialised,
-            span=span,
-        )
+        _write_number(ctx, stmt.pointer, outcome.pointer, materialised, span=span)
     _lower_overflow_phrases(
         ctx,
-        _list_item(ctx, outcome_reg, 2, span=span),
+        outcome.overflow,
         stmt.on_overflow,
         stmt.not_on_overflow,
         materialised,
@@ -162,27 +155,23 @@ def _string_outcome(
     stmt: StringStatement,
     has_pointer: bool,
     materialised: MaterialisedSectionedLayout,
-) -> Register:
-    """[receiver characters, pointer, overflow] after the transfer; the pointer
-    starts at 1 without WITH POINTER."""
+) -> StringIrOutcome:
+    """The receiver characters, pointer and overflow after the transfer; the
+    pointer starts at 1 without WITH POINTER."""
     span = stmt.span
     parts = tuple(
         _delimited_sending(ctx, sending, materialised, span=span)
         for sending in stmt.sendings
     )
-    return _call(
-        ctx,
-        BuiltinName.COBOL_STRING,
+    return emit_string(
+        IrEmitter(ctx=ctx, span=span),
+        _receiver_characters(ctx, stmt.into, materialised, span=span),
         (
-            _receiver_characters(ctx, stmt.into, materialised, span=span),
-            (
-                _read_pointer(ctx, stmt.pointer, materialised, span=span)
-                if has_pointer
-                else ctx.const_to_reg(1, span=span)
-            ),
-            *parts,
+            _read_pointer(ctx, stmt.pointer, materialised, span=span)
+            if has_pointer
+            else ctx.const_to_reg(1, span=span)
         ),
-        span=span,
+        parts,
     )
 
 
@@ -207,7 +196,12 @@ def _delimited_sending(
         ),
         span=span,
     )
-    return _list_item(ctx, pieces_reg, 0, span=span)
+    return _call(
+        ctx,
+        BuiltinName.LIST_GET,
+        (pieces_reg, ctx.const_to_reg(0, span=span)),
+        span=span,
+    )
 
 
 def _sending_characters(
@@ -341,17 +335,6 @@ def _write_number(
     )
 
 
-def _list_item(
-    ctx: EmitContext, list_reg: Register, index: int, *, span: SourceSpan | None
-) -> Register:
-    return _call(
-        ctx,
-        BuiltinName.LIST_GET,
-        (list_reg, ctx.const_to_reg(index, span=span)),
-        span=span,
-    )
-
-
 def _lower_overflow_phrases(
     ctx: EmitContext,
     overflow_reg: Register,
@@ -401,8 +384,8 @@ def lower_unstring(
 ) -> None:
     """UNSTRING source [DELIMITED BY [ALL] d1 OR ...] INTO receivers [WITH
     POINTER] [TALLYING IN] [ON / NOT ON OVERFLOW]. The source, pointer and
-    delimiters are evaluated once; one builtin then examines the source
-    (interpreter.cobol.unstring_scan) and each receiver it acted on is written."""
+    delimiters are evaluated once; IR then examines the source
+    (interpreter.cobol.unstring_ir) and each receiver it acted on is written."""
     span = stmt.span
     if not ctx.has_field(stmt.source.name, materialised):
         logger.warning("UNSTRING source %s not found in layout", stmt.source.name)
@@ -410,27 +393,24 @@ def lower_unstring(
     has_pointer = bool(stmt.pointer.name) and ctx.has_field(
         stmt.pointer.name, materialised
     )
-    outcome_reg = _unstring_outcome(ctx, stmt, has_pointer, materialised)
-    acted_reg = _list_item(ctx, outcome_reg, 2, span=span)
-    for index, receiver in enumerate(stmt.into):
+    outcome = _unstring_outcome(ctx, stmt, has_pointer, materialised)
+    for index, (receiver, piece) in enumerate(
+        zip(stmt.into, outcome.pieces, strict=True)
+    ):
         _write_unstring_receiver(
-            ctx, receiver, outcome_reg, acted_reg, index, materialised, span=span
+            ctx, receiver, (piece, outcome.acted), index, materialised, span=span
         )
     if has_pointer:
-        _write_number(
-            ctx,
-            stmt.pointer,
-            _list_item(ctx, outcome_reg, 0, span=span),
-            materialised,
-            span=span,
-        )
+        _write_number(ctx, stmt.pointer, outcome.pointer, materialised, span=span)
     if stmt.tallying_target.name and ctx.has_field(
         stmt.tallying_target.name, materialised
     ):
-        _add_to_number(ctx, stmt.tallying_target, acted_reg, materialised, span=span)
+        _add_to_number(
+            ctx, stmt.tallying_target, outcome.acted, materialised, span=span
+        )
     _lower_overflow_phrases(
         ctx,
-        _list_item(ctx, outcome_reg, 1, span=span),
+        outcome.overflow,
         stmt.on_overflow,
         stmt.not_on_overflow,
         materialised,
@@ -443,49 +423,41 @@ def _unstring_outcome(
     stmt: UnstringStatement,
     has_pointer: bool,
     materialised: MaterialisedSectionedLayout,
-) -> Register:
-    """The builtin's result for this statement; the pointer starts at 1
+) -> UnstringIrOutcome:
+    """The examination's outcome for this statement; the pointer starts at 1
     without WITH POINTER."""
     span = stmt.span
-    delimiter_args = tuple(
-        arg
-        for delimiter in stmt.delimiters
-        for arg in (
-            _resolve_inspect_operand(ctx, delimiter.operand, materialised, span=span),
-            ctx.const_to_reg(delimiter.all, span=span),
-        )
-    )
-    return _call(
-        ctx,
-        BuiltinName.COBOL_UNSTRING,
+    delimiters = tuple(
         (
-            _receiver_characters(ctx, stmt.source, materialised, span=span),
-            (
-                _read_pointer(ctx, stmt.pointer, materialised, span=span)
-                if has_pointer
-                else ctx.const_to_reg(1, span=span)
-            ),
-            ctx.const_to_reg(len(stmt.delimiters), span=span),
-            *delimiter_args,
-            *(
-                ctx.const_to_reg(
-                    materialised.resolve(
-                        receiver.target.name, receiver.target.qualifiers
-                    )[0].byte_length,
-                    span=span,
-                )
+            _resolve_inspect_operand(ctx, delimiter.operand, materialised, span=span),
+            delimiter.all,
+        )
+        for delimiter in stmt.delimiters
+    )
+    return emit_unstring(
+        IrEmitter(ctx=ctx, span=span),
+        _receiver_characters(ctx, stmt.source, materialised, span=span),
+        (
+            _read_pointer(ctx, stmt.pointer, materialised, span=span)
+            if has_pointer
+            else ctx.const_to_reg(1, span=span)
+        ),
+        (
+            delimiters,
+            tuple(
+                materialised.resolve(receiver.target.name, receiver.target.qualifiers)[
+                    0
+                ].byte_length
                 for receiver in stmt.into
             ),
         ),
-        span=span,
     )
 
 
 def _write_unstring_receiver(
     ctx: EmitContext,
     receiver: UnstringReceiver,
-    outcome_reg: Register,
-    acted_reg: Register,
+    received: tuple[UnstringIrPiece, Register],
     index: int,
     materialised: MaterialisedSectionedLayout,
     *,
@@ -494,6 +466,7 @@ def _write_unstring_receiver(
     """Receiver ``index`` and its DELIMITER IN and COUNT IN items get their
     piece when the examination reached that receiver, and are untouched when
     it did not."""
+    piece, acted_reg = received
     write_label = ctx.fresh_label("unstring_receive")
     skip_label = ctx.fresh_label("unstring_skip")
     reached_reg = ctx.fresh_reg()
@@ -511,29 +484,16 @@ def _write_unstring_receiver(
         span=span,
     )
     ctx.emit_inst(Label_(label=write_label), span=span)
-    first = 3 + 3 * index
-    _write_ref_mod_target(
-        ctx,
-        receiver.target,
-        _list_item(ctx, outcome_reg, first, span=span),
-        materialised,
-        span=span,
-    )
+    _write_ref_mod_target(ctx, receiver.target, piece.text, materialised, span=span)
     if receiver.delimiter_in.name:
         _write_ref_mod_target(
-            ctx,
-            receiver.delimiter_in,
-            _list_item(ctx, outcome_reg, first + 1, span=span),
-            materialised,
-            span=span,
+            ctx, receiver.delimiter_in, piece.delimiter, materialised, span=span
         )
     if receiver.count_in.name:
         _write_ref_mod_target(
             ctx,
             receiver.count_in,
-            ctx.emit_to_string(
-                _list_item(ctx, outcome_reg, first + 2, span=span), span=span
-            ),
+            ctx.emit_to_string(piece.count, span=span),
             materialised,
             span=span,
         )
