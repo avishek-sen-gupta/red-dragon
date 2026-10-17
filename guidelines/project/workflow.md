@@ -106,6 +106,12 @@ turns up something pertinent — a rejected approach, an edge case, a related is
   never widen the primitive's signature.
 - **A builtin hides the program from analysis.** Symbolic input also collapses
   to UNCOMPUTABLE there, whereas IR carries the symbolic value through.
+- **COBOL structure is fixed at its source.** A fix to how a construct is
+  represented starts in the ProLeap grammar (`proleap-bridge/proleap-cobol-parser`)
+  where that applies. The Java bridge is a passthrough that serialises the parse tree
+  as written. It transforms only where that makes the Python lowering simpler, and
+  never computes a COBOL rule such as a storage size, SIGN inheritance or condition
+  expansion. Those belong in `cobol_asg` and lowering.
 
 ### Tests
 
