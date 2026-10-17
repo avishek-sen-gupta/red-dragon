@@ -247,5 +247,7 @@ fileignoreconfig:
 - filename: proleap-bridge/src/main/java/org/reddragon/bridge/StatementSerializer.java
   checksum: 10c584835ec6a3eb0cc930cb541bc3bf1fac8f61fa29cfa85ca67abdec34d8ff
 - filename: interpreter/cobol/lower_io.py
-  checksum: e9b2dde8315af635b9f9593dc2e53982e26af382d2312c5c1380921213134663
+  checksum: e88b808f6443e8d2b1b72e6b2f8cd1bf5ee2bdc7d178d2fa25a59d0999f5bcce
+- filename: tests/integration/test_cobol_use_declaratives.py
+  checksum: d0c6ea039a432d727fde9ea777b1c4945dff7c0f5c3a4599a626bfd8df390072
 version: "1.0"
