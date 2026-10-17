@@ -342,3 +342,34 @@ class TestRelativeDriver:
         assert r1.data is not None and b"SLOT1" in r1.data
         assert r2.data is not None and b"SLOT3" in r2.data
         assert eof.condition is AccessCondition.END_OF_FILE
+
+    @covers(CobolFeature.START)
+    def test_start_positions_by_its_relation_to_the_record_number(
+        self, tmp_path: Path
+    ) -> None:
+        path = tmp_path / "rel.dat"
+        drv = RelativeDriver()
+        drv.open(path, OpenMode.OUTPUT, RL, 0, 0)
+        [drv.write(_b(f"SLOT{n}"), key=n.to_bytes(4, "big")) for n in (2, 5, 7)]
+        drv.close()
+        drv2 = RelativeDriver()
+        drv2.open(path, OpenMode.INPUT, RL, 0, 0)
+        starts = [
+            (relop, n, drv2.start(n.to_bytes(4, "big"), relop).condition)
+            for relop, n in (("=", 3), (">", 7))
+        ]
+        found = [
+            (relop, n, drv2.start(n.to_bytes(4, "big"), relop).condition)
+            + (drv2.read_seq().record_number,)
+            for relop, n in (("=", 5), (">=", 3), (">", 5), (">", 0))
+        ]
+        drv2.close()
+        assert (starts, found) == (
+            [("=", 3, AccessCondition.NOT_FOUND), (">", 7, AccessCondition.NOT_FOUND)],
+            [
+                ("=", 5, AccessCondition.OK, 5),
+                (">=", 3, AccessCondition.OK, 5),
+                (">", 5, AccessCondition.OK, 7),
+                (">", 0, AccessCondition.OK, 2),
+            ],
+        )

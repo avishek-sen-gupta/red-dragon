@@ -417,9 +417,17 @@ class RelativeDriver:
                 return AccessResult(condition=AccessCondition.OK, data=found[0])
         return AccessResult(condition=AccessCondition.END_OF_FILE)
 
+    def _first_record_from(self, n: int) -> int:
+        slots = range(max(n, 1), self._total_slots() + 1)
+        return next((m for m in slots if self._record_at(m)), 0)
+
     def start(self, key: bytes, relop: str) -> AccessResult:
         n = self._n(key)
-        self._cursor = n - 1
+        found = self._first_record_from(n + 1 if relop == ">" else n)
+        missing = not found or (relop in ("=", "==") and found != n)
+        if missing:
+            return AccessResult(condition=AccessCondition.NOT_FOUND)
+        self._cursor = found - 1
         return AccessResult(condition=AccessCondition.OK)
 
     def write(self, data: bytes, key: bytes = b"") -> AccessResult:
