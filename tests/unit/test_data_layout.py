@@ -11,6 +11,7 @@ from interpreter.cobol.data_layout import (
     OccursTable,
     build_data_layout,
     build_index_layout,
+    laid_end_to_end,
     record_length,
 )
 from interpreter.cobol.features import CobolFeature
@@ -433,6 +434,39 @@ class TestBuildDataLayoutRedefines:
         assert fl.offset == 0
         assert fl.byte_length == 8
         assert fl.redefines == "WS-DATE"
+
+
+class TestLargerRedefiningRecord:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_the_longest_redefining_record_sizes_the_shared_area(self):
+        """SMALL (4) redefined by BIG (10) and MID (7): the area is 10 bytes,
+        so NEXT starts at 10 and the region holds 16."""
+        fields = [
+            CobolField(name="SMALL", level=1, pic="X(4)", usage="DISPLAY", offset=0),
+            CobolField(
+                name="BIG",
+                level=1,
+                pic="X(10)",
+                usage="DISPLAY",
+                offset=4,
+                redefines="SMALL",
+            ),
+            CobolField(
+                name="MID",
+                level=1,
+                pic="X(7)",
+                usage="DISPLAY",
+                offset=10,
+                redefines="SMALL",
+            ),
+            CobolField(name="NEXT", level=1, pic="X(6)", usage="DISPLAY", offset=0),
+        ]
+        layout = build_data_layout(fields)
+
+        assert (
+            layout.total_bytes,
+            [f.offset for f in laid_end_to_end(fields)],
+        ) == (16, [0, 4, 10, 10])
 
 
 class TestBuildDataLayoutMultipleTopLevel:

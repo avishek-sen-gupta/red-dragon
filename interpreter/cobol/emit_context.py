@@ -867,13 +867,7 @@ class EmitContext:
         text = (
             self.figuratives.characters[value] * fl.byte_length if figurative else value
         )
-        return self.emit_encode_alphanumeric(
-            fl.name,
-            text,
-            td.total_digits,
-            justified_right=td.justified_right,
-            span=span,
-        )
+        return self.emit_encode_alphanumeric(fl.name, text, td.total_digits, span=span)
 
     def _emit_hex_literal_bytes(
         self, raw: bytes, byte_length: int, *, span: SourceSpan | None = None
