@@ -44,27 +44,35 @@ from interpreter.cobol.file_verb_ir import (
     VerbOutcome,
     emit_closed,
 )
+from interpreter.cobol.global_names import visible_file_entries, visible_record_files
 from interpreter.cobol.invalid_key_phrases import InvalidKeyPhrases
 from interpreter.cobol.lowering_scope import LoweringScope
 from interpreter.cobol.prime_key import PrimeKey
-from interpreter.cobol.program_object import program_name
+from interpreter.cobol.program_object import entry_var, program_name, use_request_var
 from interpreter.cobol.read_plan import ReadPlan
 from interpreter.cobol.relative_key import addressing_key, reported_key
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.cobol.status_class import StatusClass
+from interpreter.cobol.use_selection import NO_USE, UseProcedure, use_procedures
 from interpreter.cobol.write_plan import WritePlan
+from interpreter.field_name import FieldName
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Binop,
     Branch,
     BranchIf,
     CallFunction,
+    CallWithMemory,
     Label_,
+    NewArray,
     SetContinuation,
+    StoreField,
+    StoreVar,
 )
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import resolve_binop
 from interpreter.register import NO_REGISTER, Register
+from interpreter.var_name import VarName
 
 logger = logging.getLogger(__name__)
 
@@ -148,22 +156,32 @@ def _emit_skip_if_class(
     ctx.emit_inst(Label_(label=next_lbl), span=span)
 
 
-def _emit_conditional_use_perform(
+def _emit_conditional_use(
     scope: LoweringScope,
     status_reg: Register,
-    section: str,
+    use: UseProcedure,
     handled: Sequence[StatusClass],
 ) -> None:
     """Emit: unless the status is successful or of a class the statement's own
-    AT END / INVALID KEY phrase handles, PERFORM the USE section and return to
-    the point of the I/O verb."""
-    ctx, span = scope.ctx, scope.span
+    AT END / INVALID KEY phrase handles, run the USE section and return to the
+    point of the I/O verb."""
+    ctx = scope.ctx
     first_reg = _emit_status_class(scope, status_reg)
     skip_lbl = ctx.fresh_label("use_skip")
     _ = [
         _emit_skip_if_class(scope, first_reg, status_class, skip_lbl)
         for status_class in (StatusClass.SUCCESSFUL, *handled)
     ]
+    if use.program == program_name(ctx._asg):
+        _emit_use_perform(scope, use.section)
+    else:
+        _emit_use_call(scope, use)
+    ctx.emit_inst(Branch(label=skip_lbl), span=scope.span)
+    ctx.emit_inst(Label_(label=skip_lbl), span=scope.span)
+
+
+def _emit_use_perform(scope: LoweringScope, section: str) -> None:
+    ctx, span = scope.ctx, scope.span
     ret_lbl = ctx.fresh_label("use_return")
     ctx.emit_inst(
         SetContinuation(name=ctx.procedures.section_end(section), target_label=ret_lbl),
@@ -171,8 +189,34 @@ def _emit_conditional_use_perform(
     )
     ctx.emit_inst(Branch(label=ctx.procedures.section(section)), span=span)
     ctx.emit_inst(Label_(label=ret_lbl), span=span)
-    ctx.emit_inst(Branch(label=skip_lbl), span=span)
-    ctx.emit_inst(Label_(label=skip_lbl), span=span)
+
+
+def _emit_use_call(scope: LoweringScope, use: UseProcedure) -> None:
+    """A containing program's USE GLOBAL section runs in that program: name the
+    section in its request variable and enter it, with no arguments."""
+    ctx, span = scope.ctx, scope.span
+    ctx.emit_inst(
+        StoreVar(
+            name=use_request_var(use.program),
+            value_reg=ctx.const_to_reg(use.section, span=span),
+        ),
+        span=span,
+    )
+    count = ctx.const_to_reg(0, span=span)
+    args = ctx.fresh_reg()
+    ctx.emit_inst(NewArray(result_reg=args, size_reg=count), span=span)
+    ctx.emit_inst(
+        StoreField(obj_reg=args, field_name=FieldName("count"), value_reg=count),
+        span=span,
+    )
+    ctx.emit_inst(
+        CallWithMemory(
+            result_reg=ctx.fresh_reg(), location=entry_var(use.program), memory=args
+        ),
+        span=span,
+    )
+    _, ws_reg = scope.materialised.working_storage
+    ctx.emit_inst(StoreVar(name=VarName("__ws_region"), value_reg=ws_reg), span=span)
 
 
 def handled_classes(at_end: bool, invalid_key: bool) -> tuple[StatusClass, ...]:
@@ -189,37 +233,52 @@ def _emit_use_trigger(
     status_reg: Register,
     handled: Sequence[StatusClass],
 ) -> None:
-    """Inject a conditional PERFORM of the matching USE declarative when an I/O
-    verb returns an error/exception status that the statement's own AT END /
-    INVALID KEY phrase does not handle."""
+    """Run the USE declarative an I/O verb's error or exception status selects,
+    when the statement's own AT END / INVALID KEY phrase does not handle it: the
+    first, in order of precedence, whose open mode is the file's (or that names
+    the file)."""
+    uses = use_procedures(scope.ctx._asg, file_name)
+    if not uses:
+        return
     ctx, span = scope.ctx, scope.span
-    section = ctx.use_by_file.get(file_name.upper(), "") or ctx.use_global or ""
-    if section:
-        _emit_conditional_use_perform(scope, status_reg, section, handled)
-        return
-    if not ctx.use_by_mode:
-        return
+    done = ctx.fresh_label("use_done")
     mode_reg = scope.emitter.load(file_state_of(ctx._asg, file_name).mode)
-    for mode_key, sec in ctx.use_by_mode.items():
+    _ = [
+        _emit_use_candidate(scope, use, mode_reg, (status_reg, done), handled)
+        for use in uses
+    ]
+    ctx.emit_inst(Label_(label=done), span=span)
+
+
+def _emit_use_candidate(
+    scope: LoweringScope,
+    use: UseProcedure,
+    mode_reg: Register,
+    outcome: tuple[Register, CodeLabel],
+    handled: Sequence[StatusClass],
+) -> None:
+    ctx, span = scope.ctx, scope.span
+    status_reg, done = outcome
+    next_lbl = ctx.fresh_label("use_mode_next")
+    if use.mode:
         match_reg = ctx.fresh_reg()
         ctx.emit_inst(
             Binop(
                 result_reg=match_reg,
                 operator=resolve_binop("=="),
                 left=mode_reg,
-                right=Register(str(ctx.const_to_reg(mode_key, span=span))),
+                right=ctx.const_to_reg(use.mode, span=span),
             ),
             span=span,
         )
         do_lbl = ctx.fresh_label("use_mode_do")
-        next_lbl = ctx.fresh_label("use_mode_next")
         ctx.emit_inst(
             BranchIf(cond_reg=match_reg, branch_targets=(do_lbl, next_lbl)), span=span
         )
         ctx.emit_inst(Label_(label=do_lbl), span=span)
-        _emit_conditional_use_perform(scope, status_reg, sec, handled)
-        ctx.emit_inst(Branch(label=next_lbl), span=span)
-        ctx.emit_inst(Label_(label=next_lbl), span=span)
+    _emit_conditional_use(scope, status_reg, use, handled)
+    ctx.emit_inst(Branch(label=done), span=span)
+    ctx.emit_inst(Label_(label=next_lbl), span=span)
 
 
 def _emit_open_use_trigger(
@@ -227,15 +286,17 @@ def _emit_open_use_trigger(
 ) -> None:
     """A failed OPEN leaves the file closed, so an open-mode USE is chosen by the
     mode the OPEN attempted, not by the file's current mode."""
-    ctx = scope.ctx
-    section = (
-        ctx.use_by_file.get(file_name.upper(), "")
-        or ctx.use_global
-        or ctx.use_by_mode.get(mode.value, "")
+    use = next(
+        (
+            use
+            for use in use_procedures(scope.ctx._asg, file_name)
+            if use.mode in ("", mode.value)
+        ),
+        NO_USE,
     )
-    if not section:
+    if not use.section:
         return
-    _emit_conditional_use_perform(scope, status_reg, section, ())
+    _emit_conditional_use(scope, status_reg, use, ())
 
 
 def lower_accept(
@@ -1067,7 +1128,7 @@ def _current_record_refusals(
 
 
 def _record_file(ctx: EmitContext, record_name: str) -> str:
-    return ctx._asg.file_record_to_select.get(record_name.upper(), record_name)
+    return visible_record_files(ctx._asg).get(record_name.upper(), record_name)
 
 
 def lower_write(
@@ -1250,7 +1311,7 @@ def lower_start(
 
 
 def _file_entries(ctx: EmitContext) -> dict[str, FileControlEntry]:
-    return {entry.file_name: entry for entry in ctx._asg.file_control}
+    return visible_file_entries(ctx._asg)
 
 
 def _file_key(entry: FileControlEntry) -> RefModOperand:

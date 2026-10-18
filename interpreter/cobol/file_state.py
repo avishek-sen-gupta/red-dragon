@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from cobol_asg.asg_types import CobolASG
+from interpreter.cobol.global_names import file_owner
 from interpreter.cobol.program_object import program_name
 from interpreter.var_name import VarName
 
@@ -36,10 +37,12 @@ def external_file_state(file_name: str) -> FileState:
 
 def file_state_of(asg: CobolASG, file_name: str) -> FileState:
     """The state the program's verbs on ``file_name`` act on: the run unit's for an
-    EXTERNAL file, the program's own otherwise."""
-    if file_name.upper() in asg.external_file_names():
+    EXTERNAL file, else that of the program whose SELECT declares it, the program
+    itself or the containing program it is GLOBAL in."""
+    owner = file_owner(asg, file_name)
+    if file_name.upper() in owner.external_file_names():
         return external_file_state(file_name)
-    return file_state(program_name(asg), file_name)
+    return file_state(program_name(owner), file_name)
 
 
 def _state(prefix: str) -> FileState:

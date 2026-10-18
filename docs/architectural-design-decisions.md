@@ -3250,3 +3250,11 @@ Because `Halt_` is a distinct type, it is naturally absent from `_infer_return`'
 
 **Consequences:** Whichever program loads first allocates an area, from its own description's length. Differing sizes are not detected. VALUE in an EXTERNAL record is not applied (ANSI forbids it). CANCEL leaves EXTERNAL areas alone, because a re-run probe finds them. The provider still keys files by name alone, so an EXTERNAL file reaches the same driver from every program; a non-EXTERNAL file of the same name in two programs does too, as before.
 
+### ADR-192: GLOBAL names resolve to the containing program's storage; USE GLOBAL runs in its program (2026-10-19)
+
+**Context:** A GLOBAL data item, file or USE GLOBAL declarative of a program is visible to every program it contains, at any depth (IBM Enterprise COBOL LR, GLOBAL clause, scope of names). Each program is lowered on its own into its own unit (ADR-190), so a contained program's lowering knew nothing of its containers (red-dragon-ljku.4).
+
+**Decision:** `programs_in_preorder` gives each contained program its enclosing programs, nearest first; the contained program resolves a name it does not declare among their global items, nearest first, addressing each at its offset in its own program's WORKING-STORAGE (from the program object) or FILE SECTION (from `__file_area_<PID>`, now allocated once at load). A GLOBAL file keeps its owner's connector state, SELECT and FILE STATUS item. A containing program's USE GLOBAL section is not copied into the contained program: the contained program names it in `__use_request_<PID>` and enters the containing program, whose procedure performs it on entry and returns, so it runs on its own program's storage, files and paragraphs.
+
+**Consequences:** Each contained unit carries copies of its enclosing programs' ASGs. A FILE SECTION record area keeps its contents across CALLs. Re-entering a program for a USE GLOBAL section binds its LINKAGE afresh from no arguments and allocates its LOCAL-STORAGE and INDEXES regions afresh, so such a section that reads those of the interrupted invocation reads fresh storage. Indexes of a global table and GLOBAL items of LINKAGE or LOCAL-STORAGE are not reached from contained programs. `CobolIOProvider` calls still name the calling program.
+

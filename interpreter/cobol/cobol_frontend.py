@@ -32,7 +32,10 @@ from interpreter.cobol.lower_data_division import (
     lower_sectioned_data_division,
 )
 from interpreter.cobol.lower_external import lower_external_areas
-from interpreter.cobol.lower_procedure import lower_procedure_division
+from interpreter.cobol.lower_procedure import (
+    lower_procedure_division,
+    lower_use_request,
+)
 from interpreter.cobol.lower_program_init import (
     lower_program_init,
     lower_ws_from_singleton,
@@ -258,6 +261,7 @@ class CobolFrontend(Frontend):
         # Skip target — init block branches here to skip past procedure body
         self._ctx.emit_inst(Label_(label=after_label))
         lower_file_area(self._ctx, self._program_id, sectioned.file)
+        lower_use_request(self._ctx, asg)
 
         logger.debug(
             "COBOL frontend produced %d IR instructions",

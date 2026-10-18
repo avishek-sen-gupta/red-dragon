@@ -12,6 +12,7 @@ from cobol_asg.ref_mod import RefModOperand
 from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.fd_record_format import records_vary
 from interpreter.cobol.file_frame import FileFrame
+from interpreter.cobol.global_names import visible_record_files
 from interpreter.cobol.prime_key import PrimeKey
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 
@@ -21,7 +22,7 @@ def largest_record(
 ) -> str:
     records = [
         materialised.resolve(record)[0]
-        for record, selected in asg.file_record_to_select.items()
+        for record, selected in visible_record_files(asg).items()
         if selected == filename.upper() and materialised.has_field(record)
     ]
     return max(records, key=lambda fl: fl.byte_length).name if records else ""
