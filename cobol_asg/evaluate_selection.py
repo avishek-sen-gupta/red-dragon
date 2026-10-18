@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 
-from cobol_asg.abbreviated_condition import resolve_condition
+from cobol_asg.abbreviated_condition import negated_condition, resolve_condition
 from cobol_asg.any_object import AnyObject
 from cobol_asg.cobol_expression import expr_from_dict
 from cobol_asg.expression_subject import ExpressionSubject
@@ -32,9 +32,7 @@ _OBJECTS: Mapping[str, Callable[[Mapping], SelectionObject]] = {
     "boolean": lambda d: TruthValue(
         value=bool(d["value"]) != bool(d.get("not", False))
     ),
-    "condition": lambda d: SelectionCondition(
-        condition=resolve_condition(d["condition"])
-    ),
+    "condition": lambda d: SelectionCondition(condition=_object_condition(d)),
     "value": lambda d: ValueObject(
         value=expr_from_dict(d["value"]), negated=bool(d.get("not", False))
     ),
@@ -44,6 +42,14 @@ _OBJECTS: Mapping[str, Callable[[Mapping], SelectionObject]] = {
         negated=bool(d.get("not", False)),
     ),
 }
+
+
+def _object_condition(data: Mapping) -> dict:
+    """A WHEN object's condition; a NOT written before it negates it."""
+    condition = resolve_condition(data["condition"])
+    if not data.get("not", False):
+        return condition
+    return negated_condition(condition)
 
 
 def selection_subject_from_dict(data: Mapping) -> SelectionSubject:
