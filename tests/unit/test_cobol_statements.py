@@ -127,7 +127,7 @@ class TestParseStatementDispatch:
     @covers(CobolFeature.SUBTRACT)
     def test_subtract(self):
         stmt = parse_statement(
-            {"type": "SUBTRACT", "operands": ["3"], "targets": ["WS-A"]}
+            {"type": "SUBTRACT", "subtrahends": ["3"], "targets": ["WS-A"]}
         )
         assert isinstance(stmt, ArithmeticStatement)
         assert stmt.op == "SUBTRACT"
@@ -135,7 +135,12 @@ class TestParseStatementDispatch:
     @covers(CobolFeature.SUBTRACT, CobolFeature.GIVING_CLAUSE)
     def test_subtract_giving(self):
         stmt = parse_statement(
-            {"type": "SUBTRACT", "operands": ["WS-B", "WS-A"], "giving": ["WS-R"]}
+            {
+                "type": "SUBTRACT",
+                "minuend": "WS-B",
+                "subtrahends": ["WS-A"],
+                "giving": ["WS-R"],
+            }
         )
         assert isinstance(stmt, ArithmeticStatement)
         assert stmt.op == "SUBTRACT"
@@ -171,9 +176,7 @@ class TestParseStatementDispatch:
 
     @covers(CobolFeature.DIVIDE)
     def test_divide(self):
-        stmt = parse_statement(
-            {"type": "DIVIDE", "operands": ["4"], "targets": ["WS-A"]}
-        )
+        stmt = parse_statement({"type": "DIVIDE", "divisor": "4", "targets": ["WS-A"]})
         assert isinstance(stmt, ArithmeticStatement)
         assert stmt.op == "DIVIDE"
 
@@ -1216,7 +1219,8 @@ class TestRoundTrip:
     def test_subtract_giving_round_trip(self):
         data = {
             "type": "SUBTRACT",
-            "operands": [{"name": "WS-B"}, {"name": "WS-A"}],
+            "minuend": {"name": "WS-B"},
+            "subtrahends": [{"name": "WS-A"}],
             "giving": [{"name": "WS-R"}],
         }
         assert self._round_trip(data) == data

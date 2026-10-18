@@ -488,14 +488,13 @@ public final class StatementSerializer {
         }
 
         JsonObject obj = newStatement("SUBTRACT");
-        JsonArray operands = new JsonArray();
+        JsonArray subtrahends = new JsonArray();
         JsonArray targets = new JsonArray();
 
         SubtractFromStatement subtractFrom = stmt.getSubtractFromStatement();
         if (subtractFrom != null) {
             for (Subtrahend sub : subtractFrom.getSubtrahends()) {
-                ValueStmt vs = sub.getSubtrahendValueStmt();
-                operands.add(serializeArithSource(vs));
+                subtrahends.add(serializeArithSource(sub.getSubtrahendValueStmt()));
             }
             for (Minuend min : subtractFrom.getMinuends()) {
                 JsonObject t = serializeRef(min.getMinuendCall());
@@ -505,15 +504,12 @@ public final class StatementSerializer {
         } else {
             SubtractFromGivingStatement subtractGiving = stmt.getSubtractFromGivingStatement();
             if (subtractGiving != null) {
-                // Minuend first, then every subtrahend:
-                // SUBTRACT X W FROM Y GIVING Z → operands=[Y, X, W], giving=[Z]
-                // and the lowering computes Y - (X + W).
+                for (Subtrahend sub : subtractGiving.getSubtrahends()) {
+                    subtrahends.add(serializeArithSource(sub.getSubtrahendValueStmt()));
+                }
                 MinuendGiving minuend = subtractGiving.getMinuend();
                 if (minuend != null) {
-                    operands.add(serializeArithSource(minuend.getMinuendValueStmt()));
-                }
-                for (Subtrahend sub : subtractGiving.getSubtrahends()) {
-                    operands.add(serializeArithSource(sub.getSubtrahendValueStmt()));
+                    obj.add("minuend", serializeArithSource(minuend.getMinuendValueStmt()));
                 }
                 JsonArray givingTargets = new JsonArray();
                 for (io.proleap.cobol.asg.metamodel.procedure.subtract.Giving g : subtractGiving.getGivings()) {
@@ -527,7 +523,7 @@ public final class StatementSerializer {
             }
         }
 
-        obj.add("operands", operands);
+        obj.add("subtrahends", subtrahends);
         if (targets.size() > 0) {
             obj.add("targets", targets);
         }
@@ -608,15 +604,8 @@ public final class StatementSerializer {
 
     private static JsonObject serializeDivide(DivideStatement stmt) {
         JsonObject obj = newStatement("DIVIDE");
-        JsonArray operands = new JsonArray();
         JsonArray targets = new JsonArray();
         try {
-            // The single "operand" the grammar attaches to the DIVIDE statement
-            // itself (X in both "DIVIDE X INTO ..." and "DIVIDE X BY ..."). Its
-            // ROLE (divisor vs dividend) differs by form, so operand ORDER is
-            // decided per-branch below rather than emitted here — the Python
-            // lowering treats "operands" generically as [dividend, divisor]
-            // (red-dragon-swdf).
             ValueStmt operandVs = stmt.getOperandValueStmt();
 
             Remainder remainder = stmt.getRemainder();
@@ -627,67 +616,31 @@ public final class StatementSerializer {
             DivideStatement.DivideType divideType = stmt.getDivideType();
 
             if (divideType == DivideStatement.DivideType.INTO_GIVING) {
-                // DIVIDE X INTO Y GIVING Z => Z = Y / X. X is the divisor (the
-                // statement-level operand); Y (the INTO value) is the dividend.
-                // Emit [dividend, divisor] to match BY_GIVING's convention.
                 DivideIntoGivingStatement intoGiving = stmt.getDivideIntoGivingStatement();
+                if (operandVs != null) {
+                    obj.add("divisor", serializeArithSource(operandVs));
+                }
                 if (intoGiving != null) {
                     if (intoGiving.getIntoValueStmt() != null) {
-                        operands.add(serializeArithSource(intoGiving.getIntoValueStmt()));
+                        obj.add("dividend", serializeArithSource(intoGiving.getIntoValueStmt()));
                     }
-                    if (operandVs != null) {
-                        operands.add(serializeArithSource(operandVs));
-                    }
-                    GivingPhrase gp = intoGiving.getGivingPhrase();
-                    if (gp != null) {
-                        JsonArray givingTargets = new JsonArray();
-                        for (Giving g : gp.getGivings()) {
-                            Call givingCall = g.getGivingCall();
-                            if (givingCall != null) {
-                                JsonObject gt = serializeRef(givingCall);
-                                gt.addProperty("rounded", g.isRounded());
-                                givingTargets.add(gt);
-                            }
-                        }
-                        if (givingTargets.size() > 0) {
-                            obj.add("giving", givingTargets);
-                        }
-                    }
+                    addDivideGiving(obj, intoGiving.getGivingPhrase());
                 }
             } else if (divideType == DivideStatement.DivideType.BY_GIVING) {
-                // DIVIDE X BY Y GIVING Z => Z = X / Y. X (the statement-level
-                // operand) is the dividend, already first — [dividend, divisor].
                 DivideByGivingStatement byGiving = stmt.getDivideByGivingStatement();
+                if (operandVs != null) {
+                    obj.add("dividend", serializeArithSource(operandVs));
+                }
                 if (byGiving != null) {
-                    if (operandVs != null) {
-                        operands.add(serializeArithSource(operandVs));
-                    }
                     if (byGiving.getByValueStmt() != null) {
-                        operands.add(serializeArithSource(byGiving.getByValueStmt()));
+                        obj.add("divisor", serializeArithSource(byGiving.getByValueStmt()));
                     }
-                    GivingPhrase gp = byGiving.getGivingPhrase();
-                    if (gp != null) {
-                        JsonArray givingTargets = new JsonArray();
-                        for (Giving g : gp.getGivings()) {
-                            Call givingCall = g.getGivingCall();
-                            if (givingCall != null) {
-                                JsonObject gt = serializeRef(givingCall);
-                                gt.addProperty("rounded", g.isRounded());
-                                givingTargets.add(gt);
-                            }
-                        }
-                        if (givingTargets.size() > 0) {
-                            obj.add("giving", givingTargets);
-                        }
-                    }
+                    addDivideGiving(obj, byGiving.getGivingPhrase());
                 }
             } else {
-                // DIVIDE X INTO Y W (in-place: Y = Y / X, W = W / X). X, the
-                // divisor, is the sole operand; Y and W are the targets. This is
-                // unrelated to the GIVING forms' [dividend, divisor] convention.
                 DivideIntoStatement intoStmt = stmt.getDivideIntoStatement();
                 if (operandVs != null) {
-                    operands.add(serializeArithSource(operandVs));
+                    obj.add("divisor", serializeArithSource(operandVs));
                 }
                 if (intoStmt != null) {
                     for (Into into : intoStmt.getIntos()) {
@@ -703,7 +656,6 @@ public final class StatementSerializer {
         } catch (Exception e) {
             LOG.fine("Could not extract DIVIDE operands: " + e.getMessage());
         }
-        obj.add("operands", operands);
         if (targets.size() > 0) {
             obj.add("targets", targets);
         }
@@ -714,6 +666,24 @@ public final class StatementSerializer {
             obj.add("not_on_size_error", serializeStatements(stmt.getNotOnSizeErrorPhrase().getStatements()));
         }
         return obj;
+    }
+
+    private static void addDivideGiving(JsonObject obj, GivingPhrase gp) {
+        if (gp == null) {
+            return;
+        }
+        JsonArray givingTargets = new JsonArray();
+        for (Giving g : gp.getGivings()) {
+            Call givingCall = g.getGivingCall();
+            if (givingCall != null) {
+                JsonObject gt = serializeRef(givingCall);
+                gt.addProperty("rounded", g.isRounded());
+                givingTargets.add(gt);
+            }
+        }
+        if (givingTargets.size() > 0) {
+            obj.add("giving", givingTargets);
+        }
     }
 
     private static JsonObject serializeCompute(ComputeStatement stmt) {

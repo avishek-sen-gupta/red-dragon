@@ -1,5 +1,7 @@
 threshold: low
 fileignoreconfig:
+- filename: tests/integration/test_bridge_arithmetic_roles.py
+  checksum: 7549863c3b6a8ef0a9f6225ceb6b358c437078b3f5974e011b04babc2e33a933
 - filename: interpreter/cobol/sort_ordering.py
   checksum: 368374a03096f4fd3ab010abae42f95451ed72ba80b6175b62b36f394439e314
 - filename: tests/unit/cobol/test_sort_pass_ir.py
