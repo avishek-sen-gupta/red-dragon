@@ -9,6 +9,7 @@ from pathlib import Path
 from types import MappingProxyType
 
 from interpreter.cobol.real_file_provider import RealFileIOProvider
+from interpreter.cobol.run_inputs import RunInputs
 from interpreter.run import run
 from tests.integration.cobol_helpers import first_region, to_fixed
 
@@ -81,9 +82,11 @@ class FileProgram:
             language="cobol",
             io_provider=RealFileIOProvider(
                 base_dir=tmp_path,
-                path_overrides={
-                    name: tmp_path / file for name, file in self.shared.items()
-                },
+                inputs=RunInputs(
+                    path_overrides={
+                        name: tmp_path / file for name, file in self.shared.items()
+                    }
+                ),
             ),
             max_steps=_MAX_STEPS,
         )

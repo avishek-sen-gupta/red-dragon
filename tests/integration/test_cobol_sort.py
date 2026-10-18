@@ -10,6 +10,7 @@ import pytest
 
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.real_file_provider import RealFileIOProvider
+from interpreter.cobol.run_inputs import RunInputs
 from interpreter.run import run
 from tests.covers import covers
 from tests.integration.cobol_helpers import (
@@ -83,7 +84,7 @@ def _sorted_output(
         max_steps=50000,
         io_provider=RealFileIOProvider(
             base_dir=tmp_path,
-            path_overrides={name: tmp_path / name for name in _FILES},
+            inputs=RunInputs(path_overrides={name: tmp_path / name for name in _FILES}),
         ),
     )
     return capsys.readouterr().out
@@ -188,7 +189,8 @@ def test_sort_procedures_release_and_return_the_records_in_key_order(
         language="cobol",
         max_steps=50000,
         io_provider=RealFileIOProvider(
-            base_dir=tmp_path, path_overrides={"SRT": tmp_path / "SRT"}
+            base_dir=tmp_path,
+            inputs=RunInputs(path_overrides={"SRT": tmp_path / "SRT"}),
         ),
     )
     assert capsys.readouterr().out == (
@@ -243,7 +245,7 @@ def test_merge_interleaves_ordered_files_with_equal_keys_in_using_order(
         max_steps=50000,
         io_provider=RealFileIOProvider(
             base_dir=tmp_path,
-            path_overrides={name: tmp_path / name for name in files},
+            inputs=RunInputs(path_overrides={name: tmp_path / name for name in files}),
         ),
     )
     assert capsys.readouterr().out == "A3\nA1\nB4\nC2\n"
@@ -300,7 +302,7 @@ def test_sort_collates_by_its_collating_sequence_else_the_programs(
         max_steps=50000,
         io_provider=RealFileIOProvider(
             base_dir=tmp_path,
-            path_overrides={name: tmp_path / name for name in files},
+            inputs=RunInputs(path_overrides={name: tmp_path / name for name in files}),
         ),
     )
     assert capsys.readouterr().out == "1\nA\nA\n1\n"

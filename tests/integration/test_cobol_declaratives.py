@@ -8,6 +8,7 @@ from pathlib import Path
 from interpreter.cobol.ebcdic_table import EbcdicTable
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.real_file_provider import RealFileIOProvider
+from interpreter.cobol.run_inputs import RunInputs
 from interpreter.run import run
 from tests.covers import covers
 from tests.integration.cobol_helpers import to_fixed
@@ -55,8 +56,7 @@ class TestDeclarativesEntryPoint:
         out_path = tmp_path / "outdd.dat"
         provider = RealFileIOProvider(
             base_dir=tmp_path,
-            file_control=[],
-            path_overrides={"OUT-FILE": out_path},
+            inputs=RunInputs(file_control=[], path_overrides={"OUT-FILE": out_path}),
         )
         result = run(_SRC, language="cobol", io_provider=provider, max_steps=50_000)
         assert result is not None

@@ -18,6 +18,7 @@ from interpreter.cobol.file_frame import FileFrame
 from interpreter.cobol.prime_key import PrimeKey
 from interpreter.cobol.real_file_provider import RealFileIOProvider
 from interpreter.cobol.record_shape import RecordShape
+from interpreter.cobol.run_inputs import RunInputs
 from interpreter.vm.vm import Operators
 from tests.covers import NotLanguageFeature, covers
 from tests.unit.cobol.declared_files import opened
@@ -30,7 +31,7 @@ def _provider(
 ) -> RealFileIOProvider:
     fce = [FileControlEntry.from_dict(dict(e)) for e in entries]
     return RealFileIOProvider(
-        base_dir=tmp_path, file_control=fce, path_overrides=overrides
+        base_dir=tmp_path, inputs=RunInputs(file_control=fce, path_overrides=overrides)
     )
 
 
@@ -72,8 +73,7 @@ class TestRealFileIOProvider:
         )
         prov = RealFileIOProvider(
             base_dir=tmp_path,
-            file_control=[fce],
-            path_overrides={"F1": custom},
+            inputs=RunInputs(file_control=[fce], path_overrides={"F1": custom}),
         )
         opened(
             prov,
@@ -200,12 +200,14 @@ class TestRealFileIOProvider:
         data.write_bytes(b"HELLO")
         prov = RealFileIOProvider(
             base_dir=tmp_path,
-            file_control=[
-                FileControlEntry.from_dict(
-                    {"file_name": "IN-FILE", "assign_to": "INDD"}
-                )
-            ],
-            path_overrides={"INDD": data},
+            inputs=RunInputs(
+                file_control=[
+                    FileControlEntry.from_dict(
+                        {"file_name": "IN-FILE", "assign_to": "INDD"}
+                    )
+                ],
+                path_overrides={"INDD": data},
+            ),
         )
         r = opened(
             prov,
@@ -239,7 +241,7 @@ def test_a_subclass_chooses_the_driver_each_open_of_each_file_uses(
         FileControlEntry.from_dict({"file_name": name, "assign_to": f"{name}.dat"})
         for name in ("F1", "F2")
     ]
-    prov = _WideRecords(base_dir=tmp_path, file_control=fce)
+    prov = _WideRecords(base_dir=tmp_path, inputs=RunInputs(file_control=fce))
     opens = [
         opened(
             prov,
@@ -263,6 +265,8 @@ def test_a_subclass_chooses_the_driver_each_open_of_each_file_uses(
 def test_accept_fills_the_receiving_area_from_successive_system_input_records(
     tmp_path: Path,
 ) -> None:
-    prov = RealFileIOProvider(base_dir=tmp_path, system_input=["ABCD", "EFGH", "IJKL"])
+    prov = RealFileIOProvider(
+        base_dir=tmp_path, inputs=RunInputs(system_input=["ABCD", "EFGH", "IJKL"])
+    )
     filled = [prov._accept_area("SYSIN", length) for length in (6, 2, 3)]
     assert filled == ["ABCDEF", "IJ", Operators.UNCOMPUTABLE]

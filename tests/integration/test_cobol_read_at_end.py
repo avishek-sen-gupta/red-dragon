@@ -13,6 +13,7 @@ from pathlib import Path
 
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.real_file_provider import RealFileIOProvider
+from interpreter.cobol.run_inputs import RunInputs
 from interpreter.run import run
 from tests.covers import covers
 from tests.integration.cobol_helpers import to_fixed
@@ -56,8 +57,7 @@ class TestReadAtEndTerminates:
     def test_read_loop_stops_at_eof(self, tmp_path: Path) -> None:
         provider = RealFileIOProvider(
             base_dir=tmp_path,
-            file_control=[],
-            path_overrides={"F": tmp_path / "f.dat"},
+            inputs=RunInputs(file_control=[], path_overrides={"F": tmp_path / "f.dat"}),
         )
         # A correct run reads exactly 3 records then hits AT END and STOPs well
         # within this budget. An infinite loop would exhaust max_steps instead.

@@ -22,6 +22,7 @@ import pytest
 
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.real_file_provider import RealFileIOProvider
+from interpreter.cobol.run_inputs import RunInputs
 from interpreter.run import run
 from tests.covers import covers
 from tests.integration.cobol_helpers import (
@@ -114,8 +115,7 @@ def _reader_program() -> list[str]:
 def _run(lines: list[str], data_path: Path, tmp_path: Path):
     provider = RealFileIOProvider(
         base_dir=tmp_path,
-        file_control=[],
-        path_overrides={"F1": data_path},
+        inputs=RunInputs(file_control=[], path_overrides={"F1": data_path}),
     )
     return run(to_fixed(lines), language="cobol", io_provider=provider, max_steps=8000)
 

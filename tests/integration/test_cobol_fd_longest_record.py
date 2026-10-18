@@ -10,6 +10,7 @@ import pytest
 
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.real_file_provider import RealFileIOProvider
+from interpreter.cobol.run_inputs import RunInputs
 from interpreter.run import run
 from tests.covers import covers
 from tests.integration.cobol_helpers import (
@@ -56,7 +57,7 @@ def test_records_longer_than_the_first_are_kept_whole(
         language="cobol",
         max_steps=20000,
         io_provider=RealFileIOProvider(
-            base_dir=tmp_path, path_overrides={"F": tmp_path / "fda"}
+            base_dir=tmp_path, inputs=RunInputs(path_overrides={"F": tmp_path / "fda"})
         ),
     )
     assert (capsys.readouterr().out, (tmp_path / "fda").read_bytes()) == (

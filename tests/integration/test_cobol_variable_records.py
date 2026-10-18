@@ -10,6 +10,7 @@ import pytest
 
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.real_file_provider import RealFileIOProvider
+from interpreter.cobol.run_inputs import RunInputs
 from interpreter.run import run
 from tests.covers import covers
 from tests.integration.cobol_helpers import (
@@ -85,7 +86,9 @@ def test_records_vary_in_length_by_their_depending_on_item(
         max_steps=50000,
         io_provider=RealFileIOProvider(
             base_dir=tmp_path,
-            path_overrides={"F": tmp_path / "vsq", "R": tmp_path / "vrl"},
+            inputs=RunInputs(
+                path_overrides={"F": tmp_path / "vsq", "R": tmp_path / "vrl"}
+            ),
         ),
     )
     assert (
