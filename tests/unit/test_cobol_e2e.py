@@ -930,7 +930,11 @@ class TestNumericValueVerification:
                 {
                     "name": "MAIN-PARA",
                     "statements": [
-                        {"type": "SUBTRACT", "operands": ["WS-B"], "targets": ["WS-A"]},
+                        {
+                            "type": "SUBTRACT",
+                            "subtrahends": ["WS-B"],
+                            "targets": ["WS-A"],
+                        },
                         {"type": "STOP_RUN"},
                     ],
                 },
@@ -1263,7 +1267,8 @@ class TestNumericValueVerification:
                     "statements": [
                         {
                             "type": "DIVIDE",
-                            "operands": ["7", "2"],
+                            "dividend": "7",
+                            "divisor": "2",
                             "giving": ["WS-Q"],
                             "remainder": "WS-R",
                         },

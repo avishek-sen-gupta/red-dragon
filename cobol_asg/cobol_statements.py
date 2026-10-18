@@ -297,9 +297,38 @@ class ArithmeticCorrespondingStatement:
         return result
 
 
+def _arithmetic_operands(data: dict) -> list:
+    match data["type"]:
+        case "SUBTRACT":
+            minuend = [data["minuend"]] if "minuend" in data else []
+            return [*minuend, *data["subtrahends"]]
+        case "DIVIDE":
+            dividend = [data["dividend"]] if "dividend" in data else []
+            return [*dividend, data["divisor"]]
+        case _:
+            return data.get("operands", [])
+
+
+def _named_operands(op: str, giving: bool, operands: list[dict]) -> dict:
+    match op, giving:
+        case "SUBTRACT", True:
+            return {"minuend": operands[0], "subtrahends": operands[1:]}
+        case "SUBTRACT", False:
+            return {"subtrahends": operands}
+        case "DIVIDE", True:
+            return {"dividend": operands[0], "divisor": operands[1]}
+        case "DIVIDE", False:
+            return {"divisor": operands[0]}
+        case _:
+            return {"operands": operands}
+
+
 @dataclass(frozen=True)
 class ArithmeticStatement:
-    """ADD/SUBTRACT/MULTIPLY/DIVIDE: sending operands, in-place targets or GIVING receivers."""
+    """ADD/SUBTRACT/MULTIPLY/DIVIDE: sending operands, in-place targets or GIVING receivers.
+    The bridge names SUBTRACT's and DIVIDE's operand roles; here a GIVING form's first
+    operand is the left side of the verb (the minuend, the dividend), and in place
+    the operands are what each target is combined with (subtrahends, the divisor)."""
 
     op: str
     operands: list[RefModOperand]
@@ -320,7 +349,7 @@ class ArithmeticStatement:
         )
         return cls(
             op=data["type"],
-            operands=[RefModOperand.from_dict(o) for o in data.get("operands", [])],
+            operands=[RefModOperand.from_dict(o) for o in _arithmetic_operands(data)],
             targets=[RefModOperand.from_dict(t) for t in data.get("targets", [])],
             giving=[RefModOperand.from_dict(g) for g in data.get("giving", [])],
             remainder=remainder,
@@ -334,7 +363,9 @@ class ArithmeticStatement:
     def to_dict(self) -> dict:
         result: dict = {
             "type": self.op,
-            "operands": [o.to_dict() for o in self.operands],
+            **_named_operands(
+                self.op, bool(self.giving), [o.to_dict() for o in self.operands]
+            ),
         }
         if self.targets:
             result["targets"] = [t.to_dict() for t in self.targets]
