@@ -213,6 +213,10 @@ class EmitContext:
     def compiled_at(self) -> datetime:
         return self._compiled_at
 
+    @property
+    def condition_index(self) -> ConditionNameIndex:
+        return self._condition_index
+
     @procedures.setter
     def procedures(self, value: ProcedureLabels) -> None:
         self._procedures = value
@@ -1683,9 +1687,7 @@ class EmitContext:
             lower_condition as _lower_condition,
         )
 
-        return _lower_condition(
-            self, condition, materialised, self._condition_index, span=span
-        )
+        return _lower_condition(self, condition, materialised, span=span)
 
     # ── File I/O Status Helper ────────────────────────────────────
 

@@ -32,7 +32,7 @@ def _setup_with_fields(cobol_fields: list[CobolField]):
     asg = CobolASG(data_fields=cobol_fields)
     sl = build_sectioned_layout(asg)
     materialised = lower_sectioned_data_division(ctx, sl, "TESTPGM")
-    return ctx, materialised, condition_index
+    return ctx, materialised
 
 
 class TestFigurativeConditions:
@@ -44,7 +44,7 @@ class TestFigurativeConditions:
         fields = [
             CobolField(name="WS-X", level=77, pic="X(8)", usage="DISPLAY", offset=0),
         ]
-        ctx, materialised, idx = _setup_with_fields(fields)
+        ctx, materialised = _setup_with_fields(fields)
         lower_condition(
             ctx,
             {
@@ -56,7 +56,6 @@ class TestFigurativeConditions:
                 },
             },
             materialised,
-            idx,
         )
         const_vals = [
             i.operands[0] for i in ctx.instructions if i.opcode == Opcode.CONST
@@ -72,7 +71,7 @@ class TestFigurativeConditions:
         fields = [
             CobolField(name="WS-X", level=77, pic="X(5)", usage="DISPLAY", offset=0),
         ]
-        ctx, materialised, idx = _setup_with_fields(fields)
+        ctx, materialised = _setup_with_fields(fields)
         lower_condition(
             ctx,
             {
@@ -84,7 +83,6 @@ class TestFigurativeConditions:
                 },
             },
             materialised,
-            idx,
         )
         const_vals = [
             i.operands[0] for i in ctx.instructions if i.opcode == Opcode.CONST
@@ -97,7 +95,7 @@ class TestFigurativeConditions:
         fields = [
             CobolField(name="WS-X", level=77, pic="X(4)", usage="DISPLAY", offset=0),
         ]
-        ctx, materialised, idx = _setup_with_fields(fields)
+        ctx, materialised = _setup_with_fields(fields)
         lower_condition(
             ctx,
             {
@@ -109,7 +107,6 @@ class TestFigurativeConditions:
                 },
             },
             materialised,
-            idx,
         )
         const_vals = [
             i.operands[0] for i in ctx.instructions if i.opcode == Opcode.CONST
@@ -126,7 +123,7 @@ class TestAbbreviatedConditions:
         fields = [
             CobolField(name="WS-X", level=77, pic="X(3)", usage="DISPLAY", offset=0),
         ]
-        ctx, materialised, idx = _setup_with_fields(fields)
+        ctx, materialised = _setup_with_fields(fields)
         node = {
             "op": "OR",
             "left": {
@@ -146,7 +143,7 @@ class TestAbbreviatedConditions:
                 },
             },
         }
-        lower_condition(ctx, node, materialised, idx)
+        lower_condition(ctx, node, materialised)
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
         or_ops = [i for i in binop_insts if i.operands[0] == "or"]
         eq_ops = [i for i in binop_insts if i.operands[0] == "=="]
@@ -162,7 +159,7 @@ class TestConditionLoweringBasic:
         fields = [
             CobolField(name="WS-A", level=77, pic="9(4)", usage="DISPLAY", offset=0),
         ]
-        ctx, materialised, idx = _setup_with_fields(fields)
+        ctx, materialised = _setup_with_fields(fields)
         result_reg = lower_condition(
             ctx,
             {
@@ -174,7 +171,6 @@ class TestConditionLoweringBasic:
                 },
             },
             materialised,
-            idx,
         )
         assert str(result_reg).startswith("%")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
@@ -191,9 +187,9 @@ class TestConditionLoweringBasic:
         fields = [
             CobolField(name="WS-A", level=77, pic="9(4)", usage="DISPLAY", offset=0),
         ]
-        ctx, materialised, idx = _setup_with_fields(fields)
+        ctx, materialised = _setup_with_fields(fields)
         result_reg = lower_condition(
-            ctx, {"not": False, "text": "UNKNOWN-TOKEN"}, materialised, idx
+            ctx, {"not": False, "text": "UNKNOWN-TOKEN"}, materialised
         )
         const_insts = [i for i in ctx.instructions if i.opcode == Opcode.CONST]
         last_const = const_insts[-1]
@@ -221,12 +217,11 @@ class TestConditionNameExpansion:
                 ],
             ),
         ]
-        ctx, materialised, idx = _setup_with_fields(fields)
+        ctx, materialised = _setup_with_fields(fields)
         result_reg = lower_condition(
             ctx,
             {"not": False, "condition_name": "STATUS-ACTIVE"},
             materialised,
-            idx,
         )
         assert str(result_reg).startswith("%")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
@@ -264,12 +259,11 @@ class TestConditionNameExpansion:
                 ],
             ),
         ]
-        ctx, materialised, idx = _setup_with_fields(fields)
+        ctx, materialised = _setup_with_fields(fields)
         result_reg = lower_condition(
             ctx,
             {"not": False, "condition_name": "STATUS-VALID"},
             materialised,
-            idx,
         )
         assert str(result_reg).startswith("%")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
@@ -296,12 +290,11 @@ class TestConditionNameExpansion:
                 ],
             ),
         ]
-        ctx, materialised, idx = _setup_with_fields(fields)
+        ctx, materialised = _setup_with_fields(fields)
         result_reg = lower_condition(
             ctx,
             {"not": False, "condition_name": "STATUS-ALPHA"},
             materialised,
-            idx,
         )
         assert str(result_reg).startswith("%")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
@@ -342,9 +335,9 @@ class TestConditionNameExpansion:
                 ],
             ),
         ]
-        ctx, materialised, idx = _setup_with_fields(fields)
+        ctx, materialised = _setup_with_fields(fields)
         result_reg = lower_condition(
-            ctx, {"not": False, "condition_name": "VALID-CODE"}, materialised, idx
+            ctx, {"not": False, "condition_name": "VALID-CODE"}, materialised
         )
         assert str(result_reg).startswith("%")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
@@ -376,9 +369,9 @@ class TestConditionNameExpansion:
         fields = [
             CobolField(name="WS-A", level=77, pic="9(4)", usage="DISPLAY", offset=0),
         ]
-        ctx, materialised, idx = _setup_with_fields(fields)
+        ctx, materialised = _setup_with_fields(fields)
         result_reg = lower_condition(
-            ctx, {"not": False, "text": "NONEXISTENT-COND"}, materialised, idx
+            ctx, {"not": False, "text": "NONEXISTENT-COND"}, materialised
         )
         const_insts = [i for i in ctx.instructions if i.opcode == Opcode.CONST]
         last_const = const_insts[-1]
@@ -410,7 +403,7 @@ class TestConditionNameExpansion:
                 ],
             ),
         ]
-        ctx, materialised, idx = _setup_with_fields(fields)
+        ctx, materialised = _setup_with_fields(fields)
         result_reg = lower_condition(
             ctx,
             {
@@ -422,7 +415,6 @@ class TestConditionNameExpansion:
                 },
             },
             materialised,
-            idx,
         )
         assert str(result_reg).startswith("%")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
