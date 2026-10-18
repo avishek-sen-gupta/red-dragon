@@ -333,7 +333,7 @@ fileignoreconfig:
 - filename: proleap-bridge/src/main/java/org/reddragon/bridge/SortSerializer.java
   checksum: 0933bfa8dec56ffbc6b9613b4acbcb0bc4a859695ba191ae2fd800e7f228f702
 - filename: interpreter/cobol/lower_sort.py
-  checksum: 31a820dda6f50df167febf504eb979071e74324ab76f0795fb686c33d1875e6c
+  checksum: 7dca6a2d09d7ee258fcd19a7ff01697316a85eb366cbbb6b3a513a14f09e7e96
 - filename: tests/unit/cobol/test_sort_key_values.py
   checksum: 624f02640dfca23ca6d2004236d8d1459cfc519d8a9267bcc811f0af25888b18
 - filename: interpreter/cobol/sort_key_values.py

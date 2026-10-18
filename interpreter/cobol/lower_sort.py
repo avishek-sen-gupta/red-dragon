@@ -30,7 +30,7 @@ from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.file_frame import FileFrame
 from interpreter.cobol.file_state import file_state
-from interpreter.cobol.file_verb_ir import emit_closed
+from interpreter.cobol.file_verb_ir import FileVerbIr, emit_closed
 from interpreter.cobol.ir_emitter import IrEmitter
 from interpreter.cobol.lower_io import lower_close, lower_open, lower_read, lower_write
 from interpreter.cobol.lower_perform import emit_perform_branch
@@ -41,6 +41,10 @@ from interpreter.cobol.sort_field import SortField
 from interpreter.cobol.sort_key_layout import sort_key_encoding
 from interpreter.cobol.sort_ordering import SortOrdering
 from interpreter.cobol.sort_pass_ir import SortPassIr
+
+
+def _nothing() -> None:
+    return
 
 
 def _first_record(ctx: EmitContext, sort_file: str) -> str:
@@ -88,15 +92,32 @@ class _SortLowering:
             self.materialised,
         )
 
+    def _verb(self, filename: str) -> FileVerbIr:
+        e = IrEmitter(self.ctx, self.stmt.span)
+        program = program_name(self.ctx._asg)
+        return FileVerbIr(e, file_state(program, filename), e.text(program))
+
+    def _if_opened(self, filename: str, transfer: Callable[[], None]) -> None:
+        v = self._verb(filename)
+        v.when(v.open_(), lambda: self._transferred(v, filename, transfer))
+
+    def _transferred(
+        self, v: FileVerbIr, filename: str, transfer: Callable[[], None]
+    ) -> None:
+        v.either(v.absent(), _nothing, transfer)
+        self._close(filename)
+
     def _copy_in(self, filename: str) -> None:
         self._open(OpenMode.INPUT, filename)
-        self._passes().copy(filename, self.stmt.file_name)
-        self._close(filename)
+        self._if_opened(
+            filename, partial(self._passes().copy, filename, self.stmt.file_name)
+        )
 
     def _copy_out(self, filename: str) -> None:
         self._open(OpenMode.OUTPUT, filename)
-        self._passes().copy(self.stmt.file_name, filename)
-        self._close(filename)
+        self._if_opened(
+            filename, partial(self._passes().copy, self.stmt.file_name, filename)
+        )
 
     def _perform(self, procedure: ProcedureRange) -> None:
         emit_perform_branch(
