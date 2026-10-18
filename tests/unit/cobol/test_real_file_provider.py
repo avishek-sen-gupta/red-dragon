@@ -15,11 +15,11 @@ from interpreter.cobol.access_result import AccessCondition
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.file_drivers import FileOrganizationDriver, open_driver
 from interpreter.cobol.file_frame import FileFrame
+from interpreter.cobol.io_provider import IOResult
 from interpreter.cobol.prime_key import PrimeKey
 from interpreter.cobol.real_file_provider import RealFileIOProvider
 from interpreter.cobol.record_shape import RecordShape
 from interpreter.cobol.run_inputs import RunInputs
-from interpreter.vm.vm import Operators
 from tests.covers import NotLanguageFeature, covers
 from tests.unit.cobol.declared_files import opened
 
@@ -262,11 +262,15 @@ def test_a_subclass_chooses_the_driver_each_open_of_each_file_uses(
 
 
 @covers(CobolFeature.ACCEPT)
-def test_accept_fills_the_receiving_area_from_successive_system_input_records(
+def test_accept_returns_each_system_input_record_then_the_end(
     tmp_path: Path,
 ) -> None:
     prov = RealFileIOProvider(
-        base_dir=tmp_path, inputs=RunInputs(system_input=["ABCD", "EFGH", "IJKL"])
+        base_dir=tmp_path, inputs=RunInputs(system_input=["ABCD", "EFGH"])
     )
-    filled = [prov._accept_area("SYSIN", length) for length in (6, 2, 3)]
-    assert filled == ["ABCDEF", "IJ", Operators.UNCOMPUTABLE]
+    assert [prov._accept("SYSIN") for _ in range(4)] == [
+        IOResult(AccessCondition.OK, "ABCD"),
+        IOResult(AccessCondition.OK, "EFGH"),
+        IOResult(AccessCondition.END_OF_FILE, None),
+        IOResult(AccessCondition.END_OF_FILE, None),
+    ]

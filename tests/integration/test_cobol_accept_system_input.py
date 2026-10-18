@@ -55,3 +55,37 @@ def test_accept_concatenates_records_and_stores_them_unedited(
         ),
     )
     assert capsys.readouterr().out == "ABCDEFGHIJMN01234567812  \n"
+
+
+@covers(CobolFeature.ACCEPT)
+def test_accept_stops_filling_where_the_input_ends(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    source = to_fixed(
+        [
+            "IDENTIFICATION DIVISION.",
+            "PROGRAM-ID. ACCEND.",
+            "DATA DIVISION.",
+            "WORKING-STORAGE SECTION.",
+            "01 SIX-AREA PIC X(6).",
+            "01 FOUR-AREA PIC X(4).",
+            "01 THREE-AREA PIC X(3) VALUE '---'.",
+            "PROCEDURE DIVISION.",
+            "MAIN-PARA.",
+            "    ACCEPT SIX-AREA.",
+            "    ACCEPT FOUR-AREA.",
+            "    ACCEPT THREE-AREA.",
+            "    DISPLAY SIX-AREA '|' FOUR-AREA '|' THREE-AREA.",
+            "    STOP RUN.",
+        ]
+    )
+    run(
+        source=source,
+        language="cobol",
+        max_steps=5000,
+        io_provider=RealFileIOProvider(
+            base_dir=tmp_path,
+            inputs=RunInputs(system_input=["ABCD", "EFGH", "IJ"]),
+        ),
+    )
+    assert capsys.readouterr().out == "ABCDEF|IJ  |---\n"

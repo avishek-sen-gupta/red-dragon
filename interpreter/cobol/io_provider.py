@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -45,7 +46,7 @@ class IOResult:
 
 # Dispatch table mapping __cobol_* function names to provider method names.
 _COBOL_IO_DISPATCH: dict[FuncName, str] = {
-    FuncName("__cobol_accept"): "_accept_area",
+    FuncName("__cobol_accept"): "_accept",
     FuncName("__cobol_declare_file"): "_declare_file",
     FuncName("__cobol_open_file"): "_open_file",
     FuncName("__cobol_close_file"): "_close_file",
@@ -131,17 +132,11 @@ class CobolIOProvider(ABC):
     ) -> IOResult:
         return IOResult(AccessCondition.OK, None)
 
-    def _accept_area(
-        self, from_device: str, length: int
-    ) -> str | Operators._Uncomputable:
-        """ACCEPT into a receiving area of ``length`` bytes: one message."""
-        return self._accept(from_device)
-
     @abstractmethod
-    def _accept(
-        self, from_device: str
-    ) -> Any:  # Any: str | _Uncomputable — VM I/O boundary
-        """ACCEPT — read input from a device (e.g. CONSOLE)."""
+    def _accept(self, from_device: str) -> IOResult | Operators._Uncomputable:
+        """ACCEPT: the device's next input record, END_OF_FILE when its input has
+        ended, UNCOMPUTABLE when the input is unknown. The lowering fills the
+        receiving area from successive records."""
         ...
 
     def _declare_file(self, frame: DataRecord, program: str) -> IOResult:
@@ -208,7 +203,7 @@ class StubFile:
 class NullIOProvider(CobolIOProvider):
     """Default provider — returns UNCOMPUTABLE for READ, IOResult(AccessCondition.OK, None) for all other ops."""
 
-    def _accept(self, from_device: str) -> Any:
+    def _accept(self, from_device: str) -> Operators._Uncomputable:
         return _UNCOMPUTABLE
 
     def _open_file(self, filename: str, mode: str, program: str) -> IOResult:
@@ -259,7 +254,7 @@ class StubIOProvider(CobolIOProvider):
         accept_values: list[str] = [],
         files: dict[str, dict[str, Any]] = {},
     ):
-        self._accept_queue: list[str] = list(accept_values)
+        self._accept_queue: Iterator[str] = iter(list(accept_values))
         self._files: dict[str, StubFile] = {
             name: StubFile(records=list(f.get("records", [])))
             for name, f in files.items()
@@ -271,15 +266,11 @@ class StubIOProvider(CobolIOProvider):
             self._files = {**self._files, filename: StubFile()}
         return self._files[filename]
 
-    def _accept(self, from_device: str) -> Any:
-        if self._accept_queue:
-            value = self._accept_queue.pop(0)
-            logger.info("StubIOProvider ACCEPT from %s → %r", from_device, value)
-            return value
-        logger.info(
-            "StubIOProvider ACCEPT from %s → UNCOMPUTABLE (queue empty)", from_device
+    def _accept(self, from_device: str) -> IOResult | Operators._Uncomputable:
+        return next(
+            (IOResult(AccessCondition.OK, value) for value in self._accept_queue),
+            _UNCOMPUTABLE,
         )
-        return _UNCOMPUTABLE
 
     def _open_file(self, filename: str, mode: str, program: str) -> IOResult:
         stub = self.get_file(filename)

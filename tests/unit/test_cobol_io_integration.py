@@ -3,7 +3,7 @@
 from interpreter.cfg import build_cfg
 from interpreter.cobol.access_result import AccessCondition
 from interpreter.cobol.features import CobolFeature
-from interpreter.cobol.io_provider import NullIOProvider, StubIOProvider
+from interpreter.cobol.io_provider import IOResult, NullIOProvider, StubIOProvider
 from interpreter.instructions import InstructionBase
 from interpreter.ir import CodeLabel, IRInstruction, Opcode
 from interpreter.register import Register
@@ -58,16 +58,16 @@ def _execute_with_provider(instructions, provider):
 class TestExecutorIOProviderDispatch:
     @covers(CobolFeature.IO_PROVIDER, CobolFeature.ACCEPT)
     def test_stub_accept_returns_concrete_value(self):
-        ir = _build_call_function_ir("__cobol_accept", "CONSOLE", 10)
+        ir = _build_call_function_ir("__cobol_accept", "CONSOLE")
         provider = StubIOProvider(accept_values=["HELLO"])
         vm = _execute_with_provider(ir, provider)
 
         result = unwrap(vm.current_frame.registers.get(Register("%result")))
-        assert result == "HELLO"
+        assert result == IOResult(AccessCondition.OK, "HELLO")
 
     @covers(CobolFeature.IO_PROVIDER, CobolFeature.ACCEPT)
     def test_stub_accept_empty_returns_symbolic(self):
-        ir = _build_call_function_ir("__cobol_accept", "CONSOLE", 10)
+        ir = _build_call_function_ir("__cobol_accept", "CONSOLE")
         provider = StubIOProvider(accept_values=[])
         vm = _execute_with_provider(ir, provider)
 
@@ -78,7 +78,7 @@ class TestExecutorIOProviderDispatch:
 
     @covers(CobolFeature.IO_PROVIDER, CobolFeature.ACCEPT)
     def test_null_provider_returns_symbolic(self):
-        ir = _build_call_function_ir("__cobol_accept", "CONSOLE", 10)
+        ir = _build_call_function_ir("__cobol_accept", "CONSOLE")
         provider = NullIOProvider()
         vm = _execute_with_provider(ir, provider)
 
@@ -89,8 +89,6 @@ class TestExecutorIOProviderDispatch:
 
     @covers(CobolFeature.IO_PROVIDER, CobolFeature.READ)
     def test_stub_read_returns_record(self):
-        from interpreter.cobol.io_provider import IOResult
-
         ir = _build_call_function_ir("__cobol_read_record", "CUST-FILE", "", "PGM")
         provider = StubIOProvider(files={"CUST-FILE": {"records": ["RECORD-DATA"]}})
         vm = _execute_with_provider(ir, provider)
