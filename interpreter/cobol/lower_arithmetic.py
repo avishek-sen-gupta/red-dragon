@@ -1808,7 +1808,7 @@ def _set_condition_name(
     ctx, span = scope.ctx, scope.span
     truth = str(value_str).strip().upper()
     condition_name = target.name
-    entry = ctx._condition_index.lookup(condition_name, target.qualifiers)
+    entry = ctx.condition_index.lookup(condition_name, target.qualifiers)
     parent = replace(target, name=entry.parent.name, qualifiers=entry.parent.qualifiers)
 
     if truth == "FALSE":
@@ -1930,7 +1930,7 @@ def _set_to(scope: LoweringScope, target: SetOperand, value: SetOperand) -> None
     if ctx.switches.has_mnemonic(target_name):
         _set_switch(scope, target_name, value)
         return
-    if ctx._condition_index.has_condition(target_name):
+    if ctx.condition_index.has_condition(target_name):
         _set_condition_name(scope, target, value.text)
         return
     if not ctx.has_field(target_name, scope.materialised):

@@ -37,7 +37,7 @@ from interpreter.cobol.class_test_ir import (
     emit_zoned_is_numeric,
 )
 from interpreter.cobol.cobol_constants import BuiltinName
-from interpreter.cobol.condition_name_index import ConditionEntry, ConditionNameIndex
+from interpreter.cobol.condition_name_index import ConditionEntry
 from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.digit_image_ir import emit_field_digit_image
 from interpreter.cobol.emit_context import EmitContext
@@ -247,33 +247,25 @@ def _expand_condition_name(
     return _emit_or_chain(scope, value_regs)
 
 
-_NO_CONDITION_NAMES = ConditionNameIndex({})
-
-
 def lower_condition(
     ctx: EmitContext,
     condition: dict,
     materialised: MaterialisedSectionedLayout,
-    condition_index: ConditionNameIndex = _NO_CONDITION_NAMES,
     *,
     span: SourceSpan | None = None,
 ) -> Register:
     """Lower a structured condition dict to a register holding a boolean."""
-    return _lower_condition_node(
-        LoweringScope(ctx, materialised, span), condition, condition_index
-    )
+    return _lower_condition_node(LoweringScope(ctx, materialised, span), condition)
 
 
-def _lower_condition_node(
-    scope: LoweringScope, node: dict, condition_index: ConditionNameIndex
-) -> Register:
+def _lower_condition_node(scope: LoweringScope, node: dict) -> Register:
     """Recursively walk a structured condition dict node and emit IR."""
     ctx, span = scope.ctx, scope.span
     if "op" in node:
         # Compound: {"op": "AND"/"OR", "left": {...}, "right": {...}}
         op = node["op"]
-        left_reg = _lower_condition_node(scope, node["left"], condition_index)
-        right_reg = _lower_condition_node(scope, node["right"], condition_index)
+        left_reg = _lower_condition_node(scope, node["left"])
+        right_reg = _lower_condition_node(scope, node["right"])
         result = ctx.fresh_reg()
         ctx.emit_inst(
             Binop(
@@ -294,10 +286,10 @@ def _lower_condition_node(
         subscripts = tuple(
             expr_from_dict(s) for s in node.get("condition_subscripts", [])
         )
-        if condition_index.has_condition(name):
+        if ctx.condition_index.has_condition(name):
             inner = _expand_condition_name(
                 scope,
-                condition_index.lookup(
+                ctx.condition_index.lookup(
                     name, tuple(node.get("condition_qualifiers", ()))
                 ),
                 subscripts,
@@ -306,10 +298,10 @@ def _lower_condition_node(
             inner = _lower_switch_condition(scope, ctx.switches.condition(name))
         else:
             # Fall back to string lowering for unresolved names
-            inner = _lower_condition_str(scope, name, condition_index)
+            inner = _lower_condition_str(scope, name)
     elif "condition" in node:
         # Nested parenthesised condition
-        inner = _lower_condition_node(scope, node["condition"], condition_index)
+        inner = _lower_condition_node(scope, node["condition"])
     elif "relation" in node:
         # Structured relation: {"left": <expr>, "op": "...", "right": <expr>}
         inner = _lower_relation_node(scope, node["relation"])
@@ -332,7 +324,7 @@ def _lower_condition_node(
         inner = _lower_sign_condition(scope, node)
     else:
         # Fallback: flat text (CLASS/SIGN conditions, EVALUATE/SEARCH callers)
-        inner = _lower_condition_str(scope, node.get("text", ""), condition_index)
+        inner = _lower_condition_str(scope, node.get("text", ""))
 
     if not not_flag:
         return inner
@@ -928,9 +920,7 @@ def _split_condition_subscript(token: str) -> tuple[str, tuple]:
     return name, subs
 
 
-def _lower_condition_str(
-    scope: LoweringScope, condition: str, condition_index: ConditionNameIndex
-) -> Register:
+def _lower_condition_str(scope: LoweringScope, condition: str) -> Register:
     """Lower a flat condition string to a boolean register.
 
     Supports:
@@ -943,9 +933,9 @@ def _lower_condition_str(
 
     if len(parts) == 1:
         name, subscripts = _split_condition_subscript(parts[0])
-        if condition_index.has_condition(name):
+        if ctx.condition_index.has_condition(name):
             return _expand_condition_name(
-                scope, condition_index.lookup(name), subscripts
+                scope, ctx.condition_index.lookup(name), subscripts
             )
 
     if len(parts) >= 3:
