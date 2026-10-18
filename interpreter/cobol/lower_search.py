@@ -9,6 +9,7 @@ from cobol_asg.ref_mod import RefModOperand
 from interpreter.cobol.condition_lowering import _lower_condition_str
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.field_resolution import ResolvedFieldRef
+from interpreter.cobol.lowering_scope import LoweringScope
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.instructions import (
     Binop,
@@ -81,79 +82,65 @@ def _companion_of(stmt: SearchStatement, search_index: RefModOperand) -> RefModO
 
 
 def _store_number(
-    ctx: EmitContext,
-    stmt: SearchStatement,
-    item: RefModOperand,
-    value_reg: Register,
-    materialised: MaterialisedSectionedLayout,
+    scope: LoweringScope, item: RefModOperand, value_reg: Register
 ) -> None:
-    ref, region_reg = _resolve(ctx, stmt, item, materialised)
-    ctx.emit_encode_and_write(
+    ref, region_reg = _resolve(scope, item)
+    scope.ctx.emit_encode_and_write(
         region_reg,
         ref.fl,
-        ctx.emit_to_string(value_reg, span=stmt.span),
+        scope.ctx.emit_to_string(value_reg, span=scope.span),
         ref.offset_reg,
         extent=ref.extent,
-        span=stmt.span,
+        span=scope.span,
     )
 
 
 def _resolve(
-    ctx: EmitContext,
-    stmt: SearchStatement,
-    item: RefModOperand,
-    materialised: MaterialisedSectionedLayout,
+    scope: LoweringScope, item: RefModOperand
 ) -> tuple[ResolvedFieldRef, Register]:
-    return ctx.resolve_field_ref(
-        item.name, materialised, item.qualifiers, item.subscripts, span=stmt.span
+    return scope.ctx.resolve_field_ref(
+        item.name,
+        scope.materialised,
+        item.qualifiers,
+        item.subscripts,
+        span=scope.span,
     )
 
 
-def _decode(
-    ctx: EmitContext,
-    stmt: SearchStatement,
-    item: RefModOperand,
-    materialised: MaterialisedSectionedLayout,
-) -> Register:
-    ref, region_reg = _resolve(ctx, stmt, item, materialised)
-    return ctx.emit_decode_field(
-        region_reg, ref.fl, ref.offset_reg, extent=ref.extent, span=stmt.span
+def _decode(scope: LoweringScope, item: RefModOperand) -> Register:
+    ref, region_reg = _resolve(scope, item)
+    return scope.ctx.emit_decode_field(
+        region_reg, ref.fl, ref.offset_reg, extent=ref.extent, span=scope.span
     )
 
 
-def _advance(
-    ctx: EmitContext,
-    stmt: SearchStatement,
-    item: RefModOperand,
-    materialised: MaterialisedSectionedLayout,
-) -> None:
+def _advance(scope: LoweringScope, item: RefModOperand) -> None:
+    ctx, span = scope.ctx, scope.span
     incremented = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
             result_reg=incremented,
             operator=resolve_binop("+"),
-            left=_decode(ctx, stmt, item, materialised),
-            right=ctx.const_to_reg(1, span=stmt.span),
+            left=_decode(scope, item),
+            right=ctx.const_to_reg(1, span=span),
         ),
-        span=stmt.span,
+        span=span,
     )
-    _store_number(ctx, stmt, item, incremented, materialised)
+    _store_number(scope, item, incremented)
 
 
 def _occurrence_bound(
-    ctx: EmitContext,
-    stmt: SearchStatement,
-    occurs: int,
-    materialised: MaterialisedSectionedLayout,
+    scope: LoweringScope, table: RefModOperand, occurs: int
 ) -> Register:
     """The highest occurrence the search may reach: the OCCURS DEPENDING ON
     object's current value for a variable table, else the OCCURS count."""
-    depending_on = materialised.resolve(stmt.table.name, stmt.table.qualifiers)[
+    materialised = scope.materialised
+    depending_on = materialised.resolve(table.name, table.qualifiers)[
         0
     ].occurs_depending_on
-    if depending_on.name and ctx.has_field(depending_on.name, materialised):
-        return _decode(ctx, stmt, depending_on, materialised)
-    return ctx.const_to_reg(occurs, span=stmt.span)
+    if depending_on.name and scope.ctx.has_field(depending_on.name, materialised):
+        return _decode(scope, depending_on)
+    return scope.ctx.const_to_reg(occurs, span=scope.span)
 
 
 def lower_search(
@@ -162,6 +149,7 @@ def lower_search(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """SEARCH table VARYING index WHEN cond ... AT END ..."""
+    scope = LoweringScope(ctx, materialised, stmt.span)
     span = stmt.span
     loop_label = ctx.fresh_label("search_loop")
     end_label = ctx.fresh_label("search_end")
@@ -225,15 +213,15 @@ def lower_search(
         )
         max_reg = ctx.const_to_reg(bound_limit, span=span)
     else:
-        max_reg = _occurrence_bound(ctx, stmt, bound_limit, materialised)
+        max_reg = _occurrence_bound(scope, stmt.table, bound_limit)
 
     if stmt.search_all and advance.name:
-        _store_number(ctx, stmt, advance, ctx.const_to_reg(1, span=span), materialised)
+        _store_number(scope, advance, ctx.const_to_reg(1, span=span))
 
     ctx.emit_inst(Label_(label=loop_label), span=span)
 
     if bound_index.name:
-        bound_ref, bound_rr = _resolve(ctx, stmt, bound_index, materialised)
+        bound_ref, bound_rr = _resolve(scope, bound_index)
         current_reg = ctx.emit_decode_field(
             bound_rr,
             bound_ref.fl,
@@ -296,9 +284,9 @@ def lower_search(
     ctx.emit_inst(Label_(label=increment_label), span=span)
 
     if advance.name:
-        _advance(ctx, stmt, advance, materialised)
+        _advance(scope, advance)
     if companion.name and ctx.has_field(companion.name, materialised):
-        _advance(ctx, stmt, companion, materialised)
+        _advance(scope, companion)
 
     if not bound_index.name:
         ctr_reg2 = ctx.fresh_reg()
