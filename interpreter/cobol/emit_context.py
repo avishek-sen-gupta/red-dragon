@@ -538,7 +538,9 @@ class EmitContext:
         # Deferred import: condition_lowering imports EmitContext, so a top-level
         # import would cycle.
         from interpreter.cobol.condition_lowering import lower_expr_node
+        from interpreter.cobol.lowering_scope import LoweringScope
 
+        scope = LoweringScope(self, materialised, span)
         base_name = name
         match, region_reg, region = materialised.resolve_match(base_name, qualifiers)
         fl = match.storage
@@ -589,7 +591,7 @@ class EmitContext:
 
         if len(subscripts) == 1:
             # Single subscript — original 3-BINOP form: (idx-1)*stride + base.
-            idx_reg = lower_expr_node(self, subscripts[0], materialised, span=span)
+            idx_reg = lower_expr_node(scope, subscripts[0])
             idx_minus_one = self.fresh_reg()
             self.emit_inst(
                 Binop(
@@ -627,7 +629,7 @@ class EmitContext:
             # add the field's base offset once at the end.
             total_disp_reg = self.const_to_reg(0, span=span)
             for sub_node, stride_k in zip(subscripts, strides, strict=False):
-                idx_reg = lower_expr_node(self, sub_node, materialised, span=span)
+                idx_reg = lower_expr_node(scope, sub_node)
                 idx_minus_one = self.fresh_reg()
                 self.emit_inst(
                     Binop(
@@ -1672,22 +1674,6 @@ class EmitContext:
             span=span,
         )
         return result
-
-    # ── Condition Lowering ───────────────────────────────────────
-
-    def lower_condition(
-        self,
-        condition: dict,
-        materialised: MaterialisedSectionedLayout,
-        *,
-        span: SourceSpan | None = None,
-    ) -> Register:
-        """Lower a condition — delegates to condition_lowering module."""
-        from interpreter.cobol.condition_lowering import (
-            lower_condition as _lower_condition,
-        )
-
-        return _lower_condition(self, condition, materialised, span=span)
 
     # ── File I/O Status Helper ────────────────────────────────────
 

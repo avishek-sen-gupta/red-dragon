@@ -2,11 +2,13 @@
 
 from cobol_asg.asg_types import CobolASG
 from cobol_asg.cobol_expression import FunctionNode, LiteralNode
+from interpreter.cobol.arithmetic_precision import ArithmeticPrecision
 from interpreter.cobol.byte_builtins import BYTE_BUILTINS
 from interpreter.cobol.condition_lowering import lower_expr_node
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.lower_data_division import lower_sectioned_data_division
+from interpreter.cobol.lowering_scope import LoweringScope
 from interpreter.cobol.sectioned_layout import build_sectioned_layout
 from interpreter.cobol.standard_deviation_ir import emit_standard_deviation
 from interpreter.cobol.statement_dispatch import dispatch_statement
@@ -50,12 +52,11 @@ def test_standard_deviation_lowers_to_variance_and_square_root():
         ctx, build_sectioned_layout(CobolASG(data_fields=[])), "T"
     )
     lower_expr_node(
-        ctx,
+        LoweringScope(ctx, materialised, None),
         FunctionNode(
             name="STANDARD-DEVIATION", args=(LiteralNode("2"), LiteralNode("4"))
         ),
-        materialised,
-        receiver_decimals=0,
+        ArithmeticPrecision(dmax=0, floating=False),
     )
     assert [
         str(i.func_name)

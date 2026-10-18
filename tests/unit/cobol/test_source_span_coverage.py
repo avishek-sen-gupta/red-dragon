@@ -136,15 +136,15 @@ def _import_aliases(tree: ast.AST) -> dict[str, str]:
 
     ``_span_accepting_functions()`` indexes by the name a function is
     *defined* with. A call site written through an aliased import uses a
-    different name, e.g. ``emit_context.py`` does::
+    different name, e.g.::
 
-        from interpreter.cobol.condition_lowering import (
-            lower_condition as _lower_condition,
+        from interpreter.cobol.lower_arithmetic import (
+            eval_ref_mod_expr as _eval_ref_mod_expr,
         )
-        return _lower_condition(..., span=span)
+        return _eval_ref_mod_expr(..., span=span)
 
-    ``_lower_condition`` never matches the accepting set's ``lower_condition``
-    entry, so the call is invisible to the lint below -- it could drop
+    ``_eval_ref_mod_expr`` never matches the accepting set's
+    ``eval_ref_mod_expr`` entry, so the call is invisible to the lint below -- it could drop
     ``span=`` and nothing would notice. Imports in this codebase are
     frequently function-local (to dodge circular imports), so this walks the
     whole tree rather than only module-level statements.
@@ -184,22 +184,28 @@ def test_every_call_to_a_span_accepting_function_passes_a_span():
     assert offenders == [], "Span dropped across a call:\n  " + "\n  ".join(offenders)
 
 
+ALIASED_CALL_SOURCE = """\
+def lower(ctx, expr, materialised, span):
+    from interpreter.cobol.lower_arithmetic import (
+        eval_ref_mod_expr as _eval_ref_mod_expr,
+    )
+    return _eval_ref_mod_expr(ctx, expr, materialised, span=span)
+"""
+
+
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_import_alias_resolution_maps_aliased_calls_to_their_real_name():
     """Guards the alias resolver itself.
 
-    emit_context.py's EmitContext.lower_condition imports the real
-    lower_condition under the local alias _lower_condition and calls it
-    under that alias. If _import_aliases ever stopped mapping
-    _lower_condition -> lower_condition, the lint above would silently stop
-    checking that call site again -- exactly the hole this fix closes.
+    A function-local import of a span-accepting function under a local alias,
+    called under that alias, is the shape the lint above must still see. If
+    _import_aliases ever stopped mapping _eval_ref_mod_expr ->
+    eval_ref_mod_expr, such a call site would silently stop being checked.
     """
-    path = LOWERING_DIR / "emit_context.py"
-    tree = ast.parse(path.read_text())
-    aliases = _import_aliases(tree)
-    assert aliases.get("_lower_condition") == "lower_condition"
+    aliases = _import_aliases(ast.parse(ALIASED_CALL_SOURCE))
+    assert aliases.get("_eval_ref_mod_expr") == "eval_ref_mod_expr"
     accepting = _span_accepting_functions()
-    assert aliases["_lower_condition"] in accepting
+    assert aliases["_eval_ref_mod_expr"] in accepting
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
@@ -210,7 +216,7 @@ def test_span_accepting_function_set_is_populated():
         "emit_inst",
         "const_to_reg",
         "resolve_field_ref",
-        "lower_expr_node",
+        "eval_ref_mod_expr",
     } <= accepting
 
 

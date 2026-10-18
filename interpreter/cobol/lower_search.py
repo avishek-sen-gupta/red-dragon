@@ -6,7 +6,7 @@ import logging
 
 from cobol_asg.cobol_statements import SearchStatement
 from cobol_asg.ref_mod import RefModOperand
-from interpreter.cobol.condition_lowering import _lower_condition_str
+from interpreter.cobol.condition_lowering import _lower_condition_str, lower_condition
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.field_resolution import ResolvedFieldRef
 from interpreter.cobol.lowering_scope import LoweringScope
@@ -260,7 +260,7 @@ def lower_search(
         if not when.condition:
             continue
         if isinstance(when.condition, dict):
-            cond_reg = ctx.lower_condition(when.condition, materialised, span=span)
+            cond_reg = lower_condition(scope, when.condition)
         else:
             cond_reg = _lower_condition_str(scope, when.condition)
         when_true = ctx.fresh_label("search_when_true")

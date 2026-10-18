@@ -19,6 +19,7 @@ from cobol_asg.range_object import RangeObject
 from cobol_asg.selection_condition import SelectionCondition
 from cobol_asg.truth_value import TruthValue
 from cobol_asg.value_object import ValueObject
+from interpreter.cobol.condition_lowering import lower_condition
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.lowering_scope import LoweringScope
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
@@ -114,9 +115,7 @@ def _selection_pair(
     if isinstance(subject, ExpressionSubject) and isinstance(
         obj, (ValueObject, RangeObject)
     ):
-        return scope.ctx.lower_condition(
-            _value_test(subject.expr, obj), scope.materialised, span=scope.span
-        )
+        return lower_condition(scope, _value_test(subject.expr, obj))
     object_truth = _object_truth(scope, obj)
     if isinstance(subject, ExpressionSubject):
         return object_truth
@@ -146,18 +145,14 @@ def _subject_truth(
 ) -> Register:
     if isinstance(subject, TruthValue):
         return scope.ctx.const_to_reg(subject.value, span=scope.span)
-    return scope.ctx.lower_condition(
-        subject.condition, scope.materialised, span=scope.span
-    )
+    return lower_condition(scope, subject.condition)
 
 
 def _object_truth(scope: LoweringScope, obj: SelectionObject) -> Register:
     if isinstance(obj, TruthValue):
         return scope.ctx.const_to_reg(obj.value, span=scope.span)
     if isinstance(obj, SelectionCondition):
-        return scope.ctx.lower_condition(
-            obj.condition, scope.materialised, span=scope.span
-        )
+        return lower_condition(scope, obj.condition)
     raise ValueError(
         "An EVALUATE object answering TRUE, FALSE or a condition must be a "
         "condition, TRUE or FALSE"

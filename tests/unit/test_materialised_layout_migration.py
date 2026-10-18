@@ -13,10 +13,12 @@ from cobol_asg.cobol_statements import (
 )
 from cobol_asg.operand_kind import OperandKind
 from cobol_asg.ref_mod import RefModOperand
+from interpreter.cobol.condition_lowering import lower_condition
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.lower_data_division import (
     lower_sectioned_data_division,
 )
+from interpreter.cobol.lowering_scope import LoweringScope
 from interpreter.cobol.sectioned_layout import (
     MaterialisedSectionedLayout,
     build_sectioned_layout,
@@ -147,7 +149,7 @@ class TestEmitContextLowerStatement:
 # ── EmitContext.lower_condition with MaterialisedSectionedLayout ───────────
 
 
-class TestEmitContextLowerCondition:
+class TestLowerConditionWithMaterialised:
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_lower_condition_with_materialised_emits_binop(self):
         asg = CobolASG(data_fields=[_make_field("WS-A", pic="9(4)")])
@@ -163,7 +165,7 @@ class TestEmitContextLowerCondition:
                 "right": {"kind": "lit", "value": "10"},
             },
         }
-        result_reg = ctx.lower_condition(condition, materialised)
+        result_reg = lower_condition(LoweringScope(ctx, materialised, None), condition)
 
         assert str(result_reg).startswith("%")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]

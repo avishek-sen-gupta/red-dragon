@@ -20,6 +20,7 @@ from cobol_asg.cobol_expression import (
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.lower_data_division import lower_sectioned_data_division
+from interpreter.cobol.lowering_scope import LoweringScope
 from interpreter.cobol.sectioned_layout import build_sectioned_layout
 from interpreter.cobol.statement_dispatch import dispatch_statement
 from interpreter.instructions import Binop, Const
@@ -249,7 +250,7 @@ def test_lower_expr_node_threads_2d_subscripts():
         name="WS-CELL", subscripts=(FieldRefNode("I"), FieldRefNode("J"))
     )
     n_before = len(ctx.instructions)
-    result_reg = lower_expr_node(ctx, node, materialised)
+    result_reg = lower_expr_node(LoweringScope(ctx, materialised, None), node)
     assert result_reg is not None
     assert len(ctx.instructions) > n_before
 
@@ -263,7 +264,7 @@ def test_lower_expr_node_threads_single_subscript_happy_path():
     ctx, materialised = _occurs_ctx()
     node = FieldRefNode(name="WS-ELEM", subscripts=(FieldRefNode("WS-IDX"),))
     n_before = len(ctx.instructions)
-    result_reg = lower_expr_node(ctx, node, materialised)
+    result_reg = lower_expr_node(LoweringScope(ctx, materialised, None), node)
     assert result_reg is not None
     assert len(ctx.instructions) > n_before
 
