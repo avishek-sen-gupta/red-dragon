@@ -539,7 +539,11 @@ class TestIfElseExecution:
                                 "relation": {
                                     "left": {"kind": "ref", "name": "WS-A"},
                                     "op": ">",
-                                    "right": {"kind": "lit", "value": "0"},
+                                    "right": {
+                                        "kind": "lit",
+                                        "value": "0",
+                                        "numeric": True,
+                                    },
                                 },
                             },
                             "children": [
@@ -618,7 +622,11 @@ class TestIfElseExecution:
                                 "relation": {
                                     "left": {"kind": "ref", "name": "WS-A"},
                                     "op": ">",
-                                    "right": {"kind": "lit", "value": "10"},
+                                    "right": {
+                                        "kind": "lit",
+                                        "value": "10",
+                                        "numeric": True,
+                                    },
                                 },
                             },
                             "children": [
@@ -755,7 +763,11 @@ class TestPerformUntilExecution:
                                 "relation": {
                                     "left": {"kind": "ref", "name": "WS-A"},
                                     "op": ">",
-                                    "right": {"kind": "lit", "value": "2"},
+                                    "right": {
+                                        "kind": "lit",
+                                        "value": "2",
+                                        "numeric": True,
+                                    },
                                 },
                             },
                             "test_before": True,
@@ -835,7 +847,11 @@ class TestPerformVaryingExecution:
                                 "relation": {
                                     "left": {"kind": "ref", "name": "WS-IDX"},
                                     "op": ">",
-                                    "right": {"kind": "lit", "value": "3"},
+                                    "right": {
+                                        "kind": "lit",
+                                        "value": "3",
+                                        "numeric": True,
+                                    },
                                 },
                             },
                             "test_before": True,

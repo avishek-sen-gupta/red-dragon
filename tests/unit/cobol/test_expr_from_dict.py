@@ -78,7 +78,7 @@ class TestExprFromDict:
         result = expr_from_dict({"kind": "neg", "expr": {"kind": "lit", "value": "5"}})
         assert isinstance(result, BinOpNode)
         assert result.op == "*"
-        assert result.left == LiteralNode(value="-1")
+        assert result.left == LiteralNode(value="-1", numeric=True)
         assert result.right == LiteralNode(value="5")
 
     @covers(CobolFeature.COMPUTE, CobolFeature.REFERENCE_MODIFICATION)
@@ -200,6 +200,23 @@ class TestExprFromDict:
             {"kind": "dfhresp", "condition": "NOTFND"},
         ):
             assert expr_to_dict(expr_from_dict(d)) == d
+
+    @covers(CobolFeature.IF_ELSE, CobolFeature.EVALUATE)
+    def test_a_literal_keeps_its_numeric_kind_through_the_round_trip(self) -> None:
+        numeric = {"kind": "lit", "value": "5", "numeric": True}
+        nonnumeric = {"kind": "lit", "value": "'5'"}
+
+        assert (
+            expr_from_dict(numeric),
+            expr_from_dict(nonnumeric),
+            expr_to_dict(expr_from_dict(numeric)),
+            expr_to_dict(expr_from_dict(nonnumeric)),
+        ) == (
+            LiteralNode(value="5", numeric=True),
+            LiteralNode(value="'5'", numeric=False),
+            numeric,
+            nonnumeric,
+        )
 
 
 @covers(CobolFeature.INTRINSIC_FUNCTION, CobolFeature.SUBSCRIPT_ACCESS)

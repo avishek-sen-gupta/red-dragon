@@ -88,7 +88,7 @@ def _whens(statement: CobolStatementType) -> list[WhenStatement]:
 
 
 def _value(literal: str) -> ValueObject:
-    return ValueObject(value=LiteralNode(value=literal))
+    return ValueObject(value=LiteralNode(value=literal, numeric=True))
 
 
 @covers(CobolFeature.EVALUATE)
@@ -106,7 +106,12 @@ def test_a_stacked_when_is_one_when_with_one_body() -> None:
         [alt.children for alt in (*first.alternatives, *second.alternatives)],
     ) == (
         ((_value("1"),), [(_value("2"),)]),
-        (RangeObject(low=LiteralNode(value="3"), high=LiteralNode(value="4")),),
+        (
+            RangeObject(
+                low=LiteralNode(value="3", numeric=True),
+                high=LiteralNode(value="4", numeric=True),
+            ),
+        ),
         [(_value("7"),)],
         (1, 1),
         1,
