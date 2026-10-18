@@ -134,6 +134,8 @@ make test    # full suite; builds the JAR first if missing
 
 `make help` lists the other targets (`jar`, `jar-force`, `parser`, `fmt`, `lint`). The JAR lands at `proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar`.
 
+The parser is installed into the local Maven repository, `~/.m2/repository` by default. Set `MAVEN_REPO_LOCAL=<dir>` to use another one: the parser staleness check and every `mvn` call (Makefile and `proleap-bridge/build.sh`) then use it. Give each parallel worktree its own, or their builds overwrite each other's installed parser.
+
 ### Minimal build (without COBOL)
 
 ```bash
