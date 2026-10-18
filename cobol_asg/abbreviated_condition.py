@@ -80,6 +80,13 @@ def resolve_condition(written: Mapping) -> dict:
     return reduce(_link, written["rest"], start).tree()
 
 
+def negated_condition(condition: Mapping) -> dict:
+    """The condition with NOT applied: an atom's own NOT flips, a compound is wrapped."""
+    if "op" in condition:
+        return {"not": True, "condition": dict(condition)}
+    return {**condition, "not": not condition.get("not", False)}
+
+
 def _link(chain: _Chain, link: Mapping) -> _Chain:
     if "atom" in link:
         return _atom_link(chain, link["bool"], link["atom"])

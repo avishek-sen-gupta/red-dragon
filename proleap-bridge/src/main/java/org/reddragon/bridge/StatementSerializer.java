@@ -1053,7 +1053,7 @@ public final class StatementSerializer {
             subject.add("condition", serializeConditionNode((ConditionValueStmt) vs));
             return subject;
         }
-        JsonObject conditionName = conditionNameOf(vs, false);
+        JsonObject conditionName = conditionNameOf(vs);
         if (conditionName != null) {
             subject.addProperty("kind", "condition");
             subject.add("condition", conditionName);
@@ -1096,9 +1096,12 @@ public final class StatementSerializer {
             return object;
         }
         ValueStmt value = cond.getValue().getValueStmt();
-        JsonObject conditionName = conditionNameOf(value, cond.isNot());
+        JsonObject conditionName = conditionNameOf(value);
         if (conditionName != null) {
             object.addProperty("kind", "condition");
+            if (cond.isNot()) {
+                object.addProperty("not", true);
+            }
             object.add("condition", conditionName);
             return object;
         }
@@ -1126,7 +1129,7 @@ public final class StatementSerializer {
      * reads it as an identifier, so only name resolution tells the two apart.
      * Null for any other value.
      */
-    private static JsonObject conditionNameOf(ValueStmt vs, boolean not) {
+    private static JsonObject conditionNameOf(ValueStmt vs) {
         if (!(vs instanceof CallValueStmt)) {
             return null;
         }
@@ -1136,7 +1139,7 @@ public final class StatementSerializer {
             return null;
         }
         JsonObject condition = new JsonObject();
-        condition.addProperty("not", not);
+        condition.addProperty("not", false);
         condition.addProperty("condition_name", extractCallName(call));
         JsonArray subscripts = extractSubscripts(call);
         if (subscripts.size() > 0) {
