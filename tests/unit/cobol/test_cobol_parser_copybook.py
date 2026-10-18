@@ -128,4 +128,4 @@ def test_get_cobol_frontend_builds_a_proleap_backed_frontend():
     assert type(frontend) is CobolFrontend
     assert type(frontend._parser) is ProLeapCobolParser
     assert frontend._parser._copybook_dirs == [Path("/proj/cpy")]
-    assert frontend._tolerant is True
+    assert frontend._options.tolerant is True

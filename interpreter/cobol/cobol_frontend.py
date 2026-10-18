@@ -16,12 +16,11 @@ import logging
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
-from cobol_asg.addressing_mode import AddressingMode
 from cobol_asg.asg_types import CobolASG
 from cobol_asg.cobol_parser import CobolParser
 from cobol_asg.cobol_statements import dialect_parsers_in_scope
 from cobol_asg.frontend_extension import DialectParser
-from cobol_asg.lp32 import LP32_MODE
+from interpreter.cobol.compile_options import CompileOptions
 from interpreter.cobol.condition_name_index import build_condition_index_over
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.field_resolution import ResolvedFieldRef
@@ -32,11 +31,11 @@ from interpreter.cobol.lower_data_division import (
     lower_sectioned_data_division,
 )
 from interpreter.cobol.lower_procedure import lower_procedure_division
-from interpreter.cobol.program_object import UNNAMED_PROGRAM, program_name
 from interpreter.cobol.lower_program_init import (
     lower_program_init,
     lower_ws_from_singleton,
 )
+from interpreter.cobol.program_object import UNNAMED_PROGRAM, program_name
 from interpreter.cobol.run_unit import run_unit_allocation
 from interpreter.cobol.sectioned_layout import (
     MaterialisedSectionedLayout,
@@ -58,6 +57,7 @@ if TYPE_CHECKING:
     from cobol_asg.cobol_expression import ExprNode
 
 logger = logging.getLogger(__name__)
+_DEFAULT_OPTIONS = CompileOptions()
 
 
 class CobolFrontend(Frontend):
@@ -74,12 +74,11 @@ class CobolFrontend(Frontend):
         observer: FrontendObserver = NullFrontendObserver(),
         extension_strategies: Sequence[RedDragonExtensionLoweringStrategy] = (),
         dialect_parsers: Sequence[DialectParser] = (),
-        tolerant: bool = False,
-        addressing_mode: AddressingMode = LP32_MODE,
+        options: CompileOptions = _DEFAULT_OPTIONS,
     ):
         self._parser = cobol_parser
-        self._tolerant = tolerant
-        self._addressing_mode = addressing_mode
+        self._options = options
+        self._addressing_mode = options.addressing_mode
         self._observer = observer
         self._extension_strategies = tuple(extension_strategies)
         self._dialect_parsers = tuple(dialect_parsers)
@@ -87,7 +86,7 @@ class CobolFrontend(Frontend):
             dispatch_fn=dispatch_statement,
             observer=observer,
             extension_strategies=self._extension_strategies,
-            tolerant=tolerant,
+            options=options,
         )
 
     def start_up_ir(self) -> tuple[InstructionBase, ...]:
@@ -219,8 +218,7 @@ class CobolFrontend(Frontend):
             condition_index=condition_index,
             extension_strategies=self._extension_strategies,
             asg=asg,
-            tolerant=self._tolerant,
-            addressing_mode=self._addressing_mode,
+            options=self._options,
         )
 
         self._ctx.emit_inst(Label_(label=CodeLabel("entry")))

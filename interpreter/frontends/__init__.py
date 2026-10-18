@@ -11,7 +11,7 @@ from cobol_asg.cobol_parser import ProLeapCobolParser
 from cobol_asg.frontend_extension import DialectParser
 from cobol_asg.lp32 import LP32_MODE
 from cobol_asg.subprocess_runner import RealSubprocessRunner
-from interpreter.cobol.cobol_frontend import CobolFrontend
+from interpreter.cobol.cobol_frontend import CobolFrontend, CompileOptions
 from interpreter.constants import Language
 from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
@@ -78,8 +78,7 @@ def get_cobol_frontend(
         observer=observer,
         extension_strategies=extension_strategies,
         dialect_parsers=dialect_parsers,
-        tolerant=tolerant,
-        addressing_mode=addressing_mode,
+        options=CompileOptions(tolerant=tolerant, addressing_mode=addressing_mode),
     )
 
 
