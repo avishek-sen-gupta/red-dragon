@@ -350,10 +350,9 @@ public final class StatementSerializer {
                 CobolParser.LiteralContext sendingLiteral =
                         sendingArea.getCtx() instanceof CobolParser.MoveToSendingAreaContext areaCtx
                                 ? areaCtx.literal() : null;
-                boolean moveAll = stmt.getCtx() instanceof CobolParser.MoveStatementContext moveCtx
-                        && moveCtx.ALL() != null;
-                if (moveAll && sendingLiteral != null) {
-                    operands.add(moveAllSource(sendingLiteral));
+                CobolParser.LiteralContext repeated = allRepeatedLiteral(sendingLiteral);
+                if (repeated != null) {
+                    operands.add(moveAllSource(repeated));
                 } else if (functionNode != null) {
                     operands.add(functionNode);
                 } else if (lengthOfNode != null) {
@@ -3915,6 +3914,10 @@ public final class StatementSerializer {
         return fig;
     }
 
+    /**
+     * A MOVE's {@code ALL literal} sender as an operand: the repeated literal's
+     * kind and text, with {@code "all"} unless it is itself a figurative constant.
+     */
     private static JsonObject moveAllSource(CobolParser.LiteralContext literal) {
         JsonObject src = new JsonObject();
         src.addProperty("kind", literalKind(literal));

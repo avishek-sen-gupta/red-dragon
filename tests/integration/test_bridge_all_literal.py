@@ -1,10 +1,16 @@
-"""Bridge: an ALL literal keeps its ALL in MOVE, VALUE, level-88 VALUE and relations."""
+"""Bridge: an ALL literal keeps its ALL in MOVE, VALUE, level-88 VALUE and relations.
+
+The grammar makes a MOVE's ALL literal the figurative constant in its sending
+area; the bridge writes it as an operand of the repeated literal's kind.
+"""
 
 from __future__ import annotations
 
 import json
 from collections.abc import Sequence
 
+from cobol_asg.operand_kind import OperandKind
+from cobol_asg.ref_mod import RefModOperand
 from cobol_asg.subprocess_runner import RealSubprocessRunner
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
@@ -64,3 +70,7 @@ def test_bridge_serialises_all_literal_with_its_all(bridge_jar):
         {"kind": "figurative", "value": "ALL", "literal": '"BA"'},
         {"kind": "figurative", "value": "ZEROS"},
     )
+    assert [RefModOperand.from_dict(s["operands"][0]) for s in statements[:2]] == [
+        RefModOperand(name='"AB"', all_literal=True, kind=OperandKind.LIT),
+        RefModOperand(name="QUOTE", kind=OperandKind.FIGURATIVE),
+    ]
