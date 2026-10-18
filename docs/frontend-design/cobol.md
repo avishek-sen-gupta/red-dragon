@@ -81,6 +81,8 @@ Not yet modelled: CALL visibility of contained programs and COMMON (red-dragon-l
 
 ProLeap's preprocessor expands COPY and applies COPY REPLACING and REPLACE before the COBOL grammar runs (`proleap-cobol-parser`, `io/proleap/cobol/preprocessor`). Matching is by text-word (IBM Enterprise COBOL LR, COPY "Comparison and replacement rules"; ANSI X3.23-1985 Text Manipulation module): an operand matches only whole text-words, never part of a word or of a literal; a separator comma or semicolon counts as a space; comment and blank lines are ignored. The text is scanned once, left to right; at each text-word the operands are tried in the order written, and replacement text is not compared again. `(`, `)` and `:` are separators, so the IBM dummy operand `==:TAG:==` still replaces the tag inside `:TAG:-REC`. An identifier operand may continue its qualifiers or subscript on the next line (`TRUE-Q-04 OF TRUE-Q-03` / `IN TRUE-Q-02`). Not modelled: `LEADING`/`TRAILING` partial-word replacement.
 
+`COPY text-name OF library-name` (or `IN`) copies the text-name of that library ("If text-name is not qualified, a library-name of SYSLIB is assumed", IBM Enterprise COBOL LR, COPY statement). A caller maps each library-name to a directory with `CopybookLibrary(name, directory)`, passed as `make_cobol_parser(copybook_libraries=...)`; the bridge takes it as `-copybook-library <name> <dir>` and matches the name in upper case. An unqualified COPY, or one naming a library with no mapping, searches the copybook directories, and text copied from a library resolves its own unqualified COPYs the same way.
+
 ## Program Declarations
 
 Right after its `entry` label, each program's IR declares two `Data` directives, which the VM steps over:

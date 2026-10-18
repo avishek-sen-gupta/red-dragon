@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
 
 from cobol_asg.cobol_parser import CobolParseError, ProLeapCobolParser
+from cobol_asg.copybook_library import CopybookLibrary
+from cobol_asg.lp64 import Lp64
 from cobol_asg.subprocess_runner import SubprocessRunner
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
@@ -18,18 +21,18 @@ class _RecordingRunner(SubprocessRunner):
     def __init__(
         self,
         stdout: str = '{"programs": [{"program_id": "T"}]}',
-        raise_exc: Exception | None = None,
+        failures: Sequence[Exception] = (),
     ):
-        self.command: list[str] | None = None
-        self.input_data: str | None = None
+        self.command: list[str] = []
+        self.input_data = ""
         self._stdout = stdout
-        self._raise = raise_exc
+        self._failures = tuple(failures)
 
     def run(self, command: list[str], input_data: str) -> str:
         self.command = command
         self.input_data = input_data
-        if self._raise is not None:
-            raise self._raise
+        if self._failures:
+            raise self._failures[0]
         return self._stdout
 
 
@@ -40,7 +43,6 @@ def test_parse_appends_copybook_dir_args():
         runner, "bridge.jar", copybook_dirs=[Path("/a/cpy"), Path("/b/cpy-bms")]
     )
     parser.parse(b"       PROGRAM-ID. T.\n")
-    assert runner.command is not None
     assert "-copybook-dir" in runner.command
     idxs = [i for i, a in enumerate(runner.command) if a == "-copybook-dir"]
     assert len(idxs) == 2
@@ -53,7 +55,6 @@ def test_parse_no_dirs_emits_no_copybook_dir_args():
     runner = _RecordingRunner()
     parser = ProLeapCobolParser(runner, "bridge.jar")
     parser.parse(b"       PROGRAM-ID. T.\n")
-    assert runner.command is not None
     assert "-copybook-dir" not in runner.command
 
 
@@ -65,7 +66,6 @@ def test_parse_accepts_source_bytes_that_are_not_utf8():
     runner = _RecordingRunner()
     parser = ProLeapCobolParser(runner, "bridge.jar")
     parser.parse(b"       01 WS-SENTINEL PIC X VALUE '\xff'.\n")
-    assert runner.input_data is not None
     assert "\u00ff" in runner.input_data
 
 
@@ -74,7 +74,6 @@ def test_parse_appends_copybook_ext_args():
     runner = _RecordingRunner()
     parser = ProLeapCobolParser(runner, "bridge.jar", copybook_exts=["txt", "CPY"])
     parser.parse(b"       PROGRAM-ID. T.\n")
-    assert runner.command is not None
     idxs = [i for i, a in enumerate(runner.command) if a == "-copybook-ext"]
     assert len(idxs) == 2
     assert runner.command[idxs[0] + 1] == "txt"
@@ -86,8 +85,32 @@ def test_parse_no_exts_leaves_the_bridge_default_in_place():
     runner = _RecordingRunner()
     parser = ProLeapCobolParser(runner, "bridge.jar")
     parser.parse(b"       PROGRAM-ID. T.\n")
-    assert runner.command is not None
     assert "-copybook-ext" not in runner.command
+
+
+@covers(CobolFeature.MULTI_FILE_IMPORTS)
+def test_each_copybook_library_reaches_the_bridge_as_its_name_and_directory():
+    runner = _RecordingRunner()
+    parser = ProLeapCobolParser(
+        runner,
+        "bridge.jar",
+        copybook_libraries=(
+            CopybookLibrary("LIB47", Path("/libs/one")),
+            CopybookLibrary("LIB48", Path("/libs/two")),
+        ),
+    ).with_addressing_mode(Lp64())
+    parser.parse(b"       PROGRAM-ID. T.\n")
+    assert runner.command == [
+        "java",
+        "-jar",
+        "bridge.jar",
+        "-copybook-library",
+        "LIB47",
+        "/libs/one",
+        "-copybook-library",
+        "LIB48",
+        "/libs/two",
+    ]
 
 
 @covers(CobolFeature.MULTI_FILE_IMPORTS)
@@ -97,7 +120,7 @@ def test_missing_copybook_raises_clean_error():
         "io.proleap.cobol.preprocessor.exception.CobolPreprocessorException: "
         "Could not find copy book MYBOOK in directory of COBOL input file"
     )
-    runner = _RecordingRunner(raise_exc=raw)
+    runner = _RecordingRunner(failures=(raw,))
     parser = ProLeapCobolParser(runner, "bridge.jar", copybook_dirs=[Path("/x/cpy")])
     with pytest.raises(CobolParseError) as excinfo:
         parser.parse(b"       COPY MYBOOK.\n")
@@ -114,7 +137,7 @@ def test_missing_copybook_raises_clean_error():
 @covers(CobolFeature.MULTI_FILE_IMPORTS)
 def test_non_copybook_error_passes_through():
     raw = CobolParseError("ProLeap bridge failed (exit 1): some other syntax error")
-    runner = _RecordingRunner(raise_exc=raw)
+    runner = _RecordingRunner(failures=(raw,))
     parser = ProLeapCobolParser(runner, "bridge.jar")
     with pytest.raises(CobolParseError) as excinfo:
         parser.parse(b"       PROGRAM-ID. T.\n")
