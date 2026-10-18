@@ -196,35 +196,19 @@ public final class AsgSerializer {
     }
 
     /**
-     * Each CLASS clause as its class-name and its literals in source order,
-     * each tagged NONE or THRU like an ALPHABET literal. ProLeap's ASG keeps
-     * only one CLASS clause, so they are read from the parse tree. A clause
-     * with an operand that is not a literal (an unsubstituted placeholder) is
-     * left out, so its class-name stays undefined.
+     * Each CLASS clause as its class-name and its operands in source order,
+     * each tagged NONE or THRU like an ALPHABET literal. An operand that is not
+     * a literal is written as {@code "kind": "NAME"}; the ASG reader decides
+     * what to do with such a clause.
      */
     private static void serializeClasses(SpecialNamesParagraph snp, JsonObject result) {
-        if (!(snp.getCtx() instanceof CobolParser.SpecialNamesParagraphContext ctx)) return;
         JsonArray classes = new JsonArray();
-        for (CobolParser.SpecialNameClauseContext clause : ctx.specialNameClause()) {
-            CobolParser.ClassClauseContext cls = clause.classClause();
-            if (cls != null && classLiteralsOnly(cls)) {
-                classes.add(serializeClass(cls));
-            }
+        for (io.proleap.cobol.asg.metamodel.environment.specialnames.ClassClause cls : snp.getClassClauses()) {
+            classes.add(serializeClass((CobolParser.ClassClauseContext) cls.getCtx()));
         }
         if (classes.size() > 0) {
             result.add("classes", classes);
         }
-    }
-
-    private static boolean classLiteralsOnly(CobolParser.ClassClauseContext cls) {
-        for (CobolParser.ClassClauseThroughContext through : cls.classClauseThrough()) {
-            if (through.classClauseFrom().literal() == null
-                    || (through.classClauseTo() != null && through.classClauseTo().literal() == null)) {
-                LOG.warning("CLASS " + cls.className().getText() + " has a non-literal operand; left undefined");
-                return false;
-            }
-        }
-        return true;
     }
 
     private static JsonObject serializeClass(CobolParser.ClassClauseContext cls) {
@@ -232,9 +216,9 @@ public final class AsgSerializer {
         result.addProperty("name", cls.className().getText().toUpperCase());
         JsonArray items = new JsonArray();
         for (CobolParser.ClassClauseThroughContext through : cls.classClauseThrough()) {
-            items.add(alphabetItem(through.classClauseFrom().literal(), "NONE"));
+            items.add(classItem(through.classClauseFrom().literal(), through.classClauseFrom(), "NONE"));
             if (through.classClauseTo() != null) {
-                items.add(alphabetItem(through.classClauseTo().literal(), "THRU"));
+                items.add(classItem(through.classClauseTo().literal(), through.classClauseTo(), "THRU"));
             }
         }
         result.add("items", items);
@@ -325,6 +309,18 @@ public final class AsgSerializer {
         if (ctx.NATIVE() != null) return "NATIVE";
         if (ctx.cobolWord() != null) return "ALIAS";
         return "LITERALS";
+    }
+
+    private static JsonObject classItem(
+            CobolParser.LiteralContext lit, ParserRuleContext operand, String link) {
+        if (lit != null) {
+            return alphabetItem(lit, link);
+        }
+        JsonObject item = new JsonObject();
+        item.addProperty("link", link);
+        item.addProperty("kind", "NAME");
+        item.addProperty("value", operand.getText().toUpperCase());
+        return item;
     }
 
     private static JsonObject alphabetItem(CobolParser.LiteralContext lit, String link) {
@@ -596,13 +592,6 @@ public final class AsgSerializer {
      * lists declaratives paragraphs in the flat paragraph list, not under the
      * declarative object.
      */
-    private static AfterOn.AfterOnType afterOnType(AfterOn afterOn) {
-        if (afterOn.getAfterOnType() != null) {
-            return afterOn.getAfterOnType();
-        }
-        CobolParser.UseAfterOnContext ctx = (CobolParser.UseAfterOnContext) afterOn.getCtx();
-        return ctx.EXTEND() != null ? AfterOn.AfterOnType.EXTEND : null;
-    }
 
     private static JsonArray serializeDeclaratives(
             ProcedureDivision pd, Collection<Paragraph> allParagraphs) {
@@ -627,7 +616,7 @@ public final class AsgSerializer {
                     && us.getUseAfterStatement() != null) {
                 UseAfterStatement ua = us.getUseAfterStatement();
                 AfterOn afterOn = ua.getAfterOn();
-                AfterOn.AfterOnType t = afterOn == null ? null : afterOnType(afterOn);
+                AfterOn.AfterOnType t = afterOn == null ? null : afterOn.getAfterOnType();
                 if (t != null) {
                     JsonObject useObj = new JsonObject();
                     useObj.addProperty("global", ua.isGlobal());

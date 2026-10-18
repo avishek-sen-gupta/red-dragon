@@ -8,6 +8,7 @@ emits JSON to stdout; these types consume that JSON via from_dict().
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from itertools import groupby
@@ -35,6 +36,20 @@ from cobol_asg.nonnumeric_literal import literal_characters, written_literal
 from cobol_asg.program_conventions import ProgramConventions
 from cobol_asg.source_span import SourceSpan
 from cobol_asg.storage_layout import file_section_layout, section_layout
+
+logger = logging.getLogger(__name__)
+_NAME_OPERAND = "NAME"
+
+
+def _defines_a_set(written: Mapping) -> bool:
+    """A CLASS clause whose operands are all literals; one naming anything else
+    (an unsubstituted placeholder) is left undefined."""
+    if all(item["kind"] != _NAME_OPERAND for item in written["items"]):
+        return True
+    logger.warning(
+        "CLASS %s has a non-literal operand; left undefined", written["name"]
+    )
+    return False
 
 
 def _program_collation(special: Mapping, alphabets: Sequence[Alphabet]) -> Alphabet:
@@ -299,6 +314,7 @@ class CobolASG:
             classes=[
                 ClassDefinition.from_parts(c["name"], c["items"])
                 for c in data.get("special_names", {}).get("classes", [])
+                if _defines_a_set(c)
             ],
         )
 
