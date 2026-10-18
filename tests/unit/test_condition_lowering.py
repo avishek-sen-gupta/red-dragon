@@ -419,3 +419,32 @@ class TestConditionNameExpansion:
         # No condition-name expansion: no or/and BINOPs from expansion
         or_ops = [i for i in binop_insts if i.operands[0] == "or"]
         assert len(or_ops) == 0, "Regular comparison should not trigger expansion"
+
+
+class TestHexLiteralRelation:
+    @covers(CobolFeature.IF_ELSE)
+    def test_a_hex_literal_compares_as_the_characters_its_bytes_encode(self):
+        """X'C1F2' is the EBCDIC bytes of 'A2': the relation's literal constant is
+        those characters, never the literal's written text."""
+        fields = [
+            CobolField(name="WS-X", level=77, pic="X(2)", usage="DISPLAY", offset=0),
+        ]
+        ctx, materialised = _setup_with_fields(fields)
+        lower_condition(
+            LoweringScope(ctx, materialised, None),
+            {
+                "not": False,
+                "relation": {
+                    "left": {"kind": "ref", "name": "WS-X"},
+                    "op": "==",
+                    "right": {"kind": "lit", "value": "X'C1F2'"},
+                },
+            },
+        )
+        string_consts = [
+            i.operands[0]
+            for i in ctx.instructions
+            if i.opcode == Opcode.CONST and isinstance(i.operands[0], str)
+        ]
+
+        assert ("A2" in string_consts, "X'C1F2'" in string_consts) == (True, False)

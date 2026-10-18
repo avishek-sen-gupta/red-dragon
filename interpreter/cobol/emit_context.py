@@ -30,7 +30,11 @@ from cobol_asg.source_span import SourceSpan
 from cobol_memory.field_extent import FieldExtent, Precision
 from cobol_memory.region_id import RegionId
 from cobol_numeric.number import from_literal, is_cobol_number
-from interpreter.cobol.alphanumeric import encode_hex_literal, parse_hex_literal
+from interpreter.cobol.alphanumeric import (
+    decode_alphanumeric,
+    encode_hex_literal,
+    parse_hex_literal,
+)
 from interpreter.cobol.binary_digits_ir import build_binary_picture_digits_ir
 from interpreter.cobol.class_name_index import ClassNameIndex
 from interpreter.cobol.cobol_constants import BuiltinName, ByteConstants, CobolEncoding
@@ -1727,7 +1731,15 @@ class EmitContext:
         Only when the raw value has NO surrounding delimiters (i.e. it is a
         bare numeric token such as ``10`` or ``3.14``) is int→exact number→str
         coercion attempted.
+
+        A hexadecimal literal ``X'C1F2'`` stands for the characters its bytes
+        encode, ``A2``, decoded as a data item's bytes are.
         """
+        match parse_hex_literal(text):
+            case bytes() as hex_bytes:
+                return decode_alphanumeric(hex_bytes)
+            case None:
+                pass
         stripped = literal_characters(text)
         is_quoted = stripped != text
         if is_quoted:

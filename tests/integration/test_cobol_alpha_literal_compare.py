@@ -62,3 +62,31 @@ class TestAlphaLiteralCompare:
             f"Expected RESULT=1 (strings matched), got {result}. "
             "parse_literal is probably coercing quoted '10' to int 10."
         )
+
+    @covers(CobolFeature.IF_ELSE, CobolFeature.VALUE_CLAUSE)
+    def test_a_hex_literal_compares_by_the_bytes_it_writes(self):
+        """X'C1' is the one byte of EBCDIC 'A'; X'F1F2' is the digit image of
+        PIC 99 VALUE 12, compared as alphanumeric. Both relations hold, and a
+        hex literal of other bytes does not."""
+        vm = run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-HEX.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-X PIC X VALUE 'A'.",
+                "01 WS-N PIC 99 VALUE 12.",
+                "01 WS-R PIC X(3) VALUE '---'.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    IF WS-X = X'C1' MOVE 'Y' TO WS-R(1:1)",
+                "    ELSE MOVE 'N' TO WS-R(1:1) END-IF.",
+                "    IF WS-N = X'F1F2' MOVE 'Y' TO WS-R(2:1)",
+                "    ELSE MOVE 'N' TO WS-R(2:1) END-IF.",
+                "    IF WS-X = X'C2' MOVE 'Y' TO WS-R(3:1)",
+                "    ELSE MOVE 'N' TO WS-R(3:1) END-IF.",
+                "    STOP RUN.",
+            ]
+        )
+
+        assert bytes(_first_region(vm)[3:6]).decode("cp037") == "YYN"
