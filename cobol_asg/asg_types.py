@@ -30,6 +30,7 @@ from cobol_asg.edit_picture import (
     DEFAULT_CURRENCY,
     UnsupportedEditPictureError,
 )
+from cobol_asg.figurative_names import with_canonical_figuratives
 from cobol_asg.implementor_switch import ImplementorSwitch
 from cobol_asg.lp32 import LP32_MODE
 from cobol_asg.nonnumeric_literal import literal_characters, written_literal
@@ -239,7 +240,7 @@ class CobolASG:
         comma = bool(
             written.get("special_names", {}).get("decimal_point_is_comma", False)
         )
-        data = DecimalPoint(comma).program(written)
+        data = with_canonical_figuratives(DecimalPoint(comma).program(written))
         # Build FD-record-name → SELECT-file-name mapping from fd_name tags
         # (populated by bridge since the fd_name fix). Level-1 fields only.
         record_to_select: dict[str, str] = {
