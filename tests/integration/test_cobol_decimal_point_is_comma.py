@@ -28,6 +28,7 @@ _COMMA_PROGRAM = [
     "    IF WS-MOVED = 1,5 MOVE 'Y' TO WS-FLAG.",
     "    IF RATE-HALF-UP MOVE 'Y' TO WS-RATE-FLAG.",
     "    COMPUTE WS-COMPUTED = WS-RATE * 2,25.",
+    "    ADD 0,25 TO WS-COMPUTED.",
     "    STOP RUN.",
 ]
 
@@ -51,7 +52,7 @@ def test_the_comma_is_the_decimal_point_in_literals_and_pictures() -> None:
     ws = bytes(ws_region(run_cobol_programs(_COMMA_PROGRAM, {}), "DCOMMA"))
 
     assert ws.decode("cp037") == (
-        "123456" + "00000150" + "1.234.567,89" + "Y" + "25" + "Y" + "0562" + "1,5"
+        "123456" + "00000150" + "1.234.567,89" + "Y" + "25" + "Y" + "0587" + "1,5"
     )
 
 

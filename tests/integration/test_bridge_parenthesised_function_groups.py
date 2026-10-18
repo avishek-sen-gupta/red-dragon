@@ -99,9 +99,9 @@ def test_group_survives_as_an_operand_of_the_enclosing_expression(bridge_jar):
             "kind": "binop",
             "op": "/",
             "left": {"kind": "binop", "op": "-", "left": _LENGTH_OF_M, "right": _REF_N},
-            "right": {"kind": "lit", "value": "2"},
+            "right": {"kind": "lit", "value": "2", "numeric": True},
         },
-        "right": {"kind": "lit", "value": "1"},
+        "right": {"kind": "lit", "value": "1", "numeric": True},
     }
 
 
@@ -111,7 +111,7 @@ def test_nested_groups_keep_every_operand(bridge_jar):
         "kind": "binop",
         "op": "-",
         "left": _LENGTH_OF_M,
-        "right": {"kind": "lit", "value": "1"},
+        "right": {"kind": "lit", "value": "1", "numeric": True},
     }
 
 
@@ -143,7 +143,7 @@ def test_group_in_a_perform_until_keeps_every_operand(bridge_jar):
         "kind": "binop",
         "op": "-",
         "left": _LENGTH_OF_M,
-        "right": {"kind": "lit", "value": "1"},
+        "right": {"kind": "lit", "value": "1", "numeric": True},
     }
 
 
@@ -181,7 +181,7 @@ def test_subscripted_read_in_an_expression_keeps_its_subscript(bridge_jar):
             "name": "X",
             "subscripts": [{"kind": "ref", "name": "I"}],
         },
-        "right": {"kind": "lit", "value": "1"},
+        "right": {"kind": "lit", "value": "1", "numeric": True},
     }
 
 

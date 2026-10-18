@@ -142,6 +142,7 @@ import io.proleap.cobol.asg.metamodel.valuestmt.relation.SignCondition;
 import io.proleap.cobol.asg.metamodel.impl.ASGElementImpl;
 import io.proleap.cobol.CobolParser;
 import org.antlr.v4.runtime.ParserRuleContext;
+import org.antlr.v4.runtime.tree.ParseTree;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -371,12 +372,14 @@ public final class StatementSerializer {
                     } else {
                         JsonObject srcObj = new JsonObject();
                         srcObj.addProperty("name", extractValueStmtText(vs));
+                        markNumeric(srcObj, vs);
                         operands.add(srcObj);
                     }
                 } else {
                     // Complex expression source: plain name object, no ref mod
                     JsonObject srcObj = new JsonObject();
                     srcObj.addProperty("name", extractValueStmtText(vs));
+                    markNumeric(srcObj, vs);
                     operands.add(srcObj);
                 }
             }
@@ -958,6 +961,7 @@ public final class StatementSerializer {
             } else {
                 JsonObject literalObj = new JsonObject();
                 literalObj.addProperty("name", extractValueStmtText(vs));
+                markNumeric(literalObj, vs);
                 operands.add(literalObj);
             }
         }
@@ -1269,6 +1273,7 @@ public final class StatementSerializer {
         }
         JsonObject literal = new JsonObject();
         literal.addProperty("name", extractValueStmtText(vs));
+        markNumeric(literal, vs);
         return literal;
     }
 
@@ -1387,7 +1392,7 @@ public final class StatementSerializer {
                 }
             }
         }
-        return litNode(extractValueStmtText(vs));
+        return litNode(extractValueStmtText(vs), vs.getCtx());
     }
 
     /** The item named by a CALL USING ... ADDRESS OF operand, as a structured reference. */
@@ -1411,6 +1416,7 @@ public final class StatementSerializer {
     private static JsonObject textOperand(ValueStmt vs) {
         JsonObject text = new JsonObject();
         text.addProperty("name", extractValueStmtText(vs));
+        markNumeric(text, vs);
         return text;
     }
 
@@ -1455,6 +1461,7 @@ public final class StatementSerializer {
                     } else {
                         JsonObject litObj = new JsonObject();
                         litObj.addProperty("name", extractValueStmtText(vs));
+                        markNumeric(litObj, vs);
                         sendingObj.add("value", litObj);
                     }
                     if (delim != null) {
@@ -1577,6 +1584,9 @@ public final class StatementSerializer {
         CobolParser.LiteralContext repeated = allLiteralOf(vs);
         JsonObject lit = new JsonObject();
         lit.addProperty("name", repeated != null ? repeated.getText() : extractValueStmtText(vs));
+        if (repeated == null) {
+            markNumeric(lit, vs);
+        }
         return lit;
     }
 
@@ -2191,6 +2201,7 @@ public final class StatementSerializer {
         }
         JsonObject literal = new JsonObject();
         literal.addProperty("name", extractValueStmtText(vs));
+        markNumeric(literal, vs);
         return literal;
     }
 
@@ -2922,6 +2933,12 @@ public final class StatementSerializer {
             if (dfh != null) return dfh;
         }
         // For literals and other operands, return as plain string
+        if (vs != null && isNumericLiteral(vs.getCtx())) {
+            JsonObject literal = new JsonObject();
+            literal.addProperty("name", extractValueStmtText(vs));
+            literal.addProperty("numeric", true);
+            return literal;
+        }
         return new JsonPrimitive(extractValueStmtText(vs));
     }
 
@@ -3206,7 +3223,7 @@ public final class StatementSerializer {
             ref.addProperty("name", arg.qualifiedDataName().getText());
             return ref;
         }
-        return litNode(arg.getText());
+        return litNode(arg.getText(), arg);
     }
 
     /**
@@ -3677,9 +3694,8 @@ public final class StatementSerializer {
             }
         }
         // Literals (LiteralValueStmt, IntegerLiteralValueStmt, etc.)
-        String text = vs != null && vs.getCtx() != null ? vs.getCtx().getText()
-                    : (b.getCtx() != null ? b.getCtx().getText() : "");
-        return litNode(text);
+        ParserRuleContext textCtx = vs != null && vs.getCtx() != null ? vs.getCtx() : b.getCtx();
+        return litNode(textCtx != null ? textCtx.getText() : "", textCtx);
     }
 
     /**
@@ -3969,7 +3985,7 @@ public final class StatementSerializer {
                 return fig;
             }
         }
-        return litNode(lit != null ? lit.getText() : "");
+        return litNode(lit != null ? lit.getText() : "", lit);
     }
 
     /**
@@ -4079,6 +4095,34 @@ public final class StatementSerializer {
         lit.addProperty("kind", "lit");
         lit.addProperty("value", value);
         return lit;
+    }
+
+    /** A {@code lit} node, marked {@code "numeric"} when {@code ctx} is a numeric literal. */
+    private static JsonObject litNode(String value, ParserRuleContext ctx) {
+        JsonObject lit = litNode(value);
+        if (isNumericLiteral(ctx)) {
+            lit.addProperty("numeric", true);
+        }
+        return lit;
+    }
+
+    /** Marks an operand {@code "numeric"} when its value statement is a numeric literal. */
+    private static void markNumeric(JsonObject operand, ValueStmt vs) {
+        if (vs != null && isNumericLiteral(vs.getCtx())) {
+            operand.addProperty("numeric", true);
+        }
+    }
+
+    /**
+     * True when {@code ctx} is, or wraps through single-child rules, the
+     * grammar's numericLiteral: the lexer's NUMERICLITERAL, written as in the
+     * source. The ASG reader applies DECIMAL-POINT IS COMMA to such literals.
+     */
+    static boolean isNumericLiteral(ParseTree ctx) {
+        if (ctx instanceof CobolParser.NumericLiteralContext) {
+            return true;
+        }
+        return ctx != null && ctx.getChildCount() == 1 && isNumericLiteral(ctx.getChild(0));
     }
 
     /**

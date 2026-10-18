@@ -68,7 +68,7 @@ def test_address_of_and_null_are_structured_operands() -> None:
             ([_ref("P")], [_ref("X", "address_of")], None),
             ([_ref("LK", "address_of")], [_ref("P")], None),
             ([_ref("P")], [{"kind": "figurative", "value": "NULL"}], None),
-            ([_ref("P")], None, {"kind": "lit", "value": "2"}),
+            ([_ref("P")], None, {"kind": "lit", "value": "2", "numeric": True}),
         ],
         _ref("LK", "address_of"),
         {"kind": "figurative", "value": "NULL"},

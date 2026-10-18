@@ -71,7 +71,7 @@ def _source_operand(bridge_jar: str, statement_line: str) -> dict:
     return _statements(bridge_jar, statement_line)[0]["operands"][0]
 
 
-_LIT_1 = {"kind": "lit", "value": "1"}
+_LIT_1 = {"kind": "lit", "value": "1", "numeric": True}
 
 
 # ── The bridge JSON shape ────────────────────────────────────────────────────
@@ -83,7 +83,7 @@ def test_a_literal_bound_leaves_the_operands_qualifier_intact(bridge_jar):
     assert _source_operand(bridge_jar, "MOVE FLD OF GA(1:2) TO D.") == {
         "name": "FLD",
         "ref_mod_start": _LIT_1,
-        "ref_mod_length": {"kind": "lit", "value": "2"},
+        "ref_mod_length": {"kind": "lit", "value": "2", "numeric": True},
         "qualifiers": ["GA"],
     }
 
@@ -128,7 +128,7 @@ def test_a_subscripted_and_qualified_operand_keeps_its_qualifier(bridge_jar):
     operand = _source_operand(bridge_jar, "MOVE TB OF HT(I)(1:2) TO D.")
     assert operand["name"] == "TB"
     assert operand["qualifiers"] == ["HT"]
-    assert operand["ref_mod_length"] == {"kind": "lit", "value": "2"}
+    assert operand["ref_mod_length"] == {"kind": "lit", "value": "2", "numeric": True}
 
 
 @covers(CobolFeature.MOVE)

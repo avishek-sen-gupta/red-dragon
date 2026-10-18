@@ -101,8 +101,8 @@ def test_a_sliced_also_subject_travels_as_a_structured_ref(bridge_jar):  # noqa:
             "expr": {
                 "kind": "ref",
                 "name": "FA",
-                "ref_mod_start": {"kind": "lit", "value": "1"},
-                "ref_mod_length": {"kind": "lit", "value": "2"},
+                "ref_mod_start": {"kind": "lit", "value": "1", "numeric": True},
+                "ref_mod_length": {"kind": "lit", "value": "2", "numeric": True},
                 "qualifiers": ["GA"],
             },
         }

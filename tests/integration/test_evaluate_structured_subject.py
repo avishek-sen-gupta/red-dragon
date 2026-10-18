@@ -100,8 +100,8 @@ def test_a_sliced_subject_travels_as_a_structured_ref(bridge_jar):
             "expr": {
                 "kind": "ref",
                 "name": "WS-T",
-                "ref_mod_start": {"kind": "lit", "value": "1"},
-                "ref_mod_length": {"kind": "lit", "value": "2"},
+                "ref_mod_start": {"kind": "lit", "value": "1", "numeric": True},
+                "ref_mod_length": {"kind": "lit", "value": "2", "numeric": True},
             },
         }
     ]
@@ -121,8 +121,8 @@ def test_a_qualified_sliced_subject_keeps_both_qualifier_and_slice(bridge_jar):
             "expr": {
                 "kind": "ref",
                 "name": "FA",
-                "ref_mod_start": {"kind": "lit", "value": "1"},
-                "ref_mod_length": {"kind": "lit", "value": "2"},
+                "ref_mod_start": {"kind": "lit", "value": "1", "numeric": True},
+                "ref_mod_length": {"kind": "lit", "value": "2", "numeric": True},
                 "qualifiers": ["GA"],
             },
         }
