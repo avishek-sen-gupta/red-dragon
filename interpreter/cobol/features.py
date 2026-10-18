@@ -121,6 +121,12 @@ class CobolFeature(Enum):
     ENTRY = "ENTRY 'name' USING alternate entry point declarations"
     BATCHED_PROGRAMS = "Programs written one after another in one source file"
     NESTED_PROGRAMS = "Programs contained in another program, ended by END PROGRAM"
+    EXTERNAL_DATA = (
+        "01 ... IS EXTERNAL records: one storage area per run unit, shared by name"
+    )
+    EXTERNAL_FILE = (
+        "FD ... IS EXTERNAL files: one file connector and record area per run unit"
+    )
 
     # ---------------------------------------------------------------------------
     # I/O statements
