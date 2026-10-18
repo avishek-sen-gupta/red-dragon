@@ -6,7 +6,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
-from itertools import islice
+from itertools import chain, islice
 
 from cobol_asg.asg_types import CobolASG, CobolField
 from cobol_memory.region_id import RegionId
@@ -19,11 +19,14 @@ from interpreter.cobol.data_layout import (
     laid_end_to_end,
     record_length,
 )
+from interpreter.cobol.enclosing_scope import EnclosingLayout, InheritedScope
 from interpreter.cobol.external_area import ExternalArea
 from interpreter.cobol.external_binding import ExternalBinding
 from interpreter.cobol.external_layout import partition_external
+from interpreter.cobol.global_names import global_records
 from interpreter.cobol.linkage_binding import LinkageBinding
 from interpreter.cobol.linkage_record import LinkageRecord
+from interpreter.cobol.program_object import program_name
 from interpreter.cobol.undeclared_data_name import UndeclaredDataName
 from interpreter.register import NO_REGISTER, Register
 
@@ -47,6 +50,7 @@ class SectionedLayout:
     external_owners: Mapping[tuple[str, int, int], ExternalArea] = field(
         default_factory=dict
     )
+    enclosing: tuple[EnclosingLayout, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -72,6 +76,11 @@ class MaterialisedSectionedLayout:
     external_owners: Mapping[tuple[str, int, int], ExternalArea] = field(
         default_factory=dict
     )
+    inherited: tuple[InheritedScope, ...] = ()
+
+    def owner_scope(self, program: str) -> InheritedScope:
+        """The enclosing program ``program`` as this one sees it."""
+        return next(s for s in self.inherited if s.layout.program == program)
 
     def external_binding(self, fl: FieldLayout) -> ExternalBinding:
         """The binding of the EXTERNAL area whose description declares ``fl``."""
@@ -112,15 +121,24 @@ class MaterialisedSectionedLayout:
         """Return the data item ``name`` qualified by ``qualifiers`` denotes, with
         its region register and RegionId.
 
-        Precedence: LOCAL-STORAGE > WORKING-STORAGE > LINKAGE > FILE >
+        Precedence: LOCAL-STORAGE > WORKING-STORAGE > EXTERNAL > LINKAGE > FILE >
         SPECIAL-REGISTERS > INDEXES; the first section holding a match wins, and
-        this is the sole place that precedence lives."""
+        this is the sole place that precedence lives. A name the program does not
+        declare is then searched for among the global names of each containing
+        program, the nearest first."""
         found = tuple(
             islice(
-                (
-                    (match, reg, region)
-                    for layout, reg, region in self._sections()
-                    for match in layout.qualified_matches(name, qualifiers)
+                chain(
+                    (
+                        (match, reg, region)
+                        for layout, reg, region in self._sections()
+                        for match in layout.qualified_matches(name, qualifiers)
+                    ),
+                    (
+                        hit
+                        for scope in self.inherited
+                        for hit in scope.global_matches(name, qualifiers)
+                    ),
                 ),
                 1,
             )
@@ -167,6 +185,7 @@ class MaterialisedSectionedLayout:
             ls_layout.exists(name)
             or ws_layout.exists(name)
             or self.external.exists(name)
+            or any(scope.has_global(name) for scope in self.inherited)
             or lk_layout.exists(name)
             or file_layout.exists(name)
             or sr_layout.exists(name)
@@ -230,6 +249,19 @@ def build_sectioned_layout(asg: CobolASG) -> SectionedLayout:
             for area, group in zip(shared.areas, shared.groups, strict=True)
             for fl in build_data_layout(list(group)).all_fields()
         },
+        enclosing=tuple(_enclosing_layout(outer) for outer in asg.enclosing),
+    )
+
+
+def _enclosing_layout(outer: CobolASG) -> EnclosingLayout:
+    shared = partition_external(outer)
+    global_ws, global_file = global_records(outer, shared.working_storage, shared.file)
+    return EnclosingLayout(
+        program=program_name(outer),
+        working_storage=build_data_layout(list(shared.working_storage)),
+        file=build_data_layout(list(shared.file)),
+        global_working_storage=build_data_layout(global_ws),
+        global_file=build_data_layout(global_file),
     )
 
 

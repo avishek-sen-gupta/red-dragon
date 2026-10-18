@@ -54,6 +54,7 @@ Files are under `interpreter/cobol/` unless prefixed with `cobol_asg/`.
 | `cobol_asg/cobol_types.py` | `CobolDataCategory` enum, `CobolTypeDescriptor` |
 | `cobol_asg/pic_parser.py` | PIC clause parser (e.g., `9(5)V99` → type descriptor) |
 | `data_layout.py` | `DataLayout`, `FieldLayout`, `build_data_layout()` |
+| `global_names.py`, `enclosing_scope.py` | GLOBAL names: which items and files of an enclosing program a contained program sees, and their regions |
 | `external_layout.py`, `external_area.py`, `lower_external.py` | EXTERNAL records and file record areas: their layout, the run unit's directories, and their allocation and binding |
 | `file_definitions_data.py` | `FILE_DEFINITIONS`, `file_definitions_data()` — the program's SELECTs and FD formats as a `Data` directive |
 | `layout_data.py` | `DATA_LAYOUT`, `layout_data()`, and the reader `field_positions()` → `FieldPosition` per WORKING-STORAGE field |
@@ -75,7 +76,7 @@ The bridge emits the compilation unit as `{"programs": [...]}`: the top-level pr
 
 `compile_cobol` and `lower_cobol_program` lower every program of a source, in pre-order (`programs_in_preorder`), each with a fresh frontend into a unit of its own, and link every unit. The run unit's main program is the first top-level program of the main source. A CALL to a sibling or contained program resolves through the run unit's program table like a CALL to a separately compiled one.
 
-Not yet modelled: CALL visibility of contained programs and COMMON (red-dragon-ljku.2), GLOBAL names (ljku.4), INITIAL (ljku.5). EXTERNAL data and files are modelled; see [EXTERNAL data and files](#external-data-and-files). Today every program in the run unit can CALL every other.
+Not yet modelled: CALL visibility of contained programs and COMMON (red-dragon-ljku.2), INITIAL (ljku.5). EXTERNAL data and files are modelled; see [EXTERNAL data and files](#external-data-and-files). GLOBAL names are modelled; see [GLOBAL names](#global-names). Today every program in the run unit can CALL every other.
 
 ## COPY and REPLACE
 
@@ -110,6 +111,16 @@ A WORKING-STORAGE 01 with the EXTERNAL clause, and the record area of an FD with
 - **Entry.** The procedure loads each area's region from the directory (`bind_external`); a field in an area is addressed at its offset from the area's start.
 - **Files.** An EXTERNAL file's state (open mode, position, refused verbs, last key, lock) is the run unit's `__cobol_external_file_<FILE>_*` variables, not the program's (`file_state_of`). The FILE STATUS item stays each program's own: a verb sets the one its program's SELECT names.
 - **Not applied.** A VALUE clause in an EXTERNAL record is not applied, and lowering logs a warning: ANSI X3.23-1985 forbids VALUE there except on level 88. Programs whose descriptions of one area differ in size are not checked: IBM requires the same number of bytes, and each program addresses the area with its own description.
+
+### GLOBAL names
+
+A name declared GLOBAL is visible to the program that declares it and to every program it contains, at any depth (IBM Enterprise COBOL LR, GLOBAL clause). A reference is resolved in the program's own declarations first; "if no match is found, only global declarations are searched in successive outer containing programs", and "the search ends when the first matching name is found" (IBM LR, scope of names). A local declaration in an intervening program therefore masks nothing; a GLOBAL one does.
+
+- **Reader.** The bridge writes `global` on a data field and on each `file_descriptions` entry (`CobolField.is_global`, `FileDescription.is_global`). `programs_in_preorder` gives each contained program its enclosing programs, nearest first, under `enclosing` (`CobolASG.enclosing`).
+- **Layout.** `build_sectioned_layout` gives each enclosing program an `EnclosingLayout` (`enclosing_scope.py`): its WORKING-STORAGE and FILE SECTION, and the global part of each, the 01s with GLOBAL and every record of a GLOBAL FD (`global_names.global_records`).
+- **Entry.** A contained program's procedure loads each enclosing program's WORKING-STORAGE from its program object and its FILE SECTION region from `__file_area_<PID>` (`InheritedScope`). `MaterialisedSectionedLayout.resolve_match` searches the program's own sections, then each enclosing program's global layouts, the nearest first; a global item is addressed at its offset in its own program's region.
+- **Condition-names.** The condition-names under an enclosing program's global items are in the contained program's condition index, below its own, the nearest program's winning, since "any item that is subordinate to a global item (including condition-names and indexes) is automatically global". Indexes of a global table are not yet reached from a contained program.
+- **FILE SECTION.** Every program's FILE SECTION region is allocated once, at load, and kept in `__file_area_<PID>` (`lower_file_area`), as WORKING-STORAGE is kept: a record area keeps its contents from one CALL to the next, and the programs a program contains reach its GLOBAL files' records there.
 
 ### Data-name qualification
 

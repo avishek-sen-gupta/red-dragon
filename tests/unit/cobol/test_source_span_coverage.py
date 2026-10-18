@@ -661,8 +661,9 @@ E2E_SOURCE = b"""\
 #   lower_ws_from_singleton:        _ENTRY_OPCODES (the initial-state test and
 #                                    perform, then StoreVar(__ws_region))
 #   lower_sectioned_data_division:  LoadVar(__ws_region)
-#     FILE, INDEXES, SPECIAL-REGISTERS: 3 x (Const(size), AllocRegion)
-#     LoadVar(singleton), StoreField(RETURN_CODE_HANDLE)
+#     FILE: LoadVar(__file_area_<PID>), allocated once at load
+#     INDEXES: Const(size), AllocRegion
+#     SPECIAL-REGISTERS: LoadVar(singleton), LoadField(RETURN_CODE_HANDLE)
 # WORKING-STORAGE VALUE initialisation is located and runs in the prologue,
 # before func_e2epgm_0, so it never interleaves with this run.
 #
@@ -675,8 +676,7 @@ E2E_SOURCE = b"""\
 _E2E_SETUP_OPCODES = (
     *_ENTRY_OPCODES,
     "LOAD_VAR",
-    "CONST",
-    "ALLOC_REGION",
+    "LOAD_VAR",
     "CONST",
     "ALLOC_REGION",
     "LOAD_VAR",
