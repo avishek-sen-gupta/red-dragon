@@ -11,4 +11,5 @@ class OperandKind(Enum):
     LENGTH_OF = "length_of"
     FIGURATIVE = "figurative"
     LIT = "lit"
+    ALL_LITERAL = "all_literal"
     SWITCH_STATUS = "switch_status"

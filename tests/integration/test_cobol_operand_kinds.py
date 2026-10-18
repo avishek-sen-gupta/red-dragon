@@ -84,7 +84,7 @@ def test_the_bridge_states_each_operands_kind() -> None:
     ) == (
         [_lit("'AB'"), _W],
         _figurative("SPACES"),
-        _lit("'*'") | {"all": True},
+        {"kind": "figurative", "name": "ALL", "literal": "'*'", "literal_kind": "lit"},
         [_lit("'HI'"), _figurative("ZERO"), _W],
         [_lit("12") | {"numeric": True}, _figurative("ZERO")],
         [_lit("'X'"), _W],

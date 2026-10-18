@@ -3898,16 +3898,16 @@ public final class StatementSerializer {
     }
 
     /**
-     * A MOVE's {@code ALL literal} sender as an operand: the repeated literal's
-     * kind and text, with {@code "all"} unless it is itself a figurative constant.
+     * A MOVE's {@code ALL literal} sender as the grammar parsed it: the
+     * figurative constant ALL with its repeated literal, as written, and that
+     * literal's kind.
      */
     private static JsonObject moveAllSource(CobolParser.LiteralContext literal) {
         JsonObject src = new JsonObject();
-        src.addProperty("kind", literalKind(literal));
-        src.addProperty("name", literal.getText());
-        if (literal.figurativeConstant() == null) {
-            src.addProperty("all", true);
-        }
+        src.addProperty("kind", "figurative");
+        src.addProperty("name", "ALL");
+        src.addProperty("literal", literal.getText());
+        src.addProperty("literal_kind", literalKind(literal));
         return src;
     }
 
