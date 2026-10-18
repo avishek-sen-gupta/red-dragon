@@ -37,9 +37,6 @@ _PRIMITIVES = (
     "__cobol_io_record_number",
     "__cobol_switch_status",
     "__cobol_set_switch",
-    "__cobol_sort_using",
-    "__cobol_sort_giving",
-    "__cobol_sort_file",
 )
 
 

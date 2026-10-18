@@ -16,9 +16,10 @@ from cobol_asg.sort_files import SortFiles
 from cobol_asg.sort_key import SortKey
 from cobol_asg.sort_key_direction import SortKeyDirection
 from interpreter.cobol.features import CobolFeature
-from interpreter.cobol.sort_field import SortField, sort_field_arguments, sort_fields
+from interpreter.cobol.sort_field import SortField
 from interpreter.cobol.sort_key_encoding import SortKeyEncoding
 from interpreter.cobol.sort_order import ordered
+from interpreter.cobol.sort_ordering import SortOrdering, ordering_of
 from tests.covers import covers
 
 _NATIVE = tuple(range(256))
@@ -38,9 +39,8 @@ def test_alphanumeric_key_orders_by_collating_weight_and_keeps_ties_in_order() -
     )
     assert ordered(records, [key], _NATIVE) == [b"3AA", b"2AB", b"4AB", b"1ZZ", b"5aa"]
     assert ordered([b"1Ab", b"2bA"], [key], swapped) == [b"2bA", b"1Ab"]
-    assert sort_fields((*sort_field_arguments(key), *sort_field_arguments(key))) == (
-        key,
-        key,
+    assert ordering_of(SortOrdering((key, key), swapped).data()) == SortOrdering(
+        (key, key), swapped
     )
 
 
