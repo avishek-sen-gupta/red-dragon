@@ -25,7 +25,6 @@ from cobol_asg.cobol_expression import (
 from cobol_asg.cobol_statements import (
     ArithmeticCorrespondingStatement,
     ArithmeticStatement,
-    CobolStatementType,
     ComputedGoto,
     ComputeStatement,
     ComputeTarget,
@@ -73,8 +72,14 @@ from cobol_numeric.scale import (
 )
 from interpreter.cobol.de_edit_ir import emit_de_edit
 from interpreter.cobol.digit_image_ir import emit_display_image, emit_field_digit_image
+from interpreter.cobol.divide_operands import DivideOperands
+from interpreter.cobol.in_place_operation import InPlaceOperation
 from interpreter.cobol.ir_emitter import IrEmitter
+from interpreter.cobol.move_source import MoveSource, plain_move_source
+from interpreter.cobol.receiver_result import ReceiverResult
+from interpreter.cobol.size_error_arm import SizeErrorArm
 from interpreter.cobol.size_error_ir import emit_size_error
+from interpreter.cobol.size_error_store import SizeErrorGuard, SizeErrorStore
 from interpreter.cobol.standard_deviation_ir import emit_standard_deviation
 from interpreter.cobol.arithmetic_precision import ArithmeticPrecision
 from interpreter.cobol.arithmetic_receiver import ArithmeticReceiver
@@ -125,7 +130,7 @@ from interpreter.instructions import (
 )
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import BinopKind, resolve_binop
-from interpreter.register import NO_REGISTER, Register
+from interpreter.register import Register
 
 logger = logging.getLogger(__name__)
 
@@ -746,6 +751,7 @@ def lower_move(
     its own reference modification and PICTURE conversion (COBOL semantics).
     """
     span = stmt.span
+    emitter = IrEmitter(ctx=ctx, span=span)
 
     # Intrinsic FUNCTION source (e.g. FUNCTION UPPER-CASE(...)): evaluate to a
     # value register, then distribute to every receiving field. Functions carry
@@ -755,7 +761,9 @@ def lower_move(
             ctx, stmt.source, materialised, span=span
         )
         for target in stmt.targets:
-            _store_move_value(ctx, target, source_value_reg, materialised, span=span)
+            _store_move_value(
+                emitter, target, plain_move_source(source_value_reg), materialised
+            )
         return
 
     if stmt.source.length_of.name:
@@ -768,7 +776,9 @@ def lower_move(
             logger.warning("MOVE LENGTH OF unknown field %r — using 0", name)
             source_value_reg = ctx.const_to_reg(0, span=span)
         for target in stmt.targets:
-            _store_move_value(ctx, target, source_value_reg, materialised, span=span)
+            _store_move_value(
+                emitter, target, plain_move_source(source_value_reg), materialised
+            )
         return
 
     # Raw figurative source (HIGH-VALUES / LOW-VALUES): these denote raw bytes —
@@ -783,11 +793,8 @@ def lower_move(
         and not stmt.source.is_reference_modified
         and ctx.figuratives.is_raw(stmt.source.name)
     ):
-        fill_byte = ctx.figuratives.raw_byte(stmt.source.name)
         for target in stmt.targets:
-            _move_raw_figurative(
-                ctx, target, stmt.source.name, fill_byte, materialised, span=span
-            )
+            _move_raw_figurative(emitter, target, stmt.source.name, materialised)
         return
 
     # Resolve the source field once (when it is a field). A numeric-DISPLAY
@@ -887,28 +894,28 @@ def lower_move(
             )
             value_str_reg = result_reg
 
-    digit_image_reg: Register = NO_REGISTER
-    if (
-        source_fl is not None
-        and not stmt.source.is_reference_modified
-        and source_fl.type_descriptor.category in _FIXED_POINT_CATEGORIES
-    ):
-        digit_image_reg = emit_field_digit_image(
-            IrEmitter(ctx=ctx, span=span), source_rr, source_ref
-        )
-
-    de_edited_reg: Register = NO_REGISTER
-    if (
-        source_fl is not None
-        and not stmt.source.is_reference_modified
-        and source_fl.type_descriptor.category == CobolDataCategory.NUMERIC_EDITED
-    ):
-        de_edited_reg = _emit_de_edit(ctx, value_str_reg, source_fl, stmt)
+    sent_whole = source_fl is not None and not stmt.source.is_reference_modified
+    source = MoveSource(
+        value=value_str_reg,
+        characters=(
+            emit_field_digit_image(emitter, source_rr, source_ref)
+            if sent_whole
+            and source_ref.fl.type_descriptor.category in _FIXED_POINT_CATEGORIES
+            else value_str_reg
+        ),
+        number=(
+            _emit_de_edit(ctx, value_str_reg, source_ref.fl, stmt)
+            if sent_whole
+            and source_ref.fl.type_descriptor.category
+            == CobolDataCategory.NUMERIC_EDITED
+            else value_str_reg
+        ),
+        group=sent_whole and source_ref.fl.is_group,
+    )
 
     # Store the (once-evaluated) source value into each receiving field. Each
     # target gets its own reference modification and PICTURE conversion; the
     # base source value (source_value_reg) is never clobbered across targets.
-    source_value_reg = value_str_reg
     for target in stmt.targets:
         if not ctx.has_field(target.name, materialised) and _is_special_register(
             target.name
@@ -923,7 +930,7 @@ def lower_move(
         # the single-character source for this target only.  Only applies when
         # there is no target reference modification (a ref-mod write targets a
         # specific slice, so the fill character must remain single for SPLICE).
-        effective_source = source_value_reg
+        effective_source = source
         if (
             _fill_pattern
             and not target.is_reference_modified
@@ -936,54 +943,38 @@ def lower_move(
             filled = ctx.const_to_reg(
                 repeat_to_width(_fill_pattern, fill_width), span=span
             )
-            effective_source = filled
-        _store_move_value(
-            ctx,
-            target,
-            effective_source,
-            materialised,
-            digit_image_reg,
-            de_edited_reg=de_edited_reg,
-            group_source=isinstance(source_fl, FieldLayout)
-            and source_fl.is_group
-            and not stmt.source.is_reference_modified,
-            span=span,
-        )
+            effective_source = plain_move_source(filled)
+        _store_move_value(emitter, target, effective_source, materialised)
 
 
 def _move_raw_figurative(
-    ctx: EmitContext,
+    e: IrEmitter,
     target: RefModOperand,
     name: str,
-    fill_byte: int,
     materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
 ) -> None:
     """Fill one receiver with HIGH-VALUE's or LOW-VALUE's raw byte; a
     reference-modified receiver takes the byte's character through the SPLICE
     path."""
-    if not ctx.has_field(target.name, materialised):
+    if not e.ctx.has_field(target.name, materialised):
         _warn_unmodelled_special_register(target.name)
         return
     if target.is_reference_modified:
-        src_reg = ctx.const_to_reg(chr(fill_byte), span=span)
-        _store_move_value(ctx, target, src_reg, materialised, span=span)
+        src_reg = e.text(chr(e.ctx.figuratives.raw_byte(name)))
+        _store_move_value(e, target, plain_move_source(src_reg), materialised)
         return
-    _fill_whole_receiver(ctx, target, name, fill_byte, materialised, span=span)
+    _fill_whole_receiver(e, target, name, materialised)
 
 
 def _fill_whole_receiver(
-    ctx: EmitContext,
+    e: IrEmitter,
     target: RefModOperand,
     name: str,
-    fill_byte: int,
     materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
 ) -> None:
     """An alphanumeric-edited receiver takes the figurative as a literal of its
     size, edited in; any other takes the raw byte in every position."""
+    ctx, span = e.ctx, e.span
     target_ref, target_rr = ctx.resolve_field_ref(
         target.name,
         materialised,
@@ -993,14 +984,12 @@ def _fill_whole_receiver(
     )
     if target_ref.fl.type_descriptor.category == CobolDataCategory.ALPHANUMERIC_EDITED:
         fill = _figurative_literal(ctx, name, target_ref.fl.byte_length)
-        _store_move_value(
-            ctx, target, ctx.const_to_reg(fill, span=span), materialised, span=span
-        )
+        _store_move_value(e, target, plain_move_source(e.text(fill)), materialised)
         return
     ctx.emit_fill_raw_byte(
         target_rr,
         target_ref.fl,
-        fill_byte,
+        ctx.figuratives.raw_byte(name),
         target_ref.offset_reg,
         extent=target_ref.extent,
         span=span,
@@ -1034,24 +1023,11 @@ def _emit_de_edit(
     return ctx.emit_to_string(value, span=stmt.span)
 
 
-def _receiving_storage(fl: FieldLayout, group_move: bool) -> FieldLayout:
-    """The receiver of a group move is filled as characters; an alphanumeric one
-    already is, and keeps its JUSTIFIED clause."""
-    if group_move and fl.type_descriptor.category != CobolDataCategory.ALPHANUMERIC:
-        return fl.as_characters()
-    return fl
-
-
 def _store_move_value(
-    ctx: EmitContext,
+    e: IrEmitter,
     target: RefModOperand,
-    source_value_reg: Register,
+    source: MoveSource,
     materialised: MaterialisedSectionedLayout,
-    digit_image_reg: Register = NO_REGISTER,
-    *,
-    de_edited_reg: Register = NO_REGISTER,
-    group_source: bool = False,
-    span: SourceSpan | None = None,
 ) -> None:
     """Store an already-evaluated MOVE source value into one receiving field.
 
@@ -1060,16 +1036,16 @@ def _store_move_value(
 
     A numeric sender moved to a character receiver sends its digit image (an
     unsigned integer of its digit positions, P positions as zeros) rather than
-    its value; digit_image_reg carries it, and is used only for character
-    receivers without target reference modification.
-
-    A numeric-edited sender moved to a numeric or numeric-edited receiver is
-    de-edited first; de_edited_reg carries the value recovered from its image.
+    its value; a numeric-edited sender moved to a numeric or numeric-edited
+    receiver is de-edited first. Neither applies to a reference-modified
+    receiver (MoveSource.value_for).
 
     A group sender is an alphanumeric move with no conversion (ANSI X3.23-1985
     MOVE; IBM Enterprise COBOL LR, group moves): its characters fill the
-    receiver as one alphanumeric item, whatever the receiver's category.
+    receiver as one alphanumeric item, whatever the receiver's category
+    (MoveSource.storage_for).
     """
+    ctx, span = e.ctx, e.span
     target_ref, target_rr = ctx.resolve_field_ref(
         target.name,
         materialised,
@@ -1077,21 +1053,7 @@ def _store_move_value(
         subscripts=target.subscripts,
         span=span,
     )
-
-    if (
-        digit_image_reg.is_present()
-        and not target.is_reference_modified
-        and target_ref.fl.type_descriptor.holds_characters
-    ):
-        source_value_reg = digit_image_reg
-
-    if (
-        de_edited_reg.is_present()
-        and not target.is_reference_modified
-        and not target_ref.fl.type_descriptor.holds_characters
-    ):
-        source_value_reg = de_edited_reg
-
+    source_value_reg = source.value_for(target, target_ref.fl)
     target_value_reg = source_value_reg
 
     # Handle target reference modification (write path): MOVE X TO Y(start:length)
@@ -1149,9 +1111,7 @@ def _store_move_value(
 
     ctx.emit_encode_and_write(
         target_rr,
-        _receiving_storage(
-            target_ref.fl, group_source and not target.is_reference_modified
-        ),
+        source.storage_for(target, target_ref.fl),
         target_value_reg,
         target_ref.offset_reg,
         extent=target_ref.extent,
@@ -1230,7 +1190,17 @@ def lower_arithmetic_corresponding(
         stmt.source, stmt.target, pairs_for_arithmetic, materialised
     )
     step = partial(_corresponding_step, ctx, stmt, materialised)
-    _store(ctx, stmt, _no_size_error_guard, pairs, step, _no_follow_up, materialised)
+    _store(
+        ctx,
+        SizeErrorStore(
+            stmt=stmt,
+            guard=_no_size_error_guard,
+            receivers=pairs,
+            step=step,
+            follow_up=_no_follow_up,
+        ),
+        materialised,
+    )
 
 
 def _corresponding_step(
@@ -1238,10 +1208,13 @@ def _corresponding_step(
     stmt: ArithmeticCorrespondingStatement,
     materialised: MaterialisedSectionedLayout,
     pair: CorrespondingPair,
-) -> tuple[ArithmeticReceiver, Register]:
+) -> ReceiverResult:
     sending = _decode_operand(ctx, pair.source, materialised, span=stmt.span)
     return _in_place_step(
-        ctx, stmt.op, sending, materialised, span=stmt.span, target=pair.target
+        IrEmitter(ctx=ctx, span=stmt.span),
+        InPlaceOperation(op=stmt.op, sending=sending),
+        materialised,
+        pair.target,
     )
 
 
@@ -1484,30 +1457,27 @@ def _sum_operands(
 
 def _write_result(
     ctx: EmitContext,
-    receiver: ArithmeticReceiver,
-    result: Register,
+    result: ReceiverResult,
     materialised: MaterialisedSectionedLayout,
     *,
     span: SourceSpan | None = None,
 ) -> None:
+    receiver = result.receiver
     _emit_arithmetic_writeback(
         ctx,
         receiver.operand,
         receiver.ref,
         receiver.region,
-        ctx.emit_to_string(result, span=span),
+        ctx.emit_to_string(result.value, span=span),
         materialised,
         span=span,
     )
 
 
 def _stored_value(
-    ctx: EmitContext,
-    receiver: ArithmeticReceiver,
-    result: Register,
-    *,
-    span: SourceSpan | None = None,
-) -> Register:
+    ctx: EmitContext, result: ReceiverResult, *, span: SourceSpan | None = None
+) -> ReceiverResult:
+    receiver = result.receiver
     if not receiver.operand.rounded:
         return result
     rounded = ctx.fresh_reg()
@@ -1516,7 +1486,7 @@ def _stored_value(
             result_reg=rounded,
             func_name=FuncName(BuiltinName.COBOL_ROUND),
             args=(
-                result,
+                result.value,
                 ctx.const_to_reg(
                     receiver_rounding_places(receiver.ref.fl.type_descriptor),
                     span=span,
@@ -1525,20 +1495,19 @@ def _stored_value(
         ),
         span=span,
     )
-    return rounded
+    return ReceiverResult(receiver=receiver, value=rounded)
 
 
 def _write_unless_size_error(
     ctx: EmitContext,
-    receiver: ArithmeticReceiver,
-    result: Register,
+    result: ReceiverResult,
     materialised: MaterialisedSectionedLayout,
     *,
     span: SourceSpan | None = None,
 ) -> Register:
-    stored = _stored_value(ctx, receiver, result, span=span)
+    stored = _stored_value(ctx, result, span=span)
     overflow = _compute_overflow_flag(
-        ctx, stored, receiver.ref.fl.type_descriptor, span=span
+        ctx, stored.value, stored.receiver.ref.fl.type_descriptor, span=span
     )
     write_label = ctx.fresh_label("size_ok")
     skip_label = ctx.fresh_label("size_err_skip")
@@ -1547,7 +1516,7 @@ def _write_unless_size_error(
         span=span,
     )
     ctx.emit_inst(Label_(label=write_label), span=span)
-    _write_result(ctx, receiver, stored, materialised, span=span)
+    _write_result(ctx, stored, materialised, span=span)
     ctx.emit_inst(Branch(label=skip_label), span=span)
     ctx.emit_inst(Label_(label=skip_label), span=span)
     return overflow
@@ -1578,14 +1547,11 @@ def _any_flag(
 
 def _emit_zero_divisor_guard(
     ctx: EmitContext,
-    op: str,
     divisor: ArithmeticValue,
     on_size_err_label: CodeLabel,
     *,
     span: SourceSpan | None = None,
 ) -> None:
-    if op != "DIVIDE":
-        return
     is_zero = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
@@ -1606,45 +1572,31 @@ def _emit_zero_divisor_guard(
 
 def _emit_size_error_arm(
     ctx: EmitContext,
-    label: CodeLabel,
-    body: Sequence[CobolStatementType],
-    follow_up: Callable[[], None],
-    end_label: CodeLabel,
+    arm: SizeErrorArm,
     materialised: MaterialisedSectionedLayout,
     *,
     span: SourceSpan | None = None,
 ) -> None:
-    ctx.emit_inst(Label_(label=label), span=span)
-    follow_up()
-    for child in body:
+    ctx.emit_inst(Label_(label=arm.label), span=span)
+    arm.follow_up()
+    for child in arm.statements:
         ctx.lower_statement(child, materialised)
-    ctx.emit_inst(Branch(label=end_label), span=span)
-
-
-type ReceiverStep[R] = Callable[[R], tuple[ArithmeticReceiver, Register]]
-SizeErrorGuard = Callable[[CodeLabel], None]
-SizeErrorPhrases = (
-    ArithmeticStatement | ArithmeticCorrespondingStatement | ComputeStatement
-)
+    ctx.emit_inst(Branch(label=arm.end), span=span)
 
 
 def _store_guarded[R](
     ctx: EmitContext,
-    stmt: SizeErrorPhrases,
-    guard: SizeErrorGuard,
-    receivers: Sequence[R],
-    step: ReceiverStep[R],
-    follow_up: Callable[[], None],
+    store: SizeErrorStore[R],
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    span = stmt.span
+    span = store.stmt.span
     on_label = ctx.fresh_label("on_size_err")
     not_on_label = ctx.fresh_label("not_on_size_err")
     end_label = ctx.fresh_label("size_err_end")
-    guard(on_label)
+    store.guard(on_label)
     flags = [
-        _write_unless_size_error(ctx, *step(target), materialised, span=span)
-        for target in receivers
+        _write_unless_size_error(ctx, store.step(target), materialised, span=span)
+        for target in store.receivers
     ]
     ctx.emit_inst(
         BranchIf(
@@ -1655,58 +1607,50 @@ def _store_guarded[R](
     )
     _emit_size_error_arm(
         ctx,
-        on_label,
-        stmt.on_size_error,
-        _no_follow_up,
-        end_label,
+        SizeErrorArm(
+            label=on_label,
+            statements=store.stmt.on_size_error,
+            follow_up=_no_follow_up,
+            end=end_label,
+        ),
         materialised,
         span=span,
     )
     _emit_size_error_arm(
         ctx,
-        not_on_label,
-        stmt.not_on_size_error,
-        follow_up,
-        end_label,
+        SizeErrorArm(
+            label=not_on_label,
+            statements=store.stmt.not_on_size_error,
+            follow_up=store.follow_up,
+            end=end_label,
+        ),
         materialised,
         span=span,
     )
     ctx.emit_inst(Label_(label=end_label), span=span)
 
 
-def _store_unguarded[R](
+def _store_unguarded(
     ctx: EmitContext,
-    target: R,
-    step: ReceiverStep[R],
+    result: ReceiverResult,
     materialised: MaterialisedSectionedLayout,
     *,
     span: SourceSpan | None = None,
 ) -> None:
-    receiver, result = step(target)
-    _write_result(
-        ctx,
-        receiver,
-        _stored_value(ctx, receiver, result, span=span),
-        materialised,
-        span=span,
-    )
+    _write_result(ctx, _stored_value(ctx, result, span=span), materialised, span=span)
 
 
 def _store[R](
     ctx: EmitContext,
-    stmt: SizeErrorPhrases,
-    guard: SizeErrorGuard,
-    receivers: Sequence[R],
-    step: ReceiverStep[R],
-    follow_up: Callable[[], None],
+    store: SizeErrorStore[R],
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    if stmt.on_size_error or stmt.not_on_size_error:
-        _store_guarded(ctx, stmt, guard, receivers, step, follow_up, materialised)
+    if store.stmt.on_size_error or store.stmt.not_on_size_error:
+        _store_guarded(ctx, store, materialised)
         return
-    for target in receivers:
-        _store_unguarded(ctx, target, step, materialised, span=stmt.span)
-    follow_up()
+    for target in store.receivers:
+        _store_unguarded(ctx, store.step(target), materialised, span=store.stmt.span)
+    store.follow_up()
 
 
 def _no_size_error_guard(_on_label: CodeLabel) -> None:
@@ -1718,13 +1662,12 @@ def _no_follow_up() -> None:
 
 
 def _in_place_step(
-    ctx: EmitContext,
-    op: str,
-    sending: ArithmeticValue,
+    e: IrEmitter,
+    operation: InPlaceOperation,
     materialised: MaterialisedSectionedLayout,
-    span: SourceSpan | None,
     target: RefModOperand,
-) -> tuple[ArithmeticReceiver, Register]:
+) -> ReceiverResult:
+    ctx, span = e.ctx, e.span
     receiver = _resolve_receiver(ctx, target, materialised, span=span)
     current = _operand_value(
         ctx,
@@ -1732,120 +1675,91 @@ def _in_place_step(
         _read_receiver(ctx, receiver, materialised, span=span),
         materialised,
     )
-    return (
-        receiver,
-        _emit_verb_operation(
-            ctx, op, current, sending, (target,), materialised, span=span
+    return ReceiverResult(
+        receiver=receiver,
+        value=_emit_verb_operation(
+            ctx,
+            operation.op,
+            current,
+            operation.sending,
+            (target,),
+            materialised,
+            span=span,
         ).register,
     )
 
 
 def _giving_step(
-    ctx: EmitContext,
+    e: IrEmitter,
     result: Register,
     materialised: MaterialisedSectionedLayout,
-    span: SourceSpan | None,
     target: RefModOperand,
-) -> tuple[ArithmeticReceiver, Register]:
-    return _resolve_receiver(ctx, target, materialised, span=span), result
+) -> ReceiverResult:
+    return ReceiverResult(
+        receiver=_resolve_receiver(e.ctx, target, materialised, span=e.span),
+        value=result,
+    )
 
 
 def _emit_remainder(
     ctx: EmitContext,
     stmt: ArithmeticStatement,
-    dividend: ArithmeticValue,
-    divisor: ArithmeticValue,
+    operands: DivideOperands,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     match stmt.remainder:
         case None:
             return
         case remainder_op:
-            _write_remainder(
+            quotient_op = stmt.giving[0]
+            value = _remainder_value(
+                IrEmitter(ctx=ctx, span=stmt.span),
+                operands,
+                field_scale(
+                    materialised.resolve(quotient_op.name, quotient_op.qualifiers)[
+                        0
+                    ].type_descriptor
+                ).decimal_places,
+            )
+            receiver = _resolve_receiver(
+                ctx, remainder_op, materialised, span=stmt.span
+            )
+            _write_result(
                 ctx,
-                remainder_op,
-                dividend,
-                divisor,
-                stmt.giving[0],
+                ReceiverResult(receiver=receiver, value=value),
                 materialised,
                 span=stmt.span,
             )
 
 
-def _emit_exact(
-    ctx: EmitContext,
-    builtin: str,
-    left: Register,
-    right: Register,
-    places: int,
-    *,
-    span: SourceSpan | None = None,
+def _remainder_value(
+    e: IrEmitter, operands: DivideOperands, quotient_places: int
 ) -> Register:
-    result = ctx.fresh_reg()
-    ctx.emit_inst(
-        CallFunction(
-            result_reg=result,
-            func_name=FuncName(builtin),
-            args=(left, right, ctx.const_to_reg(places, span=span)),
-        ),
-        span=span,
-    )
-    return result
-
-
-def _write_remainder(
-    ctx: EmitContext,
-    remainder_op: RefModOperand,
-    dividend: ArithmeticValue,
-    divisor: ArithmeticValue,
-    quotient_op: RefModOperand,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None = None,
-) -> None:
-    quotient_places = field_scale(
-        materialised.resolve(quotient_op.name, quotient_op.qualifiers)[
-            0
-        ].type_descriptor
-    ).decimal_places
+    dividend, divisor = operands.dividend, operands.divisor
     product_places = quotient_places + divisor.scale.decimal_places
-    quotient = _emit_exact(
-        ctx,
+    quotient = e.call(
         BuiltinName.COBOL_DIVIDE,
         dividend.register,
         divisor.register,
-        quotient_places,
-        span=span,
+        e.int_(quotient_places),
     )
-    product = _emit_exact(
-        ctx,
-        BuiltinName.COBOL_MULTIPLY,
-        quotient,
-        divisor.register,
-        product_places,
-        span=span,
+    product = e.call(
+        BuiltinName.COBOL_MULTIPLY, quotient, divisor.register, e.int_(product_places)
     )
-    remainder = _emit_exact(
-        ctx,
+    return e.call(
         BuiltinName.COBOL_SUBTRACT,
         dividend.register,
         product,
-        max(dividend.scale.decimal_places, product_places),
-        span=span,
-    )
-    _write_result(
-        ctx,
-        _resolve_receiver(ctx, remainder_op, materialised, span=span),
-        remainder,
-        materialised,
-        span=span,
+        e.int_(max(dividend.scale.decimal_places, product_places)),
     )
 
 
 def _divisor_guard(
     ctx: EmitContext, stmt: ArithmeticStatement, divisor: ArithmeticValue
 ) -> SizeErrorGuard:
-    return partial(_emit_zero_divisor_guard, ctx, stmt.op, divisor, span=stmt.span)
+    if stmt.op != "DIVIDE":
+        return _no_size_error_guard
+    return partial(_emit_zero_divisor_guard, ctx, divisor, span=stmt.span)
 
 
 def lower_arithmetic(
@@ -1860,9 +1774,23 @@ def lower_arithmetic(
     sending = _sum_operands(
         ctx, stmt.operands, stmt.targets, materialised, span=stmt.span
     )
-    step = partial(_in_place_step, ctx, stmt.op, sending, materialised, stmt.span)
-    guard = _divisor_guard(ctx, stmt, sending)
-    _store(ctx, stmt, guard, stmt.targets, step, _no_follow_up, materialised)
+    step = partial(
+        _in_place_step,
+        IrEmitter(ctx=ctx, span=stmt.span),
+        InPlaceOperation(op=stmt.op, sending=sending),
+        materialised,
+    )
+    _store(
+        ctx,
+        SizeErrorStore(
+            stmt=stmt,
+            guard=_divisor_guard(ctx, stmt, sending),
+            receivers=tuple(stmt.targets),
+            step=step,
+            follow_up=_no_follow_up,
+        ),
+        materialised,
+    )
 
 
 def _lower_arithmetic_giving(
@@ -1876,10 +1804,27 @@ def _lower_arithmetic_giving(
     result = _emit_verb_operation(
         ctx, stmt.op, first, rest, stmt.giving, materialised, span=span
     )
-    step = partial(_giving_step, ctx, result.register, materialised, span)
-    remainder = partial(_emit_remainder, ctx, stmt, first, rest, materialised)
-    guard = _divisor_guard(ctx, stmt, rest)
-    _store(ctx, stmt, guard, stmt.giving, step, remainder, materialised)
+    step = partial(
+        _giving_step, IrEmitter(ctx=ctx, span=span), result.register, materialised
+    )
+    remainder = partial(
+        _emit_remainder,
+        ctx,
+        stmt,
+        DivideOperands(dividend=first, divisor=rest),
+        materialised,
+    )
+    _store(
+        ctx,
+        SizeErrorStore(
+            stmt=stmt,
+            guard=_divisor_guard(ctx, stmt, rest),
+            receivers=tuple(stmt.giving),
+            step=step,
+            follow_up=remainder,
+        ),
+        materialised,
+    )
 
 
 def _compute_operand(target: ComputeTarget) -> RefModOperand:
@@ -1928,8 +1873,20 @@ def lower_compute(
     )
     if not targets:
         return
-    step = partial(_giving_step, ctx, result_reg, materialised, span)
-    _store(ctx, stmt, _no_size_error_guard, targets, step, _no_follow_up, materialised)
+    step = partial(
+        _giving_step, IrEmitter(ctx=ctx, span=span), result_reg, materialised
+    )
+    _store(
+        ctx,
+        SizeErrorStore(
+            stmt=stmt,
+            guard=_no_size_error_guard,
+            receivers=tuple(targets),
+            step=step,
+            follow_up=_no_follow_up,
+        ),
+        materialised,
+    )
 
 
 def lower_if(
