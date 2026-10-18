@@ -435,32 +435,16 @@ public final class DataFieldSerializer {
     }
 
     /**
-     * The entry's own USAGE clause, or null when it has none. The ASG reader
-     * applies a group's USAGE to the items in it.
+     * The entry's own USAGE clause as ProLeap's ASG names it (its
+     * UsageClauseType, e.g. PACKED_DECIMAL), or null when it has none. The ASG
+     * reader reads the synonyms as one USAGE and applies a group's USAGE to the
+     * items in it.
      */
     private static String extractUsage(DataDescriptionEntryGroup group) {
         if (group.getUsageClause() != null && group.getUsageClause().getUsageClauseType() != null) {
-            return mapUsageType(group.getUsageClause().getUsageClauseType().name());
+            return group.getUsageClause().getUsageClauseType().name();
         }
         return null;
-    }
-
-    /**
-     * Maps ProLeap usage clause type names to standard COBOL usage strings.
-     */
-    private static String mapUsageType(String proleapType) {
-        return switch (proleapType) {
-            case "COMP_3", "PACKED_DECIMAL" -> "COMP-3";
-            case "COMP", "COMP_4", "BINARY" -> "COMP";
-            case "COMP_1" -> "COMP-1";
-            case "COMP_2" -> "COMP-2";
-            case "COMP_5" -> "COMP-5";
-            case "DISPLAY_1" -> "DISPLAY-1";
-            case "INDEX" -> "INDEX";
-            case "NATIONAL" -> "NATIONAL";
-            case "POINTER" -> "POINTER";
-            default -> "DISPLAY";
-        };
     }
 
     /**
