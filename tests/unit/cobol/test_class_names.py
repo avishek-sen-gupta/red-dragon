@@ -51,6 +51,7 @@ _CLASSES = {
                     _item("NONE", "NUMERIC", "241"),
                 ],
             },
+            {"name": "UNSUBSTITUTED", "items": [_item("NONE", "NAME", "XXXXX050")]},
         ]
     }
 }
@@ -68,6 +69,12 @@ def test_class_clauses_parse_round_trip_and_name_native_character_sets() -> None
             AlphabetItem(AlphabetLink.THRU, AlphabetLiteralKind.NONNUMERIC, "D"),
         ),
     )
+    assert [c.name for c in asg.classes] == [
+        "A-THRU-D",
+        "D-THRU-A",
+        "ORDINALS",
+        "LETTERS",
+    ]
     assert CobolASG.from_dict(asg.to_dict()) == asg
     assert (
         [index.characters(c.name) for c in asg.classes],
