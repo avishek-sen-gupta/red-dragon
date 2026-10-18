@@ -184,7 +184,7 @@ def lower_program(
     copybook_dirs: Sequence[Path],
     work_dir: Path,
     tolerant: bool,
-) -> Path:
+) -> tuple[Path, ...]:
     text = functools.reduce(
         lambda t, spec: spec.source_prepass(t), specs, source.decode("utf-8")
     )

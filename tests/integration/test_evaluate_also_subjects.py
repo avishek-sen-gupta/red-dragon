@@ -69,7 +69,7 @@ def _statement(bridge_jar: str, *statement_lines: str) -> dict:  # noqa: F811
     raw = RealSubprocessRunner().run(
         ["java", "-jar", bridge_jar], to_fixed(_program(*statement_lines))
     )
-    return json.loads(raw)["paragraphs"][0]["statements"][0]
+    return json.loads(raw)["programs"][0]["paragraphs"][0]["statements"][0]
 
 
 def _ran(*statement_lines: str) -> int:

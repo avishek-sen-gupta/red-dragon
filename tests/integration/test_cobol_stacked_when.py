@@ -94,7 +94,9 @@ def _value(literal: str) -> ValueObject:
 @covers(CobolFeature.EVALUATE)
 def test_a_stacked_when_is_one_when_with_one_body() -> None:
     source = "".join("       " + line + "\n" for line in _PROGRAM).encode()
-    statements = make_cobol_parser().parse(source).paragraphs[0].statements
+    statements = (
+        make_cobol_parser().parse(source).first_program.paragraphs[0].statements
+    )
     (first, second), (true_when,) = _whens(statements[1]), _whens(statements[9])
 
     assert (

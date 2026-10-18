@@ -25,6 +25,7 @@ from cobol_asg.cobol_statements import (
     parse_statement,
 )
 from cobol_asg.collating_sequence_phrase import CollatingSequencePhrase
+from cobol_asg.contained_programs import contained_programs, program_alone
 from cobol_asg.decimal_point import DecimalPoint
 from cobol_asg.edit_picture import (
     DEFAULT_CURRENCY,
@@ -34,6 +35,7 @@ from cobol_asg.figurative_names import with_canonical_figuratives
 from cobol_asg.implementor_switch import ImplementorSwitch
 from cobol_asg.lp32 import LP32_MODE
 from cobol_asg.nonnumeric_literal import literal_characters, written_literal
+from cobol_asg.program_attribute import ProgramAttribute
 from cobol_asg.program_conventions import ProgramConventions
 from cobol_asg.source_span import SourceSpan
 from cobol_asg.storage_layout import file_section_layout, section_layout
@@ -202,9 +204,13 @@ class CobolASG:
         sections: Procedure Division sections.
         paragraphs: Standalone paragraphs (no section).
         statements: Division-level bare statements (no paragraph or section).
+        attribute: The PROGRAM-ID attribute (COMMON, INITIAL, ...), NONE if absent.
+        programs: The programs this one directly contains, in source order.
     """
 
     program_id: str = ""
+    attribute: ProgramAttribute = ProgramAttribute.NONE
+    programs: tuple[CobolASG, ...] = ()
     file_control: list[FileControlEntry] = field(default_factory=list)
     data_fields: list[CobolField] = field(default_factory=list)
     linkage_fields: list[CobolField] = field(default_factory=list)
@@ -240,7 +246,9 @@ class CobolASG:
         comma = bool(
             written.get("special_names", {}).get("decimal_point_is_comma", False)
         )
-        data = with_canonical_figuratives(DecimalPoint(comma).program(written))
+        data = with_canonical_figuratives(
+            DecimalPoint(comma).program(program_alone(written))
+        )
         # Build FD-record-name → SELECT-file-name mapping from fd_name tags
         # (populated by bridge since the fd_name fix). Level-1 fields only.
         record_to_select: dict[str, str] = {
@@ -260,6 +268,11 @@ class CobolASG:
         )
         return cls(
             program_id=data.get("program_id", ""),
+            attribute=ProgramAttribute(data.get("attribute", "")),
+            programs=tuple(
+                CobolASG.from_dict(p, addressing_mode)
+                for p in contained_programs(written)
+            ),
             file_control=[
                 FileControlEntry.from_dict(e) for e in data.get("file_control", [])
             ],
@@ -334,6 +347,16 @@ class CobolASG:
         }
         return (
             ({"program_id": self.program_id} if self.program_id else {})
+            | (
+                {"attribute": self.attribute.value}
+                if self.attribute != ProgramAttribute.NONE
+                else {}
+            )
+            | (
+                {"programs": [p.to_dict() for p in self.programs]}
+                if self.programs
+                else {}
+            )
             | ({"special_names": special_names} if special_names else {})
             | {section: items for section, items in listed.items() if items}
             | self._procedure_using_dict()

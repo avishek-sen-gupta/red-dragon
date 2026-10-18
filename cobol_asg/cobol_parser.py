@@ -16,7 +16,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from cobol_asg.addressing_mode import AddressingMode
-from cobol_asg.asg_types import CobolASG
+from cobol_asg.compilation_unit import CobolCompilationUnit
 from cobol_asg.lp32 import LP32_MODE
 from cobol_asg.source_text import decode_source
 from cobol_asg.subprocess_runner import (
@@ -38,12 +38,12 @@ class CobolParser(ABC):
         self,
         source: bytes,
         preprocessor: Callable[[dict], dict] = _IDENTITY,
-    ) -> CobolASG:
-        """Parse COBOL source bytes into an ASG.
+    ) -> CobolCompilationUnit:
+        """Parse COBOL source bytes into the compilation unit of its programs.
 
-        *preprocessor* is called on the raw bridge JSON dict before
-        :func:`CobolASG.from_dict` runs — used by the CICS strategy to
-        resolve CICS-specific expression nodes into generic ones.
+        *preprocessor* is called on each program's raw bridge JSON dict, in
+        pre-order, before :func:`CobolASG.from_dict` runs — used by the CICS
+        strategy to resolve CICS-specific expression nodes into generic ones.
         """
         ...
 
@@ -84,23 +84,18 @@ class ProLeapCobolParser(CobolParser):
         self,
         source: bytes,
         preprocessor: Callable[[dict], dict] = _IDENTITY,
-    ) -> CobolASG:
+    ) -> CobolCompilationUnit:
         logger.debug("Parsing COBOL source (%d bytes) via ProLeap bridge", len(source))
         command = self._build_command()
         try:
             json_str = self._runner.run(command, decode_source(source))
         except CobolParseError as e:
             raise self._enrich_copybook_error(e) from e
-        asg = CobolASG.from_dict(
-            preprocessor(json.loads(json_str)), self._addressing_mode
+        unit = CobolCompilationUnit.from_dict(
+            json.loads(json_str), self._addressing_mode, preprocessor
         )
-        logger.debug(
-            "Parsed ASG: %d data fields, %d sections, %d paragraphs",
-            len(asg.data_fields),
-            len(asg.sections),
-            len(asg.paragraphs),
-        )
-        return asg
+        logger.debug("Parsed compilation unit: %d programs", len(unit.programs))
+        return unit
 
     def expand(self, source: bytes) -> str:
         """The preprocessed source: copybooks inlined, continuations folded.

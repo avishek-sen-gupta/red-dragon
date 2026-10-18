@@ -69,7 +69,7 @@ public class XmlGenerateSerializerTest {
 
         Program program = new CobolParserRunnerImpl()
                 .analyzeFile(new File(resource.toURI()), CobolSourceFormatEnum.FIXED);
-        JsonObject asg = AsgSerializer.serialize(program);
+        JsonObject asg = AsgSerializer.serialize(program).getAsJsonArray("programs").get(0).getAsJsonObject();
 
         JsonArray statements = asg.getAsJsonArray("statements");
         assertNotNull("ASG must have division-level statements", statements);

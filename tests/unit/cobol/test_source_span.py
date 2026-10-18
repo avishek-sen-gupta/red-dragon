@@ -138,7 +138,7 @@ PROBE_SOURCE = b"""\
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_bridge_emits_a_span_for_a_data_division_field():
     """01 WS-B is declared on line 5 of PROBE_SOURCE."""
-    asg = make_cobol_parser().parse(PROBE_SOURCE)
+    asg = make_cobol_parser().parse(PROBE_SOURCE).first_program
     (field,) = [f for f in asg.data_fields if f.name == "WS-B"]
     assert field.span is not None
     assert field.span.line_start == 5
@@ -147,7 +147,7 @@ def test_bridge_emits_a_span_for_a_data_division_field():
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_field_layout_carries_the_declaring_line():
     """WS-B's FieldLayout knows it was declared on line 5."""
-    asg = make_cobol_parser().parse(PROBE_SOURCE)
+    asg = make_cobol_parser().parse(PROBE_SOURCE).first_program
     layout = build_data_layout(asg.data_fields)
     fl = layout.fields["WS-B"]
     assert fl.span is not None
@@ -173,7 +173,7 @@ def test_index_items_are_deliberately_spanless():
        PROCEDURE DIVISION.
            STOP RUN.
 """
-    asg = make_cobol_parser().parse(indexed_source)
+    asg = make_cobol_parser().parse(indexed_source).first_program
     index_layout = build_index_layout(asg.data_fields)
     assert index_layout.fields, "expected an index item for IX"
     assert all(fl.span is None for fl in index_layout.fields.values())
@@ -259,7 +259,7 @@ SECTION_SOURCE = b"""\
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_bridge_emits_a_span_for_a_section():
     """MAIN-SECTION SECTION is declared on line 4 of SECTION_SOURCE."""
-    asg = make_cobol_parser().parse(SECTION_SOURCE)
+    asg = make_cobol_parser().parse(SECTION_SOURCE).first_program
     (section,) = [s for s in asg.sections if s.name == "MAIN-SECTION"]
     assert isinstance(section, CobolSection)
     assert section.span is not None
@@ -286,7 +286,7 @@ IF_BRANCH_SOURCE = b"""\
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_if_branch_statements_carry_their_own_spans():
     """THEN-branch MOVE is on line 9, ELSE-branch MOVE on line 11."""
-    asg = make_cobol_parser().parse(IF_BRANCH_SOURCE)
+    asg = make_cobol_parser().parse(IF_BRANCH_SOURCE).first_program
     if_stmt = asg.statements[0]
     assert isinstance(if_stmt, IfStatement)
     assert if_stmt.span is not None and if_stmt.span.line_start == 8
@@ -315,7 +315,7 @@ GOTO_SOURCE = b"""\
 
 
 def _goto_in(paragraph_name: str) -> GotoStatement:
-    asg = make_cobol_parser().parse(GOTO_SOURCE)
+    asg = make_cobol_parser().parse(GOTO_SOURCE).first_program
     (para,) = [p for p in asg.paragraphs if p.name == paragraph_name]
     (stmt,) = para.statements
     assert isinstance(stmt, GotoStatement)
@@ -407,7 +407,7 @@ DECLARATIVES_SOURCE = b"""\
 def test_bridge_emits_a_span_for_a_declarative_section():
     """IO-ERR SECTION is declared on line 14 of DECLARATIVES_SOURCE, inside
     the DECLARATIVES block."""
-    asg = make_cobol_parser().parse(DECLARATIVES_SOURCE)
+    asg = make_cobol_parser().parse(DECLARATIVES_SOURCE).first_program
     (section,) = [s for s in asg.declaratives if s.name == "IO-ERR"]
     assert section.use is not None, "expected the USE AFTER ERROR clause"
     assert section.span is not None

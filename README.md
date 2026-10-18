@@ -251,7 +251,7 @@ vm, stats = execute_cfg(
 
 RedDragon can execute real-world multi-file codebases. Given an entry file, it recursively discovers imports, resolves them to local files, compiles each module independently, links them into a single merged program, and executes it with the same deterministic pipeline.
 
-**Supported across all 15 deterministic frontends** — Python, JavaScript, TypeScript, Java, Go, Rust, C, C++, C#, Kotlin, Scala, Ruby, PHP, Lua, Pascal. COBOL links its main program with the programs it calls through `compile_cobol` (see [Running COBOL](#running-cobol)), which parses, lowers and links through files in a work directory and returns the `LinkedProgram` read back from disk; a kept work directory reuses every compiled program ([linker design §7.1](docs/linker-design.md)). A build can instead lower each program once (`lower_program`), link a list of them into one image with no main (`link_units`), and enter it by name (`ProgramEntry`) ([linker design §7.3](docs/linker-design.md)).
+**Supported across all 15 deterministic frontends** — Python, JavaScript, TypeScript, Java, Go, Rust, C, C++, C#, Kotlin, Scala, Ruby, PHP, Lua, Pascal. COBOL links its main program with the programs it calls through `compile_cobol` (see [Running COBOL](#running-cobol)), which parses, lowers and links through files in a work directory and returns the `LinkedProgram` read back from disk; a kept work directory reuses every compiled program ([linker design §7.1](docs/linker-design.md)). A build can instead lower each source once (`lower_program`, a unit for each program in it), link a list of them into one image with no main (`link_units`), and enter it by name (`ProgramEntry`) ([linker design §7.3](docs/linker-design.md)).
 
 ```python
 from pathlib import Path

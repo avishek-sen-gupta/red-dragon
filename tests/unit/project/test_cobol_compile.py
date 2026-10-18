@@ -15,6 +15,7 @@ from interpreter.cobol.file_definitions_data import (
 )
 from interpreter.cobol.layout_data import DATA_LAYOUT, FieldPosition, field_positions
 from interpreter.constants import Language
+from cobol_asg.compilation_unit import programs_in_preorder
 from interpreter.frontend import make_cobol_parser
 from interpreter.frontend_extension_lowering import (
     RedDragonExtensionLoweringStrategy,
@@ -82,7 +83,11 @@ def test_compile_cobol_module_returns_a_unit_with_its_entry_label(tmp_path):
     parser = make_cobol_parser()
     ast_path = tmp_path / "prog.ast.json"
     parser.parse_to_file(_SRC, ast_path)
-    module = compile_cobol_module(_SRC, parser=parser, ast_path=ast_path)
+    module = compile_cobol_module(
+        _SRC,
+        parser=parser,
+        program=programs_in_preorder(json.loads(ast_path.read_text()))[0],
+    )
     assert (type(module), len(module.ir) > 0, module.entry_label) == (
         ModuleUnit,
         True,
@@ -252,8 +257,8 @@ def test_each_linked_program_declares_its_files_and_the_run_holds_the_mains(
         programs=(SourceFile(Path("FCALLEE.cbl"), _FILE_CALLEE),),
         parser=parser,
     )
-    main_files = file_definitions_data(parser.parse(_FILE_CALLER))
-    callee_files = file_definitions_data(parser.parse(_FILE_CALLEE))
+    main_files = file_definitions_data(parser.parse(_FILE_CALLER).first_program)
+    callee_files = file_definitions_data(parser.parse(_FILE_CALLEE).first_program)
     declared = [i for i in linked.merged_ir if isinstance(i, Data)]
     entry = linked.entry_func_label
     vm = run_program(
@@ -292,7 +297,9 @@ def test_the_traced_run_starts_with_the_mains_declarations():
     )
     match trace.initial_state:
         case VMState(declarations=(first, *_)):
-            assert first == file_definitions_data(parser.parse(_FILE_CALLER))
+            assert first == file_definitions_data(
+                parser.parse(_FILE_CALLER).first_program
+            )
         case other:
             raise AssertionError(f"the trace starts without declarations: {other!r}")
 
@@ -308,7 +315,7 @@ def test_parse_stage_writes_one_named_file_per_source(tmp_path):
     )
     result = parse_stage(programs, make_cobol_parser(), _SETTINGS, tmp_path)
     assert {
-        source: (ast, json.loads(ast.read_text())["program_id"])
+        source: (ast, json.loads(ast.read_text())["programs"][0]["program_id"])
         for source, ast in result.items()
     } == {
         p.path: (_SETTINGS.artifact(p, tmp_path, "ast"), f"HELLO{p.path.stem[-1]}")
@@ -387,7 +394,10 @@ def test_compile_cobol_persists_an_ast_for_every_compiled_program(tmp_path):
     )
 
     assert sorted(
-        (ast.name.rpartition("-")[0], json.loads(ast.read_text())["program_id"])
+        (
+            ast.name.rpartition("-")[0],
+            json.loads(ast.read_text())["programs"][0]["program_id"],
+        )
         for ast in tmp_path.glob("*.ast.json")
     ) == [("CALLEE", "CALLEE"), ("__main__", "CALLER")]
 
@@ -476,7 +486,10 @@ def test_the_later_of_two_programs_with_the_same_path_is_compiled(tmp_path):
     )
 
     assert sorted(
-        (ast.name.rpartition("-")[0], json.loads(ast.read_text())["program_id"])
+        (
+            ast.name.rpartition("-")[0],
+            json.loads(ast.read_text())["programs"][0]["program_id"],
+        )
         for ast in tmp_path.glob("*.ast.json")
     ) == [("CALLEE", "SECONDONE"), ("__main__", "CALLER")]
 

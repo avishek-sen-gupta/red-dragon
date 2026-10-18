@@ -66,7 +66,7 @@ def test_the_bridge_states_each_operands_kind() -> None:
     jar = os.environ["PROLEAP_BRIDGE_JAR"]
     doc = json.loads(
         RealSubprocessRunner().run(["java", "-jar", jar], to_fixed(_KINDS))
-    )
+    )["programs"][0]
     move_a, move_spaces, move_all, display, add, string, init, call, write = doc[
         "statements"
     ][:9]

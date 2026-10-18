@@ -101,7 +101,7 @@ def _says_own_name(name: str, width: int) -> bytes:
 
 
 def _lowered(source: bytes, work_dir: Path) -> Path:
-    return lower_program(
+    (unit,) = lower_program(
         source,
         parser=make_cobol_parser(),
         specs=(),
@@ -109,6 +109,7 @@ def _lowered(source: bytes, work_dir: Path) -> Path:
         work_dir=work_dir,
         tolerant=False,
     )
+    return unit
 
 
 def _image(sources: tuple[bytes, ...], work_dir: Path) -> LinkedProgram:

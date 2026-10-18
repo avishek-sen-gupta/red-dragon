@@ -104,7 +104,7 @@ public class CallTargetSerializerTest {
         File file = new File(resource.toURI());
         Program program = new CobolParserRunnerImpl()
                 .analyzeFile(file, CobolSourceFormatEnum.FIXED);
-        return AsgSerializer.serialize(program);
+        return AsgSerializer.serialize(program).getAsJsonArray("programs").get(0).getAsJsonObject();
     }
 
     private JsonObject findParagraph(JsonArray paragraphs, String name) {

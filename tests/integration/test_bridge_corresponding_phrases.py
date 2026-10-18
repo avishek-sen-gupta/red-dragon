@@ -63,7 +63,9 @@ def _shape(
 @covers(CobolFeature.ADD, CobolFeature.SUBTRACT, CobolFeature.ON_SIZE_ERROR)
 def test_corresponding_statements_carry_rounded_and_size_error_phrases():
     source = "".join("       " + line + "\n" for line in _PROGRAM).encode()
-    add, subtract, _goback = make_cobol_parser().parse(source).paragraphs[0].statements
+    add, subtract, _goback = (
+        make_cobol_parser().parse(source).first_program.paragraphs[0].statements
+    )
     assert [_shape(add), _shape(subtract)] == [
         ("ADD", "G1", "G2", True, [("'E'", ["F"])], [("'N'", ["F"])]),
         ("SUBTRACT", "G1", "G2", False, [("'S'", ["F"])], []),

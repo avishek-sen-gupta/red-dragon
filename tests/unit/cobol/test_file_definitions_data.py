@@ -65,7 +65,7 @@ def _field(name: str, value: DataScalar | DataRecord | DataList) -> DataField:
 
 @covers(CobolFeature.SECTION_FILE, status=FeatureStatus.PARTIAL)
 def test_each_select_is_declared_with_its_fd_format():
-    asg = make_cobol_parser().parse(_SOURCE)
+    asg = make_cobol_parser().parse(_SOURCE).first_program
     in_fd = DataRecord(
         (
             _field("recording_mode", _text("V")),

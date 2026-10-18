@@ -168,7 +168,7 @@ class CobolFrontend(Frontend):
         namespace_resolver: NamespaceResolver = Frontend._NULL_RESOLVER,
         resolved_imports: dict[str, PathName] = {},
     ) -> list[InstructionBase]:
-        """Lower COBOL source to IR via the ProLeap bridge."""
+        """Lower the first program of COBOL source to IR via the ProLeap bridge."""
 
         def _chained_preprocess(data: dict) -> dict:
             for strat in self._extension_strategies:
@@ -176,11 +176,13 @@ class CobolFrontend(Frontend):
             return data
 
         with dialect_parsers_in_scope(self._dialect_parsers):
-            asg = self._parser.parse(source, preprocessor=_chained_preprocess)
-        return self._lower_asg(asg)
+            unit = self._parser.parse(source, preprocessor=_chained_preprocess)
+        return self._lower_asg(unit.first_program)
 
     def lower_from_ast_dict(self, data: dict) -> list[InstructionBase]:
-        """Lower from a raw bridge JSON dict — no subprocess, no source bytes.
+        """Lower one program from its raw bridge JSON dict — no subprocess, no
+        source bytes. *data* is one program object of a compilation unit, as
+        :func:`cobol_asg.compilation_unit.programs_in_preorder` yields it.
 
         Applies extension strategy preprocessors (same as lower()) then lowers
         the resulting ASG to IR. Use this in Phase 2 of the AST cache pipeline

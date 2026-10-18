@@ -59,7 +59,7 @@ def _moves(stmts: Sequence[CobolStatementType]) -> list[tuple[str, list[str]] | 
 def test_conditional_phrases_carry_their_statements_into_the_asg():
     source = "".join("       " + line + "\n" for line in _PROGRAM).encode()
     string_stmt, unstring_stmt, dynamic_call, static_call, _goback = (
-        make_cobol_parser().parse(source).paragraphs[0].statements
+        make_cobol_parser().parse(source).first_program.paragraphs[0].statements
     )
     assert isinstance(string_stmt, StringStatement)
     assert isinstance(unstring_stmt, UnstringStatement)

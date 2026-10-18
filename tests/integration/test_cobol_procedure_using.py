@@ -49,7 +49,7 @@ MAIN_SRC = (
 
 @covers(CobolFeature.PROCEDURE_DIVISION_USING)
 def test_the_bridge_records_the_using_list_in_order() -> None:
-    asg = make_cobol_parser().parse(SUB_SRC.encode())
+    asg = make_cobol_parser().parse(SUB_SRC.encode()).first_program
 
     assert asg.procedure_using == [
         CallUsingParam(name="LK-A", param_type="REFERENCE"),

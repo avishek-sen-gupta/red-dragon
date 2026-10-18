@@ -16,7 +16,9 @@ class _RecordingRunner(SubprocessRunner):
     """Captures the command; returns a fixed minimal ASG JSON."""
 
     def __init__(
-        self, stdout: str = '{"program_id": "T"}', raise_exc: Exception | None = None
+        self,
+        stdout: str = '{"programs": [{"program_id": "T"}]}',
+        raise_exc: Exception | None = None,
     ):
         self.command: list[str] | None = None
         self.input_data: str | None = None

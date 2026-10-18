@@ -17,7 +17,7 @@ _FIXTURES = (
 
 
 def _parsed(fixture: str) -> CobolASG:
-    return make_cobol_parser().parse((_FIXTURES / fixture).read_bytes())
+    return make_cobol_parser().parse((_FIXTURES / fixture).read_bytes()).first_program
 
 
 def _placed(fields: Sequence[CobolField]) -> list[tuple[str, int]]:

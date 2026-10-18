@@ -57,7 +57,7 @@ def test_numeric_edited_value_stores_a_nonnumeric_literal_and_edits_a_numeric_on
             ["java", "-jar", bridge_jar],
             cobol_helpers.to_fixed(_program(fields, [])),
         )
-    )
+    )["programs"][0]
     numeric = {
         child["name"]: child.get("value_is_numeric", False)
         for child in obj["data_fields"][0]["children"]

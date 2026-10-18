@@ -22,7 +22,9 @@ bridge_jar = cobol_helpers.bridge_jar
 
 def _parse(src: Sequence[str], jar: str) -> dict:
     fixed = "\n".join("       " + line for line in src) + "\n"
-    return json.loads(RealSubprocessRunner().run(["java", "-jar", jar], fixed))
+    return json.loads(RealSubprocessRunner().run(["java", "-jar", jar], fixed))[
+        "programs"
+    ][0]
 
 
 @covers(CobolFeature.FIGURATIVE_ALL)

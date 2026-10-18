@@ -55,7 +55,7 @@ def _statement(bridge_jar: str, *statement_lines: str) -> dict:
             [*_PREAMBLE, *(f"    {line}" for line in statement_lines), "    STOP RUN."]
         ),
     )
-    return json.loads(raw)["paragraphs"][0]["statements"][0]
+    return json.loads(raw)["programs"][0]["paragraphs"][0]["statements"][0]
 
 
 def _move_source(bridge_jar: str, statement_line: str) -> dict:

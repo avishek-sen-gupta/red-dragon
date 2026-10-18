@@ -379,12 +379,20 @@ process:
 | Stage | Reads | Writes |
 |---|---|---|
 | `parse_stage` | source bytes | `<stem>-<digest>.ast.json` (bridge JSON) |
-| lowering (`_Lowering.lower`) | the AST file | `<stem>-<digest>.unit.json` (a `ModuleUnit`) |
+| lowering (`_Lowering.lower`) | the AST file | a `<stem>[.<PROGRAM-ID>]-<digest>.unit.json` (a `ModuleUnit`) per program |
 | `link_units` | unit files | `image-<digest>.linked.json` (a `LinkedProgram`, no main) |
+
+An AST file is a compilation unit, `{"programs": [...]}`, and may hold several
+programs, batch or nested. Lowering makes a unit of each, in pre-order. Under
+`compile_cobol` the first keeps the source's path and unit name, and each other
+program's module path is `<stem>.<PROGRAM-ID>.cbl`, its unit
+`<stem>.<PROGRAM-ID>-<digest>.unit.json`; lowering reads the AST file to learn
+the program names even when every unit is already on disk.
 
 `compile_cobol` runs the three over a work directory, links its units (callees
 first, the main last) into `<main stem>-<digest>.linked.json` with
-`entry_func_label` at the main program, and returns the `LinkedProgram` read back
+`entry_func_label` at the main program — the first top-level program of the main
+source — and returns the `LinkedProgram` read back
 from the linked file; no frontend or in-memory unit
 crosses a stage. A stage skips a program whose output already exists, so a kept
 work directory reuses every stage's output.
@@ -431,11 +439,12 @@ included. The encoding is verbose
 A build that lowers each program once and links a chosen list keeps lowering and
 linking apart (ADR-185):
 
-- `lower_program(source, *, parser, specs, copybook_dirs, work_dir, tolerant) -> Path`
+- `lower_program(source, *, parser, specs, copybook_dirs, work_dir, tolerant) -> tuple[Path, ...]`
   (`coprocessor_compile.py`) runs every spec's `source_prepass`, makes each
-  spec's strategy and dialect parser, parses and lowers the one program, and
-  returns its unit file. The unit's path is `<PROGRAM-ID>.cbl`, so each program's
-  labels are namespaced by its own name. It discovers nothing.
+  spec's strategy and dialect parser, parses the source and lowers every program
+  in it, in pre-order, and returns their unit files. Each unit's path is
+  `<PROGRAM-ID>.cbl`, so each program's labels are namespaced by its own name. It
+  discovers nothing.
 - `link_units(units, work_dir) -> LinkedProgram` (`cobol_compile.py`) links the
   unit files in the order given, after the COBOL run-unit allocation, which is
   the same for every program. No unit is main: `link_every_module` keeps every
@@ -518,8 +527,8 @@ interpreter/project/
                             lower_cobol_program(), link_units() — COBOL in three stages
                             chained through files (AST, unit, linked); compile_cobol links
                             the main program with a fixed list of other programs
-    coprocessor_compile.py  CoprocessorSpec, compile_program(), lower_program() — one program
-                            lowered with every spec's prepass, strategy and dialect parser
+    coprocessor_compile.py  CoprocessorSpec, compile_program(), lower_program() — one source's
+                            programs lowered with every spec's prepass, strategy and dialect parser
     lowering_settings.py    LoweringSettings — the settings a compiled file's name digests
     ir_codec.py             IrCodec — self-describing JSON for IR values
     unit_codec.py           UnitCodec — ModuleUnit <-> .unit.json

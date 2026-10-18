@@ -104,7 +104,9 @@ class TestCombinedConditions:
 
     def test_bridge_groups_or_of_and_runs_with_abbreviation_subjects(self):
         source = to_fixed(_PROGRAM).encode()
-        stmt = make_cobol_parser().parse(source).paragraphs[0].statements[4]
+        stmt = (
+            make_cobol_parser().parse(source).first_program.paragraphs[0].statements[4]
+        )
         assert isinstance(stmt, IfStatement)
         x1 = {"kind": "ref", "name": "X1"}
 

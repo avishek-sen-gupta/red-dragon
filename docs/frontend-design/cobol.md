@@ -45,11 +45,12 @@ Files are under `interpreter/cobol/` unless prefixed with `cobol_asg/`.
 |------|---------|
 | `cobol_frontend.py` | Main frontend: DATA DIVISION allocation, PROCEDURE DIVISION lowering |
 | `cobol_asg/cobol_statements.py` | Typed statement hierarchy — frozen dataclasses + union type |
-| `features.py` | `CobolFeature` enum — 139 semantic features; used with `@covers(CobolFeature.X)` test decorators |
+| `features.py` | `CobolFeature` enum — 148 semantic features; used with `@covers(CobolFeature.X)` test decorators |
 | `io_provider.py` | Injectable I/O provider: `CobolIOProvider` ABC, `NullIOProvider`, `StubIOProvider` |
 | `cobol_asg/cobol_expression.py` | `ExprNode` union type (`LiteralNode | FieldRefNode | RefModNode | BinOpNode`) + `expr_from_dict()` deserializer; legacy `parse_expression` tokenizer retained for standalone tests |
 | `cobol_asg/cobol_parser.py` | Subprocess bridge to ProLeap JAR |
 | `cobol_asg/asg_types.py` | `CobolASG`, `CobolSection`, `CobolParagraph`, `CobolField` |
+| `cobol_asg/compilation_unit.py` | `CobolCompilationUnit` — a source file's top-level programs; `programs_in_preorder()` over the raw bridge JSON |
 | `cobol_asg/cobol_types.py` | `CobolDataCategory` enum, `CobolTypeDescriptor` |
 | `cobol_asg/pic_parser.py` | PIC clause parser (e.g., `9(5)V99` → type descriptor) |
 | `data_layout.py` | `DataLayout`, `FieldLayout`, `build_data_layout()` |
@@ -62,6 +63,18 @@ Files are under `interpreter/cobol/` unless prefixed with `cobol_asg/`.
 | `zoned_decimal.py` | Zoned decimal encoding/decoding reference |
 | `comp3.py` | COMP-3 (packed decimal) encoding/decoding reference |
 | `alphanumeric.py` | Alphanumeric/EBCDIC encoding reference |
+
+## Compilation Units
+
+A source file is a compilation unit of one or more programs. Programs follow one another, each ended by END PROGRAM (batch compilation), or are contained in another program, ended by END PROGRAM before the containing program's own END PROGRAM header (nested programs; ANSI X3.23-1985 Inter-Program Communication module; IBM Enterprise COBOL LR, "Nested programs"). ProLeap's grammar nests them (`programUnit : ... programUnit* endProgramStatement?`); `CompilationUnit.getTopLevelProgramUnits()` and `ProgramUnit.getContainedProgramUnits()` read that tree from the parse tree.
+
+The bridge emits the compilation unit as `{"programs": [...]}`: the top-level programs in source order. Each program object carries `program_id`, `attribute` (the PROGRAM-ID attribute — `COMMON`, `INITIAL`, ... — or `""`), its own divisions, and `programs`, the programs it directly contains, in source order. A program's divisions never include those of the programs it contains.
+
+`ProLeapCobolParser.parse()` and `AstStore.get()` return a `CobolCompilationUnit` of top-level `CobolASG`s, each with its `attribute` (`ProgramAttribute`) and its contained `programs`; the preprocessor runs on each program object alone, in pre-order. A consumer that handles one program takes `first_program`, as `CobolFrontend.lower(source)` does.
+
+`compile_cobol` and `lower_cobol_program` lower every program of a source, in pre-order (`programs_in_preorder`), each with a fresh frontend into a unit of its own, and link every unit. The run unit's main program is the first top-level program of the main source. A CALL to a sibling or contained program resolves through the run unit's program table like a CALL to a separately compiled one.
+
+Not yet modelled: CALL visibility of contained programs and COMMON (red-dragon-ljku.2), EXTERNAL data and files (ljku.3), GLOBAL names (ljku.4), INITIAL (ljku.5). Today every program in the run unit can CALL every other.
 
 ## Program Declarations
 

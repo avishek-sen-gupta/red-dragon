@@ -56,7 +56,7 @@ _PROGRAM = [
 @covers(CobolFeature.NEXT_SENTENCE)
 def test_the_bridge_keeps_next_sentence_and_where_each_sentence_ends() -> None:
     source = "".join("       " + line + "\n" for line in _PROGRAM).encode()
-    (p1,) = make_cobol_parser().parse(source).paragraphs
+    (p1,) = make_cobol_parser().parse(source).first_program.paragraphs
     branch, search = p1.statements[1], p1.statements[5]
     assert isinstance(branch, IfStatement)
     assert isinstance(search, SearchStatement)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from cobol_asg.asg_types import CobolASG
+from cobol_asg.contained_programs import UNNAMED_PROGRAM
 from interpreter.field_name import FieldName
 from interpreter.var_name import VarName
 
@@ -10,7 +11,6 @@ ENTRY_PREFIX = "__entry_"
 PROGRAM_PREFIX = "__prog_"
 ARGUMENTS_PARAM = VarName("__call_arguments")
 WORKING_STORAGE_FIELD = FieldName("ws_handle")
-UNNAMED_PROGRAM = "MAIN"
 
 
 def entry_var(program_id: str) -> VarName:

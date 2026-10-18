@@ -62,7 +62,7 @@ def _statements(bridge_jar: str, *statement_lines: str) -> list[dict]:
             [*_PREAMBLE, *(f"    {line}" for line in statement_lines), "    STOP RUN."]
         ),
     )
-    return json.loads(raw)["paragraphs"][0]["statements"]
+    return json.loads(raw)["programs"][0]["paragraphs"][0]["statements"]
 
 
 def _expression(bridge_jar: str, statement_line: str) -> dict:

@@ -34,7 +34,9 @@ _PROGRAM = [
 @covers(CobolFeature.READ)
 def test_only_the_next_phrase_makes_a_read_sequential() -> None:
     source = "".join("       " + line + "\n" for line in _PROGRAM).encode()
-    statements = make_cobol_parser().parse(source).paragraphs[0].statements
+    statements = (
+        make_cobol_parser().parse(source).first_program.paragraphs[0].statements
+    )
     assert [s.next_record for s in statements if isinstance(s, ReadStatement)] == [
         False,
         False,

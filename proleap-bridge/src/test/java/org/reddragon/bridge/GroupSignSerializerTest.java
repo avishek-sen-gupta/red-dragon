@@ -46,7 +46,7 @@ public class GroupSignSerializerTest {
         URL resource = getClass().getClassLoader().getResource("fixtures/" + fixtureName);
         Program program = new CobolParserRunnerImpl()
                 .analyzeFile(new File(resource.toURI()), CobolSourceFormatEnum.FIXED);
-        return AsgSerializer.serialize(program);
+        return AsgSerializer.serialize(program).getAsJsonArray("programs").get(0).getAsJsonObject();
     }
 
     private JsonObject findField(JsonArray fields, String name) {

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from cobol_asg.file_enums import FileOrganization
@@ -13,6 +14,7 @@ from interpreter.cobol.io_provider import IOResult, NullIOProvider
 from interpreter.cobol.prime_key import PrimeKey
 from interpreter.data_value import DataList, DataRecord, DataValue
 from interpreter.field_name import FieldName
+from cobol_asg.compilation_unit import programs_in_preorder
 from interpreter.frontend import make_cobol_parser
 from interpreter.instructions import CallFunction, Const, Data, InstructionBase
 from interpreter.project.cobol_compile import compile_cobol_module
@@ -91,7 +93,11 @@ def _ir(source: bytes, tmp_path: Path) -> tuple[InstructionBase, ...]:
     parser = make_cobol_parser()
     ast_path = tmp_path / "program.ast.json"
     parser.parse_to_file(source, ast_path)
-    return compile_cobol_module(source, parser=parser, ast_path=ast_path).ir
+    return compile_cobol_module(
+        source,
+        parser=parser,
+        program=programs_in_preorder(json.loads(ast_path.read_text()))[0],
+    ).ir
 
 
 def _producers(

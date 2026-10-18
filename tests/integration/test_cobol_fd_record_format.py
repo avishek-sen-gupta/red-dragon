@@ -55,8 +55,10 @@ def test_each_fd_carries_its_recording_mode_and_record_clause():
         ]
     )
     bridge_jar = os.environ["PROLEAP_BRIDGE_JAR"]
-    asg = ProLeapCobolParser(RealSubprocessRunner(), bridge_jar).parse(
-        source.encode("utf-8")
+    asg = (
+        ProLeapCobolParser(RealSubprocessRunner(), bridge_jar)
+        .parse(source.encode("utf-8"))
+        .first_program
     )
     expected = [
         FileDescription("FIXED-FILE", RecordingMode.F, NoRecordClause()),
