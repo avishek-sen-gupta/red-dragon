@@ -20,6 +20,7 @@ from cobol_asg.selection_condition import SelectionCondition
 from cobol_asg.truth_value import TruthValue
 from cobol_asg.value_object import ValueObject
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.cobol.lowering_scope import LoweringScope
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.instructions import Binop, Branch, BranchIf, Label_
 from interpreter.ir import CodeLabel
@@ -32,34 +33,32 @@ def lower_evaluate(
     stmt: EvaluateStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
+    scope = LoweringScope(ctx, materialised, stmt.span)
     end_label = ctx.fresh_label("eval_end")
     for child in stmt.children:
-        _lower_evaluate_child(ctx, stmt, child, end_label, materialised)
+        _lower_evaluate_child(scope, stmt.subjects, child, end_label)
     ctx.emit_inst(Label_(label=end_label), span=stmt.span)
 
 
 def _lower_evaluate_child(
-    ctx: EmitContext,
-    stmt: EvaluateStatement,
+    scope: LoweringScope,
+    subjects: Sequence[SelectionSubject],
     child: CobolStatementType,
     end_label: CodeLabel,
-    materialised: MaterialisedSectionedLayout,
 ) -> None:
     if isinstance(child, WhenStatement):
-        _lower_when(ctx, stmt, child, end_label, materialised)
+        _lower_when(scope, _when_condition(scope, subjects, child), child, end_label)
     elif isinstance(child, WhenOtherStatement):
-        _lower_body(ctx, child.children, materialised)
+        _lower_body(scope, child.children)
 
 
 def _lower_when(
-    ctx: EmitContext,
-    stmt: EvaluateStatement,
+    scope: LoweringScope,
+    cond_reg: Register,
     child: WhenStatement,
     end_label: CodeLabel,
-    materialised: MaterialisedSectionedLayout,
 ) -> None:
-    span = stmt.span
-    cond_reg = _when_condition(ctx, stmt, child, materialised)
+    ctx, span = scope.ctx, scope.span
     when_true = ctx.fresh_label("when_true")
     when_false = ctx.fresh_label("when_false")
     ctx.emit_inst(
@@ -67,72 +66,62 @@ def _lower_when(
         span=span,
     )
     ctx.emit_inst(Label_(label=when_true), span=span)
-    _lower_body(ctx, child.children, materialised)
+    _lower_body(scope, child.children)
     ctx.emit_inst(Branch(label=end_label), span=span)
     ctx.emit_inst(Label_(label=when_false), span=span)
 
 
-def _lower_body(
-    ctx: EmitContext,
-    statements: Sequence[CobolStatementType],
-    materialised: MaterialisedSectionedLayout,
-) -> None:
+def _lower_body(scope: LoweringScope, statements: Sequence[CobolStatementType]) -> None:
     for statement in statements:
-        ctx.lower_statement(statement, materialised)
+        scope.ctx.lower_statement(statement, scope.materialised)
 
 
 def _when_condition(
-    ctx: EmitContext,
-    stmt: EvaluateStatement,
+    scope: LoweringScope,
+    subjects: Sequence[SelectionSubject],
     child: WhenStatement,
-    materialised: MaterialisedSectionedLayout,
 ) -> Register:
     return reduce(
-        lambda left, right: _combine(ctx, stmt, "or", left, right),
+        lambda left, right: _combine(scope, "or", left, right),
         (
-            _when_alternative(ctx, stmt, alternative, materialised)
+            _when_alternative(scope, subjects, alternative)
             for alternative in child.alternatives
         ),
-        _when_alternative(ctx, stmt, child, materialised),
+        _when_alternative(scope, subjects, child),
     )
 
 
 def _when_alternative(
-    ctx: EmitContext,
-    stmt: EvaluateStatement,
+    scope: LoweringScope,
+    subjects: Sequence[SelectionSubject],
     child: WhenStatement,
-    materialised: MaterialisedSectionedLayout,
 ) -> Register:
     pair_regs = [
-        _selection_pair(ctx, stmt, subject, obj, materialised)
-        for subject, obj in zip(stmt.subjects, child.objects, strict=False)
+        _selection_pair(scope, subject, obj)
+        for subject, obj in zip(subjects, child.objects, strict=False)
         if not isinstance(obj, AnyObject)
     ]
     return reduce(
-        lambda left, right: _combine(ctx, stmt, "&&", left, right),
+        lambda left, right: _combine(scope, "&&", left, right),
         pair_regs[1:],
-        pair_regs[0] if pair_regs else ctx.const_to_reg(True, span=stmt.span),
+        pair_regs[0] if pair_regs else scope.ctx.const_to_reg(True, span=scope.span),
     )
 
 
 def _selection_pair(
-    ctx: EmitContext,
-    stmt: EvaluateStatement,
-    subject: SelectionSubject,
-    obj: SelectionObject,
-    materialised: MaterialisedSectionedLayout,
+    scope: LoweringScope, subject: SelectionSubject, obj: SelectionObject
 ) -> Register:
     if isinstance(subject, ExpressionSubject) and isinstance(
         obj, (ValueObject, RangeObject)
     ):
-        return ctx.lower_condition(
-            _value_test(subject.expr, obj), materialised, span=stmt.span
+        return scope.ctx.lower_condition(
+            _value_test(subject.expr, obj), scope.materialised, span=scope.span
         )
-    object_truth = _object_truth(ctx, stmt, obj, materialised)
+    object_truth = _object_truth(scope, obj)
     if isinstance(subject, ExpressionSubject):
         return object_truth
-    subject_truth = _subject_truth(ctx, stmt, subject, materialised)
-    return _combine(ctx, stmt, "==", subject_truth, object_truth)
+    subject_truth = _subject_truth(scope, subject)
+    return _combine(scope, "==", subject_truth, object_truth)
 
 
 def _value_test(subject: ExprNode, obj: ValueObject | RangeObject) -> dict:
@@ -153,26 +142,22 @@ def _relation(left: ExprNode, op: str, right: ExprNode) -> dict:
 
 
 def _subject_truth(
-    ctx: EmitContext,
-    stmt: EvaluateStatement,
-    subject: SelectionCondition | TruthValue,
-    materialised: MaterialisedSectionedLayout,
+    scope: LoweringScope, subject: SelectionCondition | TruthValue
 ) -> Register:
     if isinstance(subject, TruthValue):
-        return ctx.const_to_reg(subject.value, span=stmt.span)
-    return ctx.lower_condition(subject.condition, materialised, span=stmt.span)
+        return scope.ctx.const_to_reg(subject.value, span=scope.span)
+    return scope.ctx.lower_condition(
+        subject.condition, scope.materialised, span=scope.span
+    )
 
 
-def _object_truth(
-    ctx: EmitContext,
-    stmt: EvaluateStatement,
-    obj: SelectionObject,
-    materialised: MaterialisedSectionedLayout,
-) -> Register:
+def _object_truth(scope: LoweringScope, obj: SelectionObject) -> Register:
     if isinstance(obj, TruthValue):
-        return ctx.const_to_reg(obj.value, span=stmt.span)
+        return scope.ctx.const_to_reg(obj.value, span=scope.span)
     if isinstance(obj, SelectionCondition):
-        return ctx.lower_condition(obj.condition, materialised, span=stmt.span)
+        return scope.ctx.lower_condition(
+            obj.condition, scope.materialised, span=scope.span
+        )
     raise ValueError(
         "An EVALUATE object answering TRUE, FALSE or a condition must be a "
         "condition, TRUE or FALSE"
@@ -180,20 +165,16 @@ def _object_truth(
 
 
 def _combine(
-    ctx: EmitContext,
-    stmt: EvaluateStatement,
-    operator: str,
-    left: Register,
-    right: Register,
+    scope: LoweringScope, operator: str, left: Register, right: Register
 ) -> Register:
-    result = ctx.fresh_reg()
-    ctx.emit_inst(
+    result = scope.ctx.fresh_reg()
+    scope.ctx.emit_inst(
         Binop(
             result_reg=result,
             operator=resolve_binop(operator),
             left=left,
             right=right,
         ),
-        span=stmt.span,
+        span=scope.span,
     )
     return result
