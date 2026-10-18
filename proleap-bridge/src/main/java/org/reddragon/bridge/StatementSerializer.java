@@ -1262,8 +1262,8 @@ public final class StatementSerializer {
                 obj.addProperty("set_type", "TO");
                 JsonArray targets = new JsonArray();
                 JsonArray values = new JsonArray();
-                // One value per target: each target takes the value of its own
-                // TO phrase, as in SET A TO 1 B TO 2.
+                // Each TO phrase has the one value the grammar allows; every
+                // target of the phrase takes it, as in SET A B TO 1 C TO 2.
                 for (SetTo setTo : stmt.getSetTos()) {
                     JsonObject value = setToValueOperand(setTo.getValues().get(0));
                     for (io.proleap.cobol.asg.metamodel.procedure.set.To to : setTo.getTos()) {
