@@ -144,21 +144,14 @@ class RealFileIOProvider(CobolIOProvider):
     def _driver(
         self, frame: FileFrame, path: Path, mode: OpenMode
     ) -> FileOrganizationDriver:
-        return open_driver(
-            frame.organization,
-            path,
-            mode,
-            frame.record_length,
-            frame.prime_key.offset,
-            frame.prime_key.length,
-        )
+        return open_driver(path, mode, frame.shape())
 
     def _driver_for(
         self, frame: FileFrame, path: Path, mode: OpenMode
     ) -> FileOrganizationDriver:
         if frame.variable and frame.organization in _VARIABLE_DRIVERS:
             drv = _VARIABLE_DRIVERS[frame.organization]()
-            drv.open(path, mode, frame.record_length, 0, 0)
+            drv.open(path, mode, frame.record_length, PrimeKey())
             return drv
         return self._driver(frame, path, mode)
 

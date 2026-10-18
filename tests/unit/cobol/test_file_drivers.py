@@ -13,6 +13,7 @@ from interpreter.cobol.file_drivers import (
     RelativeDriver,
     SequentialDriver,
 )
+from interpreter.cobol.prime_key import PrimeKey
 from tests.covers import covers
 
 RL = 10  # record length for all tests
@@ -27,28 +28,28 @@ class TestSequentialDriver:
     def test_write_and_read_three(self, tmp_path: Path) -> None:
         path = tmp_path / "seq.dat"
         drv = SequentialDriver()
-        drv.open(path, OpenMode.OUTPUT, RL, 0, 0)
+        drv.open(path, OpenMode.OUTPUT, RL, PrimeKey(0, 0))
         drv.write(_b("AAAA"))
         drv.write(_b("BBBB"))
         drv.write(_b("CCCC"))
         drv.close()
 
         drv2 = SequentialDriver()
-        drv2.open(path, OpenMode.INPUT, RL, 0, 0)
+        drv2.open(path, OpenMode.INPUT, RL, PrimeKey(0, 0))
         assert drv2.read_seq().data is not None and drv2.read_seq().data  # type: ignore[union-attr]
 
     @covers(CobolFeature.READ)
     def test_read_all_three_in_order(self, tmp_path: Path) -> None:
         path = tmp_path / "seq.dat"
         drv = SequentialDriver()
-        drv.open(path, OpenMode.OUTPUT, RL, 0, 0)
+        drv.open(path, OpenMode.OUTPUT, RL, PrimeKey(0, 0))
         drv.write(_b("AAAA"))
         drv.write(_b("BBBB"))
         drv.write(_b("CCCC"))
         drv.close()
 
         drv2 = SequentialDriver()
-        drv2.open(path, OpenMode.INPUT, RL, 0, 0)
+        drv2.open(path, OpenMode.INPUT, RL, PrimeKey(0, 0))
         r1 = drv2.read_seq()
         r2 = drv2.read_seq()
         r3 = drv2.read_seq()
@@ -75,19 +76,19 @@ class TestSequentialDriver:
     def test_rewrite_updates_last_read(self, tmp_path: Path) -> None:
         path = tmp_path / "seq.dat"
         drv = SequentialDriver()
-        drv.open(path, OpenMode.OUTPUT, RL, 0, 0)
+        drv.open(path, OpenMode.OUTPUT, RL, PrimeKey(0, 0))
         drv.write(_b("AAAA"))
         drv.write(_b("BBBB"))
         drv.close()
 
         drv2 = SequentialDriver()
-        drv2.open(path, OpenMode.IO, RL, 0, 0)
+        drv2.open(path, OpenMode.IO, RL, PrimeKey(0, 0))
         drv2.read_seq()
         drv2.rewrite(_b("XXXX"))
         drv2.close()
 
         drv3 = SequentialDriver()
-        drv3.open(path, OpenMode.INPUT, RL, 0, 0)
+        drv3.open(path, OpenMode.INPUT, RL, PrimeKey(0, 0))
         first = drv3.read_seq()
         drv3.close()
         assert first.data is not None and b"XXXX" in first.data
@@ -96,12 +97,12 @@ class TestSequentialDriver:
     def test_write_in_input_mode_returns_48(self, tmp_path: Path) -> None:
         path = tmp_path / "seq.dat"
         drv = SequentialDriver()
-        drv.open(path, OpenMode.OUTPUT, RL, 0, 0)
+        drv.open(path, OpenMode.OUTPUT, RL, PrimeKey(0, 0))
         drv.write(_b("AAAA"))
         drv.close()
 
         drv2 = SequentialDriver()
-        drv2.open(path, OpenMode.INPUT, RL, 0, 0)
+        drv2.open(path, OpenMode.INPUT, RL, PrimeKey(0, 0))
         result = drv2.write(_b("BBBB"))
         drv2.close()
         assert result.condition is AccessCondition.WRITE_NOT_PERMITTED
@@ -115,14 +116,14 @@ class TestIndexedDriver:
     def test_write_sorted_by_key(self, tmp_path: Path) -> None:
         path = tmp_path / "idx.dat"
         drv = IndexedDriver()
-        drv.open(path, OpenMode.OUTPUT, RL, self.KO, self.KL)
+        drv.open(path, OpenMode.OUTPUT, RL, PrimeKey(self.KO, self.KL))
         drv.write(_b("CCC"))
         drv.write(_b("AAA"))
         drv.write(_b("BBB"))
         drv.close()
 
         drv2 = IndexedDriver()
-        drv2.open(path, OpenMode.INPUT, RL, self.KO, self.KL)
+        drv2.open(path, OpenMode.INPUT, RL, PrimeKey(self.KO, self.KL))
         r = drv2.read_key(b"AAA")
         drv2.close()
         assert r.condition is AccessCondition.OK
@@ -132,7 +133,7 @@ class TestIndexedDriver:
     def test_duplicate_key_returns_22(self, tmp_path: Path) -> None:
         path = tmp_path / "idx.dat"
         drv = IndexedDriver()
-        drv.open(path, OpenMode.OUTPUT, RL, self.KO, self.KL)
+        drv.open(path, OpenMode.OUTPUT, RL, PrimeKey(self.KO, self.KL))
         drv.write(_b("AAA"))
         result = drv.write(_b("AAA"))
         drv.close()
@@ -142,12 +143,12 @@ class TestIndexedDriver:
     def test_missing_key_returns_23(self, tmp_path: Path) -> None:
         path = tmp_path / "idx.dat"
         drv = IndexedDriver()
-        drv.open(path, OpenMode.OUTPUT, RL, self.KO, self.KL)
+        drv.open(path, OpenMode.OUTPUT, RL, PrimeKey(self.KO, self.KL))
         drv.write(_b("AAA"))
         drv.close()
 
         drv2 = IndexedDriver()
-        drv2.open(path, OpenMode.INPUT, RL, self.KO, self.KL)
+        drv2.open(path, OpenMode.INPUT, RL, PrimeKey(self.KO, self.KL))
         r = drv2.read_key(b"ZZZ")
         drv2.close()
         assert r.condition is AccessCondition.NOT_FOUND
@@ -156,20 +157,20 @@ class TestIndexedDriver:
     def test_delete_compacts_file(self, tmp_path: Path) -> None:
         path = tmp_path / "idx.dat"
         drv = IndexedDriver()
-        drv.open(path, OpenMode.OUTPUT, RL, self.KO, self.KL)
+        drv.open(path, OpenMode.OUTPUT, RL, PrimeKey(self.KO, self.KL))
         drv.write(_b("AAA"))
         drv.write(_b("BBB"))
         drv.write(_b("CCC"))
         drv.close()
 
         drv2 = IndexedDriver()
-        drv2.open(path, OpenMode.IO, RL, self.KO, self.KL)
+        drv2.open(path, OpenMode.IO, RL, PrimeKey(self.KO, self.KL))
         drv2.read_key(b"BBB")
         drv2.delete()
         drv2.close()
 
         drv3 = IndexedDriver()
-        drv3.open(path, OpenMode.INPUT, RL, self.KO, self.KL)
+        drv3.open(path, OpenMode.INPUT, RL, PrimeKey(self.KO, self.KL))
         r = drv3.read_key(b"BBB")
         drv3.close()
         assert r.condition is AccessCondition.NOT_FOUND
@@ -181,11 +182,11 @@ class TestIndexedDriver:
     ) -> None:
         path = tmp_path / "idx.dat"
         drv = IndexedDriver()
-        drv.open(path, OpenMode.OUTPUT, RL, self.KO, self.KL)
+        drv.open(path, OpenMode.OUTPUT, RL, PrimeKey(self.KO, self.KL))
         [drv.write(_b(k)) for k in ("BBB", "DDD", "FFF", "HHH")]
         drv.close()
         drv2 = IndexedDriver()
-        drv2.open(path, OpenMode.IO, RL, self.KO, self.KL)
+        drv2.open(path, OpenMode.IO, RL, PrimeKey(self.KO, self.KL))
         first = drv2.read_seq().data
         drv2.delete()
         after_delete = drv2.read_seq().data
@@ -198,12 +199,12 @@ class TestIndexedDriver:
     def test_write_in_input_mode_returns_48(self, tmp_path: Path) -> None:
         path = tmp_path / "idx.dat"
         drv = IndexedDriver()
-        drv.open(path, OpenMode.OUTPUT, RL, self.KO, self.KL)
+        drv.open(path, OpenMode.OUTPUT, RL, PrimeKey(self.KO, self.KL))
         drv.write(_b("AAA"))
         drv.close()
 
         drv2 = IndexedDriver()
-        drv2.open(path, OpenMode.INPUT, RL, self.KO, self.KL)
+        drv2.open(path, OpenMode.INPUT, RL, PrimeKey(self.KO, self.KL))
         result = drv2.write(_b("BBB"))
         drv2.close()
         assert result.condition is AccessCondition.WRITE_NOT_PERMITTED
@@ -212,13 +213,13 @@ class TestIndexedDriver:
     def test_start_positions_for_seq_scan(self, tmp_path: Path) -> None:
         path = tmp_path / "idx.dat"
         drv = IndexedDriver()
-        drv.open(path, OpenMode.OUTPUT, RL, self.KO, self.KL)
+        drv.open(path, OpenMode.OUTPUT, RL, PrimeKey(self.KO, self.KL))
         for c in ["AAA", "BBB", "CCC", "DDD"]:
             drv.write(_b(c))
         drv.close()
 
         drv2 = IndexedDriver()
-        drv2.open(path, OpenMode.INPUT, RL, self.KO, self.KL)
+        drv2.open(path, OpenMode.INPUT, RL, PrimeKey(self.KO, self.KL))
         drv2.start(b"BBB", ">=")
         r1 = drv2.read_seq()
         r2 = drv2.read_seq()
@@ -232,11 +233,11 @@ class TestIndexedDriver:
     ) -> None:
         path = tmp_path / "idx.dat"
         drv = IndexedDriver()
-        drv.open(path, OpenMode.OUTPUT, RL, self.KO, self.KL)
+        drv.open(path, OpenMode.OUTPUT, RL, PrimeKey(self.KO, self.KL))
         [drv.write(_b(k)) for k in ("AAX", "BBA", "BBB", "CCA")]
         drv.close()
         drv2 = IndexedDriver()
-        drv2.open(path, OpenMode.INPUT, RL, self.KO, self.KL)
+        drv2.open(path, OpenMode.INPUT, RL, PrimeKey(self.KO, self.KL))
         starts = [
             (relop, prefix, drv2.start(prefix, relop).condition, drv2.read_seq().data)
             for relop, prefix in (("=", b"BB"), (">", b"BB"), (">=", b"AB"))
@@ -259,12 +260,12 @@ class TestRelativeDriver:
         path = tmp_path / "rel.dat"
         k3 = (3).to_bytes(4, "big")
         drv = RelativeDriver()
-        drv.open(path, OpenMode.OUTPUT, RL, 0, 0)
+        drv.open(path, OpenMode.OUTPUT, RL, PrimeKey(0, 0))
         drv.write(_b("SLOT3"), key=k3)
         drv.close()
 
         drv2 = RelativeDriver()
-        drv2.open(path, OpenMode.INPUT, RL, 0, 0)
+        drv2.open(path, OpenMode.INPUT, RL, PrimeKey(0, 0))
         r = drv2.read_key(k3)
         drv2.close()
         assert r.condition is AccessCondition.OK
@@ -276,12 +277,12 @@ class TestRelativeDriver:
         k1 = (1).to_bytes(4, "big")
         k3 = (3).to_bytes(4, "big")
         drv = RelativeDriver()
-        drv.open(path, OpenMode.OUTPUT, RL, 0, 0)
+        drv.open(path, OpenMode.OUTPUT, RL, PrimeKey(0, 0))
         drv.write(_b("SLOT3"), key=k3)
         drv.close()
 
         drv2 = RelativeDriver()
-        drv2.open(path, OpenMode.INPUT, RL, 0, 0)
+        drv2.open(path, OpenMode.INPUT, RL, PrimeKey(0, 0))
         r = drv2.read_key(k1)
         drv2.close()
         assert r.condition is AccessCondition.NOT_FOUND
@@ -291,18 +292,18 @@ class TestRelativeDriver:
         path = tmp_path / "rel.dat"
         k2 = (2).to_bytes(4, "big")
         drv = RelativeDriver()
-        drv.open(path, OpenMode.OUTPUT, RL, 0, 0)
+        drv.open(path, OpenMode.OUTPUT, RL, PrimeKey(0, 0))
         drv.write(_b("SLOT2"), key=k2)
         drv.close()
 
         drv2 = RelativeDriver()
-        drv2.open(path, OpenMode.IO, RL, 0, 0)
+        drv2.open(path, OpenMode.IO, RL, PrimeKey(0, 0))
         drv2.read_key(k2)
         drv2.delete()
         drv2.close()
 
         drv3 = RelativeDriver()
-        drv3.open(path, OpenMode.INPUT, RL, 0, 0)
+        drv3.open(path, OpenMode.INPUT, RL, PrimeKey(0, 0))
         r = drv3.read_key(k2)
         drv3.close()
         assert r.condition is AccessCondition.NOT_FOUND
@@ -312,12 +313,12 @@ class TestRelativeDriver:
         path = tmp_path / "rel.dat"
         k1 = (1).to_bytes(4, "big")
         drv = RelativeDriver()
-        drv.open(path, OpenMode.OUTPUT, RL, 0, 0)
+        drv.open(path, OpenMode.OUTPUT, RL, PrimeKey(0, 0))
         drv.write(_b("SLOT1"), key=k1)
         drv.close()
 
         drv2 = RelativeDriver()
-        drv2.open(path, OpenMode.INPUT, RL, 0, 0)
+        drv2.open(path, OpenMode.INPUT, RL, PrimeKey(0, 0))
         result = drv2.write(_b("SLOT2"), key=(2).to_bytes(4, "big"))
         drv2.close()
         assert result.condition is AccessCondition.WRITE_NOT_PERMITTED
@@ -328,13 +329,13 @@ class TestRelativeDriver:
         k1 = (1).to_bytes(4, "big")
         k3 = (3).to_bytes(4, "big")
         drv = RelativeDriver()
-        drv.open(path, OpenMode.OUTPUT, RL, 0, 0)
+        drv.open(path, OpenMode.OUTPUT, RL, PrimeKey(0, 0))
         drv.write(_b("SLOT1"), key=k1)
         drv.write(_b("SLOT3"), key=k3)
         drv.close()
 
         drv2 = RelativeDriver()
-        drv2.open(path, OpenMode.INPUT, RL, 0, 0)
+        drv2.open(path, OpenMode.INPUT, RL, PrimeKey(0, 0))
         r1 = drv2.read_seq()
         r2 = drv2.read_seq()
         eof = drv2.read_seq()
@@ -349,11 +350,11 @@ class TestRelativeDriver:
     ) -> None:
         path = tmp_path / "rel.dat"
         drv = RelativeDriver()
-        drv.open(path, OpenMode.OUTPUT, RL, 0, 0)
+        drv.open(path, OpenMode.OUTPUT, RL, PrimeKey(0, 0))
         [drv.write(_b(f"SLOT{n}"), key=n.to_bytes(4, "big")) for n in (2, 5, 7)]
         drv.close()
         drv2 = RelativeDriver()
-        drv2.open(path, OpenMode.INPUT, RL, 0, 0)
+        drv2.open(path, OpenMode.INPUT, RL, PrimeKey(0, 0))
         starts = [
             (relop, n, drv2.start(n.to_bytes(4, "big"), relop).condition)
             for relop, n in (("=", 3), (">", 7))

@@ -8,7 +8,10 @@ from pathlib import Path
 
 from cobol_asg.file_enums import OpenMode
 from interpreter.cobol.access_result import AccessCondition, AccessResult
+from interpreter.cobol.alternate_key import AlternateKey
 from interpreter.cobol.file_drivers import FileOrganizationDriver, IndexedDriver
+from interpreter.cobol.prime_key import PrimeKey
+from interpreter.cobol.record_shape import RecordShape
 
 _WRITE_MODES = frozenset({OpenMode.OUTPUT, OpenMode.EXTEND, OpenMode.IO})
 _Entry = tuple[bytes, bytes]
@@ -21,11 +24,10 @@ def _alternate(entry: _Entry) -> bytes:
 class AlternateIndexDriver:
     """Reads by alternate key; duplicates in primary-key order; writes go to the base file."""
 
-    def __init__(
-        self, primary_key_offset: int, primary_key_length: int, unique: bool
-    ) -> None:
-        self._poff = primary_key_offset
-        self._plen = primary_key_length
+    def __init__(self, primary: PrimeKey, unique: bool) -> None:
+        self._primary = primary
+        self._poff = primary.offset
+        self._plen = primary.length
         self._unique = unique
         self._base = IndexedDriver()
         self._view: list[_Entry] = []
@@ -39,13 +41,12 @@ class AlternateIndexDriver:
         path: Path,
         mode: OpenMode,
         record_length: int,
-        key_offset: int,
-        key_length: int,
+        key: PrimeKey,
     ) -> None:
         self._rl, self._koff, self._klen, self._mode = (
             record_length,
-            key_offset,
-            key_length,
+            key.offset,
+            key.length,
             mode,
         )
         data = b"" if mode == OpenMode.OUTPUT else path.read_bytes()
@@ -55,7 +56,7 @@ class AlternateIndexDriver:
         )
         self._cursor = 0
         self._last = 0
-        self._base.open(path, mode, record_length, self._poff, self._plen)
+        self._base.open(path, mode, record_length, self._primary)
 
     def close(self) -> None:
         self._base.close()
@@ -203,16 +204,9 @@ class AlternateIndexDriver:
 
 
 def open_alternate_index_driver(
-    path: Path,
-    mode: OpenMode,
-    record_length: int,
-    primary_key_offset: int,
-    primary_key_length: int,
-    key_offset: int,
-    key_length: int,
-    unique: bool,
+    path: Path, mode: OpenMode, shape: RecordShape, alternate: AlternateKey
 ) -> FileOrganizationDriver:
     """Open an AlternateIndexDriver over a base file sorted by its primary key."""
-    drv = AlternateIndexDriver(primary_key_offset, primary_key_length, unique)
-    drv.open(path, mode, record_length, key_offset, key_length)
+    drv = AlternateIndexDriver(shape.key, alternate.unique)
+    drv.open(path, mode, shape.record_length, alternate.key)
     return drv

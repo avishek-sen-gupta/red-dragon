@@ -16,6 +16,8 @@ from typing import BinaryIO, Protocol, runtime_checkable
 from cobol_asg.file_enums import FileOrganization, OpenMode
 from interpreter.cobol.access_result import AccessCondition, AccessResult
 from interpreter.cobol.flagged_slot import FlaggedSlot
+from interpreter.cobol.prime_key import PrimeKey
+from interpreter.cobol.record_shape import RecordShape
 from interpreter.cobol.relative_slot import RelativeSlot
 
 logger = logging.getLogger(__name__)
@@ -34,8 +36,7 @@ class FileOrganizationDriver(Protocol):
         path: Path,
         mode: OpenMode,
         record_length: int,
-        key_offset: int,
-        key_length: int,
+        key: PrimeKey,
     ) -> None: ...
     def close(self) -> None: ...
     def read_seq(self) -> AccessResult: ...
@@ -48,22 +49,18 @@ class FileOrganizationDriver(Protocol):
 
 
 def open_driver(
-    org: FileOrganization,
-    path: Path,
-    mode: OpenMode,
-    record_length: int,
-    key_offset: int,
-    key_length: int,
+    path: Path, mode: OpenMode, shape: RecordShape
 ) -> FileOrganizationDriver:
     """Select and open the driver for a file organization. The one door
     every consumer (COBOL adapter, IDCAMS, …) uses to reach a dataset."""
+    org = shape.organization
     if org == FileOrganization.INDEXED:
         drv: FileOrganizationDriver = IndexedDriver()
     elif org == FileOrganization.RELATIVE:
         drv = RelativeDriver()
     else:
         drv = SequentialDriver()
-    drv.open(path, mode, record_length, key_offset, key_length)
+    drv.open(path, mode, shape.record_length, shape.key)
     return drv
 
 
@@ -81,8 +78,7 @@ class SequentialDriver:
         path: Path,
         mode: OpenMode,
         record_length: int,
-        key_offset: int,
-        key_length: int,
+        key: PrimeKey,
     ) -> None:
         self._rl = record_length
         self._mode = mode
@@ -155,12 +151,11 @@ class IndexedDriver:
         path: Path,
         mode: OpenMode,
         record_length: int,
-        key_offset: int,
-        key_length: int,
+        key: PrimeKey,
     ) -> None:
         self._rl = record_length
-        self._koff = key_offset
-        self._klen = key_length
+        self._koff = key.offset
+        self._klen = key.length
         self._cursor = 0
         self._mode = mode
         if mode == OpenMode.OUTPUT:
@@ -342,8 +337,7 @@ class RelativeDriver:
         path: Path,
         mode: OpenMode,
         record_length: int,
-        key_offset: int,
-        key_length: int,
+        key: PrimeKey,
     ) -> None:
         self._rl = record_length
         self._slot = self._format.size(record_length)

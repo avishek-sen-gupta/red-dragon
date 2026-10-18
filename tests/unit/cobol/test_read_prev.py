@@ -9,6 +9,7 @@ from interpreter.cobol.file_drivers import (
     RelativeDriver,
     SequentialDriver,
 )
+from interpreter.cobol.prime_key import PrimeKey
 from tests.covers import NotLanguageFeature, covers
 
 
@@ -18,7 +19,7 @@ def test_indexed_read_prev_backward_and_reversal(tmp_path: Path):
     p = tmp_path / "ksds"
     p.write_bytes(b"AAA00001" + b"BBB00002" + b"CCC00003")
     drv = IndexedDriver()
-    drv.open(p, OpenMode.INPUT, 8, 0, 3)
+    drv.open(p, OpenMode.INPUT, 8, PrimeKey(0, 3))
     assert drv.start(b"AAA", ">=").condition is AccessCondition.OK
     # forward
     assert drv.read_seq().data == b"AAA00001"
@@ -38,7 +39,7 @@ def test_relative_read_prev_backward_and_reversal(tmp_path: Path):
     p = tmp_path / "rrds"
     p.write_bytes(b"\xff" + b"AAAA" + b"\xff" + b"BBBB")
     drv = RelativeDriver()
-    drv.open(p, OpenMode.INPUT, 4, 0, 0)
+    drv.open(p, OpenMode.INPUT, 4, PrimeKey(0, 0))
     assert drv.read_seq().data == b"AAAA"
     assert drv.read_seq().data == b"BBBB"
     assert drv.read_prev().data == b"BBBB"  # reversal re-reads
@@ -52,7 +53,7 @@ def test_sequential_read_prev_raises(tmp_path: Path):
     p = tmp_path / "ps"
     p.write_bytes(b"AAAAA")
     drv = SequentialDriver()
-    drv.open(p, OpenMode.INPUT, 5, 0, 0)
+    drv.open(p, OpenMode.INPUT, 5, PrimeKey(0, 0))
     with pytest.raises(NotImplementedError):
         drv.read_prev()
     drv.close()
@@ -64,7 +65,7 @@ def test_indexed_startbr_past_end_then_read_prev_walks_back(tmp_path: Path):
     p = tmp_path / "ksds"
     p.write_bytes(b"AAA00001" + b"BBB00002" + b"CCC00003")
     drv = IndexedDriver()
-    drv.open(p, OpenMode.INPUT, 8, 0, 3)
+    drv.open(p, OpenMode.INPUT, 8, PrimeKey(0, 3))
     r = drv.start(b"\xff\xff\xff", ">=")
     assert (
         r.condition is AccessCondition.NOT_FOUND

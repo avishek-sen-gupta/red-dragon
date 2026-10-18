@@ -7,19 +7,27 @@ from interpreter.cobol.file_drivers import (
     SequentialDriver,
     open_driver,
 )
+from interpreter.cobol.prime_key import PrimeKey
+from interpreter.cobol.record_shape import RecordShape
 from tests.covers import NotLanguageFeature, covers
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_open_driver_selects_by_org(tmp_path: Path):
     seq = open_driver(
-        FileOrganization.SEQUENTIAL, tmp_path / "s", OpenMode.OUTPUT, 5, 0, 0
+        tmp_path / "s",
+        OpenMode.OUTPUT,
+        RecordShape(FileOrganization.SEQUENTIAL, 5, PrimeKey(0, 0)),
     )
     idx = open_driver(
-        FileOrganization.INDEXED, tmp_path / "i", OpenMode.OUTPUT, 8, 0, 3
+        tmp_path / "i",
+        OpenMode.OUTPUT,
+        RecordShape(FileOrganization.INDEXED, 8, PrimeKey(0, 3)),
     )
     rel = open_driver(
-        FileOrganization.RELATIVE, tmp_path / "r", OpenMode.OUTPUT, 8, 0, 0
+        tmp_path / "r",
+        OpenMode.OUTPUT,
+        RecordShape(FileOrganization.RELATIVE, 8, PrimeKey(0, 0)),
     )
     assert isinstance(seq, SequentialDriver)
     assert isinstance(idx, IndexedDriver)

@@ -1,5 +1,11 @@
 threshold: low
 fileignoreconfig:
+- filename: interpreter/cobol/alternate_key.py
+  checksum: dfd81caaf6dce2a383048ef791c7b0fbd89a8166da24cc145742ddc78292e6ac
+- filename: interpreter/cobol/record_shape.py
+  checksum: 70a1ac017b5448009421b861469f16ab7cc380cdc9325b06ed0f1637ebd47c23
+- filename: tests/unit/cobol/test_alternate_index_driver.py
+  checksum: dd4c78d37af6e6848d58d443e4dacd8405b643c9354f886ccede6b4375cbbc0f
 - filename: interpreter/cobol/outcome_status.py
   checksum: 1276ca8363282216f0f1bfd328419ff517144791eb81e2a5ef82bee87ff5b840
 - filename: interpreter/cobol/write_plan.py
@@ -19,15 +25,15 @@ fileignoreconfig:
 - filename: tests/integration/test_cobol_relative_start.py
   checksum: 5e53f787af78ae33dad1a0bff737f651ee67115235eb783aa6037731bd0098ca
 - filename: tests/unit/cobol/test_file_drivers.py
-  checksum: 7d6501cad6a8f3a20a5667e4d59773a3bfefb198c6325d277e8d5ce9ba7f8886
+  checksum: 7ba8d9a4dbc67e7f56186ac04e4b503153a2406d3e75002241d15c2b0b7ee3d4
 - filename: tests/unit/cobol/test_variable_record_drivers.py
   checksum: 8e8dade0f209f22c9092e61cc53bb17a0bf7ab68712f93083e9eb48578c64625
 - filename: interpreter/cobol/variable_sequential_driver.py
-  checksum: 22cdc045d2f9945a9361d2e105d9edc7e0c6ea4221ea668a7e71d549aed1db77
+  checksum: 8fca73f6b72e4d1221d337cfdedb8d16d27dd34e4d1510701f31d75af0cf3632
 - filename: interpreter/cobol/absent_file_driver.py
   checksum: 9d17c38dc90f3eb3deb72c6fb125a8baaabbc75c0c169b1943f950a969ac5866
 - filename: interpreter/cobol/file_drivers.py
-  checksum: e1ca7ad0d6d4d4167748aea9546c9b15193eee0a80a17ab6824017188ab3d5fa
+  checksum: 9f4f35d122eea8af5f1af02a5b93a7b665f8da6be16462e5d6996fab98725065
 - filename: tests/integration/test_cobol_indexed_random_read.py
   checksum: a2a3fed254307af309b32f738f52c96e6d5e647d25e536d59afb818468bc254c
 - filename: tests/unit/cobol/test_indexed_read_key.py
@@ -251,7 +257,7 @@ fileignoreconfig:
 - filename: tests/unit/project/test_coprocessor_compile.py
   checksum: cf3dcc3c9f539303d52eac893423a91bc15c258857aa07006aa395e666b86bad
 - filename: interpreter/cobol/alternate_index_driver.py
-  checksum: 240441d2833179ea7f9c01beb2e9b61ee4d584d205c34eade4b773ee14630c2c
+  checksum: b41425fef4887ce6404988c0ef88e7df3c935c64266ad3f1125e32055072723b
 - filename: interpreter/cobol/real_file_provider.py
   checksum: d0e98bcfd02dd4e89f4a16e0d1fe2613835cd36aba6cf1bacfb830fcf3358e17
 - filename: interpreter/cobol/file_definitions_data.py
