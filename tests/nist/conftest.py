@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from cobol_asg.cobol_parser import ProLeapCobolParser
 from cobol_asg.copybook_library import CopybookLibrary
 from cobol_asg.switch_status import SwitchStatus
 from interpreter.cobol.ebcdic_table import EbcdicTable
@@ -62,7 +63,6 @@ _X_CARD_LIBRARIES = {
 }
 _SWITCH_SETTINGS = {"SWITCH-1": SwitchStatus.ON, "SWITCH-2": SwitchStatus.OFF}
 _X_CARD_FILE_RE = re.compile(r"XXXX[XPD](\d{3})")
-_COPY_RE = re.compile(r"\bCOPY\s+([\w-]+)", re.IGNORECASE)
 _HEADER_RE = re.compile(
     r"^.{6}\*HEADER,COBOL,(\w+),(SUBPRG|SUBRTN),(\w+)", re.MULTILINE
 )
@@ -102,21 +102,36 @@ def input_deck(deck_path: Path) -> list[str]:
     ]
 
 
-def _cobol_content(src: str) -> str:
-    """Return COBOL source with sequence numbers and comments stripped."""
+def _expanded_content(expanded: str) -> str:
+    """The code of expanded source, comment lines dropped. Expanded lines carry no
+    sequence or identification area, and a replaced or folded line may run past
+    column 72, so nothing after the indicator area is cut."""
     return " ".join(
-        line[7:72] if len(line) > 7 else ""
-        for line in src.splitlines()
+        line[_TEXT_AREA_START:]
+        for line in expanded.splitlines()
         if not (len(line) > 6 and line[6] in ("*", "/"))
     )
 
 
-def extract_file_controls(src: str) -> list[tuple[str, str]]:
+def extract_file_controls(expanded: str) -> list[tuple[str, str]]:
     """Return [(cobol_file_name, assign_to), ...] from SELECT...ASSIGN TO clauses."""
-    content = _cobol_content(src)
+    content = _expanded_content(expanded)
     return [
         (m.group(1).upper(), m.group(2).upper())
         for m in _SELECT_ASSIGN_RE.finditer(content)
+    ]
+
+
+def expanded_file_controls(
+    parser: ProLeapCobolParser, units: Sequence[str]
+) -> list[tuple[str, str]]:
+    """The file controls of each unit as the compiler sees it: COPYs inlined with
+    their REPLACING applied, so a SELECT in copied text is mapped by the name the
+    program gives it."""
+    return [
+        control
+        for unit in units
+        for control in extract_file_controls(parser.expand(unit.encode()))
     ]
 
 
@@ -164,15 +179,6 @@ def preceding_run_units(prog: str) -> list[str]:
     ]
 
 
-def _copied_members(src: str) -> list[str]:
-    """The library text a source COPYs, so file controls inside it are seen."""
-    return [
-        path.read_text()
-        for name in _COPY_RE.findall(_cobol_content(src))
-        if (path := NIST_DIR / f"{name.upper()}.CPY").exists()
-    ]
-
-
 def _x_card_libraries(tmp_path: Path) -> tuple[CopybookLibrary, ...]:
     """The COBOL libraries X-cards 047 and 048 name, each a directory holding its
     members under the text-names a COPY ... OF library uses: SM207A copies ALTLB
@@ -197,17 +203,17 @@ def _run_unit(prog: str, tmp_path: Path, max_steps: int) -> tuple[Path, RunOutco
     and how the run ended."""
     src = _source(prog)
     callees = [_source(callee) for callee in subroutines(prog)]
-    units = [src, *callees]
+    parser = make_cobol_parser(
+        copybook_dirs=[NIST_DIR], copybook_libraries=_x_card_libraries(tmp_path)
+    )
     provider, print_path = make_provider(
-        "\n".join([*units, *(t for unit in units for t in _copied_members(unit))]),
+        expanded_file_controls(parser, [src, *callees]),
         tmp_path,
         input_deck(NIST_DIR / f"{prog}.DAT"),
     )
     linked = compile_cobol(
         src.encode(),
-        parser=make_cobol_parser(
-            copybook_dirs=[NIST_DIR], copybook_libraries=_x_card_libraries(tmp_path)
-        ),
+        parser=parser,
         programs=tuple(
             SourceFile(Path(f"{callee}.CBL"), text.encode())
             for callee, text in zip(subroutines(prog), callees, strict=True)
@@ -261,7 +267,9 @@ def run_display_report(
 
 
 def make_provider(
-    src: str, tmp_path: Path, system_input: Sequence[str] = ()
+    file_controls: Sequence[tuple[str, str]],
+    tmp_path: Path,
+    system_input: Sequence[str] = (),
 ) -> tuple[RealFileIOProvider, Path]:
     """Build RealFileIOProvider; return (provider, print_file_path).
 
@@ -269,7 +277,7 @@ def make_provider(
     """
     overrides = {
         file_name: tmp_path / f"{_x_card_file(assign_to)}.dat"
-        for file_name, assign_to in extract_file_controls(src)
+        for file_name, assign_to in file_controls
     }
     print_path = next(
         (path for file_name, path in overrides.items() if "PRINT" in file_name),
