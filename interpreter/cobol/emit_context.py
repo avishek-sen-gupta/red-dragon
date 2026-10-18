@@ -17,8 +17,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from cobol_asg.addressing_mode import AddressingMode
-from cobol_asg.lp32 import LP32_MODE
+from interpreter.cobol.compile_options import CompileOptions
 
 if TYPE_CHECKING:
     from cobol_asg.cobol_expression import ExprNode
@@ -171,6 +170,7 @@ _NUMERIC_DECODE_IR: Mapping[
 _NULL_OBSERVER = NullFrontendObserver()
 _NO_CONDITION_NAMES = ConditionNameIndex({})
 _EMPTY_ASG = CobolASG()
+_DEFAULT_OPTIONS = CompileOptions()
 
 
 class EmitContext:
@@ -183,15 +183,15 @@ class EmitContext:
         condition_index: ConditionNameIndex = _NO_CONDITION_NAMES,
         extension_strategies: Sequence[RedDragonExtensionLoweringStrategy] = (),
         asg: CobolASG = _EMPTY_ASG,
-        tolerant: bool = False,
-        addressing_mode: AddressingMode = LP32_MODE,
+        options: CompileOptions = _DEFAULT_OPTIONS,
     ) -> None:
         self._dispatch_fn = dispatch_fn
-        self.addressing_mode = addressing_mode
+        self.addressing_mode = options.addressing_mode
         # Opt-in: skip (with a WARNING) statements whose lowering raises, e.g.
         # references to fields from missing/stub copybooks. Off by default so
         # lowering errors (ambiguous references etc.) surface.
-        self._tolerant = tolerant
+        self._tolerant = options.tolerant
+        self._compiled_at = options.clock.now()
         self._observer = observer
         self._condition_index = condition_index
         self._extension_strategies = tuple(extension_strategies)
@@ -227,7 +227,7 @@ class EmitContext:
 
     @property
     def compiled_at(self) -> datetime:
-        return self._asg.compiled_at
+        return self._compiled_at
 
     @procedures.setter
     def procedures(self, value: ProcedureLabels) -> None:

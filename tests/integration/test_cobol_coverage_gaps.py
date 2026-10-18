@@ -450,10 +450,9 @@ class TestIntrinsicFunctions:
 
     @covers(CobolFeature.INTRINSIC_FUNCTION)
     def test_when_compiled(self):
-        """FUNCTION WHEN-COMPILED is the bridge's compile stamp in its 21
-        characters, so it falls between the instants either side of the
-        compile; the clock is the bridge's, so the value itself is not known
-        in advance."""
+        """FUNCTION WHEN-COMPILED is the compile stamp in its 21 characters,
+        so it falls between the instants either side of the compile; the
+        clock is the system's, so the value itself is not known in advance."""
         before = datetime.now(UTC).replace(microsecond=0)
         vm = _run(
             [

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from interpreter.cobol.compile_options import CompileOptions
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
@@ -35,6 +36,8 @@ def test_lowering_error_propagates_by_default():
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_tolerant_lowering_skips_failing_statement():
-    ctx = EmitContext(dispatch_fn=_raising_dispatch, tolerant=True)
+    ctx = EmitContext(
+        dispatch_fn=_raising_dispatch, options=CompileOptions(tolerant=True)
+    )
     ctx.lower_statement(object(), _layout())
     assert ctx.instructions == []
