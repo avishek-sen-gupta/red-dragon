@@ -119,6 +119,8 @@ class CobolFeature(Enum):
     USING_BY_VALUE = "USING BY VALUE pass-by-value parameter mode"
     CANCEL = "CANCEL 'program' program cancellation statements"
     ENTRY = "ENTRY 'name' USING alternate entry point declarations"
+    BATCHED_PROGRAMS = "Programs written one after another in one source file"
+    NESTED_PROGRAMS = "Programs contained in another program, ended by END PROGRAM"
 
     # ---------------------------------------------------------------------------
     # I/O statements

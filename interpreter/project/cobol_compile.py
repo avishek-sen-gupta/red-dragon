@@ -2,11 +2,17 @@
 """COBOL compilation in three stages chained only through files.
 
 parse_stage():  sources → <stem>-<digest>.ast.json
-_Lowering.lower(): an AST file → <stem>-<digest>.unit.json
-lower_cobol_program(): one program, parsed and lowered → its unit file
+_Lowering.lower(): an AST file → <stem>[.<PROGRAM-ID>]-<digest>.unit.json per program
+lower_cobol_program(): one source, parsed and lowered → a unit file per program
 link_units():   unit files → image-<digest>.linked.json, read back; no unit is main
 compile_cobol(): parses, lowers and links its programs into
-                 <main stem>-<digest>.linked.json, whose entry is its main program.
+                 <main stem>-<digest>.linked.json, whose entry is the first
+                 top-level program of its main source.
+
+A source file is a compilation unit of one or more programs, batch or nested.
+Every program in it is lowered to a unit of its own, in pre-order. Under
+compile_cobol the first keeps the source's name and each other one is named
+<stem>.<PROGRAM-ID>; under lower_cobol_program each is named <PROGRAM-ID>.
 
 The digest covers the source bytes and the lowering settings; a stage skips a
 program whose output file already exists. It knows about COBOL-specific
@@ -32,6 +38,8 @@ from tqdm import tqdm
 
 from cobol_asg.addressing_mode import AddressingMode
 from cobol_asg.ast_store import AsgJsonParser, AstParseError
+from cobol_asg.compilation_unit import programs_in_preorder
+from cobol_asg.contained_programs import written_program_name
 from cobol_asg.cobol_parser import ProLeapCobolParser
 from cobol_asg.frontend_extension import DialectParser
 from cobol_asg.lp import LP
@@ -73,11 +81,11 @@ def compile_cobol_module(
     dialect_parsers: Sequence[DialectParser] = (),
     observer: FrontendObserver = NullFrontendObserver(),
     path: Path = _MAIN_PATH,
-    ast_path: Path,
+    program: Mapping,
     tolerant: bool = False,
     addressing_mode: AddressingMode = LP32_MODE,
 ) -> ModuleUnit:
-    """Lower one COBOL program's AST file into a ModuleUnit. The shared core."""
+    """Lower one program object of an AST file into a ModuleUnit. The shared core."""
     frontend = get_cobol_frontend(
         observer=observer,
         copybook_dirs=copybook_dirs,
@@ -86,7 +94,7 @@ def compile_cobol_module(
         tolerant=tolerant,
         addressing_mode=addressing_mode,
     )
-    ir = frontend.lower_from_ast_dict(json.loads(ast_path.read_text("utf-8")))
+    ir = frontend.lower_from_ast_dict(dict(program))
     return ModuleUnit(
         path=path,
         language=Language.COBOL,
@@ -157,30 +165,36 @@ class _Lowering:
     settings: LoweringSettings
     units: UnitCodec
 
-    def lower(self, program: SourceFile, ast_file: Path, work_dir: Path) -> Path:
-        """The program's unit file, lowering it only if it is not yet on disk."""
-        target = self.settings.artifact(program, work_dir, "unit")
-        if not target.exists():
-            self.units.write(self._module(program, ast_file), target)
-        return target
+    def lower(
+        self, program: SourceFile, ast_file: Path, work_dir: Path
+    ) -> tuple[Path, ...]:
+        """A unit file for every program in the source, in pre-order, lowering only
+        those not yet on disk. The first keeps the source's path; each other program
+        is a module of its own, named after the source and its PROGRAM-ID."""
+        written = programs_in_preorder(json.loads(ast_file.read_text("utf-8")))
+        first = (self._unit(program, program.path, written[0], work_dir),)
+        return first + tuple(
+            self._unit(program, _contained_path(program, data), data, work_dir)
+            for data in written[1:]
+        )
 
     def lower_as_program(
         self, program: SourceFile, ast_file: Path, work_dir: Path
-    ) -> Path:
-        target = self.settings.artifact(program, work_dir, "unit")
-        if not target.exists():
-            module = self._module(program, ast_file)
-            self.units.write(
-                dataclasses.replace(module, path=Path(f"{module.program}.cbl")),
-                target,
+    ) -> tuple[Path, ...]:
+        """A unit file for every program in the source, each a module named after
+        its PROGRAM-ID."""
+        return tuple(
+            self._unit(
+                program, Path(f"{written_program_name(data)}.cbl"), data, work_dir
             )
-        return target
+            for data in programs_in_preorder(json.loads(ast_file.read_text("utf-8")))
+        )
 
     def lower_or_skip(
         self, program: SourceFile, ast_file: Path, work_dir: Path
     ) -> tuple[Path, ...]:
         try:
-            return (self.lower(program, ast_file, work_dir),)
+            return self.lower(program, ast_file, work_dir)
         except Exception:  # noqa: BLE001
             logger.warning(
                 "compile_cobol: %s failed to lower — skipping",
@@ -189,7 +203,23 @@ class _Lowering:
             )
             return ()
 
-    def _module(self, program: SourceFile, ast_file: Path) -> ModuleUnit:
+    def _unit(
+        self,
+        program: SourceFile,
+        module_path: Path,
+        data: Mapping,
+        work_dir: Path,
+    ) -> Path:
+        target = self.settings.artifact(
+            SourceFile(module_path, program.source), work_dir, "unit"
+        )
+        if not target.exists():
+            self.units.write(self._module(program, module_path, data), target)
+        return target
+
+    def _module(
+        self, program: SourceFile, module_path: Path, data: Mapping
+    ) -> ModuleUnit:
         return compile_cobol_module(
             program.source,
             parser=self.parser,
@@ -197,11 +227,17 @@ class _Lowering:
             extension_strategies=self.extension_strategies,
             dialect_parsers=self.dialect_parsers,
             observer=self.observer,
-            path=program.path,
-            ast_path=ast_file,
+            path=module_path,
+            program=data,
             tolerant=self.tolerant,
             addressing_mode=self.addressing_mode,
         )
+
+
+def _contained_path(program: SourceFile, data: Mapping) -> Path:
+    return program.path.with_name(
+        f"{program.path.stem}.{written_program_name(data)}.cbl"
+    )
 
 
 def lower_cobol_program(
@@ -213,7 +249,8 @@ def lower_cobol_program(
     dialect_parsers: Sequence[DialectParser],
     work_dir: Path,
     tolerant: bool,
-) -> Path:
+) -> tuple[Path, ...]:
+    """A unit file for every program in the source, in pre-order."""
     mode = addressing_mode(LP.LP32)
     mode_parser = parser.with_addressing_mode(mode)
     settings = LoweringSettings(
@@ -345,14 +382,14 @@ def compile_cobol(
         settings=settings,
         units=UnitCodec(IrCodec()),
     )
-    main_unit = lowering.lower(main, asts[main.path], workspace)
+    main_unit, *companions = lowering.lower(main, asts[main.path], workspace)
     callee_units = tuple(
         unit
         for path, program in by_path.items()
         if path != main.path
         for unit in lowering.lower_or_skip(program, asts[path], workspace)
     )
-    return _link_entered_at_main(main_unit, callee_units, workspace)
+    return _link_entered_at_main(main_unit, (*companions, *callee_units), workspace)
 
 
 def _link_entered_at_main(

@@ -21,7 +21,7 @@ def _fixed(lines: list[str]) -> str:
 
 def _parse(src: list[str], bridge_jar: str) -> dict:
     raw = RealSubprocessRunner().run(["java", "-jar", bridge_jar], _fixed(src))
-    return json.loads(raw)
+    return json.loads(raw)["programs"][0]
 
 
 def _find_compute(obj: dict) -> dict:

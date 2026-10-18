@@ -22,6 +22,7 @@ import io.proleap.cobol.asg.metamodel.environment.inputoutput.InputOutputSection
 import io.proleap.cobol.asg.metamodel.environment.inputoutput.filecontrol.FileControlEntry;
 import io.proleap.cobol.asg.metamodel.environment.inputoutput.filecontrol.FileControlParagraph;
 import io.proleap.cobol.asg.metamodel.identification.IdentificationDivision;
+import io.proleap.cobol.asg.metamodel.identification.ProgramIdParagraph;
 import io.proleap.cobol.asg.metamodel.procedure.Paragraph;
 import io.proleap.cobol.asg.metamodel.procedure.ProcedureDivision;
 import io.proleap.cobol.asg.metamodel.procedure.Section;
@@ -48,9 +49,13 @@ import java.util.logging.Logger;
  * Top-level ASG serializer: walks a ProLeap {@link Program} and produces
  * a JSON object matching the RedDragon {@code CobolASG} contract.
  *
- * <p>Output structure:
+ * <p>Output structure: {@code {"programs": [program, ...]}}, the compilation
+ * unit's top-level programs in source order, each program being:
  * <pre>
  * {
+ *   "program_id": "...",
+ *   "attribute": "COMMON"|"INITIAL"|...|"",  // PROGRAM-ID attribute, "" when none
+ *   "programs": [program, ...],    // directly contained programs, in source order
  *   "data_fields": [...],          // WORKING-STORAGE SECTION
  *   "linkage_fields": [...],       // LINKAGE SECTION (optional)
  *   "procedure_using": [{"name": "...", "type": "REFERENCE"|"VALUE"}],
@@ -72,31 +77,43 @@ public final class AsgSerializer {
     }
 
     /**
-     * Serializes a ProLeap Program to a CobolASG-compatible JSON object.
+     * Serializes a ProLeap Program's compilation unit: its top-level programs, in
+     * source order, each carrying the programs it directly contains.
      *
      * @param program the parsed ProLeap Program
-     * @return JSON object matching CobolASG.from_dict() contract
+     * @return {@code {"programs": [...]}}, each element a CobolASG.from_dict() object
      */
     public static JsonObject serialize(Program program) {
-        JsonObject asg = new JsonObject();
+        JsonObject unit = new JsonObject();
+        JsonArray programs = new JsonArray();
+        unit.add("programs", programs);
 
         CompilationUnit cu = program.getCompilationUnit();
         if (cu == null) {
             LOG.warning("No CompilationUnit found in program");
-            return asg;
+            return unit;
         }
+        for (ProgramUnit pu : cu.getTopLevelProgramUnits()) {
+            programs.add(serializeProgramUnit(cu, pu));
+        }
+        return unit;
+    }
 
-        ProgramUnit pu = cu.getProgramUnit();
-        if (pu == null) {
-            LOG.warning("No ProgramUnit found in CompilationUnit");
-            return asg;
-        }
+    /**
+     * One program: its PROGRAM-ID name and attribute, its divisions, and the
+     * programs it directly contains, serialized the same way.
+     */
+    private static JsonObject serializeProgramUnit(CompilationUnit cu, ProgramUnit pu) {
+        JsonObject asg = new JsonObject();
 
         IdentificationDivision id = pu.getIdentificationDivision();
         if (id != null && id.getProgramIdParagraph() != null) {
             asg.addProperty("program_id", id.getProgramIdParagraph().getName());
+            ProgramIdParagraph.Attribute attribute = id.getProgramIdParagraph().getAttribute();
+            asg.addProperty("attribute", attribute == null ? "" : attribute.name());
         } else {
             asg.addProperty("program_id", cu.getName());
+            asg.addProperty("attribute", "");
         }
 
         serializeDataDivision(pu, asg);
@@ -106,6 +123,12 @@ public final class AsgSerializer {
         if (specialNames.size() > 0) {
             asg.add("special_names", specialNames);
         }
+
+        JsonArray contained = new JsonArray();
+        for (ProgramUnit inner : pu.getContainedProgramUnits()) {
+            contained.add(serializeProgramUnit(cu, inner));
+        }
+        asg.add("programs", contained);
 
         return asg;
     }

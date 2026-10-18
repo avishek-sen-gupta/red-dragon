@@ -299,7 +299,10 @@ def test_compile_program_keeps_and_reuses_its_work_directory(tmp_path):
     second = compile_once()
 
     assert sorted(
-        (ast.name.rpartition("-")[0], json.loads(ast.read_text())["program_id"])
+        (
+            ast.name.rpartition("-")[0],
+            json.loads(ast.read_text())["programs"][0]["program_id"],
+        )
         for ast in asts
     ) == [("WDCALLEE", "WDCALLEE"), ("__main__", "WDCALLER")]
     assert second == first

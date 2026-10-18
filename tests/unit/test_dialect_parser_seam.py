@@ -8,6 +8,7 @@ never Cicada's or Squall's real types. Renamed from test_exec_sql_seam.py
 relocated to Squall and RedDragon must not depend on it)."""
 
 from cobol_asg.cobol_statements import _dialect_parsers, parse_statement
+from cobol_asg.compilation_unit import CobolCompilationUnit
 from tests.unit.cobol.dialect_parser_fixtures import (
     FakeDialectParser,
     FakeExtensionStatement,
@@ -198,10 +199,10 @@ from interpreter.cobol.cobol_frontend import CobolFrontend
 
 
 class _PreprocessRecordingParser(CobolParser):
-    def parse(self, source: bytes, preprocessor=None) -> CobolASG:
+    def parse(self, source: bytes, preprocessor=None) -> CobolCompilationUnit:
         if preprocessor is not None:
             preprocessor({"type": "PROGRAM", "program_id": "T"})
-        return CobolASG()
+        return CobolCompilationUnit((CobolASG(),))
 
 
 class TestFrontendExtensionArray:

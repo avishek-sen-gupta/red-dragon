@@ -67,7 +67,7 @@ fileignoreconfig:
 - filename: docs/notes-on-vm-design.md
   checksum: 8eec207a444b807fc084f83ac389009b25c4715701023a60ea224d58c84e6cc5
 - filename: docs/architectural-design-decisions.md
-  checksum: 28de6d9a78521b9d670683d9e5b65d3328d3622afc55c77436fc6376a261f7b9
+  checksum: 65474c21f1746e33978328f9e99385b91f14a4a0c75fc82b4cd48bf3981ab45f
 - filename: docs/ir-reference.md
   checksum: 962dbce228810b9a418568bcf1c0b8e6c37811a08fc29171fdd8882b0d112a7f
 - filename: tests/unit/exercism/exercises/pangram/canonical_data.json
@@ -143,7 +143,7 @@ fileignoreconfig:
 - filename: docs/superpowers/specs/2026-04-05-namespace-resolution-design.md
   checksum: ee9d30cf23bc94a2b4f95d524f26f8a874f56801803432fd525e8c6b73060642
 - filename: docs/linker-design.md
-  checksum: 92ad38214f5ac0e4ca6c48cddec25ed31ab74cb9f80191f6d72a7bfd87f705c7
+  checksum: 57944c157e1262fade9b23574707cdf47c0edc0848e466537d28b9ea8dc119fd
 - filename: docs/superpowers/plans/2026-04-05-namespace-resolution.md
   checksum: 81b587d795b14a57513319f5abaf175ccb1f0bc65d167de7c517d58f535a5aac
 - filename: docs/superpowers/specs/2026-04-05-tui-mvvm-design.md
@@ -356,4 +356,6 @@ fileignoreconfig:
   checksum: 5bcb241d599c7d0f2f9fde6e840a029d8705c5e6aa4aafca7878910b86fbfdfb
 - filename: docs/nist/README.md
   checksum: 46491037b28d8b4c528b288e9c833c6ddb026bae89142ee0032aa88c1c22e385
+- filename: cobol_asg/contained_programs.py
+  checksum: d72977db03be5c3f07d9bb999dde8546f85010312f83419ad04a8b3a986eee26
 version: "1.0"

@@ -60,7 +60,9 @@ def _roles(stmt: CobolStatementType) -> dict[str, str | list[str]]:
 @covers(CobolFeature.SUBTRACT, CobolFeature.DIVIDE, CobolFeature.GIVING_CLAUSE)
 def test_subtract_and_divide_operands_arrive_by_role():
     source = "".join("       " + line + "\n" for line in _PROGRAM).encode()
-    *arithmetic, _goback = make_cobol_parser().parse(source).paragraphs[0].statements
+    *arithmetic, _goback = (
+        make_cobol_parser().parse(source).first_program.paragraphs[0].statements
+    )
     assert [(_names(s), _roles(s)) for s in arithmetic] == [
         (
             (["Y", "X", "W"], [], ["Z"], ""),

@@ -62,7 +62,7 @@ public class IndexedBySerializerTest {
 
         Program program = new CobolParserRunnerImpl()
                 .analyzeFile(new File(resource.toURI()), CobolSourceFormatEnum.FIXED);
-        return AsgSerializer.serialize(program);
+        return AsgSerializer.serialize(program).getAsJsonArray("programs").get(0).getAsJsonObject();
     }
 
     /** Depth-first search over data_fields (and their children) for a field by name. */

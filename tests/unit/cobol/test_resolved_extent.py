@@ -92,7 +92,7 @@ class _Probe:
 @pytest.fixture
 def probe() -> _Probe:
     parser = make_cobol_parser()
-    asg = parser.parse(_PROBE_SRC)
+    asg = parser.parse(_PROBE_SRC).first_program
     sectioned = build_sectioned_layout(asg)
     ctx = EmitContext(dispatch_fn=dispatch_statement)
     materialised = lower_sectioned_data_division(ctx, sectioned, "PROBE")

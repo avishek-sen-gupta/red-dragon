@@ -46,7 +46,7 @@ def test_region_ids_are_the_section_buffers_the_call_argument_copy_and_the_run_u
 @pytest.fixture
 def cobol_frontend_probe() -> MaterialisedSectionedLayout:
     parser = make_cobol_parser()
-    asg = parser.parse(_PROBE_SRC)
+    asg = parser.parse(_PROBE_SRC).first_program
     sectioned = build_sectioned_layout(asg)
     return MaterialisedSectionedLayout(
         working_storage=(sectioned.working_storage, Register("%ws")),

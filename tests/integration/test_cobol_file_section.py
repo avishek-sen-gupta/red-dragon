@@ -41,7 +41,7 @@ def test_file_section_fields_in_sectioned_layout(bridge_jar):
         ]
     )
     parser = ProLeapCobolParser(RealSubprocessRunner(), bridge_jar)
-    asg = parser.parse(source.encode("utf-8"))
+    asg = parser.parse(source.encode("utf-8")).first_program
 
     # FD record fields reached the ASG
     assert [f.name for f in asg.file_fields] == ["CUSTOMER-RECORD"]

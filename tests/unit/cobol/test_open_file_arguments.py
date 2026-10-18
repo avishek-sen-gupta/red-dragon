@@ -5,12 +5,14 @@ then names only the file, the mode and the program."""
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from cobol_asg.file_enums import FileOrganization
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.file_frame import FileFrame, frame_of
 from interpreter.cobol.prime_key import PrimeKey
+from cobol_asg.compilation_unit import programs_in_preorder
 from interpreter.frontend import make_cobol_parser
 from interpreter.instructions import CallFunction, Const, InstructionBase
 from interpreter.project.cobol_compile import compile_cobol_module
@@ -73,7 +75,11 @@ def test_each_file_is_declared_once_and_opened_by_name_and_mode(
     parser = make_cobol_parser()
     ast_path = tmp_path / "program.ast.json"
     parser.parse_to_file(_THREE_FILES, ast_path)
-    ir = compile_cobol_module(_THREE_FILES, parser=parser, ast_path=ast_path).ir
+    ir = compile_cobol_module(
+        _THREE_FILES,
+        parser=parser,
+        program=programs_in_preorder(json.loads(ast_path.read_text()))[0],
+    ).ir
     assert (_declared(ir), _opens(ir)) == (
         [
             (

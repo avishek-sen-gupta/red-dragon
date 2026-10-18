@@ -59,7 +59,7 @@ def _function_node(statement_line: str, jar: str) -> dict:
         ["java", "-jar", jar],
         _fixed([*_PREAMBLE, f"    {statement_line}", "    STOP RUN."]),
     )
-    statement = json.loads(raw)["paragraphs"][0]["statements"][0]
+    statement = json.loads(raw)["programs"][0]["paragraphs"][0]["statements"][0]
     return statement.get("expression") or statement["operands"][0]
 
 

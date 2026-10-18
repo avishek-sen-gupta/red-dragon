@@ -12,7 +12,7 @@ def _fixed(lines: list[str]) -> str:
 
 def _parse(src: list[str], jar: str) -> dict:
     raw = RealSubprocessRunner().run(["java", "-jar", jar], _fixed(src))
-    return json.loads(raw)
+    return json.loads(raw)["programs"][0]
 
 
 def _first_statement(obj: dict) -> dict:

@@ -31,7 +31,7 @@ _PROGRAM = [
 
 
 def test_each_usage_spelling_reads_as_its_canonical_usage():
-    asg = make_cobol_parser().parse(to_fixed(_PROGRAM).encode())
+    asg = make_cobol_parser().parse(to_fixed(_PROGRAM).encode()).first_program
     expected = [
         ("P1", "COMP-3"),
         ("P2", "COMP-3"),

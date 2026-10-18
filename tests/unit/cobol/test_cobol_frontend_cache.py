@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 from cobol_asg.cobol_parser import make_cobol_parser
+from cobol_asg.compilation_unit import programs_in_preorder
 from interpreter.cobol.cobol_frontend import CobolFrontend
 from interpreter.instructions import InstructionBase
 from tests.covers import NotLanguageFeature, covers
@@ -37,7 +38,7 @@ def test_lower_from_ast_dict_matches_lower(tmp_path):
     parser = make_cobol_parser()
     ast_path = tmp_path / "prog.ast.json"
     parser.parse_to_file(_MINIMAL_SRC, ast_path)
-    data = json.loads(ast_path.read_text())
+    (data,) = programs_in_preorder(json.loads(ast_path.read_text()))
 
     frontend1 = CobolFrontend(make_cobol_parser())
     ir_from_dict = frontend1.lower_from_ast_dict(data)

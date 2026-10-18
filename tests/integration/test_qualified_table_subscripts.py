@@ -62,7 +62,9 @@ def _source_operand(bridge_jar: str, statement_line: str) -> dict:
     raw = RealSubprocessRunner().run(
         ["java", "-jar", bridge_jar], to_fixed(_program(statement_line))
     )
-    return json.loads(raw)["paragraphs"][0]["statements"][0]["operands"][0]
+    return json.loads(raw)["programs"][0]["paragraphs"][0]["statements"][0]["operands"][
+        0
+    ]
 
 
 def _region(*statement_lines: str) -> bytearray:

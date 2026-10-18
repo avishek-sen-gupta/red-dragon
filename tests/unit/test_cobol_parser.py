@@ -45,20 +45,20 @@ class TestProLeapCobolParser:
     @covers(CobolFeature.PROLEAP_BRIDGE)
     def test_parse_minimal_asg(self):
         parser = make_cobol_parser()
-        asg = parser.parse(_MINIMAL)
-        assert asg is not None
+        asg = parser.parse(_MINIMAL).first_program
+        assert asg.program_id == "TESTPROG"
 
     @covers(CobolFeature.PROLEAP_BRIDGE)
     def test_parse_data_field(self):
         parser = make_cobol_parser()
-        asg = parser.parse(_WITH_DATA)
+        asg = parser.parse(_WITH_DATA).first_program
         assert len(asg.data_fields) == 1
         assert asg.data_fields[0].name == "WS-A"
 
     @covers(CobolFeature.PROLEAP_BRIDGE)
     def test_parse_with_sections(self):
         parser = make_cobol_parser()
-        asg = parser.parse(_WITH_SECTION)
+        asg = parser.parse(_WITH_SECTION).first_program
         assert len(asg.sections) == 1
         assert asg.sections[0].name == "MAIN-SECTION"
 
@@ -77,11 +77,13 @@ def test_parse_to_file_writes_valid_json(tmp_path):
     assert result == out
     assert out.exists()
     data = json.loads(out.read_text())
+    (program,) = data["programs"]
+    assert (program["program_id"], program["programs"]) == ("TESTPROG", [])
     assert (
-        "paragraphs" in data
-        or "sections" in data
-        or "data_fields" in data
-        or "statements" in data
+        "paragraphs" in program
+        or "sections" in program
+        or "data_fields" in program
+        or "statements" in program
     )
 
 

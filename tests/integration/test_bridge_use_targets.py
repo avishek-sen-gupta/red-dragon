@@ -39,7 +39,7 @@ _PROGRAM = [
 @covers(CobolFeature.DECLARATIVES)
 def test_each_use_target_is_kept_in_the_asg() -> None:
     source = "".join("       " + line + "\n" for line in _PROGRAM).encode()
-    asg = make_cobol_parser().parse(source)
+    asg = make_cobol_parser().parse(source).first_program
     assert [
         (s.name, s.use.target if s.use else "", s.use.files if s.use else ())
         for s in asg.declaratives

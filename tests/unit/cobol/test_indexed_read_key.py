@@ -3,9 +3,11 @@ is a random READ, and no key when it is a sequential one."""
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from interpreter.cobol.features import CobolFeature
+from cobol_asg.compilation_unit import programs_in_preorder
 from interpreter.frontend import make_cobol_parser
 from interpreter.instructions import CallFunction, Const, InstructionBase
 from interpreter.project.cobol_compile import compile_cobol_module
@@ -57,7 +59,11 @@ def test_only_a_random_read_passes_its_key_bytes(tmp_path: Path) -> None:
     parser = make_cobol_parser()
     ast_path = tmp_path / "program.ast.json"
     parser.parse_to_file(_READS, ast_path)
-    ir = compile_cobol_module(_READS, parser=parser, ast_path=ast_path).ir
+    ir = compile_cobol_module(
+        _READS,
+        parser=parser,
+        program=programs_in_preorder(json.loads(ast_path.read_text()))[0],
+    ).ir
     assert _read_keys(ir) == [
         "__bytes_to_string",
         "__bytes_to_string",

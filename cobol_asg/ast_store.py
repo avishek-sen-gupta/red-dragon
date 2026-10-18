@@ -27,7 +27,7 @@ from typing import Protocol
 
 from tqdm import tqdm
 
-from cobol_asg.asg_types import CobolASG
+from cobol_asg.compilation_unit import CobolCompilationUnit
 
 _IDENTITY: Callable[[dict], dict] = lambda d: d  # noqa: E731
 
@@ -82,7 +82,7 @@ def _parse_one(
 
 
 class AstStore:
-    """Parse-once, get-many store of CobolASG, backed by bridge JSON on disk."""
+    """Parse-once, get-many store of compilation units, backed by bridge JSON on disk."""
 
     def __init__(self, cache_dir: Path, max_workers: int = 4) -> None:
         cache_dir.mkdir(parents=True, exist_ok=True)
@@ -127,10 +127,11 @@ class AstStore:
             ]
         self._cached = dict(results)
 
-    def get(self, path: Path) -> CobolASG:
-        """The program's ASG, deserialized now, with the preprocessor applied."""
+    def get(self, path: Path) -> CobolCompilationUnit:
+        """The source's programs, deserialized now, with the preprocessor applied
+        to each."""
         raw = json.loads(self._cached[_digest(path)].read_text(encoding="utf-8"))
-        return CobolASG.from_dict(self._preprocessor(raw))  # preprocessor on load
+        return CobolCompilationUnit.from_dict(raw, preprocessor=self._preprocessor)
 
 
 @contextmanager

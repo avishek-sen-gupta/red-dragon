@@ -71,7 +71,7 @@ _FILES = (
 
 @covers(CobolFeature.SECTION_FILE)
 def test_an_fds_records_vary_by_mode_clause_or_descriptions() -> None:
-    asg = make_cobol_parser().parse(_FDS)
+    asg = make_cobol_parser().parse(_FDS).first_program
     assert (
         [records_vary(asg, f) for f in _FILES],
         [depending_on(asg, f) for f in _FILES],

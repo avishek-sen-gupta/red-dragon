@@ -54,7 +54,7 @@ def test_each_exit_carries_the_construct_it_leaves():
     read as a plain EXIT; each now arrives as its own kind, and a plain paragraph-end
     EXIT is still the no-op."""
     source = "".join("       " + line + "\n" for line in _PROGRAM).encode()
-    p1, p2, p3 = make_cobol_parser().parse(source).sections[0].paragraphs
+    p1, p2, p3 = make_cobol_parser().parse(source).first_program.sections[0].paragraphs
     first_loop, second_loop, leave_paragraph = p1.statements
 
     assert [
