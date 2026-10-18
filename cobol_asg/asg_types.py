@@ -30,6 +30,7 @@ from cobol_asg.edit_picture import (
     UnsupportedEditPictureError,
 )
 from cobol_asg.lp32 import LP32_MODE
+from cobol_asg.nonnumeric_literal import literal_characters, written_literal
 from cobol_asg.program_conventions import ProgramConventions
 from cobol_asg.source_span import SourceSpan
 from cobol_asg.storage_layout import file_section_layout, section_layout
@@ -51,7 +52,7 @@ def _currency_from_special_names(data: dict) -> str:
     loudly instead (red-dragon-3o5f scoped it out).
     """
     special = data.get("special_names") or {}
-    sign = special.get("currency_sign") or DEFAULT_CURRENCY
+    sign = literal_characters(special.get("currency_sign", "")) or DEFAULT_CURRENCY
     if len(sign) != 1:
         raise UnsupportedEditPictureError(
             f"CURRENCY SIGN IS {sign!r} is a multi-character currency literal, "
@@ -310,7 +311,7 @@ class CobolASG:
 
     def _special_names_dict(self) -> dict:
         currency = (
-            {"currency_sign": self.currency_symbol}
+            {"currency_sign": written_literal(self.currency_symbol)}
             if self.currency_symbol != DEFAULT_CURRENCY
             else {}
         ) | ({"decimal_point_is_comma": True} if self.decimal_point_is_comma else {})

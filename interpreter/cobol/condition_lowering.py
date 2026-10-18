@@ -18,9 +18,10 @@ from cobol_asg.cobol_expression import (
     expr_from_dict,
     expr_to_dict,
 )
-from cobol_asg.condition_name import ConditionValue
-from cobol_asg.ref_mod import FunctionCallOperand, RefModOperand
 from cobol_asg.cobol_types import CobolDataCategory
+from cobol_asg.condition_name import ConditionValue
+from cobol_asg.nonnumeric_literal import literal_characters
+from cobol_asg.ref_mod import FunctionCallOperand, RefModOperand
 from cobol_asg.source_span import SourceSpan
 from interpreter.cobol.arithmetic_precision import ArithmeticPrecision
 from interpreter.cobol.arithmetic_scale import (
@@ -37,8 +38,8 @@ from interpreter.cobol.class_test_ir import (
 )
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.condition_name_index import ConditionNameIndex
-from interpreter.cobol.emit_context import EmitContext, strip_cobol_literal
 from interpreter.cobol.digit_image_ir import emit_field_digit_image
+from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.figurative_constants import repeat_to_width
 from interpreter.cobol.ir_emitter import IrEmitter
 from interpreter.cobol.pointer_lowering import PointerLowering
@@ -507,7 +508,7 @@ def _lower_all_literal(
     *,
     span: SourceSpan | None,
 ) -> Register:
-    pattern = strip_cobol_literal(str(fig.get("literal", "")))
+    pattern = literal_characters(str(fig.get("literal", "")))
     length = _field_byte_length(ctx, sibling, materialised, span=span)
     width = len(pattern) if length is None else length
     return ctx.const_to_reg(repeat_to_width(pattern, width), span=span)

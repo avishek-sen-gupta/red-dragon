@@ -12,6 +12,7 @@ from cobol_asg.decimal_point import DecimalPoint
 from cobol_asg.edit_picture import DEFAULT_CURRENCY, UnsupportedEditPictureError
 from cobol_asg.enclosing_clauses import TOP_LEVEL, EnclosingClauses
 from cobol_asg.item_clauses import ItemClauses
+from cobol_asg.nonnumeric_literal import literal_characters, written_literal
 from cobol_asg.pic_parser import parse_pic
 from cobol_asg.pointer_types import FULLWORD_POINTER
 from cobol_asg.program_conventions import DEFAULT_CONVENTIONS, ProgramConventions
@@ -140,6 +141,13 @@ class CobolField:
         )
 
     @property
+    def _written_value(self) -> str:
+        """The VALUE literal as the source could write it."""
+        if self.value_is_numeric or self.value_is_figurative:
+            return self.value
+        return written_literal(self.value)
+
+    @property
     def is_signed_display_numeric(self) -> bool:
         return self.usage == _DISPLAY and self.type_descriptor.signed
 
@@ -149,18 +157,13 @@ class CobolField:
     ) -> CobolField:
         own_sign = SignClause.from_dict(data)
         decimal_point = DecimalPoint(conventions.decimal_point_is_comma)
-        value = data.get("value", "")
         return cls(
             name=data["name"],
             level=data["level"],
             pic=data.get("pic", ""),
             usage=inner.usage,
             offset=data.get("offset", 0),
-            value=(
-                decimal_point.numeric_literal(value)
-                if data.get("value_is_numeric", False)
-                else value
-            ),
+            value=_value_characters(data, decimal_point),
             value_is_figurative=data.get("value_is_figurative", False),
             value_is_all=data.get("value_is_all", False),
             value_is_numeric=data.get("value_is_numeric", False),
@@ -213,7 +216,7 @@ class CobolField:
             **({"value_is_all": True} if self.value_is_all else {}),
             **({"value_is_numeric": True} if self.value_is_numeric else {}),
             **({"filler": True} if self.filler else {}),
-            **({"value": self.value} if self.value else {}),
+            **({"value": self._written_value} if self.value else {}),
             **({"value_is_figurative": True} if self.value_is_figurative else {}),
             **({"redefines": self.redefines} if self.redefines else {}),
             **(
@@ -260,3 +263,14 @@ class CobolField:
         if self.span is not None:
             self.span.write_into(result)
         return result
+
+
+def _value_characters(data: Mapping, decimal_point: DecimalPoint) -> str:
+    """A VALUE literal as the bridge wrote it, read once: a numeric literal's
+    digits, a figurative constant's name, a nonnumeric literal's characters."""
+    written = data.get("value", "")
+    if data.get("value_is_numeric", False):
+        return decimal_point.numeric_literal(written)
+    if data.get("value_is_figurative", False):
+        return written
+    return literal_characters(written)

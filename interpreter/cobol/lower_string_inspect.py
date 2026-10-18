@@ -12,11 +12,12 @@ from cobol_asg.cobol_statements import (
     StringStatement,
     UnstringStatement,
 )
+from cobol_asg.nonnumeric_literal import literal_characters
 from cobol_asg.ref_mod import RefModOperand
 from cobol_asg.source_span import SourceSpan
 from cobol_asg.unstring_receiver import UnstringReceiver
 from interpreter.cobol.cobol_constants import BuiltinName, InspectType
-from interpreter.cobol.emit_context import EmitContext, strip_cobol_literal
+from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.inspect_ir import (
     emit_inspect_convert,
     emit_inspect_replace,
@@ -227,7 +228,7 @@ def _sending_characters(
         )
     if not sending.value.names_data:
         return ctx.const_to_reg(
-            strip_cobol_literal(ctx.figuratives.translate(sending.value.name)),
+            literal_characters(ctx.figuratives.translate(sending.value.name)),
             span=span,
         )
     ref, rr = ctx.resolve_field_ref(
@@ -732,7 +733,7 @@ def _resolve_inspect_operand(
             rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
         )
     return ctx.const_to_reg(
-        strip_cobol_literal(ctx.figuratives.translate(operand.name)), span=span
+        literal_characters(ctx.figuratives.translate(operand.name)), span=span
     )
 
 
