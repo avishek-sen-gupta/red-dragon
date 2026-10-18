@@ -8,6 +8,7 @@ import pytest
 
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.real_file_provider import RealFileIOProvider
+from interpreter.cobol.run_inputs import RunInputs
 from interpreter.run import run
 from tests.covers import covers
 from tests.integration.cobol_helpers import (
@@ -48,7 +49,9 @@ def test_accept_concatenates_records_and_stores_them_unedited(
         max_steps=5000,
         io_provider=RealFileIOProvider(
             base_dir=tmp_path,
-            system_input=["ABCD", "EFGH", "IJKL", "MNOP", "0123456789", "12  "],
+            inputs=RunInputs(
+                system_input=["ABCD", "EFGH", "IJKL", "MNOP", "0123456789", "12  "]
+            ),
         ),
     )
     assert capsys.readouterr().out == "ABCDEFGHIJMN01234567812  \n"

@@ -5,10 +5,9 @@ from __future__ import annotations
 
 import logging
 import os
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping
 from itertools import count, takewhile
 from pathlib import Path
-from types import MappingProxyType
 
 from cobol_asg.cobol_statements import FileControlEntry
 from cobol_asg.file_enums import FileOrganization, OpenMode
@@ -23,6 +22,7 @@ from interpreter.cobol.file_drivers import (
 from interpreter.cobol.file_frame import FileFrame, frame_of
 from interpreter.cobol.io_provider import CobolIOProvider, IOResult
 from interpreter.cobol.prime_key import PrimeKey
+from interpreter.cobol.run_inputs import NO_RUN_INPUTS, RunInputs
 from interpreter.cobol.sort_field import sort_fields
 from interpreter.cobol.sort_order import ordered
 from interpreter.cobol.variable_sequential_driver import VariableSequentialDriver
@@ -64,29 +64,21 @@ class RealFileIOProvider(CobolIOProvider):
 
     Args:
         base_dir: Root for resolving relative paths from ``assign_to``.
-        file_control: FileControlEntry list from the ASG.
-        path_overrides: Test hook — takes precedence over all other resolution.
-        system_input: The system input device's fixed-length records, which
-            ACCEPT reads in order.
-        switches: The run's implementor switch settings by environment name;
-            a switch not named is OFF.
+        inputs: The run's SELECT entries, path overrides (which take precedence
+            over all other resolution), system input records (which ACCEPT reads
+            in order) and implementor switch settings (a switch not named is OFF).
     """
 
-    def __init__(
-        self,
-        base_dir: Path,
-        file_control: Sequence[FileControlEntry] = (),
-        path_overrides: Mapping[str, Path] = MappingProxyType({}),
-        system_input: Sequence[str] = (),
-        switches: Mapping[str, SwitchStatus] = MappingProxyType({}),
-    ) -> None:
+    def __init__(self, base_dir: Path, inputs: RunInputs = NO_RUN_INPUTS) -> None:
         self._base_dir = base_dir
-        self._system_input: Iterator[str] = iter(system_input)
+        self._system_input: Iterator[str] = iter(inputs.system_input)
         self._switches: dict[str, SwitchStatus] = {
-            name.upper(): status for name, status in switches.items()
+            name.upper(): status for name, status in inputs.switches.items()
         }
-        self._fce: dict[str, FileControlEntry] = {e.file_name: e for e in file_control}
-        self._overrides: Mapping[str, Path] = path_overrides
+        self._fce: dict[str, FileControlEntry] = {
+            e.file_name: e for e in inputs.file_control
+        }
+        self._overrides: Mapping[str, Path] = inputs.path_overrides
         self._files: dict[str, FileOrganizationDriver] = {}
         self._frames: dict[str, FileFrame] = {}
 

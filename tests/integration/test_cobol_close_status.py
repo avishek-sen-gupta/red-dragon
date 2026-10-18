@@ -69,9 +69,11 @@ def test_close_resets_file_status_to_00(tmp_path: Path) -> None:
     data = tmp_path / "f1.dat"
     data.write_bytes(b"HELLO")  # one 5-byte record -> second READ hits EOF (FS=10)
     from interpreter.cobol.real_file_provider import RealFileIOProvider
+    from interpreter.cobol.run_inputs import RunInputs
 
     provider = RealFileIOProvider(
-        base_dir=tmp_path, file_control=[], path_overrides={"F1DD": data, "F1": data}
+        base_dir=tmp_path,
+        inputs=RunInputs(file_control=[], path_overrides={"F1DD": data, "F1": data}),
     )
     vm = run(
         to_fixed(_program()), language="cobol", io_provider=provider, max_steps=5000

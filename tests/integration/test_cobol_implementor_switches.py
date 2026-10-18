@@ -9,6 +9,7 @@ import pytest
 from cobol_asg.switch_status import SwitchStatus
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.real_file_provider import RealFileIOProvider
+from interpreter.cobol.run_inputs import RunInputs
 from interpreter.run import run
 from tests.covers import covers
 from tests.integration.cobol_helpers import (
@@ -64,7 +65,7 @@ def test_switch_conditions_follow_the_supplied_settings_and_set(
         language="cobol",
         max_steps=5000,
         io_provider=RealFileIOProvider(
-            base_dir=tmp_path, switches={"SWITCH-1": SwitchStatus.ON}
+            base_dir=tmp_path, inputs=RunInputs(switches={"SWITCH-1": SwitchStatus.ON})
         ),
     )
     assert capsys.readouterr().out == "YNNNYNYY\n"

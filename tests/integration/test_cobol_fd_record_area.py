@@ -9,6 +9,7 @@ from pathlib import Path
 from interpreter.cobol.ebcdic_table import EbcdicTable
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.real_file_provider import RealFileIOProvider
+from interpreter.cobol.run_inputs import RunInputs
 from interpreter.run import run
 from tests.covers import covers
 from tests.integration.cobol_helpers import to_fixed
@@ -52,8 +53,10 @@ def test_records_of_one_fd_share_its_area_and_fds_do_not_overlap(
     data_path = tmp_path / "datdd.dat"
     provider = RealFileIOProvider(
         base_dir=tmp_path,
-        file_control=[],
-        path_overrides={"PRINT-FILE": print_path, "DATA-FILE": data_path},
+        inputs=RunInputs(
+            file_control=[],
+            path_overrides={"PRINT-FILE": print_path, "DATA-FILE": data_path},
+        ),
     )
     run(to_fixed(_LINES), language="cobol", io_provider=provider, max_steps=50_000)
 

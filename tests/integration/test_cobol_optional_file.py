@@ -9,6 +9,7 @@ import pytest
 
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.real_file_provider import RealFileIOProvider
+from interpreter.cobol.run_inputs import RunInputs
 from interpreter.run import run
 from tests.covers import covers
 from tests.integration.cobol_helpers import (
@@ -59,7 +60,9 @@ def test_an_absent_optional_file_opens_with_status_05(
         max_steps=20000,
         io_provider=RealFileIOProvider(
             base_dir=tmp_path,
-            path_overrides={"F": tmp_path / "optf", "G": tmp_path / "nopt"},
+            inputs=RunInputs(
+                path_overrides={"F": tmp_path / "optf", "G": tmp_path / "nopt"}
+            ),
         ),
     )
     assert capsys.readouterr().out == "05\nE 10\n05\n00\nAB\n35\n"

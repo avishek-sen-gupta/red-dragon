@@ -19,6 +19,7 @@ import pytest
 
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.real_file_provider import RealFileIOProvider
+from interpreter.cobol.run_inputs import RunInputs
 from interpreter.run import run
 from tests.covers import covers
 from tests.integration.cobol_helpers import (
@@ -78,8 +79,7 @@ def _flag(lines: list[str], tmp_path: Path, offset: int = 0) -> int:
     data_path.write_bytes(b" " * 10)
     provider = RealFileIOProvider(
         base_dir=tmp_path,
-        file_control=[],
-        path_overrides={"F1": data_path},
+        inputs=RunInputs(file_control=[], path_overrides={"F1": data_path}),
     )
     vm = run(to_fixed(lines), language="cobol", io_provider=provider, max_steps=4000)
     return _decode(_first_region(vm), offset, 1)
@@ -193,8 +193,7 @@ class TestUseDeclaratives:
         f2_path.write_bytes(b" " * 10)
         provider = RealFileIOProvider(
             base_dir=tmp_path,
-            file_control=[],
-            path_overrides={"F2": f2_path},
+            inputs=RunInputs(file_control=[], path_overrides={"F2": f2_path}),
         )
         vm = run(
             to_fixed(lines), language="cobol", io_provider=provider, max_steps=4000
@@ -281,8 +280,9 @@ class TestUseDeclaratives:
         ]
         provider = RealFileIOProvider(
             base_dir=tmp_path,
-            file_control=[],
-            path_overrides={"F1": tmp_path / "absent.dat"},
+            inputs=RunInputs(
+                file_control=[], path_overrides={"F1": tmp_path / "absent.dat"}
+            ),
         )
         vm = run(
             to_fixed(lines), language="cobol", io_provider=provider, max_steps=4000

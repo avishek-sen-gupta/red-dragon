@@ -10,6 +10,7 @@ from cobol_asg.switch_status import SwitchStatus
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.io_provider import NullIOProvider
 from interpreter.cobol.real_file_provider import RealFileIOProvider
+from interpreter.cobol.run_inputs import RunInputs
 from interpreter.cobol.switch_index import SwitchCondition, SwitchIndex
 from tests.covers import covers
 
@@ -66,7 +67,9 @@ def test_switches_parse_round_trip_and_index_their_names() -> None:
 def test_switch_state_starts_from_the_run_input_and_defaults_off(
     tmp_path: Path,
 ) -> None:
-    prov = RealFileIOProvider(base_dir=tmp_path, switches={"SWITCH-1": SwitchStatus.ON})
+    prov = RealFileIOProvider(
+        base_dir=tmp_path, inputs=RunInputs(switches={"SWITCH-1": SwitchStatus.ON})
+    )
     before = [prov._switch_status(name) for name in ("SWITCH-1", "SWITCH-2")]
     prov._set_switch("SWITCH-1", "OFF")
     prov._set_switch("SWITCH-2", "ON")

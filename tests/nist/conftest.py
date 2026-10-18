@@ -12,6 +12,7 @@ import pytest
 from cobol_asg.switch_status import SwitchStatus
 from interpreter.cobol.ebcdic_table import EbcdicTable
 from interpreter.cobol.real_file_provider import RealFileIOProvider
+from interpreter.cobol.run_inputs import RunInputs
 from interpreter.frontend import make_cobol_parser
 from interpreter.project.cobol_compile import compile_cobol
 from interpreter.project.entry_point import EntryPoint
@@ -229,10 +230,12 @@ def make_provider(
     )
     provider = RealFileIOProvider(
         base_dir=tmp_path,
-        file_control=[],
-        path_overrides=overrides,
-        system_input=system_input,
-        switches=_SWITCH_SETTINGS,
+        inputs=RunInputs(
+            file_control=[],
+            path_overrides=overrides,
+            system_input=system_input,
+            switches=_SWITCH_SETTINGS,
+        ),
     )
     return provider, print_path
 

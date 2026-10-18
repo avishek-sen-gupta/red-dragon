@@ -9,6 +9,7 @@ import pytest
 
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.real_file_provider import RealFileIOProvider
+from interpreter.cobol.run_inputs import RunInputs
 from interpreter.run import run
 from tests.covers import covers
 from tests.integration.cobol_helpers import (
@@ -64,7 +65,7 @@ def test_relative_start_honours_its_relation(
         language="cobol",
         max_steps=20000,
         io_provider=RealFileIOProvider(
-            base_dir=tmp_path, path_overrides={"R": tmp_path / "rls"}
+            base_dir=tmp_path, inputs=RunInputs(path_overrides={"R": tmp_path / "rls"})
         ),
     )
     assert capsys.readouterr().out == "00E5\nI 23\n00B2\nI 23\n"
