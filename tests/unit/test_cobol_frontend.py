@@ -76,7 +76,7 @@ from interpreter.cobol.program_object import (
     INITIAL_STATE_FIELD,
     WORKING_STORAGE_FIELD,
 )
-from interpreter.cobol.run_unit import RUN_UNIT_VAR
+from interpreter.cobol.run_unit import PROGRAM_DIRECTORY, RUN_UNIT_VAR
 from interpreter.continuation_name import ContinuationName
 from interpreter.field_name import FieldName
 from interpreter.func_name import FuncName
@@ -88,6 +88,7 @@ from interpreter.instructions import (
     Data,
     InstructionBase,
     Label_,
+    LoadFieldIndirect,
     LoadVar,
     ResumeContinuation,
     SetContinuation,
@@ -163,31 +164,40 @@ def _performs(
 
 def _cancel_reset(
     instructions: Sequence[InstructionBase],
-) -> tuple[list[ConstValue], bool, VarName, list[ConstValue]]:
-    """What a CANCEL lowered to: the name the presence test is given, whether the
-    branch tests that result, the program ConstValue the reset arm loads, and what
-    it stores into that ConstValue's initial_state."""
+) -> tuple[VarName, ConstValue, bool, bool, list[ConstValue]]:
+    """What a CANCEL lowered to: the directory its membership test looks in, the
+    name it looks for (a constant, or the builtin that produced it at run time),
+    whether the branch tests that result, whether the reset arm loads the program
+    object out of the same directory by the same name, and what it stores into
+    that object's initial_state."""
     consts = _consts(instructions)
-    presence = next(
-        i
+    producers = {
+        i.result_reg: str(i.func_name)
         for i in instructions
         if isinstance(i, CallFunction)
-        and str(i.func_name) == BuiltinName.PROGRAM_PRESENT
-    )
-    branch = instructions[list(instructions).index(presence) + 1]
-    singleton = instructions[_label_at(instructions, branch.branch_targets[0]) + 1]
-    marks = [
-        consts[i.value_reg]
+    }
+    loads = {i.result_reg: i.name for i in instructions if isinstance(i, LoadVar)}
+    test = next(
+        i
         for i in instructions
-        if isinstance(i, StoreField)
-        and i.field_name == INITIAL_STATE_FIELD
-        and i.obj_reg == singleton.result_reg
-    ]
+        if isinstance(i, CallFunction) and str(i.func_name) == "dict_contains_key"
+    )
+    directory, name = test.args
+    branch = instructions[list(instructions).index(test) + 1]
+    found = instructions[_label_at(instructions, branch.branch_targets[0]) + 1]
     return (
-        [consts[a] for a in presence.args],
-        branch.cond_reg == presence.result_reg,
-        singleton.name,
-        marks,
+        loads[directory],
+        consts.get(name, producers.get(name, "")),
+        branch.cond_reg == test.result_reg,
+        isinstance(found, LoadFieldIndirect)
+        and (found.obj_reg, found.name_reg) == (directory, name),
+        [
+            consts[i.value_reg]
+            for i in instructions
+            if isinstance(i, StoreField)
+            and i.field_name == INITIAL_STATE_FIELD
+            and i.obj_reg == found.result_reg
+        ],
     )
 
 
@@ -2751,15 +2761,15 @@ class TestCallAlterEntryCancelLowering:
 
     @covers(CobolFeature.CANCEL, CobolFeature.PIC_CLAUSE, CobolFeature.USAGE_DISPLAY)
     def test_cancel_marks_a_present_program_for_its_initial_state(self):
-        """CANCEL 'SUBPROG' is IR: when SUBPROG is in the run unit, its program
-        object's initial_state field is set, so its next entry re-initialises
-        WORKING-STORAGE. The only builtin it calls is the run-unit membership
-        test CALL ON EXCEPTION already uses."""
+        """CANCEL 'SUBPROG' is IR: when the run unit's program directory holds
+        SUBPROG, its program object's initial_state field is set, so its next
+        entry re-initialises WORKING-STORAGE. The only builtin it calls is the
+        primitive membership test of a heap object."""
         fields = [
             CobolField(name="WS-A", level=77, pic="9(1)", usage="DISPLAY", offset=0),
         ]
         with_cancel = self._lower_with_field_and_stmts(
-            fields, [CancelStatement(programs=["SUBPROG"])]
+            fields, [CancelStatement(programs=(CallTarget.of_literal("subprog"),))]
         )
         without_cancel = self._lower_with_field_and_stmts(fields, [])
         added = Counter(_builtin_names(with_cancel)) - Counter(
@@ -2767,8 +2777,32 @@ class TestCallAlterEntryCancelLowering:
         )
 
         assert (list(added.elements()), _cancel_reset(with_cancel)) == (
-            [BuiltinName.PROGRAM_PRESENT],
-            (["__entry_SUBPROG"], True, VarName("__prog_SUBPROG"), [True]),
+            ["dict_contains_key"],
+            (PROGRAM_DIRECTORY, "SUBPROG", True, True, [True]),
+        )
+
+    @covers(CobolFeature.CANCEL, CobolFeature.PIC_CLAUSE, CobolFeature.USAGE_DISPLAY)
+    def test_cancel_identifier_cancels_the_program_its_contents_name(self):
+        """CANCEL WS-PROG reads WS-PROG at run time, trims and upper-cases it as
+        CALL identifier does, and looks that name up in the program directory."""
+        fields = [
+            CobolField(name="WS-PROG", level=77, pic="X(8)", usage="DISPLAY", offset=0),
+        ]
+        ir = self._lower_with_field_and_stmts(
+            fields,
+            [
+                CancelStatement(
+                    programs=(CallTarget.of_identifier(RefModOperand(name="WS-PROG")),)
+                )
+            ],
+        )
+
+        assert _cancel_reset(ir) == (
+            PROGRAM_DIRECTORY,
+            BuiltinName.UPPER_CASE,
+            True,
+            True,
+            [True],
         )
 
     @covers(CobolFeature.CANCEL, CobolFeature.VALUE_CLAUSE)

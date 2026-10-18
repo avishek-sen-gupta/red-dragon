@@ -1,5 +1,6 @@
 """The COBOL run unit's own storage, which the start-up module sets up before any program
-runs: one region, and the directories of its EXTERNAL records and files."""
+runs: one region, the directories of its EXTERNAL records and files, and the directory
+of its programs, which maps each loaded program's name to its program object."""
 
 from __future__ import annotations
 
@@ -21,6 +22,7 @@ from interpreter.var_name import VarName
 logger = logging.getLogger(__name__)
 
 RUN_UNIT_VAR = VarName("__cobol_run_unit")
+PROGRAM_DIRECTORY = VarName("__cobol_programs")
 RUN_UNIT_RETURN_CODE = "RUN-UNIT-RETURN-CODE"
 RANDOM_STATE = "RANDOM-STATE"
 
@@ -36,7 +38,7 @@ RUN_UNIT_LAYOUT = build_data_layout(
 
 def run_unit_allocation() -> tuple[InstructionBase, ...]:
     size, region = Register("%0"), Register("%1")
-    records, files = Register("%2"), Register("%3")
+    records, files, programs = Register("%2"), Register("%3"), Register("%4")
     return (
         Const.int_(size, RUN_UNIT_LAYOUT.total_bytes),
         AllocRegion(result_reg=region, size_reg=size),
@@ -45,6 +47,8 @@ def run_unit_allocation() -> tuple[InstructionBase, ...]:
         DeclVar(name=external_directory(ExternalKind.RECORD), value_reg=records),
         NewObject(result_reg=files),
         DeclVar(name=external_directory(ExternalKind.FILE), value_reg=files),
+        NewObject(result_reg=programs),
+        DeclVar(name=PROGRAM_DIRECTORY, value_reg=programs),
     )
 
 

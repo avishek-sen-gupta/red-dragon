@@ -61,6 +61,13 @@ class CallTarget:
         else:
             out["program"] = self.literal
 
+    def to_dict(self) -> dict:
+        match self.identifier:
+            case RefModOperand() as operand:
+                return {"program_ref": operand.to_dict()}
+            case _:
+                return {"program": self.literal}
+
     @property
     def resolved_at_runtime(self) -> bool:
         """True when the program name must be read out of storage to be known."""

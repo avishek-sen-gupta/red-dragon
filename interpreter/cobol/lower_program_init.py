@@ -5,6 +5,7 @@ Emits (in order):
   1. Init block — runs once at program load:
        NEW_OBJECT %ptr
        STORE_VAR __prog_<PID>, %ptr
+       STORE_FIELD __cobol_programs, <PID>, %ptr   (the run unit's program directory)
        LABEL __ws_initial_<pid>_0        ← the initial-state block, performed
        ALLOC_REGION %ws_reg  + VALUE initialisers   by the procedure's entry
        STORE_FIELD %ptr, ws_handle, %ws_reg         after a CANCEL; at load no
@@ -44,6 +45,7 @@ from interpreter.cobol.program_object import (
     entry_var,
     program_var,
 )
+from interpreter.cobol.run_unit import PROGRAM_DIRECTORY
 from interpreter.cobol.special_registers import (
     RETURN_CODE_HANDLE,
     SPECIAL_REGISTERS_LAYOUT,
@@ -91,6 +93,15 @@ def lower_program_init(
     ptr_reg = ctx.fresh_reg()
     ctx.emit_inst(NewObject(result_reg=ptr_reg))
     ctx.emit_inst(StoreVar(name=singleton_var, value_reg=ptr_reg))
+    directory_reg = ctx.fresh_reg()
+    ctx.emit_inst(LoadVar(result_reg=directory_reg, name=PROGRAM_DIRECTORY))
+    ctx.emit_inst(
+        StoreField(
+            obj_reg=directory_reg,
+            field_name=FieldName(program_id.upper()),
+            value_reg=ptr_reg,
+        )
+    )
 
     _lower_initial_state(ctx, program_id, ws_layout)
 

@@ -5,6 +5,7 @@ from cobol_asg.cobol_parser import make_cobol_parser
 from interpreter.cobol.cobol_frontend import CobolFrontend
 from interpreter.cobol.external_area import ExternalKind, external_directory
 from interpreter.cobol.run_unit import (
+    PROGRAM_DIRECTORY,
     RANDOM_STATE,
     RUN_UNIT_LAYOUT,
     RUN_UNIT_RETURN_CODE,
@@ -18,7 +19,7 @@ from tests.covers import NotLanguageFeature, covers
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_the_cobol_frontend_starts_a_link_by_allocating_the_run_unit_region():
-    size, region, records, files = (Register(f"%{n}") for n in range(4))
+    size, region, records, files, programs = (Register(f"%{n}") for n in range(5))
     expected = (
         Const.int_(size, 6),
         AllocRegion(result_reg=region, size_reg=size),
@@ -27,6 +28,8 @@ def test_the_cobol_frontend_starts_a_link_by_allocating_the_run_unit_region():
         DeclVar(name=external_directory(ExternalKind.RECORD), value_reg=records),
         NewObject(result_reg=files),
         DeclVar(name=external_directory(ExternalKind.FILE), value_reg=files),
+        NewObject(result_reg=programs),
+        DeclVar(name=PROGRAM_DIRECTORY, value_reg=programs),
     )
     assert (
         run_unit_allocation(),

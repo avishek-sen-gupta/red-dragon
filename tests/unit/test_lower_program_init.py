@@ -3,10 +3,12 @@ import pytest
 from cobol_asg.asg_types import CobolField
 from interpreter.cobol.data_layout import build_data_layout
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.lower_program_init import (
     lower_program_init,
     lower_ws_from_singleton,
 )
+from interpreter.cobol.run_unit import PROGRAM_DIRECTORY
 from interpreter.cobol.statement_dispatch import dispatch_statement
 from interpreter.frontend import make_cobol_parser
 from interpreter.instructions import (
@@ -51,8 +53,15 @@ def test_lower_program_init_publishes_every_singleton_field():
     """Naming the fields, not counting them: a count says nothing about which."""
     ctx = EmitContext(dispatch_fn=dispatch_statement)
     lower_program_init(ctx, "SUBPROG", _ws_layout_5bytes())
+    directories = {
+        i.result_reg
+        for i in ctx.instructions
+        if isinstance(i, LoadVar) and i.name == PROGRAM_DIRECTORY
+    }
     published = [
-        str(i.field_name) for i in ctx.instructions if isinstance(i, StoreField)
+        str(i.field_name)
+        for i in ctx.instructions
+        if isinstance(i, StoreField) and i.obj_reg not in directories
     ]
     # return_code_handle joins them because the special registers are allocated
     # once, with WORKING-STORAGE, rather than per call (red-dragon-ltq6).
@@ -175,3 +184,22 @@ def test_a_linked_entry_function_is_registered_with_its_parameter():
     assert linked.merged_registry.func_params[
         CodeLabel("__main__.func_init_params_caller_0")
     ] == ["__call_arguments"]
+
+
+@covers(CobolFeature.CANCEL)
+def test_lower_program_init_lists_the_program_object_in_the_program_directory():
+    """The run unit's program directory maps each loaded program's name to its
+    program object, so a name known only at run time (CANCEL identifier) finds it."""
+    ctx = EmitContext(dispatch_fn=dispatch_statement)
+    lower_program_init(ctx, "subprog", _ws_layout_5bytes())
+    program_object = next(i for i in ctx.instructions if isinstance(i, NewObject))
+    directories = {
+        i.result_reg
+        for i in ctx.instructions
+        if isinstance(i, LoadVar) and i.name == PROGRAM_DIRECTORY
+    }
+    assert [
+        (str(i.field_name), i.value_reg)
+        for i in ctx.instructions
+        if isinstance(i, StoreField) and i.obj_reg in directories
+    ] == [("SUBPROG", program_object.result_reg)]

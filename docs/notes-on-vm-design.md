@@ -444,7 +444,7 @@ Each program's lowering (`interpreter/cobol/lower_program_init.py`) emits an ini
 
 The program's FILE SECTION region is allocated once at load too, and kept in `__file_area_<PID>`; the procedure loads it on entry, and so does a program it contains that names one of its GLOBAL items.
 
-WORKING-STORAGE is laid down by one block inside the init block, `__ws_initial_<pid>_0`, which also clears the singleton's `initial_state` field and ends in `RESUME_CONTINUATION`; at load no continuation is set, so the init block runs straight through it. `CANCEL` sets `initial_state` on a program in the run unit, and the procedure's entry, finding it set, performs the block (`SET_CONTINUATION` + `BRANCH`, as PERFORM does) before binding `__ws_region`, so the next CALL finds WORKING-STORAGE at its VALUE clauses.
+WORKING-STORAGE is laid down by one block inside the init block, `__ws_initial_<pid>_0`, which also clears the singleton's `initial_state` field and ends in `RESUME_CONTINUATION`; at load no continuation is set, so the init block runs straight through it. Each init block also lists the program object under its name in the run unit's program directory, `__cobol_programs` (declared by the start-up module), which is how `CANCEL` finds a program named only at run time. `CANCEL` sets `initial_state` on a program in that directory, and the procedure's entry, finding it set, performs the block (`SET_CONTINUATION` + `BRANCH`, as PERFORM does) before binding `__ws_region`, so the next CALL finds WORKING-STORAGE at its VALUE clauses.
 
 ### 12.2 CALL_WITH_MEMORY
 
@@ -466,6 +466,7 @@ Harnesses build an argument array with `call_arguments(vm, regions)` (`interpret
 - The last program to end wins, which is the value the operating system would get.
 - `read_return_code(vm)` (`interpreter/cobol/return_code_readback.py`) decodes the run-unit region's RETURN-CODE field.
 - The start-up module also declares `__cobol_external_records` and `__cobol_external_files`, two heap objects holding each EXTERNAL area's region under its name. A program's load-time code asks `dict_contains_key` whether its area is there and allocates it when it is not; its procedure loads the region on entry. An EXTERNAL file's connector state is a set of run-unit variables, started closed where its area is allocated. Lowering does all of it in IR.
+- It also declares `__cobol_programs`, the program directory: each program's init block stores its program object there under its upper-cased name, and CANCEL finds the object by name in IR (`dict_contains_key`, `LOAD_FIELD_INDIRECT`).
 - FUNCTION RANDOM keeps its generator state in the same region: lowering loads it, steps it with a pure builtin, and stores it back. The sequence belongs to the run unit, and starts at seed 0 when the first reference has no argument (Enterprise COBOL 6.5 LR ch. 83). `VMState` holds no COBOL state for either.
 
 ### 12.4 Pointers

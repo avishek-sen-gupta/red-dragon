@@ -1473,20 +1473,21 @@ class EntryStatement:
 
 @dataclass(frozen=True)
 class CancelStatement:
-    """CANCEL program-name(s)."""
+    """CANCEL program-name(s): each operand a literal or an identifier, as CALL's
+    callee is."""
 
-    programs: list[str] = field(default_factory=list)
+    programs: tuple[CallTarget, ...] = ()
     span: SourceSpan | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> CancelStatement:
         return cls(
-            programs=data.get("programs", []),
+            programs=tuple(CallTarget.from_dict(p) for p in data.get("programs", [])),
             span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
-        result = {"type": "CANCEL", "programs": self.programs}
+        result = {"type": "CANCEL", "programs": [t.to_dict() for t in self.programs]}
         if self.span is not None:
             self.span.write_into(result)
         return result
