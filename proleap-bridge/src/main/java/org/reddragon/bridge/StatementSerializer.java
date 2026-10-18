@@ -1359,14 +1359,10 @@ public final class StatementSerializer {
         if (vs instanceof LiteralValueStmt) {
             Literal lit = ((LiteralValueStmt) vs).getLiteral();
             if (lit != null && lit.getLiteralType() == Literal.LiteralType.FIGURATIVE_CONSTANT
-                    && lit.getFigurativeConstant() != null) {
-                String canonical = canonicalFigurative(lit.getFigurativeConstant().getFigurativeConstantType());
-                if (canonical != null) {
-                    JsonObject fig = new JsonObject();
-                    fig.addProperty("kind", "figurative");
-                    fig.addProperty("value", canonical);
-                    return fig;
-                }
+                    && lit.getFigurativeConstant() != null
+                    && lit.getFigurativeConstant().getFigurativeConstantType()
+                            != FigurativeConstant.FigurativeConstantType.ALL) {
+                return figurativeNode(lit.getCtx());
             }
         }
         return litNode(extractValueStmtText(vs), vs.getCtx());
@@ -3513,14 +3509,10 @@ public final class StatementSerializer {
                 return allLiteralNode(allRepeatedLiteral(lit.getCtx()));
             }
             if (lit != null && lit.getLiteralType() == Literal.LiteralType.FIGURATIVE_CONSTANT
-                    && lit.getFigurativeConstant() != null) {
-                String canonical = canonicalFigurative(lit.getFigurativeConstant().getFigurativeConstantType());
-                if (canonical != null) {
-                    JsonObject fig = new JsonObject();
-                    fig.addProperty("kind", "figurative");
-                    fig.addProperty("value", canonical);
-                    return fig;
-                }
+                    && lit.getFigurativeConstant() != null
+                    && lit.getFigurativeConstant().getFigurativeConstantType()
+                            != FigurativeConstant.FigurativeConstantType.ALL) {
+                return figurativeNode(lit.getCtx());
             }
         }
         // Literals (LiteralValueStmt, IntegerLiteralValueStmt, etc.)
@@ -3807,13 +3799,7 @@ public final class StatementSerializer {
             return allLiteralNode(repeated);
         }
         if (lit != null && lit.figurativeConstant() != null) {
-            String canonical = canonicalFigurativeCtx(lit.figurativeConstant());
-            if (canonical != null) {
-                JsonObject fig = new JsonObject();
-                fig.addProperty("kind", "figurative");
-                fig.addProperty("value", canonical);
-                return fig;
-            }
+            return figurativeNode(lit.figurativeConstant());
         }
         return litNode(lit != null ? lit.getText() : "", lit);
     }
@@ -3879,18 +3865,15 @@ public final class StatementSerializer {
     }
 
     /**
-     * Maps a figurative-constant grammar context to the canonical comparison string.
-     * Mirrors {@link #canonicalFigurative} but reads ANTLR terminal nodes directly,
-     * for the grammar-context fallback path used on abbreviated conditions.
+     * A figurative constant as written, e.g. {@code {"kind": "figurative",
+     * "value": "ZERO"}}. The ASG reader reads the spellings of one constant as
+     * one name.
      */
-    private static String canonicalFigurativeCtx(CobolParser.FigurativeConstantContext fc) {
-        if (fc == null) return null;
-        if (fc.SPACE() != null || fc.SPACES() != null) return "SPACES";
-        if (fc.ZERO() != null || fc.ZEROS() != null || fc.ZEROES() != null) return "ZEROS";
-        if (fc.LOW_VALUE() != null || fc.LOW_VALUES() != null) return "LOW-VALUES";
-        if (fc.HIGH_VALUE() != null || fc.HIGH_VALUES() != null) return "HIGH-VALUES";
-        if (fc.QUOTE() != null || fc.QUOTES() != null) return "QUOTES";
-        return null;
+    private static JsonObject figurativeNode(ParserRuleContext written) {
+        JsonObject fig = new JsonObject();
+        fig.addProperty("kind", "figurative");
+        fig.addProperty("value", written.getText().toUpperCase());
+        return fig;
     }
 
     static CobolParser.LiteralContext allRepeatedLiteral(CobolParser.LiteralContext lit) {
@@ -3979,38 +3962,6 @@ public final class StatementSerializer {
             return true;
         }
         return ctx != null && ctx.getChildCount() == 1 && isNumericLiteral(ctx.getChild(0));
-    }
-
-    /**
-     * Maps a ProLeap figurative-constant type to the canonical string the Python
-     * condition lowering recognises. Returns {@code null} for figuratives without
-     * a meaningful comparison fill (e.g. ALL/NULL) so callers fall back to text.
-     */
-    private static String canonicalFigurative(FigurativeConstant.FigurativeConstantType type) {
-        if (type == null) return null;
-        switch (type) {
-            case SPACE:
-            case SPACES:
-                return "SPACES";
-            case ZERO:
-            case ZEROS:
-            case ZEROES:
-                return "ZEROS";
-            case LOW_VALUE:
-            case LOW_VALUES:
-                return "LOW-VALUES";
-            case HIGH_VALUE:
-            case HIGH_VALUES:
-                return "HIGH-VALUES";
-            case QUOTE:
-            case QUOTES:
-                return "QUOTES";
-            case NULL:
-            case NULLS:
-                return "NULL";
-            default:
-                return null;
-        }
     }
 
     /**

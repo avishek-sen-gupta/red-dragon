@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 
+from cobol_asg.asg_types import CobolASG
 from cobol_asg.operand_kind import OperandKind
 from cobol_asg.ref_mod import RefModOperand
 from cobol_asg.subprocess_runner import RealSubprocessRunner
@@ -68,9 +69,14 @@ def test_bridge_serialises_all_literal_with_its_all(bridge_jar):
         {"kind": "lit", "name": '"AB"', "all": True},
         {"kind": "figurative", "name": "QUOTE"},
         {"kind": "figurative", "value": "ALL", "literal": '"BA"'},
-        {"kind": "figurative", "value": "ZEROS"},
+        {"kind": "figurative", "value": "ZEROES"},
     )
     assert [RefModOperand.from_dict(s["operands"][0]) for s in statements[:2]] == [
         RefModOperand(name='"AB"', all_literal=True, kind=OperandKind.LIT),
         RefModOperand(name="QUOTE", kind=OperandKind.FIGURATIVE),
     ]
+    revived = CobolASG.from_dict(obj)
+    assert revived.statements[3].to_dict()["condition"]["relation"]["left"] == {
+        "kind": "figurative",
+        "value": "ZEROS",
+    }
