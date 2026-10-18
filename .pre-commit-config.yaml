@@ -16,7 +16,7 @@ repos:
         entry: bash -c 'pyright "$@" || true' --
         verbose: true
   - repo: https://github.com/avishek-sen-gupta/python-fp-lint
-    rev: 1206504f7ea2be9e23609161eefd75446ed9117e
+    rev: c4c5e061a65e91db4e7a5b8a6a014bd8b1f56951
     hooks:
       - id: python-fp-lint
         args: [--config, fp.json]
