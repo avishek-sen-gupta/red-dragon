@@ -2,16 +2,22 @@
 PROLEAP_BRIDGE_JAR ?= $(CURDIR)/proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar
 export PROLEAP_BRIDGE_JAR
 
+# The local Maven repository every mvn call uses, and where the parser
+# staleness check looks. Override it to give a worktree its own repo, so
+# parallel worktrees do not overwrite each other's installed parser.
+MAVEN_REPO_LOCAL ?= $(HOME)/.m2/repository
+export MAVEN_REPO_LOCAL
+
 # The ProLeap parser is NOT on Maven Central: version 4.0.0 is this fork's own
 # version, declared by the vendored submodule. It must be built and installed
-# into the local ~/.m2 repo before proleap-bridge can resolve it. Version is
+# into the local Maven repo (MAVEN_REPO_LOCAL) before proleap-bridge can resolve it. Version is
 # read from the bridge pom so it stays single-sourced.
 PROLEAP_VERSION    := $(shell sed -n 's|.*<proleap.version>\(.*\)</proleap.version>.*|\1|p' $(CURDIR)/proleap-bridge/pom.xml)
 PROLEAP_PARSER_DIR := $(CURDIR)/proleap-bridge/proleap-cobol-parser
 # Only src/main: the install runs with -DskipTests, so test sources cannot
 # affect the installed artifact and must not trigger a ~90s rebuild.
 PROLEAP_PARSER_SRC := $(shell find $(PROLEAP_PARSER_DIR)/src/main -type f 2>/dev/null)
-PROLEAP_PARSER_JAR := $(HOME)/.m2/repository/io/github/uwol/proleap-cobol-parser/$(PROLEAP_VERSION)/proleap-cobol-parser-$(PROLEAP_VERSION).jar
+PROLEAP_PARSER_JAR := $(MAVEN_REPO_LOCAL)/io/github/uwol/proleap-cobol-parser/$(PROLEAP_VERSION)/proleap-cobol-parser-$(PROLEAP_VERSION).jar
 
 PYTEST      = uv run python -m pytest
 PYTEST_ARGS ?=
@@ -22,17 +28,21 @@ help:
 	@echo "make setup      - initialise submodules + build the ProLeap JAR (run once after clone)"
 	@echo "make test       - full suite (builds the JAR if missing)"
 	@echo "make jar        - build the ProLeap bridge JAR if it is missing"
-	@echo "make parser     - install the vendored ProLeap parser into ~/.m2 if stale/missing"
+	@echo "make parser     - install the vendored ProLeap parser into MAVEN_REPO_LOCAL if stale/missing"
 	@echo "make parser-force - reinstall the ProLeap parser unconditionally"
 	@echo "make jar-force  - rebuild the ProLeap bridge JAR (run after changing Java/bridge sources)"
 	@echo "make fmt        - black-format the codebase"
 	@echo "make lint       - import-linter contracts"
 	@echo ""
+	@echo "Set MAVEN_REPO_LOCAL=<dir> to use a local Maven repo other than ~/.m2/repository"
+	@echo "(e.g. one per worktree); the parser staleness check and every mvn call use it."
+	@echo ""
+	@echo "MAVEN_REPO_LOCAL=$(MAVEN_REPO_LOCAL)"
 	@echo "PROLEAP_BRIDGE_JAR=$(PROLEAP_BRIDGE_JAR)"
 	@echo "PROLEAP_PARSER_JAR=$(PROLEAP_PARSER_JAR)"
 
 # One-time setup from a fresh clone: pull submodules, install the parser into
-# ~/.m2 (via the jar's prerequisites), then build the bridge JAR.
+# MAVEN_REPO_LOCAL (via the jar's prerequisites), then build the bridge JAR.
 setup:
 	git submodule update --init --recursive
 	$(MAKE) jar
@@ -42,7 +52,7 @@ setup:
 $(PROLEAP_PARSER_DIR)/pom.xml:
 	git submodule update --init --recursive
 
-# Build + install the vendored parser when it is absent from ~/.m2, or when the
+# Build + install the vendored parser when it is absent from MAVEN_REPO_LOCAL, or when the
 # submodule's pom/sources are newer than the installed jar -- otherwise grammar
 # edits would silently never reach the bridge. The build command itself lives in
 # proleap-bridge/build.sh so it is not duplicated here.
@@ -57,12 +67,12 @@ parser-force:
 
 # Build the shaded JAR only when it is missing (file target).
 $(PROLEAP_BRIDGE_JAR): $(PROLEAP_PARSER_JAR)
-	cd proleap-bridge && mvn -DskipTests package -q
+	cd proleap-bridge && mvn "-Dmaven.repo.local=$(MAVEN_REPO_LOCAL)" -DskipTests package -q
 
 jar: $(PROLEAP_BRIDGE_JAR)
 
 jar-force: $(PROLEAP_PARSER_JAR)
-	cd proleap-bridge && mvn -DskipTests package -q
+	cd proleap-bridge && mvn "-Dmaven.repo.local=$(MAVEN_REPO_LOCAL)" -DskipTests package -q
 
 test: jar
 	$(PYTEST) $(PYTEST_ARGS)

@@ -9,22 +9,23 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TARGET="${1:-all}"
+MAVEN_REPO_LOCAL="${MAVEN_REPO_LOCAL:-$HOME/.m2/repository}"
 
 build_parser() {
   # The parser is not on Maven Central -- its version is this fork's own -- so it
-  # must be installed into the local ~/.m2 repo before the bridge can resolve it.
+  # must be installed into the local Maven repo (MAVEN_REPO_LOCAL) before the bridge can resolve it.
   # `clean` because this is a generated-parser build: stale ANTLR output fails in
   # confusing ways. Not -q: this is the slow step (~90s) and quieting it hides
   # dependency-resolution failures.
   echo "==> Building ProLeap COBOL Parser from submodule..."
   cd "$SCRIPT_DIR/proleap-cobol-parser"
-  mvn clean install -DskipTests
+  mvn -Dmaven.repo.local="$MAVEN_REPO_LOCAL" clean install -DskipTests
 }
 
 build_bridge() {
   echo "==> Building ProLeap Bridge..."
   cd "$SCRIPT_DIR"
-  mvn clean package -q
+  mvn -Dmaven.repo.local="$MAVEN_REPO_LOCAL" clean package -q
   echo "==> Done. Fat JAR: target/proleap-bridge-0.1.0-shaded.jar"
 }
 
