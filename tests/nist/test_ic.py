@@ -17,7 +17,7 @@ import pytest
 
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
-from tests.nist.conftest import run_nist
+from tests.nist.conftest import run_nist, skip_flagger_program
 
 pytestmark = pytest.mark.nist
 
@@ -52,8 +52,17 @@ pytestmark = pytest.mark.nist
         "IC234A",
         "IC235A",
         "IC237A",
-        "IC401M",
     ],
 )
 def test_ic_program(prog: str, tmp_path: Path) -> None:
     run_nist(prog, tmp_path)
+
+
+@pytest.mark.parametrize(
+    "prog, header, flags_expected",
+    [
+        ("IC401M", "The following program tests the flagging of high", 11),
+    ],
+)
+def test_ic_flagger_program(prog: str, header: str, flags_expected: int) -> None:
+    skip_flagger_program(prog, header, flags_expected)
