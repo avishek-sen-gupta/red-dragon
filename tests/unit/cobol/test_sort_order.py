@@ -55,7 +55,7 @@ def test_sort_and_merge_statements_read_and_write_their_bridge_form() -> None:
         "collating_sequence": {
             "name": "REV",
             "kind": "LITERALS",
-            "items": [{"link": "NONE", "kind": "NONNUMERIC", "value": "B"}],
+            "items": [{"link": "NONE", "kind": "NONNUMERIC", "value": '"B"'}],
         },
         "using": ["IN-F"],
         "giving": [],
@@ -71,7 +71,7 @@ def test_sort_and_merge_statements_read_and_write_their_bridge_form() -> None:
             ),
         ),
         collating_sequence=Alphabet.from_parts(
-            "REV", "LITERALS", [{"kind": "NONNUMERIC", "value": "B", "link": "NONE"}]
+            "REV", "LITERALS", [{"kind": "NONNUMERIC", "value": '"B"', "link": "NONE"}]
         ),
         source=SortFiles(("IN-F",)),
         sink=ProcedureRange(target=ProcedureRef("P1"), thru=ProcedureRef("P2", "S")),

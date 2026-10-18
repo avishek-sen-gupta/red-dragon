@@ -46,7 +46,7 @@ def test_numeric_literals_take_the_period_and_nothing_else_changes() -> None:
     rate, edited, text = asg.data_fields
 
     assert rate.value == "2.5"
-    assert rate.conditions[0].values == [ConditionValue(from_val="0.5")]
+    assert rate.conditions[0].values == [ConditionValue(from_val="0.5", numeric=True)]
     assert edited.pic == "9,99"
     assert text.value == "1,5"
     assert text.conditions[0].values == [ConditionValue(from_val="1,5")]
@@ -60,7 +60,9 @@ def test_without_the_clause_literals_stay_as_written() -> None:
     asg = CobolASG.from_dict(_WRITTEN | {"special_names": {}})
 
     assert asg.data_fields[0].value == "2,5"
-    assert asg.data_fields[0].conditions[0].values == [ConditionValue(from_val="0,5")]
+    assert asg.data_fields[0].conditions[0].values == [
+        ConditionValue(from_val="0,5", numeric=True)
+    ]
     assert asg.statements[0].to_dict()["operands"] == [
         {"name": "1,5"},
         {"name": "WS-RATE"},

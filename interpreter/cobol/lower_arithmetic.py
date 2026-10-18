@@ -10,8 +10,6 @@ from dataclasses import replace
 from functools import partial, reduce
 from itertools import chain, product
 
-from cobol_asg.edit_picture import de_edit_plan
-from cobol_asg.cobol_field import NO_ODO_OBJECT
 from cobol_asg.cobol_expression import (
     AllSubscriptNode,
     ExprNode,
@@ -22,6 +20,7 @@ from cobol_asg.cobol_expression import (
     expr_from_dict,
     expr_to_dict,
 )
+from cobol_asg.cobol_field import NO_ODO_OBJECT
 from cobol_asg.cobol_statements import (
     ArithmeticCorrespondingStatement,
     ArithmeticStatement,
@@ -44,9 +43,11 @@ from cobol_asg.cobol_statements import (
     StopRunStatement,
 )
 from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
+from cobol_asg.edit_picture import de_edit_plan
 from cobol_asg.exit_kind import ExitKind
 from cobol_asg.initialize_category import InitializeCategory
 from cobol_asg.initialize_replacing import InitializeReplacing
+from cobol_asg.nonnumeric_literal import literal_characters
 from cobol_asg.operand_kind import OperandKind
 from cobol_asg.ref_mod import (
     FunctionCallOperand,
@@ -71,17 +72,6 @@ from cobol_numeric.scale import (
     literal_scale,
     mul_scale,
 )
-from interpreter.cobol.de_edit_ir import emit_de_edit
-from interpreter.cobol.digit_image_ir import emit_display_image, emit_field_digit_image
-from interpreter.cobol.divide_operands import DivideOperands
-from interpreter.cobol.in_place_operation import InPlaceOperation
-from interpreter.cobol.ir_emitter import IrEmitter
-from interpreter.cobol.move_source import MoveSource, plain_move_source
-from interpreter.cobol.receiver_result import ReceiverResult
-from interpreter.cobol.size_error_arm import SizeErrorArm
-from interpreter.cobol.size_error_ir import emit_size_error
-from interpreter.cobol.size_error_store import SizeErrorGuard, SizeErrorStore
-from interpreter.cobol.standard_deviation_ir import emit_standard_deviation
 from interpreter.cobol.arithmetic_precision import ArithmeticPrecision
 from interpreter.cobol.arithmetic_receiver import ArithmeticReceiver
 from interpreter.cobol.arithmetic_scale import (
@@ -105,19 +95,30 @@ from interpreter.cobol.corresponding_paths import (
     pairs_for_move,
 )
 from interpreter.cobol.data_layout import DataItemMatch, DataLayout, FieldLayout
-from interpreter.cobol.emit_context import EmitContext, strip_cobol_literal
+from interpreter.cobol.de_edit_ir import emit_de_edit
+from interpreter.cobol.digit_image_ir import emit_display_image, emit_field_digit_image
+from interpreter.cobol.divide_operands import DivideOperands
+from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.field_resolution import ResolvedFieldRef, whole_field_extent
 from interpreter.cobol.figurative_constants import repeat_to_width
+from interpreter.cobol.in_place_operation import InPlaceOperation
 from interpreter.cobol.initialize_target import InitializeTarget
 from interpreter.cobol.initialize_targets import initialize_targets
+from interpreter.cobol.ir_emitter import IrEmitter
 from interpreter.cobol.lower_pointer import is_pointer_set, lower_pointer_set
 from interpreter.cobol.lower_program_exit import (
     emit_publish_run_unit_return_code,
     emit_return_code_load,
     lower_program_exit,
 )
+from interpreter.cobol.move_source import MoveSource, plain_move_source
+from interpreter.cobol.receiver_result import ReceiverResult
 from interpreter.cobol.run_unit import RANDOM_STATE, RUN_UNIT_LAYOUT, RUN_UNIT_VAR
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
+from interpreter.cobol.size_error_arm import SizeErrorArm
+from interpreter.cobol.size_error_ir import emit_size_error
+from interpreter.cobol.size_error_store import SizeErrorGuard, SizeErrorStore
+from interpreter.cobol.standard_deviation_ir import emit_standard_deviation
 from interpreter.cobol.when_compiled import when_compiled_text
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
@@ -836,7 +837,7 @@ def lower_move(
             )
             value_str_reg = ctx.emit_to_string(decoded_reg, span=span)
     else:
-        literal = strip_cobol_literal(ctx.figuratives.translate(stmt.source.name))
+        literal = literal_characters(ctx.figuratives.translate(stmt.source.name))
         value_str_reg = ctx.const_to_reg(literal, span=span)
         if not stmt.source.is_reference_modified:
             _fill_pattern = (
@@ -2314,7 +2315,7 @@ def _lower_display_operand(
     else:
         display_reg = ctx.const_to_reg(
             ctx.figuratives.characters.get(
-                operand.name.upper(), strip_cobol_literal(operand.name)
+                operand.name.upper(), literal_characters(operand.name)
             ),
             span=span,
         )

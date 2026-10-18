@@ -16,6 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from cobol_asg.decimal_point import PERIOD_POINT, DecimalPoint
+from cobol_asg.nonnumeric_literal import literal_characters, written_literal
 
 
 @dataclass(frozen=True)
@@ -23,31 +24,50 @@ class ConditionValue:
     """A single value or range in a level-88 condition.
 
     Attributes:
-        from_val: The starting (or only) value.
+        from_val: The starting (or only) value: a nonnumeric literal's
+            characters, a numeric literal's digits, a figurative constant's name.
         to_val: The ending value for a THRU range, or empty string if discrete.
+        numeric / figurative: which kind of literal the value is written with.
     """
 
     from_val: str
     to_val: str = ""
     is_all: bool = False
+    numeric: bool = False
+    figurative: bool = False
 
     @classmethod
     def from_dict(
         cls, data: dict, decimal_point: DecimalPoint = PERIOD_POINT
     ) -> ConditionValue:
-        literal = decimal_point.numeric_literal if data.get("numeric", False) else str
+        numeric = data.get("numeric", False)
+        figurative = data.get("figurative", False)
+        literal = (
+            decimal_point.numeric_literal
+            if numeric
+            else str if figurative else literal_characters
+        )
         return cls(
             from_val=literal(data.get("from", "")),
             to_val=literal(data.get("to", "")),
             is_all=data.get("all", False),
+            numeric=numeric,
+            figurative=figurative,
         )
 
     def to_dict(self) -> dict:
+        written = written_literal if self._nonnumeric else str
         return {
-            "from": self.from_val,
-            "to": self.to_val,
+            "from": written(self.from_val),
+            "to": written(self.to_val) if self.to_val else "",
             **({"all": True} if self.is_all else {}),
+            **({"numeric": True} if self.numeric else {}),
+            **({"figurative": True} if self.figurative else {}),
         }
+
+    @property
+    def _nonnumeric(self) -> bool:
+        return not (self.numeric or self.figurative)
 
     @property
     def is_range(self) -> bool:

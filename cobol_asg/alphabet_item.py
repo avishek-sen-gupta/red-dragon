@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from cobol_asg.alphabet_link import AlphabetLink
 from cobol_asg.alphabet_literal_kind import AlphabetLiteralKind
+from cobol_asg.nonnumeric_literal import literal_characters, written_literal
 
 
 @dataclass(frozen=True)
@@ -23,11 +24,24 @@ class AlphabetItem:
 
     @classmethod
     def from_dict(cls, data: Mapping[str, str]) -> AlphabetItem:
+        kind = AlphabetLiteralKind(data["kind"])
         return cls(
             link=AlphabetLink(data["link"]),
-            kind=AlphabetLiteralKind(data["kind"]),
-            value=data["value"],
+            kind=kind,
+            value=(
+                literal_characters(data["value"])
+                if kind is AlphabetLiteralKind.NONNUMERIC
+                else data["value"]
+            ),
         )
 
     def to_dict(self) -> dict[str, str]:
-        return {"link": self.link, "kind": self.kind, "value": self.value}
+        return {
+            "link": self.link,
+            "kind": self.kind,
+            "value": (
+                written_literal(self.value)
+                if self.kind is AlphabetLiteralKind.NONNUMERIC
+                else self.value
+            ),
+        }

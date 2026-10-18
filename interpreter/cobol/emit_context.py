@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 from cobol_asg.asg_types import CobolASG
 from cobol_asg.cobol_statements import ProcedureRef
 from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
+from cobol_asg.nonnumeric_literal import literal_characters
 from cobol_asg.source_span import SourceSpan
 from cobol_memory.field_extent import FieldExtent, Precision
 from cobol_memory.region_id import RegionId
@@ -80,26 +81,6 @@ from interpreter.register import NO_REGISTER, Register
 from interpreter.types.type_expr import array_of, scalar
 
 logger = logging.getLogger(__name__)
-
-
-def strip_cobol_literal(value: str) -> str:
-    """Strip surrounding COBOL string delimiters from a literal.
-
-    The ProLeap bridge emits string literals with their surrounding COBOL
-    quote characters (e.g. ``'"A"'`` or ``"'HELLO'"``).  Call this before
-    passing such a value to ``const_to_reg`` so the stored value is the raw
-    character content rather than a string with embedded quote chars.
-
-    A doubled delimiter inside the literal stands for one delimiter character
-    (ANSI X3.23-1985 nonnumeric literals): ``'"A""B"'`` is ``A"B``.
-
-    Pure numeric strings (``"10"``, ``"0"``) pass through unchanged — they
-    contain no surrounding delimiters and ``const_to_reg`` will emit them as
-    strings (which is correct for alphanumeric operands).
-    """
-    if len(value) >= 2 and value[0] in ('"', "'") and value[-1] == value[0]:
-        return value[1:-1].replace(value[0] * 2, value[0])
-    return value
 
 
 # Type alias for the dispatch callback signature.
@@ -1753,7 +1734,7 @@ class EmitContext:
         bare numeric token such as ``10`` or ``3.14``) is int→exact number→str
         coercion attempted.
         """
-        stripped = strip_cobol_literal(text)
+        stripped = literal_characters(text)
         is_quoted = stripped != text
         if is_quoted:
             # Quoted literal: alphanumeric — never coerce to int/float.

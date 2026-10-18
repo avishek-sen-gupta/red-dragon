@@ -344,22 +344,28 @@ public final class DataFieldSerializer {
     }
 
     /**
-     * Serializes a single ValueInterval to a JSON object with "from" and "to" keys.
+     * Serializes a single ValueInterval: its "from" and "to" literals as
+     * written, and which kind of literal it is.
      */
     private static JsonObject serializeValueInterval(ValueInterval interval) {
         JsonObject intervalObj = new JsonObject();
 
-        intervalObj.addProperty("from",
-                stripQuotes(rawBoundText(fromLiteral(interval), interval.getFromValueStmt())));
-        intervalObj.addProperty("to",
-                stripQuotes(rawBoundText(toLiteral(interval), interval.getToValueStmt())));
+        intervalObj.addProperty("from", rawBoundText(fromLiteral(interval), interval.getFromValueStmt()));
+        intervalObj.addProperty("to", rawBoundText(toLiteral(interval), interval.getToValueStmt()));
         if (isAllLiteral(fromLiteral(interval))) {
             intervalObj.addProperty("all", true);
         }
         if (isNumericLiteral(fromLiteral(interval))) {
             intervalObj.addProperty("numeric", true);
         }
+        if (isFigurativeLiteral(fromLiteral(interval))) {
+            intervalObj.addProperty("figurative", true);
+        }
         return intervalObj;
+    }
+
+    private static boolean isFigurativeLiteral(CobolParser.LiteralContext lit) {
+        return lit != null && unwrapAll(lit).figurativeConstant() != null;
     }
 
     private static boolean isNumericLiteral(CobolParser.LiteralContext lit) {
@@ -417,21 +423,6 @@ public final class DataFieldSerializer {
         return numeric != null && numeric.ZERO() == null;
     }
 
-    /**
-     * A VALUE literal's characters: a nonnumeric literal loses its delimiters and
-     * each doubled delimiter inside it stands for one; a numeric literal is
-     * emitted as written.
-     */
-    private static String stripQuotes(String raw) {
-        if (raw.length() >= 2
-                && ((raw.startsWith("'") && raw.endsWith("'"))
-                || (raw.startsWith("\"") && raw.endsWith("\"")))) {
-            String delimiter = raw.substring(0, 1);
-            return raw.substring(1, raw.length() - 1).replace(delimiter + delimiter, delimiter);
-        }
-        return raw;
-    }
-
     private static String extractPic(DataDescriptionEntryGroup group) {
         try {
             if (group.getPictureClause() != null) {
@@ -479,7 +470,7 @@ public final class DataFieldSerializer {
         try {
             if (group.getValueClause() != null && !group.getValueClause().getValueIntervals().isEmpty()) {
                 ValueInterval interval = group.getValueClause().getValueIntervals().get(0);
-                return stripQuotes(rawBoundText(fromLiteral(interval), interval.getFromValueStmt()));
+                return rawBoundText(fromLiteral(interval), interval.getFromValueStmt());
             }
         } catch (Exception e) {
             LOG.fine("No VALUE clause for " + group.getName());

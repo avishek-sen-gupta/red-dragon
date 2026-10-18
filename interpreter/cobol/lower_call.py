@@ -15,6 +15,7 @@ from cobol_asg.cobol_statements import (
     ProcedureRef,
 )
 from cobol_asg.cobol_types import CobolTypeDescriptor
+from cobol_asg.nonnumeric_literal import literal_characters
 from cobol_asg.operand_kind import OperandKind
 from cobol_asg.pic_parser import parse_pic
 from cobol_asg.ref_mod import RefModOperand
@@ -23,9 +24,8 @@ from cobol_memory.field_extent import FieldExtent, Precision
 from cobol_memory.region_id import RegionId
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.data_layout import FieldLayout
-from interpreter.cobol.emit_context import EmitContext, strip_cobol_literal
+from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.field_resolution import ResolvedFieldRef
-from interpreter.cobol.program_figuratives import ProgramFiguratives
 from interpreter.cobol.lower_arithmetic import eval_ref_mod_expr
 from interpreter.cobol.lower_program_exit import (
     emit_return_code_load,
@@ -33,6 +33,7 @@ from interpreter.cobol.lower_program_exit import (
     emit_return_code_value,
 )
 from interpreter.cobol.pointer_lowering import PointerLowering
+from interpreter.cobol.program_figuratives import ProgramFiguratives
 from interpreter.cobol.program_object import ENTRY_PREFIX, entry_var
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.field_name import FieldName
@@ -444,7 +445,7 @@ def _is_zero(param: CallUsingParam) -> bool:
 def _literal_value(param: CallUsingParam, figuratives: ProgramFiguratives) -> str:
     if param.kind is OperandKind.FIGURATIVE:
         return figuratives.characters.get(param.name.upper(), param.name)
-    return strip_cobol_literal(param.name)
+    return literal_characters(param.name)
 
 
 def _layout(type_descriptor: CobolTypeDescriptor) -> FieldLayout:

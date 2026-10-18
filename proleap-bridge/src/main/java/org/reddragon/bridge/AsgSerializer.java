@@ -341,21 +341,14 @@ public final class AsgSerializer {
             item.addProperty("value", lit.numericLiteral().getText());
         } else {
             item.addProperty("kind", "NONNUMERIC");
-            item.addProperty("value", nonnumericCharacters(lit.getText()));
+            item.addProperty("value", lit.getText());
         }
         return item;
     }
 
-    /** A nonnumeric literal's characters: delimiters removed, doubled delimiters undone. */
-    private static String nonnumericCharacters(String text) {
-        String delimiter = text.substring(0, 1);
-        return text.substring(1, text.length() - 1).replace(delimiter + delimiter, delimiter);
-    }
-
-    /** Literal text with COBOL quote delimiters stripped. */
+    /** A literal as written, delimiters included. */
     private static String literalText(io.proleap.cobol.asg.metamodel.Literal lit) {
-        String text = (lit.getCtx() != null) ? lit.getCtx().getText() : lit.toString();
-        return text.replaceAll("^['\"]|['\"]$", "");
+        return (lit.getCtx() != null) ? lit.getCtx().getText() : lit.toString();
     }
 
     /**

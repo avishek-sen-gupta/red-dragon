@@ -154,8 +154,9 @@ public class AsgSerializerTest {
         JsonArray operands = addStmt.getAsJsonArray("operands");
         assertEquals("ADD should have 1 sending operand", 1, operands.size());
         JsonObject sending = operands.get(0).getAsJsonObject();
+        assertEquals("lit", sending.get("kind").getAsString());
         assertEquals("50", sending.get("name").getAsString());
-        assertTrue("A numeric literal is marked numeric", sending.get("numeric").getAsBoolean());
+        assertTrue("50 is a numeric literal", sending.get("numeric").getAsBoolean());
         JsonArray targets = addStmt.getAsJsonArray("targets");
         assertEquals("ADD should have 1 receiver", 1, targets.size());
         assertEquals("WS-TOTAL", targets.get(0).getAsJsonObject().get("name").getAsString());
@@ -287,7 +288,7 @@ public class AsgSerializerTest {
         JsonObject asg = parseFixture("CurrencySign.cbl");
         assertTrue("special_names missing from the ASG", asg.has("special_names"));
         JsonObject sn = asg.getAsJsonObject("special_names");
-        assertEquals("W", sn.get("currency_sign").getAsString());
+        assertEquals("\"W\"", sn.get("currency_sign").getAsString());
     }
 
     /**
