@@ -93,8 +93,8 @@ class TestUseDeclaratives:
 
     @covers(CobolFeature.DECLARATIVES)
     def test_global_use_fires_when_no_named_match(self, tmp_path: Path) -> None:
-        # USE GLOBAL ... ON F1 registers under use_global; an I/O error on F1
-        # resolves via the global fallback. (Uses the GLOBAL keyword form.)
+        # USE GLOBAL ... ON F1 applies to the program's own I/O on F1 as a plain
+        # USE ... ON F1 does; GLOBAL adds the programs it contains.
         lines = [
             (
                 "    USE GLOBAL AFTER STANDARD ERROR PROCEDURE ON F1."

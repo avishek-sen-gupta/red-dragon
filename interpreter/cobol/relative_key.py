@@ -6,15 +6,15 @@ from cobol_asg.asg_types import CobolASG
 from cobol_asg.cobol_statements import FileControlEntry
 from cobol_asg.file_enums import AccessMode, FileOrganization
 from cobol_asg.ref_mod import RefModOperand
+from interpreter.cobol.global_names import visible_file_entries
 
 NO_KEY = RefModOperand(name="")
 _ADDRESSED_ACCESS = frozenset({AccessMode.RANDOM, AccessMode.DYNAMIC})
 
 
 def _entry(asg: CobolASG, file_name: str) -> FileControlEntry:
-    return next(
-        (e for e in asg.file_control if e.file_name == file_name),
-        FileControlEntry(file_name=file_name),
+    return visible_file_entries(asg).get(
+        file_name, FileControlEntry(file_name=file_name)
     )
 
 

@@ -11,9 +11,22 @@ from cobol_asg.cobol_statements import CobolStatementType
 from cobol_asg.source_span import SourceSpan
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.lower_program_exit import lower_program_exit
-from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.cobol.procedure_labels import procedure_labels
-from interpreter.instructions import Label_, ResumeContinuation
+from interpreter.cobol.program_object import program_name, use_request_var
+from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
+from interpreter.instructions import (
+    Binop,
+    Branch,
+    BranchIf,
+    Label_,
+    LoadVar,
+    ResumeContinuation,
+    Return_,
+    SetContinuation,
+    StoreVar,
+)
+from interpreter.operator_kind import resolve_binop
+from interpreter.register import Register
 
 logger = logging.getLogger(__name__)
 
@@ -30,20 +43,7 @@ def lower_procedure_division(
         [*asg.sections, *asg.declaratives], asg.paragraphs
     )
 
-    # Build the USE-declarative registry: map each registered USE to its
-    # declarative SECTION NAME so I/O verbs can fire the matching procedure on an
-    # unhandled error. Open-mode resolution (use_by_mode) is wired here but
-    # consumed in a later task; this task does named-file + GLOBAL only.
-    for section in asg.declaratives:
-        if section.use is None:
-            continue
-        if section.use.is_global:
-            ctx.use_global = section.name
-        elif section.use.target == "FILE":
-            for fname in section.use.files:
-                ctx.use_by_file[fname.upper()] = section.name
-        else:  # INPUT / OUTPUT / I-O / EXTEND
-            ctx.use_by_mode[section.use.target] = section.name
+    _lower_use_requests(ctx, asg)
 
     for stmt in asg.statements:
         ctx.lower_statement(stmt, materialised)
@@ -62,9 +62,83 @@ def lower_procedure_division(
     lower_program_exit(ctx, materialised, span=_end_of_flow_span(asg), implicit=True)
 
     # Declaratives last: real flow above keeps the entry point on the first real
-    # element. USE-procedure triggering on I/O errors is deferred to m0oa.4.
+    # element.
     for section in asg.declaratives:
         lower_section(ctx, section, materialised)
+
+
+def global_uses(asg: CobolASG) -> list[CobolSection]:
+    """The program's USE GLOBAL declaratives."""
+    return [s for s in asg.declaratives if s.use and s.use.is_global]
+
+
+def lower_use_request(ctx: EmitContext, asg: CobolASG) -> None:
+    """At load, no USE GLOBAL section of the program is asked for."""
+    if not global_uses(asg):
+        return
+    ctx.emit_inst(
+        StoreVar(
+            name=use_request_var(program_name(asg)),
+            value_reg=ctx.const_to_reg("", span=None),
+        ),
+        span=None,
+    )
+
+
+def _lower_use_requests(ctx: EmitContext, asg: CobolASG) -> None:
+    """A contained program enters this one to run one of its USE GLOBAL sections
+    for an I-O condition of its own: it names the section in the request
+    variable. On entry the procedure runs the section named, clears the request
+    and returns; with none named it carries on."""
+    uses = global_uses(asg)
+    if not uses:
+        return
+    request = ctx.fresh_reg()
+    ctx.emit_inst(
+        LoadVar(result_reg=request, name=use_request_var(program_name(asg))),
+        span=uses[0].span,
+    )
+    _ = [_lower_use_request(ctx, asg, request, section) for section in uses]
+
+
+def _lower_use_request(
+    ctx: EmitContext, asg: CobolASG, request: Register, section: CobolSection
+) -> None:
+    span = section.span
+    asked = ctx.fresh_reg()
+    ctx.emit_inst(
+        Binop(
+            result_reg=asked,
+            operator=resolve_binop("=="),
+            left=request,
+            right=ctx.const_to_reg(section.name, span=span),
+        ),
+        span=span,
+    )
+    run_lbl, done_lbl, next_lbl = (
+        ctx.fresh_label(f"use_request_{tag}") for tag in ("run", "done", "next")
+    )
+    ctx.emit_inst(
+        BranchIf(cond_reg=asked, branch_targets=(run_lbl, next_lbl)), span=span
+    )
+    ctx.emit_inst(Label_(label=run_lbl), span=span)
+    ctx.emit_inst(
+        StoreVar(
+            name=use_request_var(program_name(asg)),
+            value_reg=ctx.const_to_reg("", span=span),
+        ),
+        span=span,
+    )
+    ctx.emit_inst(
+        SetContinuation(
+            name=ctx.procedures.section_end(section.name), target_label=done_lbl
+        ),
+        span=span,
+    )
+    ctx.emit_inst(Branch(label=ctx.procedures.section(section.name)), span=span)
+    ctx.emit_inst(Label_(label=done_lbl), span=span)
+    ctx.emit_inst(Return_(), span=span)
+    ctx.emit_inst(Label_(label=next_lbl), span=span)
 
 
 def _end_of_flow_span(asg: CobolASG) -> SourceSpan | None:

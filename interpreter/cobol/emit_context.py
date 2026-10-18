@@ -26,6 +26,7 @@ from cobol_asg.asg_types import CobolASG
 from cobol_asg.cobol_statements import ProcedureRef
 from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from cobol_asg.nonnumeric_literal import literal_characters
+from cobol_asg.ref_mod import RefModOperand
 from cobol_asg.source_span import SourceSpan
 from cobol_memory.field_extent import FieldExtent, Precision
 from cobol_memory.region_id import RegionId
@@ -42,6 +43,7 @@ from interpreter.cobol.collating_sequences import collating_sequence_of
 from interpreter.cobol.condition_name_index import ConditionNameIndex
 from interpreter.cobol.data_layout import DataItemMatch, DataLayout, FieldLayout
 from interpreter.cobol.field_resolution import ResolvedFieldRef, field_access_extent
+from interpreter.cobol.program_object import program_name
 from interpreter.cobol.figurative_constants import FIGURATIVE_ZEROS
 from interpreter.cobol.ir_encoders import (
     build_decode_alphanumeric_ir,
@@ -192,9 +194,6 @@ class EmitContext:
         self._reg_counter: int = 0
         self._label_counter: int = 0
         self._procedures: ProcedureLabels = ProcedureLabels()
-        self.use_by_file: dict[str, str] = {}
-        self.use_by_mode: dict[str, str] = {}
-        self.use_global: str | None = None
         self._paragraph: str = ""
         self._section: str = ""
         self._requested_exits: set[CodeLabel] = set()
@@ -1693,17 +1692,21 @@ class EmitContext:
         *,
         span: SourceSpan | None = None,
     ) -> None:
-        """Write I/O status code to the FILE STATUS variable if declared."""
-        from cobol_asg.cobol_statements import (
-            FileControlEntry,
-        )  # avoid circular at module level
+        """Write the I-O status to the FILE STATUS item of the file's SELECT, if it
+        names one: an item of the program whose SELECT it is, which for a GLOBAL
+        file of a containing program is that program's, global or not."""
+        from interpreter.cobol.global_names import file_owner, visible_file_entries
 
-        fce: FileControlEntry | None = next(
-            (e for e in self._asg.file_control if e.file_name == file_name), None
-        )
-        if fce is None or not fce.file_status_var.name:
+        entries = visible_file_entries(self._asg)
+        if file_name not in entries or not entries[file_name].file_status_var.name:
             return
-        status_item = fce.file_status_var
+        status_item = entries[file_name].file_status_var
+        owner = program_name(file_owner(self._asg, file_name))
+        if owner != program_name(self._asg):
+            self._emit_owned_status(
+                owner, status_item, status_reg, materialised, span=span
+            )
+            return
         if not materialised.has_field(status_item.name):
             return
         target_ref, target_rr = self.resolve_field_ref(
@@ -1713,6 +1716,35 @@ class EmitContext:
             status_item.subscripts,
             span=span,
         )
+        self._emit_status_write(target_ref, target_rr, status_reg, span=span)
+
+    def _emit_owned_status(
+        self,
+        owner: str,
+        status_item: RefModOperand,
+        status_reg: Register,
+        materialised: MaterialisedSectionedLayout,
+        *,
+        span: SourceSpan | None,
+    ) -> None:
+        match, region_reg, region = next(
+            materialised.owner_scope(owner).owned_matches(
+                status_item.name, status_item.qualifiers
+            )
+        )
+        target_ref = self.resolve_field_ref_from(
+            match.storage, region_reg, region, materialised, span=span
+        )
+        self._emit_status_write(target_ref, region_reg, status_reg, span=span)
+
+    def _emit_status_write(
+        self,
+        target_ref: ResolvedFieldRef,
+        target_rr: Register,
+        status_reg: Register,
+        *,
+        span: SourceSpan | None,
+    ) -> None:
         str_reg = self.emit_to_string(status_reg, span=span)
         self.emit_encode_and_write(
             target_rr,

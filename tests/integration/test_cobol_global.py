@@ -148,3 +148,70 @@ def test_a_record_area_keeps_its_contents_from_one_call_to_the_next(tmp_path):
     assert _working_storage(
         linked, "KEEPER", RealFileIOProvider(base_dir=tmp_path)
     ) == {"K-SEEN": _ebcdic("KEPT")}
+
+
+_FILE_AND_USE = b"""\
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. OWNER.
+       ENVIRONMENT DIVISION.
+       INPUT-OUTPUT SECTION.
+       FILE-CONTROL.
+           SELECT G-FILE ASSIGN TO GDD FILE STATUS IS O-FS.
+       DATA DIVISION.
+       FILE SECTION.
+       FD  G-FILE GLOBAL.
+       01  G-REC     PIC X(4).
+       WORKING-STORAGE SECTION.
+       01  O-FS      PIC XX.
+       01  HITS      PIC 9 VALUE 0.
+       01  SEEN-FS   PIC XX VALUE SPACES.
+       PROCEDURE DIVISION.
+       DECLARATIVES.
+       G-ERR SECTION.
+           USE GLOBAL AFTER ERROR PROCEDURE ON INPUT.
+       G-ERR-PARA.
+           ADD 1 TO HITS.
+           MOVE O-FS TO SEEN-FS.
+       END DECLARATIVES.
+       MAIN-FLOW SECTION.
+       MAIN-PARA.
+           OPEN OUTPUT G-FILE.
+           MOVE 'ABCD' TO G-REC.
+           WRITE G-REC.
+           CLOSE G-FILE.
+           OPEN INPUT G-FILE.
+           CALL 'READER'.
+           CLOSE G-FILE.
+           STOP RUN.
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. READER.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01  I-BUF     PIC X(4) VALUE SPACES.
+       PROCEDURE DIVISION.
+           READ G-FILE INTO I-BUF.
+           READ G-FILE.
+           GOBACK.
+       END PROGRAM READER.
+       END PROGRAM OWNER.
+"""
+
+
+@covers(CobolFeature.GLOBAL_FILE, CobolFeature.USE_GLOBAL)
+def test_a_contained_programs_io_on_a_global_file_uses_its_owners_connector_and_use(
+    tmp_path,
+):
+    linked = compile_cobol(_FILE_AND_USE, parser=make_cobol_parser(), work_dir=tmp_path)
+    provider = RealFileIOProvider(base_dir=tmp_path)
+
+    assert (
+        _working_storage(linked, "OWNER", provider),
+        _working_storage(linked, "READER", RealFileIOProvider(base_dir=tmp_path)),
+    ) == (
+        {
+            "O-FS": _ebcdic("00"),
+            "HITS": _ebcdic("1"),
+            "SEEN-FS": _ebcdic("10"),
+        },
+        {"I-BUF": _ebcdic("ABCD")},
+    )
