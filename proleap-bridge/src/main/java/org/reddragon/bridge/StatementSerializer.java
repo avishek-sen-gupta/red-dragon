@@ -1199,6 +1199,35 @@ public final class StatementSerializer {
         return condition;
     }
 
+    /**
+     * Whether ProLeap resolves a name written where a condition stands to a data
+     * item rather than to a level-88 entry: {@code IF A = 1 OR B} with B a data
+     * item, an abbreviated operand. Switch condition-names do not resolve to a
+     * data description entry, so they stay condition names.
+     */
+    private static boolean namesDataItem(Call call) {
+        return call != null
+                && call.unwrap() instanceof DataDescriptionEntryCall entryCall
+                && !(entryCall.getDataDescriptionEntry() instanceof DataDescriptionEntryCondition);
+    }
+
+    /** The data item a condition-name reference resolved to, as a reference operand. */
+    private static JsonObject dataOperand(ConditionNameReference ref) {
+        JsonObject operand = new JsonObject();
+        operand.addProperty("kind", "ref");
+        operand.addProperty("name", extractCallName(ref.getConditionCall()));
+        JsonArray subscripts = extractConditionSubscripts(ref);
+        if (subscripts.size() > 0) {
+            operand.add("subscripts", subscripts);
+        }
+        JsonArray qualifiers = new JsonArray();
+        collectInDataQualifiers(ref.getCtx(), qualifiers);
+        if (qualifiers.size() > 0) {
+            operand.add("qualifiers", qualifiers);
+        }
+        return operand;
+    }
+
     /** The TRUE / FALSE literal a context consists of, or null when it is anything else. */
     private static CobolParser.BooleanLiteralContext booleanLiteralOf(ParserRuleContext ctx) {
         if (ctx instanceof CobolParser.BooleanLiteralContext) {
@@ -3299,6 +3328,8 @@ public final class StatementSerializer {
      *   <li>{@code {"not": bool, "condition_name": "IS-MINOR"}} for 88-level references,
      *       with {@code condition_qualifiers} for its OF/IN qualifiers and
      *       {@code condition_subscripts} for its subscripts when written</li>
+     *   <li>{@code {"not": bool, "data_operand": <ref>}} for a name written as a condition
+     *       that resolves to a data item: an abbreviated operand</li>
      *   <li>{@code {"not": bool, "relation": {"left": <expr>, "op": "...", "right": <expr>}}} for relation conditions</li>
      *   <li>{@code {"not": bool, "text": "..."}} fallback for class/sign/unknown conditions</li>
      *   <li>{@code {"not": bool, "condition": {...}}} for nested parenthesised conditions</li>
@@ -3323,7 +3354,9 @@ public final class StatementSerializer {
         SimpleCondition.SimpleConditionType scType = sc.getSimpleConditionType();
         if (scType == SimpleCondition.SimpleConditionType.CONDITION_NAME_REFERENCE) {
             ConditionNameReference ref = sc.getConditionNameReference();
-            if (ref != null && ref.getConditionCall() != null) {
+            if (ref != null && namesDataItem(ref.getConditionCall())) {
+                obj.add("data_operand", dataOperand(ref));
+            } else if (ref != null && ref.getConditionCall() != null) {
                 obj.addProperty("condition_name", extractCallName(ref.getConditionCall()));
                 JsonArray conditionSubscripts = extractConditionSubscripts(ref);
                 if (conditionSubscripts.size() > 0) {

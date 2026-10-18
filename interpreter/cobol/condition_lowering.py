@@ -341,22 +341,6 @@ def _lower_condition_node(
             inner = _lower_switch_condition(
                 ctx, ctx.switches.condition(name), span=span
             )
-        elif "abbreviation" in node:
-            inner = _lower_relation_node(
-                ctx,
-                {
-                    "left": node["abbreviation"]["left"],
-                    "op": node["abbreviation"]["op"],
-                    "right": {
-                        "kind": "ref",
-                        "name": name,
-                        "subscripts": node.get("condition_subscripts", []),
-                        "qualifiers": node.get("condition_qualifiers", []),
-                    },
-                },
-                materialised,
-                span=span,
-            )
         else:
             # Fall back to string lowering for unresolved names
             inner = _lower_condition_str(

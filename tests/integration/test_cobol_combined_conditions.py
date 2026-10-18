@@ -120,8 +120,7 @@ class TestCombinedConditions:
         def abbreviated(name: str, negated: bool, op: str) -> dict:
             return {
                 "not": negated,
-                "condition_name": name,
-                "abbreviation": {"left": x1, "op": op},
+                "relation": {"left": x1, "op": op, "right": ref(name)},
             }
 
         assert stmt.condition == {
