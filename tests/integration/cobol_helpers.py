@@ -122,10 +122,17 @@ def ws_region(vm, program_id: str) -> bytearray:
     """Return one program's WORKING-STORAGE bytes, found via its program singleton.
 
     ``first_region`` cannot serve a multi-program run: which region comes first is
-    module link order, not the program under test. The singleton is identified by
-    the ``run`` entry point it publishes, which is stable across link orders.
+    module link order, not the program under test.
     """
     from interpreter.address import Address
+
+    return vm.region_get(Address(str(ws_address(vm, program_id))))
+
+
+def ws_address(vm, program_id: str) -> int:
+    """Where one program's WORKING-STORAGE starts. The program singleton is
+    identified by the ``run`` entry point it publishes, which is stable across
+    link orders."""
     from interpreter.field_name import FieldName
 
     wanted = f"func_{program_id.lower()}_0"
@@ -133,8 +140,7 @@ def ws_region(vm, program_id: str) -> bytearray:
         run_field = obj.fields.get(FieldName("run"))
         if run_field is None or str(run_field.value.func_ref.name) != wanted:
             continue
-        handle = obj.fields[FieldName("ws_handle")]
-        return vm.region_get(Address(str(handle.value)))
+        return int(obj.fields[FieldName("ws_handle")].value)
     raise KeyError(f"No singleton for program {program_id!r} in this VMState")
 
 

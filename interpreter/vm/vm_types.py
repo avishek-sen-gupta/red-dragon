@@ -172,6 +172,7 @@ class VMState:
     _next_address: int = FIRST_ADDRESS
     _bases: tuple[int, ...] = ()
     _handles: tuple[Address, ...] = ()
+    _symbolic_bytes: dict[int, SymbolicRegionWrite] = field(default_factory=dict)
     null_access: NullAccess = field(default_factory=WarnAndIgnore)
     continuations: dict[ContinuationName, CodeLabel] = field(default_factory=dict)
     exception_stack: list[ExceptionHandler] = field(default_factory=list)
@@ -309,6 +310,7 @@ class VMState:
         if address < FIRST_ADDRESS:
             self.null_access.on_write(address, len(data))
             return
+        self._unmark(address, len(data))
         region, offset = self._within_one(address, len(data))
         if offset >= 0:
             _write_piece(data, (region, (offset, offset + len(data)), 0))
@@ -321,6 +323,50 @@ class VMState:
         self._report("write", address, len(data), reach)
         for piece in pieces:
             _write_piece(data, piece)
+
+    def write_symbolic(self, write: SymbolicRegionWrite) -> None:
+        if write.address < FIRST_ADDRESS:
+            self.null_access.on_write(write.address, write.width)
+            return
+        self._symbolic_bytes = {
+            **self._symbolic_bytes,
+            **{at: write for at in range(write.address, write.address + write.width)},
+        }
+
+    def load(self, address: int, length: int) -> list[int] | SymbolicValue:
+        covering = self._covering(address, length)
+        if covering:
+            return self._symbol_over(covering, address, length)
+        raw = list(self.read_at(address, length))
+        return raw + [0] * (length - len(raw))
+
+    def _covering(self, address: int, length: int) -> tuple[SymbolicRegionWrite, ...]:
+        if not self._symbolic_bytes:
+            return ()
+        return tuple(
+            self._symbolic_bytes[at]
+            for at in range(address, address + length)
+            if at in self._symbolic_bytes
+        )
+
+    def _symbol_over(
+        self, covering: tuple[SymbolicRegionWrite, ...], address: int, length: int
+    ) -> SymbolicValue:
+        whole = SymbolicRegionWrite(
+            address=address, width=length, value=covering[0].value
+        )
+        if covering == (whole,) * length:
+            return whole.value
+        return self.fresh_symbolic(hint="region_load")
+
+    def _unmark(self, address: int, length: int) -> None:
+        if not self._symbolic_bytes:
+            return
+        self._symbolic_bytes = {
+            at: write
+            for at, write in self._symbolic_bytes.items()
+            if not address <= at < address + length
+        }
 
     def region_items(self) -> ItemsView[Address, bytearray]:
         """Iterate over all (address, bytearray) pairs."""
@@ -396,6 +442,15 @@ class RegionWrite(BaseModel):
     data: list[int]
 
 
+class SymbolicRegionWrite(BaseModel):
+    """``width`` bytes from ``address`` on hold the image of a symbolic value."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True, frozen=True)
+    address: int
+    width: int
+    value: SymbolicValue
+
+
 @dataclass
 class BuiltinResult:
     """Uniform return type for all builtins.
@@ -432,6 +487,7 @@ class StateUpdate(BaseModel):
     heap_writes: list[HeapWrite] = []
     new_objects: list[NewObject] = []
     region_writes: list[RegionWrite] = []
+    symbolic_region_writes: list[SymbolicRegionWrite] = []
     new_regions: dict[str, int] = {}
     continuation_writes: dict[ContinuationName, CodeLabel] = {}
     continuation_clear: ContinuationName = NO_CONTINUATION_NAME

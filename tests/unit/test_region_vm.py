@@ -3,6 +3,8 @@
 Hand-crafted IR that allocates a region, writes bytes, reads them back.
 """
 
+from collections.abc import Sequence
+
 from interpreter.address import Address
 from interpreter.cfg import CFG
 from interpreter.ir import IRInstruction, Opcode
@@ -15,7 +17,7 @@ from interpreter.vm.executor import (
 )
 from interpreter.vm.vm import VMState, apply_update
 from interpreter.vm.segment import Segment
-from interpreter.vm.vm_types import SymbolicValue
+from interpreter.vm.vm_types import StateUpdate, SymbolicValue
 from tests.unit.vm_helpers import make_vm as _make_vm
 
 
@@ -38,8 +40,15 @@ def _execute(vm, inst):
     return result
 
 
+_Stored = Sequence[int | SymbolicValue] | SymbolicValue
+
+
+def _set(vm: VMState, reg: str, value: _Stored | int) -> None:
+    apply_update(vm, StateUpdate(register_writes={Register(reg): value}))
+
+
 def _alloc_region(vm: VMState, result_reg: Register, size: int) -> None:
-    vm.current_frame.registers[Register("%alloc_size")] = size
+    _set(vm, "%alloc_size", size)
     _execute(
         vm,
         IRInstruction(
@@ -67,9 +76,7 @@ class TestAllocRegion:
 
     def test_alloc_symbolic_size(self):
         vm = _make_vm()
-        vm.current_frame.registers[Register("%size")] = SymbolicValue(
-            name="unknown_size"
-        )
+        _set(vm, "%size", SymbolicValue(name="unknown_size"))
         inst = IRInstruction(
             opcode=Opcode.ALLOC_REGION,
             result_reg=Register("%r0"),
@@ -89,8 +96,8 @@ class TestWriteAndLoadRegion:
         _alloc_region(vm, Register("%rgn"), 8)
 
         # Write [0xDE, 0xAD, 0xBE, 0xEF] at offset 2
-        vm.current_frame.registers[Register("%offset")] = 2
-        vm.current_frame.registers[Register("%data")] = [0xDE, 0xAD, 0xBE, 0xEF]
+        _set(vm, "%offset", 2)
+        _set(vm, "%data", [0xDE, 0xAD, 0xBE, 0xEF])
         _execute(
             vm,
             IRInstruction(
@@ -122,8 +129,8 @@ class TestWriteAndLoadRegion:
         _alloc_region(vm, Register("%rgn"), 8)
 
         # Write 8 bytes at offset 0
-        vm.current_frame.registers[Register("%off0")] = 0
-        vm.current_frame.registers[Register("%data")] = [1, 2, 3, 4, 5, 6, 7, 8]
+        _set(vm, "%off0", 0)
+        _set(vm, "%data", [1, 2, 3, 4, 5, 6, 7, 8])
         _execute(
             vm,
             IRInstruction(
@@ -144,7 +151,7 @@ class TestWriteAndLoadRegion:
         assert unwrap(vm.current_frame.registers[Register("%first4")]) == [1, 2, 3, 4]
 
         # Read last 4 bytes
-        vm.current_frame.registers[Register("%off4")] = 4
+        _set(vm, "%off4", 4)
         _execute(
             vm,
             IRInstruction(
@@ -162,8 +169,8 @@ class TestWriteAndLoadRegion:
 
         # Allocate 4 bytes, fill with [1, 2, 3, 4]
         _alloc_region(vm, Register("%rgn"), 4)
-        vm.current_frame.registers[Register("%off0")] = 0
-        vm.current_frame.registers[Register("%data")] = [1, 2, 3, 4]
+        _set(vm, "%off0", 0)
+        _set(vm, "%data", [1, 2, 3, 4])
         _execute(
             vm,
             IRInstruction(
@@ -200,8 +207,8 @@ class TestWriteAndLoadRegion:
         vm = _make_vm()
         for name, size in (("%first", 2), ("%second", 3)):
             _alloc_region(vm, Register(name), size)
-        vm.current_frame.registers[Register("%off0")] = 0
-        vm.current_frame.registers[Register("%data")] = [1, 2, 3, 4, 5]
+        _set(vm, "%off0", 0)
+        _set(vm, "%data", [1, 2, 3, 4, 5])
         _execute(
             vm,
             IRInstruction(
@@ -234,7 +241,7 @@ class TestWriteAndLoadRegion:
         """LOAD_REGION entirely beyond the region end returns all zero bytes."""
         vm = _make_vm()
         _alloc_region(vm, Register("%rgn"), 4)
-        vm.current_frame.registers[Register("%off")] = 8
+        _set(vm, "%off", 8)
         _execute(
             vm,
             IRInstruction(
@@ -248,8 +255,8 @@ class TestWriteAndLoadRegion:
     def test_load_at_an_unallocated_address_reads_zeroes(self):
         """A handle is an address: a load past the last segment reads zeroes."""
         vm = _make_vm()
-        vm.current_frame.registers[Register("%rgn")] = 9000
-        vm.current_frame.registers[Register("%off")] = 0
+        _set(vm, "%rgn", 9000)
+        _set(vm, "%off", 0)
 
         _execute(
             vm,
@@ -276,8 +283,8 @@ class TestWriteAndLoadRegion:
         _alloc_region(vm, Register("%rgn"), 8)
 
         # Write all 8 bytes
-        vm.current_frame.registers[Register("%off0")] = 0
-        vm.current_frame.registers[Register("%data1")] = [0xAA] * 8
+        _set(vm, "%off0", 0)
+        _set(vm, "%data1", [0xAA] * 8)
         _execute(
             vm,
             IRInstruction(
@@ -287,8 +294,8 @@ class TestWriteAndLoadRegion:
         )
 
         # Overwrite bytes 2-3
-        vm.current_frame.registers[Register("%off2")] = 2
-        vm.current_frame.registers[Register("%data2")] = [0xBB, 0xCC]
+        _set(vm, "%off2", 2)
+        _set(vm, "%data2", [0xBB, 0xCC])
         _execute(
             vm,
             IRInstruction(
@@ -309,3 +316,66 @@ class TestWriteAndLoadRegion:
 
         expected = [0xAA, 0xAA, 0xBB, 0xCC, 0xAA, 0xAA, 0xAA, 0xAA]
         assert unwrap(vm.current_frame.registers[Register("%result")]) == expected
+
+
+def _write(vm: VMState, offset: int, value: _Stored, length: int) -> None:
+    _set(vm, "%w_off", offset)
+    _set(vm, "%w_val", value)
+    _execute(
+        vm,
+        IRInstruction(
+            opcode=Opcode.WRITE_REGION,
+            operands=["%rgn", "%w_off", length, "%w_val"],
+        ),
+    )
+
+
+def _load(vm: VMState, offset: int, length: int) -> _Stored:
+    _set(vm, "%l_off", offset)
+    _execute(
+        vm,
+        IRInstruction(
+            opcode=Opcode.LOAD_REGION,
+            result_reg=Register("%l_out"),
+            operands=["%rgn", "%l_off", length],
+        ),
+    )
+    return unwrap(vm.current_frame.registers[Register("%l_out")])
+
+
+class TestSymbolicRegionBytes:
+    def test_a_symbolic_write_reads_back_as_that_symbol_until_overwritten(self):
+        vm = _make_vm()
+        _alloc_region(vm, Register("%rgn"), 8)
+        _write(vm, 0, [1, 2, 3, 4, 5, 6, 7, 8], 8)
+        stored = SymbolicValue(name="stored")
+        _write(vm, 2, stored, 3)
+
+        reads = (_load(vm, 2, 3), _load(vm, 0, 2), _load(vm, 5, 3), _load(vm, 0, 8))
+        _write(vm, 2, [9, 9, 9], 3)
+
+        assert (*reads, _load(vm, 0, 8)) == (
+            stored,
+            [1, 2],
+            [6, 7, 8],
+            SymbolicValue(name="sym_0", type_hint="region_load"),
+            [1, 2, 9, 9, 9, 6, 7, 8],
+        )
+
+    def test_symbolic_elements_of_a_byte_list_are_stored_one_byte_each(self):
+        vm = _make_vm()
+        _alloc_region(vm, Register("%rgn"), 4)
+        element = SymbolicValue(name="element")
+        _write(vm, 0, [5, element, 7, 8], 4)
+
+        assert (
+            _load(vm, 1, 1),
+            _load(vm, 0, 1),
+            _load(vm, 2, 2),
+            _load(vm, 1, 2),
+        ) == (
+            element,
+            [5],
+            [7, 8],
+            SymbolicValue(name="sym_0", type_hint="region_load"),
+        )
