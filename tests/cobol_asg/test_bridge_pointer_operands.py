@@ -72,5 +72,5 @@ def test_address_of_and_null_are_structured_operands() -> None:
         ],
         _ref("LK", "address_of"),
         {"kind": "figurative", "value": "NULL"},
-        {"name": "X", "type": "VALUE", "address_of": True},
+        {"kind": "ref", "name": "X", "type": "VALUE", "address_of": True},
     )

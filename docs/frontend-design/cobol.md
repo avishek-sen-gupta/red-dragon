@@ -114,6 +114,8 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 
 ## Statement Coverage
 
+Every statement operand states its kind. The bridge writes a data reference as `{"kind": "ref", "name", ...}` and a literal as `{"kind": "lit" | "figurative", "name": <text as written>, "numeric"?: true}`, read from the parse tree's alternative. The ASG reader keeps it on the operand (`RefModOperand.kind`, `CallUsingParam.kind` and `numeric`), and MOVE, DISPLAY, the arithmetic verbs, STRING, INSPECT, INITIALIZE REPLACING and CALL USING take a data item only where the bridge wrote a reference. A data name the program does not declare is an error, not literal text.
+
 29 of 51 ProLeap statement types are handled (24 fully deterministic + 5 I/O stub via injectable provider):
 
 ### Arithmetic (6 types)

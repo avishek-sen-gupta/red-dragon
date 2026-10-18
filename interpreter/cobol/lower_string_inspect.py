@@ -225,7 +225,7 @@ def _sending_characters(
             lower_function_operand(ctx, sending.function, materialised, span=span),
             span=span,
         )
-    if not ctx.has_field(sending.value.name, materialised):
+    if not sending.value.names_data:
         return ctx.const_to_reg(
             strip_cobol_literal(ctx.figuratives.translate(sending.value.name)),
             span=span,
@@ -720,7 +720,7 @@ def _resolve_inspect_operand(
     """An INSPECT operand's characters: a data item (with its qualifiers and
     subscripts) decoded at run time, a figurative constant's character, or a
     literal's text. An operand that was not written is the empty string."""
-    if ctx.has_field(operand.name, materialised):
+    if operand.names_data:
         ref, rr = ctx.resolve_field_ref(
             operand.name,
             materialised,

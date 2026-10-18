@@ -86,6 +86,7 @@ _FILL = [
 @covers(CobolFeature.GROUP_ITEM, CobolFeature.SUBSCRIPT_ACCESS)
 def test_a_qualified_table_reference_carries_its_subscript(bridge_jar):
     assert _source_operand(bridge_jar, "MOVE TB OF HT(I) TO D.") == {
+        "kind": "ref",
         "name": "TB",
         "subscripts": [{"kind": "ref", "name": "I"}],
         "qualifiers": ["HT"],
@@ -96,6 +97,7 @@ def test_a_qualified_table_reference_carries_its_subscript(bridge_jar):
 @covers(CobolFeature.REFERENCE_MODIFICATION)
 def test_a_sliced_qualified_table_reference_keeps_subscript_and_slice(bridge_jar):
     assert _source_operand(bridge_jar, "MOVE TB OF HT(I)(1:2) TO D.") == {
+        "kind": "ref",
         "name": "TB",
         "subscripts": [{"kind": "ref", "name": "I"}],
         "ref_mod_start": {"kind": "lit", "value": "1", "numeric": True},
@@ -107,6 +109,7 @@ def test_a_sliced_qualified_table_reference_keeps_subscript_and_slice(bridge_jar
 @covers(CobolFeature.SUBSCRIPT_ACCESS)
 def test_an_unqualified_table_reference_is_unchanged(bridge_jar):
     assert _source_operand(bridge_jar, "MOVE TU(I) TO D.") == {
+        "kind": "ref",
         "name": "TU",
         "subscripts": [{"kind": "ref", "name": "I"}],
     }

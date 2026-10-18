@@ -20,7 +20,7 @@
         {
             "name": "WORK-PARA",
             "statements": [
-                {"type": "MOVE", "operands": ["42", "WS-RESULT"]}
+                {"type": "MOVE", "operands": [{"kind": "lit", "name": "42", "numeric": true}, "WS-RESULT"]}
             ]
         }
     ]

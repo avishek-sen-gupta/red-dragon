@@ -299,7 +299,7 @@ fileignoreconfig:
 - filename: cobol_asg/cobol_statements.py
   checksum: 2835f0f8c432583724ad57edce774591f70abba3fc20157734f9d0158e7514e8
 - filename: proleap-bridge/src/main/java/org/reddragon/bridge/StatementSerializer.java
-  checksum: f9a87946dec86a8815575eff56958f913885c76b3fb14f7f3db967b3686e1036
+  checksum: f171434ff2438a6e421f6fd711461d0daf457ffc613371bbb3b7d8d3c30a2b96
 - filename: interpreter/cobol/lower_io.py
   checksum: a8ca1ad4eafcabb6f14660f9050fdda3075b897ba63872c430d146e20dd73232
 - filename: tests/integration/test_cobol_use_declaratives.py
@@ -338,4 +338,6 @@ fileignoreconfig:
   checksum: 624f02640dfca23ca6d2004236d8d1459cfc519d8a9267bcc811f0af25888b18
 - filename: interpreter/cobol/sort_key_values.py
   checksum: be38fee64e0a81abe929aee76f049c1a5d66b1fbc12e340362d4d9cb9233e449
+- filename: tests/integration/test_cobol_operand_kinds.py
+  checksum: b4b87abf38a3ba321ef1bb8d7906061058ad5bb065180e7b6b24affcd128469a
 version: "1.0"

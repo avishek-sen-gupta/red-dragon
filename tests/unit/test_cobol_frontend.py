@@ -298,7 +298,8 @@ class TestProcedureDivisionLowering:
         ]
         stmts = [
             MoveStatement(
-                source=RefModOperand(name="123"), targets=[RefModOperand(name="WS-A")]
+                source=RefModOperand(name="123", kind=OperandKind.LIT),
+                targets=[RefModOperand(name="WS-A")],
             )
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
@@ -380,7 +381,7 @@ class TestProcedureDivisionLowering:
         stmts = [
             ArithmeticStatement(
                 op="ADD",
-                operands=[RefModOperand(name="5")],
+                operands=[RefModOperand(name="5", kind=OperandKind.LIT)],
                 targets=[RefModOperand(name="WS-A")],
             )
         ]
@@ -411,7 +412,7 @@ class TestProcedureDivisionLowering:
         stmts = [
             ArithmeticStatement(
                 op="SUBTRACT",
-                operands=[RefModOperand(name="3")],
+                operands=[RefModOperand(name="3", kind=OperandKind.LIT)],
                 targets=[RefModOperand(name="WS-A")],
             )
         ]
@@ -450,7 +451,9 @@ class TestProcedureDivisionLowering:
                     },
                 },
                 children=[
-                    DisplayStatement(operands=(RefModOperand(name="POSITIVE"),)),
+                    DisplayStatement(
+                        operands=(RefModOperand(name="POSITIVE", kind=OperandKind.LIT),)
+                    ),
                 ],
             ),
         ]
@@ -483,9 +486,17 @@ class TestProcedureDivisionLowering:
                         "right": {"kind": "lit", "value": "0"},
                     },
                 },
-                children=[DisplayStatement(operands=(RefModOperand(name="POSITIVE"),))],
+                children=[
+                    DisplayStatement(
+                        operands=(RefModOperand(name="POSITIVE", kind=OperandKind.LIT),)
+                    )
+                ],
                 else_children=[
-                    DisplayStatement(operands=(RefModOperand(name="NOT-POSITIVE"),))
+                    DisplayStatement(
+                        operands=(
+                            RefModOperand(name="NOT-POSITIVE", kind=OperandKind.LIT),
+                        )
+                    )
                 ],
             ),
         ]
@@ -541,7 +552,10 @@ class TestProcedureDivisionLowering:
         ]
         stmts = [
             DisplayStatement(
-                operands=(RefModOperand(name="SPACES"), RefModOperand(name="quote"))
+                operands=(
+                    RefModOperand(name="SPACES", kind=OperandKind.FIGURATIVE),
+                    RefModOperand(name="quote", kind=OperandKind.FIGURATIVE),
+                )
             ),
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
@@ -569,10 +583,10 @@ class TestProcedureDivisionLowering:
         stmts = [
             DisplayStatement(
                 operands=(
-                    RefModOperand(name="'IT''S '"),
+                    RefModOperand(name="'IT''S '", kind=OperandKind.LIT),
                     RefModOperand(name="WS-A"),
-                    RefModOperand(name='"!"'),
-                    RefModOperand(name="12"),
+                    RefModOperand(name='"!"', kind=OperandKind.LIT),
+                    RefModOperand(name="12", kind=OperandKind.LIT),
                 )
             ),
         ]
@@ -620,7 +634,11 @@ class TestProcedureDivisionLowering:
                     },
                 },
                 children=[
-                    DisplayStatement(operands=(RefModOperand(name="ONLY-THEN"),))
+                    DisplayStatement(
+                        operands=(
+                            RefModOperand(name="ONLY-THEN", kind=OperandKind.LIT),
+                        )
+                    )
                 ],
             ),
         ]
@@ -636,7 +654,11 @@ class TestProcedureDivisionLowering:
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
         ]
-        stmts = [DisplayStatement(operands=(RefModOperand(name="HELLO WORLD"),))]
+        stmts = [
+            DisplayStatement(
+                operands=(RefModOperand(name="HELLO WORLD", kind=OperandKind.LIT),)
+            )
+        ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
@@ -1057,7 +1079,11 @@ class TestPerformLoopLowering:
         ]
         stmts = [
             PerformStatement(
-                children=[DisplayStatement(operands=(RefModOperand(name="IN-LOOP"),))],
+                children=[
+                    DisplayStatement(
+                        operands=(RefModOperand(name="IN-LOOP", kind=OperandKind.LIT),)
+                    )
+                ],
                 spec=PerformTimesSpec(times=LiteralNode(value="3")),
             ),
         ]
@@ -1098,7 +1124,9 @@ class TestPerformLoopLowering:
             CobolParagraph(
                 name="WORK-PARA",
                 statements=[
-                    DisplayStatement(operands=(RefModOperand(name="WORKING"),))
+                    DisplayStatement(
+                        operands=(RefModOperand(name="WORKING", kind=OperandKind.LIT),)
+                    )
                 ],
             ),
         ]
@@ -1131,7 +1159,11 @@ class TestPerformLoopLowering:
         ]
         stmts = [
             PerformStatement(
-                children=[DisplayStatement(operands=(RefModOperand(name="LOOPING"),))],
+                children=[
+                    DisplayStatement(
+                        operands=(RefModOperand(name="LOOPING", kind=OperandKind.LIT),)
+                    )
+                ],
                 spec=PerformUntilSpec(
                     condition={
                         "not": False,
@@ -1194,7 +1226,11 @@ class TestPerformLoopLowering:
         ]
         stmts = [
             PerformStatement(
-                children=[DisplayStatement(operands=(RefModOperand(name="LOOPING"),))],
+                children=[
+                    DisplayStatement(
+                        operands=(RefModOperand(name="LOOPING", kind=OperandKind.LIT),)
+                    )
+                ],
                 spec=PerformUntilSpec(
                     condition={
                         "not": False,
@@ -1256,7 +1292,11 @@ class TestPerformLoopLowering:
         stmts = [
             PerformStatement(
                 children=[
-                    DisplayStatement(operands=(RefModOperand(name="VARYING-LOOP"),))
+                    DisplayStatement(
+                        operands=(
+                            RefModOperand(name="VARYING-LOOP", kind=OperandKind.LIT),
+                        )
+                    )
                 ],
                 spec=PerformVaryingSpec(
                     varying_var=FieldRefNode(name="WS-IDX"),
@@ -1320,7 +1360,11 @@ class TestPerformLoopLowering:
         }
         stmts = [
             PerformStatement(
-                children=[DisplayStatement(operands=(RefModOperand(name="BODY"),))],
+                children=[
+                    DisplayStatement(
+                        operands=(RefModOperand(name="BODY", kind=OperandKind.LIT),)
+                    )
+                ],
                 spec=PerformVaryingSpec(
                     varying_var=FieldRefNode(name="WS-I"),
                     varying_from=LiteralNode(value="1"),
@@ -1394,7 +1438,11 @@ class TestPerformLoopLowering:
         }
         stmts = [
             PerformStatement(
-                children=[DisplayStatement(operands=(RefModOperand(name="BODY"),))],
+                children=[
+                    DisplayStatement(
+                        operands=(RefModOperand(name="BODY", kind=OperandKind.LIT),)
+                    )
+                ],
                 spec=PerformVaryingSpec(
                     varying_var=FieldRefNode(name="WS-I"),
                     varying_from=LiteralNode(value="1"),
@@ -1461,7 +1509,11 @@ class TestSectionPerform:
                             name="WORK-PARA",
                             statements=[
                                 DisplayStatement(
-                                    operands=(RefModOperand(name="IN-SECTION"),)
+                                    operands=(
+                                        RefModOperand(
+                                            name="IN-SECTION", kind=OperandKind.LIT
+                                        ),
+                                    )
                                 )
                             ],
                         ),
@@ -1855,7 +1907,7 @@ class TestTier2Lowering:
                 sendings=[
                     StringSending(
                         value=RefModOperand(name="WS-SRC"),
-                        delimiter=RefModOperand(name=" "),
+                        delimiter=RefModOperand(name=" ", kind=OperandKind.LIT),
                     ),
                 ],
                 into=RefModOperand(name="WS-OUT"),
@@ -1908,7 +1960,11 @@ class TestTier2Lowering:
         stmts = [
             UnstringStatement(
                 source=RefModOperand(name="WS-FULL"),
-                delimiters=[UnstringDelimiter(operand=RefModOperand(name=" "))],
+                delimiters=[
+                    UnstringDelimiter(
+                        operand=RefModOperand(name=" ", kind=OperandKind.LIT)
+                    )
+                ],
                 into=[
                     UnstringReceiver(target=RefModOperand(name="WS-FIRST")),
                     UnstringReceiver(target=RefModOperand(name="WS-LAST")),
@@ -1962,7 +2018,10 @@ class TestTier2Lowering:
                     TallyingGroup(
                         target=RefModOperand(name="WS-COUNT"),
                         patterns=[
-                            TallyingFor(mode="ALL", pattern=RefModOperand(name="'A'"))
+                            TallyingFor(
+                                mode="ALL",
+                                pattern=RefModOperand(name="'A'", kind=OperandKind.LIT),
+                            )
                         ],
                     )
                 ],
@@ -2007,8 +2066,8 @@ class TestTier2Lowering:
                 replacings=[
                     Replacing(
                         mode="ALL",
-                        from_pattern=RefModOperand(name="'A'"),
-                        to_pattern=RefModOperand(name="'B'"),
+                        from_pattern=RefModOperand(name="'A'", kind=OperandKind.LIT),
+                        to_pattern=RefModOperand(name="'B'", kind=OperandKind.LIT),
                     )
                 ],
             )
@@ -2069,16 +2128,16 @@ class TestTier2Lowering:
                 replacings=[
                     Replacing(
                         mode="LEADING",
-                        from_pattern=RefModOperand(name="'A'"),
-                        to_pattern=RefModOperand(name="'B'"),
+                        from_pattern=RefModOperand(name="'A'", kind=OperandKind.LIT),
+                        to_pattern=RefModOperand(name="'B'", kind=OperandKind.LIT),
                     )
                 ],
             ),
             InspectStatement(
                 inspect_type="CONVERTING",
                 source=RefModOperand(name="WS-DATA"),
-                converting_from=RefModOperand(name="'AB'"),
-                converting_to=RefModOperand(name="'XY'"),
+                converting_from=RefModOperand(name="'AB'", kind=OperandKind.LIT),
+                converting_to=RefModOperand(name="'XY'", kind=OperandKind.LIT),
             ),
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
@@ -2118,8 +2177,8 @@ class TestTier2Lowering:
                 replacings=[
                     Replacing(
                         mode="ALL",
-                        from_pattern=RefModOperand(name="'1'"),
-                        to_pattern=RefModOperand(name="'2'"),
+                        from_pattern=RefModOperand(name="'1'", kind=OperandKind.LIT),
+                        to_pattern=RefModOperand(name="'2'", kind=OperandKind.LIT),
                     )
                 ],
             ),
@@ -2132,7 +2191,11 @@ class TestTier2Lowering:
                         "right": {"kind": "ref", "name": "WS-X"},
                     },
                 },
-                children=[DisplayStatement(operands=(RefModOperand(name="'EQ'"),))],
+                children=[
+                    DisplayStatement(
+                        operands=(RefModOperand(name="'EQ'", kind=OperandKind.LIT),)
+                    )
+                ],
             ),
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
@@ -2162,7 +2225,11 @@ class TestTier2Lowering:
         def tested(condition: Mapping[str, str | Mapping[str, str]]) -> IfStatement:
             return IfStatement(
                 condition={"not": False, **condition},
-                children=[DisplayStatement(operands=(RefModOperand(name="'Y'"),))],
+                children=[
+                    DisplayStatement(
+                        operands=(RefModOperand(name="'Y'", kind=OperandKind.LIT),)
+                    )
+                ],
             )
 
         stmts = [
@@ -2256,7 +2323,11 @@ class TestSearchLowering:
                     SearchWhen(
                         condition="WS-IDX = 5",
                         children=[
-                            DisplayStatement(operands=(RefModOperand(name="FOUND"),))
+                            DisplayStatement(
+                                operands=(
+                                    RefModOperand(name="FOUND", kind=OperandKind.LIT),
+                                )
+                            )
                         ],
                     )
                 ],
@@ -2336,7 +2407,13 @@ class TestSearchLowering:
             SearchStatement(
                 table=RefModOperand(name="WS-TABLE"),
                 whens=[SearchWhen(condition="WS-IDX = 5")],
-                at_end=[DisplayStatement(operands=(RefModOperand(name="NOT FOUND"),))],
+                at_end=[
+                    DisplayStatement(
+                        operands=(
+                            RefModOperand(name="NOT FOUND", kind=OperandKind.LIT),
+                        )
+                    )
+                ],
             )
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)

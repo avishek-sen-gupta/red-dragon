@@ -12,6 +12,7 @@ Where start and length can be:
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Union
 
@@ -21,6 +22,7 @@ from cobol_asg.cobol_expression import (
     expr_from_dict,
     expr_to_dict,
 )
+from cobol_asg.operand_kind import OperandKind
 
 
 @dataclass(frozen=True)
@@ -180,7 +182,7 @@ class FunctionCallOperand:
     args: tuple[dict, ...] = ()
 
     @classmethod
-    def from_dict(cls, data: dict) -> FunctionCallOperand:
+    def from_dict(cls, data: Mapping) -> FunctionCallOperand:
         raw_args = data.get("args", []) or []
         return cls(name=data.get("name", ""), args=tuple(raw_args))
 
@@ -208,10 +210,16 @@ class RefModOperand:
     subscripts: tuple[ExprNode, ...] = ()
     rounded: bool = False
     all_literal: bool = False
+    kind: OperandKind = OperandKind.REF
 
     @property
     def is_reference_modified(self) -> bool:
         return self.ref_mod_start is not None
+
+    @property
+    def names_data(self) -> bool:
+        """A data reference was written, not a literal or figurative constant."""
+        return self.kind is OperandKind.REF and bool(self.name)
 
     @classmethod
     def from_dict(cls, data: dict) -> RefModOperand:
@@ -232,7 +240,11 @@ class RefModOperand:
             return cls(name=data)
 
         if data.get("kind") == "length_of":
-            return cls(name="", length_of=length_of_from_dict(data))
+            return cls(
+                name="",
+                length_of=length_of_from_dict(data),
+                kind=OperandKind.LENGTH_OF,
+            )
 
         name = data.get("name", "")
         ref_mod_start_data = data.get("ref_mod_start")
@@ -258,6 +270,7 @@ class RefModOperand:
             subscripts=subscripts,
             rounded=rounded,
             all_literal=data.get("all", False),
+            kind=_LITERAL_KINDS.get(data.get("kind", ""), OperandKind.REF),
         )
 
     def to_dict(self) -> dict:
@@ -265,6 +278,7 @@ class RefModOperand:
         if self.length_of.name:
             return ref_mod_expr_to_dict(self.length_of)
         result: dict = {
+            **literal_kind_dict(self),
             "name": self.name,
             **({"all": True} if self.all_literal else {}),
         }
@@ -279,3 +293,14 @@ class RefModOperand:
         if self.rounded:
             result["rounded"] = True
         return result
+
+
+_LITERAL_KINDS = {
+    OperandKind.LIT.value: OperandKind.LIT,
+    OperandKind.FIGURATIVE.value: OperandKind.FIGURATIVE,
+}
+
+
+def literal_kind_dict(operand: RefModOperand) -> dict:
+    """The kind key a literal or figurative operand is written with; none for a reference."""
+    return {"kind": operand.kind.value} if operand.kind.value in _LITERAL_KINDS else {}

@@ -313,15 +313,33 @@ class TestPerformReturnFixture:
                 {
                     "name": "PARA-A",
                     "statements": [
-                        {"type": "MOVE", "operands": ["10", "WS-VAL"]},
+                        {
+                            "type": "MOVE",
+                            "operands": [
+                                {"kind": "lit", "name": "10", "numeric": True},
+                                "WS-VAL",
+                            ],
+                        },
                         {"type": "PERFORM", "operands": ["PARA-B"]},
-                        {"type": "MOVE", "operands": ["42", "WS-VAL"]},
+                        {
+                            "type": "MOVE",
+                            "operands": [
+                                {"kind": "lit", "name": "42", "numeric": True},
+                                "WS-VAL",
+                            ],
+                        },
                     ],
                 },
                 {
                     "name": "PARA-B",
                     "statements": [
-                        {"type": "MOVE", "operands": ["99", "WS-VAL"]},
+                        {
+                            "type": "MOVE",
+                            "operands": [
+                                {"kind": "lit", "name": "99", "numeric": True},
+                                "WS-VAL",
+                            ],
+                        },
                     ],
                 },
             ],
@@ -363,13 +381,25 @@ class TestPerformReturnFixture:
                 {
                     "name": "FIRST-PARA",
                     "statements": [
-                        {"type": "MOVE", "operands": ["1", "WS-A"]},
+                        {
+                            "type": "MOVE",
+                            "operands": [
+                                {"kind": "lit", "name": "1", "numeric": True},
+                                "WS-A",
+                            ],
+                        },
                     ],
                 },
                 {
                     "name": "SECOND-PARA",
                     "statements": [
-                        {"type": "MOVE", "operands": ["2", "WS-A"]},
+                        {
+                            "type": "MOVE",
+                            "operands": [
+                                {"kind": "lit", "name": "2", "numeric": True},
+                                "WS-A",
+                            ],
+                        },
                         {"type": "STOP_RUN"},
                     ],
                 },
@@ -443,7 +473,13 @@ class TestMultipleStatementTypes:
                 {
                     "name": "MAIN",
                     "statements": [
-                        {"type": "MOVE", "operands": ["42", "WS-A"]},
+                        {
+                            "type": "MOVE",
+                            "operands": [
+                                {"kind": "lit", "name": "42", "numeric": True},
+                                "WS-A",
+                            ],
+                        },
                         {"type": "DISPLAY", "operands": ["WS-B"]},
                         {"type": "STOP_RUN"},
                     ],
@@ -507,10 +543,22 @@ class TestIfElseExecution:
                                 },
                             },
                             "children": [
-                                {"type": "MOVE", "operands": ["1", "WS-RESULT"]},
+                                {
+                                    "type": "MOVE",
+                                    "operands": [
+                                        {"kind": "lit", "name": "1", "numeric": True},
+                                        "WS-RESULT",
+                                    ],
+                                },
                             ],
                             "else_children": [
-                                {"type": "MOVE", "operands": ["2", "WS-RESULT"]},
+                                {
+                                    "type": "MOVE",
+                                    "operands": [
+                                        {"kind": "lit", "name": "2", "numeric": True},
+                                        "WS-RESULT",
+                                    ],
+                                },
                             ],
                         },
                         {"type": "STOP_RUN"},
@@ -574,10 +622,22 @@ class TestIfElseExecution:
                                 },
                             },
                             "children": [
-                                {"type": "MOVE", "operands": ["1", "WS-RESULT"]},
+                                {
+                                    "type": "MOVE",
+                                    "operands": [
+                                        {"kind": "lit", "name": "1", "numeric": True},
+                                        "WS-RESULT",
+                                    ],
+                                },
                             ],
                             "else_children": [
-                                {"type": "MOVE", "operands": ["2", "WS-RESULT"]},
+                                {
+                                    "type": "MOVE",
+                                    "operands": [
+                                        {"kind": "lit", "name": "2", "numeric": True},
+                                        "WS-RESULT",
+                                    ],
+                                },
                             ],
                         },
                         {"type": "STOP_RUN"},
@@ -632,7 +692,9 @@ class TestPerformTimesExecution:
                             "children": [
                                 {
                                     "type": "ADD",
-                                    "operands": ["1"],
+                                    "operands": [
+                                        {"kind": "lit", "name": "1", "numeric": True}
+                                    ],
                                     "targets": ["WS-CTR"],
                                 },
                             ],
@@ -698,7 +760,13 @@ class TestPerformUntilExecution:
                             },
                             "test_before": True,
                             "children": [
-                                {"type": "ADD", "operands": ["1"], "targets": ["WS-A"]},
+                                {
+                                    "type": "ADD",
+                                    "operands": [
+                                        {"kind": "lit", "name": "1", "numeric": True}
+                                    ],
+                                    "targets": ["WS-A"],
+                                },
                             ],
                         },
                         {"type": "STOP_RUN"},
@@ -835,7 +903,13 @@ class TestNumericValueVerification:
                 {
                     "name": "MAIN-PARA",
                     "statements": [
-                        {"type": "MOVE", "operands": ["42", "WS-A"]},
+                        {
+                            "type": "MOVE",
+                            "operands": [
+                                {"kind": "lit", "name": "42", "numeric": True},
+                                "WS-A",
+                            ],
+                        },
                         {"type": "STOP_RUN"},
                     ],
                 },
@@ -973,7 +1047,13 @@ class TestNumericValueVerification:
                 {
                     "name": "MAIN-PARA",
                     "statements": [
-                        {"type": "ADD", "operands": ["25"], "targets": ["WS-A"]},
+                        {
+                            "type": "ADD",
+                            "operands": [
+                                {"kind": "lit", "name": "25", "numeric": True}
+                            ],
+                            "targets": ["WS-A"],
+                        },
                         {"type": "STOP_RUN"},
                     ],
                 },
@@ -1021,7 +1101,9 @@ class TestNumericValueVerification:
                             "children": [
                                 {
                                     "type": "ADD",
-                                    "operands": ["1"],
+                                    "operands": [
+                                        {"kind": "lit", "name": "1", "numeric": True}
+                                    ],
                                     "targets": ["WS-CTR"],
                                 },
                             ],
@@ -1103,8 +1185,18 @@ class TestNumericValueVerification:
                 {
                     "name": "MAIN-PARA",
                     "statements": [
-                        {"type": "ADD", "operands": ["10"], "targets": ["WS-R"]},
-                        {"type": "ADD", "operands": ["5"], "targets": ["WS-R"]},
+                        {
+                            "type": "ADD",
+                            "operands": [
+                                {"kind": "lit", "name": "10", "numeric": True}
+                            ],
+                            "targets": ["WS-R"],
+                        },
+                        {
+                            "type": "ADD",
+                            "operands": [{"kind": "lit", "name": "5", "numeric": True}],
+                            "targets": ["WS-R"],
+                        },
                         {"type": "STOP_RUN"},
                     ],
                 },
@@ -1161,7 +1253,13 @@ class TestNumericValueVerification:
                 {
                     "name": "ADD-PARA",
                     "statements": [
-                        {"type": "ADD", "operands": ["10"], "targets": ["WS-SUM"]},
+                        {
+                            "type": "ADD",
+                            "operands": [
+                                {"kind": "lit", "name": "10", "numeric": True}
+                            ],
+                            "targets": ["WS-SUM"],
+                        },
                     ],
                 },
             ],
@@ -1206,7 +1304,13 @@ class TestNumericValueVerification:
                 {
                     "name": "MAIN-PARA",
                     "statements": [
-                        {"type": "MOVE", "operands": ["100", "WS-SUM"]},
+                        {
+                            "type": "MOVE",
+                            "operands": [
+                                {"kind": "lit", "name": "100", "numeric": True},
+                                "WS-SUM",
+                            ],
+                        },
                         {
                             "type": "PERFORM",
                             "perform_type": "TIMES",
@@ -1219,7 +1323,13 @@ class TestNumericValueVerification:
                 {
                     "name": "ADD-PARA",
                     "statements": [
-                        {"type": "ADD", "operands": ["10"], "targets": ["WS-SUM"]},
+                        {
+                            "type": "ADD",
+                            "operands": [
+                                {"kind": "lit", "name": "10", "numeric": True}
+                            ],
+                            "targets": ["WS-SUM"],
+                        },
                     ],
                 },
             ],
@@ -1267,8 +1377,8 @@ class TestNumericValueVerification:
                     "statements": [
                         {
                             "type": "DIVIDE",
-                            "dividend": "7",
-                            "divisor": "2",
+                            "dividend": {"kind": "lit", "name": "7", "numeric": True},
+                            "divisor": {"kind": "lit", "name": "2", "numeric": True},
                             "giving": ["WS-Q"],
                             "remainder": "WS-R",
                         },
@@ -1321,13 +1431,25 @@ class TestSectionFallThrough:
                         {
                             "name": "FIRST-PARA",
                             "statements": [
-                                {"type": "MOVE", "operands": ["1", "WS-A"]},
+                                {
+                                    "type": "MOVE",
+                                    "operands": [
+                                        {"kind": "lit", "name": "1", "numeric": True},
+                                        "WS-A",
+                                    ],
+                                },
                             ],
                         },
                         {
                             "name": "SECOND-PARA",
                             "statements": [
-                                {"type": "MOVE", "operands": ["2", "WS-A"]},
+                                {
+                                    "type": "MOVE",
+                                    "operands": [
+                                        {"kind": "lit", "name": "2", "numeric": True},
+                                        "WS-A",
+                                    ],
+                                },
                                 {"type": "STOP_RUN"},
                             ],
                         },
@@ -1388,15 +1510,31 @@ class TestNestedPerformNumericValues:
                 {
                     "name": "OUTER-PARA",
                     "statements": [
-                        {"type": "ADD", "operands": ["100"], "targets": ["WS-SUM"]},
+                        {
+                            "type": "ADD",
+                            "operands": [
+                                {"kind": "lit", "name": "100", "numeric": True}
+                            ],
+                            "targets": ["WS-SUM"],
+                        },
                         {"type": "PERFORM", "operands": ["INNER-PARA"]},
-                        {"type": "ADD", "operands": ["1"], "targets": ["WS-SUM"]},
+                        {
+                            "type": "ADD",
+                            "operands": [{"kind": "lit", "name": "1", "numeric": True}],
+                            "targets": ["WS-SUM"],
+                        },
                     ],
                 },
                 {
                     "name": "INNER-PARA",
                     "statements": [
-                        {"type": "ADD", "operands": ["10"], "targets": ["WS-SUM"]},
+                        {
+                            "type": "ADD",
+                            "operands": [
+                                {"kind": "lit", "name": "10", "numeric": True}
+                            ],
+                            "targets": ["WS-SUM"],
+                        },
                     ],
                 },
             ],
@@ -1464,7 +1602,11 @@ class TestNestedPerformNumericValues:
                 {
                     "name": "INNER-PARA",
                     "statements": [
-                        {"type": "ADD", "operands": ["1"], "targets": ["WS-CTR"]},
+                        {
+                            "type": "ADD",
+                            "operands": [{"kind": "lit", "name": "1", "numeric": True}],
+                            "targets": ["WS-CTR"],
+                        },
                     ],
                 },
             ],
@@ -1512,19 +1654,35 @@ class TestGotoInsidePerform:
                 {
                     "name": "MAIN-PARA",
                     "statements": [
-                        {"type": "ADD", "operands": ["10"], "targets": ["WS-VAL"]},
+                        {
+                            "type": "ADD",
+                            "operands": [
+                                {"kind": "lit", "name": "10", "numeric": True}
+                            ],
+                            "targets": ["WS-VAL"],
+                        },
                         {
                             "type": "GOTO",
                             "form": "simple",
                             "target": {"paragraph": "SKIP-PARA", "section": ""},
                         },
-                        {"type": "ADD", "operands": ["999"], "targets": ["WS-VAL"]},
+                        {
+                            "type": "ADD",
+                            "operands": [
+                                {"kind": "lit", "name": "999", "numeric": True}
+                            ],
+                            "targets": ["WS-VAL"],
+                        },
                     ],
                 },
                 {
                     "name": "SKIP-PARA",
                     "statements": [
-                        {"type": "ADD", "operands": ["1"], "targets": ["WS-VAL"]},
+                        {
+                            "type": "ADD",
+                            "operands": [{"kind": "lit", "name": "1", "numeric": True}],
+                            "targets": ["WS-VAL"],
+                        },
                         {"type": "STOP_RUN"},
                     ],
                 },
@@ -1570,7 +1728,11 @@ class TestGotoInsidePerform:
                 {
                     "name": "PARA-A",
                     "statements": [
-                        {"type": "ADD", "operands": ["1"], "targets": ["WS-VAL"]},
+                        {
+                            "type": "ADD",
+                            "operands": [{"kind": "lit", "name": "1", "numeric": True}],
+                            "targets": ["WS-VAL"],
+                        },
                         {
                             "type": "GOTO",
                             "form": "simple",
@@ -1581,13 +1743,25 @@ class TestGotoInsidePerform:
                 {
                     "name": "PARA-B",
                     "statements": [
-                        {"type": "ADD", "operands": ["100"], "targets": ["WS-VAL"]},
+                        {
+                            "type": "ADD",
+                            "operands": [
+                                {"kind": "lit", "name": "100", "numeric": True}
+                            ],
+                            "targets": ["WS-VAL"],
+                        },
                     ],
                 },
                 {
                     "name": "PARA-C",
                     "statements": [
-                        {"type": "ADD", "operands": ["10"], "targets": ["WS-VAL"]},
+                        {
+                            "type": "ADD",
+                            "operands": [
+                                {"kind": "lit", "name": "10", "numeric": True}
+                            ],
+                            "targets": ["WS-VAL"],
+                        },
                         {"type": "STOP_RUN"},
                     ],
                 },
@@ -1639,14 +1813,24 @@ class TestGotoInsidePerform:
                     "name": "MAIN-PARA",
                     "statements": [
                         {"type": "PERFORM", "operands": ["WORK-PARA"]},
-                        {"type": "ADD", "operands": ["1"], "targets": ["WS-VAL"]},
+                        {
+                            "type": "ADD",
+                            "operands": [{"kind": "lit", "name": "1", "numeric": True}],
+                            "targets": ["WS-VAL"],
+                        },
                         {"type": "STOP_RUN"},
                     ],
                 },
                 {
                     "name": "WORK-PARA",
                     "statements": [
-                        {"type": "ADD", "operands": ["10"], "targets": ["WS-VAL"]},
+                        {
+                            "type": "ADD",
+                            "operands": [
+                                {"kind": "lit", "name": "10", "numeric": True}
+                            ],
+                            "targets": ["WS-VAL"],
+                        },
                         {
                             "type": "GOTO",
                             "form": "simple",
@@ -1657,7 +1841,13 @@ class TestGotoInsidePerform:
                 {
                     "name": "EXIT-PARA",
                     "statements": [
-                        {"type": "ADD", "operands": ["100"], "targets": ["WS-VAL"]},
+                        {
+                            "type": "ADD",
+                            "operands": [
+                                {"kind": "lit", "name": "100", "numeric": True}
+                            ],
+                            "targets": ["WS-VAL"],
+                        },
                     ],
                 },
             ],
@@ -1733,7 +1923,13 @@ class TestPicXDigitOnlyValue:
                 {
                     "name": "MAIN-PARA",
                     "statements": [
-                        {"type": "MOVE", "operands": ["67890", "WS-DEST"]},
+                        {
+                            "type": "MOVE",
+                            "operands": [
+                                {"kind": "lit", "name": "67890", "numeric": True},
+                                "WS-DEST",
+                            ],
+                        },
                         {"type": "STOP_RUN"},
                     ],
                 }

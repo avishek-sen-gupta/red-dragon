@@ -15,6 +15,7 @@ from cobol_asg.cobol_statements import (
     ProcedureRef,
 )
 from cobol_asg.cobol_types import CobolTypeDescriptor
+from cobol_asg.operand_kind import OperandKind
 from cobol_asg.pic_parser import parse_pic
 from cobol_asg.ref_mod import RefModOperand
 from cobol_asg.source_span import SourceSpan
@@ -24,7 +25,6 @@ from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.emit_context import EmitContext, strip_cobol_literal
 from interpreter.cobol.field_resolution import ResolvedFieldRef
-from interpreter.cobol.figurative_constants import COBOL_FIGURATIVE_CONSTANTS
 from interpreter.cobol.program_figuratives import ProgramFiguratives
 from interpreter.cobol.lower_arithmetic import eval_ref_mod_expr
 from interpreter.cobol.lower_program_exit import (
@@ -430,21 +430,21 @@ def _literal_type(
     """BY VALUE: a numeric literal or ZERO as a fullword binary, a floating-point
     literal as COMP-2. Anything else: its characters, a figurative constant one."""
     word = param.name.upper()
-    if param.param_type == "VALUE" and _is_numeric(word):
-        return _COMP2 if word not in _ZEROS and "E" in word else _FULLWORD
+    if param.param_type == "VALUE" and param.numeric:
+        return _COMP2 if "E" in word else _FULLWORD
+    if param.param_type == "VALUE" and _is_zero(param):
+        return _FULLWORD
     return parse_pic(f"X({max(len(_literal_value(param, figuratives)), 1)})")
 
 
-def _is_numeric(word: str) -> bool:
-    return word in _ZEROS or (
-        word not in COBOL_FIGURATIVE_CONSTANTS and strip_cobol_literal(word) == word
-    )
+def _is_zero(param: CallUsingParam) -> bool:
+    return param.kind is OperandKind.FIGURATIVE and param.name.upper() in _ZEROS
 
 
 def _literal_value(param: CallUsingParam, figuratives: ProgramFiguratives) -> str:
-    return figuratives.characters.get(
-        param.name.upper(), strip_cobol_literal(param.name)
-    )
+    if param.kind is OperandKind.FIGURATIVE:
+        return figuratives.characters.get(param.name.upper(), param.name)
+    return strip_cobol_literal(param.name)
 
 
 def _layout(type_descriptor: CobolTypeDescriptor) -> FieldLayout:
