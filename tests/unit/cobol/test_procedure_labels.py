@@ -156,7 +156,7 @@ class TestProcedureLabels:
         assert [
             (str(i.name), str(i.target_label))
             for i in instructions
-            if isinstance(i, SetContinuation)
+            if isinstance(i, SetContinuation) and str(i.name).startswith("para_")
         ] == [
             ("para_S2_WORK_end", "perform_return_0"),
             ("para_S1_WORK_end", "perform_return_1"),

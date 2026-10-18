@@ -1,5 +1,7 @@
 """Tests for COBOL frontend — Data Division and Procedure Division lowering."""
 
+import itertools
+from collections import Counter
 from collections.abc import Mapping, Sequence
 
 from cobol_asg.alphabet_item import AlphabetItem
@@ -70,20 +72,31 @@ from interpreter.cobol.cobol_frontend import CobolFrontend
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.field_position import FieldPosition
 from interpreter.cobol.layout_data import field_positions
+from interpreter.cobol.program_object import (
+    INITIAL_STATE_FIELD,
+    WORKING_STORAGE_FIELD,
+)
 from interpreter.cobol.run_unit import RUN_UNIT_VAR
 from interpreter.continuation_name import ContinuationName
+from interpreter.field_name import FieldName
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
     AllocRegion,
+    Branch,
     CallFunction,
     Const,
     Data,
     InstructionBase,
+    Label_,
     LoadVar,
+    ResumeContinuation,
+    SetContinuation,
+    StoreField,
     WriteRegion,
 )
-from interpreter.ir import Opcode
+from interpreter.ir import CodeLabel, Opcode
 from interpreter.register import Register
+from interpreter.var_name import VarName
 from tests.covers import covers
 
 
@@ -91,6 +104,145 @@ def _find_opcodes(
     instructions: list[InstructionBase], opcode: Opcode
 ) -> list[InstructionBase]:
     return [inst for inst in instructions if inst.opcode == opcode]
+
+
+def _procedure_statements(
+    instructions: Sequence[InstructionBase],
+) -> list[InstructionBase]:
+    """The instructions after the procedure's entry has bound WORKING-STORAGE,
+    so a test about one statement's shape does not see the entry's own branch
+    and perform of the initial-state block."""
+    ready = next(
+        n
+        for n, inst in enumerate(instructions)
+        if isinstance(inst, Label_) and str(inst.label).startswith("__ws_ready_")
+    )
+    return list(instructions[ready + 1 :])
+
+
+ConstValue = str | bool | int | float
+
+
+def _consts(instructions: Sequence[InstructionBase]) -> dict[Register, ConstValue]:
+    return {i.result_reg: i.value for i in instructions if isinstance(i, Const)}
+
+
+def _builtin_names(instructions: Sequence[InstructionBase]) -> list[str]:
+    return [str(i.func_name) for i in instructions if isinstance(i, CallFunction)]
+
+
+def _label_at(instructions: Sequence[InstructionBase], label: CodeLabel) -> int:
+    return next(
+        n
+        for n, i in enumerate(instructions)
+        if isinstance(i, Label_) and i.label == label
+    )
+
+
+def _field_stores(
+    instructions: Sequence[InstructionBase],
+    field: FieldName,
+    consts: Mapping[Register, ConstValue],
+) -> list[ConstValue]:
+    return [
+        consts.get(i.value_reg, "region")
+        for i in instructions
+        if isinstance(i, StoreField) and i.field_name == field
+    ]
+
+
+def _performs(
+    instructions: Sequence[InstructionBase],
+) -> list[tuple[str, CodeLabel, CodeLabel]]:
+    return [
+        (str(a.name), a.target_label, b.label)
+        for a, b in itertools.pairwise(instructions)
+        if isinstance(a, SetContinuation) and isinstance(b, Branch)
+    ]
+
+
+def _cancel_reset(
+    instructions: Sequence[InstructionBase],
+) -> tuple[list[ConstValue], bool, VarName, list[ConstValue]]:
+    """What a CANCEL lowered to: the name the presence test is given, whether the
+    branch tests that result, the program ConstValue the reset arm loads, and what
+    it stores into that ConstValue's initial_state."""
+    consts = _consts(instructions)
+    presence = next(
+        i
+        for i in instructions
+        if isinstance(i, CallFunction)
+        and str(i.func_name) == BuiltinName.PROGRAM_PRESENT
+    )
+    branch = instructions[list(instructions).index(presence) + 1]
+    singleton = instructions[_label_at(instructions, branch.branch_targets[0]) + 1]
+    marks = [
+        consts[i.value_reg]
+        for i in instructions
+        if isinstance(i, StoreField)
+        and i.field_name == INITIAL_STATE_FIELD
+        and i.obj_reg == singleton.result_reg
+    ]
+    return (
+        [consts[a] for a in presence.args],
+        branch.cond_reg == presence.result_reg,
+        singleton.name,
+        marks,
+    )
+
+
+def _initial_state_block(
+    instructions: Sequence[InstructionBase],
+) -> tuple[
+    list[tuple[str, CodeLabel, CodeLabel]], list[ConstValue], list[ConstValue], str, int
+]:
+    """The init block's performs; what the init block and the initial-state block
+    store into ws_handle then initial_state; the continuation the block resumes;
+    and how many writes go into the region it allocates."""
+    consts = _consts(instructions)
+    resume = next(
+        n for n, i in enumerate(instructions) if isinstance(i, ResumeContinuation)
+    )
+    block = instructions[
+        _label_at(instructions, CodeLabel("__ws_initial_main_0")) : resume + 1
+    ]
+    init_block = instructions[
+        : _label_at(instructions, CodeLabel("func_init_params_main_0"))
+    ]
+    alloc = next(i for i in block if isinstance(i, AllocRegion))
+    return (
+        _performs(init_block),
+        _field_stores(init_block, WORKING_STORAGE_FIELD, consts)
+        + _field_stores(init_block, INITIAL_STATE_FIELD, consts),
+        _field_stores(block, WORKING_STORAGE_FIELD, consts)
+        + _field_stores(block, INITIAL_STATE_FIELD, consts),
+        str(instructions[resume].name),
+        sum(
+            1
+            for i in block
+            if isinstance(i, WriteRegion) and i.region_reg == alloc.result_reg
+        ),
+    )
+
+
+def _entry_perform(
+    instructions: Sequence[InstructionBase],
+) -> tuple[
+    list[ConstValue], bool, list[tuple[str, CodeLabel, CodeLabel]], list[CodeLabel]
+]:
+    """The procedure's own stores into the program ConstValue; whether its first
+    branch tests initial_state; the performs of its entry; and the labels of the
+    two arms, in order."""
+    procedure = instructions[_label_at(instructions, CodeLabel("func_main_0")) :]
+    consts = _consts(procedure)
+    test, branch = procedure[2:4]
+    return (
+        _field_stores(procedure, WORKING_STORAGE_FIELD, consts)
+        + _field_stores(procedure, INITIAL_STATE_FIELD, consts),
+        test.field_name == INITIAL_STATE_FIELD and branch.cond_reg == test.result_reg,
+        _performs(procedure[5:7]),
+        [i.label for i in procedure[4:8] if isinstance(i, Label_)],
+    )
 
 
 def _program_writes(instructions: list[InstructionBase]) -> list[InstructionBase]:
@@ -722,7 +874,9 @@ class TestProcedureDivisionLowering:
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
         ]
         stmts = [PerformStatement(target="WORK-PARA")]
-        instructions = self._lower_with_field_and_stmts(fields, stmts)
+        instructions = _procedure_statements(
+            self._lower_with_field_and_stmts(fields, stmts)
+        )
 
         # Should emit SET_CONTINUATION before the BRANCH
         set_conts = _find_opcodes(instructions, Opcode.SET_CONTINUATION)
@@ -767,7 +921,9 @@ class TestProcedureDivisionLowering:
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
         ]
         stmts = [PerformStatement(target="FIRST-PARA", thru="LAST-PARA")]
-        instructions = self._lower_with_field_and_stmts(fields, stmts)
+        instructions = _procedure_statements(
+            self._lower_with_field_and_stmts(fields, stmts)
+        )
 
         set_conts = _find_opcodes(instructions, Opcode.SET_CONTINUATION)
         assert len(set_conts) >= 1
@@ -1244,7 +1400,9 @@ class TestPerformLoopLowering:
                 ),
             ),
         ]
-        instructions = self._lower_with_field_and_stmts(fields, stmts)
+        instructions = _procedure_statements(
+            self._lower_with_field_and_stmts(fields, stmts)
+        )
 
         # For TEST AFTER, body comes before condition check
         # Find the print call (body) and the BRANCH_IF (condition)
@@ -1382,7 +1540,9 @@ class TestPerformLoopLowering:
                 ),
             )
         ]
-        instructions = self._lower_with_field_and_stmts(fields, stmts)
+        instructions = _procedure_statements(
+            self._lower_with_field_and_stmts(fields, stmts)
+        )
 
         branch_ifs = _find_opcodes(instructions, Opcode.BRANCH_IF)
         # Two BRANCH_IF instructions: outer (I) and inner (J)
@@ -1460,7 +1620,9 @@ class TestPerformLoopLowering:
                 ),
             )
         ]
-        instructions = self._lower_with_field_and_stmts(fields, stmts)
+        instructions = _procedure_statements(
+            self._lower_with_field_and_stmts(fields, stmts)
+        )
 
         branch_ifs = _find_opcodes(instructions, Opcode.BRANCH_IF)
         assert len(branch_ifs) == 2
@@ -2588,8 +2750,11 @@ class TestCallAlterEntryCancelLowering:
         assert len(entry_labels) >= 1
 
     @covers(CobolFeature.CANCEL, CobolFeature.PIC_CLAUSE, CobolFeature.USAGE_DISPLAY)
-    def test_cancel_emits_nothing(self):
-        """CANCEL should not emit any data-affecting instructions."""
+    def test_cancel_marks_a_present_program_for_its_initial_state(self):
+        """CANCEL 'SUBPROG' is IR: when SUBPROG is in the run unit, its program
+        object's initial_state field is set, so its next entry re-initialises
+        WORKING-STORAGE. The only builtin it calls is the run-unit membership
+        test CALL ON EXCEPTION already uses."""
         fields = [
             CobolField(name="WS-A", level=77, pic="9(1)", usage="DISPLAY", offset=0),
         ]
@@ -2597,15 +2762,47 @@ class TestCallAlterEntryCancelLowering:
             fields, [CancelStatement(programs=["SUBPROG"])]
         )
         without_cancel = self._lower_with_field_and_stmts(fields, [])
+        added = Counter(_builtin_names(with_cancel)) - Counter(
+            _builtin_names(without_cancel)
+        )
 
-        # Compared against the same program with no CANCEL, rather than counted
-        # over the whole lowering: every program now ends by reading RETURN-CODE
-        # and publishing it, so "CANCEL emits nothing" has to mean "CANCEL adds
-        # nothing", which is the claim anyway and a stricter one.
-        def shape(instructions):
-            return [i.opcode for i in instructions]
+        assert (list(added.elements()), _cancel_reset(with_cancel)) == (
+            [BuiltinName.PROGRAM_PRESENT],
+            (["__entry_SUBPROG"], True, VarName("__prog_SUBPROG"), [True]),
+        )
 
-        assert shape(with_cancel) == shape(without_cancel)
+    @covers(CobolFeature.CANCEL, CobolFeature.VALUE_CLAUSE)
+    def test_working_storage_initialisation_is_performed_at_load_and_after_cancel(
+        self,
+    ):
+        """One block allocates WORKING-STORAGE with its VALUE clauses and takes
+        the program object out of its initial state. The init block runs through
+        it once at load, with no continuation set; the procedure's entry performs
+        it again only while the object is in its initial state, which is what
+        CANCEL sets."""
+        fields = [
+            CobolField(
+                name="WS-A", level=77, pic="9(1)", usage="DISPLAY", offset=0, value="7"
+            ),
+        ]
+        ir = self._lower_with_field_and_stmts(fields, [])
+        initial = CodeLabel("__ws_initial_main_0")
+
+        assert _initial_state_block(ir) == (
+            [],
+            ["region", False],
+            ["region", False],
+            str(initial),
+            1,
+        )
+        assert _entry_perform(ir) == (
+            [],
+            True,
+            [
+                (str(initial), CodeLabel("__ws_ready_main_0"), initial),
+            ],
+            [CodeLabel("__ws_cancelled_main_0"), CodeLabel("__ws_ready_main_0")],
+        )
 
     # ── I/O Statement Tests ──────────────────────────────────────────
 

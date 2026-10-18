@@ -34,7 +34,12 @@ from interpreter.cobol.lower_program_exit import (
 from interpreter.cobol.lowering_scope import LoweringScope
 from interpreter.cobol.pointer_lowering import PointerLowering
 from interpreter.cobol.program_figuratives import ProgramFiguratives
-from interpreter.cobol.program_object import ENTRY_PREFIX, entry_var
+from interpreter.cobol.program_object import (
+    ENTRY_PREFIX,
+    INITIAL_STATE_FIELD,
+    entry_var,
+    program_var,
+)
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.field_name import FieldName
 from interpreter.func_name import FuncName
@@ -46,6 +51,7 @@ from interpreter.instructions import (
     CallFunction,
     CallWithMemory,
     Label_,
+    LoadVar,
     NewArray,
     NewObject,
     StoreField,
@@ -498,10 +504,34 @@ def lower_entry(
 
 
 def lower_cancel(
-    _ctx: EmitContext,
+    ctx: EmitContext,
     stmt: CancelStatement,
-    _materialised: MaterialisedSectionedLayout,
+    materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """CANCEL program — no-op for static analysis."""
-    for prog in stmt.programs:
-        logger.info("CANCEL %s (no-op for static analysis)", prog)
+    """CANCEL program ... — each named program in the run unit is put back in its
+    initial state, so its next CALL re-initialises its WORKING-STORAGE. A name
+    not in the run unit is passed over."""
+    scope = LoweringScope(ctx, materialised, stmt.span)
+    _ = [_cancel_program(scope, program) for program in stmt.programs]
+
+
+def _cancel_program(scope: LoweringScope, program: str) -> None:
+    ctx, span = scope.ctx, scope.span
+    reset_label, end_label = (
+        ctx.fresh_label(name) for name in ("cancel_reset", "cancel_end")
+    )
+    _emit_presence_branch(scope, entry_var(program), (reset_label, end_label))
+    ctx.emit_inst(Label_(label=reset_label), span=span)
+    singleton = ctx.fresh_reg()
+    ctx.emit_inst(LoadVar(result_reg=singleton, name=program_var(program)), span=span)
+    ctx.emit_inst(
+        StoreField(
+            obj_reg=singleton,
+            field_name=INITIAL_STATE_FIELD,
+            value_reg=ctx.const_to_reg(True, span=span),
+        ),
+        span=span,
+    )
+    ctx.emit_inst(Branch(label=end_label), span=span)
+    ctx.emit_inst(Label_(label=end_label), span=span)
+    logger.info("CANCEL %s", program)

@@ -29,6 +29,7 @@ from tests.integration.cobol_helpers import (
     bridge_jar,  # noqa: F401
     compile_programs_in,
     first_region,
+    ws_region,
 )
 from tests.integration.cobol_helpers import (
     decode_zoned_unsigned as _decode_zoned_unsigned,
@@ -3713,7 +3714,8 @@ class TestRewriteStatement:
 class TestCancelSmoke:
     @covers(CobolFeature.CANCEL)
     def test_cancel_does_not_crash(self):
-        """CANCEL is a no-op — verify the program completes normally."""
+        """CANCEL of a program not in the run unit does nothing; the program
+        completes normally."""
         vm = _run_cobol(
             [
                 "IDENTIFICATION DIVISION.",
@@ -5675,6 +5677,37 @@ class TestSectionedDataDivision:
         assert _decode_zoned_unsigned(region, 18, 18) == 123456789012345678
 
 
+_COUNTER_SUBPROGRAM = (
+    "DATA DIVISION.",
+    "WORKING-STORAGE SECTION.",
+    "77 WS-COUNTER PIC 9(4) VALUE 5.",
+    "LINKAGE SECTION.",
+    "01 LK-OUT PIC 9(4).",
+    "PROCEDURE DIVISION USING LK-OUT.",
+    "    ADD 1 TO WS-COUNTER.",
+    "    MOVE WS-COUNTER TO LK-OUT.",
+    "    GOBACK.",
+)
+
+_CANCELLING_MAIN = [
+    "IDENTIFICATION DIVISION.",
+    "PROGRAM-ID. MAINCAN.",
+    "DATA DIVISION.",
+    "WORKING-STORAGE SECTION.",
+    "01 WS-RESULTS.",
+    "   05 WS-OUT PIC 9(4) VALUE 0 OCCURS 6 TIMES.",
+    "PROCEDURE DIVISION.",
+    "    CALL 'WSINC' USING BY REFERENCE WS-OUT(1).",
+    "    CALL 'WSINC' USING BY REFERENCE WS-OUT(2).",
+    "    CALL 'OTHINC' USING BY REFERENCE WS-OUT(3).",
+    "    CANCEL 'WSINC' 'NOSUCH' 'NEVERC'.",
+    "    CALL 'WSINC' USING BY REFERENCE WS-OUT(4).",
+    "    CALL 'OTHINC' USING BY REFERENCE WS-OUT(5).",
+    "    CALL 'NEVERC' USING BY REFERENCE WS-OUT(6).",
+    "    STOP RUN.",
+]
+
+
 class TestSubprogramWsPersistence:
     @covers(CobolFeature.CALL_USING, CobolFeature.SECTION_WORKING_STORAGE)
     def test_ws_counter_survives_two_calls(self, tmp_path):
@@ -5832,6 +5865,42 @@ class TestSubprogramWsPersistence:
             f"second call: expected LS reset to 5 then + 1 = 6, got {second} "
             "(LOCAL-STORAGE did not re-initialise — it behaved like WORKING-STORAGE)"
         )
+
+    @covers(CobolFeature.CANCEL, CobolFeature.CALL_USING)
+    def test_cancel_returns_the_named_program_to_its_initial_state(self, tmp_path):
+        """CANCEL 'WSINC' makes the next CALL find WSINC in its initial state:
+        WORKING-STORAGE back to VALUE 5. OTHINC, not named, keeps its counter.
+        NEVERC is in the run unit but was never called, and NOSUCH is not in it:
+        cancelling either does nothing, and NEVERC's first CALL still sees its
+        VALUE clause."""
+        sources = {
+            name: [
+                "IDENTIFICATION DIVISION.",
+                f"PROGRAM-ID. {name}.",
+                *_COUNTER_SUBPROGRAM,
+            ]
+            for name in ("WSINC", "OTHINC", "NEVERC")
+        } | {"MAINCAN": _CANCELLING_MAIN}
+        _ = [
+            (tmp_path / f"{name}.cbl").write_text(_to_fixed(lines))
+            for name, lines in sources.items()
+        ]
+
+        vm = run_linked(
+            compile_programs_in(tmp_path, "MAINCAN"),
+            entry_point=EntryPoint.function(
+                lambda ref: str(ref.label).endswith("func_maincan_0")
+                and "init_params" not in str(ref.label)
+            ),
+            max_steps=20000,
+            initial_vm=initial_vm_state(),
+            builtins=core_builtins(),
+        )
+
+        region = ws_region(vm, "MAINCAN")
+        assert [
+            _decode_zoned_unsigned(region, offset=4 * n, length=4) for n in range(6)
+        ] == [6, 7, 6, 6, 7, 6]
 
 
 class TestCallUsingByReference:

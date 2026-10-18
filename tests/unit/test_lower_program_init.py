@@ -56,8 +56,11 @@ def test_lower_program_init_publishes_every_singleton_field():
     ]
     # return_code_handle joins them because the special registers are allocated
     # once, with WORKING-STORAGE, rather than per call (red-dragon-ltq6).
+    # initial_state is cleared by the block that lays down WORKING-STORAGE, which
+    # CANCEL makes the next entry perform again.
     assert published == [
         "ws_handle",
+        "initial_state",
         "return_code_handle",
         "run",
     ]
