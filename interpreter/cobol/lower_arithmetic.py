@@ -72,6 +72,7 @@ from cobol_numeric.scale import (
     literal_scale,
     mul_scale,
 )
+from interpreter.cobol.arithmetic_operation import ArithmeticOperation
 from interpreter.cobol.arithmetic_precision import ArithmeticPrecision
 from interpreter.cobol.arithmetic_receiver import ArithmeticReceiver
 from interpreter.cobol.arithmetic_scale import (
@@ -106,6 +107,7 @@ from interpreter.cobol.initialize_target import InitializeTarget
 from interpreter.cobol.initialize_targets import initialize_targets
 from interpreter.cobol.ir_emitter import IrEmitter
 from interpreter.cobol.lower_pointer import is_pointer_set, lower_pointer_set
+from interpreter.cobol.lowering_scope import LoweringScope
 from interpreter.cobol.lower_program_exit import (
     emit_publish_run_unit_return_code,
     emit_return_code_load,
@@ -170,13 +172,12 @@ _EXACT_VERB_BUILTINS = {
 }
 
 
-def _operand_scale(
-    ctx: EmitContext, operand: RefModOperand, materialised: MaterialisedSectionedLayout
-) -> Scale:
+def _operand_scale(scope: LoweringScope, operand: RefModOperand) -> Scale:
+    ctx = scope.ctx
     name = operand.name
     if operand.names_data:
         return field_scale(
-            materialised.resolve(name, operand.qualifiers)[0].type_descriptor
+            scope.materialised.resolve(name, operand.qualifiers)[0].type_descriptor
         )
     try:
         from_literal(ctx.figuratives.translate(name))
@@ -193,19 +194,14 @@ _VERB_SCALES: Mapping[str, Callable[[Scale, Scale, int], Scale]] = {
 }
 
 
-def _is_floating_operand(
-    ctx: EmitContext, operand: RefModOperand, materialised: MaterialisedSectionedLayout
-) -> bool:
+def _is_floating_operand(scope: LoweringScope, operand: RefModOperand) -> bool:
     return operand.names_data and is_floating_type(
-        materialised.resolve(operand.name, operand.qualifiers)[0].type_descriptor
+        scope.materialised.resolve(operand.name, operand.qualifiers)[0].type_descriptor
     )
 
 
-def _receiver_places(
-    ctx: EmitContext,
-    receivers: Sequence[RefModOperand],
-    materialised: MaterialisedSectionedLayout,
-) -> int:
+def _receiver_places(scope: LoweringScope, receivers: Sequence[RefModOperand]) -> int:
+    ctx, materialised = scope.ctx, scope.materialised
     return max(
         (
             _receiver_decimals(
@@ -220,34 +216,26 @@ def _receiver_places(
 
 
 def _operand_value(
-    ctx: EmitContext,
-    operand: RefModOperand,
-    register: Register,
-    materialised: MaterialisedSectionedLayout,
+    scope: LoweringScope, operand: RefModOperand, register: Register
 ) -> ArithmeticValue:
     return ArithmeticValue(
         register=register,
-        scale=_operand_scale(ctx, operand, materialised),
-        floating=_is_floating_operand(ctx, operand, materialised),
+        scale=_operand_scale(scope, operand),
+        floating=_is_floating_operand(scope, operand),
     )
 
 
 def _emit_float_operation(
-    ctx: EmitContext,
-    op: str,
-    left: ArithmeticValue,
-    right: ArithmeticValue,
-    scale: Scale,
-    *,
-    span: SourceSpan | None = None,
+    scope: LoweringScope, operation: ArithmeticOperation, scale: Scale
 ) -> ArithmeticValue:
+    ctx, span = scope.ctx, scope.span
     result_reg = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
             result_reg=result_reg,
-            operator=resolve_binop(ARITHMETIC_OPS[op]),
-            left=_float_operand(ctx, left.register, True, span=span),
-            right=_float_operand(ctx, right.register, True, span=span),
+            operator=resolve_binop(ARITHMETIC_OPS[operation.op]),
+            left=_float_operand(ctx, operation.left.register, True, span=span),
+            right=_float_operand(ctx, operation.right.register, True, span=span),
         ),
         span=span,
     )
@@ -255,37 +243,27 @@ def _emit_float_operation(
 
 
 def _emit_verb_operation(
-    ctx: EmitContext,
-    op: str,
-    left: ArithmeticValue,
-    right: ArithmeticValue,
+    scope: LoweringScope,
+    operation: ArithmeticOperation,
     receivers: Sequence[RefModOperand],
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None = None,
 ) -> ArithmeticValue:
     """Emit ``left <op> right``, exact unless IBM's floating-point rule applies."""
     return _emit_scaled_operation(
-        ctx,
-        op,
-        left,
-        right,
-        _receiver_places(ctx, receivers, materialised),
-        any(_is_floating_operand(ctx, r, materialised) for r in receivers),
-        span=span,
+        scope,
+        operation,
+        _receiver_places(scope, receivers),
+        any(_is_floating_operand(scope, r) for r in receivers),
     )
 
 
 def _emit_scaled_operation(
-    ctx: EmitContext,
-    op: str,
-    left: ArithmeticValue,
-    right: ArithmeticValue,
+    scope: LoweringScope,
+    operation: ArithmeticOperation,
     receiver_places: int,
     floating_receiver: bool,
-    *,
-    span: SourceSpan | None = None,
 ) -> ArithmeticValue:
+    ctx, span = scope.ctx, scope.span
+    op, left, right = operation.op, operation.left, operation.right
     operand_places = (
         left.scale.decimal_places
         if op == "DIVIDE"
@@ -294,7 +272,7 @@ def _emit_scaled_operation(
     dmax = max(receiver_places, operand_places)
     scale = carry(_VERB_SCALES[op](left.scale, right.scale, dmax), dmax)
     if left.floating or right.floating or floating_receiver:
-        return _emit_float_operation(ctx, op, left, right, scale, span=span)
+        return _emit_float_operation(scope, operation, scale)
     result_reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(
@@ -312,15 +290,9 @@ def _emit_scaled_operation(
 
 
 def _compute_overflow_flag(
-    ctx: EmitContext,
-    result_reg: Register,
-    td: CobolTypeDescriptor,
-    *,
-    span: SourceSpan | None = None,
+    scope: LoweringScope, result_reg: Register, td: CobolTypeDescriptor
 ) -> Register:
-    return emit_size_error(
-        IrEmitter(ctx=ctx, span=span), result_reg, receiver_capacity(td)
-    )
+    return emit_size_error(scope.emitter, result_reg, receiver_capacity(td))
 
 
 def eval_ref_mod_expr(
@@ -463,21 +435,17 @@ _INTRINSIC_FUNCTIONS = {
 
 
 def _lower_function_arg_to_string(
-    ctx: EmitContext,
-    arg: dict,
-    materialised: MaterialisedSectionedLayout,
-    precision: ArithmeticPrecision,
-    *,
-    span: SourceSpan | None,
+    scope: LoweringScope, arg: dict, precision: ArithmeticPrecision
 ) -> Register:
     """Lower one intrinsic-function argument dict to a string-valued register.
 
     Field references are decoded then stringified (intrinsics like UPPER-CASE
     operate on character data); literals are parsed as constants.
     """
+    ctx, materialised, span = scope.ctx, scope.materialised, scope.span
     kind = arg.get("kind", "lit")
     if kind == "ref":
-        return _lower_ref_function_arg(ctx, arg, materialised, span=span)
+        return _lower_ref_function_arg(scope, arg)
     if kind == "lit":
         return ctx.const_to_reg(ctx.parse_literal(arg.get("value", "")), span=span)
     from interpreter.cobol.condition_lowering import lower_expr_node
@@ -493,13 +461,7 @@ def _lower_function_arg_to_string(
     return ctx.emit_to_string(value_reg, span=span)
 
 
-def _lower_ref_function_arg(
-    ctx: EmitContext,
-    arg: dict,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
-) -> Register:
+def _lower_ref_function_arg(scope: LoweringScope, arg: dict) -> Register:
     # Delegated rather than re-resolved: this path used to call
     # resolve_field_ref with neither the subscripts nor the reference
     # modification the node carries, so FUNCTION f(TBL(I)) always read
@@ -510,6 +472,7 @@ def _lower_ref_function_arg(
         _unresolvable_operand,
     )
 
+    ctx, materialised, span = scope.ctx, scope.materialised, scope.span
     name = arg.get("name", "")
     if not ctx.has_field(name, materialised):
         return _unresolvable_operand(ctx, name, span=span)
@@ -541,28 +504,24 @@ def lower_function_operand(
         materialised,
     )
     return lower_function_in_expression(
-        ctx, operand, materialised, precision, span=span
+        LoweringScope(ctx, materialised, span), operand, precision
     )
 
 
 def lower_function_in_expression(
-    ctx: EmitContext,
-    operand: FunctionCallOperand,
-    materialised: MaterialisedSectionedLayout,
-    precision: ArithmeticPrecision,
-    *,
-    span: SourceSpan | None,
+    scope: LoweringScope, operand: FunctionCallOperand, precision: ArithmeticPrecision
 ) -> Register:
     lowering = _STATEFUL_FUNCTIONS.get(operand.name.upper(), _lower_builtin_function)
     expanded = replace(
         operand,
         args=tuple(
             chain.from_iterable(
-                _all_subscripts_expanded(arg, materialised) for arg in operand.args
+                _all_subscripts_expanded(arg, scope.materialised)
+                for arg in operand.args
             )
         ),
     )
-    return lowering(ctx, expanded, materialised, precision, span=span)
+    return lowering(scope, expanded, precision)
 
 
 def _all_subscripts_expanded(
@@ -608,24 +567,14 @@ def _subscript_choices(
 
 
 def _lower_builtin_function(
-    ctx: EmitContext,
-    operand: FunctionCallOperand,
-    materialised: MaterialisedSectionedLayout,
-    precision: ArithmeticPrecision,
-    *,
-    span: SourceSpan | None,
+    scope: LoweringScope, operand: FunctionCallOperand, precision: ArithmeticPrecision
 ) -> Register:
     if operand.name.upper() not in _INTRINSIC_EMITTERS:
-        return _lower_unsupported_function(
-            ctx, operand, materialised, precision, span=span
-        )
+        return _lower_unsupported_function(scope, operand, precision)
     arg_regs = tuple(
-        _lower_function_arg_to_string(ctx, arg, materialised, precision, span=span)
-        for arg in operand.args
+        _lower_function_arg_to_string(scope, arg, precision) for arg in operand.args
     )
-    return _INTRINSIC_EMITTERS[operand.name.upper()](
-        IrEmitter(ctx=ctx, span=span), arg_regs
-    )
+    return _INTRINSIC_EMITTERS[operand.name.upper()](scope.emitter, arg_regs)
 
 
 def _call_intrinsic_builtin(
@@ -646,34 +595,23 @@ _INTRINSIC_EMITTERS: Mapping[
 
 
 def _lower_unsupported_function(
-    ctx: EmitContext,
-    operand: FunctionCallOperand,
-    materialised: MaterialisedSectionedLayout,
-    precision: ArithmeticPrecision,
-    *,
-    span: SourceSpan | None,
+    scope: LoweringScope, operand: FunctionCallOperand, precision: ArithmeticPrecision
 ) -> Register:
     logger.warning(
         "Unsupported COBOL intrinsic FUNCTION %r — falling back to first argument",
         operand.name,
     )
     if not operand.args:
-        return ctx.const_to_reg("", span=span)
-    return _lower_function_arg_to_string(
-        ctx, operand.args[0], materialised, precision, span=span
-    )
+        return scope.ctx.const_to_reg("", span=scope.span)
+    return _lower_function_arg_to_string(scope, operand.args[0], precision)
 
 
 def _lower_random(
-    ctx: EmitContext,
-    operand: FunctionCallOperand,
-    materialised: MaterialisedSectionedLayout,
-    precision: ArithmeticPrecision,
-    *,
-    span: SourceSpan | None,
+    scope: LoweringScope, operand: FunctionCallOperand, precision: ArithmeticPrecision
 ) -> Register:
     """FUNCTION RANDOM [(seed)]: load the run unit's generator state, step it,
     store it back, and return its value -- one sequence for the whole run unit."""
+    ctx, span = scope.ctx, scope.span
     fl = RUN_UNIT_LAYOUT.lookup_or_raise(RANDOM_STATE)
     extent = whole_field_extent(fl, RegionId.RUN_UNIT)
     region_reg, state_reg = ctx.fresh_reg(), ctx.fresh_reg()
@@ -688,11 +626,10 @@ def _lower_random(
         span=span,
     )
     seed_regs = tuple(
-        _lower_function_arg_to_string(ctx, arg, materialised, precision, span=span)
-        for arg in operand.args[:1]
+        _lower_function_arg_to_string(scope, arg, precision) for arg in operand.args[:1]
     )
     next_reg = _call_builtin(
-        ctx, BuiltinName.RANDOM_NEXT_STATE, (state_reg, *seed_regs), span=span
+        scope, BuiltinName.RANDOM_NEXT_STATE, (state_reg, *seed_regs)
     )
     ctx._emit_write_region(
         region_reg=region_reg,
@@ -702,33 +639,26 @@ def _lower_random(
         extent=extent,
         span=span,
     )
-    return _call_builtin(ctx, BuiltinName.RANDOM_VALUE, (next_reg,), span=span)
+    return _call_builtin(scope, BuiltinName.RANDOM_VALUE, (next_reg,))
 
 
 def _call_builtin(
-    ctx: EmitContext,
-    builtin: str,
-    args: tuple[Register, ...],
-    *,
-    span: SourceSpan | None,
+    scope: LoweringScope, builtin: str, args: tuple[Register, ...]
 ) -> Register:
-    result_reg = ctx.fresh_reg()
-    ctx.emit_inst(
+    result_reg = scope.ctx.fresh_reg()
+    scope.ctx.emit_inst(
         CallFunction(result_reg=result_reg, func_name=FuncName(builtin), args=args),
-        span=span,
+        span=scope.span,
     )
     return result_reg
 
 
 def _lower_when_compiled(
-    ctx: EmitContext,
-    operand: FunctionCallOperand,
-    materialised: MaterialisedSectionedLayout,
-    precision: ArithmeticPrecision,
-    *,
-    span: SourceSpan | None,
+    scope: LoweringScope, operand: FunctionCallOperand, precision: ArithmeticPrecision
 ) -> Register:
-    return ctx.const_to_reg(when_compiled_text(ctx.compiled_at), span=span)
+    return scope.ctx.const_to_reg(
+        when_compiled_text(scope.ctx.compiled_at), span=scope.span
+    )
 
 
 _STATEFUL_FUNCTIONS = {"RANDOM": _lower_random, "WHEN-COMPILED": _lower_when_compiled}
@@ -752,8 +682,9 @@ def lower_move(
     The source is evaluated ONCE and stored into every receiving field, each with
     its own reference modification and PICTURE conversion (COBOL semantics).
     """
+    scope = LoweringScope(ctx, materialised, stmt.span)
     span = stmt.span
-    emitter = IrEmitter(ctx=ctx, span=span)
+    emitter = scope.emitter
 
     # Intrinsic FUNCTION source (e.g. FUNCTION UPPER-CASE(...)): evaluate to a
     # value register, then distribute to every receiving field. Functions carry
@@ -763,9 +694,7 @@ def lower_move(
             ctx, stmt.source, materialised, span=span
         )
         for target in stmt.targets:
-            _store_move_value(
-                emitter, target, plain_move_source(source_value_reg), materialised
-            )
+            _store_move_value(scope, target, plain_move_source(source_value_reg))
         return
 
     if stmt.source.length_of.name:
@@ -778,9 +707,7 @@ def lower_move(
             logger.warning("MOVE LENGTH OF unknown field %r — using 0", name)
             source_value_reg = ctx.const_to_reg(0, span=span)
         for target in stmt.targets:
-            _store_move_value(
-                emitter, target, plain_move_source(source_value_reg), materialised
-            )
+            _store_move_value(scope, target, plain_move_source(source_value_reg))
         return
 
     # Raw figurative source (HIGH-VALUES / LOW-VALUES): these denote raw bytes —
@@ -796,7 +723,7 @@ def lower_move(
         and ctx.figuratives.is_raw(stmt.source.name)
     ):
         for target in stmt.targets:
-            _move_raw_figurative(emitter, target, stmt.source.name, materialised)
+            _move_raw_figurative(scope, target, stmt.source.name)
         return
 
     # Resolve the source field once (when it is a field). A numeric-DISPLAY
@@ -906,7 +833,7 @@ def lower_move(
             else value_str_reg
         ),
         number=(
-            _emit_de_edit(ctx, value_str_reg, source_ref.fl, stmt)
+            _emit_de_edit(scope, value_str_reg, source_ref.fl)
             if sent_whole
             and source_ref.fl.type_descriptor.category
             == CobolDataCategory.NUMERIC_EDITED
@@ -946,37 +873,31 @@ def lower_move(
                 repeat_to_width(_fill_pattern, fill_width), span=span
             )
             effective_source = plain_move_source(filled)
-        _store_move_value(emitter, target, effective_source, materialised)
+        _store_move_value(scope, target, effective_source)
 
 
 def _move_raw_figurative(
-    e: IrEmitter,
-    target: RefModOperand,
-    name: str,
-    materialised: MaterialisedSectionedLayout,
+    scope: LoweringScope, target: RefModOperand, name: str
 ) -> None:
     """Fill one receiver with HIGH-VALUE's or LOW-VALUE's raw byte; a
     reference-modified receiver takes the byte's character through the SPLICE
     path."""
-    if not e.ctx.has_field(target.name, materialised):
+    if not scope.ctx.has_field(target.name, scope.materialised):
         _warn_unmodelled_special_register(target.name)
         return
     if target.is_reference_modified:
-        src_reg = e.text(chr(e.ctx.figuratives.raw_byte(name)))
-        _store_move_value(e, target, plain_move_source(src_reg), materialised)
+        src_reg = scope.emitter.text(chr(scope.ctx.figuratives.raw_byte(name)))
+        _store_move_value(scope, target, plain_move_source(src_reg))
         return
-    _fill_whole_receiver(e, target, name, materialised)
+    _fill_whole_receiver(scope, target, name)
 
 
 def _fill_whole_receiver(
-    e: IrEmitter,
-    target: RefModOperand,
-    name: str,
-    materialised: MaterialisedSectionedLayout,
+    scope: LoweringScope, target: RefModOperand, name: str
 ) -> None:
     """An alphanumeric-edited receiver takes the figurative as a literal of its
     size, edited in; any other takes the raw byte in every position."""
-    ctx, span = e.ctx, e.span
+    ctx, materialised, span = scope.ctx, scope.materialised, scope.span
     target_ref, target_rr = ctx.resolve_field_ref(
         target.name,
         materialised,
@@ -986,7 +907,7 @@ def _fill_whole_receiver(
     )
     if target_ref.fl.type_descriptor.category == CobolDataCategory.ALPHANUMERIC_EDITED:
         fill = _figurative_literal(ctx, name, target_ref.fl.byte_length)
-        _store_move_value(e, target, plain_move_source(e.text(fill)), materialised)
+        _store_move_value(scope, target, plain_move_source(scope.emitter.text(fill)))
         return
     ctx.emit_fill_raw_byte(
         target_rr,
@@ -1009,27 +930,21 @@ def _figurative_literal(ctx: EmitContext, name: str, width: int) -> str:
 
 
 def _emit_de_edit(
-    ctx: EmitContext,
-    image_reg: Register,
-    source_fl: FieldLayout,
-    stmt: MoveStatement,
+    scope: LoweringScope, image_reg: Register, source_fl: FieldLayout
 ) -> Register:
     """The value of a numeric-edited source, de-edited by IR fixed by its
     PICTURE (interpreter.cobol.de_edit_ir)."""
     td = source_fl.type_descriptor
     value = emit_de_edit(
-        IrEmitter(ctx=ctx, span=stmt.span),
+        scope.emitter,
         image_reg,
         de_edit_plan(td.pic_string, td.currency, td.decimal_point_is_comma),
     )
-    return ctx.emit_to_string(value, span=stmt.span)
+    return scope.ctx.emit_to_string(value, span=scope.span)
 
 
 def _store_move_value(
-    e: IrEmitter,
-    target: RefModOperand,
-    source: MoveSource,
-    materialised: MaterialisedSectionedLayout,
+    scope: LoweringScope, target: RefModOperand, source: MoveSource
 ) -> None:
     """Store an already-evaluated MOVE source value into one receiving field.
 
@@ -1047,7 +962,7 @@ def _store_move_value(
     receiver as one alphanumeric item, whatever the receiver's category
     (MoveSource.storage_for).
     """
-    ctx, span = e.ctx, e.span
+    ctx, materialised, span = scope.ctx, scope.materialised, scope.span
     target_ref, target_rr = ctx.resolve_field_ref(
         target.name,
         materialised,
@@ -1188,12 +1103,13 @@ def lower_arithmetic_corresponding(
 ) -> None:
     """ADD/SUBTRACT CORRESPONDING: each pair is a separate ADD/SUBTRACT with the
     statement's ROUNDED, and its size error phrases run once after every pair."""
+    scope = LoweringScope(ctx, materialised, stmt.span)
     pairs = _corresponding_pairs(
         stmt.source, stmt.target, pairs_for_arithmetic, materialised
     )
-    step = partial(_corresponding_step, ctx, stmt, materialised)
+    step = partial(_corresponding_step, scope, stmt.op)
     _store(
-        ctx,
+        scope,
         SizeErrorStore(
             stmt=stmt,
             guard=_no_size_error_guard,
@@ -1201,34 +1117,18 @@ def lower_arithmetic_corresponding(
             step=step,
             follow_up=_no_follow_up,
         ),
-        materialised,
     )
 
 
 def _corresponding_step(
-    ctx: EmitContext,
-    stmt: ArithmeticCorrespondingStatement,
-    materialised: MaterialisedSectionedLayout,
-    pair: CorrespondingPair,
+    scope: LoweringScope, op: str, pair: CorrespondingPair
 ) -> ReceiverResult:
-    sending = _decode_operand(ctx, pair.source, materialised, span=stmt.span)
-    return _in_place_step(
-        IrEmitter(ctx=ctx, span=stmt.span),
-        InPlaceOperation(op=stmt.op, sending=sending),
-        materialised,
-        pair.target,
-    )
+    sending = _decode_operand(scope, pair.source)
+    return _in_place_step(scope, InPlaceOperation(op=op, sending=sending), pair.target)
 
 
 def _emit_arithmetic_writeback(
-    ctx: EmitContext,
-    target_op: RefModOperand,
-    target_ref: ResolvedFieldRef,
-    target_rr: Register,
-    result_str_reg: Register,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None = None,
+    scope: LoweringScope, receiver: ArithmeticReceiver, result_str_reg: Register
 ) -> None:
     """Write arithmetic result into target, applying target ref-mod if present.
 
@@ -1237,6 +1137,8 @@ def _emit_arithmetic_writeback(
     splice the result string into the requested substring position, then encode
     and write back the spliced whole — identical to the MOVE target ref-mod path.
     """
+    ctx, materialised, span = scope.ctx, scope.materialised, scope.span
+    target_op, target_ref, target_rr = receiver.operand, receiver.ref, receiver.region
     fl = target_ref.fl
     offset_reg = target_ref.offset_reg
 
@@ -1261,7 +1163,7 @@ def _emit_arithmetic_writeback(
             span=span,
         )
 
-        tgt_length_reg = _ref_mod_length(ctx, target_op, materialised, span=span)
+        tgt_length_reg = _ref_mod_length(scope, target_op)
 
         # Parse the text as an exact number, then normalise → int → zero-padded
         # string ('015') before splicing to fill the exact ref-mod width.
@@ -1320,29 +1222,20 @@ def _emit_arithmetic_writeback(
         )
 
 
-def _ref_mod_length(
-    ctx: EmitContext,
-    operand: RefModOperand,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None = None,
-) -> Register:
+def _ref_mod_length(scope: LoweringScope, operand: RefModOperand) -> Register:
     match operand.ref_mod_length:
         case None:
-            return ctx.const_to_reg(999999, span=span)
+            return scope.ctx.const_to_reg(999999, span=scope.span)
         case length:
-            return eval_ref_mod_expr(ctx, length, materialised, span=span)
+            return eval_ref_mod_expr(
+                scope.ctx, length, scope.materialised, span=scope.span
+            )
 
 
 def _ref_mod_number(
-    ctx: EmitContext,
-    decoded: Register,
-    operand: RefModOperand,
-    start: RefModExpr,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None = None,
+    scope: LoweringScope, decoded: Register, operand: RefModOperand, start: RefModExpr
 ) -> Register:
+    ctx, materialised, span = scope.ctx, scope.materialised, scope.span
     start_0indexed = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
@@ -1361,7 +1254,7 @@ def _ref_mod_number(
             args=(
                 ctx.emit_to_string(decoded, span=span),
                 start_0indexed,
-                _ref_mod_length(ctx, operand, materialised, span=span),
+                _ref_mod_length(scope, operand),
             ),
         ),
         span=span,
@@ -1378,107 +1271,70 @@ def _ref_mod_number(
     return number
 
 
-def _read_receiver(
-    ctx: EmitContext,
-    receiver: ArithmeticReceiver,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None = None,
-) -> Register:
-    decoded = ctx.emit_decode_field(
+def _read_receiver(scope: LoweringScope, receiver: ArithmeticReceiver) -> Register:
+    decoded = scope.ctx.emit_decode_field(
         receiver.region,
         receiver.ref.fl,
         receiver.ref.offset_reg,
         extent=receiver.ref.extent,
-        span=span,
+        span=scope.span,
     )
     match receiver.operand.ref_mod_start:
         case None:
             return decoded
         case start:
-            return _ref_mod_number(
-                ctx, decoded, receiver.operand, start, materialised, span=span
-            )
+            return _ref_mod_number(scope, decoded, receiver.operand, start)
 
 
 def _resolve_receiver(
-    ctx: EmitContext,
-    operand: RefModOperand,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None = None,
+    scope: LoweringScope, operand: RefModOperand
 ) -> ArithmeticReceiver:
-    ref, region = ctx.resolve_field_ref(
+    ref, region = scope.ctx.resolve_field_ref(
         operand.name,
-        materialised,
+        scope.materialised,
         operand.qualifiers,
         subscripts=operand.subscripts,
-        span=span,
+        span=scope.span,
     )
     return ArithmeticReceiver(operand=operand, ref=ref, region=region)
 
 
-def _decode_operand(
-    ctx: EmitContext,
-    operand: RefModOperand,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None = None,
-) -> ArithmeticValue:
+def _decode_operand(scope: LoweringScope, operand: RefModOperand) -> ArithmeticValue:
+    ctx = scope.ctx
     if not operand.names_data:
         literal = ctx.parse_literal(ctx.figuratives.translate(operand.name))
         return _operand_value(
-            ctx, operand, ctx.const_to_reg(literal, span=span), materialised
+            scope, operand, ctx.const_to_reg(literal, span=scope.span)
         )
-    receiver = _resolve_receiver(ctx, operand, materialised, span=span)
-    return _operand_value(
-        ctx,
-        operand,
-        _read_receiver(ctx, receiver, materialised, span=span),
-        materialised,
-    )
+    receiver = _resolve_receiver(scope, operand)
+    return _operand_value(scope, operand, _read_receiver(scope, receiver))
 
 
 def _sum_operands(
-    ctx: EmitContext,
+    scope: LoweringScope,
     operands: Sequence[RefModOperand],
     receivers: Sequence[RefModOperand],
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None = None,
 ) -> ArithmeticValue:
-    values = [_decode_operand(ctx, o, materialised, span=span) for o in operands]
+    values = [_decode_operand(scope, o) for o in operands]
     return reduce(
         lambda total, value: _emit_verb_operation(
-            ctx, "ADD", total, value, receivers, materialised, span=span
+            scope, ArithmeticOperation(op="ADD", left=total, right=value), receivers
         ),
         values[1:],
         values[0],
     )
 
 
-def _write_result(
-    ctx: EmitContext,
-    result: ReceiverResult,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None = None,
-) -> None:
-    receiver = result.receiver
+def _write_result(scope: LoweringScope, result: ReceiverResult) -> None:
     _emit_arithmetic_writeback(
-        ctx,
-        receiver.operand,
-        receiver.ref,
-        receiver.region,
-        ctx.emit_to_string(result.value, span=span),
-        materialised,
-        span=span,
+        scope,
+        result.receiver,
+        scope.ctx.emit_to_string(result.value, span=scope.span),
     )
 
 
-def _stored_value(
-    ctx: EmitContext, result: ReceiverResult, *, span: SourceSpan | None = None
-) -> ReceiverResult:
+def _stored_value(scope: LoweringScope, result: ReceiverResult) -> ReceiverResult:
+    ctx, span = scope.ctx, scope.span
     receiver = result.receiver
     if not receiver.operand.rounded:
         return result
@@ -1500,16 +1356,11 @@ def _stored_value(
     return ReceiverResult(receiver=receiver, value=rounded)
 
 
-def _write_unless_size_error(
-    ctx: EmitContext,
-    result: ReceiverResult,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None = None,
-) -> Register:
-    stored = _stored_value(ctx, result, span=span)
+def _write_unless_size_error(scope: LoweringScope, result: ReceiverResult) -> Register:
+    ctx, span = scope.ctx, scope.span
+    stored = _stored_value(scope, result)
     overflow = _compute_overflow_flag(
-        ctx, stored.value, stored.receiver.ref.fl.type_descriptor, span=span
+        scope, stored.value, stored.receiver.ref.fl.type_descriptor
     )
     write_label = ctx.fresh_label("size_ok")
     skip_label = ctx.fresh_label("size_err_skip")
@@ -1518,15 +1369,15 @@ def _write_unless_size_error(
         span=span,
     )
     ctx.emit_inst(Label_(label=write_label), span=span)
-    _write_result(ctx, stored, materialised, span=span)
+    _write_result(scope, stored)
     ctx.emit_inst(Branch(label=skip_label), span=span)
     ctx.emit_inst(Label_(label=skip_label), span=span)
     return overflow
 
 
-def _any_flag(
-    ctx: EmitContext, flags: Sequence[Register], *, span: SourceSpan | None = None
-) -> Register:
+def _any_flag(scope: LoweringScope, flags: Sequence[Register]) -> Register:
+    ctx, span = scope.ctx, scope.span
+
     def _or(left: Register, right: Register) -> Register:
         combined = ctx.fresh_reg()
         ctx.emit_inst(
@@ -1548,12 +1399,9 @@ def _any_flag(
 
 
 def _emit_zero_divisor_guard(
-    ctx: EmitContext,
-    divisor: ArithmeticValue,
-    on_size_err_label: CodeLabel,
-    *,
-    span: SourceSpan | None = None,
+    scope: LoweringScope, divisor: ArithmeticValue, on_size_err_label: CodeLabel
 ) -> None:
+    ctx, span = scope.ctx, scope.span
     is_zero = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
@@ -1572,86 +1420,63 @@ def _emit_zero_divisor_guard(
     ctx.emit_inst(Label_(label=compute_label), span=span)
 
 
-def _emit_size_error_arm(
-    ctx: EmitContext,
-    arm: SizeErrorArm,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None = None,
-) -> None:
+def _emit_size_error_arm(scope: LoweringScope, arm: SizeErrorArm) -> None:
+    ctx, span = scope.ctx, scope.span
     ctx.emit_inst(Label_(label=arm.label), span=span)
     arm.follow_up()
     for child in arm.statements:
-        ctx.lower_statement(child, materialised)
+        ctx.lower_statement(child, scope.materialised)
     ctx.emit_inst(Branch(label=arm.end), span=span)
 
 
-def _store_guarded[R](
-    ctx: EmitContext,
-    store: SizeErrorStore[R],
-    materialised: MaterialisedSectionedLayout,
-) -> None:
-    span = store.stmt.span
+def _store_guarded[R](scope: LoweringScope, store: SizeErrorStore[R]) -> None:
+    ctx, span = scope.ctx, scope.span
     on_label = ctx.fresh_label("on_size_err")
     not_on_label = ctx.fresh_label("not_on_size_err")
     end_label = ctx.fresh_label("size_err_end")
     store.guard(on_label)
     flags = [
-        _write_unless_size_error(ctx, store.step(target), materialised, span=span)
+        _write_unless_size_error(scope, store.step(target))
         for target in store.receivers
     ]
     ctx.emit_inst(
         BranchIf(
-            cond_reg=_any_flag(ctx, flags, span=span),
+            cond_reg=_any_flag(scope, flags),
             branch_targets=(on_label, not_on_label),
         ),
         span=span,
     )
     _emit_size_error_arm(
-        ctx,
+        scope,
         SizeErrorArm(
             label=on_label,
             statements=store.stmt.on_size_error,
             follow_up=_no_follow_up,
             end=end_label,
         ),
-        materialised,
-        span=span,
     )
     _emit_size_error_arm(
-        ctx,
+        scope,
         SizeErrorArm(
             label=not_on_label,
             statements=store.stmt.not_on_size_error,
             follow_up=store.follow_up,
             end=end_label,
         ),
-        materialised,
-        span=span,
     )
     ctx.emit_inst(Label_(label=end_label), span=span)
 
 
-def _store_unguarded(
-    ctx: EmitContext,
-    result: ReceiverResult,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None = None,
-) -> None:
-    _write_result(ctx, _stored_value(ctx, result, span=span), materialised, span=span)
+def _store_unguarded(scope: LoweringScope, result: ReceiverResult) -> None:
+    _write_result(scope, _stored_value(scope, result))
 
 
-def _store[R](
-    ctx: EmitContext,
-    store: SizeErrorStore[R],
-    materialised: MaterialisedSectionedLayout,
-) -> None:
+def _store[R](scope: LoweringScope, store: SizeErrorStore[R]) -> None:
     if store.stmt.on_size_error or store.stmt.not_on_size_error:
-        _store_guarded(ctx, store, materialised)
+        _store_guarded(scope, store)
         return
     for target in store.receivers:
-        _store_unguarded(ctx, store.step(target), materialised, span=store.stmt.span)
+        _store_unguarded(scope, store.step(target))
     store.follow_up()
 
 
@@ -1664,50 +1489,28 @@ def _no_follow_up() -> None:
 
 
 def _in_place_step(
-    e: IrEmitter,
-    operation: InPlaceOperation,
-    materialised: MaterialisedSectionedLayout,
-    target: RefModOperand,
+    scope: LoweringScope, operation: InPlaceOperation, target: RefModOperand
 ) -> ReceiverResult:
-    ctx, span = e.ctx, e.span
-    receiver = _resolve_receiver(ctx, target, materialised, span=span)
-    current = _operand_value(
-        ctx,
-        target,
-        _read_receiver(ctx, receiver, materialised, span=span),
-        materialised,
-    )
+    receiver = _resolve_receiver(scope, target)
+    current = _operand_value(scope, target, _read_receiver(scope, receiver))
     return ReceiverResult(
         receiver=receiver,
         value=_emit_verb_operation(
-            ctx,
-            operation.op,
-            current,
-            operation.sending,
+            scope,
+            ArithmeticOperation(op=operation.op, left=current, right=operation.sending),
             (target,),
-            materialised,
-            span=span,
         ).register,
     )
 
 
 def _giving_step(
-    e: IrEmitter,
-    result: Register,
-    materialised: MaterialisedSectionedLayout,
-    target: RefModOperand,
+    scope: LoweringScope, result: Register, target: RefModOperand
 ) -> ReceiverResult:
-    return ReceiverResult(
-        receiver=_resolve_receiver(e.ctx, target, materialised, span=e.span),
-        value=result,
-    )
+    return ReceiverResult(receiver=_resolve_receiver(scope, target), value=result)
 
 
 def _emit_remainder(
-    ctx: EmitContext,
-    stmt: ArithmeticStatement,
-    operands: DivideOperands,
-    materialised: MaterialisedSectionedLayout,
+    scope: LoweringScope, stmt: ArithmeticStatement, operands: DivideOperands
 ) -> None:
     match stmt.remainder:
         case None:
@@ -1715,23 +1518,16 @@ def _emit_remainder(
         case remainder_op:
             quotient_op = stmt.giving[0]
             value = _remainder_value(
-                IrEmitter(ctx=ctx, span=stmt.span),
+                scope.emitter,
                 operands,
                 field_scale(
-                    materialised.resolve(quotient_op.name, quotient_op.qualifiers)[
-                        0
-                    ].type_descriptor
+                    scope.materialised.resolve(
+                        quotient_op.name, quotient_op.qualifiers
+                    )[0].type_descriptor
                 ).decimal_places,
             )
-            receiver = _resolve_receiver(
-                ctx, remainder_op, materialised, span=stmt.span
-            )
-            _write_result(
-                ctx,
-                ReceiverResult(receiver=receiver, value=value),
-                materialised,
-                span=stmt.span,
-            )
+            receiver = _resolve_receiver(scope, remainder_op)
+            _write_result(scope, ReceiverResult(receiver=receiver, value=value))
 
 
 def _remainder_value(
@@ -1757,11 +1553,11 @@ def _remainder_value(
 
 
 def _divisor_guard(
-    ctx: EmitContext, stmt: ArithmeticStatement, divisor: ArithmeticValue
+    scope: LoweringScope, op: str, divisor: ArithmeticValue
 ) -> SizeErrorGuard:
-    if stmt.op != "DIVIDE":
+    if op != "DIVIDE":
         return _no_size_error_guard
-    return partial(_emit_zero_divisor_guard, ctx, divisor, span=stmt.span)
+    return partial(_emit_zero_divisor_guard, scope, divisor)
 
 
 def lower_arithmetic(
@@ -1770,62 +1566,43 @@ def lower_arithmetic(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """ADD/SUBTRACT/MULTIPLY/DIVIDE with every sending operand applied to every receiver."""
+    scope = LoweringScope(ctx, materialised, stmt.span)
     if stmt.giving:
-        _lower_arithmetic_giving(ctx, stmt, materialised)
+        _lower_arithmetic_giving(scope, stmt)
         return
-    sending = _sum_operands(
-        ctx, stmt.operands, stmt.targets, materialised, span=stmt.span
-    )
-    step = partial(
-        _in_place_step,
-        IrEmitter(ctx=ctx, span=stmt.span),
-        InPlaceOperation(op=stmt.op, sending=sending),
-        materialised,
-    )
+    sending = _sum_operands(scope, stmt.operands, stmt.targets)
+    step = partial(_in_place_step, scope, InPlaceOperation(op=stmt.op, sending=sending))
     _store(
-        ctx,
+        scope,
         SizeErrorStore(
             stmt=stmt,
-            guard=_divisor_guard(ctx, stmt, sending),
+            guard=_divisor_guard(scope, stmt.op, sending),
             receivers=tuple(stmt.targets),
             step=step,
             follow_up=_no_follow_up,
         ),
-        materialised,
     )
 
 
-def _lower_arithmetic_giving(
-    ctx: EmitContext,
-    stmt: ArithmeticStatement,
-    materialised: MaterialisedSectionedLayout,
-) -> None:
-    span = stmt.span
-    first = _decode_operand(ctx, stmt.operands[0], materialised, span=span)
-    rest = _sum_operands(ctx, stmt.operands[1:], stmt.giving, materialised, span=span)
+def _lower_arithmetic_giving(scope: LoweringScope, stmt: ArithmeticStatement) -> None:
+    first = _decode_operand(scope, stmt.operands[0])
+    rest = _sum_operands(scope, stmt.operands[1:], stmt.giving)
     result = _emit_verb_operation(
-        ctx, stmt.op, first, rest, stmt.giving, materialised, span=span
+        scope, ArithmeticOperation(op=stmt.op, left=first, right=rest), stmt.giving
     )
-    step = partial(
-        _giving_step, IrEmitter(ctx=ctx, span=span), result.register, materialised
-    )
+    step = partial(_giving_step, scope, result.register)
     remainder = partial(
-        _emit_remainder,
-        ctx,
-        stmt,
-        DivideOperands(dividend=first, divisor=rest),
-        materialised,
+        _emit_remainder, scope, stmt, DivideOperands(dividend=first, divisor=rest)
     )
     _store(
-        ctx,
+        scope,
         SizeErrorStore(
             stmt=stmt,
-            guard=_divisor_guard(ctx, stmt, rest),
+            guard=_divisor_guard(scope, stmt.op, rest),
             receivers=tuple(stmt.giving),
             step=step,
             follow_up=remainder,
         ),
-        materialised,
     )
 
 
@@ -1838,10 +1615,8 @@ def _compute_operand(target: ComputeTarget) -> RefModOperand:
     )
 
 
-def _known_compute_target(
-    ctx: EmitContext, target: ComputeTarget, materialised: MaterialisedSectionedLayout
-) -> bool:
-    if ctx.has_field(target.name, materialised):
+def _known_compute_target(scope: LoweringScope, target: ComputeTarget) -> bool:
+    if scope.ctx.has_field(target.name, scope.materialised):
         return True
     logger.warning("COMPUTE target %s not found in layout", target.name)
     return False
@@ -1853,11 +1628,10 @@ def lower_compute(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """COMPUTE target(s) = arithmetic-expression."""
+    scope = LoweringScope(ctx, materialised, stmt.span)
     span = stmt.span
     targets = [
-        _compute_operand(t)
-        for t in stmt.targets
-        if _known_compute_target(ctx, t, materialised)
+        _compute_operand(t) for t in stmt.targets if _known_compute_target(scope, t)
     ]
     target_types = [
         (materialised.resolve(t.name, t.qualifiers)[0].type_descriptor, t.rounded)
@@ -1875,11 +1649,9 @@ def lower_compute(
     )
     if not targets:
         return
-    step = partial(
-        _giving_step, IrEmitter(ctx=ctx, span=span), result_reg, materialised
-    )
+    step = partial(_giving_step, scope, result_reg)
     _store(
-        ctx,
+        scope,
         SizeErrorStore(
             stmt=stmt,
             guard=_no_size_error_guard,
@@ -1887,7 +1659,6 @@ def lower_compute(
             step=step,
             follow_up=_no_follow_up,
         ),
-        materialised,
     )
 
 
@@ -1990,10 +1761,11 @@ def lower_initialize(
     numeric-edited one ZERO. With REPLACING only the items of a named category are
     moved into, each receiving its category's value; the rest are left alone.
     """
+    scope = LoweringScope(ctx, materialised, stmt.span)
     moves = [
         MoveStatement(source=value, targets=[target.operand], span=stmt.span)
         for operand in stmt.operands
-        for target in _initialize_targets(ctx, operand, materialised)
+        for target in _initialize_targets(scope, operand)
         for value in _initial_values(target.storage.type_descriptor, stmt.replacing)
     ]
     for move in moves:
@@ -2001,12 +1773,12 @@ def lower_initialize(
 
 
 def _initialize_targets(
-    ctx: EmitContext, operand: RefModOperand, materialised: MaterialisedSectionedLayout
+    scope: LoweringScope, operand: RefModOperand
 ) -> tuple[InitializeTarget, ...]:
-    if not ctx.has_field(operand.name, materialised):
+    if not scope.ctx.has_field(operand.name, scope.materialised):
         logger.warning("INITIALIZE target %s not found in layout", operand.name)
         return ()
-    match, _, _ = materialised.resolve_match(operand.name, operand.qualifiers)
+    match, _, _ = scope.materialised.resolve_match(operand.name, operand.qualifiers)
     return initialize_targets(operand, match)
 
 
@@ -2024,12 +1796,7 @@ def _initial_values(
 
 
 def _set_condition_name(
-    ctx: EmitContext,
-    target: SetOperand,
-    value_str: str,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None = None,
+    scope: LoweringScope, target: SetOperand, value_str: str
 ) -> None:
     """SET <88-condition-name> TO TRUE|FALSE — write the VALUE into the parent.
 
@@ -2038,6 +1805,7 @@ def _set_condition_name(
     ConditionNameIndex/ConditionValue carries no FALSE-value, so we warn and skip
     rather than guessing (never silently behave as TRUE).
     """
+    ctx, span = scope.ctx, scope.span
     truth = str(value_str).strip().upper()
     condition_name = target.name
     entry = ctx._condition_index.lookup(condition_name, target.qualifiers)
@@ -2049,7 +1817,7 @@ def _set_condition_name(
                 "SET %s TO FALSE: condition not in index — skipping", condition_name
             )
             return
-        parent_ref, parent_rr = _set_operand_ref(ctx, parent, materialised, span=span)
+        parent_ref, parent_rr = _set_operand_ref(scope, parent)
         if parent_ref.fl.type_descriptor.holds_characters:
             # WHEN SET TO FALSE IS not in scope — write SPACES (field-length fill)
             false_val: object = " " * max(parent_ref.fl.byte_length, 1)
@@ -2082,7 +1850,7 @@ def _set_condition_name(
 
     # First discrete value / range-low is what makes the condition true.
     cv = entry.values[0]
-    parent_ref, parent_rr = _set_operand_ref(ctx, parent, materialised, span=span)
+    parent_ref, parent_rr = _set_operand_ref(scope, parent)
 
     # For an ALPHANUMERIC (PIC X) parent, the 88 VALUE is a character literal —
     # write its characters verbatim. It must reach the alphanumeric encoder as a
@@ -2118,93 +1886,70 @@ def _set_condition_name(
 
 
 def _set_operand_ref(
-    ctx: EmitContext,
-    operand: SetOperand,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
+    scope: LoweringScope, operand: SetOperand
 ) -> tuple[ResolvedFieldRef, Register]:
     """The field a SET operand names, at the occurrence its subscripts select."""
-    return ctx.resolve_field_ref(
+    return scope.ctx.resolve_field_ref(
         operand.name,
-        materialised,
+        scope.materialised,
         qualifiers=operand.qualifiers,
         subscripts=tuple(expr_from_dict(s) for s in operand.subscripts),
-        span=span,
+        span=scope.span,
     )
 
 
-def _decode_set_operand(
-    ctx: EmitContext,
-    operand: SetOperand,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
-) -> Register:
+def _decode_set_operand(scope: LoweringScope, operand: SetOperand) -> Register:
     """The value of the data item a SET operand names."""
-    ref, region_reg = _set_operand_ref(ctx, operand, materialised, span=span)
-    return ctx.emit_decode_field(
-        region_reg, ref.fl, ref.offset_reg, extent=ref.extent, span=span
+    ref, region_reg = _set_operand_ref(scope, operand)
+    return scope.ctx.emit_decode_field(
+        region_reg, ref.fl, ref.offset_reg, extent=ref.extent, span=scope.span
     )
 
 
-def _set_switch(
-    ctx: EmitContext, stmt: SetStatement, mnemonic_name: str, value: SetOperand
-) -> None:
+def _set_switch(scope: LoweringScope, mnemonic_name: str, value: SetOperand) -> None:
     """SET mnemonic-name TO ON|OFF: the switch the mnemonic names takes that
     status for the rest of the run."""
+    ctx, span = scope.ctx, scope.span
     ctx.emit_inst(
         CallFunction(
             result_reg=ctx.fresh_reg(),
             func_name=FuncName("__cobol_set_switch"),
             args=(
-                ctx.const_to_reg(
-                    ctx.switches.environment_of(mnemonic_name), span=stmt.span
-                ),
-                ctx.const_to_reg(SwitchStatus(value.value).value, span=stmt.span),
+                ctx.const_to_reg(ctx.switches.environment_of(mnemonic_name), span=span),
+                ctx.const_to_reg(SwitchStatus(value.value).value, span=span),
             ),
         ),
-        span=stmt.span,
+        span=span,
     )
 
 
-def _set_to(
-    ctx: EmitContext,
-    stmt: SetStatement,
-    target: SetOperand,
-    value: SetOperand,
-    materialised: MaterialisedSectionedLayout,
-) -> None:
+def _set_to(scope: LoweringScope, target: SetOperand, value: SetOperand) -> None:
     """One target of SET ... TO, with the value its own TO phrase gives it."""
+    ctx = scope.ctx
     target_name = target.text
     if ctx.switches.has_mnemonic(target_name):
-        _set_switch(ctx, stmt, target_name, value)
+        _set_switch(scope, target_name, value)
         return
     if ctx._condition_index.has_condition(target_name):
-        _set_condition_name(ctx, target, value.text, materialised, span=stmt.span)
+        _set_condition_name(scope, target, value.text)
         return
-    if not ctx.has_field(target_name, materialised):
+    if not ctx.has_field(target_name, scope.materialised):
         logger.warning("SET target %s not found in layout", target_name)
         return
-    _set_data_item(ctx, stmt, target, value, materialised)
+    _set_data_item(scope, target, value)
 
 
-def _set_data_item(
-    ctx: EmitContext,
-    stmt: SetStatement,
-    target: SetOperand,
-    value: SetOperand,
-    materialised: MaterialisedSectionedLayout,
-) -> None:
-    target_ref, target_rr = _set_operand_ref(ctx, target, materialised, span=stmt.span)
+def _set_data_item(scope: LoweringScope, target: SetOperand, value: SetOperand) -> None:
+    ctx, materialised, span = scope.ctx, scope.materialised, scope.span
+    target_ref, target_rr = _set_operand_ref(scope, target)
     # SET A TO B is legal when B is a data item; the value is raw operand text
     # from the bridge and is never tested for being a name. Untested, it wrote
     # the two characters "B" — which encodes into a numeric field as 0, so the
     # symptom is a plausible zero, not a crash.
     value_str_reg = (
-        _decode_set_operand(ctx, value, materialised, span=stmt.span)
+        _decode_set_operand(scope, value)
         if ctx.has_field(value.text, materialised)
-        else ctx.const_to_reg(value.text, span=stmt.span)
+        else ctx.const_to_reg(value.text, span=span)
     )
     ctx.emit_encode_and_write(
         target_rr,
@@ -2212,7 +1957,7 @@ def _set_data_item(
         value_str_reg,
         target_ref.offset_reg,
         extent=target_ref.extent,
-        span=stmt.span,
+        span=span,
     )
 
 
@@ -2231,10 +1976,11 @@ def lower_set(
     if is_pointer_set(ctx, stmt, materialised):
         lower_pointer_set(ctx, stmt, materialised)
         return
+    scope = LoweringScope(ctx, materialised, stmt.span)
     span = stmt.span
     if stmt.set_type == "TO":
         for target, value in zip(stmt.targets, stmt.values, strict=True):
-            _set_to(ctx, stmt, target, value, materialised)
+            _set_to(scope, target, value)
     elif stmt.set_type == "BY":
         step_val = stmt.values[0].text if stmt.values else "1"
         op = "+" if stmt.by_type == "UP" else "-"
@@ -2242,9 +1988,7 @@ def lower_set(
             if not ctx.has_field(target.text, materialised):
                 logger.warning("SET target %s not found in layout", target.text)
                 continue
-            target_ref, target_rr = _set_operand_ref(
-                ctx, target, materialised, span=span
-            )
+            target_ref, target_rr = _set_operand_ref(scope, target)
             tgt_decoded = ctx.emit_decode_field(
                 target_rr,
                 target_ref.fl,
@@ -2254,9 +1998,7 @@ def lower_set(
             )
             # SET ... UP/DOWN BY <data-item> takes the same path as TO above.
             if ctx.has_field(str(step_val), materialised):
-                step_reg = _decode_set_operand(
-                    ctx, stmt.values[0], materialised, span=span
-                )
+                step_reg = _decode_set_operand(scope, stmt.values[0])
             else:
                 step_reg = ctx.const_to_reg(ctx.parse_literal(step_val), span=span)
             result_reg = ctx.fresh_reg()
@@ -2283,14 +2025,9 @@ def lower_set(
 _DISPLAYED_AS_ZONED = frozenset({CobolDataCategory.BINARY, CobolDataCategory.COMP3})
 
 
-def _lower_display_operand(
-    ctx: EmitContext,
-    operand: RefModOperand,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None = None,
-) -> Register:
+def _lower_display_operand(scope: LoweringScope, operand: RefModOperand) -> Register:
     """Lower one DISPLAY operand to a register holding its display string."""
+    ctx, materialised, span = scope.ctx, scope.materialised, scope.span
     if operand.names_data:
         ref, rr = ctx.resolve_field_ref(
             operand.name,
@@ -2302,7 +2039,7 @@ def _lower_display_operand(
         td = ref.fl.type_descriptor
         display_reg = (
             emit_display_image(
-                IrEmitter(ctx=ctx, span=span),
+                scope.emitter,
                 ctx.emit_decode_field(
                     rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
                 ),
@@ -2367,11 +2104,9 @@ def lower_display(
     The device then moves to the next line, unless WITH NO ADVANCING leaves it
     where the last operand ended.
     """
+    scope = LoweringScope(ctx, materialised, stmt.span)
     span = stmt.span
-    operand_regs = [
-        _lower_display_operand(ctx, operand, materialised, span=span)
-        for operand in stmt.operands
-    ]
+    operand_regs = [_lower_display_operand(scope, operand) for operand in stmt.operands]
     if not operand_regs:
         return
 
@@ -2437,15 +2172,10 @@ def lower_exit_program(
     lower_program_exit(ctx, materialised, span=stmt.span)
 
 
-def _lower_computed_goto(
-    ctx: EmitContext,
-    computed: ComputedGoto,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None = None,
-) -> None:
+def _lower_computed_goto(scope: LoweringScope, computed: ComputedGoto) -> None:
     """GO TO p1 ... pN DEPENDING ON idx — branch to the idx-th (1-based) target;
     out-of-range (idx <= 0 or idx > N) falls through to the next statement."""
+    ctx, materialised, span = scope.ctx, scope.materialised, scope.span
     index = computed.index
     ref, rr = ctx.resolve_field_ref(
         index.name,
@@ -2491,6 +2221,6 @@ def lower_goto(
     if isinstance(form, SimpleGoto):
         ctx.emit_inst(Branch(label=ctx.procedure_label(form.target)), span=span)
     elif isinstance(form, ComputedGoto):
-        _lower_computed_goto(ctx, form, materialised, span=span)
+        _lower_computed_goto(LoweringScope(ctx, materialised, span), form)
     # AlteredGoto: GO TO. with target supplied by ALTER — no-op, behavior
     # intentionally unchanged (not exercised by any test).

@@ -43,6 +43,7 @@ from interpreter.cobol.digit_image_ir import emit_field_digit_image
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.figurative_constants import repeat_to_width
 from interpreter.cobol.ir_emitter import IrEmitter
+from interpreter.cobol.lowering_scope import LoweringScope
 from interpreter.cobol.pointer_lowering import PointerLowering
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.cobol.switch_condition import SwitchCondition
@@ -1310,13 +1311,11 @@ def _lower_expr_node_body(
         from interpreter.cobol.lower_arithmetic import lower_function_in_expression
 
         result_reg = lower_function_in_expression(
-            ctx,
+            LoweringScope(ctx, materialised, span),
             FunctionCallOperand(
                 name=node.name, args=tuple(expr_to_dict(arg) for arg in node.args)
             ),
-            materialised,
             ArithmeticPrecision(dmax=dmax, floating=floating),
-            span=span,
         )
         return _float_operand(ctx, result_reg, floating, span=span)
     if isinstance(node, FigurativeNode):
