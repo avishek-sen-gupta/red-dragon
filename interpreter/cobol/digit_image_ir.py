@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
-from cobol_memory.field_extent import FieldExtent
 from interpreter.cobol.cobol_constants import BuiltinName, ByteConstants
-from interpreter.cobol.data_layout import FieldLayout
+from interpreter.cobol.field_resolution import ResolvedFieldRef
 from interpreter.cobol.ir_emitter import IrEmitter
 from interpreter.cobol.ir_encoders import (
     build_decode_alphanumeric_ir,
@@ -15,12 +14,9 @@ from interpreter.register import Register
 
 
 def emit_field_digit_image(
-    e: IrEmitter,
-    region_reg: Register,
-    fl: FieldLayout,
-    offset_reg: Register,
-    extent: FieldExtent,
+    e: IrEmitter, region_reg: Register, ref: ResolvedFieldRef
 ) -> Register:
+    fl, offset_reg, extent = ref.fl, ref.offset_reg, ref.extent
     td = fl.type_descriptor
     if td.category == CobolDataCategory.ZONED_DECIMAL and not td.signed:
         return _with_scaling_zeros(

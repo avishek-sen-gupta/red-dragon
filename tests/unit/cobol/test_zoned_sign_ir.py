@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.ir_emitter import IrEmitter
+from interpreter.cobol.sign_position import SignPosition
 from interpreter.cobol.zoned_sign_ir import emit_restore_sign, emit_strip_sign
 from interpreter.register import Register
 from interpreter.vm.vm_types import SymbolicValue
@@ -14,7 +15,7 @@ from tests.unit.cobol.emitted_ir import ParamValue, run_emitted
 def _strip(data: ParamValue, index: int, separate: bool) -> ParamValue:
     def emit(e: IrEmitter, registers: tuple[Register, ...]) -> Register:
         (stored,) = registers
-        return emit_strip_sign(e, stored, index, separate)
+        return emit_strip_sign(e, stored, SignPosition(index=index, separate=separate))
 
     return run_emitted(emit, (data,))
 
@@ -24,7 +25,9 @@ def _restore(
 ) -> ParamValue:
     def emit(e: IrEmitter, registers: tuple[Register, ...]) -> Register:
         digits_reg, original_reg = registers
-        return emit_restore_sign(e, digits_reg, original_reg, index, separate)
+        return emit_restore_sign(
+            e, digits_reg, original_reg, SignPosition(index=index, separate=separate)
+        )
 
     return run_emitted(emit, (digits, original))
 

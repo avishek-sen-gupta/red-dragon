@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 from cobol_asg.cobol_types import CobolDataCategory
-from cobol_memory.field_extent import FieldExtent
 from interpreter.cobol.cobol_constants import BuiltinName, NibblePosition
 from interpreter.cobol.data_layout import FieldLayout
+from interpreter.cobol.field_resolution import ResolvedFieldRef
 from interpreter.cobol.ir_emitter import IrEmitter
 from interpreter.cobol.ir_encoders import (
     build_decode_alphanumeric_ir,
     build_encode_alphanumeric_ir,
 )
+from interpreter.cobol.sign_position import SignPosition
 from interpreter.register import Register
 
 _DIGIT_ZONE = 0xF
@@ -18,27 +19,26 @@ _LOWEST_SIGN_ZONE = 0xA
 _HIGHEST_DIGIT = 9
 
 
-def sign_index(fl: FieldLayout) -> int:
-    return 0 if fl.type_descriptor.sign_leading else fl.byte_length - 1
+def sign_position(fl: FieldLayout) -> SignPosition:
+    td = fl.type_descriptor
+    return SignPosition(
+        index=0 if td.sign_leading else fl.byte_length - 1,
+        separate=td.sign_separate,
+    )
 
 
 def emit_inspected_characters(
-    e: IrEmitter,
-    region_reg: Register,
-    fl: FieldLayout,
-    offset_reg: Register,
-    extent: FieldExtent,
+    e: IrEmitter, region_reg: Register, ref: ResolvedFieldRef
 ) -> Register:
     ctx = e.ctx
+    fl = ref.fl
     td = fl.type_descriptor
     if not (td.category == CobolDataCategory.ZONED_DECIMAL and td.signed):
         return ctx.emit_decode_field_characters(
-            region_reg, fl, offset_reg, extent=extent, span=e.span
+            region_reg, fl, ref.offset_reg, extent=ref.extent, span=e.span
         )
-    stored = ctx.emit_load_field_bytes(
-        region_reg, fl, offset_reg, extent=extent, span=e.span
-    )
-    digits = emit_strip_sign(e, stored, sign_index(fl), td.sign_separate)
+    stored = ctx.emit_load_field_bytes(region_reg, ref, span=e.span)
+    digits = emit_strip_sign(e, stored, sign_position(fl))
     return ctx.inline_ir(
         build_decode_alphanumeric_ir(f"dec_inspected_{fl.name}"),
         {"%p_data": digits},
@@ -47,18 +47,19 @@ def emit_inspected_characters(
 
 
 def emit_write_inspected_characters(
-    e: IrEmitter,
-    region_reg: Register,
-    fl: FieldLayout,
-    value_str_reg: Register,
-    offset_reg: Register,
-    extent: FieldExtent,
+    e: IrEmitter, region_reg: Register, ref: ResolvedFieldRef, value_str_reg: Register
 ) -> None:
     ctx = e.ctx
+    fl = ref.fl
     td = fl.type_descriptor
     if not (td.category == CobolDataCategory.ZONED_DECIMAL and td.signed):
         ctx.emit_encode_and_write(
-            region_reg, fl, value_str_reg, offset_reg, extent=extent, span=e.span
+            region_reg,
+            fl,
+            value_str_reg,
+            ref.offset_reg,
+            extent=ref.extent,
+            span=e.span,
         )
         return
     digits = ctx.inline_ir(
@@ -66,19 +67,14 @@ def emit_write_inspected_characters(
         {"%p_value": value_str_reg},
         span=e.span,
     )
-    original = ctx.emit_load_field_bytes(
-        region_reg, fl, offset_reg, extent=extent, span=e.span
-    )
-    signed = emit_restore_sign(e, digits, original, sign_index(fl), td.sign_separate)
-    ctx.emit_write_field_bytes(
-        region_reg, fl, signed, offset_reg, extent=extent, span=e.span
-    )
+    original = ctx.emit_load_field_bytes(region_reg, ref, span=e.span)
+    signed = emit_restore_sign(e, digits, original, sign_position(fl))
+    ctx.emit_write_field_bytes(region_reg, ref, signed, span=e.span)
 
 
-def emit_strip_sign(
-    e: IrEmitter, stored: Register, index: int, separate: bool
-) -> Register:
-    if separate:
+def emit_strip_sign(e: IrEmitter, stored: Register, sign: SignPosition) -> Register:
+    index = sign.index
+    if sign.separate:
         return e.call(
             BuiltinName.LIST_CONCAT,
             e.call(BuiltinName.LIST_SLICE, stored, e.int_(0), e.int_(index)),
@@ -100,10 +96,11 @@ def emit_strip_sign(
 
 
 def emit_restore_sign(
-    e: IrEmitter, digits: Register, original: Register, index: int, separate: bool
+    e: IrEmitter, digits: Register, original: Register, sign: SignPosition
 ) -> Register:
+    index = sign.index
     sign_byte = e.call(BuiltinName.LIST_GET, original, e.int_(index))
-    if separate:
+    if sign.separate:
         return e.call(
             BuiltinName.LIST_CONCAT,
             e.call(

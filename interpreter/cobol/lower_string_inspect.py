@@ -237,9 +237,7 @@ def _sending_characters(
         subscripts=sending.value.subscripts,
         span=span,
     )
-    stored_reg = ctx.emit_stored_characters(
-        rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
-    )
+    stored_reg = ctx.emit_stored_characters(rr, ref, span=span)
     window = _ref_mod_window(ctx, sending.value, materialised, span=span)
     return (
         _call(ctx, BuiltinName.STRING_SLICE, (stored_reg, *window), span=span)
@@ -550,11 +548,7 @@ def lower_inspect(
         span=span,
     )
     image_reg = emit_inspected_characters(
-        IrEmitter(ctx=ctx, span=span),
-        source_rr,
-        source_ref.fl,
-        source_ref.offset_reg,
-        source_ref.extent,
+        IrEmitter(ctx=ctx, span=span), source_rr, source_ref
     )
     window = _inspected_window(ctx, stmt, materialised)
     inspected_reg = (
@@ -570,7 +564,7 @@ def lower_inspect(
     emit_write_inspected_characters(
         IrEmitter(ctx=ctx, span=span),
         source_rr,
-        source_ref.fl,
+        source_ref,
         (
             _call(
                 ctx,
@@ -581,8 +575,6 @@ def lower_inspect(
             if window
             else rewritten_reg
         ),
-        source_ref.offset_reg,
-        source_ref.extent,
     )
 
 
