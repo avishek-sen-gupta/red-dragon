@@ -9,6 +9,9 @@ import pytest
 
 from interpreter.cobol.ebcdic_table import EbcdicTable
 from tests.nist.conftest import assert_nist_pass
+from tests.nist.nist_failure import NistFailure
+from tests.nist.nist_outcome import NistOutcome
+from tests.nist.nist_skip import NistSkip
 
 
 def _print_file(path: Path, lines: Sequence[str]) -> Path:
@@ -31,8 +34,16 @@ def test_pass_check_reads_the_ebcdic_summary(tmp_path: Path) -> None:
     )
 
     assert_nist_pass(clean, "NC999A")
-    with pytest.raises(AssertionError, match="NC999A: CCVS summary reports 3 failed"):
+    with pytest.raises(
+        NistFailure, match="NC999A: CCVS summary reports 3 failed"
+    ) as summary:
         assert_nist_pass(failing, "NC999A")
+    with pytest.raises(NistSkip, match="NC999A: PRINT-FILE not written") as absent:
+        assert_nist_pass(tmp_path / "absent.dat", "NC999A")
+    assert (summary.value.outcome, absent.value.outcome) == (
+        NistOutcome.SUMMARY_FAILURES,
+        NistOutcome.NO_PRINT_FILE,
+    )
 
 
 def test_visual_inspection_summary_passes_only_when_complete_and_clean(
@@ -52,16 +63,33 @@ def test_visual_inspection_summary_passes_only_when_complete_and_clean(
     )
 
     assert_nist_pass(clean, "NC999M")
-    with pytest.raises(AssertionError, match="NC999M: inline FAIL\\* records"):
+    with pytest.raises(NistFailure, match="NC999M: inline FAIL\\* records") as inline:
         assert_nist_pass(failing, "NC999M")
-    with pytest.raises(AssertionError, match="NC999M: did not run to completion"):
+    with pytest.raises(
+        NistFailure, match="NC999M: did not run to completion"
+    ) as halted:
         assert_nist_pass(
             _print_file(
                 tmp_path / "halted.dat", ["15 TESTS REQUIRE VISUAL INSPECTION"]
             ),
             "NC999M",
         )
-    with pytest.raises(AssertionError, match="NC999A: completion banner present"):
+    with pytest.raises(
+        NistFailure, match="NC999A: completion banner present"
+    ) as silent:
         assert_nist_pass(
             _print_file(tmp_path / "silent.dat", ["END OF TEST-  NC999A"]), "NC999A"
         )
+    assert [(e.value.outcome, e.value.detail) for e in (inline, halted, silent)] == [
+        (NistOutcome.INLINE_FAILURES, "FAIL*  AREA-A-TEST"),
+        (
+            NistOutcome.INCOMPLETE,
+            "NC999M: did not run to completion — 'END OF TEST' banner absent "
+            "(1 record(s) written). Program halted before its summary.",
+        ),
+        (
+            NistOutcome.NO_SUMMARY,
+            "NC999A: completion banner present but no 'TEST(S) FAILED' summary line "
+            "found — cannot confirm a clean run.",
+        ),
+    ]

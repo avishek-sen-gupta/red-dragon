@@ -1,9 +1,9 @@
-"""NIST-85 test harness shared fixtures."""
+"""NIST-85 harness: shared fixtures, and the typed outcome each test reports."""
 
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
+from collections.abc import Generator, Sequence
 from functools import cache
 from pathlib import Path
 
@@ -17,8 +17,17 @@ from interpreter.frontend import make_cobol_parser
 from interpreter.project.cobol_compile import compile_cobol
 from interpreter.project.entry_point import EntryPoint
 from interpreter.project.source_file import SourceFile
-from interpreter.run import initial_vm_state, run_linked
+from interpreter.run import (
+    BudgetExhausted,
+    RunOutcome,
+    initial_vm_state,
+    run_linked_resumable,
+)
 from interpreter.vm.builtins import core_builtins
+from tests.nist.nist_classify import nist_result
+from tests.nist.nist_failure import NistFailure
+from tests.nist.nist_outcome import NistOutcome
+from tests.nist.nist_skip import NistSkip
 
 NIST_DIR = (
     Path(__file__).resolve().parents[2]
@@ -159,8 +168,9 @@ def _copied_members(src: str) -> list[str]:
     ]
 
 
-def _run_unit(prog: str, tmp_path: Path, max_steps: int) -> Path:
-    """Compile a program with its SUBRTN subprograms, run it, return its print path."""
+def _run_unit(prog: str, tmp_path: Path, max_steps: int) -> tuple[Path, RunOutcome]:
+    """Compile a program with its SUBRTN subprograms, run it, return its print path
+    and how the run ended."""
     src = _source(prog)
     callees = [_source(callee) for callee in subroutines(prog)]
     units = [src, *callees]
@@ -179,7 +189,7 @@ def _run_unit(prog: str, tmp_path: Path, max_steps: int) -> Path:
         copybook_dirs=[NIST_DIR],
     )
     label = linked.entry_func_label
-    run_linked(
+    outcome = run_linked_resumable(
         linked,
         entry_point=EntryPoint.function(lambda ref: ref.label == label),
         max_steps=max_steps,
@@ -188,7 +198,7 @@ def _run_unit(prog: str, tmp_path: Path, max_steps: int) -> Path:
         initial_vm=initial_vm_state(io_provider=provider),
         permit_unresolved_call_targets=False,
     )
-    return print_path
+    return print_path, outcome
 
 
 def run_nist(prog: str, tmp_path: Path) -> None:
@@ -198,10 +208,20 @@ def run_nist(prog: str, tmp_path: Path) -> None:
     pass on are there; their reports are discarded before this program runs.
     """
     if not (NIST_DIR / f"{prog}.CBL").exists():
-        pytest.skip(f"NIST source not found: {prog}")
+        raise NistSkip(NistOutcome.SOURCE_MISSING, f"NIST source not found: {prog}")
     for unit in preceding_run_units(prog):
-        _run_unit(unit, tmp_path, _MAX_STEPS).unlink(missing_ok=True)
-    assert_nist_pass(_run_unit(prog, tmp_path, _MAX_STEPS), prog)
+        _run_unit(unit, tmp_path, _MAX_STEPS)[0].unlink(missing_ok=True)
+    assert_nist_pass(run_within_budget(prog, tmp_path, _MAX_STEPS), prog)
+
+
+def run_within_budget(prog: str, tmp_path: Path, max_steps: int) -> Path:
+    print_path, outcome = _run_unit(prog, tmp_path, max_steps)
+    if isinstance(outcome, BudgetExhausted):
+        message = (
+            f"{prog}: step budget of {max_steps} exhausted before the program ended."
+        )
+        raise NistFailure(NistOutcome.STEP_BUDGET_EXHAUSTED, message, message)
+    return print_path
 
 
 def run_display_report(
@@ -259,10 +279,12 @@ def _summary_failed_count(text: str, prog: str) -> int:
     counts = _TESTS_FAILED_RE.findall(text)
     if counts == [] and _VISUAL_INSPECTION_RE.search(text):
         return 0
-    assert counts != [], (
-        f"{prog}: completion banner present but no 'TEST(S) FAILED' summary line "
-        f"found — cannot confirm a clean run."
-    )
+    if counts == []:
+        message = (
+            f"{prog}: completion banner present but no 'TEST(S) FAILED' summary line "
+            f"found — cannot confirm a clean run."
+        )
+        raise NistFailure(NistOutcome.NO_SUMMARY, message, message)
     return 0 if counts[0].upper() == "NO" else int(counts[0])
 
 
@@ -282,26 +304,42 @@ def assert_nist_pass(print_path: Path, prog: str) -> None:
     output must complete and report a clean summary, or this fails.
     """
     if not print_path.exists():
-        pytest.skip(f"{prog}: PRINT-FILE not written — program did not produce output")
+        raise NistSkip(
+            NistOutcome.NO_PRINT_FILE,
+            f"{prog}: PRINT-FILE not written — program did not produce output",
+        )
 
     records = _print_records(print_path.read_bytes())
     text = "\n".join(records)
+    _assert_complete(text, len(records), prog)
+    _assert_summary_clean(text, prog)
+    _assert_no_inline_failures(records, prog)
 
-    # (1) Completion: the CCVS end-of-test banner must be present.
-    assert _END_OF_TEST in text, (
-        f"{prog}: did not run to completion — '{_END_OF_TEST}' banner absent "
-        f"({len(records)} record(s) written). Program halted before its summary."
-    )
 
-    # (2) Summary failure count must be zero.
+def _assert_complete(text: str, record_count: int, prog: str) -> None:
+    if _END_OF_TEST not in text:
+        message = (
+            f"{prog}: did not run to completion — '{_END_OF_TEST}' banner absent "
+            f"({record_count} record(s) written). Program halted before its summary."
+        )
+        raise NistFailure(NistOutcome.INCOMPLETE, message, message)
+
+
+def _assert_summary_clean(text: str, prog: str) -> None:
     n_failed = _summary_failed_count(text, prog)
-    assert n_failed == 0, f"{prog}: CCVS summary reports {n_failed} failed test(s)."
+    if n_failed != 0:
+        message = f"{prog}: CCVS summary reports {n_failed} failed test(s)."
+        raise NistFailure(NistOutcome.SUMMARY_FAILURES, message, message)
 
-    # (3) No inline failure markers in the detail lines.
+
+def _assert_no_inline_failures(records: Sequence[str], prog: str) -> None:
     inline_fails = [r for r in records if "FAIL*" in r]
-    assert not inline_fails, f"{prog}: inline FAIL* records:\n" + "\n".join(
-        inline_fails
-    )
+    if inline_fails != []:
+        raise NistFailure(
+            NistOutcome.INLINE_FAILURES,
+            f"{prog}: inline FAIL* records:\n" + "\n".join(inline_fails),
+            inline_fails[0].strip(),
+        )
 
 
 _FLAGS_EXPECTED_RE = re.compile(r"TOTAL NUMBER OF FLAGS EXPECTED = (\d+)\.")
@@ -325,16 +363,38 @@ def skip_flagger_program(prog: str, header: str, flags_expected: int) -> None:
     """
     src_path = NIST_DIR / f"{prog}.CBL"
     if not src_path.exists():
-        pytest.skip(f"NIST source not found: {src_path}")
+        raise NistSkip(NistOutcome.SOURCE_MISSING, f"NIST source not found: {src_path}")
     comments = _comment_lines(src_path.read_text())
     totals = [int(m[1]) for c in comments if (m := _FLAGS_EXPECTED_RE.search(c))]
     assert (header in comments, totals) == (
         True,
         [flags_expected],
     ), f"{prog}: not the flagger program it is classified as"
-    pytest.skip(
+    raise NistSkip(
+        NistOutcome.FIPS_FLAGGER,
         f"{prog}: FIPS flagger test (program header: '{header}'; "
         f"'TOTAL NUMBER OF FLAGS EXPECTED = {flags_expected}.') -- its verdict is "
         f"compile-time flagging messages, not run-time output; red-dragon has no "
-        f"FIPS flagger"
+        f"FIPS flagger",
     )
+
+
+_NIST_RESULT_PROPERTY = "nist_result"
+
+
+def _recorded(report: pytest.TestReport) -> bool:
+    return report.when == "call" or (report.when == "setup" and not report.passed)
+
+
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_makereport(
+    item: pytest.Function, call: pytest.CallInfo[None]
+) -> Generator[None, pytest.TestReport, pytest.TestReport]:
+    report = yield
+    if _recorded(report):
+        result = nist_result(str(item.callspec.params["prog"]), call)
+        report.user_properties = [
+            *report.user_properties,
+            (_NIST_RESULT_PROPERTY, result.model_dump_json()),
+        ]
+    return report

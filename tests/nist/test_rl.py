@@ -4,8 +4,9 @@ Run: uv run python -m pytest tests/nist/test_rl.py -m nist -v
 
 A program passes only when it runs to its END OF TEST banner and its CCVS summary
 reports zero failed tests (tests/nist/conftest.py). A SUBPRG member runs after the run
-units before it in its CCVS job, which create the files it reads. Excluded from the
-default test run; run on demand with `-m nist`.
+units before it in its CCVS job, which create the files it reads. The FIPS flagger
+programs (RL301M, RL302M, RL401M) are classified, not run: their verdict is compile-time
+flagging messages. Excluded from the default test run; run on demand with `-m nist`.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ import pytest
 
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
-from tests.nist.conftest import run_nist
+from tests.nist.conftest import run_nist, skip_flagger_program
 
 pytestmark = pytest.mark.nist
 
@@ -60,10 +61,19 @@ pytestmark = pytest.mark.nist
         "RL211A",
         "RL212A",
         "RL213A",
-        "RL301M",
-        "RL302M",
-        "RL401M",
     ],
 )
 def test_rl_program(prog: str, tmp_path: Path) -> None:
     run_nist(prog, tmp_path)
+
+
+@pytest.mark.parametrize(
+    "prog, header, flags_expected",
+    [
+        ("RL301M", "The following program tests the flagging of intermediate", 6),
+        ("RL302M", "THE FOLLOWING PROGRAM TESTS THE FLAGGING OF", 4),
+        ("RL401M", "THE FOLLOWING PROGRAM TESTS THE FLAGGING OF", 9),
+    ],
+)
+def test_rl_flagger_program(prog: str, header: str, flags_expected: int) -> None:
+    skip_flagger_program(prog, header, flags_expected)
