@@ -19,7 +19,6 @@ from cobol_asg.nonnumeric_literal import literal_characters
 from cobol_asg.operand_kind import OperandKind
 from cobol_asg.pic_parser import parse_pic
 from cobol_asg.ref_mod import RefModOperand
-from cobol_asg.source_span import SourceSpan
 from cobol_memory.field_extent import FieldExtent, Precision
 from cobol_memory.region_id import RegionId
 from interpreter.cobol.cobol_constants import BuiltinName
@@ -32,6 +31,7 @@ from interpreter.cobol.lower_program_exit import (
     emit_return_code_store,
     emit_return_code_value,
 )
+from interpreter.cobol.lowering_scope import LoweringScope
 from interpreter.cobol.pointer_lowering import PointerLowering
 from interpreter.cobol.program_figuratives import ProgramFiguratives
 from interpreter.cobol.program_object import ENTRY_PREFIX, entry_var
@@ -65,13 +65,7 @@ _FULLWORD = parse_pic("S9(9)", usage="COMP-5")
 _COMP2 = parse_pic("", usage="COMP-2")
 
 
-def _emit_callee_name(
-    ctx: EmitContext,
-    operand: RefModOperand,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
-) -> Register:
+def _emit_callee_name(scope: LoweringScope, operand: RefModOperand) -> Register:
     """Emit IR that produces the callee's name from a data item, at run time.
 
     ``CALL identifier`` names the program by the *contents* of a data item, so
@@ -81,6 +75,7 @@ def _emit_callee_name(
     that already handles them — ``CALL WS-PROG(1:8)`` is the common idiom, since
     a program name is 8 characters and the holding field is usually wider.
     """
+    ctx, materialised, span = scope.ctx, scope.materialised, scope.span
     if not ctx.has_field(operand.name, materialised):
         raise ValueError(
             f"CALL {operand.name}: the callee is a data name that resolves to no "
@@ -138,36 +133,24 @@ def _emit_callee_name(
     return sliced_reg
 
 
-def _emit_entry_var_name(
-    ctx: EmitContext,
-    operand: RefModOperand,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
-) -> Register:
+def _emit_entry_var_name(scope: LoweringScope, operand: RefModOperand) -> Register:
     """The entry variable a ``CALL identifier`` names, computed in IR: the field's
     text trimmed of spaces, upper-cased (COBOL program names ignore case) and
     prefixed, so the VM looks it up as it is."""
-    name_reg = _emit_callee_name(ctx, operand, materialised, span=span)
-    trimmed = _emit_builtin(ctx, BuiltinName.TRIM, (name_reg,), span=span)
-    upper = _emit_builtin(ctx, BuiltinName.UPPER_CASE, (trimmed,), span=span)
-    prefix = ctx.const_to_reg(ENTRY_PREFIX, span=span)
-    return _emit_builtin(
-        ctx, BuiltinName.STRING_CONCAT_PAIR, (prefix, upper), span=span
-    )
+    name_reg = _emit_callee_name(scope, operand)
+    trimmed = _emit_builtin(scope, BuiltinName.TRIM, (name_reg,))
+    upper = _emit_builtin(scope, BuiltinName.UPPER_CASE, (trimmed,))
+    prefix = scope.ctx.const_to_reg(ENTRY_PREFIX, span=scope.span)
+    return _emit_builtin(scope, BuiltinName.STRING_CONCAT_PAIR, (prefix, upper))
 
 
 def _emit_builtin(
-    ctx: EmitContext,
-    name: str,
-    args: tuple[Register, ...],
-    *,
-    span: SourceSpan | None,
+    scope: LoweringScope, name: str, args: tuple[Register, ...]
 ) -> Register:
-    result = ctx.fresh_reg()
-    ctx.emit_inst(
+    result = scope.ctx.fresh_reg()
+    scope.ctx.emit_inst(
         CallFunction(result_reg=result, func_name=FuncName(name), args=args),
-        span=span,
+        span=scope.span,
     )
     return result
 
@@ -185,18 +168,19 @@ def lower_call(
     copied back; BY CONTENT, BY VALUE and a literal pass a fresh copy; OMITTED
     passes a marker. The callee binds each LINKAGE 01 to its argument.
     """
-    args_reg = _argument_array(ctx, stmt.using, materialised, span=stmt.span)
+    scope = LoweringScope(ctx, materialised, stmt.span)
+    args_reg = _argument_array(scope, stmt.using)
     location = (
-        _emit_entry_var_name(ctx, stmt.target.identifier, materialised, span=stmt.span)
+        _emit_entry_var_name(scope, stmt.target.identifier)
         if stmt.target.identifier is not None
         else entry_var(stmt.target.literal)
     )
 
     if stmt.on_exception:
-        _lower_guarded_call(ctx, stmt, location, args_reg, materialised)
+        _lower_guarded_call(scope, stmt, location, args_reg)
     else:
-        _emit_program_call(ctx, stmt, location, args_reg, materialised)
-        _lower_statements(ctx, stmt.not_on_exception, materialised)
+        _emit_program_call(scope, stmt, location, args_reg)
+        _lower_statements(scope, stmt.not_on_exception)
 
     logger.info(
         "CALL %s with %d params (CallWithMemory)",
@@ -206,65 +190,58 @@ def lower_call(
 
 
 def _lower_guarded_call(
-    ctx: EmitContext,
+    scope: LoweringScope,
     stmt: CallStatement,
     location: VarName | Register,
     args_reg: Register,
-    materialised: MaterialisedSectionedLayout,
 ) -> None:
+    ctx, span = scope.ctx, scope.span
     call_label, exception_label, end_label = (
         ctx.fresh_label(name)
         for name in ("call_available", "call_exception", "call_end")
     )
-    _emit_presence_branch(ctx, stmt, location, (call_label, exception_label))
-    ctx.emit_inst(Label_(label=exception_label), span=stmt.span)
-    _lower_statements(ctx, stmt.on_exception, materialised)
-    ctx.emit_inst(Branch(label=end_label), span=stmt.span)
-    ctx.emit_inst(Label_(label=call_label), span=stmt.span)
-    _emit_program_call(ctx, stmt, location, args_reg, materialised)
-    _lower_statements(ctx, stmt.not_on_exception, materialised)
-    ctx.emit_inst(Branch(label=end_label), span=stmt.span)
-    ctx.emit_inst(Label_(label=end_label), span=stmt.span)
+    _emit_presence_branch(scope, location, (call_label, exception_label))
+    ctx.emit_inst(Label_(label=exception_label), span=span)
+    _lower_statements(scope, stmt.on_exception)
+    ctx.emit_inst(Branch(label=end_label), span=span)
+    ctx.emit_inst(Label_(label=call_label), span=span)
+    _emit_program_call(scope, stmt, location, args_reg)
+    _lower_statements(scope, stmt.not_on_exception)
+    ctx.emit_inst(Branch(label=end_label), span=span)
+    ctx.emit_inst(Label_(label=end_label), span=span)
 
 
 def _emit_presence_branch(
-    ctx: EmitContext,
-    stmt: CallStatement,
+    scope: LoweringScope,
     location: VarName | Register,
     targets: tuple[CodeLabel, CodeLabel],
 ) -> None:
-    span = stmt.span
     name_reg = (
         location
         if isinstance(location, Register)
-        else ctx.const_to_reg(str(location), span=span)
+        else scope.ctx.const_to_reg(str(location), span=scope.span)
     )
-    present_reg = _emit_builtin(
-        ctx, BuiltinName.PROGRAM_PRESENT, (name_reg,), span=span
-    )
-    ctx.emit_inst(
+    present_reg = _emit_builtin(scope, BuiltinName.PROGRAM_PRESENT, (name_reg,))
+    scope.ctx.emit_inst(
         BranchIf(cond_reg=present_reg, branch_targets=targets),
-        span=span,
+        span=scope.span,
     )
 
 
 def _lower_statements(
-    ctx: EmitContext,
-    statements: Sequence[CobolStatementType],
-    materialised: MaterialisedSectionedLayout,
+    scope: LoweringScope, statements: Sequence[CobolStatementType]
 ) -> None:
     for statement in statements:
-        ctx.lower_statement(statement, materialised)
+        scope.ctx.lower_statement(statement, scope.materialised)
 
 
 def _emit_program_call(
-    ctx: EmitContext,
+    scope: LoweringScope,
     stmt: CallStatement,
     location: VarName | Register,
     args_reg: Register,
-    materialised: MaterialisedSectionedLayout,
 ) -> None:
-    span = stmt.span
+    ctx, materialised, span = scope.ctx, scope.materialised, scope.span
     # The callee returns its RETURN-CODE in result_reg, and the copy-up below
     # writes it into the caller's. Seeding that same register with the caller's
     # OWN value first is what makes a callee that returns nothing harmless: a
@@ -297,13 +274,11 @@ def _emit_program_call(
         StoreVar(name=VarName("__ws_region"), value_reg=caller_ws_reg), span=span
     )
 
-    _store_giving(ctx, stmt, materialised)
+    _store_giving(scope, stmt.giving)
 
 
-def _store_giving(
-    ctx: EmitContext, stmt: CallStatement, materialised: MaterialisedSectionedLayout
-) -> None:
-    giving, span = stmt.giving, stmt.span
+def _store_giving(scope: LoweringScope, giving: RefModOperand) -> None:
+    ctx, materialised, span = scope.ctx, scope.materialised, scope.span
     if giving.name and ctx.has_field(giving.name, materialised):
         giving_ref, giving_rr = ctx.resolve_field_ref(
             giving.name,
@@ -325,62 +300,45 @@ def _store_giving(
         )
 
 
-def _argument_array(
-    ctx: EmitContext,
-    using: Sequence[CallUsingParam],
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
-) -> Register:
+def _argument_array(scope: LoweringScope, using: Sequence[CallUsingParam]) -> Register:
     """One element per USING argument, by position: a region, an offset, and
     whether it was OMITTED."""
+    ctx, span = scope.ctx, scope.span
     args = ctx.fresh_reg()
     ctx.emit_inst(
         NewArray(result_reg=args, size_reg=ctx.const_to_reg(len(using), span=span)),
         span=span,
     )
-    _store_field(ctx, args, "count", ctx.const_to_reg(len(using), span=span), span=span)
+    _store_field(scope, args, "count", ctx.const_to_reg(len(using), span=span))
     for position, param in enumerate(using):
         ctx.emit_inst(
             StoreIndex(
                 arr_reg=args,
                 index_reg=ctx.const_to_reg(position, span=span),
-                value_reg=_argument(ctx, param, materialised, span=span),
+                value_reg=_argument(scope, param),
             ),
             span=span,
         )
     return args
 
 
-def _argument(
-    ctx: EmitContext,
-    param: CallUsingParam,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
-) -> Register:
+def _argument(scope: LoweringScope, param: CallUsingParam) -> Register:
+    ctx, span = scope.ctx, scope.span
     element = ctx.fresh_reg()
     ctx.emit_inst(NewObject(result_reg=element), span=span)
     omitted = param.omitted
-    _store_field(
-        ctx, element, "omitted", ctx.const_to_reg(omitted, span=span), span=span
-    )
+    _store_field(scope, element, "omitted", ctx.const_to_reg(omitted, span=span))
     if omitted:
         return element
-    region, offset = _address(ctx, param, materialised, span=span)
-    _store_field(ctx, element, "region", region, span=span)
-    _store_field(ctx, element, "offset", offset, span=span)
+    region, offset = _address(scope, param)
+    _store_field(scope, element, "region", region)
+    _store_field(scope, element, "offset", offset)
     return element
 
 
-def _address(
-    ctx: EmitContext,
-    param: CallUsingParam,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
-) -> tuple[Register, Register]:
+def _address(scope: LoweringScope, param: CallUsingParam) -> tuple[Register, Register]:
     """BY REFERENCE: the argument's own bytes. Anything else: a fresh copy."""
+    ctx, materialised, span = scope.ctx, scope.materialised, scope.span
     if param.is_literal or param.address_of:
         return (
             PointerLowering(ctx, materialised, span).address_argument(
@@ -391,20 +349,21 @@ def _address(
                 ),
             )
             if param.address_of
-            else _literal_copy(ctx, param, span=span)
+            else _literal_copy(scope, param)
         )
     ref, region_reg = ctx.resolve_field_ref(
         param.name, materialised, param.qualifiers, param.subscripts, span=span
     )
     if param.param_type == "REFERENCE":
         return region_reg, ref.offset_reg
-    return _content_copy(ctx, ref, region_reg, param.name, span=span)
+    return _content_copy(scope, ref, region_reg, param.name)
 
 
 def _literal_copy(
-    ctx: EmitContext, param: CallUsingParam, *, span: SourceSpan | None
+    scope: LoweringScope, param: CallUsingParam
 ) -> tuple[Register, Register]:
     """A literal argument in the representation IBM defines for it, in a fresh copy."""
+    ctx, span = scope.ctx, scope.span
     layout = _layout(_literal_type(param, ctx.figuratives))
     copy = ctx.fresh_reg()
     ctx.emit_inst(
@@ -458,13 +417,12 @@ def _layout(type_descriptor: CobolTypeDescriptor) -> FieldLayout:
 
 
 def _content_copy(
-    ctx: EmitContext,
+    scope: LoweringScope,
     ref: ResolvedFieldRef,
     region_reg: Register,
     name: str,
-    *,
-    span: SourceSpan | None,
 ) -> tuple[Register, Register]:
+    ctx, span = scope.ctx, scope.span
     length = ref.fl.byte_length
     copy = ctx.fresh_reg()
     ctx.emit_inst(
@@ -497,16 +455,11 @@ def _copy_extent(length: int, name: str) -> FieldExtent:
 
 
 def _store_field(
-    ctx: EmitContext,
-    obj: Register,
-    name: str,
-    value: Register,
-    *,
-    span: SourceSpan | None,
+    scope: LoweringScope, obj: Register, name: str, value: Register
 ) -> None:
-    ctx.emit_inst(
+    scope.ctx.emit_inst(
         StoreField(obj_reg=obj, field_name=FieldName(name), value_reg=value),
-        span=span,
+        span=scope.span,
     )
 
 
