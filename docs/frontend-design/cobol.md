@@ -82,7 +82,7 @@ The DATA DIVISION is lowered to byte-addressed memory regions:
 
 ### Data-name qualification
 
-A reference `N OF Q1 OF Q2 ...` (or `IN`) is resolved by `DataLayout.qualified_matches`: every elementary or group item named N whose enclosing groups, read outward, contain Q1, Q2, ... in that order (intermediate levels may be skipped). One survivor is the item; more than one raises `CobolAmbiguousReferenceError`; none falls through to the next DATA DIVISION section. A subscripted reference strides by, and is bounded by, the OCCURS tables enclosing that one match (`DataItemMatch.tables`), never another item of the same name.
+A reference `N OF Q1 OF Q2 ...` (or `IN`) is resolved by `DataLayout.qualified_matches`: every elementary or group item named N whose enclosing groups, read outward, contain Q1, Q2, ... in that order (intermediate levels may be skipped). One survivor is the item; more than one raises `CobolAmbiguousReferenceError`; none falls through to the next DATA DIVISION section, and a name no section declares is an `UndeclaredDataNameError` naming the item and the line of the statement that used it. A subscripted reference strides by, and is bounded by, the OCCURS tables enclosing that one match (`DataItemMatch.tables`), never another item of the same name.
 
 `LENGTH OF X OF G` (in MOVE, arithmetic expressions and reference-modification bounds) measures the item its qualifiers select: the bridge's `length_of` node carries the qualifiers (`LengthOfNode`, `RefModLengthOf`, `RefModOperand.length_of`).
 

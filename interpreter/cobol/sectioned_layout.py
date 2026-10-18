@@ -21,6 +21,7 @@ from interpreter.cobol.data_layout import (
 )
 from interpreter.cobol.linkage_binding import LinkageBinding
 from interpreter.cobol.linkage_record import LinkageRecord
+from interpreter.cobol.undeclared_data_name import UndeclaredDataName
 from interpreter.register import NO_REGISTER, Register
 
 logger = logging.getLogger(__name__)
@@ -105,7 +106,7 @@ class MaterialisedSectionedLayout:
             )
         )
         if not found:
-            raise KeyError(f"Field {name!r} not found in any DATA DIVISION section")
+            raise UndeclaredDataName(name)
         match, reg, region = found[0]
         if region is RegionId.LOCAL_STORAGE and self.working_storage[
             0

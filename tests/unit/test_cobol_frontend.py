@@ -2748,6 +2748,9 @@ class TestCallAlterEntryCancelLowering:
         """WRITE should emit CALL_FUNCTION __cobol_write_record."""
         fields = [
             CobolField(name="WS-A", level=77, pic="9(1)", usage="DISPLAY", offset=0),
+            CobolField(
+                name="CUST-REC", level=1, pic="X(10)", usage="DISPLAY", offset=1
+            ),
         ]
         stmts = [WriteStatement(record_name="CUST-REC")]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
@@ -2807,6 +2810,9 @@ class TestCallAlterEntryCancelLowering:
         """REWRITE should emit CALL_FUNCTION __cobol_rewrite_record."""
         fields = [
             CobolField(name="WS-A", level=77, pic="9(1)", usage="DISPLAY", offset=0),
+            CobolField(
+                name="CUST-REC", level=1, pic="X(10)", usage="DISPLAY", offset=1
+            ),
         ]
         stmts = [RewriteStatement(record_name="CUST-REC")]
         instructions = self._lower_with_field_and_stmts(fields, stmts)

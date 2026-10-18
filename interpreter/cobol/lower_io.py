@@ -984,13 +984,8 @@ def _write_source_reg(
     LATIN1 identity so binary subfields (COMP-3/COMP) survive unchanged
     (red-dragon-zwzg). `WRITE rec FROM fld` is COBOL `MOVE fld TO rec; WRITE rec`:
     emit the MOVE into the record region first, then read the region raw.
-
-    Only when `record_name` is not a known FD record do we fall back to the bare
-    name as a string constant (defensive parity with the prior behaviour for
-    feeders that never register the record).
+    The MOVE takes the FROM operand by the kind the bridge states.
     """
-    if not ctx.has_field(record_name, materialised):
-        return ctx.const_to_reg(from_field.name or record_name, span=span)
     if from_field.name:
         from cobol_asg.cobol_statements import MoveStatement
 
