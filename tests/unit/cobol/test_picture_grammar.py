@@ -16,6 +16,7 @@ import pytest
 from cobol_asg import picture
 from cobol_asg.cobol_types import CobolDataCategory
 from cobol_asg.edit_picture import UnsupportedEditPictureError
+from cobol_asg.item_clauses import ItemClauses
 from cobol_asg.pic_parser import parse_pic
 from interpreter.cobol.features import CobolFeature
 from tests.covers import FeatureStatus, covers
@@ -125,8 +126,13 @@ class TestTableTwelveSizes:
         # associated SIGN clause specifies the SEPARATE CHARACTER phrase"
         # (Table 12, p. 210).
         assert parse_pic("S9(5)").char_positions == 5
-        assert parse_pic("S9(5)", sign_separate=True).char_positions == 6
-        assert parse_pic("S9(5)", sign_separate=True).byte_length == 6
+        assert (
+            parse_pic("S9(5)", clauses=ItemClauses(sign_separate=True)).char_positions
+            == 6
+        )
+        assert (
+            parse_pic("S9(5)", clauses=ItemClauses(sign_separate=True)).byte_length == 6
+        )
 
     @covers(CobolFeature.NUMERIC_EDITED)
     def test_cr_occupies_two_character_positions(self):

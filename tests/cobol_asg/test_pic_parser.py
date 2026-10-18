@@ -1,6 +1,7 @@
 """Tests for COBOL PIC clause parser."""
 
 from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
+from cobol_asg.item_clauses import ItemClauses
 from cobol_asg.pic_parser import parse_pic
 
 
@@ -210,7 +211,7 @@ class TestParsePicUsageOverride:
 class TestParsePicBlankWhenZero:
     def test_blank_when_zero_propagated(self):
         """BLANK WHEN ZERO flag is propagated to the type descriptor."""
-        result = parse_pic("9(5)", blank_when_zero=True)
+        result = parse_pic("9(5)", clauses=ItemClauses(blank_when_zero=True))
         assert result.blank_when_zero is True
         assert result.category == CobolDataCategory.ZONED_DECIMAL
 
@@ -220,7 +221,7 @@ class TestParsePicBlankWhenZero:
 
     def test_blank_when_zero_not_on_alphanumeric(self):
         """BLANK WHEN ZERO on alphanumeric is ignored (not propagated)."""
-        result = parse_pic("X(10)", blank_when_zero=True)
+        result = parse_pic("X(10)", clauses=ItemClauses(blank_when_zero=True))
         assert result.blank_when_zero is False  # alphanumeric path doesn't set it
 
 

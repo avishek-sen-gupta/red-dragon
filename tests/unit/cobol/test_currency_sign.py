@@ -28,6 +28,7 @@ from cobol_asg.edit_picture import (
     parse_edit_picture,
 )
 from cobol_asg.pic_parser import parse_pic
+from cobol_asg.program_conventions import ProgramConventions
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
 from tests.unit.cobol.edited_ir import edited
@@ -88,7 +89,7 @@ class TestCurrencyThreadingToParsePic:
         """PIC WWWWW is numeric-edited ONLY if parse_pic knows 'W' is the
         currency symbol. Without it there are no digit positions at all and
         the picture falls through to the Lark grammar as a hard error."""
-        d = parse_pic("WWWWW", currency="W")
+        d = parse_pic("WWWWW", conventions=ProgramConventions(currency="W"))
         assert d.category == CobolDataCategory.NUMERIC_EDITED
         assert d.byte_length == 5
 
@@ -98,7 +99,9 @@ class TestCurrencyThreadingToParsePic:
         byte width must be identical to the '$' equivalent. This is the
         parity the bridge's uniform rule depends on (red-dragon-ilb6)."""
         assert (
-            parse_pic("WW,WWW.99", currency="W").byte_length
+            parse_pic(
+                "WW,WWW.99", conventions=ProgramConventions(currency="W")
+            ).byte_length
             == parse_pic("$$,$$$.99").byte_length
         )
 

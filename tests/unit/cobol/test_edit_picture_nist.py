@@ -24,6 +24,7 @@ import pytest
 
 from cobol_asg.cobol_types import CobolDataCategory
 from cobol_asg.pic_parser import parse_pic
+from cobol_asg.program_conventions import ProgramConventions
 from cobol_numeric.number import from_literal
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
@@ -359,7 +360,9 @@ class TestDecimalPointIsComma:
 
     @covers(CobolFeature.NUMERIC_EDITED)
     def test_parse_pic_reads_the_comma_as_the_point(self):
-        descriptor = parse_pic("9.999.999,99", decimal_point_is_comma=True)
+        descriptor = parse_pic(
+            "9.999.999,99", conventions=ProgramConventions(decimal_point_is_comma=True)
+        )
         assert (
             descriptor.category,
             descriptor.byte_length,
