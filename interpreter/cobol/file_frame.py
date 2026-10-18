@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from cobol_asg.file_enums import FileOrganization
 from interpreter.cobol.data_literals import boolean, integer, named, text
 from interpreter.cobol.prime_key import PrimeKey
+from interpreter.cobol.record_shape import RecordShape
 from interpreter.data_value import DataRecord, DataScalar, DataValue
 from interpreter.field_name import FieldName
 
@@ -19,6 +20,9 @@ class FileFrame:
     prime_key: PrimeKey
     variable: bool
     record_length: int
+
+    def shape(self) -> RecordShape:
+        return RecordShape(self.organization, self.record_length, self.prime_key)
 
     def data(self) -> DataRecord:
         return DataRecord(

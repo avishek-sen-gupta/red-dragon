@@ -17,6 +17,7 @@ from interpreter.cobol.file_drivers import FileOrganizationDriver, open_driver
 from interpreter.cobol.file_frame import FileFrame
 from interpreter.cobol.prime_key import PrimeKey
 from interpreter.cobol.real_file_provider import RealFileIOProvider
+from interpreter.cobol.record_shape import RecordShape
 from interpreter.vm.vm import Operators
 from tests.covers import NotLanguageFeature, covers
 from tests.unit.cobol.declared_files import opened
@@ -220,13 +221,13 @@ class _WideRecords(RealFileIOProvider):
     def _driver(
         self, frame: FileFrame, path: Path, mode: OpenMode
     ) -> FileOrganizationDriver:
+        wide = 2 if frame.file_name == "F1" else 1
         return open_driver(
-            frame.organization,
             path,
             mode,
-            frame.record_length * (2 if frame.file_name == "F1" else 1),
-            frame.prime_key.offset,
-            frame.prime_key.length,
+            RecordShape(
+                frame.organization, frame.record_length * wide, frame.prime_key
+            ),
         )
 
 

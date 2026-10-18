@@ -12,6 +12,7 @@ from interpreter.cobol.access_result import AccessCondition
 from interpreter.cobol.described_slot import DescribedSlot
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.file_drivers import FileOrganizationDriver, RelativeDriver
+from interpreter.cobol.prime_key import PrimeKey
 from interpreter.cobol.variable_sequential_driver import VariableSequentialDriver
 from tests.covers import covers
 
@@ -22,7 +23,7 @@ def _written(
     maximum: int,
     records: Sequence[tuple[bytes, bytes]],
 ) -> list[AccessCondition]:
-    driver.open(path, OpenMode.OUTPUT, maximum, 0, 0)
+    driver.open(path, OpenMode.OUTPUT, maximum, PrimeKey(0, 0))
     conditions = [driver.write(record, key).condition for record, key in records]
     driver.close()
     return conditions
@@ -39,7 +40,7 @@ def test_a_sequential_file_keeps_each_record_at_its_own_length(
         VariableSequentialDriver(), path, 5, ((b"ABC", b""), (b"DEFGH", b""))
     )
     io = VariableSequentialDriver()
-    io.open(path, OpenMode.IO, 5, 0, 0)
+    io.open(path, OpenMode.IO, 5, PrimeKey(0, 0))
     updates = (
         io.read_seq().data,
         io.rewrite(b"ABCD").condition,
@@ -73,7 +74,7 @@ def test_a_relative_file_keeps_each_records_length_in_its_slot(
         ((b"AB", (1).to_bytes(4, "big")), (b"CDEF", (3).to_bytes(4, "big"))),
     )
     io = RelativeDriver(DescribedSlot())
-    io.open(path, OpenMode.IO, 4, 0, 0)
+    io.open(path, OpenMode.IO, 4, PrimeKey(0, 0))
     reads = [io.read_seq().data, io.read_seq().data, io.read_seq().condition]
     keyed = [io.read_key((n).to_bytes(4, "big")).condition for n in (2, 3)]
     io.delete((1).to_bytes(4, "big"))

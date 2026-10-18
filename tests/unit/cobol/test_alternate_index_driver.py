@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from cobol_asg.file_enums import OpenMode
+from cobol_asg.file_enums import FileOrganization, OpenMode
 from interpreter.cobol.access_result import AccessCondition, AccessResult
 from interpreter.cobol.alternate_index_driver import open_alternate_index_driver
+from interpreter.cobol.alternate_key import AlternateKey
+from interpreter.cobol.prime_key import PrimeKey
 from interpreter.cobol.real_file_provider import to_ioresult
+from interpreter.cobol.record_shape import RecordShape
 from tests.unit.cobol.file_status_of import file_status_of
 
 _BASE = (b"001BBBxx", b"002AAAyy", b"003AAAzz", b"004CCCww")
@@ -20,7 +23,12 @@ def _base(tmp_path: Path, records: tuple[bytes, ...] = _BASE) -> Path:
 
 
 def _path(base: Path, mode: OpenMode, unique: bool = False):
-    return open_alternate_index_driver(base, mode, 8, 0, 3, 3, 3, unique)
+    return open_alternate_index_driver(
+        base,
+        mode,
+        RecordShape(FileOrganization.INDEXED, 8, PrimeKey(0, 3)),
+        AlternateKey(PrimeKey(3, 3), unique),
+    )
 
 
 def _walk(read):
