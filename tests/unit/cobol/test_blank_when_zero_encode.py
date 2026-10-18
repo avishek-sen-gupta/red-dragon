@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from cobol_asg.item_clauses import ItemClauses
 from cobol_asg.pic_parser import parse_pic
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.data_layout import FieldLayout
@@ -13,7 +14,7 @@ from tests.covers import covers
 
 
 def _field(pic: str, value: str, *, value_is_numeric: bool) -> FieldLayout:
-    td = parse_pic(pic, blank_when_zero=True)
+    td = parse_pic(pic, clauses=ItemClauses(blank_when_zero=True))
     return FieldLayout(
         name="F",
         type_descriptor=td,

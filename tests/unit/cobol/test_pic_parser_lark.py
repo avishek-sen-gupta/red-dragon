@@ -13,6 +13,7 @@ import inspect
 from cobol_asg import pic_parser
 from cobol_asg.asg_types import CobolField
 from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
+from cobol_asg.item_clauses import ItemClauses
 from cobol_asg.pic_parser import parse_pic
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
@@ -54,7 +55,7 @@ class TestSignSeparateByteLength:
     @covers(CobolFeature.PIC_CLAUSE)
     def test_sign_separate_includes_sign_byte(self):
         """A sign-separate zoned field's byte_length includes the sign byte."""
-        result = parse_pic("S9(5)", sign_separate=True)
+        result = parse_pic("S9(5)", clauses=ItemClauses(sign_separate=True))
         assert result.byte_length == 6
 
 

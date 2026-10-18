@@ -44,11 +44,11 @@ from lark.exceptions import UnexpectedInput
 from cobol_asg import picture
 from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from cobol_asg.edit_picture import (
-    DEFAULT_CURRENCY,
     UnsupportedEditPictureError,
 )
 from cobol_asg.index_types import INDEX_ITEM
-from cobol_asg.pointer_types import FULLWORD_POINTER
+from cobol_asg.item_clauses import NO_ITEM_CLAUSES, ItemClauses
+from cobol_asg.program_conventions import DEFAULT_CONVENTIONS, ProgramConventions
 
 _USAGE_TO_CATEGORY = {
     "COMP-3": CobolDataCategory.COMP3,
@@ -203,30 +203,21 @@ def _checked_analysis(
 def parse_pic(
     pic: str,
     usage: str = "DISPLAY",
-    sign_leading: bool = False,
-    sign_separate: bool = False,
-    justified_right: bool = False,
-    blank_when_zero: bool = False,
-    currency: str = DEFAULT_CURRENCY,
-    pointer_type: CobolTypeDescriptor = FULLWORD_POINTER,
-    decimal_point_is_comma: bool = False,
+    clauses: ItemClauses = NO_ITEM_CLAUSES,
+    conventions: ProgramConventions = DEFAULT_CONVENTIONS,
 ) -> CobolTypeDescriptor:
     """Parse a COBOL PIC clause string into a CobolTypeDescriptor.
 
     Args:
         pic: The PIC string (e.g. "9(5)", "S9(5)V99", "X(8)", "$$$,$$9.99CR").
         usage: USAGE clause value ("DISPLAY", "COMP-3", "COMP").
-        sign_leading: SIGN IS LEADING.
-        sign_separate: SIGN IS SEPARATE CHARACTER — adds a character position.
-        justified_right: JUSTIFIED RIGHT.
-        blank_when_zero: BLANK WHEN ZERO.
-        currency: the program's currency symbol, '$' unless SPECIAL-NAMES
-            declared CURRENCY SIGN IS otherwise (red-dragon-3o5f). It is a
-            grammar terminal, so it selects the parser rather than being an
-            argument to the parse.
-        decimal_point_is_comma: SPECIAL-NAMES DECIMAL-POINT IS COMMA, which
-            exchanges the period and the comma in the picture; it selects the
-            parser for the same reason.
+        clauses: the entry's SIGN, JUSTIFIED and BLANK WHEN ZERO clauses. SIGN
+            IS SEPARATE CHARACTER adds a character position.
+        conventions: the program's currency symbol ('$' unless SPECIAL-NAMES
+            declared CURRENCY SIGN IS otherwise, red-dragon-3o5f), DECIMAL-POINT
+            IS COMMA, and the addressing mode's pointer type. The currency
+            symbol and the decimal point are grammar terminals, so they select
+            the parser rather than being arguments to the parse.
 
     Returns:
         A CobolTypeDescriptor describing the field's type and layout.
@@ -238,9 +229,11 @@ def parse_pic(
             representation (a ValueError subclass, so existing handling holds).
     """
     if _has_no_picture(pic, usage):
-        return _pictureless_descriptor(pic, usage, pointer_type)
+        return _pictureless_descriptor(pic, usage, conventions.pointer_type)
     analysis = _checked_analysis(
-        pic, _parse_tree(pic, currency, decimal_point_is_comma), sign_separate
+        pic,
+        _parse_tree(pic, conventions.currency, conventions.decimal_point_is_comma),
+        clauses.sign_separate,
     )
     usage_category = _USAGE_TO_CATEGORY.get(usage, CobolDataCategory.ZONED_DECIMAL)
     # USAGE governs the category for numeric pictures; the picture governs it for
@@ -255,13 +248,14 @@ def parse_pic(
         decimal_digits=decimal_digits,
         signed=analysis.signed,
         char_positions=analysis.char_positions,
-        sign_separate=sign_separate,
-        sign_leading=sign_leading,
-        justified_right=justified_right,
-        blank_when_zero=blank_when_zero and category in _BLANK_WHEN_ZERO_CATEGORIES,
+        sign_separate=clauses.sign_separate,
+        sign_leading=clauses.sign_leading,
+        justified_right=clauses.justified_right,
+        blank_when_zero=clauses.blank_when_zero
+        and category in _BLANK_WHEN_ZERO_CATEGORIES,
         scale=analysis.point_shift,
-        currency=currency,
-        decimal_point_is_comma=decimal_point_is_comma,
+        currency=conventions.currency,
+        decimal_point_is_comma=conventions.decimal_point_is_comma,
         pic_string=pic,
         alphabetic=analysis.category == "alphabetic",
     )

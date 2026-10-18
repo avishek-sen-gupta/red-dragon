@@ -11,6 +11,7 @@ from cobol_asg.condition_name import ConditionName, ConditionValue
 from cobol_asg.decimal_point import DecimalPoint
 from cobol_asg.edit_picture import DEFAULT_CURRENCY, UnsupportedEditPictureError
 from cobol_asg.enclosing_clauses import TOP_LEVEL, EnclosingClauses
+from cobol_asg.item_clauses import ItemClauses
 from cobol_asg.pic_parser import parse_pic
 from cobol_asg.pointer_types import FULLWORD_POINTER
 from cobol_asg.program_conventions import DEFAULT_CONVENTIONS, ProgramConventions
@@ -90,13 +91,17 @@ class CobolField:
             descriptor = parse_pic(
                 self.pic,
                 self.usage,
-                sign_leading=self.sign_leading,
-                sign_separate=self.sign_separate,
-                justified_right=self.justified_right,
-                blank_when_zero=self.blank_when_zero,
-                currency=self.currency_symbol,
-                pointer_type=self.pointer_type,
-                decimal_point_is_comma=self.decimal_point_is_comma,
+                ItemClauses(
+                    sign_leading=self.sign_leading,
+                    sign_separate=self.sign_separate,
+                    justified_right=self.justified_right,
+                    blank_when_zero=self.blank_when_zero,
+                ),
+                ProgramConventions(
+                    currency=self.currency_symbol,
+                    pointer_type=self.pointer_type,
+                    decimal_point_is_comma=self.decimal_point_is_comma,
+                ),
             )
         except UnsupportedEditPictureError as exc:
             # parse_pic sees only the picture. This is a load-time abort, so

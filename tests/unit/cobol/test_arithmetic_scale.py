@@ -10,6 +10,7 @@ from cobol_asg.cobol_expression import (
 )
 from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from cobol_asg.pic_parser import parse_pic
+from cobol_asg.program_conventions import ProgramConventions
 from cobol_numeric.number import from_literal
 from cobol_numeric.scale import Scale
 from interpreter.cobol.arithmetic_scale import (
@@ -86,7 +87,9 @@ def test_a_numeric_edited_capacity_counts_only_its_integer_digit_positions():
     assert receiver_capacity(parse_pic("-9(4).99", "DISPLAY")) == 10000
     assert receiver_capacity(parse_pic("9(3),9(3)", "DISPLAY")) == 1000000
     assert receiver_capacity(parse_pic("ZZZPP", "DISPLAY")) == 100000
-    comma = parse_pic("ZZ9,99", "DISPLAY", decimal_point_is_comma=True)
+    comma = parse_pic(
+        "ZZ9,99", "DISPLAY", conventions=ProgramConventions(decimal_point_is_comma=True)
+    )
     assert receiver_capacity(comma) == 1000
 
 
