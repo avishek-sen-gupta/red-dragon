@@ -66,13 +66,18 @@ def test_bridge_serialises_all_literal_with_its_all(bridge_jar):
         True,
         False,
         [{"from": "'BAC'", "to": "", "all": True}, {"from": "'X'", "to": ""}],
-        {"kind": "lit", "name": '"AB"', "all": True},
-        {"kind": "figurative", "name": "QUOTE"},
+        {"kind": "figurative", "name": "ALL", "literal": '"AB"', "literal_kind": "lit"},
+        {
+            "kind": "figurative",
+            "name": "ALL",
+            "literal": "QUOTE",
+            "literal_kind": "figurative",
+        },
         {"kind": "figurative", "value": "ALL", "literal": '"BA"'},
         {"kind": "figurative", "value": "ZEROES"},
     )
     assert [RefModOperand.from_dict(s["operands"][0]) for s in statements[:2]] == [
-        RefModOperand(name='"AB"', all_literal=True, kind=OperandKind.LIT),
+        RefModOperand(name='"AB"', kind=OperandKind.ALL_LITERAL),
         RefModOperand(name="QUOTE", kind=OperandKind.FIGURATIVE),
     ]
     revived = CobolASG.from_dict(obj)
@@ -80,3 +85,5 @@ def test_bridge_serialises_all_literal_with_its_all(bridge_jar):
         "kind": "figurative",
         "value": "ZEROS",
     }
+    moves = [RefModOperand.from_dict(s["operands"][0]) for s in statements[:2]]
+    assert [RefModOperand.from_dict(m.to_dict()) for m in moves] == moves

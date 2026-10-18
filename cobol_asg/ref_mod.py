@@ -209,7 +209,6 @@ class RefModOperand:
     qualifiers: tuple[str, ...] = ()
     subscripts: tuple[ExprNode, ...] = ()
     rounded: bool = False
-    all_literal: bool = False
     kind: OperandKind = OperandKind.REF
 
     @property
@@ -220,6 +219,17 @@ class RefModOperand:
     def names_data(self) -> bool:
         """A data reference was written, not a literal or figurative constant."""
         return self.kind is OperandKind.REF and bool(self.name)
+
+    @classmethod
+    def of_all(cls, data: Mapping) -> RefModOperand:
+        """The figurative constant ALL literal: the literal, repeated.
+
+        ALL of a figurative constant is that figurative constant (ANSI X3.23-1985
+        figurative constants).
+        """
+        if data["literal_kind"] == OperandKind.FIGURATIVE.value:
+            return cls(name=data["literal"], kind=OperandKind.FIGURATIVE)
+        return cls(name=data["literal"], kind=OperandKind.ALL_LITERAL)
 
     @classmethod
     def from_dict(cls, data: dict) -> RefModOperand:
@@ -246,6 +256,9 @@ class RefModOperand:
                 kind=OperandKind.LENGTH_OF,
             )
 
+        if data.get("kind") == OperandKind.FIGURATIVE.value and "literal" in data:
+            return cls.of_all(data)
+
         name = data.get("name", "")
         ref_mod_start_data = data.get("ref_mod_start")
         ref_mod_length_data = data.get("ref_mod_length")
@@ -269,7 +282,6 @@ class RefModOperand:
             qualifiers=qualifiers,
             subscripts=subscripts,
             rounded=rounded,
-            all_literal=data.get("all", False),
             kind=_LITERAL_KINDS.get(data.get("kind", ""), OperandKind.REF),
         )
 
@@ -277,10 +289,16 @@ class RefModOperand:
         """Serialize RefModOperand to JSON dict format."""
         if self.length_of.name:
             return ref_mod_expr_to_dict(self.length_of)
+        if self.kind is OperandKind.ALL_LITERAL:
+            return {
+                "kind": OperandKind.FIGURATIVE.value,
+                "name": _ALL,
+                "literal": self.name,
+                "literal_kind": OperandKind.LIT.value,
+            }
         result: dict = {
             **literal_kind_dict(self),
             "name": self.name,
-            **({"all": True} if self.all_literal else {}),
         }
         if self.ref_mod_start is not None:
             result["ref_mod_start"] = ref_mod_expr_to_dict(self.ref_mod_start)
@@ -294,6 +312,8 @@ class RefModOperand:
             result["rounded"] = True
         return result
 
+
+_ALL = "ALL"
 
 _LITERAL_KINDS = {
     OperandKind.LIT.value: OperandKind.LIT,

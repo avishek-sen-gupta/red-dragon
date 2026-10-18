@@ -763,7 +763,7 @@ def lower_move(
         if not stmt.source.is_reference_modified:
             _fill_pattern = (
                 literal
-                if stmt.source.all_literal
+                if stmt.source.kind is OperandKind.ALL_LITERAL
                 else ctx.figuratives.characters.get(stmt.source.name.upper(), "")
             )
 
