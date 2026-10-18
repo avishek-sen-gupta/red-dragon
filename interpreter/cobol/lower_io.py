@@ -37,7 +37,7 @@ from interpreter.cobol.file_facts import (
 )
 from interpreter.cobol.file_logic_status import FileLogicStatus
 from interpreter.cobol.file_position import FilePosition
-from interpreter.cobol.file_state import file_state
+from interpreter.cobol.file_state import file_state_of
 from interpreter.cobol.file_verb_ir import (
     FileVerbIr,
     Refusal,
@@ -84,7 +84,7 @@ def _program(scope: LoweringScope) -> Register:
 def _verb(scope: LoweringScope, file_name: str) -> FileVerbIr:
     return FileVerbIr(
         scope.emitter,
-        file_state(program_name(scope.ctx._asg), file_name),
+        file_state_of(scope.ctx._asg, file_name),
         _program(scope),
     )
 
@@ -199,7 +199,7 @@ def _emit_use_trigger(
         return
     if not ctx.use_by_mode:
         return
-    mode_reg = scope.emitter.load(file_state(program_name(ctx._asg), file_name).mode)
+    mode_reg = scope.emitter.load(file_state_of(ctx._asg, file_name).mode)
     for mode_key, sec in ctx.use_by_mode.items():
         match_reg = ctx.fresh_reg()
         ctx.emit_inst(

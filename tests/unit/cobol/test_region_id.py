@@ -1,5 +1,5 @@
-"""RegionId — which section buffer a field lives in, or the fresh copy a CALL argument
-is passed in."""
+"""RegionId — which section buffer a field lives in, the fresh copy a CALL argument is
+passed in, or the run unit's area for an EXTERNAL item."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ _PROBE_SRC = b"""\
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_region_ids_are_the_section_buffers_the_call_argument_copy_and_the_run_unit():
+def test_region_ids_are_the_section_buffers_the_call_argument_copy_the_run_unit_and_external_areas():
     assert {r.value for r in RegionId} == {
         "working_storage",
         "linkage",
@@ -40,6 +40,7 @@ def test_region_ids_are_the_section_buffers_the_call_argument_copy_and_the_run_u
         "indexes",
         "call_argument",
         "run_unit",
+        "external",
     }
 
 

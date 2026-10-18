@@ -45,7 +45,7 @@ Files are under `interpreter/cobol/` unless prefixed with `cobol_asg/`.
 |------|---------|
 | `cobol_frontend.py` | Main frontend: DATA DIVISION allocation, PROCEDURE DIVISION lowering |
 | `cobol_asg/cobol_statements.py` | Typed statement hierarchy — frozen dataclasses + union type |
-| `features.py` | `CobolFeature` enum — 148 semantic features; used with `@covers(CobolFeature.X)` test decorators |
+| `features.py` | `CobolFeature` enum — 150 semantic features; used with `@covers(CobolFeature.X)` test decorators |
 | `io_provider.py` | Injectable I/O provider: `CobolIOProvider` ABC, `NullIOProvider`, `StubIOProvider` |
 | `cobol_asg/cobol_expression.py` | `ExprNode` union type (`LiteralNode | FieldRefNode | RefModNode | BinOpNode`) + `expr_from_dict()` deserializer; legacy `parse_expression` tokenizer retained for standalone tests |
 | `cobol_asg/cobol_parser.py` | Subprocess bridge to ProLeap JAR |
@@ -54,6 +54,7 @@ Files are under `interpreter/cobol/` unless prefixed with `cobol_asg/`.
 | `cobol_asg/cobol_types.py` | `CobolDataCategory` enum, `CobolTypeDescriptor` |
 | `cobol_asg/pic_parser.py` | PIC clause parser (e.g., `9(5)V99` → type descriptor) |
 | `data_layout.py` | `DataLayout`, `FieldLayout`, `build_data_layout()` |
+| `external_layout.py`, `external_area.py`, `lower_external.py` | EXTERNAL records and file record areas: their layout, the run unit's directories, and their allocation and binding |
 | `file_definitions_data.py` | `FILE_DEFINITIONS`, `file_definitions_data()` — the program's SELECTs and FD formats as a `Data` directive |
 | `layout_data.py` | `DATA_LAYOUT`, `layout_data()`, and the reader `field_positions()` → `FieldPosition` per WORKING-STORAGE field |
 | `ir_encoders.py` | IR instruction builders for encode/decode (zoned, COMP-3, alphanumeric, string ops) |
@@ -74,7 +75,7 @@ The bridge emits the compilation unit as `{"programs": [...]}`: the top-level pr
 
 `compile_cobol` and `lower_cobol_program` lower every program of a source, in pre-order (`programs_in_preorder`), each with a fresh frontend into a unit of its own, and link every unit. The run unit's main program is the first top-level program of the main source. A CALL to a sibling or contained program resolves through the run unit's program table like a CALL to a separately compiled one.
 
-Not yet modelled: CALL visibility of contained programs and COMMON (red-dragon-ljku.2), EXTERNAL data and files (ljku.3), GLOBAL names (ljku.4), INITIAL (ljku.5). Today every program in the run unit can CALL every other.
+Not yet modelled: CALL visibility of contained programs and COMMON (red-dragon-ljku.2), GLOBAL names (ljku.4), INITIAL (ljku.5). EXTERNAL data and files are modelled; see [EXTERNAL data and files](#external-data-and-files). Today every program in the run unit can CALL every other.
 
 ## Program Declarations
 
@@ -92,6 +93,17 @@ The DATA DIVISION is lowered to byte-addressed memory regions:
 1. `build_data_layout()` parses all WORKING-STORAGE fields, computing offsets and byte lengths from PIC clauses
 2. `ALLOC_REGION` allocates a contiguous byte array sized to `layout.total_bytes`
 3. Each field with a VALUE clause is encoded per its PIC type and written via `WRITE_REGION`; a group's VALUE is encoded as alphanumeric over the whole group, before its descendants'. A numeric-edited item stores a nonnumeric VALUE literal as its characters, unedited; a numeric literal (the bridge marks it `value_is_numeric`) and the figurative ZERO are edited as a MOVE would edit them (`PIC $.** VALUE ZERO` holds `*.**`). BLANK WHEN ZERO plays no part in a VALUE; it blanks an item, numeric-edited included, when a zero value is moved or stored into it
+
+### EXTERNAL data and files
+
+A WORKING-STORAGE 01 with the EXTERNAL clause, and the record area of an FD with it, is one area of the run unit, shared by every program that describes it (IBM Enterprise COBOL LR, EXTERNAL clause: "An external data item can be referenced by any program or method in the run unit that describes the data item"; for a file, "In a run unit, there is only one representative of an external file"). The bridge passes the clause through: `external: true` on the 01's data field, `external` on each `file_descriptions` entry. `CobolField.external`, `FileDescription.external` and `CobolASG.external_file_names()` carry it.
+
+- **Layout.** `partition_external` (`external_layout.py`) takes each EXTERNAL record (with any 01 that REDEFINES it) and each EXTERNAL FD's records out of their section, lays them end to end in the program's EXTERNAL layout (`SectionedLayout.external`, `RegionId.EXTERNAL`), one `ExternalArea` (name, kind, start, length) per area, and lays out what is left of WORKING-STORAGE and the FILE SECTION again without them.
+- **Run unit.** The start-up module declares two directories in the outermost frame, `__cobol_external_records` and `__cobol_external_files` (`external_area.py`): heap objects holding each area's region under its upper-cased name. Records and files are matched by name, each kind in its own directory.
+- **Load.** Each program's load-time code probes the directory with `dict_contains_key` for each of its areas and, when the name is absent, allocates a zero-filled region of the area's length and stores it there (`lower_external.py`). The first program loaded that describes an area allocates it; an EXTERNAL file's connector state starts closed at the same point.
+- **Entry.** The procedure loads each area's region from the directory (`bind_external`); a field in an area is addressed at its offset from the area's start.
+- **Files.** An EXTERNAL file's state (open mode, position, refused verbs, last key, lock) is the run unit's `__cobol_external_file_<FILE>_*` variables, not the program's (`file_state_of`). The FILE STATUS item stays each program's own: a verb sets the one its program's SELECT names.
+- **Not applied.** A VALUE clause in an EXTERNAL record is not applied, and lowering logs a warning: ANSI X3.23-1985 forbids VALUE there except on level 88. Programs whose descriptions of one area differ in size are not checked: IBM requires the same number of bytes, and each program addresses the area with its own description.
 
 ### Data-name qualification
 

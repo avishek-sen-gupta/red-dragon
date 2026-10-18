@@ -6,7 +6,8 @@ address is (region, byte offset). Two fields can alias only within the same
 region; across regions there is no overlap, because they are separate byte
 buffers. LINKAGE is the exception in scope 2, where CALL USING deliberately
 binds a callee's linkage region onto caller storage; CALL_ARGUMENT is the fresh
-copy a BY CONTENT or BY VALUE argument is passed in.
+copy a BY CONTENT or BY VALUE argument is passed in. EXTERNAL fields live in the
+run unit's region for their area, shared by every program that describes it.
 """
 
 from __future__ import annotations
@@ -23,5 +24,6 @@ class RegionId(Enum):
     INDEXES = "indexes"
     CALL_ARGUMENT = "call_argument"
     RUN_UNIT = "run_unit"
+    EXTERNAL = "external"
 
     __hash__ = object.__hash__

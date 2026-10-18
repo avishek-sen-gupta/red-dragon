@@ -19,6 +19,9 @@ from interpreter.cobol.data_layout import (
     laid_end_to_end,
     record_length,
 )
+from interpreter.cobol.external_area import ExternalArea
+from interpreter.cobol.external_binding import ExternalBinding
+from interpreter.cobol.external_layout import partition_external
 from interpreter.cobol.linkage_binding import LinkageBinding
 from interpreter.cobol.linkage_record import LinkageRecord
 from interpreter.cobol.undeclared_data_name import UndeclaredDataName
@@ -39,6 +42,11 @@ class SectionedLayout:
     linkage_parameters: tuple[LinkageRecord, ...] = ()
     linkage_unbound: tuple[LinkageRecord, ...] = ()
     linkage_owners: Mapping[tuple[str, int, int], str] = field(default_factory=dict)
+    external: DataLayout = field(default_factory=DataLayout)
+    external_areas: tuple[ExternalArea, ...] = ()
+    external_owners: Mapping[tuple[str, int, int], ExternalArea] = field(
+        default_factory=dict
+    )
 
 
 @dataclass(frozen=True)
@@ -59,6 +67,18 @@ class MaterialisedSectionedLayout:
     )
     linkage_bindings: tuple[LinkageBinding, ...] = ()
     linkage_owners: Mapping[tuple[str, int, int], str] = field(default_factory=dict)
+    external: DataLayout = field(default_factory=DataLayout)
+    external_bindings: tuple[ExternalBinding, ...] = ()
+    external_owners: Mapping[tuple[str, int, int], ExternalArea] = field(
+        default_factory=dict
+    )
+
+    def external_binding(self, fl: FieldLayout) -> ExternalBinding:
+        """The binding of the EXTERNAL area whose description declares ``fl``."""
+        area = self.external_owners[_field_identity(fl)]
+        return next(
+            binding for binding in self.external_bindings if binding.area == area
+        )
 
     def linkage_binding(self, fl: FieldLayout) -> LinkageBinding:
         """The binding of the LINKAGE 01 that declares ``fl`` -- for a field under
@@ -117,6 +137,8 @@ class MaterialisedSectionedLayout:
             )
         if region is RegionId.LINKAGE:
             return match, self.linkage_binding(match.storage).region_reg, region
+        if region is RegionId.EXTERNAL:
+            return match, self.external_binding(match.storage).region_reg, region
         return match, reg, region
 
     def layout_of(self, region: RegionId) -> DataLayout:
@@ -127,6 +149,7 @@ class MaterialisedSectionedLayout:
         return (
             (*self.local_storage, RegionId.LOCAL_STORAGE),
             (*self.working_storage, RegionId.WORKING_STORAGE),
+            (self.external, NO_REGISTER, RegionId.EXTERNAL),
             (*self.linkage, RegionId.LINKAGE),
             (*self.file, RegionId.FILE),
             (*self.special_registers, RegionId.SPECIAL_REGISTERS),
@@ -143,6 +166,7 @@ class MaterialisedSectionedLayout:
         return (
             ls_layout.exists(name)
             or ws_layout.exists(name)
+            or self.external.exists(name)
             or lk_layout.exists(name)
             or file_layout.exists(name)
             or sr_layout.exists(name)
@@ -158,6 +182,7 @@ class MaterialisedSectionedLayout:
         for layout, _reg in (
             self.local_storage,
             self.working_storage,
+            (self.external, NO_REGISTER),
             self.linkage,
             self.file,
         ):
@@ -181,11 +206,12 @@ def build_sectioned_layout(asg: CobolASG) -> SectionedLayout:
         record.name for record in records
     ]
     by_name = {record.name: record for record in records}
+    shared = partition_external(asg)
     return SectionedLayout(
-        working_storage=build_data_layout(asg.data_fields),
+        working_storage=build_data_layout(list(shared.working_storage)),
         linkage=build_data_layout(linkage_fields),
         local_storage=build_data_layout(asg.local_storage_fields),
-        file=build_data_layout(asg.file_fields),
+        file=build_data_layout(list(shared.file)),
         indexes=build_index_layout(
             asg.data_fields,
             asg.local_storage_fields,
@@ -195,6 +221,15 @@ def build_sectioned_layout(asg: CobolASG) -> SectionedLayout:
         linkage_parameters=tuple(by_name[name] for name in named if name in by_name),
         linkage_unbound=tuple(r for r in records if r.name not in named),
         linkage_owners=_linkage_owners(linkage_fields),
+        external=build_data_layout(
+            [record for group in shared.groups for record in group]
+        ),
+        external_areas=shared.areas,
+        external_owners={
+            _field_identity(fl): area
+            for area, group in zip(shared.areas, shared.groups, strict=True)
+            for fl in build_data_layout(list(group)).all_fields()
+        },
     )
 
 

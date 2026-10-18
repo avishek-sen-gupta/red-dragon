@@ -1,10 +1,12 @@
 """Declares each SELECT's frame to the file provider once, from the program's start-up
-code, and starts the file's state closed."""
+code, and starts the file's state closed. An EXTERNAL file's state is the run unit's,
+and starts closed where its area is first allocated."""
 
 from __future__ import annotations
 
 from cobol_asg.cobol_statements import FileControlEntry
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.cobol.external_binding import ExternalBinding
 from interpreter.cobol.file_facts import file_frame
 from interpreter.cobol.file_state import file_state
 from interpreter.cobol.file_verb_ir import emit_closed
@@ -30,6 +32,11 @@ def _layout_only(sectioned: SectionedLayout) -> MaterialisedSectionedLayout:
         special_registers=(SPECIAL_REGISTERS_LAYOUT, NO_REGISTER),
         indexes=(sectioned.indexes, NO_REGISTER),
         linkage_owners=sectioned.linkage_owners,
+        external=sectioned.external,
+        external_bindings=tuple(
+            ExternalBinding(area, NO_REGISTER) for area in sectioned.external_areas
+        ),
+        external_owners=sectioned.external_owners,
     )
 
 
@@ -52,6 +59,8 @@ def _declare(
             args=(frame_reg, program_reg),
         )
     )
+    if entry.file_name.upper() in ctx._asg.external_file_names():
+        return
     emit_closed(
         IrEmitter(ctx, None),
         file_state(program_name(ctx._asg), entry.file_name),

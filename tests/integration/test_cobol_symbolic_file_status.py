@@ -64,8 +64,8 @@ def test_symbolic_read_leaves_a_symbolic_status() -> None:
         vm.load(ws_address(vm, "FSNULL"), 2),
     ) == (
         "00",
-        SymbolicValue(name="sym_3", type_hint=_LOOKUP, constraints=[_LOOKUP]),
+        SymbolicValue(name="sym_5", type_hint=_LOOKUP, constraints=[_LOOKUP]),
         SymbolicValue(
-            name="sym_11", type_hint=_FIELD_IMAGE, constraints=[_FIELD_IMAGE]
+            name="sym_13", type_hint=_FIELD_IMAGE, constraints=[_FIELD_IMAGE]
         ),
     )

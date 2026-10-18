@@ -395,6 +395,12 @@ class CobolASG:
             }
         )
 
+    def external_file_names(self) -> frozenset[str]:
+        """The upper-cased names of the files whose FD is EXTERNAL."""
+        return frozenset(
+            fd.fd_name.upper() for fd in self.file_descriptions if fd.external
+        )
+
     def _file_descriptions_dict(self) -> dict:
         if not self.file_descriptions:
             return {}

@@ -10,6 +10,7 @@ from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.field_resolution import whole_field_extent
 from interpreter.cobol.linkage_binding import LinkageBinding
 from interpreter.cobol.linkage_record import LinkageRecord
+from interpreter.cobol.lower_external import bind_external
 from interpreter.cobol.program_object import ARGUMENTS_PARAM, program_var
 from interpreter.cobol.sectioned_layout import (
     MaterialisedSectionedLayout,
@@ -103,6 +104,7 @@ def lower_sectioned_data_division(
     ctx.emit_inst(LoadVar(result_reg=ws_reg, name=VarName("__ws_region")))
 
     bindings = bind_linkage(ctx, layout.linkage_parameters, layout.linkage_unbound)
+    external = bind_external(ctx, layout.external_areas)
 
     ls_reg = (
         lower_data_division(ctx, layout.local_storage, RegionId.LOCAL_STORAGE)
@@ -160,6 +162,9 @@ def lower_sectioned_data_division(
         indexes=(layout.indexes, index_reg),
         linkage_bindings=bindings,
         linkage_owners=layout.linkage_owners,
+        external=layout.external,
+        external_bindings=external,
+        external_owners=layout.external_owners,
     )
 
 

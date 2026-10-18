@@ -830,7 +830,11 @@ class EmitContext:
         span: SourceSpan | None = None,
     ) -> Register:
         """The field's offset in its region at run time: a LINKAGE field moves by
-        its 01's shift, every other field sits at its static offset."""
+        its 01's shift, an EXTERNAL field sits at its offset in its own area, every
+        other field sits at its static offset."""
+        if region is RegionId.EXTERNAL:
+            start = materialised.external_binding(fl).area.start
+            return self.const_to_reg(fl.offset - start, span=span)
         static = self.const_to_reg(fl.offset, span=span)
         if region is not RegionId.LINKAGE:
             return static
