@@ -77,6 +77,10 @@ The bridge emits the compilation unit as `{"programs": [...]}`: the top-level pr
 
 Not yet modelled: CALL visibility of contained programs and COMMON (red-dragon-ljku.2), GLOBAL names (ljku.4), INITIAL (ljku.5). EXTERNAL data and files are modelled; see [EXTERNAL data and files](#external-data-and-files). Today every program in the run unit can CALL every other.
 
+## COPY and REPLACE
+
+ProLeap's preprocessor expands COPY and applies COPY REPLACING and REPLACE before the COBOL grammar runs (`proleap-cobol-parser`, `io/proleap/cobol/preprocessor`). Matching is by text-word (IBM Enterprise COBOL LR, COPY "Comparison and replacement rules"; ANSI X3.23-1985 Text Manipulation module): an operand matches only whole text-words, never part of a word or of a literal; a separator comma or semicolon counts as a space; comment and blank lines are ignored. The text is scanned once, left to right; at each text-word the operands are tried in the order written, and replacement text is not compared again. `(`, `)` and `:` are separators, so the IBM dummy operand `==:TAG:==` still replaces the tag inside `:TAG:-REC`. An identifier operand may continue its qualifiers or subscript on the next line (`TRUE-Q-04 OF TRUE-Q-03` / `IN TRUE-Q-02`). Not modelled: `LEADING`/`TRAILING` partial-word replacement.
+
 ## Program Declarations
 
 Right after its `entry` label, each program's IR declares two `Data` directives, which the VM steps over:
@@ -354,6 +358,7 @@ An ALL literal (`ALL "AB"`) is its literal repeated to the size of the associate
 - **Exponentiation (`**`) is not parsed or lowered** (red-dragon-wxur). Fixed-point arithmetic itself is exact: values, IBM `ARITH(COMPAT)` intermediate scales and every conversion live behind the `cobol_numeric` boundary (ADR-148, ADR-149), and only COMP-1/COMP-2 fields and floating intrinsics use IEEE floats.
 - **CANCEL is a no-op** — doesn't reset the cancelled subprogram's WORKING-STORAGE on next CALL (red-dragon-8dpn).
 - **SEARCH ALL is lowered as a whole-table linear scan**, not a binary search (red-dragon-c32s); for a correctly ordered table the result is the same.
+- **ALTER redirects only a bare `GO TO.`**: a GO TO that names a target keeps branching to it (red-dragon-8auq.1).
 - **Index items hold occurrence numbers, not byte displacements**, for `INDEXED BY` names and USAGE INDEX items alike (red-dragon-zm9w); no conforming program can observe the difference.
 - **Most intrinsic `FUNCTION`s fall back to their first argument** instead of being implemented (red-dragon-clpn, deprioritized — `MOD` and `DATE-OF-INTEGER` are implemented, the only ones observed in real corpora so far).
 
