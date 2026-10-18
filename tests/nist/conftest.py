@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Generator, Sequence
+from collections.abc import Generator, Mapping, Sequence
 from functools import cache
 from pathlib import Path
 
 import pytest
 
+from cobol_asg.copybook_library import CopybookLibrary
 from cobol_asg.switch_status import SwitchStatus
 from interpreter.cobol.ebcdic_table import EbcdicTable
 from interpreter.cobol.real_file_provider import RealFileIOProvider
@@ -54,6 +55,10 @@ _X_CARDS = {
     "XXXXX081": '"12345678"',
     "XXXXX090": "194",
     "XXXXX091": "197",
+}
+_X_CARD_LIBRARIES = {
+    "XXXXX047": {"ALTLB": "ALTLB"},
+    "XXXXX048": {"ALTLB": "ALTL1"},
 }
 _SWITCH_SETTINGS = {"SWITCH-1": SwitchStatus.ON, "SWITCH-2": SwitchStatus.OFF}
 _X_CARD_FILE_RE = re.compile(r"XXXX[XPD](\d{3})")
@@ -168,6 +173,25 @@ def _copied_members(src: str) -> list[str]:
     ]
 
 
+def _x_card_libraries(tmp_path: Path) -> tuple[CopybookLibrary, ...]:
+    """The COBOL libraries X-cards 047 and 048 name, each a directory holding its
+    members under the text-names a COPY ... OF library uses: SM207A copies ALTLB
+    from both, and the X-048 library's ALTLB is the ALTL1 text."""
+    return tuple(
+        _library(tmp_path / "libraries" / name.lower(), name, members)
+        for name, members in _X_CARD_LIBRARIES.items()
+    )
+
+
+def _library(directory: Path, name: str, members: Mapping[str, str]) -> CopybookLibrary:
+    directory.mkdir(parents=True, exist_ok=True)
+    for text_name, member in members.items():
+        (directory / f"{text_name}.CPY").write_text(
+            (NIST_DIR / f"{member}.CPY").read_text()
+        )
+    return CopybookLibrary(name, directory)
+
+
 def _run_unit(prog: str, tmp_path: Path, max_steps: int) -> tuple[Path, RunOutcome]:
     """Compile a program with its SUBRTN subprograms, run it, return its print path
     and how the run ended."""
@@ -181,7 +205,9 @@ def _run_unit(prog: str, tmp_path: Path, max_steps: int) -> tuple[Path, RunOutco
     )
     linked = compile_cobol(
         src.encode(),
-        parser=make_cobol_parser(copybook_dirs=[NIST_DIR]),
+        parser=make_cobol_parser(
+            copybook_dirs=[NIST_DIR], copybook_libraries=_x_card_libraries(tmp_path)
+        ),
         programs=tuple(
             SourceFile(Path(f"{callee}.CBL"), text.encode())
             for callee, text in zip(subroutines(prog), callees, strict=True)

@@ -8,6 +8,7 @@ from interpreter.address import Address
 from interpreter.cobol.features import CobolFeature
 from interpreter.field_name import FieldName
 from interpreter.project.entry_point import EntryPoint
+from interpreter.project.types import LinkedProgram
 from interpreter.run import initial_vm_state, run_linked
 from interpreter.var_name import VarName
 from interpreter.vm.builtins import core_builtins
@@ -29,6 +30,33 @@ from tests.integration.cobol_helpers import (
 def _require_bridge_jar(bridge_jar):
     """Enforce the required PROLEAP_BRIDGE_JAR for run()/compile_cobol-based
     tests (fails loudly via bridge_jar if it's unset)."""
+
+
+def _working_storage(linked: LinkedProgram, program: str) -> bytearray:
+    """Run ``program`` to its end and return its WORKING-STORAGE region."""
+    vm = run_linked(
+        linked,
+        entry_point=EntryPoint.function(
+            lambda ref: str(ref.label).endswith(f"func_{program.lower()}_0")
+            and "init_params" not in str(ref.label)
+        ),
+        max_steps=500,
+        initial_vm=initial_vm_state(),
+        builtins=core_builtins(),
+    )
+    program_var = VarName(f"__prog_{program}")
+    pointer = next(
+        frame.local_vars[program_var].value
+        for frame in reversed(vm.call_stack)
+        if program_var in frame.local_vars
+    )
+    assert isinstance(pointer, Pointer)
+    handle = vm.heap_get(pointer.base).fields[FieldName("ws_handle")].value
+    match vm.region_get(Address(str(handle))):
+        case bytearray() as region:
+            return region
+        case _:
+            raise AssertionError(f"{program} has no WORKING-STORAGE region")
 
 
 @covers(CobolFeature.MULTI_FILE_IMPORTS)
@@ -53,27 +81,7 @@ def test_copy_inlined_field_executes(tmp_path):
     )
 
     linked = compile_programs_in(tmp_path, "MAIN")
-    vm = run_linked(
-        linked,
-        entry_point=EntryPoint.function(
-            lambda ref: str(ref.label).endswith("func_main_0")
-            and "init_params" not in str(ref.label)
-        ),
-        max_steps=500,
-        initial_vm=initial_vm_state(),
-        builtins=core_builtins(),
-    )
-
-    ptr = None
-    for frame in reversed(vm.call_stack):
-        if VarName("__prog_MAIN") in frame.local_vars:
-            ptr = frame.local_vars[VarName("__prog_MAIN")].value
-            break
-    assert ptr is not None and isinstance(ptr, Pointer)
-    region = vm.region_get(
-        Address(str(vm.heap_get(ptr.base).fields[FieldName("ws_handle")].value))
-    )
-    assert region is not None
+    region = _working_storage(linked, "MAIN")
     assert _decode_zoned_unsigned(region, 0, 4) == 4242
 
 
@@ -97,27 +105,7 @@ def test_copy_of_library_inlined(tmp_path):
     )
 
     linked = compile_programs_in(tmp_path, "MAIN")
-    vm = run_linked(
-        linked,
-        entry_point=EntryPoint.function(
-            lambda ref: str(ref.label).endswith("func_main_0")
-            and "init_params" not in str(ref.label)
-        ),
-        max_steps=500,
-        initial_vm=initial_vm_state(),
-        builtins=core_builtins(),
-    )
-
-    ptr = None
-    for frame in reversed(vm.call_stack):
-        if VarName("__prog_MAIN") in frame.local_vars:
-            ptr = frame.local_vars[VarName("__prog_MAIN")].value
-            break
-    assert ptr is not None and isinstance(ptr, Pointer)
-    region = vm.region_get(
-        Address(str(vm.heap_get(ptr.base).fields[FieldName("ws_handle")].value))
-    )
-    assert region is not None
+    region = _working_storage(linked, "MAIN")
     assert _decode_zoned_unsigned(region, 0, 4) == 7777
 
 
@@ -170,26 +158,7 @@ def test_multiple_copybooks_inlined(tmp_path):
     )
 
     linked = compile_programs_in(tmp_path, "MAIN")
-    vm = run_linked(
-        linked,
-        entry_point=EntryPoint.function(
-            lambda ref: str(ref.label).endswith("func_main_0")
-            and "init_params" not in str(ref.label)
-        ),
-        max_steps=500,
-        initial_vm=initial_vm_state(),
-        builtins=core_builtins(),
-    )
-    ptr = None
-    for frame in reversed(vm.call_stack):
-        if VarName("__prog_MAIN") in frame.local_vars:
-            ptr = frame.local_vars[VarName("__prog_MAIN")].value
-            break
-    assert ptr is not None and isinstance(ptr, Pointer)
-    region = vm.region_get(
-        Address(str(vm.heap_get(ptr.base).fields[FieldName("ws_handle")].value))
-    )
-    assert region is not None
+    region = _working_storage(linked, "MAIN")
     assert _decode_zoned_unsigned(region, 0, 4) == 11
     assert _decode_zoned_unsigned(region, 4, 4) == 22
 
@@ -233,27 +202,7 @@ def test_copybook_with_a_high_byte_in_a_comment_is_inlined(tmp_path):
     )
 
     linked = compile_programs_in(tmp_path, "MAIN")
-    vm = run_linked(
-        linked,
-        entry_point=EntryPoint.function(
-            lambda ref: str(ref.label).endswith("func_main_0")
-            and "init_params" not in str(ref.label)
-        ),
-        max_steps=500,
-        initial_vm=initial_vm_state(),
-        builtins=core_builtins(),
-    )
-
-    ptr = None
-    for frame in reversed(vm.call_stack):
-        if VarName("__prog_MAIN") in frame.local_vars:
-            ptr = frame.local_vars[VarName("__prog_MAIN")].value
-            break
-    assert ptr is not None and isinstance(ptr, Pointer)
-    region = vm.region_get(
-        Address(str(vm.heap_get(ptr.base).fields[FieldName("ws_handle")].value))
-    )
-    assert region is not None
+    region = _working_storage(linked, "MAIN")
     assert _decode_zoned_unsigned(region, 0, 4) == 1234
 
 
@@ -314,30 +263,56 @@ def test_copy_shared_record_across_call(tmp_path):
     )
 
     linked = compile_programs_in(tmp_path, "MAINPROG")
-    vm = run_linked(
-        linked,
-        entry_point=EntryPoint.function(
-            lambda ref: str(ref.label).endswith("func_mainprog_0")
-            and "init_params" not in str(ref.label)
-        ),
-        max_steps=500,
-        initial_vm=initial_vm_state(),
-        builtins=core_builtins(),
-    )
-
-    ptr = None
-    for frame in reversed(vm.call_stack):
-        if VarName("__prog_MAINPROG") in frame.local_vars:
-            ptr = frame.local_vars[VarName("__prog_MAINPROG")].value
-            break
-    assert ptr is not None and isinstance(ptr, Pointer)
-    region = vm.region_get(
-        Address(str(vm.heap_get(ptr.base).fields[FieldName("ws_handle")].value))
-    )
-    assert region is not None
+    region = _working_storage(linked, "MAINPROG")
     # SR-VALUE at offset 0: 7 (set by MAINPROG) + 10 (added by CALLEE via LINKAGE)
     # propagated back through the BY REFERENCE params region.
     sr_value = _decode_zoned_unsigned(region, 0, 4)
     assert (
         sr_value == 17
     ), f"SR-VALUE: expected 17 (7 + 10 via shared copybook), got {sr_value}"
+
+
+@covers(CobolFeature.MULTI_FILE_IMPORTS)
+def test_copy_of_a_mapped_library_copies_that_librarys_text(tmp_path):
+    """COPY BOOK OF LIBA and COPY BOOK IN LIBB copy the BOOK of each library; an
+    unqualified COPY BOOK copies the one in the copybook directories."""
+    from cobol_asg.cobol_parser import make_cobol_parser
+    from cobol_asg.copybook_library import CopybookLibrary
+    from interpreter.project.cobol_compile import compile_cobol
+
+    books = {"liba": "WS-A PIC 9(4) VALUE 1111", "libb": "WS-B PIC 9(4) VALUE 2222"}
+    for directory, field in {**books, "syslib": "WS-S PIC 9(4) VALUE 3333"}.items():
+        (tmp_path / directory).mkdir()
+        (tmp_path / directory / "BOOK.cpy").write_text(_to_fixed([f"01 {field}."]))
+    main = _to_fixed(
+        [
+            "IDENTIFICATION DIVISION.",
+            "PROGRAM-ID. MAIN.",
+            "DATA DIVISION.",
+            "WORKING-STORAGE SECTION.",
+            "COPY BOOK OF LIBA.",
+            "COPY BOOK IN",
+            "    LIBB.",
+            "COPY BOOK.",
+            "PROCEDURE DIVISION.",
+            "    STOP RUN.",
+        ]
+    )
+    syslib = [tmp_path / "syslib"]
+    linked = compile_cobol(
+        main.encode(),
+        parser=make_cobol_parser(
+            copybook_dirs=syslib,
+            copybook_libraries=(
+                CopybookLibrary("LIBA", tmp_path / "liba"),
+                CopybookLibrary("LIBB", tmp_path / "libb"),
+            ),
+        ),
+        copybook_dirs=syslib,
+    )
+    region = _working_storage(linked, "MAIN")
+    assert [_decode_zoned_unsigned(region, offset, 4) for offset in (0, 4, 8)] == [
+        1111,
+        2222,
+        3333,
+    ]

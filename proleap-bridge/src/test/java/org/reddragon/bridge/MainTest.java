@@ -2,8 +2,10 @@ package org.reddragon.bridge;
 
 import org.junit.Test;
 
+import java.io.File;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -48,6 +50,18 @@ public class MainTest {
 
         assertEquals(
             Arrays.asList("", "cpy", "CPY", "cob", "cbl", "copy", "COPY"), extensions);
+    }
+
+    @Test
+    public void eachLibraryFlagMapsItsNameInUpperCaseToItsDirectory() {
+        String[] args = {
+            "-copybook-dir", "sym", "-copybook-library", "lib47", "one",
+            "-format", "FIXED", "-copybook-library", "LIB48", "two"
+        };
+
+        assertEquals(
+            Map.of("LIB47", new File("one"), "LIB48", new File("two")),
+            Main.copyBookLibraries(args));
     }
 
     @Test

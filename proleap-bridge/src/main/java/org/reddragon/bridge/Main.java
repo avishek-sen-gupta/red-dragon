@@ -21,7 +21,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -36,6 +39,8 @@ import java.util.logging.Logger;
  *   <li>{@code -copybook-dir <dir>}: copybook search directory (repeatable)</li>
  *   <li>{@code -copybook-ext <ext>}: copybook filename extension (repeatable;
  *       defaults to {@link #DEFAULT_COPYBOOK_EXTENSIONS} when not given)</li>
+ *   <li>{@code -copybook-library <name> <dir>}: the directory of COBOL library
+ *       {@code name}, read by COPY text-name OF/IN name (repeatable)</li>
  *   <li>{@code -expand-only}: write the expanded source instead of the ASG</li>
  * </ul>
  *
@@ -105,6 +110,8 @@ public final class Main {
                 i++;
             } else if ("-copybook-ext".equals(args[i]) && i + 1 < args.length) {
                 i++;  // value consumed by copyBookExtensions(args)
+            } else if ("-copybook-library".equals(args[i]) && i + 2 < args.length) {
+                i += 2;  // values consumed by copyBookLibraries(args)
             } else if ("-expand-only".equals(args[i])) {
                 continue;  // valueless; read by expandOnly(args)
             } else {
@@ -121,6 +128,7 @@ public final class Main {
         params.setFormat(format);
         params.setCharset(SOURCE_CHARSET);
         params.setCopyBookExtensions(copyBookExtensions(args));
+        params.setCopyBookLibraries(copyBookLibraries(args));
         if (!copyBookDirs.isEmpty()) {
             params.setCopyBookDirectories(copyBookDirs);
         }
@@ -169,6 +177,22 @@ public final class Main {
             }
         }
         return extensions.isEmpty() ? DEFAULT_COPYBOOK_EXTENSIONS : extensions;
+    }
+
+    /**
+     * Each {@code -copybook-library <name> <dir>}: the directory a COPY text-name
+     * OF/IN library-name reads, keyed by library-name in upper case (COBOL words
+     * are case-insensitive).
+     */
+    static Map<String, File> copyBookLibraries(String[] args) {
+        Map<String, File> libraries = new HashMap<>();
+        for (int i = 0; i < args.length - 2; i++) {
+            if ("-copybook-library".equals(args[i])) {
+                libraries.put(args[i + 1].toUpperCase(Locale.ROOT), new File(args[i + 2]));
+                i += 2;
+            }
+        }
+        return libraries;
     }
 
     private static File resolveInputFile(String filePath) throws IOException {
