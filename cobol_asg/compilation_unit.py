@@ -17,6 +17,7 @@ from cobol_asg.addressing_mode import AddressingMode
 from cobol_asg.asg_types import CobolASG
 from cobol_asg.contained_programs import (
     CONTAINED_PROGRAMS,
+    ENCLOSING_PROGRAMS,
     contained_programs,
     program_alone,
 )
@@ -27,19 +28,22 @@ _IDENTITY: Callable[[dict], dict] = lambda d: d  # noqa: E731
 
 def programs_in_preorder(written: Mapping) -> tuple[dict, ...]:
     """Every program object of a bridge compilation unit, each without the
-    programs it contains: source order, a program before those it contains."""
+    programs it contains: source order, a program before those it contains. A
+    contained program carries the programs that contain it, each alone, the
+    nearest first, under ``enclosing``."""
     return tuple(
-        program for top in written[CONTAINED_PROGRAMS] for program in _preorder(top)
+        program for top in written[CONTAINED_PROGRAMS] for program in _preorder(top, ())
     )
 
 
-def _preorder(written: Mapping) -> tuple[dict, ...]:
+def _preorder(written: Mapping, enclosing: tuple[dict, ...]) -> tuple[dict, ...]:
+    alone = program_alone(written)
     return (
-        program_alone(written),
+        alone | ({ENCLOSING_PROGRAMS: list(enclosing)} if enclosing else {}),
         *(
             program
             for inner in contained_programs(written)
-            for program in _preorder(inner)
+            for program in _preorder(inner, (alone, *enclosing))
         ),
     )
 

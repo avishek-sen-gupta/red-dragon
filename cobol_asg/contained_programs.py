@@ -6,6 +6,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 
 CONTAINED_PROGRAMS = "programs"
+ENCLOSING_PROGRAMS = "enclosing"
 UNNAMED_PROGRAM = "MAIN"
 
 
@@ -27,3 +28,8 @@ def written_program_id(written: Mapping) -> str:
 def written_program_name(written: Mapping) -> str:
     """The name a bridge program object's program goes by in the run unit."""
     return (written_program_id(written) or UNNAMED_PROGRAM).upper()
+
+
+def enclosing_programs(written: Mapping) -> Sequence[dict]:
+    """The programs that contain this one, each alone, the nearest first."""
+    return written.get(ENCLOSING_PROGRAMS, [])

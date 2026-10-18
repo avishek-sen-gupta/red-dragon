@@ -71,6 +71,7 @@ class CobolField:
     blank_when_zero: bool = False
     filler: bool = False
     external: bool = False
+    is_global: bool = False
     # The program's currency symbol at the time this field was ingested — '$'
     # unless SPECIAL-NAMES declared CURRENCY SIGN IS otherwise. It is
     # program-scoped, not per-field, but __post_init__ computes the type
@@ -201,6 +202,7 @@ class CobolField:
             blank_when_zero=data.get("blank_when_zero", False),
             filler=data.get("filler", False),
             external=data.get("external", False),
+            is_global=data.get("global", False),
             currency_symbol=conventions.currency,
             pointer_type=conventions.pointer_type,
             decimal_point_is_comma=conventions.decimal_point_is_comma,
@@ -265,6 +267,7 @@ class CobolField:
             ),
             **({"blank_when_zero": True} if self.blank_when_zero else {}),
             **({"external": True} if self.external else {}),
+            **({"global": True} if self.is_global else {}),
         }
         if self.span is not None:
             self.span.write_into(result)

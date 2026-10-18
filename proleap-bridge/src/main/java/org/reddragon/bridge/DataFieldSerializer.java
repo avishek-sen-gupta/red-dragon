@@ -238,6 +238,10 @@ public final class DataFieldSerializer {
             obj.addProperty("external", true);
         }
 
+        if (group.getGlobalClause() != null) {
+            obj.addProperty("global", true);
+        }
+
         List<DataDescriptionEntry> children = group.getDataDescriptionEntries();
         if (children != null && !children.isEmpty()) {
             JsonArray childArray = serializeChildren(children);

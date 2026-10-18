@@ -1619,12 +1619,13 @@ _RECORD_CLAUSES: dict[str, Callable[[Mapping], RecordClause]] = {
 
 @dataclass(frozen=True)
 class FileDescription:
-    """An FD's RECORDING MODE, RECORD and EXTERNAL clauses, from the FILE SECTION."""
+    """An FD's RECORDING MODE, RECORD, EXTERNAL and GLOBAL clauses, from the FILE SECTION."""
 
     fd_name: str
     recording_mode: RecordingMode
     record_clause: RecordClause
     external: bool = False
+    is_global: bool = False
 
     @classmethod
     def from_dict(cls, data: Mapping) -> FileDescription:
@@ -1634,6 +1635,7 @@ class FileDescription:
             recording_mode=RecordingMode(data["recording_mode"]),
             record_clause=_RECORD_CLAUSES[clause["kind"]](clause),
             external=data.get("external", False),
+            is_global=data.get("global", False),
         )
 
     def to_dict(self) -> dict:
@@ -1642,6 +1644,7 @@ class FileDescription:
             "recording_mode": self.recording_mode.value,
             "record_clause": self.record_clause.to_dict(),
             "external": self.external,
+            "global": self.is_global,
         }
 
 
