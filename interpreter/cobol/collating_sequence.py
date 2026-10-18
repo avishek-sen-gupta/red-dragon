@@ -21,11 +21,13 @@ def _character(byte: int) -> str:
 class CollatingSequence:
     """``weights[b]`` is native byte b's position; equal weights compare equal.
 
-    ``low_value`` and ``high_value`` are the native bytes LOW-VALUE and
-    HIGH-VALUE stand for.
+    ``first_bytes[p]`` is the native byte the ALPHABET clause names first for
+    position p. ``low_value`` and ``high_value`` are the native bytes LOW-VALUE
+    and HIGH-VALUE stand for.
     """
 
     weights: tuple[int, ...]
+    first_bytes: tuple[int, ...]
     low_value: int
     high_value: int
 
@@ -34,6 +36,11 @@ class CollatingSequence:
         a string through them gives one that orders as this sequence does."""
         native = "".join(_character(b) for b in range(len(self.weights)))
         return native, "".join(chr(w) for w in self.weights)
+
+    def characters_by_position(self) -> tuple[str, ...]:
+        """The character at each position, from the first: where characters share
+        a position, the one the ALPHABET clause names first."""
+        return tuple(_character(b) for b in self.first_bytes)
 
     def figuratives(self) -> ProgramFiguratives:
         high, low = _character(self.high_value), _character(self.low_value)

@@ -57,6 +57,7 @@ def _sequence(positions: Positions) -> CollatingSequence:
     position_of = {b: n for n, bytes_ in enumerate(positions) for b in bytes_}
     return CollatingSequence(
         weights=tuple(position_of[b] for b in _NATIVE_BYTES),
+        first_bytes=tuple(bytes_[0] for bytes_ in positions),
         low_value=positions[0][0],
         high_value=positions[-1][-1],
     )
