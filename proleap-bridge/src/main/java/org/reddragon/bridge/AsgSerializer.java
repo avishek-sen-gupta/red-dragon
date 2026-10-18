@@ -40,8 +40,6 @@ import io.proleap.cobol.asg.metamodel.call.Call;
 
 import java.util.ArrayList;
 import org.antlr.v4.runtime.ParserRuleContext;
-import org.antlr.v4.runtime.tree.ParseTree;
-import org.antlr.v4.runtime.tree.TerminalNode;
 import java.util.Collection;
 import java.util.List;
 import java.util.logging.Logger;
@@ -188,15 +186,11 @@ public final class AsgSerializer {
         CobolParser.EnvironmentSwitchNameSpecialNamesStatusPhraseContext phrase =
                 ctx.environmentSwitchNameSpecialNamesStatusPhrase();
         if (phrase == null) return sw;
-        String status = "";
-        for (ParseTree child : phrase.children) {
-            if (child instanceof TerminalNode token
-                    && (token.getSymbol().getType() == CobolParser.ON
-                        || token.getSymbol().getType() == CobolParser.OFF)) {
-                status = token.getSymbol().getType() == CobolParser.ON ? "on_condition" : "off_condition";
-            } else if (child instanceof CobolParser.ConditionContext condition) {
-                sw.addProperty(status, condition.getText().toUpperCase());
-            }
+        if (phrase.switchOnStatus() != null) {
+            sw.addProperty("on_condition", upperText(phrase.switchOnStatus().conditionName()));
+        }
+        if (phrase.switchOffStatus() != null) {
+            sw.addProperty("off_condition", upperText(phrase.switchOffStatus().conditionName()));
         }
         return sw;
     }
