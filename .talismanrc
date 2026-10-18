@@ -210,7 +210,7 @@ fileignoreconfig:
 - filename: docs/superpowers/plans/2026-04-21-compute-ref-mod.md
   checksum: 9fc7678c0884d46b552543aa1a180efab15478593785ef0b7088cf6f5357e77f
 - filename: README.md
-  checksum: e5fc10fbad943242c23c9ea2795e35ba05c06e8558f7c41d7f1454e2e48de0ef
+  checksum: 945d1bfab179cb9f676986001af85e87b2fb2c8908bb78c95446235211a6a92e
 - filename: issues/issues.jsonl
   # Generated snapshot of the Beads issue graph (bd export -o issues/issues.jsonl)
   # — churns on every issue change, so a checksum is self-defeating; ignore
@@ -350,4 +350,10 @@ fileignoreconfig:
   checksum: 6e8e1d1a0dae38eb3fcdf85ccb2f957313cdb025315a54129edd29c5871bbfbe
 - filename: tests/unit/nist/test_nist_classify.py
   checksum: b0b2b0a7b6d9a868f9566159074a8f9968f5c4f65a37e92db30afac6076563a3
+- filename: tests/unit/nist/test_nist_report_render.py
+  checksum: f5561612308a852a038e67fdaac5cd26fd7343d1abc60efee0c47356c3cf8e73
+- filename: tests/nist/nist_report_render.py
+  checksum: 5bcb241d599c7d0f2f9fde6e840a029d8705c5e6aa4aafca7878910b86fbfdfb
+- filename: docs/nist/README.md
+  checksum: 46491037b28d8b4c528b288e9c833c6ddb026bae89142ee0032aa88c1c22e385
 version: "1.0"

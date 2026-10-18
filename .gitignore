@@ -57,3 +57,6 @@ dolt-server.*
 .beads-credential-key
 .beads/proxieddb/
 *.gate.lock*
+
+# NIST conformance reports (make nist-report)
+nist-reports/

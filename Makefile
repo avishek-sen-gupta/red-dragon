@@ -22,11 +22,12 @@ PROLEAP_PARSER_JAR := $(MAVEN_REPO_LOCAL)/io/github/uwol/proleap-cobol-parser/$(
 PYTEST      = uv run python -m pytest
 PYTEST_ARGS ?=
 
-.PHONY: help setup test jar jar-force parser parser-force fmt lint
+.PHONY: help setup test nist-report jar jar-force parser parser-force fmt lint
 
 help:
 	@echo "make setup      - initialise submodules + build the ProLeap JAR (run once after clone)"
 	@echo "make test       - full suite (builds the JAR if missing)"
+	@echo "make nist-report - run the NIST CCVS suite and write a categorised report to nist-reports/"
 	@echo "make jar        - build the ProLeap bridge JAR if it is missing"
 	@echo "make parser     - install the vendored ProLeap parser into MAVEN_REPO_LOCAL if stale/missing"
 	@echo "make parser-force - reinstall the ProLeap parser unconditionally"
@@ -76,6 +77,9 @@ jar-force: $(PROLEAP_PARSER_JAR)
 
 test: jar
 	$(PYTEST) $(PYTEST_ARGS)
+
+nist-report: jar
+	uv run python -m scripts.nist_report $(PYTEST_ARGS)
 
 fmt:
 	uv run python -m black .
