@@ -121,6 +121,7 @@ from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.cobol.size_error_arm import SizeErrorArm
 from interpreter.cobol.size_error_ir import emit_size_error
 from interpreter.cobol.size_error_store import SizeErrorGuard, SizeErrorStore
+from interpreter.cobol.ordinal_function_ir import emit_char, emit_ord
 from interpreter.cobol.standard_deviation_ir import emit_standard_deviation
 from interpreter.cobol.when_compiled import when_compiled_text
 from interpreter.func_name import FuncName
@@ -423,8 +424,6 @@ _INTRINSIC_FUNCTIONS = {
     "SUBSTITUTE": BuiltinName.SUBSTITUTE,
     "EXP10": BuiltinName.EXP10,
     "LOG10": BuiltinName.LOG10,
-    "CHAR": BuiltinName.CHAR,
-    "ORD": BuiltinName.ORD,
     "DAY-OF-INTEGER": BuiltinName.DAY_OF_INTEGER,
     "INTEGER-OF-DAY": BuiltinName.INTEGER_OF_DAY,
     "ANNUITY": BuiltinName.ANNUITY,
@@ -585,6 +584,8 @@ _INTRINSIC_EMITTERS: Mapping[
         for name, builtin in _INTRINSIC_FUNCTIONS.items()
     },
     "STANDARD-DEVIATION": emit_standard_deviation,
+    "CHAR": emit_char,
+    "ORD": emit_ord,
 }
 
 

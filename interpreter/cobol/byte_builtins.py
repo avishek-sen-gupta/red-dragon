@@ -1397,32 +1397,6 @@ def _builtin_log10(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     return BuiltinResult(value=math.log10(x))
 
 
-def _builtin_char(args: list[TypedValue], vm: VMState) -> BuiltinResult:
-    """COBOL FUNCTION CHAR(n): the nth character (1-based) in the program
-    collating sequence — this codebase's EBCDIC table. n must be in [1,256].
-    """
-    if len(args) < 1 or _is_symbolic(args[0].value):
-        return BuiltinResult(value=_UNCOMPUTABLE)
-    n = _coerce_intrinsic_int(args[0].value)
-    if n is None or n < 1 or n > 256:
-        return BuiltinResult(value=_UNCOMPUTABLE)
-    ascii_code = EbcdicTable.EBCDIC_TO_ASCII[n - 1]
-    return BuiltinResult(value=chr(ascii_code))
-
-
-def _builtin_ord(args: list[TypedValue], vm: VMState) -> BuiltinResult:
-    """COBOL FUNCTION ORD(c): the 1-based ordinal position of the single
-    character c in the program collating sequence (inverse of CHAR, subject
-    to duplicate-mapping collapse in the EBCDIC control-character range)."""
-    if len(args) < 1 or _is_symbolic(args[0].value):
-        return BuiltinResult(value=_UNCOMPUTABLE)
-    value = args[0].value
-    if not isinstance(value, str) or len(value) != 1:
-        return BuiltinResult(value=_UNCOMPUTABLE)
-    ebcdic_byte = EbcdicTable.ASCII_TO_EBCDIC[ord(value)]
-    return BuiltinResult(value=ebcdic_byte + 1)
-
-
 def _builtin_day_of_integer(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """COBOL FUNCTION DAY-OF-INTEGER(n): the Julian date YYYYDDD, n days after
     the COBOL standard epoch (1600-12-31). Sibling of DATE-OF-INTEGER, which
@@ -1648,8 +1622,6 @@ BYTE_BUILTINS: Mapping[FuncName, Builtin] = MappingProxyType(
         FuncName(BuiltinName.SUBSTITUTE): _builtin_substitute,
         FuncName(BuiltinName.EXP10): _builtin_exp10,
         FuncName(BuiltinName.LOG10): _builtin_log10,
-        FuncName(BuiltinName.CHAR): _builtin_char,
-        FuncName(BuiltinName.ORD): _builtin_ord,
         FuncName(BuiltinName.DAY_OF_INTEGER): _builtin_day_of_integer,
         FuncName(BuiltinName.INTEGER_OF_DAY): _builtin_integer_of_day,
         FuncName(BuiltinName.ANNUITY): _builtin_annuity,

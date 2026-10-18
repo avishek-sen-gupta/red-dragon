@@ -14,7 +14,6 @@ from interpreter.cobol.byte_builtins import (
     _builtin_byte_from_int,
     _builtin_bytes_to_float,
     _builtin_bytes_to_string,
-    _builtin_char,
     _builtin_cobol_blank_when_zero,
     _builtin_cobol_prepare_digits,
     _builtin_cobol_prepare_sign,
@@ -62,7 +61,6 @@ from interpreter.cobol.byte_builtins import (
     _builtin_nibble_set,
     _builtin_numval,
     _builtin_numval_c,
-    _builtin_ord,
     _builtin_ord_max,
     _builtin_ord_min,
     _builtin_present_value,
@@ -487,8 +485,6 @@ class TestByteBuiltinsRegistration:
             "__substitute",
             "__exp10",
             "__log10",
-            "__char",
-            "__ord_char",
             "__day_of_integer",
             "__integer_of_day",
             "__annuity",
@@ -3023,67 +3019,6 @@ class TestLog10:
     @covers(CobolFeature.INTRINSIC_FUNCTION)
     def test_registered_in_builtins(self):
         assert FuncName(BuiltinName.LOG10) in BYTE_BUILTINS
-
-
-class TestChar:
-    """FUNCTION CHAR(n) -> the nth character (1-based) in the program
-    collating sequence (this codebase's EBCDIC table)."""
-
-    @covers(CobolFeature.INTRINSIC_FUNCTION)
-    def test_letter_a(self):
-        # EBCDIC byte 0xC1 (193 decimal) is 'A' -> n = 193 + 1 = 194.
-        assert _builtin_char([typed_from_runtime(194)], None).value == "A"
-
-    @covers(CobolFeature.INTRINSIC_FUNCTION)
-    def test_digit_zero(self):
-        # EBCDIC byte 0xF0 (240 decimal) is '0' -> n = 240 + 1 = 241.
-        assert _builtin_char([typed_from_runtime(241)], None).value == "0"
-
-    @covers(CobolFeature.INTRINSIC_FUNCTION)
-    def test_out_of_range_uncomputable(self):
-        assert _builtin_char([typed_from_runtime(0)], None).value is _UNCOMPUTABLE
-        assert _builtin_char([typed_from_runtime(257)], None).value is _UNCOMPUTABLE
-
-    @covers(CobolFeature.INTRINSIC_FUNCTION)
-    def test_symbolic_uncomputable(self):
-        sym = SymbolicValue("s0")
-        assert _builtin_char([typed_from_runtime(sym)], None).value is _UNCOMPUTABLE
-
-    @covers(CobolFeature.INTRINSIC_FUNCTION)
-    def test_registered_in_builtins(self):
-        assert FuncName(BuiltinName.CHAR) in BYTE_BUILTINS
-
-
-class TestOrd:
-    """FUNCTION ORD(c) -> the 1-based ordinal position of c in the program
-    collating sequence; ORD(CHAR(n)) == n for printable characters."""
-
-    @covers(CobolFeature.INTRINSIC_FUNCTION)
-    def test_letter_a(self):
-        assert _builtin_ord([typed_from_runtime("A")], None).value == 194
-
-    @covers(CobolFeature.INTRINSIC_FUNCTION)
-    def test_digit_zero(self):
-        assert _builtin_ord([typed_from_runtime("0")], None).value == 241
-
-    @covers(CobolFeature.INTRINSIC_FUNCTION)
-    def test_round_trips_with_char(self):
-        n = 194
-        char_result = _builtin_char([typed_from_runtime(n)], None).value
-        assert _builtin_ord([typed_from_runtime(char_result)], None).value == n
-
-    @covers(CobolFeature.INTRINSIC_FUNCTION)
-    def test_multi_char_uncomputable(self):
-        assert _builtin_ord([typed_from_runtime("AB")], None).value is _UNCOMPUTABLE
-
-    @covers(CobolFeature.INTRINSIC_FUNCTION)
-    def test_symbolic_uncomputable(self):
-        sym = SymbolicValue("s0")
-        assert _builtin_ord([typed_from_runtime(sym)], None).value is _UNCOMPUTABLE
-
-    @covers(CobolFeature.INTRINSIC_FUNCTION)
-    def test_registered_in_builtins(self):
-        assert FuncName(BuiltinName.ORD) in BYTE_BUILTINS
 
 
 class TestDayOfInteger:

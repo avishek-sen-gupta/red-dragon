@@ -148,8 +148,6 @@ class BuiltinName:
     SUBSTITUTE = "__substitute"
     EXP10 = "__exp10"
     LOG10 = "__log10"
-    CHAR = "__char"
-    ORD = "__ord_char"
     DAY_OF_INTEGER = "__day_of_integer"
     INTEGER_OF_DAY = "__integer_of_day"
     ANNUITY = "__annuity"
