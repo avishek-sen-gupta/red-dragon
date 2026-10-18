@@ -14,7 +14,6 @@ from cobol_asg.cobol_statements import (
 )
 from cobol_asg.nonnumeric_literal import literal_characters
 from cobol_asg.ref_mod import RefModOperand
-from cobol_asg.source_span import SourceSpan
 from cobol_asg.unstring_receiver import UnstringReceiver
 from interpreter.cobol.cobol_constants import BuiltinName, InspectType
 from interpreter.cobol.emit_context import EmitContext
@@ -25,8 +24,8 @@ from interpreter.cobol.inspect_ir import (
 )
 from interpreter.cobol.inspect_mode import InspectMode
 from interpreter.cobol.inspect_phrase_registers import InspectPhraseRegisters
-from interpreter.cobol.ir_emitter import IrEmitter
 from interpreter.cobol.lower_arithmetic import eval_ref_mod_expr
+from interpreter.cobol.lowering_scope import LoweringScope
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.cobol.string_ir import emit_string
 from interpreter.cobol.string_ir_outcome import StringIrOutcome
@@ -49,12 +48,7 @@ _NO_OPERAND = RefModOperand(name="")
 
 
 def _write_ref_mod_target(
-    ctx: EmitContext,
-    target: RefModOperand,
-    value_reg: Register,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None = None,
+    scope: LoweringScope, target: RefModOperand, value_reg: Register
 ) -> None:
     """Write value_reg into target's field.
 
@@ -65,6 +59,7 @@ def _write_ref_mod_target(
     uses (lower_arithmetic.py's _store_move_value). Caller is responsible for
     confirming ctx.has_field(target.name, materialised) first.
     """
+    ctx, materialised, span = scope.ctx, scope.materialised, scope.span
     target_ref, target_rr = ctx.resolve_field_ref(
         target.name,
         materialised,
@@ -134,91 +129,63 @@ def lower_string(
     """STRING sendings DELIMITED BY ... INTO receiver [WITH POINTER] [ON / NOT ON
     OVERFLOW]. Every operand is evaluated once; IR then runs the transfer
     (interpreter.cobol.string_ir)."""
-    span = stmt.span
+    scope = LoweringScope(ctx, materialised, stmt.span)
     if not ctx.has_field(stmt.into.name, materialised):
         logger.warning("STRING INTO target %s not found in layout", stmt.into.name)
         return
     has_pointer = bool(stmt.pointer.name) and ctx.has_field(
         stmt.pointer.name, materialised
     )
-    outcome = _string_outcome(ctx, stmt, has_pointer, materialised)
-    _write_ref_mod_target(ctx, stmt.into, outcome.image, materialised, span=span)
+    outcome = _string_outcome(scope, stmt, has_pointer)
+    _write_ref_mod_target(scope, stmt.into, outcome.image)
     if has_pointer:
-        _write_number(ctx, stmt.pointer, outcome.pointer, materialised, span=span)
+        _write_number(scope, stmt.pointer, outcome.pointer)
     _lower_overflow_phrases(
-        ctx,
-        outcome.overflow,
-        stmt.on_overflow,
-        stmt.not_on_overflow,
-        materialised,
-        span=span,
+        scope, outcome.overflow, stmt.on_overflow, stmt.not_on_overflow
     )
 
 
 def _string_outcome(
-    ctx: EmitContext,
-    stmt: StringStatement,
-    has_pointer: bool,
-    materialised: MaterialisedSectionedLayout,
+    scope: LoweringScope, stmt: StringStatement, has_pointer: bool
 ) -> StringIrOutcome:
     """The receiver characters, pointer and overflow after the transfer; the
     pointer starts at 1 without WITH POINTER."""
-    span = stmt.span
-    parts = tuple(
-        _delimited_sending(ctx, sending, materialised, span=span)
-        for sending in stmt.sendings
-    )
+    parts = tuple(_delimited_sending(scope, sending) for sending in stmt.sendings)
     return emit_string(
-        IrEmitter(ctx=ctx, span=span),
-        _receiver_characters(ctx, stmt.into, materialised, span=span),
+        scope.emitter,
+        _receiver_characters(scope, stmt.into),
         (
-            _read_pointer(ctx, stmt.pointer, materialised, span=span)
+            _read_pointer(scope, stmt.pointer)
             if has_pointer
-            else ctx.const_to_reg(1, span=span)
+            else scope.ctx.const_to_reg(1, span=scope.span)
         ),
         parts,
     )
 
 
-def _delimited_sending(
-    ctx: EmitContext,
-    sending: StringSending,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
-) -> Register:
+def _delimited_sending(scope: LoweringScope, sending: StringSending) -> Register:
     """The characters a sending contributes: all of them for DELIMITED BY SIZE,
     else those before the delimiter's first occurrence."""
-    characters_reg = _sending_characters(ctx, sending, materialised, span=span)
+    characters_reg = _sending_characters(scope, sending)
     if not sending.delimiter.name:
         return characters_reg
     pieces_reg = _call(
-        ctx,
+        scope,
         BuiltinName.STRING_SPLIT,
-        (
-            characters_reg,
-            _resolve_inspect_operand(ctx, sending.delimiter, materialised, span=span),
-        ),
-        span=span,
+        (characters_reg, _resolve_inspect_operand(scope, sending.delimiter)),
     )
     return _call(
-        ctx,
+        scope,
         BuiltinName.LIST_GET,
-        (pieces_reg, ctx.const_to_reg(0, span=span)),
-        span=span,
+        (pieces_reg, scope.ctx.const_to_reg(0, span=scope.span)),
     )
 
 
-def _sending_characters(
-    ctx: EmitContext,
-    sending: StringSending,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
-) -> Register:
+def _sending_characters(scope: LoweringScope, sending: StringSending) -> Register:
     """An intrinsic FUNCTION's value, a data item's stored characters (with its
     qualifiers, subscripts and reference modification), a figurative constant's
     single character, or a literal's text."""
+    ctx, materialised, span = scope.ctx, scope.materialised, scope.span
     if sending.function is not None:
         from interpreter.cobol.lower_arithmetic import lower_function_operand
 
@@ -239,26 +206,21 @@ def _sending_characters(
         span=span,
     )
     stored_reg = ctx.emit_stored_characters(rr, ref, span=span)
-    window = _ref_mod_window(ctx, sending.value, materialised, span=span)
+    window = _ref_mod_window(scope, sending.value)
     return (
-        _call(ctx, BuiltinName.STRING_SLICE, (stored_reg, *window), span=span)
+        _call(scope, BuiltinName.STRING_SLICE, (stored_reg, *window))
         if window
         else stored_reg
     )
 
 
-def _receiver_characters(
-    ctx: EmitContext,
-    receiver: RefModOperand,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
-) -> Register:
+def _receiver_characters(scope: LoweringScope, receiver: RefModOperand) -> Register:
     """The receiving item's current characters, only its reference-modified
     window when it has one."""
+    ctx, span = scope.ctx, scope.span
     ref, rr = ctx.resolve_field_ref(
         receiver.name,
-        materialised,
+        scope.materialised,
         receiver.qualifiers,
         subscripts=receiver.subscripts,
         span=span,
@@ -266,24 +228,21 @@ def _receiver_characters(
     current_reg = ctx.emit_decode_field_characters(
         rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
     )
-    window = _ref_mod_window(ctx, receiver, materialised, span=span)
+    window = _ref_mod_window(scope, receiver)
     return (
-        _call(ctx, BuiltinName.STRING_SLICE, (current_reg, *window), span=span)
+        _call(scope, BuiltinName.STRING_SLICE, (current_reg, *window))
         if window
         else current_reg
     )
 
 
 def _ref_mod_window(
-    ctx: EmitContext,
-    operand: RefModOperand,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
+    scope: LoweringScope, operand: RefModOperand
 ) -> tuple[Register, ...]:
     """(0-based start, length) registers of a reference-modified operand, else ()."""
     if operand.ref_mod_start is None:
         return ()
+    ctx, materialised, span = scope.ctx, scope.materialised, scope.span
     start_reg = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
@@ -302,15 +261,10 @@ def _ref_mod_window(
     return start_reg, length_reg
 
 
-def _read_pointer(
-    ctx: EmitContext,
-    item: RefModOperand,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
-) -> Register:
+def _read_pointer(scope: LoweringScope, item: RefModOperand) -> Register:
+    ctx, span = scope.ctx, scope.span
     ref, rr = ctx.resolve_field_ref(
-        item.name, materialised, item.qualifiers, item.subscripts, span=span
+        item.name, scope.materialised, item.qualifiers, item.subscripts, span=span
     )
     return ctx.emit_decode_field(
         rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
@@ -318,15 +272,11 @@ def _read_pointer(
 
 
 def _write_number(
-    ctx: EmitContext,
-    item: RefModOperand,
-    value_reg: Register,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
+    scope: LoweringScope, item: RefModOperand, value_reg: Register
 ) -> None:
+    ctx, span = scope.ctx, scope.span
     ref, rr = ctx.resolve_field_ref(
-        item.name, materialised, item.qualifiers, item.subscripts, span=span
+        item.name, scope.materialised, item.qualifiers, item.subscripts, span=span
     )
     ctx.emit_encode_and_write(
         rr,
@@ -339,18 +289,16 @@ def _write_number(
 
 
 def _lower_overflow_phrases(
-    ctx: EmitContext,
+    scope: LoweringScope,
     overflow_reg: Register,
     on_overflow: Sequence[CobolStatementType],
     not_on_overflow: Sequence[CobolStatementType],
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
 ) -> None:
     """ON OVERFLOW runs when the overflow condition arose, NOT ON OVERFLOW when
     it did not; control then passes to the end of the statement."""
     if not (on_overflow or not_on_overflow):
         return
+    ctx, span = scope.ctx, scope.span
     on_label = ctx.fresh_label("on_overflow")
     not_on_label = ctx.fresh_label("not_on_overflow")
     end_label = ctx.fresh_label("overflow_end")
@@ -358,25 +306,21 @@ def _lower_overflow_phrases(
         BranchIf(cond_reg=overflow_reg, branch_targets=(on_label, not_on_label)),
         span=span,
     )
-    _lower_overflow_arm(ctx, on_label, on_overflow, end_label, materialised, span=span)
-    _lower_overflow_arm(
-        ctx, not_on_label, not_on_overflow, end_label, materialised, span=span
-    )
+    _lower_overflow_arm(scope, on_label, on_overflow, end_label)
+    _lower_overflow_arm(scope, not_on_label, not_on_overflow, end_label)
     ctx.emit_inst(Label_(label=end_label), span=span)
 
 
 def _lower_overflow_arm(
-    ctx: EmitContext,
+    scope: LoweringScope,
     label: CodeLabel,
     body: Sequence[CobolStatementType],
     end_label: CodeLabel,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
 ) -> None:
+    ctx, span = scope.ctx, scope.span
     ctx.emit_inst(Label_(label=label), span=span)
     for child in body:
-        ctx.lower_statement(child, materialised)
+        ctx.lower_statement(child, scope.materialised)
     ctx.emit_inst(Branch(label=end_label), span=span)
 
 
@@ -389,61 +333,46 @@ def lower_unstring(
     POINTER] [TALLYING IN] [ON / NOT ON OVERFLOW]. The source, pointer and
     delimiters are evaluated once; IR then examines the source
     (interpreter.cobol.unstring_ir) and each receiver it acted on is written."""
-    span = stmt.span
+    scope = LoweringScope(ctx, materialised, stmt.span)
     if not ctx.has_field(stmt.source.name, materialised):
         logger.warning("UNSTRING source %s not found in layout", stmt.source.name)
         return
     has_pointer = bool(stmt.pointer.name) and ctx.has_field(
         stmt.pointer.name, materialised
     )
-    outcome = _unstring_outcome(ctx, stmt, has_pointer, materialised)
+    outcome = _unstring_outcome(scope, stmt, has_pointer)
     for index, (receiver, piece) in enumerate(
         zip(stmt.into, outcome.pieces, strict=True)
     ):
-        _write_unstring_receiver(
-            ctx, receiver, (piece, outcome.acted), index, materialised, span=span
-        )
+        _write_unstring_receiver(scope, receiver, (piece, outcome.acted), index)
     if has_pointer:
-        _write_number(ctx, stmt.pointer, outcome.pointer, materialised, span=span)
+        _write_number(scope, stmt.pointer, outcome.pointer)
     if stmt.tallying_target.name and ctx.has_field(
         stmt.tallying_target.name, materialised
     ):
-        _add_to_number(
-            ctx, stmt.tallying_target, outcome.acted, materialised, span=span
-        )
+        _add_to_number(scope, stmt.tallying_target, outcome.acted)
     _lower_overflow_phrases(
-        ctx,
-        outcome.overflow,
-        stmt.on_overflow,
-        stmt.not_on_overflow,
-        materialised,
-        span=span,
+        scope, outcome.overflow, stmt.on_overflow, stmt.not_on_overflow
     )
 
 
 def _unstring_outcome(
-    ctx: EmitContext,
-    stmt: UnstringStatement,
-    has_pointer: bool,
-    materialised: MaterialisedSectionedLayout,
+    scope: LoweringScope, stmt: UnstringStatement, has_pointer: bool
 ) -> UnstringIrOutcome:
     """The examination's outcome for this statement; the pointer starts at 1
     without WITH POINTER."""
-    span = stmt.span
+    materialised = scope.materialised
     delimiters = tuple(
-        (
-            _resolve_inspect_operand(ctx, delimiter.operand, materialised, span=span),
-            delimiter.all,
-        )
+        (_resolve_inspect_operand(scope, delimiter.operand), delimiter.all)
         for delimiter in stmt.delimiters
     )
     return emit_unstring(
-        IrEmitter(ctx=ctx, span=span),
-        _receiver_characters(ctx, stmt.source, materialised, span=span),
+        scope.emitter,
+        _receiver_characters(scope, stmt.source),
         (
-            _read_pointer(ctx, stmt.pointer, materialised, span=span)
+            _read_pointer(scope, stmt.pointer)
             if has_pointer
-            else ctx.const_to_reg(1, span=span)
+            else scope.ctx.const_to_reg(1, span=scope.span)
         ),
         (
             delimiters,
@@ -458,17 +387,15 @@ def _unstring_outcome(
 
 
 def _write_unstring_receiver(
-    ctx: EmitContext,
+    scope: LoweringScope,
     receiver: UnstringReceiver,
     received: tuple[UnstringIrPiece, Register],
     index: int,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
 ) -> None:
     """Receiver ``index`` and its DELIMITER IN and COUNT IN items get their
     piece when the examination reached that receiver, and are untouched when
     it did not."""
+    ctx, span = scope.ctx, scope.span
     piece, acted_reg = received
     write_label = ctx.fresh_label("unstring_receive")
     skip_label = ctx.fresh_label("unstring_skip")
@@ -487,42 +414,32 @@ def _write_unstring_receiver(
         span=span,
     )
     ctx.emit_inst(Label_(label=write_label), span=span)
-    _write_ref_mod_target(ctx, receiver.target, piece.text, materialised, span=span)
+    _write_ref_mod_target(scope, receiver.target, piece.text)
     if receiver.delimiter_in.name:
-        _write_ref_mod_target(
-            ctx, receiver.delimiter_in, piece.delimiter, materialised, span=span
-        )
+        _write_ref_mod_target(scope, receiver.delimiter_in, piece.delimiter)
     if receiver.count_in.name:
         _write_ref_mod_target(
-            ctx,
-            receiver.count_in,
-            ctx.emit_to_string(piece.count, span=span),
-            materialised,
-            span=span,
+            scope, receiver.count_in, ctx.emit_to_string(piece.count, span=span)
         )
     ctx.emit_inst(Branch(label=skip_label), span=span)
     ctx.emit_inst(Label_(label=skip_label), span=span)
 
 
 def _add_to_number(
-    ctx: EmitContext,
-    item: RefModOperand,
-    addend_reg: Register,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
+    scope: LoweringScope, item: RefModOperand, addend_reg: Register
 ) -> None:
+    ctx = scope.ctx
     total_reg = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
             result_reg=total_reg,
             operator=resolve_binop("+"),
-            left=_read_pointer(ctx, item, materialised, span=span),
+            left=_read_pointer(scope, item),
             right=addend_reg,
         ),
-        span=span,
+        span=scope.span,
     )
-    _write_number(ctx, item, total_reg, materialised, span=span)
+    _write_number(scope, item, total_reg)
 
 
 def lower_inspect(
@@ -537,6 +454,7 @@ def lower_inspect(
     scan (interpreter.cobol.inspect_ir). TALLYING ...
     REPLACING tallies first and then replaces, as two statements would.
     """
+    scope = LoweringScope(ctx, materialised, stmt.span)
     span = stmt.span
     if not ctx.has_field(stmt.source.name, materialised):
         logger.warning("INSPECT source %s not found in layout", stmt.source.name)
@@ -548,30 +466,27 @@ def lower_inspect(
         subscripts=stmt.source.subscripts,
         span=span,
     )
-    image_reg = emit_inspected_characters(
-        IrEmitter(ctx=ctx, span=span), source_rr, source_ref
-    )
-    window = _inspected_window(ctx, stmt, materialised)
+    image_reg = emit_inspected_characters(scope.emitter, source_rr, source_ref)
+    window = _ref_mod_window(scope, stmt.source)
     inspected_reg = (
-        _call(ctx, BuiltinName.STRING_SLICE, (image_reg, *window), span=span)
+        _call(scope, BuiltinName.STRING_SLICE, (image_reg, *window))
         if window
         else image_reg
     )
     if stmt.tallying_groups:
-        _lower_inspect_tallying(ctx, stmt, inspected_reg, materialised)
-    rewritten_reg = _rewritten(ctx, stmt, inspected_reg, materialised)
+        _lower_inspect_tallying(scope, stmt, inspected_reg)
+    rewritten_reg = _rewritten(scope, stmt, inspected_reg)
     if not rewritten_reg.is_present():
         return
     emit_write_inspected_characters(
-        IrEmitter(ctx=ctx, span=span),
+        scope.emitter,
         source_rr,
         source_ref,
         (
             _call(
-                ctx,
+                scope,
                 BuiltinName.STRING_SPLICE,
                 (image_reg, *window, rewritten_reg),
-                span=span,
             )
             if window
             else rewritten_reg
@@ -579,60 +494,22 @@ def lower_inspect(
     )
 
 
-def _inspected_window(
-    ctx: EmitContext,
-    stmt: InspectStatement,
-    materialised: MaterialisedSectionedLayout,
-) -> tuple[Register, ...]:
-    """(start, length) registers of a reference-modified source, else ()."""
-    if stmt.source.ref_mod_start is None:
-        return ()
-    span = stmt.span
-    start_reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        Binop(
-            result_reg=start_reg,
-            operator=resolve_binop("-"),
-            left=eval_ref_mod_expr(
-                ctx, stmt.source.ref_mod_start, materialised, span=span
-            ),
-            right=ctx.const_to_reg(1, span=span),
-        ),
-        span=span,
-    )
-    length_reg = (
-        eval_ref_mod_expr(ctx, stmt.source.ref_mod_length, materialised, span=span)
-        if stmt.source.ref_mod_length is not None
-        else ctx.const_to_reg(9999, span=span)
-    )
-    return start_reg, length_reg
-
-
 def _rewritten(
-    ctx: EmitContext,
-    stmt: InspectStatement,
-    inspected_reg: Register,
-    materialised: MaterialisedSectionedLayout,
+    scope: LoweringScope, stmt: InspectStatement, inspected_reg: Register
 ) -> Register:
     """The new characters REPLACING or CONVERTING give, or NO_REGISTER."""
-    emitter = IrEmitter(ctx=ctx, span=stmt.span)
+    emitter = scope.emitter
     if stmt.inspect_type == InspectType.CONVERTING:
         return emit_inspect_convert(
             emitter,
             inspected_reg,
             (
-                _written_operand(
-                    ctx, stmt.converting_from, materialised, span=stmt.span
-                ),
-                _written_operand(ctx, stmt.converting_to, materialised, span=stmt.span),
+                _written_operand(scope, stmt.converting_from),
+                _written_operand(scope, stmt.converting_to),
             ),
             (
-                _written_operand(
-                    ctx, stmt.converting_after, materialised, span=stmt.span
-                ),
-                _written_operand(
-                    ctx, stmt.converting_before, materialised, span=stmt.span
-                ),
+                _written_operand(scope, stmt.converting_after),
+                _written_operand(scope, stmt.converting_before),
             ),
         )
     if not stmt.replacings:
@@ -642,7 +519,7 @@ def _rewritten(
         inspected_reg,
         tuple(
             _phrase_registers(
-                ctx,
+                scope,
                 replacing.mode,
                 (
                     replacing.from_pattern,
@@ -651,8 +528,6 @@ def _rewritten(
                     replacing.before,
                 ),
                 0,
-                materialised,
-                span=stmt.span,
             )
             for replacing in stmt.replacings
         ),
@@ -660,18 +535,15 @@ def _rewritten(
 
 
 def _phrase_registers(
-    ctx: EmitContext,
+    scope: LoweringScope,
     mode: str,
     operands: tuple[RefModOperand, RefModOperand, RefModOperand, RefModOperand],
     counter: int,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
 ) -> InspectPhraseRegisters:
     """One phrase's mode, its written operands' characters (pattern, BY value,
     AFTER, BEFORE) and the counter it tallies into."""
     pattern, replacement, after, before = (
-        _written_operand(ctx, operand, materialised, span=span) for operand in operands
+        _written_operand(scope, operand) for operand in operands
     )
     return InspectPhraseRegisters(
         mode=InspectMode(mode),
@@ -683,48 +555,31 @@ def _phrase_registers(
     )
 
 
-def _written_operand(
-    ctx: EmitContext,
-    operand: RefModOperand,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
-) -> Register:
+def _written_operand(scope: LoweringScope, operand: RefModOperand) -> Register:
     """The operand's characters, or NO_REGISTER when it was not written."""
     if not operand.name:
         return NO_REGISTER
-    return _resolve_inspect_operand(ctx, operand, materialised, span=span)
+    return _resolve_inspect_operand(scope, operand)
 
 
-def _call(
-    ctx: EmitContext,
-    builtin: str,
-    args: tuple[Register, ...],
-    *,
-    span: SourceSpan | None,
-) -> Register:
-    result_reg = ctx.fresh_reg()
-    ctx.emit_inst(
+def _call(scope: LoweringScope, builtin: str, args: tuple[Register, ...]) -> Register:
+    result_reg = scope.ctx.fresh_reg()
+    scope.ctx.emit_inst(
         CallFunction(result_reg=result_reg, func_name=FuncName(builtin), args=args),
-        span=span,
+        span=scope.span,
     )
     return result_reg
 
 
-def _resolve_inspect_operand(
-    ctx: EmitContext,
-    operand: RefModOperand,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
-) -> Register:
+def _resolve_inspect_operand(scope: LoweringScope, operand: RefModOperand) -> Register:
     """An INSPECT operand's characters: a data item (with its qualifiers and
     subscripts) decoded at run time, a figurative constant's character, or a
     literal's text. An operand that was not written is the empty string."""
+    ctx, span = scope.ctx, scope.span
     if operand.names_data:
         ref, rr = ctx.resolve_field_ref(
             operand.name,
-            materialised,
+            scope.materialised,
             operand.qualifiers,
             subscripts=operand.subscripts,
             span=span,
@@ -738,25 +593,19 @@ def _resolve_inspect_operand(
 
 
 def _lower_inspect_tallying(
-    ctx: EmitContext,
-    stmt: InspectStatement,
-    inspected_reg: Register,
-    materialised: MaterialisedSectionedLayout,
+    scope: LoweringScope, stmt: InspectStatement, inspected_reg: Register
 ) -> None:
     """Each TALLYING identifier gains the matches of its own phrases; the count
     ACCUMULATES into its existing value (IBM Enterprise COBOL LR, INSPECT)."""
-    span = stmt.span
     counts_reg = emit_inspect_tally(
-        IrEmitter(ctx=ctx, span=span),
+        scope.emitter,
         inspected_reg,
         tuple(
             _phrase_registers(
-                ctx,
+                scope,
                 tally_for.mode,
                 (tally_for.pattern, _NO_OPERAND, tally_for.after, tally_for.before),
                 counter,
-                materialised,
-                span=span,
             )
             for counter, group in enumerate(stmt.tallying_groups)
             for tally_for in group.patterns
@@ -764,22 +613,20 @@ def _lower_inspect_tallying(
         len(stmt.tallying_groups),
     )
     for counter, group in enumerate(stmt.tallying_groups):
-        if ctx.has_field(group.target.name, materialised):
-            _add_to_tally(ctx, stmt, group.target, counts_reg, counter, materialised)
+        if scope.ctx.has_field(group.target.name, scope.materialised):
+            _add_to_tally(scope, group.target, counts_reg, counter)
 
 
 def _add_to_tally(
-    ctx: EmitContext,
-    stmt: InspectStatement,
+    scope: LoweringScope,
     target: RefModOperand,
     counts_reg: Register,
     counter: int,
-    materialised: MaterialisedSectionedLayout,
 ) -> None:
-    span = stmt.span
+    ctx, span = scope.ctx, scope.span
     tally_ref, tally_rr = ctx.resolve_field_ref(
         target.name,
-        materialised,
+        scope.materialised,
         target.qualifiers,
         subscripts=target.subscripts,
         span=span,
@@ -797,10 +644,9 @@ def _add_to_tally(
                 span=span,
             ),
             right=_call(
-                ctx,
+                scope,
                 BuiltinName.LIST_GET,
                 (counts_reg, ctx.const_to_reg(counter, span=span)),
-                span=span,
             ),
         ),
         span=span,
