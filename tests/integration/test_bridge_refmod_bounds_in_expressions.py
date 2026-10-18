@@ -69,7 +69,7 @@ def _expression(bridge_jar: str, statement_line: str) -> dict:
     return _statements(bridge_jar, statement_line)[0]["expression"]
 
 
-_LIT_1 = {"kind": "lit", "value": "1"}
+_LIT_1 = {"kind": "lit", "value": "1", "numeric": True}
 _LENGTH_OF_M = {
     "kind": "function",
     "name": "LENGTH",
@@ -120,7 +120,7 @@ def test_function_bound_in_an_arithmetic_operand_keeps_the_sliced_field(bridge_j
         "kind": "binop",
         "op": "+",
         "left": _SLICED_M,
-        "right": {"kind": "lit", "value": "0"},
+        "right": {"kind": "lit", "value": "0", "numeric": True},
     }
 
 

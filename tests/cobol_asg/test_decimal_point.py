@@ -29,8 +29,14 @@ _WRITTEN = {
         },
     ],
     "statements": [
-        {"type": "MOVE", "operands": [{"name": "1,5"}, {"name": "WS-RATE"}]},
-        {"type": "MOVE", "operands": [{"name": "-12,25E3"}, {"name": "A(1,2)"}]},
+        {
+            "type": "MOVE",
+            "operands": [{"name": "1,5", "numeric": True}, {"name": "WS-RATE"}],
+        },
+        {
+            "type": "MOVE",
+            "operands": [{"name": "-12,25E3", "numeric": True}, {"name": "9,5"}],
+        },
     ],
 }
 
@@ -46,7 +52,7 @@ def test_numeric_literals_take_the_period_and_nothing_else_changes() -> None:
     assert text.conditions[0].values == [ConditionValue(from_val="1,5")]
     assert [s.to_dict()["operands"] for s in asg.statements] == [
         [{"name": "1.5"}, {"name": "WS-RATE"}],
-        [{"name": "-12.25E3"}, {"name": "A(1,2)"}],
+        [{"name": "-12.25E3"}, {"name": "9,5"}],
     ]
 
 

@@ -80,7 +80,9 @@ def test_literal_subscript_rejoined_to_its_identifier(jar):
     node = _function_node("MOVE FUNCTION TRIM(TX(5)) TO D.", jar)
     assert len(node["args"]) == 1
     assert node["args"][0]["name"] == "TX"
-    assert node["args"][0]["subscripts"] == [{"kind": "lit", "value": "5"}]
+    assert node["args"][0]["subscripts"] == [
+        {"kind": "lit", "value": "5", "numeric": True}
+    ]
 
 
 @covers(CobolFeature.INTRINSIC_FUNCTION, CobolFeature.SUBSCRIPT_ACCESS)
@@ -175,7 +177,11 @@ def test_subscript_leading_an_arithmetic_argument_rejoins_inside_the_expression(
     `(5) / 9 - TX(I) * 2`: the group leading the second argument subscripts the
     name before it, and the operators after it apply to the subscripted item."""
     node = _function_node("COMPUTE N = FUNCTION MAX(TX(5) / 9 - TX(I) * 2).", jar)
-    tx5 = {"kind": "ref", "name": "TX", "subscripts": [{"kind": "lit", "value": "5"}]}
+    tx5 = {
+        "kind": "ref",
+        "name": "TX",
+        "subscripts": [{"kind": "lit", "value": "5", "numeric": True}],
+    }
     txi = {"kind": "ref", "name": "TX", "subscripts": [{"kind": "ref", "name": "I"}]}
     assert node["args"] == [
         {
@@ -185,13 +191,13 @@ def test_subscript_leading_an_arithmetic_argument_rejoins_inside_the_expression(
                 "kind": "binop",
                 "op": "/",
                 "left": tx5,
-                "right": {"kind": "lit", "value": "9"},
+                "right": {"kind": "lit", "value": "9", "numeric": True},
             },
             "right": {
                 "kind": "binop",
                 "op": "*",
                 "left": txi,
-                "right": {"kind": "lit", "value": "2"},
+                "right": {"kind": "lit", "value": "2", "numeric": True},
             },
         }
     ]
@@ -204,6 +210,9 @@ def test_all_subscript_is_its_own_node_kind(jar):
         {
             "kind": "ref",
             "name": "X2",
-            "subscripts": [{"kind": "all"}, {"kind": "lit", "value": "2"}],
+            "subscripts": [
+                {"kind": "all"},
+                {"kind": "lit", "value": "2", "numeric": True},
+            ],
         }
     ]

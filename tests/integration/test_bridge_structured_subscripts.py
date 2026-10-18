@@ -107,7 +107,7 @@ def test_bridge_keeps_both_subscripts_when_a_literal_follows_a_data_name(bridge_
     subs = src["subscripts"]
     assert len(subs) == 2
     assert subs[0] == {"kind": "ref", "name": "WS-IDX"}
-    assert subs[1] == {"kind": "lit", "value": "3"}
+    assert subs[1] == {"kind": "lit", "value": "3", "numeric": True}
 
 
 @covers(CobolFeature.OCCURS_FIXED)
@@ -138,7 +138,7 @@ def test_bridge_keeps_a_relative_subscript_as_one_expression(bridge_jar):
         "kind": "binop",
         "op": "+",
         "left": {"kind": "ref", "name": "WS-IDX"},
-        "right": {"kind": "lit", "value": "1"},
+        "right": {"kind": "lit", "value": "1", "numeric": True},
     }
 
 
@@ -150,6 +150,6 @@ def test_bridge_serialises_an_integer_subscript_as_a_literal(bridge_jar):
         bridge_jar,
     )[0]
     assert src["subscripts"] == [
-        {"kind": "lit", "value": "1"},
-        {"kind": "lit", "value": "2"},
+        {"kind": "lit", "value": "1", "numeric": True},
+        {"kind": "lit", "value": "2", "numeric": True},
     ]

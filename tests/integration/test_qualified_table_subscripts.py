@@ -98,8 +98,8 @@ def test_a_sliced_qualified_table_reference_keeps_subscript_and_slice(bridge_jar
     assert _source_operand(bridge_jar, "MOVE TB OF HT(I)(1:2) TO D.") == {
         "name": "TB",
         "subscripts": [{"kind": "ref", "name": "I"}],
-        "ref_mod_start": {"kind": "lit", "value": "1"},
-        "ref_mod_length": {"kind": "lit", "value": "2"},
+        "ref_mod_start": {"kind": "lit", "value": "1", "numeric": True},
+        "ref_mod_length": {"kind": "lit", "value": "2", "numeric": True},
         "qualifiers": ["HT"],
     }
 

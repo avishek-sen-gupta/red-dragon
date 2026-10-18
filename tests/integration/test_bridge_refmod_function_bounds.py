@@ -67,7 +67,7 @@ _LENGTH_OF_M = {
     "name": "LENGTH",
     "args": [{"kind": "ref", "name": "M"}],
 }
-_LIT_1 = {"kind": "lit", "value": "1"}
+_LIT_1 = {"kind": "lit", "value": "1", "numeric": True}
 
 
 @covers(CobolFeature.INTRINSIC_FUNCTION, CobolFeature.REFERENCE_MODIFICATION)
@@ -103,7 +103,7 @@ def test_function_in_the_start_position_keeps_the_sliced_field(bridge_jar):
             "name": "LENGTH",
             "args": [{"kind": "ref", "name": "N"}],
         },
-        "ref_mod_length": {"kind": "lit", "value": "2"},
+        "ref_mod_length": {"kind": "lit", "value": "2", "numeric": True},
     }
 
 
@@ -204,7 +204,7 @@ def test_subscripted_read_in_an_expression_keeps_its_subscript(bridge_jar):
             "name": "X",
             "subscripts": [{"kind": "ref", "name": "I"}],
         },
-        "right": {"kind": "lit", "value": "1"},
+        "right": {"kind": "lit", "value": "1", "numeric": True},
     }
 
 
