@@ -281,11 +281,11 @@ fileignoreconfig:
 - filename: tests/unit/cobol/test_file_calls_name_their_program.py
   checksum: 032f77764c218b3cbf098fc5c124d653095bc86b075e58a7c4b2510061d5a7b9
 - filename: tests/unit/cobol/test_nist_pass_check.py
-  checksum: 3b583ba63de1eda902820bb4480539f5720855e82f6905d03dc2d095293da89a
+  checksum: 3f2546d75fbb7a89cad97cf19f4912dbcb3b1cd3ae45dd1467468aab0291cfad
 - filename: tests/nist/test_nc.py
   checksum: 164b3de065ac8fb0b0884dbcc166350473801ff472fddeaa630d7ab26df91026
 - filename: tests/nist/conftest.py
-  checksum: c78525b4aa6812db40d108bce7c7180b6cc5293662b2138c6523073c1e73c093
+  checksum: 1093c3811e1ceed6fc585aa0c6514d1928879c5e3aaf2a51cd04babc302d2c9e
 - filename: interpreter/cobol/lower_perform.py
   checksum: e6cac512f59e64b0eb6ef613edfd1a76df82a116b8d4d50f6c8a28fa45c4c04a
 - filename: tests/unit/cobol/test_procedure_labels.py
@@ -342,4 +342,12 @@ fileignoreconfig:
   checksum: b4b87abf38a3ba321ef1bb8d7906061058ad5bb065180e7b6b24affcd128469a
 - filename: interpreter/cobol/invalid_key_phrases.py
   checksum: 9fa75b66c1d40738da65cb4f5ef2b4a4c703bce063d0891b1b8ccfc3cbee688f
+- filename: tests/nist/nist_verdict.py
+  checksum: 0e2bf0d61805254e3745d0496a1825474bdd4208449fa6aee19fd29dbdbec39c
+- filename: tests/nist/nist_outcome.py
+  checksum: e3b139cb8485a03329090654e1b1489b9adc313e5bde4f331dbe272c52e901c0
+- filename: tests/nist/nist_classify.py
+  checksum: 6e8e1d1a0dae38eb3fcdf85ccb2f957313cdb025315a54129edd29c5871bbfbe
+- filename: tests/unit/nist/test_nist_classify.py
+  checksum: b0b2b0a7b6d9a868f9566159074a8f9968f5c4f65a37e92db30afac6076563a3
 version: "1.0"

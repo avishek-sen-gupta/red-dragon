@@ -6,8 +6,9 @@ Run: uv run python -m pytest tests/nist/test_st.py -m nist -v
 A program passes only when it runs to its END OF TEST banner and its CCVS summary
 reports zero failed tests (tests/nist/conftest.py). A sort work file is the SD's ASSIGN,
 mapped to a file like any other. A SUBPRG member runs after the run units before it in
-its CCVS job, which create the files it reads. Excluded from the default test run; run
-on demand with `-m nist`.
+its CCVS job, which create the files it reads. The FIPS flagger programs (ST301M) are
+classified, not run: their verdict is compile-time flagging messages. Excluded from the
+default test run; run on demand with `-m nist`.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ import pytest
 
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
-from tests.nist.conftest import run_nist
+from tests.nist.conftest import run_nist, skip_flagger_program
 
 pytestmark = pytest.mark.nist
 
@@ -68,8 +69,17 @@ pytestmark = pytest.mark.nist
         "ST144A",
         "ST146A",
         "ST147A",
-        "ST301M",
     ],
 )
 def test_st_program(prog: str, tmp_path: Path) -> None:
     run_nist(prog, tmp_path)
+
+
+@pytest.mark.parametrize(
+    "prog, header, flags_expected",
+    [
+        ("ST301M", "The following program tests the flagging of intermediate", 6),
+    ],
+)
+def test_st_flagger_program(prog: str, header: str, flags_expected: int) -> None:
+    skip_flagger_program(prog, header, flags_expected)

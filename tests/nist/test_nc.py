@@ -144,12 +144,15 @@ _NC110M_SEPARATOR = " " + "-" * 57
 
 
 @covers(CobolFeature.DISPLAY, CobolFeature.GO_TO, CobolFeature.PERFORM)
-def test_nc110m_display_report(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
+@pytest.mark.parametrize("prog", ["NC110M"])
+def test_nc110m_display_report(
+    prog: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+):
     """NC110M's procedure division "CONSISTS ENTIRELY OF PARAGRAPH NAMES AND
     'DISPLAY' LITERAL STATEMENTS". Its GO TO test "PASSES UNLESS FAIL APPEARS
     BELOW" and its PERFORM test "FAILS UNLESS PASS APPEARS BELOW", so the result
     block between the separators must be the two feature lines and one PASS."""
-    lines = run_display_report("NC110M", tmp_path, capsys)
+    lines = run_display_report(prog, tmp_path, capsys)
     first = lines.index(_NC110M_SEPARATOR)
     last = lines.index(_NC110M_SEPARATOR, first + 1)
     assert (lines[first + 1 : last], lines[last + 1 : last + 3]) == (
