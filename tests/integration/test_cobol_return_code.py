@@ -8,14 +8,21 @@ its value is readable from the returned VMState via ``read_return_code``.
 
 from __future__ import annotations
 
+import pytest
+
 from interpreter.cobol.features import CobolFeature
-from interpreter.cobol.return_code_readback import read_return_code
+from interpreter.cobol.io_provider import NullIOProvider
+from interpreter.cobol.return_code_readback import read_return_code, run_unit_address
+from interpreter.cobol.symbolic_return_code_error import SymbolicReturnCodeError
+from interpreter.run import run
+from interpreter.vm.vm_types import SymbolicValue
 from tests.covers import NotLanguageFeature, covers
 from tests.integration.cobol_helpers import (
     decode_zoned_unsigned,
     return_code_of,
     run_cobol,
     run_cobol_programs,
+    to_fixed,
     ws_region,
 )
 
@@ -362,3 +369,43 @@ def test_call_giving_stores_the_returned_value_as_a_numeric_move():
     vm = run_cobol_programs(caller, {"RCSEVEN": callee})
 
     assert bytes(ws_region(vm, "RCGIVE")[:6]).decode("cp037") == "070007"
+
+
+@covers(CobolFeature.READ)
+def test_a_symbolic_return_code_is_reported_not_the_bytes_it_masks():
+    """A READ the provider cannot compute leaves a symbolic FILE STATUS; MOVEd
+    to RETURN-CODE it makes the run unit's RETURN-CODE symbolic, and the
+    readback reports that symbol instead of decoding the stale bytes."""
+    vm = run(
+        to_fixed(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. RCNULL.",
+                "ENVIRONMENT DIVISION.",
+                "INPUT-OUTPUT SECTION.",
+                "FILE-CONTROL.",
+                "    SELECT F ASSIGN TO FDD FILE STATUS IS FS-F.",
+                "DATA DIVISION.",
+                "FILE SECTION.",
+                "FD  F.",
+                "01  F-REC PIC X(4).",
+                "WORKING-STORAGE SECTION.",
+                "01  FS-F PIC 99.",
+                "PROCEDURE DIVISION.",
+                "    MOVE 7 TO RETURN-CODE.",
+                "    OPEN INPUT F.",
+                "    READ F.",
+                "    MOVE FS-F TO RETURN-CODE.",
+                "    STOP RUN.",
+            ]
+        ),
+        language="cobol",
+        io_provider=NullIOProvider(),
+        max_steps=200_000,
+    )
+    stored = vm.load(vm.segment_of(run_unit_address(vm)).base, 2)
+
+    with pytest.raises(SymbolicReturnCodeError) as raised:
+        read_return_code(vm)
+
+    assert (isinstance(stored, SymbolicValue), raised.value.value) == (True, stored)
