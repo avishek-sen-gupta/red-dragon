@@ -180,6 +180,7 @@ class EmitContext:
         self._extension_strategies = tuple(extension_strategies)
         self._asg: CobolASG = asg
         self.collating_sequence = collating_sequence_of(asg.collating_sequence)
+        self.alphabets = tuple(asg.alphabets)
         self.switches = SwitchIndex(asg.switches)
         self.class_names = ClassNameIndex(asg.classes)
         self.figuratives = self.collating_sequence.figuratives()

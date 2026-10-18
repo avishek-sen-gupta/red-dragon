@@ -33,12 +33,10 @@ final class SortSerializer {
         obj.add("keys", keys(stmt.getOnKeys()));
         CollatingSequence sequence = stmt.getCollatingSequence();
         if (sequence != null) {
-            addCollatingSequence(
-                    obj,
-                    stmt,
-                    sequence.getAlphaNumeric() != null
-                            ? sequence.getAlphaNumeric().getAlphabetCall()
-                            : sequence.getAlphabetCalls().get(0));
+            obj.add("collating_sequence", collatingSequence(
+                    sequence.getAlphabetCalls(),
+                    sequence.getAlphaNumeric() == null ? null : sequence.getAlphaNumeric().getAlphabetCall(),
+                    sequence.getNational() == null ? null : sequence.getNational().getAlphabetCall()));
         }
         obj.add("using", using(stmt.getUsingPhrases()));
         obj.add("giving", giving(stmt.getGivingPhrases()));
@@ -81,12 +79,10 @@ final class SortSerializer {
         obj.add("keys", keys);
         CollatingSequencePhrase sequence = stmt.getCollatingSequencePhrase();
         if (sequence != null) {
-            addCollatingSequence(
-                    obj,
-                    stmt,
-                    sequence.getAlphaNumeric() != null
-                            ? sequence.getAlphaNumeric().getAlphabetCall()
-                            : sequence.getAlphabetCalls().get(0));
+            obj.add("collating_sequence", collatingSequence(
+                    sequence.getAlphabetCalls(),
+                    sequence.getAlphaNumeric() == null ? null : sequence.getAlphaNumeric().getAlphabetCall(),
+                    sequence.getNational() == null ? null : sequence.getNational().getAlphabetCall()));
         }
         JsonArray using = new JsonArray();
         for (io.proleap.cobol.asg.metamodel.procedure.merge.UsingPhrase phrase : stmt.getUsingPhrases()) {
@@ -147,13 +143,16 @@ final class SortSerializer {
         return obj;
     }
 
-    private static void addCollatingSequence(JsonObject obj, Statement stmt, Call alphabet) {
-        JsonObject named =
-                AsgSerializer.alphabetNamed(
-                        stmt.getProgramUnit(), StatementSerializer.extractCallName(alphabet));
-        if (named != null) {
-            obj.add("collating_sequence", named);
+    /** The statement's COLLATING SEQUENCE phrase as written, its alphabet-names unresolved. */
+    private static JsonObject collatingSequence(List<Call> alphabets, Call alphanumeric, Call national) {
+        List<String> names = new java.util.ArrayList<>();
+        for (Call alphabet : alphabets) {
+            names.add(StatementSerializer.extractCallName(alphabet));
         }
+        return AsgSerializer.collatingSequencePhrase(
+                names,
+                alphanumeric == null ? null : StatementSerializer.extractCallName(alphanumeric),
+                national == null ? null : StatementSerializer.extractCallName(national));
     }
 
     private static JsonObject procedure(Call first, Call thru) {
