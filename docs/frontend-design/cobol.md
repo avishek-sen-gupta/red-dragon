@@ -307,7 +307,7 @@ The Java bridge writes a condition as the parse tree has it: `{"first": <atom>, 
 
 - AND binds tighter than OR: `{"op": "AND"|"OR", "left": ..., "right": ...}`.
 - An abbreviated operand takes the last stated subject and relational operator; a NOT immediately before an operator is part of it, and a NOT before a bare operand negates that relation: `{"not": bool, "relation": {"left", "op", "right"}}`.
-- A bare identifier after a relation parses as a condition name; it carries the implied subject and operator under `"abbreviation"`, and lowering compares with it when the name is a data item rather than a level-88 (`{"not": bool, "condition_name": ...}`, names indexed over WORKING-STORAGE, LOCAL-STORAGE, LINKAGE and the FILE SECTION).
+- A bare identifier after a relation parses as a condition name. The bridge passes ProLeap's name resolution through, as it does for EVALUATE: a name that resolves to a data item arrives as `{"not": bool, "data_operand": <ref>}`, and the ASG reader expands it with the last stated subject and operator (with no stated subject it stays as text). Anything else, a level-88 or a switch condition, arrives as `{"not": bool, "condition_name": ...}` (names indexed over WORKING-STORAGE, LOCAL-STORAGE, LINKAGE and the FILE SECTION; switch condition-names from SPECIAL-NAMES).
 - A combined relation expands into one relation per operand under `"condition"`; a parenthesised condition is resolved the same way.
 
 `_lower_condition()` deserializes this tree and recursively emits IR: leaf relation nodes produce a `BINOP` comparison; compound nodes chain via `BRANCH_IF` with short-circuit blocks.

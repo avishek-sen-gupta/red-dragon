@@ -29,13 +29,12 @@ def test_abbreviations_take_the_last_stated_subject_and_operator() -> None:
                     _abbreviation("D", True),
                 ],
             },
-            {"bool": "OR", "atom": {"not": False, "condition_name": "E"}},
+            {"bool": "OR", "atom": {"not": True, "data_operand": _ref("E")}},
             {"bool": "AND", "atom": {"not": True, "condition_name": "F"}},
             {"bool": "OR", "abbreviations": [_abbreviation("G", False, "==")]},
         ],
     }
 
-    implied = {"left": _ref("A"), "op": ">="}
     assert resolve_condition(written) == {
         "op": "OR",
         "left": {
@@ -51,8 +50,8 @@ def test_abbreviations_take_the_last_stated_subject_and_operator() -> None:
             },
             "right": {
                 "op": "AND",
-                "left": {"not": False, "condition_name": "E", "abbreviation": implied},
-                "right": {"not": True, "condition_name": "F", "abbreviation": implied},
+                "left": _rel("A", ">=", "E", negated=True),
+                "right": {"not": True, "condition_name": "F"},
             },
         },
         "right": _rel("A", "==", "G"),
@@ -74,8 +73,13 @@ def test_combined_and_nested_relations_expand_and_a_resolved_tree_is_kept() -> N
                 "atom": {
                     "not": False,
                     "condition": {
-                        "first": {"not": False, "condition_name": "K"},
-                        "rest": [],
+                        "first": {"not": True, "data_operand": _ref("K")},
+                        "rest": [
+                            {
+                                "bool": "OR",
+                                "atom": {"not": False, "condition_name": "L"},
+                            }
+                        ],
                     },
                 },
             },
@@ -94,7 +98,14 @@ def test_combined_and_nested_relations_expand_and_a_resolved_tree_is_kept() -> N
                     "right": _rel("X", "<", "Z"),
                 },
             },
-            "right": {"not": False, "condition": {"not": False, "condition_name": "K"}},
+            "right": {
+                "not": False,
+                "condition": {
+                    "op": "OR",
+                    "left": {"not": True, "text": "K"},
+                    "right": {"not": False, "condition_name": "L"},
+                },
+            },
         },
         "right": {"text": ""},
     }

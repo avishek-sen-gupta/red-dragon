@@ -68,10 +68,10 @@ def _relation(left: Mapping, op: str, right: Mapping, negated: bool) -> dict:
 def resolve_condition(written: Mapping) -> dict:
     """The condition tree: AND binds tighter than OR, and each abbreviation is expanded.
 
-    A bare identifier after a relation parses as a condition name; it carries
-    the implied subject and operator under ``"abbreviation"`` so lowering can
-    expand it when the name is a data item rather than a level-88. A tree
-    already resolved is returned unchanged.
+    A bare name the bridge resolved to a data item (``"data_operand"``) is an
+    abbreviated operand: after a stated relation it takes the implied subject
+    and operator; without one it stays as text. A tree already resolved is
+    returned unchanged.
     """
     if "first" not in written:
         return dict(written)
@@ -89,14 +89,14 @@ def _link(chain: _Chain, link: Mapping) -> _Chain:
 def _atom_link(chain: _Chain, bool_op: str, written: Mapping) -> _Chain:
     if _states_subject(written):
         return chain.joined(bool_op, _atom(written), chain.subject.stating(written))
-    return chain.joined(bool_op, _implied(chain.subject, _atom(written)), chain.subject)
+    return chain.joined(bool_op, _implied(chain.subject, written), chain.subject)
 
 
-def _implied(subject: _Subject, atom: Mapping) -> Mapping:
-    """A condition name after a stated relation may be an abbreviated operand."""
-    if not subject.stated or "condition_name" not in atom:
-        return atom
-    return {**atom, "abbreviation": {"left": subject.left, "op": subject.op}}
+def _implied(subject: _Subject, written: Mapping) -> dict:
+    """A data item after a stated relation is an abbreviated operand."""
+    if not subject.stated or "data_operand" not in written:
+        return _atom(written)
+    return _relation(subject.left, subject.op, written["data_operand"], written["not"])
 
 
 def _abbreviation_link(
@@ -133,6 +133,8 @@ def _stated_op(abbreviation: Mapping, implied: str) -> str:
 
 
 def _atom(written: Mapping) -> dict:
+    if "data_operand" in written:
+        return {"not": written["not"], "text": written["data_operand"]["name"]}
     if "condition" in written:
         return dict(written) | {"condition": resolve_condition(written["condition"])}
     if "combined" in written:
