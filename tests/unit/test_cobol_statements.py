@@ -330,6 +330,7 @@ class TestParseStatementDispatch:
                                         "not": False,
                                     },
                                     {"kind": "any"},
+                                    {"kind": "boolean", "value": True, "not": True},
                                 ],
                             }
                         ],
@@ -367,7 +368,11 @@ class TestParseStatementDispatch:
             SelectionCondition(condition=relation),
         )
         assert [alt.objects for alt in when.alternatives] == [
-            (ValueObject(value=LiteralNode(value="81")), AnyObject())
+            (
+                ValueObject(value=LiteralNode(value="81")),
+                AnyObject(),
+                TruthValue(value=False),
+            )
         ]
 
     @covers(CobolFeature.DISPLAY)

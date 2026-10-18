@@ -1090,15 +1090,12 @@ public final class StatementSerializer {
         if (ct == io.proleap.cobol.asg.metamodel.procedure.evaluate.Condition.ConditionType.BOOLEAN) {
             object.addProperty("kind", "boolean");
             object.addProperty("value", booleanLiteralOf(cond.getConditionValueStmt().getCtx()).TRUE() != null);
+            if (cond.isNot()) {
+                object.addProperty("not", true);
+            }
             return object;
         }
         ValueStmt value = cond.getValue().getValueStmt();
-        CobolParser.BooleanLiteralContext truth = booleanLiteralOf(value.getCtx());
-        if (truth != null) {
-            object.addProperty("kind", "boolean");
-            object.addProperty("value", (truth.TRUE() != null) != cond.isNot());
-            return object;
-        }
         JsonObject conditionName = conditionNameOf(value, cond.isNot());
         if (conditionName != null) {
             object.addProperty("kind", "condition");

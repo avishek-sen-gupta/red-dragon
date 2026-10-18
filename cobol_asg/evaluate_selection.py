@@ -29,7 +29,9 @@ _SUBJECTS: Mapping[str, Callable[[Mapping], SelectionSubject]] = {
 
 _OBJECTS: Mapping[str, Callable[[Mapping], SelectionObject]] = {
     "any": lambda d: AnyObject(),
-    "boolean": lambda d: TruthValue(value=bool(d["value"])),
+    "boolean": lambda d: TruthValue(
+        value=bool(d["value"]) != bool(d.get("not", False))
+    ),
     "condition": lambda d: SelectionCondition(
         condition=resolve_condition(d["condition"])
     ),
