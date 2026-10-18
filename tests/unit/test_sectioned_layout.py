@@ -1,8 +1,11 @@
 import logging
 
+import pytest
+
 from cobol_asg.asg_types import CobolASG, CobolField
 from interpreter.cobol.data_layout import DataLayout, build_data_layout
 from interpreter.cobol.features import CobolFeature
+from interpreter.cobol.undeclared_data_name import UndeclaredDataName
 from interpreter.cobol.sectioned_layout import (
     MaterialisedSectionedLayout,
     build_sectioned_layout,
@@ -89,16 +92,20 @@ def test_materialised_resolve_local_storage_wins_over_ws_on_collision(caplog):
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_materialised_resolve_raises_key_error_for_unknown_field():
+def test_materialised_resolve_raises_undeclared_data_name_for_unknown_field():
     m = MaterialisedSectionedLayout(
         working_storage=(DataLayout(), Register("%r0")),
         linkage=(DataLayout(), Register("%r1")),
         local_storage=(DataLayout(), Register("%r2")),
     )
-    import pytest
 
-    with pytest.raises(KeyError, match="UNKNOWN"):
+    with pytest.raises(UndeclaredDataName) as raised:
         m.resolve("UNKNOWN")
+
+    assert (raised.value.name, isinstance(raised.value, KeyError)) == (
+        "UNKNOWN",
+        True,
+    )
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

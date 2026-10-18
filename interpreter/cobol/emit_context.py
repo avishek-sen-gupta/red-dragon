@@ -60,6 +60,8 @@ from interpreter.cobol.procedure_labels import ProcedureLabels
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.cobol.source_spans import to_source_location
 from interpreter.cobol.switch_index import SwitchIndex
+from interpreter.cobol.undeclared_data_name import UndeclaredDataName
+from interpreter.cobol.undeclared_data_name_error import UndeclaredDataNameError
 from interpreter.constants import FoundationTypeName
 from interpreter.continuation_name import ContinuationName
 from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy
@@ -487,7 +489,10 @@ class EmitContext:
     ) -> None:  # Any: CobolStatementType, circular-import boundary
         """Dispatch a statement through the injected callback."""
         if not self._tolerant:
-            self._dispatch_fn(self, stmt, materialised)
+            try:
+                self._dispatch_fn(self, stmt, materialised)
+            except UndeclaredDataName as missing:
+                raise UndeclaredDataNameError(missing.name, stmt.span) from missing
             return
         try:
             self._dispatch_fn(self, stmt, materialised)

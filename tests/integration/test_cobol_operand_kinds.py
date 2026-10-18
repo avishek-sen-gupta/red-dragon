@@ -10,6 +10,7 @@ import pytest
 
 from cobol_asg.subprocess_runner import RealSubprocessRunner
 from interpreter.cobol.features import CobolFeature
+from interpreter.cobol.undeclared_data_name_error import UndeclaredDataNameError
 from tests.covers import NotLanguageFeature, covers
 from tests.integration.cobol_helpers import (
     bridge_jar,  # noqa: F401
@@ -97,11 +98,24 @@ def test_the_bridge_states_each_operands_kind() -> None:
     )
 
 
+_WRITE_UNDECLARED_RECORD = [
+    *_KINDS[:11],
+    "01 W PIC X(4) VALUE 'WXYZ'.",
+    "PROCEDURE DIVISION.",
+    "    OPEN OUTPUT F.",
+    "    WRITE NOREC FROM W.",
+    "    CLOSE F.",
+    "    GOBACK.",
+]
+
+
 @covers(CobolFeature.STRING_VERB)
-def test_an_undeclared_data_name_is_an_error_not_literal_text() -> None:
+@covers(CobolFeature.WRITE)
+def test_an_undeclared_data_name_is_a_lowering_error_naming_it_and_its_line() -> None:
     """A data name is resolved against the DATA DIVISION; one the program does
     not declare is not taken as a literal spelled like it. Literals and
-    figurative constants beside it keep their values."""
+    figurative constants beside it keep their values. WRITE FROM moves its
+    operand into the record it names, so that record must be declared too."""
     declared = [
         "IDENTIFICATION DIVISION.",
         "PROGRAM-ID. KINDS2.",
@@ -122,5 +136,18 @@ def test_an_undeclared_data_name_is_an_error_not_literal_text() -> None:
     region = first_region(run_cobol(declared))
 
     assert bytes(region[0:10]).decode("cp037") == 'XABCD"    '
-    with pytest.raises(KeyError, match="Field 'WS-NOPE' not found"):
+    with pytest.raises(UndeclaredDataNameError) as raised:
         run_cobol(undeclared)
+    with pytest.raises(UndeclaredDataNameError) as unwritable:
+        run_cobol(_WRITE_UNDECLARED_RECORD)
+    assert (
+        (raised.value.name, raised.value.line, str(raised.value)),
+        (unwritable.value.name, unwritable.value.line),
+    ) == (
+        (
+            "WS-NOPE",
+            8,
+            "line 8: data name 'WS-NOPE' is not declared in the DATA DIVISION",
+        ),
+        ("NOREC", 15),
+    )
