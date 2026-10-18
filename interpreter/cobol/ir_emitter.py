@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from cobol_asg.source_span import SourceSpan
 from cobol_numeric.number import CobolNumber
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.constants import FoundationTypeName
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
     Binop,
@@ -22,6 +23,7 @@ from interpreter.instructions import (
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import resolve_binop
 from interpreter.register import Register
+from interpreter.types.type_expr import array_of, scalar
 from interpreter.var_name import VarName
 
 
@@ -40,6 +42,18 @@ class IrEmitter:
     def text(self, value: str) -> Register:
         reg = self.ctx.fresh_reg()
         self.ctx.emit_inst(Const.string(reg, value), span=self.span)
+        return reg
+
+    def texts(self, values: Sequence[str]) -> Register:
+        reg = self.ctx.fresh_reg()
+        self.ctx.emit_inst(
+            Const(
+                result_reg=reg,
+                value=list(values),
+                type_expr=array_of(scalar(FoundationTypeName.STRING)),
+            ),
+            span=self.span,
+        )
         return reg
 
     def decimal(self, value: CobolNumber) -> Register:

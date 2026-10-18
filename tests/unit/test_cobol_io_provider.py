@@ -359,8 +359,10 @@ class TestIOStatusAndDataMethods:
     @covers(CobolFeature.IO_PROVIDER)
     def test_io_outcome_extracts_from_io_result(self):
         provider = NullIOProvider()
-        result = provider._io_outcome(IOResult(AccessCondition.OK, "rec"), "PGM")
-        assert result == "OK"
+        result = provider._io_outcome(
+            IOResult(AccessCondition.END_OF_FILE, "rec"), "PGM"
+        )
+        assert result == 2
 
     @covers(CobolFeature.IO_PROVIDER)
     def test_io_data_extracts_from_io_result(self):
@@ -393,7 +395,7 @@ class TestIOStatusAndDataMethods:
         result = provider.handle_call(
             FuncName("__cobol_io_outcome"), [typed_from_runtime(io_result), _PROGRAM]
         )
-        assert result == "END_OF_FILE"
+        assert result == 2
 
     @covers(CobolFeature.IO_PROVIDER)
     def test_io_data_via_dispatch(self):

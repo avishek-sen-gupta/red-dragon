@@ -7,7 +7,6 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from interpreter.cobol.access_result import AccessCondition
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.file_logic_status import FileLogicStatus
 from interpreter.cobol.file_position import FilePosition
@@ -91,29 +90,12 @@ class FileVerbIr:
         return raw
 
     def store_status(self, outcome: VerbOutcome, driver_outcome: Register) -> None:
-        """The FILE STATUS the driver outcome reports."""
-        done = self.e.label("io_mapped")
-        _ = [
-            self._map_if(outcome, driver_outcome, pair, done) for pair in OUTCOME_STATUS
-        ]
-        self.e.place(done)
-
-    def _map_if(
-        self,
-        outcome: VerbOutcome,
-        driver_outcome: Register,
-        pair: tuple[AccessCondition, FileLogicStatus],
-        done: CodeLabel,
-    ) -> None:
-        condition, status = pair
-        hit, miss = self.e.label("io_outcome"), self.e.label("io_outcome_next")
-        self.e.branch_if(
-            self.e.binop("==", driver_outcome, self.e.text(condition.value)), hit, miss
+        self.e.store(
+            outcome.status,
+            self.e.call(
+                BuiltinName.LIST_GET, self.e.texts(OUTCOME_STATUS), driver_outcome
+            ),
         )
-        self.e.place(hit)
-        self.set_status(outcome, status)
-        self.e.jump(done)
-        self.e.place(miss)
 
     def keep_record(self, raw: Register, outcome: VerbOutcome) -> None:
         self.e.store(outcome.data, self.e.call("__cobol_io_data", raw, self.program))

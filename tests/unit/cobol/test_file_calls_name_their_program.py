@@ -158,9 +158,9 @@ class _Recording(NullIOProvider):
         self._saw("close_file", program)
         return IOResult(AccessCondition.OK, None)
 
-    def _io_outcome(self, raw: IOResult, program: str) -> str:
+    def _io_outcome(self, raw: IOResult, program: str) -> int:
         self._saw("io_outcome", program)
-        return raw.condition.value
+        return raw.condition.position()
 
     def _io_data(self, raw: IOResult, program: str) -> str:
         self._saw("io_data", program)
