@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from cobol_asg.alphabet import Alphabet
 from cobol_asg.cobol_statements import (
     MergeStatement,
     ProcedureRange,
@@ -10,6 +9,7 @@ from cobol_asg.cobol_statements import (
     SortStatement,
     parse_statement,
 )
+from cobol_asg.collating_sequence_phrase import CollatingSequencePhrase
 from cobol_asg.program_collation import PROGRAM_COLLATION
 from cobol_asg.ref_mod import RefModOperand
 from cobol_asg.sort_files import SortFiles
@@ -52,11 +52,7 @@ def test_sort_and_merge_statements_read_and_write_their_bridge_form() -> None:
         "keys": [
             {"direction": "DESCENDING", "key": {"name": "K", "qualifiers": ["G"]}}
         ],
-        "collating_sequence": {
-            "name": "REV",
-            "kind": "LITERALS",
-            "items": [{"link": "NONE", "kind": "NONNUMERIC", "value": '"B"'}],
-        },
+        "collating_sequence": {"alphabet_names": ["REV"]},
         "using": ["IN-F"],
         "giving": [],
         "output_procedure": {"target": "P1", "thru": "P2", "thru_section": "S"},
@@ -70,9 +66,7 @@ def test_sort_and_merge_statements_read_and_write_their_bridge_form() -> None:
                 key=RefModOperand(name="K", qualifiers=("G",)),
             ),
         ),
-        collating_sequence=Alphabet.from_parts(
-            "REV", "LITERALS", [{"kind": "NONNUMERIC", "value": '"B"', "link": "NONE"}]
-        ),
+        collating_sequence=CollatingSequencePhrase(alphabet_names=("REV",)),
         source=SortFiles(("IN-F",)),
         sink=ProcedureRange(target=ProcedureRef("P1"), thru=ProcedureRef("P2", "S")),
         span=None,

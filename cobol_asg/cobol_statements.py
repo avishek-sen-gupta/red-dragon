@@ -16,7 +16,6 @@ from dataclasses import dataclass, field
 from typing import Union
 
 from cobol_asg.abbreviated_condition import resolve_condition
-from cobol_asg.alphabet import Alphabet
 from cobol_asg.call_target import CallTarget
 from cobol_asg.cobol_expression import (
     ExprNode,
@@ -25,6 +24,7 @@ from cobol_asg.cobol_expression import (
     expr_to_dict,
     field_ref_from_dict,
 )
+from cobol_asg.collating_sequence_phrase import CollatingSequencePhrase
 from cobol_asg.evaluate_selection import (
     SelectionObject,
     SelectionSubject,
@@ -1918,19 +1918,18 @@ class ProcedureRange:
 
 SortSource = SortFiles | ProcedureRange
 
-SortCollation = Alphabet | ProgramCollation
+SortCollation = CollatingSequencePhrase | ProgramCollation
 
 
 def _sort_collation(data: Mapping) -> SortCollation:
     if "collating_sequence" not in data:
         return PROGRAM_COLLATION
-    named = data["collating_sequence"]
-    return Alphabet.from_parts(named["name"], named["kind"], named.get("items", []))
+    return CollatingSequencePhrase.from_dict(data["collating_sequence"])
 
 
 def _sort_collation_to_dict(collation: SortCollation) -> dict:
     match collation:
-        case Alphabet():
+        case CollatingSequencePhrase():
             return {"collating_sequence": collation.to_dict()}
         case ProgramCollation():
             return {}

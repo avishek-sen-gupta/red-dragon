@@ -21,11 +21,8 @@ def _items(*items: tuple[str, str, str]) -> list[dict[str, str]]:
 def _special_names(name: str, items: Sequence[Mapping[str, str]]) -> dict:
     return {
         "special_names": {
-            "program_collating_sequence": {
-                "name": name,
-                "kind": "LITERALS",
-                "items": items,
-            },
+            "alphabets": [{"name": name, "kind": "LITERALS", "items": items}],
+            "program_collating_sequence": {"alphabet_names": [name]},
         }
     }
 

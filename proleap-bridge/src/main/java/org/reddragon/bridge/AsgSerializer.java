@@ -139,7 +139,8 @@ public final class AsgSerializer {
         if (env == null) return result;
         SpecialNamesParagraph snp = env.getSpecialNamesParagraph();
         if (snp == null) return result;
-        serializeProgramCollatingSequence(env, snp, result);
+        serializeAlphabets(snp, result);
+        serializeProgramCollatingSequence(env, result);
         serializeSwitches(snp, result);
         serializeClasses(snp, result);
         if (snp.getDecimalPointClause() != null) {
@@ -250,41 +251,49 @@ public final class AsgSerializer {
         return ctx == null ? "" : ctx.getText().toUpperCase();
     }
 
+    /** Every format-1 ALPHABET clause, as {@code "alphabets"}. */
+    private static void serializeAlphabets(SpecialNamesParagraph snp, JsonObject result) {
+        JsonArray alphabets = new JsonArray();
+        for (AlphabetClause alphabet : snp.getAlphabetClauses()) {
+            if (alphabet.getCtx() instanceof CobolParser.AlphabetClauseFormat1Context ctx) {
+                alphabets.add(serializeAlphabet(ctx));
+            }
+        }
+        if (alphabets.size() > 0) {
+            result.add("alphabets", alphabets);
+        }
+    }
+
     /**
-     * OBJECT-COMPUTER's PROGRAM COLLATING SEQUENCE IS alphabet-name (FOR
-     * ALPHANUMERIC when written), as the format-1 ALPHABET clause it names.
+     * OBJECT-COMPUTER's PROGRAM COLLATING SEQUENCE as written: its alphabet-names
+     * and the FOR ALPHANUMERIC and FOR NATIONAL names. The ASG reader resolves
+     * the names against the ALPHABET clauses.
      */
-    private static void serializeProgramCollatingSequence(
-            EnvironmentDivision env, SpecialNamesParagraph snp, JsonObject result) {
+    private static void serializeProgramCollatingSequence(EnvironmentDivision env, JsonObject result) {
         ConfigurationSection config = env.getConfigurationSection();
         if (config == null || config.getObjectComputerParagraph() == null) return;
         CollatingSequenceClause clause =
                 config.getObjectComputerParagraph().getCollatingSequenceClause();
         if (clause == null) return;
-        String name = clause.getAlphaNumeric() != null
-                ? clause.getAlphaNumeric()
-                : clause.getAlphabetNames().get(0);
-        JsonObject alphabet = alphabetNamed(snp, name);
-        if (alphabet != null) {
-            result.add("program_collating_sequence", alphabet);
-        }
+        result.add("program_collating_sequence",
+                collatingSequencePhrase(clause.getAlphabetNames(), clause.getAlphaNumeric(), clause.getNational()));
     }
 
-    /** The format-1 ALPHABET clause of a program's SPECIAL-NAMES with this name, or null. */
-    static JsonObject alphabetNamed(ProgramUnit pu, String name) {
-        EnvironmentDivision env = pu.getEnvironmentDivision();
-        if (env == null || env.getSpecialNamesParagraph() == null) return null;
-        return alphabetNamed(env.getSpecialNamesParagraph(), name);
-    }
-
-    private static JsonObject alphabetNamed(SpecialNamesParagraph snp, String name) {
-        for (AlphabetClause alphabet : snp.getAlphabetClauses()) {
-            if (alphabet.getCtx() instanceof CobolParser.AlphabetClauseFormat1Context ctx
-                    && ctx.alphabetName().getText().equalsIgnoreCase(name)) {
-                return serializeAlphabet(ctx);
-            }
+    /** A COLLATING SEQUENCE phrase as written, its names unresolved. */
+    static JsonObject collatingSequencePhrase(List<String> names, String alphanumeric, String national) {
+        JsonObject phrase = new JsonObject();
+        JsonArray written = new JsonArray();
+        for (String name : names) {
+            written.add(name.toUpperCase());
         }
-        return null;
+        phrase.add("alphabet_names", written);
+        if (alphanumeric != null) {
+            phrase.addProperty("alphanumeric", alphanumeric.toUpperCase());
+        }
+        if (national != null) {
+            phrase.addProperty("national", national.toUpperCase());
+        }
+        return phrase;
     }
 
     /**
@@ -292,9 +301,7 @@ public final class AsgSerializer {
      * ({@code "kind"}: NATIVE, EBCDIC, ASCII, STANDARD-1, STANDARD-2, ALIAS for an
      * implementor-name) or, for the literal phrase, {@code "kind": "LITERALS"}
      * with the literals in source order, each tagged with what links it to the
-     * literal before it (NONE, THRU or ALSO). The flat order is kept because the
-     * grammar's grouping of ALSO operands is not the standard's: every ALSO takes
-     * exactly one literal.
+     * literal before it (NONE, THRU or ALSO).
      */
     private static JsonObject serializeAlphabet(CobolParser.AlphabetClauseFormat1Context ctx) {
         JsonObject alphabet = new JsonObject();
@@ -307,11 +314,7 @@ public final class AsgSerializer {
                 items.add(alphabetItem(lits.alphabetThrough().literal(), "THRU"));
             }
             for (CobolParser.AlphabetAlsoContext also : lits.alphabetAlso()) {
-                List<CobolParser.LiteralContext> operands = also.literal();
-                items.add(alphabetItem(operands.get(0), "ALSO"));
-                for (CobolParser.LiteralContext operand : operands.subList(1, operands.size())) {
-                    items.add(alphabetItem(operand, "NONE"));
-                }
+                items.add(alphabetItem(also.literal(), "ALSO"));
             }
         }
         if (items.size() > 0) {

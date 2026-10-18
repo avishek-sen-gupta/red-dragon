@@ -8,7 +8,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
 
-from cobol_asg.alphabet import Alphabet
 from cobol_asg.cobol_statements import (
     CloseStatement,
     MergeStatement,
@@ -21,6 +20,7 @@ from cobol_asg.cobol_statements import (
     SortStatement,
     WriteStatement,
 )
+from cobol_asg.collating_sequence_phrase import CollatingSequencePhrase
 from cobol_asg.file_enums import FileOrganization, OpenMode
 from cobol_asg.program_collation import ProgramCollation
 from cobol_asg.sort_files import SortFiles
@@ -144,7 +144,8 @@ class _SortLowering:
 
     def _weights(self) -> tuple[int, ...]:
         match self.stmt.collating_sequence:
-            case Alphabet() as alphabet:
+            case CollatingSequencePhrase() as phrase:
+                alphabet = phrase.alphanumeric_alphabet(self.ctx.alphabets)
                 return collating_sequence_of(alphabet).weights
             case ProgramCollation():
                 return self.ctx.collating_sequence.weights

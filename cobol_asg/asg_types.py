@@ -8,12 +8,14 @@ emits JSON to stdout; these types consume that JSON via from_dict().
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from itertools import groupby
 
 from cobol_asg.addressing_mode import AddressingMode
 from cobol_asg.alphabet import NATIVE_ALPHABET, Alphabet
+from cobol_asg.class_definition import ClassDefinition
+from cobol_asg.cobol_field import CobolField
 from cobol_asg.cobol_statements import (
     CallUsingParam,
     CobolStatementType,
@@ -21,19 +23,26 @@ from cobol_asg.cobol_statements import (
     FileDescription,
     parse_statement,
 )
-from cobol_asg.cobol_field import CobolField
+from cobol_asg.collating_sequence_phrase import CollatingSequencePhrase
 from cobol_asg.decimal_point import DecimalPoint
-from cobol_asg.class_definition import ClassDefinition
-from cobol_asg.implementor_switch import ImplementorSwitch
 from cobol_asg.edit_picture import (
     DEFAULT_CURRENCY,
     UnsupportedEditPictureError,
 )
+from cobol_asg.implementor_switch import ImplementorSwitch
 from cobol_asg.lp32 import LP32_MODE
 from cobol_asg.nonnumeric_literal import literal_characters, written_literal
 from cobol_asg.program_conventions import ProgramConventions
 from cobol_asg.source_span import SourceSpan
 from cobol_asg.storage_layout import file_section_layout, section_layout
+
+
+def _program_collation(special: Mapping, alphabets: Sequence[Alphabet]) -> Alphabet:
+    """The alphabet PROGRAM COLLATING SEQUENCE names, the native one when absent."""
+    if "program_collating_sequence" not in special:
+        return NATIVE_ALPHABET
+    phrase = CollatingSequencePhrase.from_dict(special["program_collating_sequence"])
+    return phrase.alphanumeric_alphabet(alphabets)
 
 
 def _fd_name(record: Mapping) -> str:
@@ -202,6 +211,9 @@ class CobolASG:
     # OBJECT-COMPUTER PROGRAM COLLATING SEQUENCE: the ALPHABET clause it names,
     # the native sequence when the clause is absent.
     collating_sequence: Alphabet = NATIVE_ALPHABET
+    # Every format-1 ALPHABET clause of SPECIAL-NAMES, which a COLLATING
+    # SEQUENCE phrase names.
+    alphabets: list[Alphabet] = field(default_factory=list)
     switches: list[ImplementorSwitch] = field(default_factory=list)
     classes: list[ClassDefinition] = field(default_factory=list)
 
@@ -221,7 +233,10 @@ class CobolASG:
             if f.get("fd_name") and f.get("level") == 1
         }
         currency = _currency_from_special_names(data)
-        collating = data.get("special_names", {}).get("program_collating_sequence", {})
+        alphabets = [
+            Alphabet.from_parts(a["name"], a["kind"], a.get("items", []))
+            for a in data.get("special_names", {}).get("alphabets", [])
+        ]
         conventions = ProgramConventions(
             currency=currency,
             pointer_type=addressing_mode.pointer_type,
@@ -273,10 +288,9 @@ class CobolASG:
             ],
             currency_symbol=currency,
             decimal_point_is_comma=comma,
-            collating_sequence=Alphabet.from_parts(
-                collating.get("name", NATIVE_ALPHABET.name),
-                collating.get("kind", NATIVE_ALPHABET.kind),
-                collating.get("items", []),
+            alphabets=alphabets,
+            collating_sequence=_program_collation(
+                data.get("special_names", {}), alphabets
             ),
             switches=[
                 ImplementorSwitch.from_dict(s)
@@ -324,11 +338,22 @@ class CobolASG:
             )
             | ({"classes": [c.to_dict() for c in self.classes]} if self.classes else {})
         )
+        alphabets = (
+            {"alphabets": [a.to_dict() for a in self.alphabets]}
+            if self.alphabets
+            else {}
+        )
         if self.collating_sequence == NATIVE_ALPHABET:
-            return clauses
-        return clauses | {
-            "program_collating_sequence": self.collating_sequence.to_dict()
-        }
+            return clauses | alphabets
+        return (
+            clauses
+            | alphabets
+            | {
+                "program_collating_sequence": CollatingSequencePhrase(
+                    alphabet_names=(self.collating_sequence.name,)
+                ).to_dict()
+            }
+        )
 
     def _file_descriptions_dict(self) -> dict:
         if not self.file_descriptions:
