@@ -13,6 +13,7 @@ all reachable paths: named-file USE fires, GLOBAL USE fires, and no-USE no-op.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
@@ -33,10 +34,7 @@ from tests.integration.cobol_helpers import (
     first_region as _first_region,
 )
 
-
-@pytest.fixture(autouse=True)
-def _require_bridge_jar(bridge_jar):
-    """Enforce PROLEAP_BRIDGE_JAR."""
+pytestmark = pytest.mark.usefixtures("bridge_jar")
 
 
 def _named_file_program() -> list[str]:
@@ -71,7 +69,7 @@ def _named_file_program() -> list[str]:
     ]
 
 
-def _flag(lines: list[str], tmp_path: Path, offset: int = 0) -> int:
+def _flag(lines: Sequence[str], tmp_path: Path, offset: int = 0) -> int:
     # FLAG is the only WS field here -> offset 0, length 1.
     # A pre-existing data file lets OPEN INPUT succeed, so the WRITE (status 48)
     # is the sole I/O error that triggers the USE.
@@ -81,7 +79,9 @@ def _flag(lines: list[str], tmp_path: Path, offset: int = 0) -> int:
         base_dir=tmp_path,
         inputs=RunInputs(file_control=[], path_overrides={"F1": data_path}),
     )
-    vm = run(to_fixed(lines), language="cobol", io_provider=provider, max_steps=4000)
+    vm = run(
+        to_fixed(list(lines)), language="cobol", io_provider=provider, max_steps=4000
+    )
     return _decode(_first_region(vm), offset, 1)
 
 
@@ -95,18 +95,23 @@ class TestUseDeclaratives:
     def test_global_use_fires_when_no_named_match(self, tmp_path: Path) -> None:
         # USE GLOBAL ... ON F1 registers under use_global; an I/O error on F1
         # resolves via the global fallback. (Uses the GLOBAL keyword form.)
-        lines = _named_file_program()
-        i = lines.index("    USE AFTER STANDARD ERROR PROCEDURE ON F1.")
-        lines[i] = "    USE GLOBAL AFTER STANDARD ERROR PROCEDURE ON F1."
+        lines = [
+            (
+                "    USE GLOBAL AFTER STANDARD ERROR PROCEDURE ON F1."
+                if line == "    USE AFTER STANDARD ERROR PROCEDURE ON F1."
+                else line
+            )
+            for line in _named_file_program()
+        ]
         assert _flag(lines, tmp_path) == 1
 
     @covers(CobolFeature.DECLARATIVES)
     def test_no_use_no_change(self, tmp_path: Path) -> None:
         # Same program without DECLARATIVES: the I/O error must not crash; FLAG stays 0.
         lines = [
-            l
-            for l in _named_file_program()
-            if l
+            line
+            for line in _named_file_program()
+            if line
             not in (
                 "DECLARATIVES.",
                 "D1 SECTION.",
@@ -120,9 +125,6 @@ class TestUseDeclaratives:
 
     @covers(CobolFeature.DECLARATIVES)
     def test_open_mode_use_fires(self, tmp_path: Path) -> None:
-        # USE scoped to open mode INPUT (no named file): the WRITE on an
-        # INPUT-opened F1 errors (status 48); the file's CURRENT open mode is
-        # "INPUT", so __cobol_file_open_mode("F1") == "INPUT" selects D1 -> FLAG=1.
         lines = [
             "IDENTIFICATION DIVISION.",
             "PROGRAM-ID. USEM.",

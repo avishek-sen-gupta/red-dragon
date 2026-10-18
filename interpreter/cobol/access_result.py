@@ -24,6 +24,9 @@ class AccessCondition(Enum):
     NOT_OPEN = "NOT_OPEN"
     WRITE_NOT_PERMITTED = "WRITE_NOT_PERMITTED"
 
+    def position(self) -> int:
+        return tuple(AccessCondition).index(self)
+
 
 @dataclass(frozen=True)
 class AccessResult:

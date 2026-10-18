@@ -7,7 +7,7 @@ fileignoreconfig:
 - filename: tests/unit/cobol/test_alternate_index_driver.py
   checksum: dd4c78d37af6e6848d58d443e4dacd8405b643c9354f886ccede6b4375cbbc0f
 - filename: interpreter/cobol/outcome_status.py
-  checksum: 1276ca8363282216f0f1bfd328419ff517144791eb81e2a5ef82bee87ff5b840
+  checksum: b27811be2fd8c6f192eeeafeac12b7e29ab15594a66c2a6b7dafa40dc9bb2776
 - filename: interpreter/cobol/write_plan.py
   checksum: caadac64410957ff293fd058c5e5ef6c379abd3f4ccf59f92b6f33448736eb92
 - filename: interpreter/cobol/file_verb_ir.py

@@ -91,9 +91,9 @@ class CobolIOProvider(ABC):
         return method(*[a.value for a in args])
 
     def _io_outcome(self, raw: Any, program: str) -> Any:
-        """The driver outcome of an IOResult, as its AccessCondition's value."""
+        """The driver outcome of an IOResult, as its AccessCondition's position."""
         if isinstance(raw, IOResult):
-            return raw.condition.value
+            return raw.condition.position()
         return _UNCOMPUTABLE
 
     def _io_data(self, raw: Any, program: str) -> Any:

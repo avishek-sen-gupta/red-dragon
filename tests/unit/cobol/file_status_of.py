@@ -7,7 +7,7 @@ from interpreter.cobol.file_state import file_state
 from interpreter.cobol.file_verb_ir import FileVerbIr
 from interpreter.cobol.ir_emitter import IrEmitter
 from interpreter.register import Register
-from tests.unit.cobol.emitted_ir import run_emitted
+from tests.unit.cobol.emitted_ir import ParamValue, run_emitted
 
 
 def _status(e: IrEmitter, registers: tuple[Register, ...]) -> Register:
@@ -19,4 +19,8 @@ def _status(e: IrEmitter, registers: tuple[Register, ...]) -> Register:
 
 
 def file_status_of(condition: AccessCondition) -> str:
-    return str(run_emitted(_status, (condition.value, "P")))
+    return str(run_emitted(_status, (condition.position(), "P")))
+
+
+def file_status_of_outcome(driver_outcome: ParamValue) -> ParamValue:
+    return run_emitted(_status, (driver_outcome, "P"))
