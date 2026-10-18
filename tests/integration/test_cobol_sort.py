@@ -306,3 +306,57 @@ def test_sort_collates_by_its_collating_sequence_else_the_programs(
         ),
     )
     assert capsys.readouterr().out == "1\nA\nA\n1\n"
+
+
+@covers(CobolFeature.MERGE)
+def test_merge_using_a_missing_file_merges_the_files_that_opened(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    files = ("IN-F", "MISS-F", "SRT")
+    source = to_fixed(
+        [
+            "IDENTIFICATION DIVISION.",
+            "PROGRAM-ID. MERGEMIS.",
+            "ENVIRONMENT DIVISION.",
+            "INPUT-OUTPUT SECTION.",
+            "FILE-CONTROL.",
+            *(f'    SELECT {name} ASSIGN TO "{name}".' for name in files[:2]),
+            '    SELECT SRT ASSIGN TO "SRT".',
+            "DATA DIVISION.",
+            "FILE SECTION.",
+            "FD IN-F.",
+            "01 F-REC PIC XX.",
+            "FD MISS-F.",
+            "01 M-REC PIC XX.",
+            "SD SRT.",
+            "01 SRT-REC.",
+            "    05 S-KEY PIC X.",
+            "    05 S-TAG PIC X.",
+            "WORKING-STORAGE SECTION.",
+            '01 EOF-FLAG PIC X VALUE "N".',
+            "PROCEDURE DIVISION.",
+            "MAIN-PARA.",
+            "    OPEN OUTPUT IN-F.",
+            '    MOVE "A1" TO F-REC. WRITE F-REC.',
+            '    MOVE "C2" TO F-REC. WRITE F-REC.',
+            "    CLOSE IN-F.",
+            "    MERGE SRT ON ASCENDING KEY S-KEY USING MISS-F IN-F",
+            "        OUTPUT PROCEDURE IS SHOW.",
+            '    DISPLAY "END".',
+            "    STOP RUN.",
+            "SHOW.",
+            '    RETURN SRT AT END MOVE "Y" TO EOF-FLAG DISPLAY "AT END"',
+            "        NOT AT END DISPLAY SRT-REC END-RETURN.",
+            '    IF EOF-FLAG = "N" GO TO SHOW.',
+        ]
+    )
+    run(
+        source=source,
+        language="cobol",
+        max_steps=50000,
+        io_provider=RealFileIOProvider(
+            base_dir=tmp_path,
+            inputs=RunInputs(path_overrides={name: tmp_path / name for name in files}),
+        ),
+    )
+    assert capsys.readouterr().out == "A1\nC2\nAT END\nEND\n"
