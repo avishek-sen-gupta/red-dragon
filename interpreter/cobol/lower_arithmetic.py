@@ -47,6 +47,7 @@ from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
 from cobol_asg.exit_kind import ExitKind
 from cobol_asg.initialize_category import InitializeCategory
 from cobol_asg.initialize_replacing import InitializeReplacing
+from cobol_asg.operand_kind import OperandKind
 from cobol_asg.ref_mod import (
     FunctionCallOperand,
     RefModBinOp,
@@ -172,7 +173,7 @@ def _operand_scale(
     ctx: EmitContext, operand: RefModOperand, materialised: MaterialisedSectionedLayout
 ) -> Scale:
     name = operand.name
-    if ctx.has_field(name, materialised):
+    if operand.names_data:
         return field_scale(
             materialised.resolve(name, operand.qualifiers)[0].type_descriptor
         )
@@ -194,7 +195,7 @@ _VERB_SCALES: Mapping[str, Callable[[Scale, Scale, int], Scale]] = {
 def _is_floating_operand(
     ctx: EmitContext, operand: RefModOperand, materialised: MaterialisedSectionedLayout
 ) -> bool:
-    return ctx.has_field(operand.name, materialised) and is_floating_type(
+    return operand.names_data and is_floating_type(
         materialised.resolve(operand.name, operand.qualifiers)[0].type_descriptor
     )
 
@@ -789,7 +790,7 @@ def lower_move(
     # source slice still selects bytes, so it keeps the character path below; a
     # reference-modified TARGET likewise needs the splice path and is excluded here.
     if (
-        not ctx.has_field(stmt.source.name, materialised)
+        not stmt.source.names_data
         and not stmt.source.is_reference_modified
         and ctx.figuratives.is_raw(stmt.source.name)
     ):
@@ -803,7 +804,7 @@ def lower_move(
     _fill_pattern = ""
     source_fl: FieldLayout | None = None
     # Get the source value (decode field or literal) — evaluated ONCE.
-    if ctx.has_field(stmt.source.name, materialised):
+    if stmt.source.names_data:
         source_ref, source_rr = ctx.resolve_field_ref(
             stmt.source.name,
             materialised,
@@ -1423,7 +1424,7 @@ def _decode_operand(
     *,
     span: SourceSpan | None = None,
 ) -> ArithmeticValue:
-    if not ctx.has_field(operand.name, materialised):
+    if not operand.names_data:
         literal = ctx.parse_literal(ctx.figuratives.translate(operand.name))
         return _operand_value(
             ctx, operand, ctx.const_to_reg(literal, span=span), materialised
@@ -1962,8 +1963,8 @@ _EXIT_TARGETS: Mapping[ExitKind, Callable[[EmitContext], CodeLabel]] = {
 }
 
 
-_DEFAULT_SPACES = RefModOperand(name="SPACES")
-_DEFAULT_ZERO = RefModOperand(name="ZERO")
+_DEFAULT_SPACES = RefModOperand(name="SPACES", kind=OperandKind.FIGURATIVE)
+_DEFAULT_ZERO = RefModOperand(name="ZERO", kind=OperandKind.FIGURATIVE)
 
 _INITIALIZE_CATEGORY = {
     CobolDataCategory.ZONED_DECIMAL: InitializeCategory.NUMERIC,
@@ -2288,7 +2289,7 @@ def _lower_display_operand(
     span: SourceSpan | None = None,
 ) -> Register:
     """Lower one DISPLAY operand to a register holding its display string."""
-    if ctx.has_field(operand.name, materialised):
+    if operand.names_data:
         ref, rr = ctx.resolve_field_ref(
             operand.name,
             materialised,

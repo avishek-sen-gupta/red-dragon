@@ -46,11 +46,12 @@ def test_unstring_emits_delimiters_with_all_and_receivers_with_their_items(
     stmt = _first_statement(obj)
     assert (stmt["delimiters"], stmt["into"]) == (
         [
-            {"operand": {"name": "'0'"}, "all": True},
-            {"operand": {"name": "';'"}},
-            {"operand": {"name": "SPACE"}, "all": True},
+            {"operand": {"kind": "lit", "name": "'0'"}, "all": True},
+            {"operand": {"kind": "lit", "name": "';'"}},
+            {"operand": {"kind": "figurative", "name": "SPACE"}, "all": True},
             {
                 "operand": {
+                    "kind": "ref",
                     "name": "WS-D",
                     "subscripts": [{"kind": "ref", "name": "WS-I"}],
                 }
@@ -58,11 +59,11 @@ def test_unstring_emits_delimiters_with_all_and_receivers_with_their_items(
         ],
         [
             {
-                "target": {"name": "WS-F1"},
-                "delimiter_in": {"name": "WS-DL"},
-                "count_in": {"name": "WS-CT"},
+                "target": {"kind": "ref", "name": "WS-F1"},
+                "delimiter_in": {"kind": "ref", "name": "WS-DL"},
+                "count_in": {"kind": "ref", "name": "WS-CT"},
             },
-            {"target": {"name": "WS-F2"}},
+            {"target": {"kind": "ref", "name": "WS-F2"}},
         ],
     )
 
@@ -87,8 +88,8 @@ def test_unstring_emits_pointer_and_tallying_target(bridge_jar):
     )
     stmt = _first_statement(obj)
     assert (stmt["pointer"], stmt["tallying_target"]) == (
-        {"name": "WS-PTR", "qualifiers": ["WS-P"]},
-        {"name": "WS-CNT", "qualifiers": ["WS-C"]},
+        {"kind": "ref", "name": "WS-PTR", "qualifiers": ["WS-P"]},
+        {"kind": "ref", "name": "WS-CNT", "qualifiers": ["WS-C"]},
     )
 
 
@@ -114,17 +115,21 @@ def test_string_emits_pointer_and_delimiter_operands(bridge_jar):
     )
     stmt = _first_statement(obj)
     assert (stmt["pointer"], stmt["sendings"]) == (
-        {"name": "WS-PTR"},
+        {"kind": "ref", "name": "WS-PTR"},
         [
-            {"value": {"name": "WS-A"}},
+            {"value": {"kind": "ref", "name": "WS-A"}},
             {
-                "value": {"name": "SPACE"},
+                "value": {"kind": "figurative", "name": "SPACE"},
                 "delimiter": {
+                    "kind": "ref",
                     "name": "WS-D",
                     "subscripts": [{"kind": "ref", "name": "WS-I"}],
                 },
             },
-            {"value": {"name": "'X'"}, "delimiter": {"name": "QUOTE"}},
+            {
+                "value": {"kind": "lit", "name": "'X'"},
+                "delimiter": {"kind": "figurative", "name": "QUOTE"},
+            },
         ],
     )
 
@@ -151,12 +156,12 @@ def test_inspect_emits_tallying_groups_for_multiple_targets(bridge_jar):
     assert len(groups) == 2
     assert groups == [
         {
-            "target": {"name": "WS-CNT-A"},
-            "patterns": [{"mode": "ALL", "pattern": {"name": "'A'"}}],
+            "target": {"kind": "ref", "name": "WS-CNT-A"},
+            "patterns": [{"mode": "ALL", "pattern": {"kind": "lit", "name": "'A'"}}],
         },
         {
-            "target": {"name": "WS-CNT-B"},
-            "patterns": [{"mode": "ALL", "pattern": {"name": "'B'"}}],
+            "target": {"kind": "ref", "name": "WS-CNT-B"},
+            "patterns": [{"mode": "ALL", "pattern": {"kind": "lit", "name": "'B'"}}],
         },
     ]
 
@@ -179,7 +184,7 @@ def test_inspect_tallying_emits_before_initial_boundary(bridge_jar):
     )
     stmt = _first_statement(obj)
     pattern = stmt["tallying_groups"][0]["patterns"][0]
-    assert pattern["before"] == {"name": "'.'"}
+    assert pattern["before"] == {"kind": "lit", "name": "'.'"}
 
 
 def test_inspect_replacing_emits_after_initial_boundary(bridge_jar):
@@ -198,7 +203,7 @@ def test_inspect_replacing_emits_after_initial_boundary(bridge_jar):
     )
     stmt = _first_statement(obj)
     replacing = stmt["replacings"][0]
-    assert replacing["after"] == {"name": "'.'"}
+    assert replacing["after"] == {"kind": "lit", "name": "'.'"}
 
 
 def test_inspect_emits_every_phrase_form_in_written_order(bridge_jar):
@@ -232,33 +237,42 @@ def test_inspect_emits_every_phrase_form_in_written_order(bridge_jar):
         "TALLYING_REPLACING",
         [
             {
-                "target": {"name": "C", "subscripts": index_ref},
+                "target": {"kind": "ref", "name": "C", "subscripts": index_ref},
                 "patterns": [
-                    {"mode": "CHARACTERS", "after": {"name": "'W'"}},
+                    {"mode": "CHARACTERS", "after": {"kind": "lit", "name": "'W'"}},
                     {
                         "mode": "ALL",
-                        "pattern": {"name": "'A'"},
-                        "before": {"name": "'X'"},
+                        "pattern": {"kind": "lit", "name": "'A'"},
+                        "before": {"kind": "lit", "name": "'X'"},
                     },
                     {
                         "mode": "ALL",
                         "pattern": {
+                            "kind": "ref",
                             "name": "E",
                             "subscripts": [{"kind": "ref", "name": "IX"}],
                         },
                     },
-                    {"mode": "ALL", "pattern": {"name": "'D'"}},
+                    {"mode": "ALL", "pattern": {"kind": "lit", "name": "'D'"}},
                 ],
             }
         ],
         [
-            {"mode": "FIRST", "from": {"name": "'A'"}, "to": {"name": "'O'"}},
-            {"mode": "ALL", "from": {"name": "'C'"}, "to": {"name": "'2'"}},
+            {
+                "mode": "FIRST",
+                "from": {"kind": "lit", "name": "'A'"},
+                "to": {"kind": "lit", "name": "'O'"},
+            },
+            {
+                "mode": "ALL",
+                "from": {"kind": "lit", "name": "'C'"},
+                "to": {"kind": "lit", "name": "'2'"},
+            },
             {
                 "mode": "CHARACTERS",
-                "to": {"name": "'Z'"},
-                "before": {"name": "'Q'"},
-                "after": {"name": "'R'"},
+                "to": {"kind": "lit", "name": "'Z'"},
+                "before": {"kind": "lit", "name": "'Q'"},
+                "after": {"kind": "lit", "name": "'R'"},
             },
         ],
     )
@@ -267,4 +281,9 @@ def test_inspect_emits_every_phrase_form_in_written_order(bridge_jar):
         converting["converting_to"],
         converting["before"],
         converting["after"],
-    ) == ({"name": "'AU'"}, {"name": "'23'"}, {"name": "'B'"}, {"name": "'Q'"})
+    ) == (
+        {"kind": "lit", "name": "'AU'"},
+        {"kind": "lit", "name": "'23'"},
+        {"kind": "lit", "name": "'B'"},
+        {"kind": "lit", "name": "'Q'"},
+    )

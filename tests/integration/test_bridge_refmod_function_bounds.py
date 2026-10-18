@@ -74,6 +74,7 @@ _LIT_1 = {"kind": "lit", "value": "1", "numeric": True}
 def test_function_as_the_length_bound_keeps_the_sliced_field(bridge_jar):
     """The defect returned the bare LENGTH call — M and the slice were gone."""
     assert _move_source(bridge_jar, "MOVE M(1:FUNCTION LENGTH(M)) TO D.") == {
+        "kind": "ref",
         "name": "M",
         "ref_mod_start": _LIT_1,
         "ref_mod_length": _LENGTH_OF_M,
@@ -83,6 +84,7 @@ def test_function_as_the_length_bound_keeps_the_sliced_field(bridge_jar):
 @covers(CobolFeature.INTRINSIC_FUNCTION, CobolFeature.REFERENCE_MODIFICATION)
 def test_parenthesised_bound_keeps_the_sliced_field_and_the_whole_group(bridge_jar):
     assert _move_source(bridge_jar, "MOVE M(1:(FUNCTION LENGTH(M) - 1)) TO D.") == {
+        "kind": "ref",
         "name": "M",
         "ref_mod_start": _LIT_1,
         "ref_mod_length": {
@@ -97,6 +99,7 @@ def test_parenthesised_bound_keeps_the_sliced_field_and_the_whole_group(bridge_j
 @covers(CobolFeature.INTRINSIC_FUNCTION, CobolFeature.REFERENCE_MODIFICATION)
 def test_function_in_the_start_position_keeps_the_sliced_field(bridge_jar):
     assert _move_source(bridge_jar, "MOVE M(FUNCTION LENGTH(N):2) TO D.") == {
+        "kind": "ref",
         "name": "M",
         "ref_mod_start": {
             "kind": "function",
@@ -123,6 +126,7 @@ def test_string_sending_item_keeps_the_sliced_field(bridge_jar):
         bridge_jar, "STRING M(1:FUNCTION LENGTH(M)) DELIMITED BY SIZE INTO D."
     )
     assert statement["sendings"][0]["value"] == {
+        "kind": "ref",
         "name": "M",
         "ref_mod_start": _LIT_1,
         "ref_mod_length": _LENGTH_OF_M,
@@ -163,6 +167,7 @@ def test_a_plain_function_source_stays_a_function(bridge_jar):
 @covers(CobolFeature.REFERENCE_MODIFICATION)
 def test_a_plain_ref_modified_source_is_unchanged(bridge_jar):
     assert _move_source(bridge_jar, "MOVE M(1:N) TO D.") == {
+        "kind": "ref",
         "name": "M",
         "ref_mod_start": _LIT_1,
         "ref_mod_length": {"kind": "ref", "name": "N"},

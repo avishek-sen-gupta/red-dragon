@@ -59,8 +59,8 @@ def test_bridge_serialises_all_literal_with_its_all(bridge_jar):
         True,
         False,
         [{"from": "BAC", "to": "", "all": True}, {"from": "X", "to": ""}],
-        {"name": '"AB"', "all": True},
-        {"name": "QUOTE"},
+        {"kind": "lit", "name": '"AB"', "all": True},
+        {"kind": "figurative", "name": "QUOTE"},
         {"kind": "figurative", "value": "ALL", "literal": '"BA"'},
         {"kind": "figurative", "value": "ZEROS"},
     )

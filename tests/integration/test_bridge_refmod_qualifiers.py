@@ -81,6 +81,7 @@ _LIT_1 = {"kind": "lit", "value": "1", "numeric": True}
 def test_a_literal_bound_leaves_the_operands_qualifier_intact(bridge_jar):
     """The plainer half: no bound to blame, the qualifier vanished outright."""
     assert _source_operand(bridge_jar, "MOVE FLD OF GA(1:2) TO D.") == {
+        "kind": "ref",
         "name": "FLD",
         "ref_mod_start": _LIT_1,
         "ref_mod_length": {"kind": "lit", "value": "2", "numeric": True},
@@ -98,6 +99,7 @@ def test_a_qualified_bound_does_not_requalify_the_sliced_operand(bridge_jar):
     about, and it is unchanged.
     """
     assert _source_operand(bridge_jar, "MOVE FLD OF GA(1:NL OF NB) TO D.") == {
+        "kind": "ref",
         "name": "FLD",
         "ref_mod_start": _LIT_1,
         "ref_mod_length": {"kind": "ref", "name": "NL", "qualifiers": ["NB"]},
@@ -117,6 +119,7 @@ def test_a_qualified_bound_on_an_unqualified_operand_adds_no_qualifier(bridge_ja
 @covers(CobolFeature.GROUP_ITEM)
 def test_a_qualified_operand_without_a_ref_mod_still_carries_its_qualifier(bridge_jar):
     assert _source_operand(bridge_jar, "MOVE FLD OF GA TO D.") == {
+        "kind": "ref",
         "name": "FLD",
         "qualifiers": ["GA"],
     }
@@ -133,7 +136,7 @@ def test_a_subscripted_and_qualified_operand_keeps_its_qualifier(bridge_jar):
 
 @covers(CobolFeature.MOVE)
 def test_an_unqualified_operand_still_emits_no_qualifiers_key(bridge_jar):
-    assert _source_operand(bridge_jar, "MOVE D TO D.") == {"name": "D"}
+    assert _source_operand(bridge_jar, "MOVE D TO D.") == {"kind": "ref", "name": "D"}
 
 
 # ── Guard-rail: CardDemo's bare qualified BMS fields are untouched ───────────

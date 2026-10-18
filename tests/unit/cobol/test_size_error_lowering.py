@@ -13,6 +13,7 @@ from cobol_asg.cobol_statements import (
     ComputeTarget,
     ContinueStatement,
 )
+from cobol_asg.operand_kind import OperandKind
 from cobol_asg.ref_mod import RefModOperand
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.emit_context import EmitContext
@@ -81,7 +82,7 @@ def test_a_rounded_receiver_is_size_tested_on_its_rounded_value():
         [
             ArithmeticStatement(
                 op="MULTIPLY",
-                operands=[RefModOperand(name="99.4")],
+                operands=[RefModOperand(name="99.4", kind=OperandKind.LIT)],
                 targets=[
                     RefModOperand(name="R", rounded=True),
                     RefModOperand(name="T"),
@@ -107,7 +108,7 @@ def test_the_size_error_test_lowers_to_ir_without_a_builtin():
         [
             ArithmeticStatement(
                 op="ADD",
-                operands=[RefModOperand(name="1")],
+                operands=[RefModOperand(name="1", kind=OperandKind.LIT)],
                 targets=[RefModOperand(name="R")],
                 on_size_error=[ContinueStatement()],
             )

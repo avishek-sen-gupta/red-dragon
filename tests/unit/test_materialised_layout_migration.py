@@ -11,6 +11,7 @@ from cobol_asg.cobol_statements import (
     DisplayStatement,
     StopRunStatement,
 )
+from cobol_asg.operand_kind import OperandKind
 from cobol_asg.ref_mod import RefModOperand
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.lower_data_division import (
@@ -134,7 +135,9 @@ class TestEmitContextLowerStatement:
         ctx = EmitContext(dispatch_fn=dispatch_statement)
         materialised = lower_sectioned_data_division(ctx, sl, "TESTPGM")
 
-        stmt = DisplayStatement(operands=(RefModOperand(name="HELLO"),))
+        stmt = DisplayStatement(
+            operands=(RefModOperand(name="HELLO", kind=OperandKind.LIT),)
+        )
         ctx.lower_statement(stmt, materialised)
 
         opcodes = [i.opcode for i in ctx.instructions]
@@ -199,7 +202,7 @@ class TestLowerMoveWithMaterialised:
         materialised = lower_sectioned_data_division(ctx, sl, "TESTPGM")
 
         stmt = MoveStatement(
-            source=RefModOperand(name="HELLO"),
+            source=RefModOperand(name="HELLO", kind=OperandKind.LIT),
             targets=[RefModOperand(name="WS-A")],
         )
         lower_move(ctx, stmt, materialised)
@@ -227,7 +230,7 @@ class TestLowerArithmeticWithMaterialised:
 
         stmt = ArithmeticStatement(
             op="ADD",
-            operands=[RefModOperand(name="1")],
+            operands=[RefModOperand(name="1", kind=OperandKind.LIT)],
             targets=[RefModOperand(name="WS-A")],
             giving=[],
             on_size_error=[],

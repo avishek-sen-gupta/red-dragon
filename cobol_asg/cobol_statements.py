@@ -36,11 +36,13 @@ from cobol_asg.file_enums import AccessMode, FileOrganization, OpenMode, Recordi
 from cobol_asg.frontend_extension import DialectParser
 from cobol_asg.initialize_category import InitializeCategory
 from cobol_asg.initialize_replacing import InitializeReplacing
+from cobol_asg.operand_kind import OperandKind
 from cobol_asg.program_collation import PROGRAM_COLLATION, ProgramCollation
 from cobol_asg.ref_mod import (
     FunctionCallOperand,
     RefModOperand,
     is_function_operand,
+    literal_kind_dict,
     ref_mod_expr_to_dict,
 )
 from cobol_asg.set_operand import SetOperand, set_operand_from_dict
@@ -197,7 +199,7 @@ class MoveStatement:
     def _operand_dict(self, operand: RefModOperand) -> dict:
         if operand.length_of.name:
             return ref_mod_expr_to_dict(operand.length_of)
-        d: dict = {"name": operand.name}
+        d: dict = {**literal_kind_dict(operand), "name": operand.name}
         if operand.ref_mod_start is not None:
             d["ref_mod_start"] = ref_mod_expr_to_dict(operand.ref_mod_start)
         if operand.ref_mod_length is not None:
@@ -1303,7 +1305,8 @@ class CallUsingParam:
     """A single USING parameter in a CALL statement.
 
     A data-item argument carries the ``OF``/``IN`` qualifiers and subscripts
-    written on it; a literal's text is its ``name``.
+    written on it; a literal's text is its ``name``, its ``kind`` says whether
+    it is a figurative constant, and ``numeric`` marks a numeric literal.
     """
 
     name: str
@@ -1313,6 +1316,8 @@ class CallUsingParam:
     address_of: bool = False
     qualifiers: tuple[str, ...] = ()
     subscripts: tuple[ExprNode, ...] = ()
+    kind: OperandKind = OperandKind.REF
+    numeric: bool = False
 
     @classmethod
     def from_dict(cls, data: dict) -> CallUsingParam:
@@ -1324,6 +1329,8 @@ class CallUsingParam:
             address_of=data.get("address_of", False),
             qualifiers=tuple(data.get("qualifiers", ())),
             subscripts=tuple(expr_from_dict(s) for s in data.get("subscripts", [])),
+            kind=OperandKind(data.get("kind", OperandKind.REF.value)),
+            numeric=data.get("numeric", False),
         )
 
     def to_dict(self) -> dict:
@@ -1331,8 +1338,10 @@ class CallUsingParam:
             "omitted": self.omitted,
             "is_literal": self.is_literal,
             "address_of": self.address_of,
+            "numeric": self.numeric,
         }
         return {
+            **({"kind": self.kind.value} if self.kind is not OperandKind.REF else {}),
             "name": self.name,
             "type": self.param_type,
             **{flag: True for flag, on in flags.items() if on},

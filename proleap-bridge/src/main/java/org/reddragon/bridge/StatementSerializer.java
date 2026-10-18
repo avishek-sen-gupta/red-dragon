@@ -4,7 +4,6 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonPrimitive;
 import io.proleap.cobol.asg.metamodel.Scope;
 import io.proleap.cobol.asg.metamodel.procedure.NotOnSizeErrorPhrase;
 import io.proleap.cobol.asg.metamodel.procedure.OnSizeErrorPhrase;
@@ -367,20 +366,9 @@ public final class StatementSerializer {
                     operands.add(serializeMoveOperand(sourceCall));
                 } else if (vs instanceof LiteralValueStmt) {
                     JsonObject dfh = serializeDfhrespLit((LiteralValueStmt) vs);
-                    if (dfh != null) {
-                        operands.add(dfh);
-                    } else {
-                        JsonObject srcObj = new JsonObject();
-                        srcObj.addProperty("name", extractValueStmtText(vs));
-                        markNumeric(srcObj, vs);
-                        operands.add(srcObj);
-                    }
+                    operands.add(dfh != null ? dfh : literalOperand(vs));
                 } else {
-                    // Complex expression source: plain name object, no ref mod
-                    JsonObject srcObj = new JsonObject();
-                    srcObj.addProperty("name", extractValueStmtText(vs));
-                    markNumeric(srcObj, vs);
-                    operands.add(srcObj);
+                    operands.add(literalOperand(vs));
                 }
             }
 
@@ -929,10 +917,7 @@ public final class StatementSerializer {
             if (vs instanceof CallValueStmt) {
                 operands.add(serializeMoveOperand(((CallValueStmt) vs).getCall()));
             } else {
-                JsonObject literalObj = new JsonObject();
-                literalObj.addProperty("name", extractValueStmtText(vs));
-                markNumeric(literalObj, vs);
-                operands.add(literalObj);
+                operands.add(literalOperand(vs));
             }
         }
 
@@ -1270,10 +1255,7 @@ public final class StatementSerializer {
         if (vs instanceof CallValueStmt callValue) {
             return serializeMoveOperand(callValue.getCall());
         }
-        JsonObject literal = new JsonObject();
-        literal.addProperty("name", extractValueStmtText(vs));
-        markNumeric(literal, vs);
-        return literal;
+        return literalOperand(vs);
     }
 
     private static JsonObject serializeSet(SetStatement stmt) {
@@ -1413,15 +1395,12 @@ public final class StatementSerializer {
     }
 
     private static JsonObject textOperand(ValueStmt vs) {
-        JsonObject text = new JsonObject();
-        text.addProperty("name", extractValueStmtText(vs));
-        markNumeric(text, vs);
-        return text;
+        return literalOperand(vs);
     }
 
     /** Copies a USING operand's name, qualifiers and subscripts onto its parameter object. */
     private static void addUsingOperand(JsonObject paramObj, JsonObject operand) {
-        for (String key : new String[] {"name", "qualifiers", "subscripts"}) {
+        for (String key : new String[] {"kind", "name", "numeric", "qualifiers", "subscripts"}) {
             if (operand.has(key)) {
                 paramObj.add(key, operand.get(key));
             }
@@ -1458,10 +1437,7 @@ public final class StatementSerializer {
                         sendingObj.add("value",
                                 (fn != null) ? fn : serializeMoveOperand(sendingCall));
                     } else {
-                        JsonObject litObj = new JsonObject();
-                        litObj.addProperty("name", extractValueStmtText(vs));
-                        markNumeric(litObj, vs);
-                        sendingObj.add("value", litObj);
+                        sendingObj.add("value", literalOperand(vs));
                     }
                     if (delim != null) {
                         sendingObj.add("delimiter", delim);
@@ -1577,11 +1553,12 @@ public final class StatementSerializer {
             return serializeRef(((CallValueStmt) vs).getCall());
         }
         CobolParser.LiteralContext repeated = allLiteralOf(vs);
-        JsonObject lit = new JsonObject();
-        lit.addProperty("name", repeated != null ? repeated.getText() : extractValueStmtText(vs));
         if (repeated == null) {
-            markNumeric(lit, vs);
+            return literalOperand(vs);
         }
+        JsonObject lit = new JsonObject();
+        lit.addProperty("kind", literalKind(repeated));
+        lit.addProperty("name", repeated.getText());
         return lit;
     }
 
@@ -2199,10 +2176,7 @@ public final class StatementSerializer {
         if (vs instanceof CallValueStmt && ((CallValueStmt) vs).getCall() != null) {
             return serializeRef(((CallValueStmt) vs).getCall());
         }
-        JsonObject literal = new JsonObject();
-        literal.addProperty("name", extractValueStmtText(vs));
-        markNumeric(literal, vs);
-        return literal;
+        return literalOperand(vs);
     }
 
     private static JsonObject serializeRewrite(RewriteStatement stmt) {
@@ -2476,6 +2450,7 @@ public final class StatementSerializer {
      */
     static JsonObject serializeRef(Call call) {
         JsonObject obj = new JsonObject();
+        obj.addProperty("kind", "ref");
         obj.addProperty("name", extractCallName(call));
         JsonArray subs = extractSubscripts(call);
         if (subs.size() > 0) {
@@ -2917,7 +2892,7 @@ public final class StatementSerializer {
     /**
      * Serializes an arithmetic source operand ValueStmt.
      * Returns a JsonElement: either a JsonObject with {name, ref_mod_start?, ref_mod_length?}
-     * for Call-based operands, or a string for literals.
+     * for Call-based operands, or a literal operand (see literalOperand).
      */
     private static JsonElement serializeArithSource(ValueStmt vs) {
         if (vs instanceof CallValueStmt) {
@@ -2932,14 +2907,7 @@ public final class StatementSerializer {
             JsonObject dfh = serializeDfhrespLit((LiteralValueStmt) vs);
             if (dfh != null) return dfh;
         }
-        // For literals and other operands, return as plain string
-        if (vs != null && isNumericLiteral(vs.getCtx())) {
-            JsonObject literal = new JsonObject();
-            literal.addProperty("name", extractValueStmtText(vs));
-            literal.addProperty("numeric", true);
-            return literal;
-        }
-        return new JsonPrimitive(extractValueStmtText(vs));
+        return literalOperand(vs);
     }
 
     /**
@@ -3949,6 +3917,7 @@ public final class StatementSerializer {
 
     private static JsonObject moveAllSource(CobolParser.LiteralContext literal) {
         JsonObject src = new JsonObject();
+        src.addProperty("kind", literalKind(literal));
         src.addProperty("name", literal.getText());
         if (literal.figurativeConstant() == null) {
             src.addProperty("all", true);
@@ -3972,11 +3941,32 @@ public final class StatementSerializer {
         return lit;
     }
 
-    /** Marks an operand {@code "numeric"} when its value statement is a numeric literal. */
-    private static void markNumeric(JsonObject operand, ValueStmt vs) {
-        if (vs != null && isNumericLiteral(vs.getCtx())) {
+    /**
+     * A literal operand as written: {@code {kind: "lit"|"figurative", name: <text>,
+     * numeric?: true}}. The parse tree states which alternative it is, so the
+     * reader never works the kind back out of the text.
+     */
+    private static JsonObject literalOperand(ValueStmt vs) {
+        JsonObject operand = new JsonObject();
+        ParseTree ctx = vs != null ? vs.getCtx() : null;
+        operand.addProperty("kind", isFigurativeConstant(ctx) ? "figurative" : "lit");
+        operand.addProperty("name", extractValueStmtText(vs));
+        if (isNumericLiteral(ctx)) {
             operand.addProperty("numeric", true);
         }
+        return operand;
+    }
+
+    private static String literalKind(CobolParser.LiteralContext literal) {
+        return literal.figurativeConstant() != null ? "figurative" : "lit";
+    }
+
+    /** True when {@code ctx} is, or wraps through single-child rules, a figurativeConstant. */
+    private static boolean isFigurativeConstant(ParseTree ctx) {
+        if (ctx instanceof CobolParser.FigurativeConstantContext) {
+            return true;
+        }
+        return ctx != null && ctx.getChildCount() == 1 && isFigurativeConstant(ctx.getChild(0));
     }
 
     /**
