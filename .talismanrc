@@ -1,5 +1,11 @@
 threshold: low
 fileignoreconfig:
+- filename: interpreter/cobol/sort_ordering.py
+  checksum: 368374a03096f4fd3ab010abae42f95451ed72ba80b6175b62b36f394439e314
+- filename: tests/unit/cobol/test_sort_pass_ir.py
+  checksum: 3fe6674608b38e22d93f6cf7375c407567e0cf11b8b9a73b2dd5be43315beb06
+- filename: interpreter/cobol/sort_pass_ir.py
+  checksum: 8e86ffcbafddb7cef18d6e9f83384c87ad5d81ce1168216489504354f754baca
 - filename: interpreter/cobol/alternate_key.py
   checksum: dfd81caaf6dce2a383048ef791c7b0fbd89a8166da24cc145742ddc78292e6ac
 - filename: interpreter/cobol/record_shape.py
@@ -243,7 +249,7 @@ fileignoreconfig:
 - filename: tests/unit/cobol/test_recorded_memory_effects.py
   checksum: ba151292b7ee1a3f747628e5950297f904de1c1cd625307f762f7a98b570b3de
 - filename: docs/frontend-design/cobol.md
-  checksum: 5088606d39e8057f4efcde767f7041af75edde4b52aad66992d191df80aa5240
+  checksum: 8cbd8d7027fa1effed1d6e4237c50d1a586d205c254e68ac91e378abd15cdfba
 - filename: tests/integration/test_cobol_call_using_addresses.py
   checksum: 353804977c7a3e5eb44a303f7e42a47ef1bdf9f837f41e396bf5033813c4fdb0
 - filename: tests/integration/test_cobol_call_using_slots.py
@@ -315,9 +321,9 @@ fileignoreconfig:
 - filename: cobol_asg/sort_key.py
   checksum: 8fadfb327f2c8bf974066015fb9329886b1515ee12ad65c575e605f5561a4bc5
 - filename: interpreter/cobol/sort_field.py
-  checksum: b57c7fe8231b7f613d599584d1e20d29d65f7609ca032d0cfac72b0900d67d4c
+  checksum: 72f13f7015b88dd08f0c6a0b51a51d28f14d435b7544d3873f808fd592a1eacb
 - filename: tests/unit/cobol/test_sort_order.py
-  checksum: f13442010d0cbc75df0d8c7c570ebb5336d9a5bd3bb055728c22c5dbc1acfbc9
+  checksum: c8dfd282ff197037fa8d71a2bf8273e00a0dd8cfc26a838f2605f9faac1f9158
 - filename: interpreter/cobol/sort_order.py
   checksum: b5a27a5d0a55e05a9ef80738a93378a90f3b4d646dddc93b1416a41a06c23f54
 - filename: tests/integration/test_cobol_sort.py
@@ -325,7 +331,7 @@ fileignoreconfig:
 - filename: proleap-bridge/src/main/java/org/reddragon/bridge/SortSerializer.java
   checksum: 0933bfa8dec56ffbc6b9613b4acbcb0bc4a859695ba191ae2fd800e7f228f702
 - filename: interpreter/cobol/lower_sort.py
-  checksum: 3b31615e2099ce93799e02bf1c40896e4ae1d18633bc149757c3c9c72265e2e3
+  checksum: 31a820dda6f50df167febf504eb979071e74324ab76f0795fb686c33d1875e6c
 - filename: tests/unit/cobol/test_sort_key_values.py
   checksum: 624f02640dfca23ca6d2004236d8d1459cfc519d8a9267bcc811f0af25888b18
 - filename: interpreter/cobol/sort_key_values.py

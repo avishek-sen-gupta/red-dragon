@@ -66,6 +66,7 @@ class BuiltinName:
     BYTES_TO_STRING = "__bytes_to_string"
     STRING_TO_BYTES = "__string_to_bytes"
     LIST_GET = "__list_get"
+    SORT_RECORDS = "__cobol_sort_records"
     LIST_SET = "__list_set"
     LIST_LEN = "__list_len"
     LIST_SLICE = "__list_slice"

@@ -6,7 +6,6 @@ from __future__ import annotations
 import logging
 import os
 from collections.abc import Callable, Iterator, Mapping
-from itertools import count, takewhile
 from pathlib import Path
 
 from cobol_asg.cobol_statements import FileControlEntry
@@ -23,8 +22,6 @@ from interpreter.cobol.file_frame import FileFrame, frame_of
 from interpreter.cobol.io_provider import CobolIOProvider, IOResult
 from interpreter.cobol.prime_key import PrimeKey
 from interpreter.cobol.run_inputs import NO_RUN_INPUTS, RunInputs
-from interpreter.cobol.sort_field import sort_fields
-from interpreter.cobol.sort_order import ordered
 from interpreter.cobol.variable_sequential_driver import VariableSequentialDriver
 from interpreter.data_value import DataRecord
 
@@ -43,7 +40,6 @@ def to_ioresult(result: AccessResult) -> IOResult:
 
 logger = logging.getLogger(__name__)
 _INPUT_ENDED = IOResult(AccessCondition.END_OF_FILE, None)
-_SUCCESSFUL = frozenset({AccessCondition.OK, AccessCondition.DUPLICATES_FOLLOW})
 _PATH_MARKS = frozenset("/\\.")
 _RELATIVE_KEY_BYTES = 4
 _OPEN_FAILED = to_ioresult(AccessResult(AccessCondition.FILE_NOT_FOUND))
@@ -51,11 +47,6 @@ _VARIABLE_DRIVERS: dict[FileOrganization, Callable[[], FileOrganizationDriver]] 
     FileOrganization.SEQUENTIAL: VariableSequentialDriver,
     FileOrganization.RELATIVE: lambda: RelativeDriver(DescribedSlot()),
 }
-_COPIED = to_ioresult(AccessResult(AccessCondition.OK))
-
-
-def _successful(result: IOResult) -> bool:
-    return result.condition in _SUCCESSFUL
 
 
 class RealFileIOProvider(CobolIOProvider):
@@ -216,53 +207,3 @@ class RealFileIOProvider(CobolIOProvider):
 
     def _delete_record(self, filename: str, key: str, program: str) -> IOResult:
         return to_ioresult(self._files[filename].delete(self._key_bytes(filename, key)))
-
-    def _records(self, filename: str, program: str) -> Iterator[str]:
-        reads = (self._read_record(filename, "", program) for _ in count())
-        return (read.data or "" for read in takewhile(_successful, reads))
-
-    def _copied(self, source: str, target: str, program: str) -> IOResult:
-        written = [
-            self._write_record(target, data, "", program)
-            for data in self._records(source, program)
-        ]
-        return next((w for w in written if not _successful(w)), _COPIED)
-
-    def _sort_using(self, sort_file: str, filename: str, program: str) -> IOResult:
-        return self._copied(filename, sort_file, program)
-
-    def _sort_giving(self, sort_file: str, filename: str, program: str) -> IOResult:
-        return self._copied(sort_file, filename, program)
-
-    def _reopened(
-        self, sort_file: str, mode: OpenMode, record_length: int, program: str
-    ) -> IOResult:
-        self._close_file(sort_file, program)
-        self._frames = {
-            **self._frames,
-            sort_file: FileFrame(
-                sort_file, FileOrganization.SEQUENTIAL, PrimeKey(), False, record_length
-            ),
-        }
-        return self._open_file(sort_file, mode.value, program)
-
-    def _sort_file(
-        self,
-        sort_file: str,
-        record_length: int,
-        weights: str,
-        *keys_then_program: int | str,
-    ) -> IOResult:
-        program = str(keys_then_program[-1])
-        self._reopened(sort_file, OpenMode.INPUT, record_length, program)
-        records = [r.encode("latin-1") for r in self._records(sort_file, program)]
-        self._reopened(sort_file, OpenMode.OUTPUT, record_length, program)
-        _ = [
-            self._write_record(sort_file, record.decode("latin-1"), "", program)
-            for record in ordered(
-                records,
-                sort_fields(keys_then_program[:-1]),
-                tuple(ord(w) for w in weights),
-            )
-        ]
-        return self._close_file(sort_file, program)

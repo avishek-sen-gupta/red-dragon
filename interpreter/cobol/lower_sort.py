@@ -5,6 +5,7 @@ order, and that the GIVING files copy or the output procedure's RETURNs read."""
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from functools import partial
 
 from cobol_asg.alphabet import Alphabet
@@ -17,33 +18,29 @@ from cobol_asg.cobol_statements import (
     ReadStatement,
     ReleaseStatement,
     ReturnStatement,
-    SortCollation,
     SortStatement,
     WriteStatement,
 )
-from cobol_asg.file_enums import OpenMode
+from cobol_asg.file_enums import FileOrganization, OpenMode
 from cobol_asg.program_collation import ProgramCollation
 from cobol_asg.sort_files import SortFiles
 from cobol_asg.sort_key import SortKey
 from interpreter.cobol.collating_sequences import collating_sequence_of
 from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.cobol.file_frame import FileFrame
 from interpreter.cobol.file_state import file_state
 from interpreter.cobol.file_verb_ir import emit_closed
 from interpreter.cobol.ir_emitter import IrEmitter
 from interpreter.cobol.lower_io import lower_close, lower_open, lower_read, lower_write
 from interpreter.cobol.lower_perform import emit_perform_branch
+from interpreter.cobol.prime_key import PrimeKey
 from interpreter.cobol.program_object import program_name
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
-from interpreter.cobol.sort_field import SortField, sort_field_arguments
+from interpreter.cobol.sort_field import SortField
 from interpreter.cobol.sort_key_layout import sort_key_encoding
-from interpreter.func_name import FuncName
-from interpreter.instructions import CallFunction
-from interpreter.register import Register
-
-_SORT_USING = FuncName("__cobol_sort_using")
-_SORT_GIVING = FuncName("__cobol_sort_giving")
-_SORT_FILE = FuncName("__cobol_sort_file")
+from interpreter.cobol.sort_ordering import SortOrdering
+from interpreter.cobol.sort_pass_ir import SortPassIr
 
 
 def _first_record(ctx: EmitContext, sort_file: str) -> str:
@@ -54,192 +51,127 @@ def _first_record(ctx: EmitContext, sort_file: str) -> str:
     )
 
 
-def _emit_call(
-    ctx: EmitContext,
-    stmt: SortStatement,
-    name: FuncName,
-    values: tuple[int | str, ...],
-) -> None:
-    ctx.emit_inst(
-        CallFunction(
-            result_reg=ctx.fresh_reg(),
-            func_name=name,
-            args=tuple(
-                Register(str(ctx.const_to_reg(value, span=stmt.span)))
-                for value in (*values, program_name(ctx._asg))
-            ),
-        ),
-        span=stmt.span,
-    )
+@dataclass(frozen=True)
+class _SortLowering:
+    """One SORT's lowering: its work file filled, ordered and drained."""
 
+    ctx: EmitContext
+    stmt: SortStatement
+    materialised: MaterialisedSectionedLayout
 
-def _open(
-    ctx: EmitContext,
-    stmt: SortStatement,
-    mode: OpenMode,
-    filename: str,
-    materialised: MaterialisedSectionedLayout,
-) -> None:
-    lower_open(
-        ctx,
-        OpenStatement(mode_groups=[(mode, [filename])], span=stmt.span),
-        materialised,
-    )
+    def lower(self) -> None:
+        self._open(OpenMode.OUTPUT, self.stmt.file_name)
+        self._fill()
+        self._order()
+        emit_closed(
+            IrEmitter(self.ctx, self.stmt.span),
+            file_state(program_name(self.ctx._asg), self.stmt.file_name),
+            False,
+        )
+        self._drain()
 
+    def _passes(self) -> SortPassIr:
+        e = IrEmitter(self.ctx, self.stmt.span)
+        return SortPassIr(e, e.text(program_name(self.ctx._asg)))
 
-def _close(
-    ctx: EmitContext,
-    stmt: SortStatement,
-    filename: str,
-    materialised: MaterialisedSectionedLayout,
-) -> None:
-    lower_close(ctx, CloseStatement(files=[filename], span=stmt.span), materialised)
-
-
-def _transfer(
-    ctx: EmitContext,
-    stmt: SortStatement,
-    filename: str,
-    materialised: MaterialisedSectionedLayout,
-    direction: tuple[FuncName, OpenMode],
-) -> None:
-    name, mode = direction
-    _open(ctx, stmt, mode, filename, materialised)
-    _emit_call(ctx, stmt, name, (stmt.file_name, filename))
-    _close(ctx, stmt, filename, materialised)
-
-
-def _perform(
-    ctx: EmitContext,
-    stmt: SortStatement,
-    procedure: ProcedureRange,
-    materialised: MaterialisedSectionedLayout,
-) -> None:
-    emit_perform_branch(
-        ctx,
-        PerformStatement(
-            target=procedure.target.paragraph,
-            target_section=procedure.target.section,
-            thru=procedure.thru.paragraph,
-            thru_section=procedure.thru.section,
-            span=stmt.span,
-        ),
-        materialised,
-    )
-
-
-def _copy_in(
-    ctx: EmitContext,
-    stmt: SortStatement,
-    files: SortFiles,
-    materialised: MaterialisedSectionedLayout,
-) -> None:
-    for filename in files.names:
-        _transfer(ctx, stmt, filename, materialised, (_SORT_USING, OpenMode.INPUT))
-
-
-def _reading(
-    ctx: EmitContext,
-    stmt: SortStatement,
-    materialised: MaterialisedSectionedLayout,
-    emit: Callable[[], None],
-) -> None:
-    _open(ctx, stmt, OpenMode.INPUT, stmt.file_name, materialised)
-    emit()
-    _close(ctx, stmt, stmt.file_name, materialised)
-
-
-def _copy_out(
-    ctx: EmitContext,
-    stmt: SortStatement,
-    files: SortFiles,
-    materialised: MaterialisedSectionedLayout,
-) -> None:
-    for filename in files.names:
-        _reading(
-            ctx,
-            stmt,
-            materialised,
-            partial(
-                _transfer,
-                ctx,
-                stmt,
-                filename,
-                materialised,
-                (_SORT_GIVING, OpenMode.OUTPUT),
-            ),
+    def _open(self, mode: OpenMode, filename: str) -> None:
+        lower_open(
+            self.ctx,
+            OpenStatement(mode_groups=[(mode, [filename])], span=self.stmt.span),
+            self.materialised,
         )
 
+    def _close(self, filename: str) -> None:
+        lower_close(
+            self.ctx,
+            CloseStatement(files=[filename], span=self.stmt.span),
+            self.materialised,
+        )
 
-def _fill(
-    ctx: EmitContext, stmt: SortStatement, materialised: MaterialisedSectionedLayout
-) -> None:
-    match stmt.source:
-        case SortFiles() as files:
-            _copy_in(ctx, stmt, files, materialised)
-        case ProcedureRange() as procedure:
-            _perform(ctx, stmt, procedure, materialised)
+    def _copy_in(self, filename: str) -> None:
+        self._open(OpenMode.INPUT, filename)
+        self._passes().copy(filename, self.stmt.file_name)
+        self._close(filename)
 
+    def _copy_out(self, filename: str) -> None:
+        self._open(OpenMode.OUTPUT, filename)
+        self._passes().copy(self.stmt.file_name, filename)
+        self._close(filename)
 
-def _drain(
-    ctx: EmitContext, stmt: SortStatement, materialised: MaterialisedSectionedLayout
-) -> None:
-    match stmt.sink:
-        case SortFiles() as files:
-            _copy_out(ctx, stmt, files, materialised)
-        case ProcedureRange() as procedure:
-            _reading(
-                ctx,
-                stmt,
-                materialised,
-                partial(_perform, ctx, stmt, procedure, materialised),
-            )
+    def _perform(self, procedure: ProcedureRange) -> None:
+        emit_perform_branch(
+            self.ctx,
+            PerformStatement(
+                target=procedure.target.paragraph,
+                target_section=procedure.target.section,
+                thru=procedure.thru.paragraph,
+                thru_section=procedure.thru.section,
+                span=self.stmt.span,
+            ),
+            self.materialised,
+        )
 
+    def _reading(self, emit: Callable[[], None]) -> None:
+        self._open(OpenMode.INPUT, self.stmt.file_name)
+        emit()
+        self._close(self.stmt.file_name)
 
-def _sort_field(
-    key: SortKey, record: FieldLayout, materialised: MaterialisedSectionedLayout
-) -> SortField:
-    layout, _ = materialised.resolve(key.key.name, key.key.qualifiers)
-    return SortField(
-        offset=layout.offset - record.offset,
-        length=layout.byte_length,
-        encoding=sort_key_encoding(layout),
-        direction=key.direction,
-    )
+    def _fill(self) -> None:
+        match self.stmt.source:
+            case SortFiles() as files:
+                _ = [self._copy_in(filename) for filename in files.names]
+            case ProcedureRange() as procedure:
+                self._perform(procedure)
 
+    def _drain(self) -> None:
+        match self.stmt.sink:
+            case SortFiles() as files:
+                _ = [
+                    self._reading(partial(self._copy_out, filename))
+                    for filename in files.names
+                ]
+            case ProcedureRange() as procedure:
+                self._reading(partial(self._perform, procedure))
 
-def _weights(ctx: EmitContext, collation: SortCollation) -> tuple[int, ...]:
-    match collation:
-        case Alphabet():
-            return collating_sequence_of(collation).weights
-        case ProgramCollation():
-            return ctx.collating_sequence.weights
+    def _sort_field(self, key: SortKey, record: FieldLayout) -> SortField:
+        layout, _ = self.materialised.resolve(key.key.name, key.key.qualifiers)
+        return SortField(
+            offset=layout.offset - record.offset,
+            length=layout.byte_length,
+            encoding=sort_key_encoding(layout),
+            direction=key.direction,
+        )
 
+    def _weights(self) -> tuple[int, ...]:
+        match self.stmt.collating_sequence:
+            case Alphabet() as alphabet:
+                return collating_sequence_of(alphabet).weights
+            case ProgramCollation():
+                return self.ctx.collating_sequence.weights
 
-def _emit_order(
-    ctx: EmitContext, stmt: SortStatement, materialised: MaterialisedSectionedLayout
-) -> None:
-    record, _ = materialised.resolve(_first_record(ctx, stmt.file_name))
-    fields = (_sort_field(key, record, materialised) for key in stmt.keys)
-    weights = "".join(chr(w) for w in _weights(ctx, stmt.collating_sequence))
-    arguments = tuple(a for f in fields for a in sort_field_arguments(f))
-    _emit_call(
-        ctx, stmt, _SORT_FILE, (stmt.file_name, record.byte_length, weights, *arguments)
-    )
+    def _order(self) -> None:
+        record, _ = self.materialised.resolve(
+            _first_record(self.ctx, self.stmt.file_name)
+        )
+        self._passes().order(
+            FileFrame(
+                self.stmt.file_name,
+                FileOrganization.SEQUENTIAL,
+                PrimeKey(),
+                False,
+                record.byte_length,
+            ),
+            SortOrdering(
+                tuple(self._sort_field(key, record) for key in self.stmt.keys),
+                self._weights(),
+            ),
+        )
 
 
 def lower_sort(
     ctx: EmitContext, stmt: SortStatement, materialised: MaterialisedSectionedLayout
 ) -> None:
-    _open(ctx, stmt, OpenMode.OUTPUT, stmt.file_name, materialised)
-    _fill(ctx, stmt, materialised)
-    _emit_order(ctx, stmt, materialised)
-    emit_closed(
-        IrEmitter(ctx, stmt.span),
-        file_state(program_name(ctx._asg), stmt.file_name),
-        False,
-    )
-    _drain(ctx, stmt, materialised)
+    _SortLowering(ctx, stmt, materialised).lower()
 
 
 def lower_merge(

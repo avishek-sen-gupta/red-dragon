@@ -56,6 +56,7 @@ from interpreter.cobol.ebcdic_table import EbcdicTable
 from interpreter.cobol.numeric_builtins import NUMERIC_BUILTINS
 from interpreter.cobol.program_presence import program_present
 from interpreter.cobol.run_unit import advanced, restarted, value_of
+from interpreter.cobol.sort_builtins import SORT_BUILTINS
 from interpreter.func_name import FuncName
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.builtin import Builtin
@@ -1657,5 +1658,6 @@ BYTE_BUILTINS: Mapping[FuncName, Builtin] = MappingProxyType(
         FuncName(BuiltinName.DAY_TO_YYYYDDD): _builtin_day_to_yyyyddd,
         FuncName(BuiltinName.YEAR_TO_YYYY): _builtin_year_to_yyyy,
         **NUMERIC_BUILTINS,
+        **SORT_BUILTINS,
     }
 )
