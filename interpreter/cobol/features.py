@@ -127,6 +127,11 @@ class CobolFeature(Enum):
     EXTERNAL_FILE = (
         "FD ... IS EXTERNAL files: one file connector and record area per run unit"
     )
+    GLOBAL_DATA = (
+        "01 ... IS GLOBAL items visible to every program the declaring program contains"
+    )
+    GLOBAL_FILE = "FD ... IS GLOBAL files whose connector the contained programs share"
+    USE_GLOBAL = "USE GLOBAL declaratives applying to the I-O of contained programs"
 
     # ---------------------------------------------------------------------------
     # I/O statements

@@ -67,11 +67,33 @@ def test_a_compilation_unit_reads_as_its_tree_of_programs_each_preprocessed_alon
 
 @covers(CobolFeature.NESTED_PROGRAMS)
 @covers(CobolFeature.BATCHED_PROGRAMS)
-def test_programs_in_preorder_yields_each_program_without_those_it_contains():
-    assert [(p["program_id"], sorted(p)) for p in programs_in_preorder(_WRITTEN)] == [
-        ("OUTER", ["attribute", "paragraphs", "program_id"]),
-        ("MIDDLE", ["attribute", "program_id"]),
-        ("INNER", ["attribute", "program_id"]),
-        ("SIBLING", ["attribute", "program_id"]),
-        ("BATCHED", ["attribute", "program_id"]),
+def test_programs_in_preorder_yields_each_program_alone_with_its_enclosing_programs():
+    assert [
+        (
+            p["program_id"],
+            sorted(p),
+            [(e["program_id"], sorted(e)) for e in p.get("enclosing", [])],
+        )
+        for p in programs_in_preorder(_WRITTEN)
+    ] == [
+        ("OUTER", ["attribute", "paragraphs", "program_id"], []),
+        (
+            "MIDDLE",
+            ["attribute", "enclosing", "program_id"],
+            [("OUTER", ["attribute", "paragraphs", "program_id"])],
+        ),
+        (
+            "INNER",
+            ["attribute", "enclosing", "program_id"],
+            [
+                ("MIDDLE", ["attribute", "program_id"]),
+                ("OUTER", ["attribute", "paragraphs", "program_id"]),
+            ],
+        ),
+        (
+            "SIBLING",
+            ["attribute", "enclosing", "program_id"],
+            [("OUTER", ["attribute", "paragraphs", "program_id"])],
+        ),
+        ("BATCHED", ["attribute", "program_id"], []),
     ]

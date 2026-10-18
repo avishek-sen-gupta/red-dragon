@@ -25,7 +25,11 @@ from cobol_asg.cobol_statements import (
     parse_statement,
 )
 from cobol_asg.collating_sequence_phrase import CollatingSequencePhrase
-from cobol_asg.contained_programs import contained_programs, program_alone
+from cobol_asg.contained_programs import (
+    contained_programs,
+    enclosing_programs,
+    program_alone,
+)
 from cobol_asg.decimal_point import DecimalPoint
 from cobol_asg.edit_picture import (
     DEFAULT_CURRENCY,
@@ -206,11 +210,14 @@ class CobolASG:
         statements: Division-level bare statements (no paragraph or section).
         attribute: The PROGRAM-ID attribute (COMMON, INITIAL, ...), NONE if absent.
         programs: The programs this one directly contains, in source order.
+        enclosing: The programs that contain this one, the nearest first, when it
+            was read from ``programs_in_preorder``.
     """
 
     program_id: str = ""
     attribute: ProgramAttribute = ProgramAttribute.NONE
     programs: tuple[CobolASG, ...] = ()
+    enclosing: tuple[CobolASG, ...] = ()
     file_control: list[FileControlEntry] = field(default_factory=list)
     data_fields: list[CobolField] = field(default_factory=list)
     linkage_fields: list[CobolField] = field(default_factory=list)
@@ -272,6 +279,10 @@ class CobolASG:
             programs=tuple(
                 CobolASG.from_dict(p, addressing_mode)
                 for p in contained_programs(written)
+            ),
+            enclosing=tuple(
+                CobolASG.from_dict(e, addressing_mode)
+                for e in enclosing_programs(written)
             ),
             file_control=[
                 FileControlEntry.from_dict(e) for e in data.get("file_control", [])
@@ -355,6 +366,11 @@ class CobolASG:
             | (
                 {"programs": [p.to_dict() for p in self.programs]}
                 if self.programs
+                else {}
+            )
+            | (
+                {"enclosing": [e.to_dict() for e in self.enclosing]}
+                if self.enclosing
                 else {}
             )
             | ({"special_names": special_names} if special_names else {})
