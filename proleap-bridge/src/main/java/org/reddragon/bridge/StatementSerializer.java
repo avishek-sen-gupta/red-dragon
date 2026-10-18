@@ -1588,15 +1588,11 @@ public final class StatementSerializer {
         return obj;
     }
 
-    /**
-     * One UNSTRING delimiter: its operand and whether ALL precedes it. The grammar
-     * may read {@code ALL "0"} as the figurative {@code ALL literal} instead of the
-     * phrase's own ALL; either way the delimiter is ALL (red-dragon-sl30.42).
-     */
+    /** One UNSTRING delimiter: its operand and whether the phrase writes ALL. */
     private static JsonObject unstringDelimiter(ValueStmt vs, boolean all) {
         JsonObject delimiter = new JsonObject();
         delimiter.add("operand", inspectOperand(vs));
-        if (all || allLiteralOf(vs) != null) {
+        if (all) {
             delimiter.addProperty("all", true);
         }
         return delimiter;
@@ -1619,11 +1615,7 @@ public final class StatementSerializer {
         return lit;
     }
 
-    /**
-     * The literal of an {@code ALL literal} figurative pattern, else null. The
-     * grammar lets {@code ALL "A" ... ALL "B"} read the second {@code ALL "B"}
-     * as a figurative operand of the first phrase; it starts a new ALL phrase.
-     */
+    /** The literal of an {@code ALL literal} figurative operand, else null. */
     private static CobolParser.LiteralContext allLiteralOf(ValueStmt vs) {
         if (!(vs instanceof LiteralValueStmt)) return null;
         Literal lit = ((LiteralValueStmt) vs).getLiteral();
@@ -1645,48 +1637,53 @@ public final class StatementSerializer {
         }
     }
 
-    /** A phrase and where it starts in the source, so phrases keep their written order. */
-    private record PositionedPhrase(int start, JsonObject phrase) {}
-
-    private static int startOf(io.proleap.cobol.asg.metamodel.ASGElement element) {
-        return element.getCtx().getStart().getTokenIndex();
-    }
-
-    /** The mode a pattern runs under: an {@code ALL literal} pattern switches it to ALL. */
-    private static String modeFor(String groupMode, ValueStmt pattern) {
-        return allLiteralOf(pattern) != null ? "ALL" : groupMode;
-    }
-
-    private static JsonArray tallyingPatterns(io.proleap.cobol.asg.metamodel.procedure.inspect.For forItem) {
-        List<PositionedPhrase> phrases = new java.util.ArrayList<>();
-        for (io.proleap.cobol.asg.metamodel.procedure.inspect.Characters chars : forItem.getCharacters()) {
-            JsonObject forObj = new JsonObject();
-            forObj.addProperty("mode", "CHARACTERS");
-            addBeforeAfter(forObj, chars.getBeforeAfterPhrases());
-            phrases.add(new PositionedPhrase(startOf(chars), forObj));
-        }
-        for (AllLeadingPhrase alp : forItem.getAllLeadingPhrase()) {
-            String mode = (alp.getAllLeadingsType() == AllLeadingPhrase.AllLeadingsType.ALL) ? "ALL" : "LEADING";
-            for (AllLeading al : alp.getAllLeadings()) {
-                ValueStmt pattern = al.getPatternDataItemValueStmt();
-                mode = modeFor(mode, pattern);
-                JsonObject forObj = new JsonObject();
-                forObj.addProperty("mode", mode);
-                if (pattern != null) {
-                    forObj.add("pattern", inspectOperand(pattern));
-                }
-                addBeforeAfter(forObj, al.getBeforeAfterPhrases());
-                phrases.add(new PositionedPhrase(startOf(al), forObj));
+    /**
+     * The element among {@code elements} that the parse-tree node {@code ctx} built,
+     * so phrases are read in the order the parse tree holds them.
+     */
+    private static <T extends io.proleap.cobol.asg.metamodel.ASGElement> T builtFrom(
+            org.antlr.v4.runtime.tree.ParseTree ctx, List<T> elements) {
+        for (T element : elements) {
+            if (element.getCtx() == ctx) {
+                return element;
             }
         }
-        return inWrittenOrder(phrases);
+        return null;
     }
 
-    private static JsonArray inWrittenOrder(List<PositionedPhrase> phrases) {
+    private static JsonObject charactersPattern(
+            io.proleap.cobol.asg.metamodel.procedure.inspect.Characters chars) {
+        JsonObject forObj = new JsonObject();
+        forObj.addProperty("mode", "CHARACTERS");
+        addBeforeAfter(forObj, chars.getBeforeAfterPhrases());
+        return forObj;
+    }
+
+    private static void addAllLeadingPatterns(JsonArray out, AllLeadingPhrase alp) {
+        String mode = (alp.getAllLeadingsType() == AllLeadingPhrase.AllLeadingsType.ALL) ? "ALL" : "LEADING";
+        for (AllLeading al : alp.getAllLeadings()) {
+            JsonObject forObj = new JsonObject();
+            forObj.addProperty("mode", mode);
+            if (al.getPatternDataItemValueStmt() != null) {
+                forObj.add("pattern", inspectOperand(al.getPatternDataItemValueStmt()));
+            }
+            addBeforeAfter(forObj, al.getBeforeAfterPhrases());
+            out.add(forObj);
+        }
+    }
+
+    /** A FOR's phrases in the order written: the parse tree's order of its children. */
+    private static JsonArray tallyingPatterns(io.proleap.cobol.asg.metamodel.procedure.inspect.For forItem) {
         JsonArray out = new JsonArray();
-        phrases.stream()
-                .sorted(java.util.Comparator.comparingInt(PositionedPhrase::start))
-                .forEach(p -> out.add(p.phrase()));
+        ParserRuleContext ctx = forItem.getCtx();
+        for (int i = 0; i < ctx.getChildCount(); i++) {
+            org.antlr.v4.runtime.tree.ParseTree child = ctx.getChild(i);
+            if (child instanceof CobolParser.InspectCharactersContext) {
+                out.add(charactersPattern(builtFrom(child, forItem.getCharacters())));
+            } else if (child instanceof CobolParser.InspectAllLeadingsContext) {
+                addAllLeadingPatterns(out, builtFrom(child, forItem.getAllLeadingPhrase()));
+            }
+        }
         return out;
     }
 
@@ -1709,45 +1706,49 @@ public final class StatementSerializer {
         }
     }
 
-    private static List<PositionedPhrase> replacingPhrases(
-            io.proleap.cobol.asg.metamodel.procedure.inspect.Replacing replacing) {
-        List<PositionedPhrase> phrases = new java.util.ArrayList<>();
-        for (io.proleap.cobol.asg.metamodel.procedure.inspect.ReplacingCharacters chars : replacing.getCharacters()) {
-            JsonObject repObj = new JsonObject();
-            repObj.addProperty("mode", "CHARACTERS");
-            addBy(repObj, chars.getBy());
-            addBeforeAfter(repObj, chars.getBeforeAfterPhrases());
-            phrases.add(new PositionedPhrase(startOf(chars), repObj));
-        }
-        for (ReplacingAllLeadings rals : replacing.getAllLeadings()) {
-            String mode;
-            switch (rals.getReplacingAllLeadingsType()) {
-                case FIRST: mode = "FIRST"; break;
-                case LEADING: mode = "LEADING"; break;
-                default: mode = "ALL"; break;
-            }
-            for (ReplacingAllLeading ral : rals.getAllLeadings()) {
-                ValueStmt pattern = ral.getPatternDataItemValueStmt();
-                mode = modeFor(mode, pattern);
-                JsonObject repObj = new JsonObject();
-                repObj.addProperty("mode", mode);
-                if (pattern != null) {
-                    repObj.add("from", inspectOperand(pattern));
-                }
-                addBy(repObj, ral.getBy());
-                addBeforeAfter(repObj, ral.getBeforeAfterPhrases());
-                phrases.add(new PositionedPhrase(startOf(ral), repObj));
-            }
-        }
-        return phrases;
+    private static JsonObject replacingCharacters(
+            io.proleap.cobol.asg.metamodel.procedure.inspect.ReplacingCharacters chars) {
+        JsonObject repObj = new JsonObject();
+        repObj.addProperty("mode", "CHARACTERS");
+        addBy(repObj, chars.getBy());
+        addBeforeAfter(repObj, chars.getBeforeAfterPhrases());
+        return repObj;
     }
 
-    private static JsonArray replacings(List<io.proleap.cobol.asg.metamodel.procedure.inspect.Replacing> replacings) {
-        List<PositionedPhrase> phrases = new java.util.ArrayList<>();
-        for (io.proleap.cobol.asg.metamodel.procedure.inspect.Replacing replacing : replacings) {
-            phrases.addAll(replacingPhrases(replacing));
+    private static void addReplacingAllLeadings(JsonArray out, ReplacingAllLeadings rals) {
+        String mode;
+        switch (rals.getReplacingAllLeadingsType()) {
+            case FIRST: mode = "FIRST"; break;
+            case LEADING: mode = "LEADING"; break;
+            default: mode = "ALL"; break;
         }
-        return inWrittenOrder(phrases);
+        for (ReplacingAllLeading ral : rals.getAllLeadings()) {
+            JsonObject repObj = new JsonObject();
+            repObj.addProperty("mode", mode);
+            if (ral.getPatternDataItemValueStmt() != null) {
+                repObj.add("from", inspectOperand(ral.getPatternDataItemValueStmt()));
+            }
+            addBy(repObj, ral.getBy());
+            addBeforeAfter(repObj, ral.getBeforeAfterPhrases());
+            out.add(repObj);
+        }
+    }
+
+    /** Every REPLACING phrase in the order written: each phrase's parse-tree children in turn. */
+    private static JsonArray replacings(List<io.proleap.cobol.asg.metamodel.procedure.inspect.Replacing> replacings) {
+        JsonArray out = new JsonArray();
+        for (io.proleap.cobol.asg.metamodel.procedure.inspect.Replacing replacing : replacings) {
+            ParserRuleContext ctx = replacing.getCtx();
+            for (int i = 0; i < ctx.getChildCount(); i++) {
+                org.antlr.v4.runtime.tree.ParseTree child = ctx.getChild(i);
+                if (child instanceof CobolParser.InspectReplacingCharactersContext) {
+                    out.add(replacingCharacters(builtFrom(child, replacing.getCharacters())));
+                } else if (child instanceof CobolParser.InspectReplacingAllLeadingsContext) {
+                    addReplacingAllLeadings(out, builtFrom(child, replacing.getAllLeadings()));
+                }
+            }
+        }
+        return out;
     }
 
     private static JsonObject serializeInspect(InspectStatement stmt) {
