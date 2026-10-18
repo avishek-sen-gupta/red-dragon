@@ -19,6 +19,7 @@ from cobol_asg.program_conventions import DEFAULT_CONVENTIONS, ProgramConvention
 from cobol_asg.ref_mod import RefModOperand
 from cobol_asg.sign_clause import SignClause
 from cobol_asg.source_span import SourceSpan
+from cobol_asg.usage_synonyms import canonical_usage
 
 NOT_RENAMED = RefModOperand(name="")
 NO_ODO_OBJECT = RefModOperand(name="")
@@ -129,7 +130,9 @@ class CobolField:
         own_sign = SignClause.from_dict(data)
         inner = EnclosingClauses(
             sign=own_sign.nearest(enclosing.sign),
-            usage=data.get("usage", enclosing.usage),
+            usage=(
+                canonical_usage(data["usage"]) if "usage" in data else enclosing.usage
+            ),
         )
         written = cls._written(data, conventions, inner)
         if own_sign.written or not written.is_signed_display_numeric:
