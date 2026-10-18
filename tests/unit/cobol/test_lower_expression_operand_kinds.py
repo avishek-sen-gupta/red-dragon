@@ -22,6 +22,7 @@ from cobol_asg.ref_mod import RefModOperand
 from interpreter.cobol.condition_lowering import lower_expr_node
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.lower_data_division import lower_sectioned_data_division
+from interpreter.cobol.lowering_scope import LoweringScope
 from interpreter.cobol.sectioned_layout import build_sectioned_layout
 from interpreter.cobol.statement_dispatch import dispatch_statement
 from interpreter.instructions import Const, LoadRegion
@@ -49,7 +50,7 @@ def test_length_of_lowers_to_the_fields_byte_length_not_a_decode():
     gives it inside a ref-mod subscript."""
     ctx, materialised = _ctx()
     n = len(ctx.instructions)
-    lower_expr_node(ctx, LengthOfNode(name="WS-A"), materialised)
+    lower_expr_node(LoweringScope(ctx, materialised, None), LengthOfNode(name="WS-A"))
     assert 8 in _consts_after(ctx, n)
 
 
@@ -87,7 +88,9 @@ def test_length_of_an_item_ending_in_an_odo_table_reads_the_object():
     ctx = EmitContext(dispatch_fn=dispatch_statement)
     materialised = lower_sectioned_data_division(ctx, build_sectioned_layout(asg), "T")
     n = len(ctx.instructions)
-    result = lower_expr_node(ctx, LengthOfNode(name="G"), materialised)
+    result = lower_expr_node(
+        LoweringScope(ctx, materialised, None), LengthOfNode(name="G")
+    )
     emitted = ctx.instructions[n:]
     assert (
         [i.length for i in emitted if isinstance(i, LoadRegion)],
@@ -98,7 +101,9 @@ def test_length_of_an_item_ending_in_an_odo_table_reads_the_object():
 def test_length_of_an_unknown_field_is_zero_and_warns(caplog):
     ctx, materialised = _ctx()
     n = len(ctx.instructions)
-    lower_expr_node(ctx, LengthOfNode(name="NO-SUCH"), materialised)
+    lower_expr_node(
+        LoweringScope(ctx, materialised, None), LengthOfNode(name="NO-SUCH")
+    )
     assert 0 in _consts_after(ctx, n)
     assert "LENGTH OF unknown field" in caplog.text
 
@@ -109,7 +114,7 @@ def test_the_zero_family_is_the_integer_zero(value):
     at all, and the only figurative with an unambiguous arithmetic value."""
     ctx, materialised = _ctx()
     n = len(ctx.instructions)
-    lower_expr_node(ctx, FigurativeNode(value=value), materialised)
+    lower_expr_node(LoweringScope(ctx, materialised, None), FigurativeNode(value=value))
     assert 0 in _consts_after(ctx, n)
 
 
@@ -121,7 +126,9 @@ def test_a_non_numeric_figurative_emits_its_fill_character_and_says_it_is_unsize
     fill character is all that can be honestly emitted, so it is warned about."""
     ctx, materialised = _ctx()
     n = len(ctx.instructions)
-    lower_expr_node(ctx, FigurativeNode(value="SPACES"), materialised)
+    lower_expr_node(
+        LoweringScope(ctx, materialised, None), FigurativeNode(value="SPACES")
+    )
     assert " " in _consts_after(ctx, n)
     assert "no length to size it to" in caplog.text
 
@@ -133,4 +140,6 @@ def test_an_unresolved_dfhresp_refuses_to_invent_a_response_code():
     would silently mis-compare every EIBRESP test in the program."""
     ctx, materialised = _ctx()
     with pytest.raises(ValueError, match=r"DFHRESP.*pre-pass did not run"):
-        lower_expr_node(ctx, DfhRespNode(condition="NOTFND"), materialised)
+        lower_expr_node(
+            LoweringScope(ctx, materialised, None), DfhRespNode(condition="NOTFND")
+        )

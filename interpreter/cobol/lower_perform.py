@@ -12,7 +12,7 @@ from cobol_asg.cobol_statements import (
     PerformVaryingSpec,
     ProcedureRef,
 )
-from interpreter.cobol.condition_lowering import lower_expr_node
+from interpreter.cobol.condition_lowering import lower_condition, lower_expr_node
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.lowering_scope import LoweringScope
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
@@ -132,6 +132,7 @@ def lower_perform_times(
     """PERFORM ... TIMES — counter-based loop."""
     spec = stmt.spec
     assert isinstance(spec, PerformTimesSpec)
+    scope = LoweringScope(ctx, materialised, stmt.span)
     span = stmt.span
 
     counter_var = ctx.fresh_name("__perform_ctr")
@@ -145,7 +146,7 @@ def lower_perform_times(
         span=span,
     )
 
-    times_reg = lower_expr_node(ctx, spec.times, materialised, span=span)
+    times_reg = lower_expr_node(scope, spec.times)
 
     ctx.emit_inst(Label_(label=loop_label), span=span)
     ctr_reg = ctx.fresh_reg()
@@ -198,6 +199,7 @@ def lower_perform_until(
     """PERFORM ... UNTIL — condition-based loop."""
     spec = stmt.spec
     assert isinstance(spec, PerformUntilSpec)
+    scope = LoweringScope(ctx, materialised, stmt.span)
     span = stmt.span
 
     loop_label = ctx.fresh_label("perform_until_loop")
@@ -206,7 +208,7 @@ def lower_perform_until(
 
     if spec.test_before:
         ctx.emit_inst(Label_(label=loop_label), span=span)
-        cond_reg = ctx.lower_condition(spec.condition, materialised, span=span)
+        cond_reg = lower_condition(scope, spec.condition)
         ctx.emit_inst(
             BranchIf(
                 cond_reg=Register(str(cond_reg)),
@@ -221,7 +223,7 @@ def lower_perform_until(
     else:
         ctx.emit_inst(Label_(label=loop_label), span=span)
         lower_perform_body(ctx, stmt, materialised)
-        cond_reg = ctx.lower_condition(spec.condition, materialised, span=span)
+        cond_reg = lower_condition(scope, spec.condition)
         ctx.emit_inst(
             BranchIf(
                 cond_reg=Register(str(cond_reg)),
@@ -234,9 +236,7 @@ def lower_perform_until(
 
 def _init_varying_var(scope: LoweringScope, spec: PerformVaryingSpec) -> None:
     """Store the FROM value in the VARYING identifier."""
-    from_reg = lower_expr_node(
-        scope.ctx, spec.varying_from, scope.materialised, span=scope.span
-    )
+    from_reg = lower_expr_node(scope, spec.varying_from)
     _store_varying_var(scope, spec.varying_var, from_reg)
 
 
@@ -271,7 +271,7 @@ def _emit_until_test(
     """At ``label``, go to targets[0] when the level's UNTIL holds, else targets[1]."""
     ctx, span = scope.ctx, scope.span
     ctx.emit_inst(Label_(label=label), span=span)
-    cond_reg = ctx.lower_condition(spec.condition, scope.materialised, span=span)
+    cond_reg = lower_condition(scope, spec.condition)
     ctx.emit_inst(BranchIf(cond_reg=cond_reg, branch_targets=targets), span=span)
 
 
@@ -360,9 +360,9 @@ def lower_perform_varying(
 
 def _emit_varying_increment(scope: LoweringScope, spec: PerformVaryingSpec) -> None:
     """Augment the VARYING identifier by the BY value."""
-    ctx, materialised, span = scope.ctx, scope.materialised, scope.span
-    val_reg = lower_expr_node(ctx, spec.varying_var, materialised, span=span)
-    by_reg = lower_expr_node(ctx, spec.varying_by, materialised, span=span)
+    ctx, span = scope.ctx, scope.span
+    val_reg = lower_expr_node(scope, spec.varying_var)
+    by_reg = lower_expr_node(scope, spec.varying_by)
     new_val_reg = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(

@@ -86,6 +86,7 @@ from interpreter.cobol.arithmetic_value import ArithmeticValue
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.condition_lowering import (
     _float_operand,
+    lower_condition,
     lower_expr_node,
 )
 from interpreter.cobol.corresponding_pair import CorrespondingPair
@@ -442,7 +443,7 @@ def _lower_function_arg_to_string(
     Field references are decoded then stringified (intrinsics like UPPER-CASE
     operate on character data); literals are parsed as constants.
     """
-    ctx, materialised, span = scope.ctx, scope.materialised, scope.span
+    ctx, span = scope.ctx, scope.span
     kind = arg.get("kind", "lit")
     if kind == "ref":
         return _lower_ref_function_arg(scope, arg)
@@ -450,14 +451,7 @@ def _lower_function_arg_to_string(
         return ctx.const_to_reg(ctx.parse_literal(arg.get("value", "")), span=span)
     from interpreter.cobol.condition_lowering import lower_expr_node
 
-    value_reg = lower_expr_node(
-        ctx,
-        expr_from_dict(arg),
-        materialised,
-        receiver_decimals=precision.dmax,
-        floating_receiver=precision.floating,
-        span=span,
-    )
+    value_reg = lower_expr_node(scope, expr_from_dict(arg), precision)
     return ctx.emit_to_string(value_reg, span=span)
 
 
@@ -1629,7 +1623,6 @@ def lower_compute(
 ) -> None:
     """COMPUTE target(s) = arithmetic-expression."""
     scope = LoweringScope(ctx, materialised, stmt.span)
-    span = stmt.span
     targets = [
         _compute_operand(t) for t in stmt.targets if _known_compute_target(scope, t)
     ]
@@ -1638,14 +1631,15 @@ def lower_compute(
         for t in targets
     ]
     result_reg = lower_expr_node(
-        ctx,
+        scope,
         stmt.expression,
-        materialised,
-        receiver_decimals=max(
-            (_receiver_decimals(td, rounded) for td, rounded in target_types), default=0
+        ArithmeticPrecision(
+            dmax=max(
+                (_receiver_decimals(td, rounded) for td, rounded in target_types),
+                default=0,
+            ),
+            floating=any(is_floating_type(td) for td, _ in target_types),
         ),
-        floating_receiver=any(is_floating_type(td) for td, _ in target_types),
-        span=span,
     )
     if not targets:
         return
@@ -1669,7 +1663,7 @@ def lower_if(
 ) -> None:
     """IF condition ... [ELSE ...] END-IF."""
     span = stmt.span
-    cond_reg = ctx.lower_condition(stmt.condition, materialised, span=span)
+    cond_reg = lower_condition(LoweringScope(ctx, materialised, span), stmt.condition)
     true_label = ctx.fresh_label("if_true")
     false_label = ctx.fresh_label("if_false")
     end_label = ctx.fresh_label("if_end")

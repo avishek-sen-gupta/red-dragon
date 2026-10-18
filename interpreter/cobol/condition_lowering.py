@@ -22,7 +22,6 @@ from cobol_asg.cobol_types import CobolDataCategory
 from cobol_asg.condition_name import ConditionValue
 from cobol_asg.nonnumeric_literal import literal_characters
 from cobol_asg.ref_mod import FunctionCallOperand, RefModOperand
-from cobol_asg.source_span import SourceSpan
 from interpreter.cobol.arithmetic_precision import ArithmeticPrecision
 from interpreter.cobol.arithmetic_scale import (
     FieldTypes,
@@ -247,25 +246,15 @@ def _expand_condition_name(
     return _emit_or_chain(scope, value_regs)
 
 
-def lower_condition(
-    ctx: EmitContext,
-    condition: dict,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None = None,
-) -> Register:
-    """Lower a structured condition dict to a register holding a boolean."""
-    return _lower_condition_node(LoweringScope(ctx, materialised, span), condition)
-
-
-def _lower_condition_node(scope: LoweringScope, node: dict) -> Register:
-    """Recursively walk a structured condition dict node and emit IR."""
+def lower_condition(scope: LoweringScope, node: dict) -> Register:
+    """Lower a structured condition dict to a register holding a boolean,
+    recursively walking its nodes."""
     ctx, span = scope.ctx, scope.span
     if "op" in node:
         # Compound: {"op": "AND"/"OR", "left": {...}, "right": {...}}
         op = node["op"]
-        left_reg = _lower_condition_node(scope, node["left"])
-        right_reg = _lower_condition_node(scope, node["right"])
+        left_reg = lower_condition(scope, node["left"])
+        right_reg = lower_condition(scope, node["right"])
         result = ctx.fresh_reg()
         ctx.emit_inst(
             Binop(
@@ -301,7 +290,7 @@ def _lower_condition_node(scope: LoweringScope, node: dict) -> Register:
             inner = _lower_condition_str(scope, name)
     elif "condition" in node:
         # Nested parenthesised condition
-        inner = _lower_condition_node(scope, node["condition"])
+        inner = lower_condition(scope, node["condition"])
     elif "relation" in node:
         # Structured relation: {"left": <expr>, "op": "...", "right": <expr>}
         inner = _lower_relation_node(scope, node["relation"])
@@ -672,7 +661,7 @@ def _lower_sign_condition(scope: LoweringScope, node: dict) -> Register:
     """Lower a sign condition {"sign": "POSITIVE"|"NEGATIVE"|"ZERO", "operand": <expr>}
     to a boolean: the decoded operand value compared against zero (>0 / <0 / ==0).
 
-    The enclosing ``not`` flag is applied by ``_lower_condition_node`` (the bridge
+    The enclosing ``not`` flag is applied by ``lower_condition`` (the bridge
     folds an inner ``NOT POSITIVE`` into that flag), so this emits the bare
     comparison. An unknown sign never matches rather than evaluating TRUE.
     """
@@ -870,7 +859,7 @@ def _lower_expr_dict(scope: LoweringScope, expr: dict) -> Register:
         # reached STRING_SLICE as '' and the slice raised. lower_expr_node is
         # the one implementation of the register's constant byte length
         # (red-dragon-twfl).
-        return _lower_expression(scope, expr_from_dict(expr), _NO_RECEIVER)
+        return lower_expr_node(scope, expr_from_dict(expr))
 
     if kind == "neg":
         inner = _lower_expr_dict(scope, expr["expr"])
@@ -1093,7 +1082,7 @@ def _lower_expr_node_body(
         full_str_reg = ctx.emit_decode_field_characters(
             rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
         )
-        start_1based_reg = _lower_expression(scope, node.ref_mod_start, _NO_RECEIVER)
+        start_1based_reg = lower_expr_node(scope, node.ref_mod_start)
         one_reg = ctx.const_to_reg(1, span=span)
         start_0based_reg = ctx.fresh_reg()
         ctx.emit_inst(
@@ -1106,7 +1095,7 @@ def _lower_expr_node_body(
             span=span,
         )
         if node.ref_mod_length is not None:
-            length_reg = _lower_expression(scope, node.ref_mod_length, _NO_RECEIVER)
+            length_reg = lower_expr_node(scope, node.ref_mod_length)
         else:
             length_reg = ctx.const_to_reg(999999, span=span)
         sliced_reg = ctx.fresh_reg()
@@ -1175,38 +1164,22 @@ def _lower_expr_node_body(
     return _float_operand(scope, ctx.const_to_reg(0, span=span), floating)
 
 
+_NO_RECEIVER = ArithmeticPrecision(dmax=0, floating=False)
+
+
 def lower_expr_node(
-    ctx: EmitContext,
-    node: ExprNode,
-    materialised: MaterialisedSectionedLayout,
-    receiver_decimals: int = 0,
-    floating_receiver: bool = False,
-    *,
-    span: SourceSpan | None = None,
+    scope: LoweringScope, node: ExprNode, receiver: ArithmeticPrecision = _NO_RECEIVER
 ) -> Register:
     """Walk an expression tree and emit IR. Returns the result register.
 
     Fixed-point expressions follow IBM ARITH(COMPAT): each operator lowers to an
     exact cobol_numeric builtin truncating to its statically carried decimal
-    places, with dmax the larger of ``receiver_decimals`` and the non-divisor
+    places, with dmax the larger of the receiver's decimals and the non-divisor
     operand decimals. Integer-only division therefore truncates (the mod idiom
     ``A - (A / B) * B``, red-dragon-apoq) while receivers with decimal places
     keep the fraction. An expression with a COMP-1/COMP-2 operand or receiver,
     or a floating intrinsic, is computed in IEEE floating point.
     """
-    return _lower_expression(
-        LoweringScope(ctx, materialised, span),
-        node,
-        ArithmeticPrecision(dmax=receiver_decimals, floating=floating_receiver),
-    )
-
-
-_NO_RECEIVER = ArithmeticPrecision(dmax=0, floating=False)
-
-
-def _lower_expression(
-    scope: LoweringScope, node: ExprNode, receiver: ArithmeticPrecision
-) -> Register:
     field_types = _field_types(scope.ctx, scope.materialised)
     floating = receiver.floating or expression_is_floating(node, field_types)
     dmax = max(receiver.dmax, operand_dmax(node, field_types))

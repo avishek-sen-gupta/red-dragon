@@ -10,6 +10,7 @@ from interpreter.cobol.data_layout import build_data_layout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.lower_data_division import lower_sectioned_data_division
+from interpreter.cobol.lowering_scope import LoweringScope
 from interpreter.cobol.sectioned_layout import (
     build_sectioned_layout,
 )
@@ -46,7 +47,7 @@ class TestFigurativeConditions:
         ]
         ctx, materialised = _setup_with_fields(fields)
         lower_condition(
-            ctx,
+            LoweringScope(ctx, materialised, None),
             {
                 "not": False,
                 "relation": {
@@ -55,7 +56,6 @@ class TestFigurativeConditions:
                     "right": {"kind": "figurative", "value": "SPACES"},
                 },
             },
-            materialised,
         )
         const_vals = [
             i.operands[0] for i in ctx.instructions if i.opcode == Opcode.CONST
@@ -73,7 +73,7 @@ class TestFigurativeConditions:
         ]
         ctx, materialised = _setup_with_fields(fields)
         lower_condition(
-            ctx,
+            LoweringScope(ctx, materialised, None),
             {
                 "not": False,
                 "relation": {
@@ -82,7 +82,6 @@ class TestFigurativeConditions:
                     "right": {"kind": "ref", "name": "WS-X"},
                 },
             },
-            materialised,
         )
         const_vals = [
             i.operands[0] for i in ctx.instructions if i.opcode == Opcode.CONST
@@ -97,7 +96,7 @@ class TestFigurativeConditions:
         ]
         ctx, materialised = _setup_with_fields(fields)
         lower_condition(
-            ctx,
+            LoweringScope(ctx, materialised, None),
             {
                 "not": False,
                 "relation": {
@@ -106,7 +105,6 @@ class TestFigurativeConditions:
                     "right": {"kind": "figurative", "value": "ZEROS"},
                 },
             },
-            materialised,
         )
         const_vals = [
             i.operands[0] for i in ctx.instructions if i.opcode == Opcode.CONST
@@ -143,7 +141,7 @@ class TestAbbreviatedConditions:
                 },
             },
         }
-        lower_condition(ctx, node, materialised)
+        lower_condition(LoweringScope(ctx, materialised, None), node)
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
         or_ops = [i for i in binop_insts if i.operands[0] == "or"]
         eq_ops = [i for i in binop_insts if i.operands[0] == "=="]
@@ -161,7 +159,7 @@ class TestConditionLoweringBasic:
         ]
         ctx, materialised = _setup_with_fields(fields)
         result_reg = lower_condition(
-            ctx,
+            LoweringScope(ctx, materialised, None),
             {
                 "not": False,
                 "relation": {
@@ -170,7 +168,6 @@ class TestConditionLoweringBasic:
                     "right": {"kind": "lit", "value": "10"},
                 },
             },
-            materialised,
         )
         assert str(result_reg).startswith("%")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
@@ -189,7 +186,8 @@ class TestConditionLoweringBasic:
         ]
         ctx, materialised = _setup_with_fields(fields)
         result_reg = lower_condition(
-            ctx, {"not": False, "text": "UNKNOWN-TOKEN"}, materialised
+            LoweringScope(ctx, materialised, None),
+            {"not": False, "text": "UNKNOWN-TOKEN"},
         )
         const_insts = [i for i in ctx.instructions if i.opcode == Opcode.CONST]
         last_const = const_insts[-1]
@@ -219,9 +217,8 @@ class TestConditionNameExpansion:
         ]
         ctx, materialised = _setup_with_fields(fields)
         result_reg = lower_condition(
-            ctx,
+            LoweringScope(ctx, materialised, None),
             {"not": False, "condition_name": "STATUS-ACTIVE"},
-            materialised,
         )
         assert str(result_reg).startswith("%")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
@@ -261,9 +258,8 @@ class TestConditionNameExpansion:
         ]
         ctx, materialised = _setup_with_fields(fields)
         result_reg = lower_condition(
-            ctx,
+            LoweringScope(ctx, materialised, None),
             {"not": False, "condition_name": "STATUS-VALID"},
-            materialised,
         )
         assert str(result_reg).startswith("%")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
@@ -292,9 +288,8 @@ class TestConditionNameExpansion:
         ]
         ctx, materialised = _setup_with_fields(fields)
         result_reg = lower_condition(
-            ctx,
+            LoweringScope(ctx, materialised, None),
             {"not": False, "condition_name": "STATUS-ALPHA"},
-            materialised,
         )
         assert str(result_reg).startswith("%")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
@@ -337,7 +332,8 @@ class TestConditionNameExpansion:
         ]
         ctx, materialised = _setup_with_fields(fields)
         result_reg = lower_condition(
-            ctx, {"not": False, "condition_name": "VALID-CODE"}, materialised
+            LoweringScope(ctx, materialised, None),
+            {"not": False, "condition_name": "VALID-CODE"},
         )
         assert str(result_reg).startswith("%")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
@@ -371,7 +367,8 @@ class TestConditionNameExpansion:
         ]
         ctx, materialised = _setup_with_fields(fields)
         result_reg = lower_condition(
-            ctx, {"not": False, "text": "NONEXISTENT-COND"}, materialised
+            LoweringScope(ctx, materialised, None),
+            {"not": False, "text": "NONEXISTENT-COND"},
         )
         const_insts = [i for i in ctx.instructions if i.opcode == Opcode.CONST]
         last_const = const_insts[-1]
@@ -405,7 +402,7 @@ class TestConditionNameExpansion:
         ]
         ctx, materialised = _setup_with_fields(fields)
         result_reg = lower_condition(
-            ctx,
+            LoweringScope(ctx, materialised, None),
             {
                 "not": False,
                 "relation": {
@@ -414,7 +411,6 @@ class TestConditionNameExpansion:
                     "right": {"kind": "lit", "value": "A"},
                 },
             },
-            materialised,
         )
         assert str(result_reg).startswith("%")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
