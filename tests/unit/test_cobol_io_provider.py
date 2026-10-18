@@ -37,7 +37,7 @@ class TestNullIOProvider:
         assert (
             provider.handle_call(
                 FuncName("__cobol_accept"),
-                [typed_from_runtime("CONSOLE"), typed_from_runtime(10)],
+                [typed_from_runtime("CONSOLE")],
             )
             is _UNCOMPUTABLE
         )
@@ -117,35 +117,26 @@ class TestStubIOProvider:
     @covers(CobolFeature.IO_PROVIDER, CobolFeature.ACCEPT)
     def test_accept_returns_queued_values(self):
         provider = StubIOProvider(accept_values=["Y", "JOHN DOE"])
-        assert (
-            provider.handle_call(
-                FuncName("__cobol_accept"),
-                [typed_from_runtime("CONSOLE"), typed_from_runtime(10)],
-            )
-            == "Y"
-        )
-        assert (
-            provider.handle_call(
-                FuncName("__cobol_accept"),
-                [typed_from_runtime("CONSOLE"), typed_from_runtime(10)],
-            )
-            == "JOHN DOE"
-        )
+        assert provider.handle_call(
+            FuncName("__cobol_accept"),
+            [typed_from_runtime("CONSOLE")],
+        ) == IOResult(AccessCondition.OK, "Y")
+        assert provider.handle_call(
+            FuncName("__cobol_accept"),
+            [typed_from_runtime("CONSOLE")],
+        ) == IOResult(AccessCondition.OK, "JOHN DOE")
 
     @covers(CobolFeature.IO_PROVIDER, CobolFeature.ACCEPT)
     def test_accept_returns_uncomputable_when_empty(self):
         provider = StubIOProvider(accept_values=["ONLY"])
+        assert provider.handle_call(
+            FuncName("__cobol_accept"),
+            [typed_from_runtime("CONSOLE")],
+        ) == IOResult(AccessCondition.OK, "ONLY")
         assert (
             provider.handle_call(
                 FuncName("__cobol_accept"),
-                [typed_from_runtime("CONSOLE"), typed_from_runtime(10)],
-            )
-            == "ONLY"
-        )
-        assert (
-            provider.handle_call(
-                FuncName("__cobol_accept"),
-                [typed_from_runtime("CONSOLE"), typed_from_runtime(10)],
+                [typed_from_runtime("CONSOLE")],
             )
             is _UNCOMPUTABLE
         )

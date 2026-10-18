@@ -27,7 +27,6 @@ from interpreter.cobol.sort_field import sort_fields
 from interpreter.cobol.sort_order import ordered
 from interpreter.cobol.variable_sequential_driver import VariableSequentialDriver
 from interpreter.data_value import DataRecord
-from interpreter.vm.vm import Operators
 
 
 def to_ioresult(result: AccessResult) -> IOResult:
@@ -43,7 +42,7 @@ def to_ioresult(result: AccessResult) -> IOResult:
 
 
 logger = logging.getLogger(__name__)
-_UNCOMPUTABLE = Operators.UNCOMPUTABLE
+_INPUT_ENDED = IOResult(AccessCondition.END_OF_FILE, None)
 _SUCCESSFUL = frozenset({AccessCondition.OK, AccessCondition.DUPLICATES_FOLLOW})
 _PATH_MARKS = frozenset("/\\.")
 _RELATIVE_KEY_BYTES = 4
@@ -112,26 +111,11 @@ class RealFileIOProvider(CobolIOProvider):
         }
         return IOResult(AccessCondition.OK, None)
 
-    def _accept(self, from_device: str) -> str | Operators._Uncomputable:
-        return next(self._system_input, _UNCOMPUTABLE)
-
-    def _accept_area(
-        self, from_device: str, length: int
-    ) -> str | Operators._Uncomputable:
-        match self._accept(from_device):
-            case str() as record:
-                return self._filled(record, from_device, length)
-            case end:
-                return end
-
-    def _filled(self, received: str, from_device: str, length: int) -> str:
-        if len(received) >= length:
-            return received[:length]
-        match self._accept(from_device):
-            case str() as record:
-                return self._filled(received + record, from_device, length)
-            case _:
-                return received
+    def _accept(self, from_device: str) -> IOResult:
+        return next(
+            (IOResult(AccessCondition.OK, record) for record in self._system_input),
+            _INPUT_ENDED,
+        )
 
     def _driver(
         self, frame: FileFrame, path: Path, mode: OpenMode

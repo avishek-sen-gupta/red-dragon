@@ -134,7 +134,7 @@ class TestCobolIOProviderDispatch:
         from interpreter.cobol.io_provider import NullIOProvider
 
         provider = NullIOProvider()
-        assert provider.dispatch(FuncName("__cobol_accept")) == "_accept_area"
+        assert provider.dispatch(FuncName("__cobol_accept")) == "_accept"
 
     def test_dispatch_unknown(self):
         from interpreter.cobol.io_provider import NullIOProvider

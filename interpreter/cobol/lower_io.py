@@ -21,6 +21,7 @@ from cobol_asg.cobol_statements import (
 from cobol_asg.file_enums import AccessMode, FileOrganization, OpenMode
 from cobol_asg.ref_mod import RefModOperand
 from cobol_asg.source_span import SourceSpan
+from interpreter.cobol.accept_fill import AcceptFill
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.fd_record_format import (
@@ -251,11 +252,12 @@ def lower_accept(
     stmt: AcceptStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """ACCEPT target [FROM device] — read input via __cobol_accept and store it
-    unedited, as characters over the receiver's bytes."""
+    """ACCEPT target [FROM device] — fill the receiver from __cobol_accept records and
+    store it unedited, as characters over the receiver's bytes."""
     span = stmt.span
+    program = _program(ctx, span=span)
     if not ctx.has_field(stmt.target.name, materialised):
-        _emit_accept_call(ctx, stmt, 0)
+        AcceptFill(IrEmitter(ctx, span), stmt.from_device, 0).emit(program, _ignored)
         return
     target_ref, target_rr = ctx.resolve_field_ref(
         stmt.target.name,
@@ -264,33 +266,21 @@ def lower_accept(
         subscripts=stmt.target.subscripts,
         span=span,
     )
-    result_reg = _emit_accept_call(ctx, stmt, target_ref.fl.byte_length)
-    str_reg = ctx.emit_to_string(result_reg, span=span)
-    ctx.emit_encode_and_write(
-        target_rr,
-        target_ref.fl.as_characters(),
-        str_reg,
-        target_ref.offset_reg,
-        extent=target_ref.extent,
-        span=span,
+
+    def store(received: Register) -> None:
+        ctx.emit_encode_and_write(
+            target_rr,
+            target_ref.fl.as_characters(),
+            ctx.emit_to_string(received, span=span),
+            target_ref.offset_reg,
+            extent=target_ref.extent,
+            span=span,
+        )
+
+    AcceptFill(IrEmitter(ctx, span), stmt.from_device, target_ref.fl.byte_length).emit(
+        program, store
     )
     logger.info("ACCEPT %s FROM %s", stmt.target.name, stmt.from_device)
-
-
-def _emit_accept_call(ctx: EmitContext, stmt: AcceptStatement, length: int) -> Register:
-    span = stmt.span
-    device_reg = ctx.const_to_reg(stmt.from_device, span=span)
-    length_reg = ctx.const_to_reg(length, span=span)
-    result_reg = ctx.fresh_reg()
-    ctx.emit_inst(
-        CallFunction(
-            result_reg=result_reg,
-            func_name=FuncName("__cobol_accept"),
-            args=(Register(str(device_reg)), Register(str(length_reg))),
-        ),
-        span=span,
-    )
-    return result_reg
 
 
 def _lower_open_file(
