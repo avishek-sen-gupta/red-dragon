@@ -247,17 +247,29 @@ def _probe_ir():
 # LOCAL-STORAGE, FILE, or INDEXED-BY items (both ARITH_SOURCE and
 # SUBSCRIPT_SOURCE qualify: SUBSCRIPT_SOURCE's OCCURS table has no INDEXED BY,
 # so it allocates no INDEXES region and produces the identical shape):
-#   lower_ws_from_singleton:        LoadVar(singleton), LoadField(ws_handle),
-#                                    StoreVar(__ws_region)
+#   lower_ws_from_singleton:        LoadVar(singleton), LoadField(initial_state),
+#                                    BranchIf, Label(cancelled),
+#                                    SetContinuation + Branch (perform the
+#                                    initial-state block), Label(ready),
+#                                    LoadField(ws_handle), StoreVar(__ws_region)
 #   lower_sectioned_data_division:  LoadVar(__ws_region)
 #   lower_sectioned_data_division:  LoadVar(singleton),
 #                                    LoadField(RETURN_CODE_HANDLE)
 # The special registers are ALLOCATED once in the init block, beside WS, so the
 # per-invocation shape only rebinds the handle (red-dragon-ltq6).
-_DATA_DIVISION_SETUP_OPCODES = (
+_ENTRY_OPCODES = (
     "LOAD_VAR",
     "LOAD_FIELD",
+    "BRANCH_IF",
+    "LABEL",
+    "SET_CONTINUATION",
+    "BRANCH",
+    "LABEL",
+    "LOAD_FIELD",
     "STORE_VAR",
+)
+_DATA_DIVISION_SETUP_OPCODES = (
+    *_ENTRY_OPCODES,
     "LOAD_VAR",
     "LOAD_VAR",
     "LOAD_FIELD",
@@ -268,8 +280,8 @@ def _skip_data_division_setup(raw):
     """Drop the leading data-division setup block that always precedes the
     first PROCEDURE DIVISION statement inside a `func_<pid>_0` body.
 
-    `lower_ws_from_singleton` (LoadVar the singleton, LoadField ws_handle,
-    StoreVar __ws_region) and `lower_sectioned_data_division` (LoadVar
+    `lower_ws_from_singleton` (LoadVar the singleton, the initial-state test
+    and perform, LoadField ws_handle, StoreVar __ws_region) and `lower_sectioned_data_division` (LoadVar
     __ws_region; the region-level Const size + AllocRegion that
     `lower_data_division` emits with an explicit ``span=None`` for
     SPECIAL-REGISTERS; LoadVar the singleton + StoreField RETURN_CODE_HANDLE)
@@ -646,7 +658,8 @@ E2E_SOURCE = b"""\
 # region-level Const(size) + AllocRegion pairs that
 # lower_sectioned_data_division emits because the program has a FILE SECTION
 # and an INDEXED BY item:
-#   lower_ws_from_singleton:        LoadVar, LoadField, StoreVar(__ws_region)
+#   lower_ws_from_singleton:        _ENTRY_OPCODES (the initial-state test and
+#                                    perform, then StoreVar(__ws_region))
 #   lower_sectioned_data_division:  LoadVar(__ws_region)
 #     FILE, INDEXES, SPECIAL-REGISTERS: 3 x (Const(size), AllocRegion)
 #     LoadVar(singleton), StoreField(RETURN_CODE_HANDLE)
@@ -660,9 +673,7 @@ E2E_SOURCE = b"""\
 # The program is fixed, so its setup shape is fixed; if data-division setup
 # legitimately changes shape, this tuple is the one place to update.
 _E2E_SETUP_OPCODES = (
-    "LOAD_VAR",
-    "LOAD_FIELD",
-    "STORE_VAR",
+    *_ENTRY_OPCODES,
     "LOAD_VAR",
     "CONST",
     "ALLOC_REGION",

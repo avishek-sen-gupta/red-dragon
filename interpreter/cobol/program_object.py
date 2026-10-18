@@ -11,6 +11,7 @@ ENTRY_PREFIX = "__entry_"
 PROGRAM_PREFIX = "__prog_"
 ARGUMENTS_PARAM = VarName("__call_arguments")
 WORKING_STORAGE_FIELD = FieldName("ws_handle")
+INITIAL_STATE_FIELD = FieldName("initial_state")
 
 
 def entry_var(program_id: str) -> VarName:

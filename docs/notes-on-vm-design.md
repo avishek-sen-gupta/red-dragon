@@ -442,6 +442,8 @@ address: 0 ........ 4095 | 4096 ......... 4096+a | 4096+a ......... | …
 
 Each program's lowering (`interpreter/cobol/lower_program_init.py`) emits an init block that runs once at load. It allocates WORKING-STORAGE and the special-registers region, and stores a singleton heap object in `__prog_<PID>` with fields `ws_handle`, `return_code_handle` and `run` (a `BoundFuncRef` to `func_<PID>_0`), and the init block registers the entry function `func_init_params_<PID>_0` under `__entry_<PID>`; that function declares `param:__call_arguments` and branches to the procedure.
 
+WORKING-STORAGE is laid down by one block inside the init block, `__ws_initial_<pid>_0`, which also clears the singleton's `initial_state` field and ends in `RESUME_CONTINUATION`; at load no continuation is set, so the init block runs straight through it. `CANCEL` sets `initial_state` on a program in the run unit, and the procedure's entry, finding it set, performs the block (`SET_CONTINUATION` + `BRANCH`, as PERFORM does) before binding `__ws_region`, so the next CALL finds WORKING-STORAGE at its VALUE clauses.
+
 ### 12.2 CALL_WITH_MEMORY
 
 `CALL … USING` passes one address per argument ([ADR-150](architectural-design-decisions.md), replacing ADR-144's copy-in/copy-back):
