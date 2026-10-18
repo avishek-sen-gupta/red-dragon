@@ -37,10 +37,11 @@ _TEXT_AREA_START = 7
 _TEXT_AREA_END = 72
 _INPUT_RECORD_LEN = 80
 _DECK_MARKERS = ("*HEADER,", "*END-OF,")
-_X_CARD_RE = re.compile(r"XXXXX\d{3}")
+_X_CARD_RE = re.compile(r"(?<![\w-])XXXXX\d{3}(?![\w-])")
 _X_CARDS = {
     "XXXXX051": "SWITCH-1",
     "XXXXX052": "SWITCH-2",
+    "XXXXX065": "0200",
     "XXXXX081": '"12345678"',
     "XXXXX090": "194",
     "XXXXX091": "197",
