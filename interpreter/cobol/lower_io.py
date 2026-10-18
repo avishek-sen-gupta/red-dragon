@@ -9,9 +9,9 @@ from functools import partial
 from cobol_asg.cobol_statements import (
     AcceptStatement,
     CloseStatement,
-    CobolStatementType,
     DeleteStatement,
     FileControlEntry,
+    MoveStatement,
     OpenStatement,
     ReadStatement,
     RewriteStatement,
@@ -20,7 +20,6 @@ from cobol_asg.cobol_statements import (
 )
 from cobol_asg.file_enums import AccessMode, FileOrganization, OpenMode
 from cobol_asg.ref_mod import RefModOperand
-from cobol_asg.source_span import SourceSpan
 from interpreter.cobol.accept_fill import AcceptFill
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.emit_context import EmitContext
@@ -45,7 +44,8 @@ from interpreter.cobol.file_verb_ir import (
     VerbOutcome,
     emit_closed,
 )
-from interpreter.cobol.ir_emitter import IrEmitter
+from interpreter.cobol.invalid_key_phrases import InvalidKeyPhrases
+from interpreter.cobol.lowering_scope import LoweringScope
 from interpreter.cobol.prime_key import PrimeKey
 from interpreter.cobol.program_object import program_name
 from interpreter.cobol.read_plan import ReadPlan
@@ -75,15 +75,17 @@ _SEQUENTIAL_WRITE_MODES = (OpenMode.OUTPUT, OpenMode.EXTEND)
 _KEYED_WRITE_MODES = (OpenMode.OUTPUT, OpenMode.EXTEND, OpenMode.IO)
 
 
-def _program(ctx: EmitContext, *, span: SourceSpan | None) -> Register:
-    return Register(str(ctx.const_to_reg(program_name(ctx._asg), span=span)))
+def _program(scope: LoweringScope) -> Register:
+    return Register(
+        str(scope.ctx.const_to_reg(program_name(scope.ctx._asg), span=scope.span))
+    )
 
 
-def _verb(ctx: EmitContext, file_name: str, *, span: SourceSpan | None) -> FileVerbIr:
+def _verb(scope: LoweringScope, file_name: str) -> FileVerbIr:
     return FileVerbIr(
-        IrEmitter(ctx, span),
-        file_state(program_name(ctx._asg), file_name),
-        _program(ctx, span=span),
+        scope.emitter,
+        file_state(program_name(scope.ctx._asg), file_name),
+        _program(scope),
     )
 
 
@@ -104,9 +106,8 @@ def _write_modes(entry: FileControlEntry) -> tuple[OpenMode, ...]:
     return _KEYED_WRITE_MODES
 
 
-def _emit_status_class(
-    ctx: EmitContext, status_reg: Register, *, span: SourceSpan | None
-) -> Register:
+def _emit_status_class(scope: LoweringScope, status_reg: Register) -> Register:
+    ctx, span = scope.ctx, scope.span
     first_reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(
@@ -124,13 +125,12 @@ def _emit_status_class(
 
 
 def _emit_skip_if_class(
-    ctx: EmitContext,
+    scope: LoweringScope,
     first_reg: Register,
     status_class: StatusClass,
     skip_lbl: CodeLabel,
-    *,
-    span: SourceSpan | None,
 ) -> None:
+    ctx, span = scope.ctx, scope.span
     match_reg = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
@@ -149,20 +149,19 @@ def _emit_skip_if_class(
 
 
 def _emit_conditional_use_perform(
-    ctx: EmitContext,
+    scope: LoweringScope,
     status_reg: Register,
     section: str,
     handled: Sequence[StatusClass],
-    *,
-    span: SourceSpan | None,
 ) -> None:
     """Emit: unless the status is successful or of a class the statement's own
     AT END / INVALID KEY phrase handles, PERFORM the USE section and return to
     the point of the I/O verb."""
-    first_reg = _emit_status_class(ctx, status_reg, span=span)
+    ctx, span = scope.ctx, scope.span
+    first_reg = _emit_status_class(scope, status_reg)
     skip_lbl = ctx.fresh_label("use_skip")
     _ = [
-        _emit_skip_if_class(ctx, first_reg, status_class, skip_lbl, span=span)
+        _emit_skip_if_class(scope, first_reg, status_class, skip_lbl)
         for status_class in (StatusClass.SUCCESSFUL, *handled)
     ]
     ret_lbl = ctx.fresh_label("use_return")
@@ -184,27 +183,23 @@ def handled_classes(at_end: bool, invalid_key: bool) -> tuple[StatusClass, ...]:
     )
 
 
-def emit_use_trigger(
-    ctx: EmitContext,
+def _emit_use_trigger(
+    scope: LoweringScope,
     file_name: str,
     status_reg: Register,
     handled: Sequence[StatusClass],
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
 ) -> None:
     """Inject a conditional PERFORM of the matching USE declarative when an I/O
     verb returns an error/exception status that the statement's own AT END /
     INVALID KEY phrase does not handle."""
+    ctx, span = scope.ctx, scope.span
     section = ctx.use_by_file.get(file_name.upper(), "") or ctx.use_global or ""
     if section:
-        _emit_conditional_use_perform(ctx, status_reg, section, handled, span=span)
+        _emit_conditional_use_perform(scope, status_reg, section, handled)
         return
     if not ctx.use_by_mode:
         return
-    mode_reg = IrEmitter(ctx, span).load(
-        file_state(program_name(ctx._asg), file_name).mode
-    )
+    mode_reg = scope.emitter.load(file_state(program_name(ctx._asg), file_name).mode)
     for mode_key, sec in ctx.use_by_mode.items():
         match_reg = ctx.fresh_reg()
         ctx.emit_inst(
@@ -222,21 +217,17 @@ def emit_use_trigger(
             BranchIf(cond_reg=match_reg, branch_targets=(do_lbl, next_lbl)), span=span
         )
         ctx.emit_inst(Label_(label=do_lbl), span=span)
-        _emit_conditional_use_perform(ctx, status_reg, sec, handled, span=span)
+        _emit_conditional_use_perform(scope, status_reg, sec, handled)
         ctx.emit_inst(Branch(label=next_lbl), span=span)
         ctx.emit_inst(Label_(label=next_lbl), span=span)
 
 
 def _emit_open_use_trigger(
-    ctx: EmitContext,
-    file_name: str,
-    mode: OpenMode,
-    status_reg: Register,
-    *,
-    span: SourceSpan | None,
+    scope: LoweringScope, file_name: str, mode: OpenMode, status_reg: Register
 ) -> None:
     """A failed OPEN leaves the file closed, so an open-mode USE is chosen by the
     mode the OPEN attempted, not by the file's current mode."""
+    ctx = scope.ctx
     section = (
         ctx.use_by_file.get(file_name.upper(), "")
         or ctx.use_global
@@ -244,7 +235,7 @@ def _emit_open_use_trigger(
     )
     if not section:
         return
-    _emit_conditional_use_perform(ctx, status_reg, section, (), span=span)
+    _emit_conditional_use_perform(scope, status_reg, section, ())
 
 
 def lower_accept(
@@ -254,10 +245,11 @@ def lower_accept(
 ) -> None:
     """ACCEPT target [FROM device] — fill the receiver from __cobol_accept records and
     store it unedited, as characters over the receiver's bytes."""
+    scope = LoweringScope(ctx, materialised, stmt.span)
     span = stmt.span
-    program = _program(ctx, span=span)
+    program = _program(scope)
     if not ctx.has_field(stmt.target.name, materialised):
-        AcceptFill(IrEmitter(ctx, span), stmt.from_device, 0).emit(program, _ignored)
+        AcceptFill(scope.emitter, stmt.from_device, 0).emit(program, _ignored)
         return
     target_ref, target_rr = ctx.resolve_field_ref(
         stmt.target.name,
@@ -277,21 +269,14 @@ def lower_accept(
             span=span,
         )
 
-    AcceptFill(IrEmitter(ctx, span), stmt.from_device, target_ref.fl.byte_length).emit(
+    AcceptFill(scope.emitter, stmt.from_device, target_ref.fl.byte_length).emit(
         program, store
     )
     logger.info("ACCEPT %s FROM %s", stmt.target.name, stmt.from_device)
 
 
-def _lower_open_file(
-    ctx: EmitContext,
-    filename: str,
-    mode: OpenMode,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
-) -> None:
-    v = _verb(ctx, filename, span=span)
+def _lower_open_file(scope: LoweringScope, filename: str, mode: OpenMode) -> None:
+    v = _verb(scope, filename)
     outcome = v.outcome()
     v.guarded(
         (
@@ -299,12 +284,14 @@ def _lower_open_file(
             Refusal(v.locked, FileLogicStatus.CLOSED_WITH_LOCK),
         ),
         outcome,
-        partial(_emit_open, v, outcome, mode, _entry(ctx, filename)),
+        partial(_emit_open, v, outcome, mode, _entry(scope.ctx, filename)),
         _nothing,
     )
     status_reg = v.e.load(outcome.status)
-    ctx.emit_file_status_update(filename, status_reg, materialised, span=span)
-    _emit_open_use_trigger(ctx, filename, mode, status_reg, span=span)
+    scope.ctx.emit_file_status_update(
+        filename, status_reg, scope.materialised, span=scope.span
+    )
+    _emit_open_use_trigger(scope, filename, mode, status_reg)
     logger.info("OPEN %s %s", mode.value, filename)
 
 
@@ -376,8 +363,9 @@ def lower_open(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """OPEN [mode file1 ...] ... — emit __cobol_open_file per file."""
+    scope = LoweringScope(ctx, materialised, stmt.span)
     _ = [
-        _lower_open_file(ctx, filename, mode, materialised, span=stmt.span)
+        _lower_open_file(scope, filename, mode)
         for mode, files in stmt.mode_groups
         for filename in files
     ]
@@ -389,33 +377,27 @@ def lower_close(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """CLOSE file1 file2 ... — close files via __cobol_close_file."""
+    scope = LoweringScope(ctx, materialised, stmt.span)
     _ = [
-        _lower_close_file(
-            ctx, filename, filename in stmt.with_lock, materialised, span=stmt.span
-        )
+        _lower_close_file(scope, filename, filename in stmt.with_lock)
         for filename in stmt.files
     ]
 
 
-def _lower_close_file(
-    ctx: EmitContext,
-    filename: str,
-    with_lock: bool,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
-) -> None:
-    v = _verb(ctx, filename, span=span)
+def _lower_close_file(scope: LoweringScope, filename: str, with_lock: bool) -> None:
+    v = _verb(scope, filename)
     outcome = v.outcome()
     v.guarded(
         (Refusal(v.closed, FileLogicStatus.NOT_OPEN),),
         outcome,
-        partial(_emit_close, v, outcome, _entry(ctx, filename), with_lock),
+        partial(_emit_close, v, outcome, _entry(scope.ctx, filename), with_lock),
         _nothing,
     )
     status_reg = v.e.load(outcome.status)
-    ctx.emit_file_status_update(filename, status_reg, materialised, span=span)
-    emit_use_trigger(ctx, filename, status_reg, (), materialised, span=span)
+    scope.ctx.emit_file_status_update(
+        filename, status_reg, scope.materialised, span=scope.span
+    )
+    _emit_use_trigger(scope, filename, status_reg, ())
     logger.info("CLOSE %s", filename)
 
 
@@ -439,29 +421,16 @@ def _closed(v: FileVerbIr, with_lock: bool) -> None:
     emit_closed(v.e, v.state, with_lock)
 
 
-def _emit_key_text(
-    ctx: EmitContext,
-    key: RefModOperand,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
-) -> Register:
-    if not materialised.has_field(key.name):
-        return Register(str(ctx.const_to_reg("", span=span)))
-    return ctx.emit_to_string(
-        _emit_key_value(ctx, key, materialised, span=span), span=span
-    )
+def _emit_key_text(scope: LoweringScope, key: RefModOperand) -> Register:
+    if not scope.materialised.has_field(key.name):
+        return Register(str(scope.ctx.const_to_reg("", span=scope.span)))
+    return scope.ctx.emit_to_string(_emit_key_value(scope, key), span=scope.span)
 
 
-def _emit_key_value(
-    ctx: EmitContext,
-    key: RefModOperand,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
-) -> Register:
+def _emit_key_value(scope: LoweringScope, key: RefModOperand) -> Register:
+    ctx, span = scope.ctx, scope.span
     key_ref, key_rr = ctx.resolve_field_ref(
-        key.name, materialised, key.qualifiers, key.subscripts, span=span
+        key.name, scope.materialised, key.qualifiers, key.subscripts, span=span
     )
     return ctx.emit_decode_field(
         key_rr, key_ref.fl, key_ref.offset_reg, extent=key_ref.extent, span=span
@@ -469,32 +438,24 @@ def _emit_key_value(
 
 
 def _emit_record_number_report(
-    ctx: EmitContext,
+    scope: LoweringScope,
     number: Callable[[], Register],
     status_reg: Register,
     key: RefModOperand,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
 ) -> None:
     """After a successful sequential READ or WRITE of a relative file, MOVE the
     record number it used to the RELATIVE KEY."""
-    if not materialised.has_field(key.name):
+    if not scope.materialised.has_field(key.name):
         return
-    _emit_store_if_successful(ctx, status_reg, number(), key, materialised, span=span)
+    _emit_store_if_successful(scope, status_reg, number(), key)
 
 
 def _emit_record_length_report(
-    ctx: EmitContext,
-    data_reg: Register,
-    status_reg: Register,
-    file_name: str,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
+    scope: LoweringScope, data_reg: Register, status_reg: Register, file_name: str
 ) -> None:
+    ctx = scope.ctx
     item = RefModOperand(name=depending_on(ctx._asg, file_name))
-    if not materialised.has_field(item.name):
+    if not scope.materialised.has_field(item.name):
         return
     length_reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -503,21 +464,15 @@ def _emit_record_length_report(
             func_name=FuncName(BuiltinName.LENGTH),
             args=(data_reg,),
         ),
-        span=span,
+        span=scope.span,
     )
-    _emit_store_if_successful(
-        ctx, status_reg, length_reg, item, materialised, span=span
-    )
+    _emit_store_if_successful(scope, status_reg, length_reg, item)
 
 
 def _emit_record_of_its_length(
-    ctx: EmitContext,
-    data_reg: Register,
-    file_name: str,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
+    scope: LoweringScope, data_reg: Register, file_name: str
 ) -> Register:
+    ctx, materialised, span = scope.ctx, scope.materialised, scope.span
     item = RefModOperand(name=depending_on(ctx._asg, file_name))
     if not materialised.has_field(item.name):
         return data_reg
@@ -560,14 +515,12 @@ def _emit_record_of_its_length(
 
 
 def _emit_read_into(
-    ctx: EmitContext,
+    scope: LoweringScope,
     status_reg: Register,
     data_reg: Register,
     into: RefModOperand,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
 ) -> None:
+    ctx, materialised, span = scope.ctx, scope.materialised, scope.span
     if not (into.name and materialised.has_field(into.name)):
         return
     into_ref, into_rr = ctx.resolve_field_ref(
@@ -587,7 +540,7 @@ def _emit_read_into(
         ),
         span=span,
     )
-    skip_lbl = _emit_branch_if_successful(ctx, status_reg, span=span)
+    skip_lbl = _emit_branch_if_successful(scope, status_reg)
     ctx.emit_write_region_raw(
         into_rr,
         into_ref.fl,
@@ -600,15 +553,14 @@ def _emit_read_into(
     ctx.emit_inst(Label_(label=skip_lbl), span=span)
 
 
-def _emit_branch_if_successful(
-    ctx: EmitContext, status_reg: Register, *, span: SourceSpan | None
-) -> CodeLabel:
+def _emit_branch_if_successful(scope: LoweringScope, status_reg: Register) -> CodeLabel:
+    ctx, span = scope.ctx, scope.span
     ok_reg = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
             result_reg=ok_reg,
             operator=resolve_binop("=="),
-            left=_emit_status_class(ctx, status_reg, span=span),
+            left=_emit_status_class(scope, status_reg),
             right=Register(
                 str(ctx.const_to_reg(StatusClass.SUCCESSFUL.value, span=span))
             ),
@@ -625,17 +577,15 @@ def _emit_branch_if_successful(
 
 
 def _emit_store_if_successful(
-    ctx: EmitContext,
+    scope: LoweringScope,
     status_reg: Register,
     value_reg: Register,
     target: RefModOperand,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
 ) -> None:
-    skip_lbl = _emit_branch_if_successful(ctx, status_reg, span=span)
+    ctx, span = scope.ctx, scope.span
+    skip_lbl = _emit_branch_if_successful(scope, status_reg)
     target_ref, target_rr = ctx.resolve_field_ref(
-        target.name, materialised, target.qualifiers, target.subscripts, span=span
+        target.name, scope.materialised, target.qualifiers, target.subscripts, span=span
     )
     ctx.emit_encode_and_write(
         target_rr,
@@ -649,45 +599,35 @@ def _emit_store_if_successful(
     ctx.emit_inst(Label_(label=skip_lbl), span=span)
 
 
-def _read_key_reg(
-    ctx: EmitContext,
-    stmt: ReadStatement,
-    materialised: MaterialisedSectionedLayout,
-) -> Register:
+def _read_key_reg(scope: LoweringScope, stmt: ReadStatement) -> Register:
+    ctx = scope.ctx
     entry = _file_entries(ctx).get(
         stmt.file_name, FileControlEntry(file_name=stmt.file_name)
     )
     if entry.organization is FileOrganization.INDEXED:
-        return _indexed_read_key_reg(ctx, entry, stmt, materialised)
+        return _indexed_read_key_reg(scope, entry, stmt)
     return _emit_key_text(
-        ctx,
+        scope,
         (
             stmt.key
             if stmt.key.name
             else addressing_key(ctx._asg, stmt.file_name, stmt.next_record)
         ),
-        materialised,
-        span=stmt.span,
     )
 
 
 def _indexed_read_key_reg(
-    ctx: EmitContext,
-    entry: FileControlEntry,
-    stmt: ReadStatement,
-    materialised: MaterialisedSectionedLayout,
+    scope: LoweringScope, entry: FileControlEntry, stmt: ReadStatement
 ) -> Register:
-    span = stmt.span
     sequential = entry.access_mode is AccessMode.SEQUENTIAL or stmt.next_record
     key = stmt.key if stmt.key.name else entry.record_key
-    if sequential or not materialised.has_field(key.name):
-        return Register(str(ctx.const_to_reg("", span=span)))
-    return _key_value_reg(ctx, entry.organization, key, materialised, span=span)
+    if sequential or not scope.materialised.has_field(key.name):
+        return Register(str(scope.ctx.const_to_reg("", span=scope.span)))
+    return _key_value_reg(scope, entry.organization, key)
 
 
-def _sequential_read(
-    ctx: EmitContext, stmt: ReadStatement, materialised: MaterialisedSectionedLayout
-) -> bool:
+def _sequential_read(scope: LoweringScope, stmt: ReadStatement) -> bool:
+    ctx, materialised = scope.ctx, scope.materialised
     entry = _entry(ctx, stmt.file_name)
     if entry.organization is FileOrganization.INDEXED:
         key = stmt.key if stmt.key.name else entry.record_key
@@ -794,21 +734,19 @@ def _emit_guarded_read(v: FileVerbIr, outcome: VerbOutcome, plan: ReadPlan) -> N
 
 
 def _read_plan(
-    ctx: EmitContext,
-    stmt: ReadStatement,
-    key_reg: Register,
-    materialised: MaterialisedSectionedLayout,
+    scope: LoweringScope, stmt: ReadStatement, key_reg: Register
 ) -> ReadPlan:
+    ctx, materialised = scope.ctx, scope.materialised
     entry = _entry(ctx, stmt.file_name)
     digits = relative_key_digits(materialised, entry)
     report = reported_key(ctx._asg, stmt.file_name, stmt.next_record)
     return ReadPlan(
         stmt.file_name,
         key_reg,
-        _sequential_read(ctx, stmt, materialised),
+        _sequential_read(scope, stmt),
         entry.optional,
         digits,
-        _key_sequence(ctx, stmt.file_name, materialised),
+        _key_sequence(scope, stmt.file_name),
         bool(digits) or materialised.has_field(report.name),
     )
 
@@ -819,33 +757,28 @@ def lower_read(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """READ file [INTO target] [KEY k] [AT END ...] [INVALID KEY ...] — with IOResult branching."""
+    scope = LoweringScope(ctx, materialised, stmt.span)
     span = stmt.span
-    key_str_reg = _read_key_reg(ctx, stmt, materialised)
-    v = _verb(ctx, stmt.file_name, span=span)
+    key_str_reg = _read_key_reg(scope, stmt)
+    v = _verb(scope, stmt.file_name)
     outcome = v.outcome()
-    _emit_guarded_read(v, outcome, _read_plan(ctx, stmt, key_str_reg, materialised))
+    _emit_guarded_read(v, outcome, _read_plan(scope, stmt, key_str_reg))
     status_reg = v.e.load(outcome.status)
     ctx.emit_file_status_update(stmt.file_name, status_reg, materialised, span=span)
     _emit_record_number_report(
-        ctx,
+        scope,
         partial(v.e.load, outcome.number),
         status_reg,
         reported_key(ctx._asg, stmt.file_name, stmt.next_record),
-        materialised,
-        span=span,
     )
-    emit_use_trigger(
-        ctx,
+    _emit_use_trigger(
+        scope,
         stmt.file_name,
         status_reg,
         handled_classes(bool(stmt.at_end), bool(stmt.invalid_key)),
-        materialised,
-        span=span,
     )
     data_reg = v.e.load(outcome.data)
-    _emit_record_length_report(
-        ctx, data_reg, status_reg, stmt.file_name, materialised, span=span
-    )
+    _emit_record_length_report(scope, data_reg, status_reg, stmt.file_name)
 
     # Write data into file section region via the FD record name for this file
     rec_name = largest_record(ctx._asg, stmt.file_name, materialised)
@@ -872,7 +805,7 @@ def lower_read(
         except KeyError:
             pass
 
-    _emit_read_into(ctx, status_reg, data_reg, stmt.into, materialised, span=span)
+    _emit_read_into(scope, status_reg, data_reg, stmt.into)
 
     after_label = ctx.fresh_label("read_after")
     has_at_end = bool(stmt.at_end or stmt.not_at_end)
@@ -887,7 +820,7 @@ def lower_read(
             Binop(
                 result_reg=cond_reg,
                 operator=resolve_binop("=="),
-                left=_emit_status_class(ctx, status_reg, span=span),
+                left=_emit_status_class(scope, status_reg),
                 right=Register(str(at_end_class)),
             ),
             span=span,
@@ -912,7 +845,7 @@ def lower_read(
             Binop(
                 result_reg=inv_cond_reg,
                 operator=resolve_binop("=="),
-                left=_emit_status_class(ctx, status_reg, span=span),
+                left=_emit_status_class(scope, status_reg),
                 right=Register(str(invalid_key_class)),
             ),
             span=span,
@@ -933,18 +866,14 @@ def lower_read(
 
 
 def _emit_invalid_key_branch(
-    ctx: EmitContext,
+    scope: LoweringScope,
     status_reg: Register,
-    file_name: str,
-    invalid_key: Sequence[CobolStatementType],
-    not_invalid_key: Sequence[CobolStatementType],
-    materialised: MaterialisedSectionedLayout,
-    after_label: object,
-    *,
-    span: SourceSpan | None,
+    phrases: InvalidKeyPhrases,
+    after_label: CodeLabel,
 ) -> None:
-    if not (invalid_key or not_invalid_key):
+    if not phrases.written:
         return
+    ctx, materialised, span = scope.ctx, scope.materialised, scope.span
     inv_lbl = ctx.fresh_label("inv_key")
     not_inv_lbl = ctx.fresh_label("not_inv_key")
     cond_reg = ctx.fresh_reg()
@@ -953,7 +882,7 @@ def _emit_invalid_key_branch(
         Binop(
             result_reg=cond_reg,
             operator=resolve_binop("=="),
-            left=_emit_status_class(ctx, status_reg, span=span),
+            left=_emit_status_class(scope, status_reg),
             right=Register(str(invalid_key_class)),
         ),
         span=span,
@@ -962,20 +891,15 @@ def _emit_invalid_key_branch(
         BranchIf(cond_reg=cond_reg, branch_targets=(inv_lbl, not_inv_lbl)), span=span
     )
     ctx.emit_inst(Label_(label=inv_lbl), span=span)
-    [ctx.lower_statement(s, materialised) for s in invalid_key]
-    ctx.emit_inst(Branch(label=after_label), span=span)  # type: ignore[arg-type]
+    [ctx.lower_statement(s, materialised) for s in phrases.invalid_key]
+    ctx.emit_inst(Branch(label=after_label), span=span)
     ctx.emit_inst(Label_(label=not_inv_lbl), span=span)
-    [ctx.lower_statement(s, materialised) for s in not_invalid_key]
-    ctx.emit_inst(Branch(label=after_label), span=span)  # type: ignore[arg-type]
+    [ctx.lower_statement(s, materialised) for s in phrases.not_invalid_key]
+    ctx.emit_inst(Branch(label=after_label), span=span)
 
 
 def _write_source_reg(
-    ctx: EmitContext,
-    from_field: RefModOperand,
-    record_name: str,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
+    scope: LoweringScope, from_field: RefModOperand, record_name: str
 ) -> Register:
     """Resolve the byte-faithful data register for WRITE/REWRITE.
 
@@ -986,9 +910,8 @@ def _write_source_reg(
     emit the MOVE into the record region first, then read the region raw.
     The MOVE takes the FROM operand by the kind the bridge states.
     """
+    ctx, materialised, span = scope.ctx, scope.materialised, scope.span
     if from_field.name:
-        from cobol_asg.cobol_statements import MoveStatement
-
         ctx.lower_statement(
             MoveStatement(
                 source=from_field,
@@ -1034,19 +957,16 @@ def _after_write(
 
 
 def _size_refusals(
-    ctx: EmitContext,
-    v: FileVerbIr,
-    file_name: str,
-    data_reg: Register,
-    materialised: MaterialisedSectionedLayout,
+    scope: LoweringScope, v: FileVerbIr, file_name: str, data_reg: Register
 ) -> tuple[Refusal, ...]:
     """A variable-length record shorter than the file's smallest or longer than its
     largest record is a boundary violation, 44."""
-    if not records_vary(ctx._asg, file_name):
+    asg = scope.ctx._asg
+    if not records_vary(asg, file_name):
         return ()
-    smallest = minimum_length(ctx._asg, file_name)
+    smallest = minimum_length(asg, file_name)
     largest = next(
-        (area.byte_length for area in record_area(ctx._asg, file_name, materialised)),
+        (area.byte_length for area in record_area(asg, file_name, scope.materialised)),
         0,
     )
 
@@ -1071,24 +991,17 @@ def _boundary_refusals(
     )
 
 
-def _addressed_key_values(
-    ctx: EmitContext,
-    file_name: str,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
-) -> tuple[Register, ...]:
-    key = addressing_key(ctx._asg, file_name, False)
-    if not materialised.has_field(key.name):
+def _addressed_key_values(scope: LoweringScope, file_name: str) -> tuple[Register, ...]:
+    key = addressing_key(scope.ctx._asg, file_name, False)
+    if not scope.materialised.has_field(key.name):
         return ()
-    return (_emit_key_value(ctx, key, materialised, span=span),)
+    return (_emit_key_value(scope, key),)
 
 
-def _key_sequence(
-    ctx: EmitContext, file_name: str, materialised: MaterialisedSectionedLayout
-) -> tuple[PrimeKey, ...]:
+def _key_sequence(scope: LoweringScope, file_name: str) -> tuple[PrimeKey, ...]:
     """The prime key an indexed file in sequential access keeps in sequence by; none
     for any other file."""
+    ctx, materialised = scope.ctx, scope.materialised
     entry = _entry(ctx, file_name)
     indexed = entry.organization is FileOrganization.INDEXED
     if not (indexed and entry.access_mode is AccessMode.SEQUENTIAL):
@@ -1153,34 +1066,33 @@ def _current_record_refusals(
     )
 
 
+def _record_file(ctx: EmitContext, record_name: str) -> str:
+    return ctx._asg.file_record_to_select.get(record_name.upper(), record_name)
+
+
 def lower_write(
     ctx: EmitContext,
     stmt: WriteStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """WRITE record-name [FROM field] [INVALID KEY ...] — write record via __cobol_write_record."""
+    scope = LoweringScope(ctx, materialised, stmt.span)
     span = stmt.span
-    file_name = ctx._asg.file_record_to_select.get(
-        stmt.record_name.upper(), stmt.record_name
-    )
+    file_name = _record_file(ctx, stmt.record_name)
     data_reg = _emit_record_of_its_length(
-        ctx,
-        _write_source_reg(
-            ctx, stmt.from_field, stmt.record_name, materialised, span=span
-        ),
+        scope,
+        _write_source_reg(scope, stmt.from_field, stmt.record_name),
         file_name,
-        materialised,
-        span=span,
     )
-    key_values = _addressed_key_values(ctx, file_name, materialised, span=span)
+    key_values = _addressed_key_values(scope, file_name)
     key_reg = next(
         (ctx.emit_to_string(value, span=span) for value in key_values),
         Register(str(ctx.const_to_reg("", span=span))),
     )
-    v = _verb(ctx, file_name, span=span)
+    v = _verb(scope, file_name)
     outcome = v.outcome()
     entry = _entry(ctx, file_name)
-    sequence = _key_sequence(ctx, file_name, materialised)
+    sequence = _key_sequence(scope, file_name)
     report = reported_key(ctx._asg, file_name, False)
     plan = WritePlan(
         data_reg,
@@ -1202,7 +1114,7 @@ def lower_write(
                 v.write_refused,
                 FileLogicStatus.WRITE_NOT_PERMITTED,
             ),
-            *_size_refusals(ctx, v, file_name, data_reg, materialised),
+            *_size_refusals(scope, v, file_name, data_reg),
             *_boundary_refusals(v, key_values),
             *_sequence_refusals(v, data_reg, sequence, "<"),
         ),
@@ -1210,31 +1122,17 @@ def lower_write(
     status_reg = v.e.load(outcome.status)
     ctx.emit_file_status_update(file_name, status_reg, materialised, span=span)
     _emit_record_number_report(
-        ctx,
-        partial(v.e.load, outcome.number),
-        status_reg,
-        report,
-        materialised,
-        span=span,
+        scope, partial(v.e.load, outcome.number), status_reg, report
     )
-    emit_use_trigger(
-        ctx,
-        file_name,
-        status_reg,
-        handled_classes(False, bool(stmt.invalid_key)),
-        materialised,
-        span=span,
+    _emit_use_trigger(
+        scope, file_name, status_reg, handled_classes(False, bool(stmt.invalid_key))
     )
     after_label = ctx.fresh_label("write_after")
     _emit_invalid_key_branch(
-        ctx,
+        scope,
         status_reg,
-        stmt.record_name,
-        stmt.invalid_key,
-        stmt.not_invalid_key,
-        materialised,
+        InvalidKeyPhrases(stmt.invalid_key, stmt.not_invalid_key),
         after_label,
-        span=span,
     )
     ctx.emit_inst(Label_(label=after_label), span=span)
     logger.info("WRITE %s FROM %s", stmt.record_name, stmt.from_field.name or "(none)")
@@ -1246,23 +1144,16 @@ def lower_rewrite(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """REWRITE record-name [FROM field] [INVALID KEY ...] — rewrite via __cobol_rewrite_record."""
+    scope = LoweringScope(ctx, materialised, stmt.span)
     span = stmt.span
-    file_name = ctx._asg.file_record_to_select.get(
-        stmt.record_name.upper(), stmt.record_name
-    )
+    file_name = _record_file(ctx, stmt.record_name)
     data_reg = _emit_record_of_its_length(
-        ctx,
-        _write_source_reg(
-            ctx, stmt.from_field, stmt.record_name, materialised, span=span
-        ),
+        scope,
+        _write_source_reg(scope, stmt.from_field, stmt.record_name),
         file_name,
-        materialised,
-        span=span,
     )
-    key_reg = _emit_key_text(
-        ctx, addressing_key(ctx._asg, file_name, False), materialised, span=span
-    )
-    v = _verb(ctx, file_name, span=span)
+    key_reg = _emit_key_text(scope, addressing_key(ctx._asg, file_name, False))
+    v = _verb(scope, file_name)
     outcome = v.outcome()
     _emit_guarded_update(
         v,
@@ -1274,32 +1165,21 @@ def lower_rewrite(
         ),
         (
             *_current_record_refusals(v, _entry(ctx, file_name)),
-            *_size_refusals(ctx, v, file_name, data_reg, materialised),
-            *_sequence_refusals(
-                v, data_reg, _key_sequence(ctx, file_name, materialised), "!="
-            ),
+            *_size_refusals(scope, v, file_name, data_reg),
+            *_sequence_refusals(v, data_reg, _key_sequence(scope, file_name), "!="),
         ),
     )
     status_reg = v.e.load(outcome.status)
     ctx.emit_file_status_update(file_name, status_reg, materialised, span=span)
-    emit_use_trigger(
-        ctx,
-        file_name,
-        status_reg,
-        handled_classes(False, bool(stmt.invalid_key)),
-        materialised,
-        span=span,
+    _emit_use_trigger(
+        scope, file_name, status_reg, handled_classes(False, bool(stmt.invalid_key))
     )
     after_label = ctx.fresh_label("rewrite_after")
     _emit_invalid_key_branch(
-        ctx,
+        scope,
         status_reg,
-        file_name,
-        stmt.invalid_key,
-        stmt.not_invalid_key,
-        materialised,
+        InvalidKeyPhrases(stmt.invalid_key, stmt.not_invalid_key),
         after_label,
-        span=span,
     )
     ctx.emit_inst(Label_(label=after_label), span=span)
     logger.info(
@@ -1313,10 +1193,11 @@ def lower_start(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """START file-name [KEY relop key] [INVALID KEY ...] — position via __cobol_start_file."""
+    scope = LoweringScope(ctx, materialised, stmt.span)
     span = stmt.span
-    key_reg = _start_key_reg(ctx, stmt, materialised, span=span)
+    key_reg = _start_key_reg(scope, stmt)
     relop_reg = Register(str(ctx.const_to_reg(stmt.relop or "=", span=span)))
-    v = _verb(ctx, stmt.file_name, span=span)
+    v = _verb(scope, stmt.file_name)
     outcome = v.outcome()
     optional = _entry(ctx, stmt.file_name).optional
 
@@ -1349,24 +1230,18 @@ def lower_start(
     )
     status_reg = v.e.load(outcome.status)
     ctx.emit_file_status_update(stmt.file_name, status_reg, materialised, span=span)
-    emit_use_trigger(
-        ctx,
+    _emit_use_trigger(
+        scope,
         stmt.file_name,
         status_reg,
         handled_classes(False, bool(stmt.invalid_key)),
-        materialised,
-        span=span,
     )
     after_label = ctx.fresh_label("start_after")
     _emit_invalid_key_branch(
-        ctx,
+        scope,
         status_reg,
-        stmt.file_name,
-        stmt.invalid_key,
-        stmt.not_invalid_key,
-        materialised,
+        InvalidKeyPhrases(stmt.invalid_key, stmt.not_invalid_key),
         after_label,
-        span=span,
     )
     ctx.emit_inst(Label_(label=after_label), span=span)
     logger.info(
@@ -1384,53 +1259,35 @@ def _file_key(entry: FileControlEntry) -> RefModOperand:
     return entry.record_key
 
 
-def _delete_key_reg(
-    ctx: EmitContext,
-    file_name: str,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
-) -> Register:
-    entries = _file_entries(ctx)
+def _delete_key_reg(scope: LoweringScope, file_name: str) -> Register:
+    entries = _file_entries(scope.ctx)
     if (
         file_name not in entries
         or entries[file_name].access_mode is AccessMode.SEQUENTIAL
     ):
-        return ctx.const_to_reg("", span=span)
+        return scope.ctx.const_to_reg("", span=scope.span)
     entry = entries[file_name]
-    return _key_value_reg(
-        ctx, entry.organization, _file_key(entry), materialised, span=span
-    )
+    return _key_value_reg(scope, entry.organization, _file_key(entry))
 
 
-def _start_key_reg(
-    ctx: EmitContext,
-    stmt: StartStatement,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
-) -> Register:
-    entries = _file_entries(ctx)
+def _start_key_reg(scope: LoweringScope, stmt: StartStatement) -> Register:
+    entries = _file_entries(scope.ctx)
     if (
         stmt.file_name not in entries
         or entries[stmt.file_name].organization is FileOrganization.SEQUENTIAL
     ):
-        return ctx.const_to_reg("", span=span)
+        return scope.ctx.const_to_reg("", span=scope.span)
     entry = entries[stmt.file_name]
     key = stmt.key if stmt.key.name else _file_key(entry)
-    return _key_value_reg(ctx, entry.organization, key, materialised, span=span)
+    return _key_value_reg(scope, entry.organization, key)
 
 
 def _key_value_reg(
-    ctx: EmitContext,
-    organization: FileOrganization,
-    key: RefModOperand,
-    materialised: MaterialisedSectionedLayout,
-    *,
-    span: SourceSpan | None,
+    scope: LoweringScope, organization: FileOrganization, key: RefModOperand
 ) -> Register:
+    ctx, span = scope.ctx, scope.span
     key_ref, key_rr = ctx.resolve_field_ref(
-        key.name, materialised, key.qualifiers, key.subscripts, span=span
+        key.name, scope.materialised, key.qualifiers, key.subscripts, span=span
     )
     if organization is FileOrganization.RELATIVE:
         value_reg = ctx.emit_decode_field(
@@ -1448,9 +1305,10 @@ def lower_delete(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """DELETE file-name [INVALID KEY ...] — delete record via __cobol_delete_record."""
+    scope = LoweringScope(ctx, materialised, stmt.span)
     span = stmt.span
-    key_reg = _delete_key_reg(ctx, stmt.file_name, materialised, span=span)
-    v = _verb(ctx, stmt.file_name, span=span)
+    key_reg = _delete_key_reg(scope, stmt.file_name)
+    v = _verb(scope, stmt.file_name)
     outcome = v.outcome()
     _emit_guarded_update(
         v,
@@ -1464,24 +1322,18 @@ def lower_delete(
     )
     status_reg = v.e.load(outcome.status)
     ctx.emit_file_status_update(stmt.file_name, status_reg, materialised, span=span)
-    emit_use_trigger(
-        ctx,
+    _emit_use_trigger(
+        scope,
         stmt.file_name,
         status_reg,
         handled_classes(False, bool(stmt.invalid_key)),
-        materialised,
-        span=span,
     )
     after_label = ctx.fresh_label("delete_after")
     _emit_invalid_key_branch(
-        ctx,
+        scope,
         status_reg,
-        stmt.file_name,
-        stmt.invalid_key,
-        stmt.not_invalid_key,
-        materialised,
+        InvalidKeyPhrases(stmt.invalid_key, stmt.not_invalid_key),
         after_label,
-        span=span,
     )
     ctx.emit_inst(Label_(label=after_label), span=span)
     logger.info("DELETE %s", stmt.file_name)
