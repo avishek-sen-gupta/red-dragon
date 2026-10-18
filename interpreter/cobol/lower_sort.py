@@ -29,7 +29,7 @@ from interpreter.cobol.collating_sequences import collating_sequence_of
 from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.file_frame import FileFrame
-from interpreter.cobol.file_state import file_state
+from interpreter.cobol.file_state import file_state_of
 from interpreter.cobol.file_verb_ir import FileVerbIr, emit_closed
 from interpreter.cobol.ir_emitter import IrEmitter
 from interpreter.cobol.lower_io import lower_close, lower_open, lower_read, lower_write
@@ -69,7 +69,7 @@ class _SortLowering:
         self._order()
         emit_closed(
             IrEmitter(self.ctx, self.stmt.span),
-            file_state(program_name(self.ctx._asg), self.stmt.file_name),
+            file_state_of(self.ctx._asg, self.stmt.file_name),
             False,
         )
         self._drain()
@@ -95,7 +95,7 @@ class _SortLowering:
     def _verb(self, filename: str) -> FileVerbIr:
         e = IrEmitter(self.ctx, self.stmt.span)
         program = program_name(self.ctx._asg)
-        return FileVerbIr(e, file_state(program, filename), e.text(program))
+        return FileVerbIr(e, file_state_of(self.ctx._asg, filename), e.text(program))
 
     def _if_opened(self, filename: str, transfer: Callable[[], None]) -> None:
         v = self._verb(filename)

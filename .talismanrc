@@ -64,10 +64,12 @@ fileignoreconfig:
   checksum: 906d0538524cf23e07dc04c2f930d173f66ca7a76487ccf0dfffce094d2e4aab
 - filename: interpreter.py
   checksum: 5337b3918a4bbf320a088669079fbe7fe525cb45bf947a62ad3f5f15de093eec
+- filename: tests/unit/cobol/test_region_id.py
+  checksum: 2b17d0bee80813d34c121186581334a539f6cc7011945f08f5681ea980ec3906
 - filename: docs/notes-on-vm-design.md
-  checksum: 8eec207a444b807fc084f83ac389009b25c4715701023a60ea224d58c84e6cc5
+  checksum: 35539e5da3f37d3581e9e3e6841b97357367f2e0eaa2e70fd07753cdae67ed1b
 - filename: docs/architectural-design-decisions.md
-  checksum: 65474c21f1746e33978328f9e99385b91f14a4a0c75fc82b4cd48bf3981ab45f
+  checksum: 072800da249e83f46a484c750102712f186a3e4a837600733c6824433e40d86b
 - filename: docs/ir-reference.md
   checksum: 962dbce228810b9a418568bcf1c0b8e6c37811a08fc29171fdd8882b0d112a7f
 - filename: tests/unit/exercism/exercises/pangram/canonical_data.json
@@ -251,7 +253,7 @@ fileignoreconfig:
 - filename: tests/unit/cobol/test_recorded_memory_effects.py
   checksum: ba151292b7ee1a3f747628e5950297f904de1c1cd625307f762f7a98b570b3de
 - filename: docs/frontend-design/cobol.md
-  checksum: 233ad90e4289b319d872cd2a519df44687c3f1106ff219c5d56d693de1ebf35c
+  checksum: a0dad66cdee212d9cf300dcc4f2feff01560b4913f870e7dc4c06214c8fdd210
 - filename: tests/integration/test_cobol_call_using_addresses.py
   checksum: 353804977c7a3e5eb44a303f7e42a47ef1bdf9f837f41e396bf5033813c4fdb0
 - filename: tests/integration/test_cobol_call_using_slots.py

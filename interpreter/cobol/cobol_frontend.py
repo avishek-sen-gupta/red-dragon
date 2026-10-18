@@ -30,6 +30,7 @@ from interpreter.cobol.layout_data import layout_data
 from interpreter.cobol.lower_data_division import (
     lower_sectioned_data_division,
 )
+from interpreter.cobol.lower_external import lower_external_areas
 from interpreter.cobol.lower_procedure import lower_procedure_division
 from interpreter.cobol.lower_program_init import (
     lower_program_init,
@@ -211,6 +212,7 @@ class CobolFrontend(Frontend):
                 sectioned.linkage,
                 sectioned.local_storage,
                 sectioned.working_storage,
+                sectioned.external,
             )
         )
 
@@ -227,6 +229,7 @@ class CobolFrontend(Frontend):
         self._ctx.emit_inst(file_definitions_data(asg))
         self._ctx.emit_inst(layout_data(sectioned.working_storage.all_fields()))
         lower_file_declarations(self._ctx, sectioned)
+        lower_external_areas(self._ctx, sectioned.external_areas)
 
         # Emit singleton init block (ALLOC_REGION for WS lives here, runs once)
         after_label = lower_program_init(

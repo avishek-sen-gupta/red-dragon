@@ -461,6 +461,7 @@ Harnesses build an argument array with `call_arguments(vm, regions)` (`interpret
 - The caller's `CALL_WITH_MEMORY` result register is seeded with its own RETURN-CODE, so a void return leaves it unchanged; the CALL lowering then copies the register into the caller's RETURN-CODE.
 - The last program to end wins, which is the value the operating system would get.
 - `read_return_code(vm)` (`interpreter/cobol/return_code_readback.py`) decodes the run-unit region's RETURN-CODE field.
+- The start-up module also declares `__cobol_external_records` and `__cobol_external_files`, two heap objects holding each EXTERNAL area's region under its name. A program's load-time code asks `dict_contains_key` whether its area is there and allocates it when it is not; its procedure loads the region on entry. An EXTERNAL file's connector state is a set of run-unit variables, started closed where its area is allocated. Lowering does all of it in IR.
 - FUNCTION RANDOM keeps its generator state in the same region: lowering loads it, steps it with a pure builtin, and stores it back. The sequence belongs to the run unit, and starts at seed 0 when the first reference has no argument (Enterprise COBOL 6.5 LR ch. 83). `VMState` holds no COBOL state for either.
 
 ### 12.4 Pointers
