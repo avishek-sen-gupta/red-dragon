@@ -14,6 +14,9 @@ def test_x_cards_are_substituted_within_the_program_text_area() -> None:
             "181500     XXXXX081".ljust(72) + "NC1034.2",
             "181600     TO NON-COBOL-CHARACTERS.".ljust(72) + "NC1034.2",
             "002800     XXXXX082.".ljust(72) + "NC1034.2",
+            "044800     XXXXX065".ljust(72) + "ST1154.2",
+            '174400     MOVE "GGGGHXXXXX052ALTKEY1" TO K.'.ljust(72) + "IX2094.2",
+            '174500     MOVE "XXXXX081ALTKEY2" TO K.'.ljust(72) + "IX2094.2",
         ]
     )
     assert substitute_x_cards(source).splitlines() == [
@@ -21,6 +24,9 @@ def test_x_cards_are_substituted_within_the_program_text_area() -> None:
         '181500     "12345678"'.ljust(72) + "NC1034.2",
         "181600     TO NON-COBOL-CHARACTERS.".ljust(72) + "NC1034.2",
         "002800     XXXXX082.".ljust(72) + "NC1034.2",
+        "044800     0200".ljust(72) + "ST1154.2",
+        '174400     MOVE "GGGGHXXXXX052ALTKEY1" TO K.'.ljust(72) + "IX2094.2",
+        '174500     MOVE "XXXXX081ALTKEY2" TO K.'.ljust(72) + "IX2094.2",
     ]
 
 
