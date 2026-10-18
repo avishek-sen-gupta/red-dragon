@@ -10,6 +10,7 @@ from interpreter.cobol.class_test_ir import (
     emit_packed_is_numeric,
     emit_zoned_is_numeric,
 )
+from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.ir_emitter import IrEmitter
 from interpreter.register import Register
@@ -21,16 +22,22 @@ from tests.unit.cobol.emitted_ir import ParamValue, run_emitted
 def _zoned(
     data: ParamValue, length: int, signed: bool, sign_index: int, separate: bool
 ) -> ParamValue:
-    td = CobolTypeDescriptor(
-        category=CobolDataCategory.ZONED_DECIMAL,
-        total_digits=length - separate,
-        signed=signed,
-        sign_separate=separate,
+    fl = FieldLayout(
+        name="ITEM",
+        type_descriptor=CobolTypeDescriptor(
+            category=CobolDataCategory.ZONED_DECIMAL,
+            total_digits=length - separate,
+            signed=signed,
+            sign_separate=separate,
+            sign_leading=sign_index == 0,
+        ),
+        offset=0,
+        byte_length=length,
     )
 
     def emit(e: IrEmitter, registers: tuple[Register, ...]) -> Register:
         (stored,) = registers
-        return emit_zoned_is_numeric(e, stored, td, length, sign_index)
+        return emit_zoned_is_numeric(e, stored, fl)
 
     return run_emitted(emit, (data,))
 

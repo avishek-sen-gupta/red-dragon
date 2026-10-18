@@ -1189,34 +1189,22 @@ class EmitContext:
         return self.emit_to_string(decoded, span=span)
 
     def emit_stored_characters(
-        self,
-        region_reg: Register,
-        fl: FieldLayout,
-        offset_reg: Register = NO_REGISTER,
-        *,
-        extent: FieldExtent,
-        span: SourceSpan | None,
+        self, region_reg: Register, ref: ResolvedFieldRef, *, span: SourceSpan | None
     ) -> Register:
-        if fl.type_descriptor.category == CobolDataCategory.ZONED_DECIMAL:
+        if ref.fl.type_descriptor.category == CobolDataCategory.ZONED_DECIMAL:
             return self.emit_decode_zoned_display(
-                region_reg, fl, offset_reg, extent=extent, span=span
+                region_reg, ref.fl, ref.offset_reg, extent=ref.extent, span=span
             )
         return self.emit_decode_field_characters(
-            region_reg, fl, offset_reg, extent=extent, span=span
+            region_reg, ref.fl, ref.offset_reg, extent=ref.extent, span=span
         )
 
     def emit_decoded_is_numeric(
-        self,
-        region_reg: Register,
-        fl: FieldLayout,
-        offset_reg: Register,
-        *,
-        extent: FieldExtent,
-        span: SourceSpan | None,
+        self, region_reg: Register, ref: ResolvedFieldRef, *, span: SourceSpan | None
     ) -> Register:
         text = self.emit_to_string(
             self.emit_decode_field(
-                region_reg, fl, offset_reg, extent=extent, span=span
+                region_reg, ref.fl, ref.offset_reg, extent=ref.extent, span=span
             ),
             span=span,
         )
@@ -1232,21 +1220,15 @@ class EmitContext:
         return result
 
     def emit_load_field_bytes(
-        self,
-        region_reg: Register,
-        fl: FieldLayout,
-        offset_reg: Register,
-        *,
-        extent: FieldExtent,
-        span: SourceSpan | None,
+        self, region_reg: Register, ref: ResolvedFieldRef, *, span: SourceSpan | None
     ) -> Register:
         data_reg = self.fresh_reg()
         self._emit_load_region(
             result_reg=data_reg,
             region_reg=region_reg,
-            offset_reg=self._materialise_offset(fl, offset_reg, span=span),
-            length=fl.byte_length,
-            extent=extent,
+            offset_reg=ref.offset_reg,
+            length=ref.fl.byte_length,
+            extent=ref.extent,
             span=span,
         )
         return data_reg
@@ -1254,19 +1236,17 @@ class EmitContext:
     def emit_write_field_bytes(
         self,
         region_reg: Register,
-        fl: FieldLayout,
+        ref: ResolvedFieldRef,
         value_reg: Register,
-        offset_reg: Register,
         *,
-        extent: FieldExtent,
         span: SourceSpan | None,
     ) -> None:
         self._emit_write_region(
             region_reg=region_reg,
-            offset_reg=self._materialise_offset(fl, offset_reg, span=span),
+            offset_reg=ref.offset_reg,
             value_reg=value_reg,
-            length=fl.byte_length,
-            extent=extent,
+            length=ref.fl.byte_length,
+            extent=ref.extent,
             span=span,
         )
 
@@ -1594,15 +1574,18 @@ class EmitContext:
         span: SourceSpan | None = None,
     ) -> None:
         """Encode a string value and write it to the field's region slot."""
+        offset_reg = self._materialise_offset(fl, offset_reg, span=span)
         stored_value_reg = (
             self._emit_keep_inactive_tail(
-                region_reg, fl, value_str_reg, offset_reg, extent=extent, span=span
+                region_reg,
+                ResolvedFieldRef(fl=fl, offset_reg=offset_reg, extent=extent),
+                value_str_reg,
+                span=span,
             )
             if fl.current_length.is_present() and not fl.receives_at_maximum
             else value_str_reg
         )
         encoded_reg = self.emit_encode_from_string(fl, stored_value_reg, span=span)
-        offset_reg = self._materialise_offset(fl, offset_reg, span=span)
         self._emit_write_region(
             region_reg=region_reg,
             offset_reg=offset_reg,
@@ -1615,20 +1598,19 @@ class EmitContext:
     def _emit_keep_inactive_tail(
         self,
         region_reg: Register,
-        fl: FieldLayout,
+        ref: ResolvedFieldRef,
         value_str_reg: Register,
-        offset_reg: Register,
         *,
-        extent: FieldExtent,
         span: SourceSpan | None,
     ) -> Register:
         """The item's new image: the value over its current length, then the
         bytes already stored past it, which the move does not reach."""
+        fl = ref.fl
         stored = self.emit_decode_field(
             region_reg,
             dataclasses.replace(fl, current_length=NO_REGISTER),
-            offset_reg,
-            extent=extent,
+            ref.offset_reg,
+            extent=ref.extent,
             span=span,
         )
         padded = self.emit_pad_to(value_str_reg, stored, span=span)

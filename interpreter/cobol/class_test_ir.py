@@ -7,7 +7,9 @@ from functools import reduce
 
 from cobol_asg.cobol_types import CobolTypeDescriptor
 from interpreter.cobol.cobol_constants import BuiltinName, NibblePosition
+from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.ir_emitter import IrEmitter
+from interpreter.cobol.zoned_sign_ir import sign_position
 from interpreter.ir import CodeLabel
 from interpreter.register import Register
 from interpreter.var_name import VarName
@@ -19,10 +21,12 @@ _SIGNED_ZONES = (0xC, 0xD, 0xF)
 _SEPARATE_SIGNS = (0x4E, 0x60)
 
 
-def emit_zoned_is_numeric(
-    e: IrEmitter, stored: Register, td: CobolTypeDescriptor, length: int, sign_at: int
-) -> Register:
-    bytes_ = [e.call(BuiltinName.LIST_GET, stored, e.int_(i)) for i in range(length)]
+def emit_zoned_is_numeric(e: IrEmitter, stored: Register, fl: FieldLayout) -> Register:
+    td = fl.type_descriptor
+    sign_at = sign_position(fl).index
+    bytes_ = [
+        e.call(BuiltinName.LIST_GET, stored, e.int_(i)) for i in range(fl.byte_length)
+    ]
     sign_byte = bytes_[sign_at]
     sign_valid = (
         _any_equal(e, sign_byte, _SEPARATE_SIGNS)

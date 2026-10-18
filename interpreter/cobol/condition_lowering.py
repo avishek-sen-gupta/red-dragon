@@ -44,7 +44,6 @@ from interpreter.cobol.ir_emitter import IrEmitter
 from interpreter.cobol.pointer_lowering import PointerLowering
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.cobol.switch_condition import SwitchCondition
-from interpreter.cobol.zoned_sign_ir import sign_index
 from interpreter.func_name import FuncName
 from interpreter.instructions import Binop, CallFunction, Const
 from interpreter.operator_kind import resolve_binop
@@ -631,9 +630,7 @@ def _lower_numeric_field_characters(
         subscripts=tuple(expr_from_dict(s) for s in expr.get("subscripts", [])),
         span=span,
     )
-    return emit_field_digit_image(
-        IrEmitter(ctx=ctx, span=span), rr, ref.fl, ref.offset_reg, ref.extent
-    )
+    return emit_field_digit_image(IrEmitter(ctx=ctx, span=span), rr, ref)
 
 
 def _lower_nonnumeric_operand(
@@ -802,16 +799,12 @@ def _lower_numeric_item_class(
     )
     td = ref.fl.type_descriptor
     if td.category not in _STORED_CLASS_TESTS:
-        return ctx.emit_decoded_is_numeric(
-            rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
-        )
+        return ctx.emit_decoded_is_numeric(rr, ref, span=span)
     e = IrEmitter(ctx=ctx, span=span)
-    stored = ctx.emit_load_field_bytes(
-        rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
-    )
+    stored = ctx.emit_load_field_bytes(rr, ref, span=span)
     if td.category == CobolDataCategory.COMP3:
         return emit_packed_is_numeric(e, stored, td, ref.fl.byte_length)
-    return emit_zoned_is_numeric(e, stored, td, ref.fl.byte_length, sign_index(ref.fl))
+    return emit_zoned_is_numeric(e, stored, ref.fl)
 
 
 _STORED_CLASS_TESTS = frozenset(

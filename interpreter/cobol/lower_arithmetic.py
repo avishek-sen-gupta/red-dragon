@@ -894,11 +894,7 @@ def lower_move(
         and source_fl.type_descriptor.category in _FIXED_POINT_CATEGORIES
     ):
         digit_image_reg = emit_field_digit_image(
-            IrEmitter(ctx=ctx, span=span),
-            source_rr,
-            source_fl,
-            source_ref.offset_reg,
-            source_ref.extent,
+            IrEmitter(ctx=ctx, span=span), source_rr, source_ref
         )
 
     de_edited_reg: Register = NO_REGISTER
