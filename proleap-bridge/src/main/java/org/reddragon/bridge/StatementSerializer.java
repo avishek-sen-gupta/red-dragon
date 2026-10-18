@@ -1929,13 +1929,15 @@ public final class StatementSerializer {
     private static JsonObject serializeCancel(CancelStatement stmt) {
         JsonObject obj = newStatement("CANCEL");
         try {
+            // Each operand as CALL's callee: cancelCall is `identifier | literal`
+            // (Cobol.g4), a literal names the program and an identifier's contents
+            // do, so the identifier arm keeps its structured reference.
+            // (red-dragon-pvcb)
             if (stmt.getCancelCalls() != null) {
                 JsonArray programs = new JsonArray();
                 for (io.proleap.cobol.asg.metamodel.procedure.cancel.CancelCall cc : stmt.getCancelCalls()) {
                     if (cc.getValueStmt() != null) {
-                        String name = extractValueStmtText(cc.getValueStmt());
-                        name = name.replaceAll("^['\"]|['\"]$", "");
-                        programs.add(name);
+                        programs.add(programTarget(cc.getValueStmt()));
                     }
                 }
                 obj.add("programs", programs);
@@ -1944,6 +1946,19 @@ public final class StatementSerializer {
             LOG.fine("Could not extract CANCEL operands: " + e.getMessage());
         }
         return obj;
+    }
+
+    private static JsonObject programTarget(ValueStmt valueStmt) {
+        JsonObject target = new JsonObject();
+        Call programCall =
+                (valueStmt instanceof CallValueStmt) ? ((CallValueStmt) valueStmt).getCall() : null;
+        if (programCall != null) {
+            target.add("program_ref", serializeRef(programCall));
+        } else {
+            target.addProperty(
+                    "program", extractValueStmtText(valueStmt).replaceAll("^['\"]|['\"]$", ""));
+        }
+        return target;
     }
 
     private static JsonObject serializeAccept(AcceptStatement stmt) {

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 
+from cobol_asg.call_target import CallTarget
 from cobol_asg.cobol_statements import (
     AlterStatement,
     CallStatement,
@@ -38,8 +39,8 @@ from interpreter.cobol.program_object import (
     ENTRY_PREFIX,
     INITIAL_STATE_FIELD,
     entry_var,
-    program_var,
 )
+from interpreter.cobol.run_unit import PROGRAM_DIRECTORY
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.field_name import FieldName
 from interpreter.func_name import FuncName
@@ -51,6 +52,7 @@ from interpreter.instructions import (
     CallFunction,
     CallWithMemory,
     Label_,
+    LoadFieldIndirect,
     LoadVar,
     NewArray,
     NewObject,
@@ -69,6 +71,7 @@ LITERAL_ARGUMENT = "%LITERAL"
 _ZEROS = frozenset({"ZERO", "ZEROS", "ZEROES"})
 _FULLWORD = parse_pic("S9(9)", usage="COMP-5")
 _COMP2 = parse_pic("", usage="COMP-2")
+_DIRECTORY_HOLDS = "dict_contains_key"
 
 
 def _emit_callee_name(scope: LoweringScope, operand: RefModOperand) -> Register:
@@ -139,13 +142,18 @@ def _emit_callee_name(scope: LoweringScope, operand: RefModOperand) -> Register:
     return sliced_reg
 
 
-def _emit_entry_var_name(scope: LoweringScope, operand: RefModOperand) -> Register:
-    """The entry variable a ``CALL identifier`` names, computed in IR: the field's
-    text trimmed of spaces, upper-cased (COBOL program names ignore case) and
-    prefixed, so the VM looks it up as it is."""
+def _emit_program_name(scope: LoweringScope, operand: RefModOperand) -> Register:
+    """The program an identifier names, computed in IR: the field's text trimmed
+    of spaces and upper-cased (COBOL program names ignore case)."""
     name_reg = _emit_callee_name(scope, operand)
     trimmed = _emit_builtin(scope, BuiltinName.TRIM, (name_reg,))
-    upper = _emit_builtin(scope, BuiltinName.UPPER_CASE, (trimmed,))
+    return _emit_builtin(scope, BuiltinName.UPPER_CASE, (trimmed,))
+
+
+def _emit_entry_var_name(scope: LoweringScope, operand: RefModOperand) -> Register:
+    """The entry variable a ``CALL identifier`` names: the program name, prefixed,
+    so the VM looks it up as it is."""
+    upper = _emit_program_name(scope, operand)
     prefix = scope.ctx.const_to_reg(ENTRY_PREFIX, span=scope.span)
     return _emit_builtin(scope, BuiltinName.STRING_CONCAT_PAIR, (prefix, upper))
 
@@ -509,29 +517,68 @@ def lower_cancel(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """CANCEL program ... — each named program in the run unit is put back in its
-    initial state, so its next CALL re-initialises its WORKING-STORAGE. A name
-    not in the run unit is passed over."""
+    initial state, so its next CALL re-initialises its WORKING-STORAGE. A literal
+    names the program; an identifier's contents do, read at run time as CALL
+    identifier reads them. A name not in the run unit's program directory is
+    passed over."""
     scope = LoweringScope(ctx, materialised, stmt.span)
-    _ = [_cancel_program(scope, program) for program in stmt.programs]
+    _ = [_cancel_program(scope, target) for target in stmt.programs]
 
 
-def _cancel_program(scope: LoweringScope, program: str) -> None:
+def _cancel_program(scope: LoweringScope, target: CallTarget) -> None:
     ctx, span = scope.ctx, scope.span
+    name = _cancelled_name(scope, target)
+    directory, present = _directory_lookup(scope, name)
     reset_label, end_label = (
-        ctx.fresh_label(name) for name in ("cancel_reset", "cancel_end")
+        ctx.fresh_label(label) for label in ("cancel_reset", "cancel_end")
     )
-    _emit_presence_branch(scope, entry_var(program), (reset_label, end_label))
+    ctx.emit_inst(
+        BranchIf(cond_reg=present, branch_targets=(reset_label, end_label)),
+        span=span,
+    )
     ctx.emit_inst(Label_(label=reset_label), span=span)
-    singleton = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=singleton, name=program_var(program)), span=span)
+    _mark_initial_state(scope, directory, name)
+    ctx.emit_inst(Branch(label=end_label), span=span)
+    ctx.emit_inst(Label_(label=end_label), span=span)
+    logger.info("CANCEL %s", target.describe())
+
+
+def _directory_lookup(
+    scope: LoweringScope, name: Register
+) -> tuple[Register, Register]:
+    """The run unit's program directory, and whether it holds ``name``."""
+    directory = scope.ctx.fresh_reg()
+    scope.ctx.emit_inst(
+        LoadVar(result_reg=directory, name=PROGRAM_DIRECTORY), span=scope.span
+    )
+    return directory, _emit_builtin(scope, _DIRECTORY_HOLDS, (directory, name))
+
+
+def _cancelled_name(scope: LoweringScope, target: CallTarget) -> Register:
+    """The program a CANCEL operand names: a literal as written, an identifier's
+    contents as CALL identifier reads them; upper-cased either way, as the
+    program directory is keyed."""
+    match target.identifier:
+        case RefModOperand() as operand:
+            return _emit_program_name(scope, operand)
+        case _:
+            return scope.ctx.const_to_reg(target.literal.upper(), span=scope.span)
+
+
+def _mark_initial_state(
+    scope: LoweringScope, directory: Register, name: Register
+) -> None:
+    ctx, span = scope.ctx, scope.span
+    program = ctx.fresh_reg()
+    ctx.emit_inst(
+        LoadFieldIndirect(result_reg=program, obj_reg=directory, name_reg=name),
+        span=span,
+    )
     ctx.emit_inst(
         StoreField(
-            obj_reg=singleton,
+            obj_reg=program,
             field_name=INITIAL_STATE_FIELD,
             value_reg=ctx.const_to_reg(True, span=span),
         ),
         span=span,
     )
-    ctx.emit_inst(Branch(label=end_label), span=span)
-    ctx.emit_inst(Label_(label=end_label), span=span)
-    logger.info("CANCEL %s", program)

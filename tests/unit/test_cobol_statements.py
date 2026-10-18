@@ -764,10 +764,24 @@ class TestParseStatementDispatch:
         assert stmt.using == ["WS-A"]
 
     @covers(CobolFeature.CANCEL)
-    def test_cancel(self):
-        stmt = parse_statement({"type": "CANCEL", "programs": ["SUBPROG"]})
-        assert isinstance(stmt, CancelStatement)
-        assert stmt.programs == ["SUBPROG"]
+    def test_cancel_reads_literal_and_identifier_operands_and_round_trips(self):
+        data = {
+            "type": "CANCEL",
+            "programs": [
+                {"program": "SUBPROG"},
+                {"program_ref": {"name": "WS-PROG", "qualifiers": ["WS-GRP"]}},
+            ],
+        }
+        stmt = parse_statement(data)
+        assert stmt == CancelStatement(
+            programs=(
+                CallTarget.of_literal("SUBPROG"),
+                CallTarget.of_identifier(
+                    RefModOperand(name="WS-PROG", qualifiers=("WS-GRP",))
+                ),
+            )
+        )
+        assert parse_statement(stmt.to_dict()) == stmt
 
     @covers(CobolFeature.ACCEPT)
     def test_accept_basic(self):
@@ -1705,7 +1719,7 @@ class TestRoundTrip:
 
     @covers(CobolFeature.CANCEL)
     def test_cancel_round_trip(self):
-        data = {"type": "CANCEL", "programs": ["SUBPROG"]}
+        data = {"type": "CANCEL", "programs": [{"program": "SUBPROG"}]}
         assert self._round_trip(data) == data
 
     @covers(CobolFeature.ACCEPT)

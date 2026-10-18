@@ -5708,6 +5708,26 @@ _CANCELLING_MAIN = [
 ]
 
 
+_CANCELLING_BY_NAME_MAIN = [
+    "IDENTIFICATION DIVISION.",
+    "PROGRAM-ID. MAINID.",
+    "DATA DIVISION.",
+    "WORKING-STORAGE SECTION.",
+    "01 WS-NAME PIC X(10) VALUE 'wsinc'.",
+    "01 WS-NONE PIC X(10) VALUE 'NOSUCH'.",
+    "01 WS-RESULTS.",
+    "   05 WS-OUT PIC 9(4) VALUE 0 OCCURS 4 TIMES.",
+    "PROCEDURE DIVISION.",
+    "    CALL 'WSINC' USING BY REFERENCE WS-OUT(1).",
+    "    CALL 'WSINC' USING BY REFERENCE WS-OUT(2).",
+    "    CANCEL WS-NONE.",
+    "    CALL 'WSINC' USING BY REFERENCE WS-OUT(3).",
+    "    CANCEL WS-NAME.",
+    "    CALL 'WSINC' USING BY REFERENCE WS-OUT(4).",
+    "    STOP RUN.",
+]
+
+
 class TestSubprogramWsPersistence:
     @covers(CobolFeature.CALL_USING, CobolFeature.SECTION_WORKING_STORAGE)
     def test_ws_counter_survives_two_calls(self, tmp_path):
@@ -5901,6 +5921,41 @@ class TestSubprogramWsPersistence:
         assert [
             _decode_zoned_unsigned(region, offset=4 * n, length=4) for n in range(6)
         ] == [6, 7, 6, 6, 7, 6]
+
+    @covers(CobolFeature.CANCEL, CobolFeature.CALL_USING)
+    def test_cancel_identifier_cancels_the_program_its_contents_name(self, tmp_path):
+        """CANCEL WS-NAME cancels the program WS-NAME holds at run time, trimmed
+        and in either case, as CALL identifier names it; a name the run unit does
+        not hold is passed over."""
+        sources = {
+            "WSINC": [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. WSINC.",
+                *_COUNTER_SUBPROGRAM,
+            ],
+            "MAINID": _CANCELLING_BY_NAME_MAIN,
+        }
+        _ = [
+            (tmp_path / f"{name}.cbl").write_text(_to_fixed(lines))
+            for name, lines in sources.items()
+        ]
+
+        vm = run_linked(
+            compile_programs_in(tmp_path, "MAINID"),
+            entry_point=EntryPoint.function(
+                lambda ref: str(ref.label).endswith("func_mainid_0")
+                and "init_params" not in str(ref.label)
+            ),
+            max_steps=20000,
+            initial_vm=initial_vm_state(),
+            builtins=core_builtins(),
+        )
+
+        region = ws_region(vm, "MAINID")
+        assert [
+            _decode_zoned_unsigned(region, offset=20 + 4 * n, length=4)
+            for n in range(4)
+        ] == [6, 7, 8, 6]
 
 
 class TestCallUsingByReference:
