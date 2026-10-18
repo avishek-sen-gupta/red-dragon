@@ -541,10 +541,7 @@ def _is_alphanumeric_operand(expr: dict) -> bool:
     kind = expr.get("kind")
     if kind == "figurative":
         return str(expr.get("value", "")).upper() in _ALPHANUMERIC_FIGURATIVES
-    if kind == "lit":
-        value = str(expr.get("value", ""))
-        return value[:1] in ("'", '"')
-    return False
+    return kind == "lit" and not expr.get("numeric", False)
 
 
 def _is_numeric_field(

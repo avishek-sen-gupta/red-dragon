@@ -30,9 +30,10 @@ JsonExpr: TypeAlias = Mapping[str, "str | JsonExpr | Sequence[JsonExpr]"]
 
 @dataclass(frozen=True)
 class LiteralNode:
-    """Numeric literal (integer or decimal)."""
+    """A literal as written; ``numeric`` when the grammar parsed a numeric literal."""
 
     value: str
+    numeric: bool = False
 
 
 @dataclass(frozen=True)
@@ -166,7 +167,7 @@ def _children(d: JsonExpr, key: str) -> tuple[ExprNode, ...]:
 
 
 def _literal(d: JsonExpr) -> ExprNode:
-    return LiteralNode(value=_text(d, "value"))
+    return LiteralNode(value=_text(d, "value"), numeric=d.get("numeric") is True)
 
 
 def _figurative(d: JsonExpr) -> ExprNode:
@@ -225,7 +226,9 @@ def _binop(d: JsonExpr) -> ExprNode:
 
 def _negation(d: JsonExpr) -> ExprNode:
     """Unary minus, folded into * -1: the tree carries no unary node."""
-    return BinOpNode(op="*", left=LiteralNode(value="-1"), right=_child(d, "expr"))
+    return BinOpNode(
+        op="*", left=LiteralNode(value="-1", numeric=True), right=_child(d, "expr")
+    )
 
 
 def _function(d: JsonExpr) -> ExprNode:
@@ -288,7 +291,9 @@ def _ref_mod_length_dict(length: ExprNode | None) -> dict:
 
 
 def _literal_dict(node: LiteralNode) -> dict:
-    return {"kind": "lit", "value": node.value}
+    return {"kind": "lit", "value": node.value} | (
+        {"numeric": True} if node.numeric else {}
+    )
 
 
 def _figurative_dict(node: FigurativeNode) -> dict:
