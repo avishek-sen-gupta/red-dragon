@@ -42,7 +42,7 @@ public class AsgSerializerTest {
         assertEquals("WS-MSG", wsMsg.get("name").getAsString());
         assertEquals(77, wsMsg.get("level").getAsInt());
         assertNotNull("Should have a PIC clause", wsMsg.get("pic"));
-        assertEquals("DISPLAY", wsMsg.get("usage").getAsString());
+        assertFalse("No USAGE clause is written, so none is emitted", wsMsg.has("usage"));
     }
 
     @Test
@@ -153,7 +153,9 @@ public class AsgSerializerTest {
         assertTrue("ADD should have operands", addStmt.has("operands"));
         JsonArray operands = addStmt.getAsJsonArray("operands");
         assertEquals("ADD should have 1 sending operand", 1, operands.size());
-        assertEquals("50", operands.get(0).getAsString());
+        JsonObject sending = operands.get(0).getAsJsonObject();
+        assertEquals("50", sending.get("name").getAsString());
+        assertTrue("A numeric literal is marked numeric", sending.get("numeric").getAsBoolean());
         JsonArray targets = addStmt.getAsJsonArray("targets");
         assertEquals("ADD should have 1 receiver", 1, targets.size());
         assertEquals("WS-TOTAL", targets.get(0).getAsJsonObject().get("name").getAsString());

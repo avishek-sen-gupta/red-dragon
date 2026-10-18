@@ -167,7 +167,7 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 | `SET p UP/DOWN BY n` | A POINTER target: decode → `BINOP +/-` n bytes → write the address back. |
 | `ADDRESS OF x` in a condition | x's region register `BINOP +` its offset; NULL is 0, so `ADDRESS OF lk = NULL` tests for an OMITTED or unsupplied parameter. |
 | `USAGE POINTER` | A signed binary of the addressing mode's width; the `LP` option given to `compile_cobol` sets it, and the ASG reader lays the item out with that width. |
-| `USAGE INDEX` | An unsigned fullword binary holding an occurrence number, like an `INDEXED BY` index; `SET` moves one into and out of it. A USAGE written on a group applies to every elementary item in it (the bridge resolves the nearest enclosing USAGE). |
+| `USAGE INDEX` | An unsigned fullword binary holding an occurrence number, like an `INDEXED BY` index; `SET` moves one into and out of it. A USAGE written on a group applies to every elementary item in it (the ASG reader, `CobolField.from_dict`, takes the nearest enclosing USAGE; the bridge emits each entry's own clause). |
 
 ### String Operations (3 types)
 

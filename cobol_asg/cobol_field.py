@@ -10,11 +10,12 @@ from cobol_asg.cobol_types import CobolTypeDescriptor
 from cobol_asg.condition_name import ConditionName, ConditionValue
 from cobol_asg.decimal_point import DecimalPoint
 from cobol_asg.edit_picture import DEFAULT_CURRENCY, UnsupportedEditPictureError
+from cobol_asg.enclosing_clauses import TOP_LEVEL, EnclosingClauses
 from cobol_asg.pic_parser import parse_pic
 from cobol_asg.pointer_types import FULLWORD_POINTER
 from cobol_asg.program_conventions import DEFAULT_CONVENTIONS, ProgramConventions
 from cobol_asg.ref_mod import RefModOperand
-from cobol_asg.sign_clause import NO_SIGN_CLAUSE, SignClause
+from cobol_asg.sign_clause import SignClause
 from cobol_asg.source_span import SourceSpan
 
 NOT_RENAMED = RefModOperand(name="")
@@ -107,24 +108,30 @@ class CobolField:
     @classmethod
     def from_dict(
         cls,
-        data: dict,
+        data: Mapping,
         conventions: ProgramConventions = DEFAULT_CONVENTIONS,
-        enclosing_sign: SignClause = NO_SIGN_CLAUSE,
+        enclosing: EnclosingClauses = TOP_LEVEL,
     ) -> CobolField:
-        """The entry, a signed numeric DISPLAY item taking the nearest SIGN clause.
+        """The entry, taking the USAGE and SIGN clauses of the groups it is in.
 
-        "The SIGN clause specified at group level applies to each signed numeric
-        data description entry subordinate to that group; one specified at a
+        "The USAGE clause written at the group level applies to each elementary
+        item in the group" (ANSI X3.23-1985 / ISO 1989 USAGE clause). "The SIGN
+        clause specified at group level applies to each signed numeric data
+        description entry subordinate to that group; one specified at a
         subordinate level takes precedence" (ANSI X3.23-1985 SIGN clause).
         """
         own_sign = SignClause.from_dict(data)
-        written = cls._written(data, conventions, own_sign.nearest(enclosing_sign))
+        inner = EnclosingClauses(
+            sign=own_sign.nearest(enclosing.sign),
+            usage=data.get("usage", enclosing.usage),
+        )
+        written = cls._written(data, conventions, inner)
         if own_sign.written or not written.is_signed_display_numeric:
             return written
         return replace(
             written,
-            sign_leading=enclosing_sign.leading,
-            sign_separate=enclosing_sign.separate,
+            sign_leading=enclosing.sign.leading,
+            sign_separate=enclosing.sign.separate,
         )
 
     @property
@@ -133,7 +140,7 @@ class CobolField:
 
     @classmethod
     def _written(
-        cls, data: Mapping, conventions: ProgramConventions, children_sign: SignClause
+        cls, data: Mapping, conventions: ProgramConventions, inner: EnclosingClauses
     ) -> CobolField:
         own_sign = SignClause.from_dict(data)
         decimal_point = DecimalPoint(conventions.decimal_point_is_comma)
@@ -142,7 +149,7 @@ class CobolField:
             name=data["name"],
             level=data["level"],
             pic=data.get("pic", ""),
-            usage=data.get("usage", "DISPLAY"),
+            usage=inner.usage,
             offset=data.get("offset", 0),
             value=(
                 decimal_point.numeric_literal(value)
@@ -154,7 +161,7 @@ class CobolField:
             value_is_numeric=data.get("value_is_numeric", False),
             redefines=data.get("redefines", ""),
             children=[
-                CobolField.from_dict(c, conventions, children_sign)
+                CobolField.from_dict(c, conventions, inner)
                 for c in data.get("children", [])
             ],
             occurs=data.get("occurs", 0),
