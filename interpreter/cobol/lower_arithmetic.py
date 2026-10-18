@@ -2095,7 +2095,8 @@ def _set_condition_name(
     # expand to its fill character repeated to the parent's byte length — NOT be
     # written as the literal text 'LOW-VALUES' (CardDemo COACTUPC
     # ACUP-DETAILS-NOT-FETCHED VALUES LOW-VALUES, SPACES).
-    fig_fill = ctx.figuratives.characters.get(cv.from_val.upper())
+    figuratives = ctx.figuratives.characters if cv.figurative else {}
+    fig_fill = figuratives.get(cv.from_val.upper())
     if parent_ref.fl.type_descriptor.holds_characters:
         if fig_fill is not None:
             filled = fig_fill * max(parent_ref.fl.byte_length, 1)
