@@ -29,6 +29,7 @@ from interpreter.vm.vm_types import (  # noqa: F401 — re-exported for backward
     StackFrame,
     StackFramePush,
     StateUpdate,
+    SymbolicRegionWrite,
     SymbolicValue,
     VMState,
     _serialize_value,
@@ -226,6 +227,8 @@ def apply_update(
     # Region writes
     for rw in update.region_writes:
         vm.write_at(rw.address, bytes(rw.data))
+    for sw in update.symbolic_region_writes:
+        vm.write_symbolic(sw)
 
     # Continuation writes
     for name, label in update.continuation_writes.items():

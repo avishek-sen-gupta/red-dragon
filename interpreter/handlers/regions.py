@@ -21,6 +21,8 @@ from interpreter.vm.vm import (
     ExecutionResult,
     RegionWrite,
     StateUpdate,
+    SymbolicRegionWrite,
+    SymbolicValue,
     VMState,
     _is_symbolic,
     _resolve_reg,
@@ -58,36 +60,46 @@ def _handle_write_region(
     """WRITE_REGION: operands = [region_reg, offset_reg, length_literal, value_reg].
 
     Write bytes from value_reg (a list[int]) into the region at the given offset.
+    A symbolic value covers ``length`` bytes; a symbolic list element covers one.
     """
     t = inst
     assert isinstance(t, WriteRegion)
     region_addr = _resolve_reg(vm, t.region_reg).value
     offset = _resolve_reg(vm, t.offset_reg).value
-    length = t.length
     value = _resolve_reg(vm, t.value_reg).value
 
-    has_symbolic_elements = isinstance(value, list) and any(
-        _is_symbolic(v) for v in value
-    )
-    if (
-        _is_symbolic(region_addr)
-        or _is_symbolic(offset)
-        or _is_symbolic(value)
-        or has_symbolic_elements
-    ):
+    if _is_symbolic(region_addr) or _is_symbolic(offset):
         return ExecutionResult.success(
             StateUpdate(
-                reasoning="write_region(symbolic args) — no-op",
+                reasoning="write_region(symbolic address) — no-op",
+            )
+        )
+    address = int(region_addr) + int(offset)
+    if _is_symbolic(value):
+        return ExecutionResult.success(
+            StateUpdate(
+                symbolic_region_writes=[
+                    SymbolicRegionWrite(address=address, width=t.length, value=value)
+                ],
+                reasoning=f"write_region({address}, len={t.length}) = {value.name}",
             )
         )
 
-    data = list(value)[: int(length)] if isinstance(value, (list, bytes)) else []
+    data = list(value)[: int(t.length)] if isinstance(value, (list, bytes)) else []
     return ExecutionResult.success(
         StateUpdate(
             region_writes=[
-                RegionWrite(address=int(region_addr) + int(offset), data=data)
+                RegionWrite(
+                    address=address,
+                    data=[0 if _is_symbolic(byte) else byte for byte in data],
+                )
             ],
-            reasoning=f"write_region({region_addr}, offset={offset}, len={length})",
+            symbolic_region_writes=[
+                SymbolicRegionWrite(address=address + at, width=1, value=byte)
+                for at, byte in enumerate(data)
+                if isinstance(byte, SymbolicValue)
+            ],
+            reasoning=f"write_region({region_addr}, offset={offset}, len={t.length})",
         )
     )
 
@@ -114,10 +126,7 @@ def _handle_load_region(
             )
         )
 
-    start = int(region_addr) + int(offset)
-    n = int(length)
-    raw = list(vm.read_at(start, n))
-    data = raw + [0] * (n - len(raw))
+    data = vm.load(int(region_addr) + int(offset), int(length))
     return ExecutionResult.success(
         StateUpdate(
             register_writes={t.result_reg: typed(data, UNKNOWN)},

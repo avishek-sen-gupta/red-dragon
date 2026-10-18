@@ -149,6 +149,7 @@ VMState
 ├── _regions: dict[Address, bytearray]        region_get / region_set / region_items …
 ├── _segments: dict[Address, Segment]         segment_of; see §11
 ├── _next_address, _bases, _handles           bump allocator and sorted lookup
+├── _symbolic_bytes: dict[int, SymbolicRegionWrite]   symbolic overlay; see §11
 ├── null_access: NullAccess                   NULL-page strategy; see §11
 ├── call_stack: list[StackFrame]
 │   └── StackFrame
@@ -182,6 +183,7 @@ Reading a register nothing has written raises `UnwrittenRegisterRead` (`interpre
 | `heap_writes`, `new_objects` | Heap fields and allocations |
 | `new_regions: dict[str, int]` | Allocate regions, keyed by stringified base address |
 | `region_writes: list[RegionWrite(address, data)]` | Byte writes at flat addresses |
+| `symbolic_region_writes: list[SymbolicRegionWrite(address, width, value)]` | Symbolic writes at flat addresses (`vm.write_symbolic`) |
 | `continuation_writes`, `continuation_clear` | Set or clear a continuation |
 | `next_label` | Jump target |
 | `call_push: StackFramePush`, `call_pop` | Push or pop a frame |
@@ -236,7 +238,7 @@ Handlers live in `interpreter/handlers/` by family: `variables.py`, `arithmetic.
 
 `apply_update` in `interpreter/vm/vm.py` applies a `StateUpdate` in this order:
 
-1. `new_regions` (allocate), then `region_writes` (`vm.write_at`)
+1. `new_regions` (allocate), then `region_writes` (`vm.write_at`), then `symbolic_region_writes` (`vm.write_symbolic`)
 2. `continuation_writes`, then `continuation_clear`
 3. `new_objects`
 4. `register_writes`, coerced to the declared register type
@@ -414,6 +416,8 @@ address: 0 ........ 4095 | 4096 ......... 4096+a | 4096+a ......... | …
 ```
 
 **Handles are addresses.** `ALLOC_REGION` returns the next base as an `int` and emits `new_regions={str(base): size}`. `WRITE_REGION r, off, len, bytes` writes at `r + off`; `LOAD_REGION r, off, len` reads `len` bytes at `r + off` and zero-pads a short read. Pointer arithmetic is plain integer `BINOP`. A symbolic size or address gives a symbolic result (or a no-op write).
+
+**Symbolic bytes.** A symbolic value written with `WRITE_REGION` is kept in an overlay beside the byte store, indexed by flat address ([ADR-189](architectural-design-decisions.md)). A whole symbolic value covers the `len` bytes written; a symbolic element of a byte list covers its one byte. The bytes beneath are masked, not changed, and a concrete write clears the overlay over the bytes it writes. `LOAD_REGION` (`vm.load`) reads concrete bytes when none of the extent is symbolic, returns the stored symbol when one symbolic write covers exactly that extent, and otherwise returns a fresh symbol. `region_get` and `read_at` see only the byte store.
 
 **Access.** `read_at(address, length)` and `write_at(address, data)`:
 
