@@ -234,6 +234,10 @@ public final class DataFieldSerializer {
             obj.addProperty("blank_when_zero", true);
         }
 
+        if (group.getExternalClause() != null) {
+            obj.addProperty("external", true);
+        }
+
         List<DataDescriptionEntry> children = group.getDataDescriptionEntries();
         if (children != null && !children.isEmpty()) {
             JsonArray childArray = serializeChildren(children);

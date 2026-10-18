@@ -6,7 +6,7 @@ import io.proleap.cobol.asg.metamodel.data.file.FileDescriptionEntry;
 import io.proleap.cobol.asg.metamodel.data.file.RecordContainsClause;
 import io.proleap.cobol.asg.metamodel.IntegerLiteral;
 
-/** Serialises an FD's RECORDING MODE and RECORD clause: the facts its record format is derived from. */
+/** Serialises an FD's RECORDING MODE, RECORD and EXTERNAL clauses: the facts its record format and its file connector's scope are derived from. */
 final class FileDescriptionSerializer {
 
     private FileDescriptionSerializer() {}
@@ -15,6 +15,7 @@ final class FileDescriptionSerializer {
         JsonObject result = new JsonObject();
         result.addProperty("fd_name", fd.getName());
         result.addProperty("recording_mode", recordingMode(fd));
+        result.addProperty("external", fd.getExternalClause() != null);
         result.add("record_clause", recordClause(fd.getRecordContainsClause()));
         return result;
     }
