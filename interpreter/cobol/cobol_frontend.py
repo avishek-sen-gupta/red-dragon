@@ -28,6 +28,7 @@ from interpreter.cobol.file_declarations import lower_file_declarations
 from interpreter.cobol.file_definitions_data import file_definitions_data
 from interpreter.cobol.layout_data import layout_data
 from interpreter.cobol.lower_data_division import (
+    lower_file_area,
     lower_sectioned_data_division,
 )
 from interpreter.cobol.lower_external import lower_external_areas
@@ -208,6 +209,11 @@ class CobolFrontend(Frontend):
         self._symbol_table = SymbolTable.from_data_layout(sectioned.working_storage)
         condition_index = build_condition_index_over(
             (
+                *(
+                    layout
+                    for outer in reversed(sectioned.enclosing)
+                    for layout in (outer.global_file, outer.global_working_storage)
+                ),
                 sectioned.file,
                 sectioned.linkage,
                 sectioned.local_storage,
@@ -251,6 +257,7 @@ class CobolFrontend(Frontend):
 
         # Skip target — init block branches here to skip past procedure body
         self._ctx.emit_inst(Label_(label=after_label))
+        lower_file_area(self._ctx, self._program_id, sectioned.file)
 
         logger.debug(
             "COBOL frontend produced %d IR instructions",

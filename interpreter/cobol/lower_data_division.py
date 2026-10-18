@@ -7,11 +7,17 @@ import logging
 from cobol_memory.region_id import RegionId
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.cobol.enclosing_scope import EnclosingLayout, InheritedScope
 from interpreter.cobol.field_resolution import whole_field_extent
 from interpreter.cobol.linkage_binding import LinkageBinding
 from interpreter.cobol.linkage_record import LinkageRecord
 from interpreter.cobol.lower_external import bind_external
-from interpreter.cobol.program_object import ARGUMENTS_PARAM, program_var
+from interpreter.cobol.program_object import (
+    ARGUMENTS_PARAM,
+    WORKING_STORAGE_FIELD,
+    file_area_var,
+    program_var,
+)
 from interpreter.cobol.sectioned_layout import (
     MaterialisedSectionedLayout,
     SectionedLayout,
@@ -112,11 +118,8 @@ def lower_sectioned_data_division(
         else NO_REGISTER
     )
 
-    file_reg = (
-        lower_data_division(ctx, layout.file, RegionId.FILE)
-        if layout.file.total_bytes > 0
-        else NO_REGISTER
-    )
+    file_reg = _file_area(ctx, program_id, layout.file)
+    inherited = tuple(_inherited(ctx, outer) for outer in layout.enclosing)
 
     # INDEXED BY items belong to no record, so they get their own region rather
     # than being appended to one: LINKAGE in particular is the CALLER's argument
@@ -165,7 +168,41 @@ def lower_sectioned_data_division(
         external=layout.external,
         external_bindings=external,
         external_owners=layout.external_owners,
+        inherited=inherited,
     )
+
+
+def lower_file_area(ctx: EmitContext, program_id: str, layout: DataLayout) -> None:
+    """The FILE SECTION region, allocated once at load like WORKING-STORAGE: a
+    record area keeps its contents from one CALL of the program to the next, and
+    the programs it contains reach its GLOBAL files' records there."""
+    if layout.total_bytes == 0:
+        return
+    region = lower_data_division(ctx, layout, RegionId.FILE)
+    ctx.emit_inst(StoreVar(name=file_area_var(program_id), value_reg=region), span=None)
+
+
+def _file_area(ctx: EmitContext, program_id: str, layout: DataLayout) -> Register:
+    if layout.total_bytes == 0:
+        return NO_REGISTER
+    region = ctx.fresh_reg()
+    ctx.emit_inst(LoadVar(result_reg=region, name=file_area_var(program_id)), span=None)
+    return region
+
+
+def _inherited(ctx: EmitContext, outer: EnclosingLayout) -> InheritedScope:
+    """A containing program's regions, found through its program object and its
+    FILE SECTION variable."""
+    singleton = ctx.fresh_reg()
+    ctx.emit_inst(
+        LoadVar(result_reg=singleton, name=program_var(outer.program)), span=None
+    )
+    ws = ctx.fresh_reg()
+    ctx.emit_inst(
+        LoadField(result_reg=ws, obj_reg=singleton, field_name=WORKING_STORAGE_FIELD),
+        span=None,
+    )
+    return InheritedScope(outer, ws, _file_area(ctx, outer.program, outer.file))
 
 
 def bind_linkage(
