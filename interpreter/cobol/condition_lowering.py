@@ -38,6 +38,7 @@ from interpreter.cobol.class_test_ir import (
 )
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.condition_name_index import ConditionNameIndex
+from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.digit_image_ir import emit_field_digit_image
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.figurative_constants import repeat_to_width
@@ -54,12 +55,7 @@ logger = logging.getLogger(__name__)
 
 
 def _emit_88_value_reg(
-    ctx: EmitContext,
-    raw: str,
-    parent_is_alpha: bool,
-    parent_byte_length: int = 1,
-    *,
-    span: SourceSpan | None = None,
+    e: IrEmitter, value: str, figurative: bool, parent: FieldLayout
 ) -> Register:
     """Build the comparison-value register for one side of an 88 VALUE.
 
@@ -77,21 +73,24 @@ def _emit_88_value_reg(
     the read-side counterpart of SET <88-figurative> TO TRUE (CardDemo COACTUPC
     ACUP-DETAILS-NOT-FETCHED VALUES LOW-VALUES, SPACES).
     """
-    fill = ctx.figuratives.characters.get(raw.upper())
-    if fill is not None:
-        # Numeric parent + ZEROS -> integer 0; otherwise build the fill string
-        # sized to the parent field so equality holds against the decoded field.
-        if not parent_is_alpha and raw.upper() in ("ZERO", "ZEROS", "ZEROES"):
-            return ctx.const_to_reg(0, span=span)
-        return ctx.const_to_reg(fill * max(parent_byte_length, 1), span=span)
-    if parent_is_alpha:
-        # The parent decodes to its full byte width (no trailing-space trim), so
-        # a VALUE shorter than the parent must be right-space-padded to that width
-        # for the equality to hold — mirroring how SET <88> TO TRUE writes the
-        # padded value. (CardDemo COCRDSLC: 88 FOUND-CARDS-FOR-ACCOUNT VALUE
-        # '   Displaying...' on a PIC X(40) flag.)
-        return ctx.const_to_reg(raw.ljust(max(parent_byte_length, len(raw))), span=span)
-    return ctx.const_to_reg(ctx.parse_literal(raw), span=span)
+    if figurative and value.upper() in e.ctx.figuratives.characters:
+        return _figurative_88_value(e, value.upper(), parent)
+    if parent.type_descriptor.holds_characters:
+        padded = value.ljust(max(parent.byte_length, len(value)))
+        return e.ctx.const_to_reg(padded, span=e.span)
+    return e.ctx.const_to_reg(e.ctx.parse_literal(value), span=e.span)
+
+
+def _figurative_88_value(e: IrEmitter, name: str, parent: FieldLayout) -> Register:
+    """ZERO on a numeric parent is the number 0; any other figurative constant is
+    its character repeated to the parent's size."""
+    if not parent.type_descriptor.holds_characters and name in _ZERO_NAMES:
+        return e.ctx.const_to_reg(0, span=e.span)
+    fill = e.ctx.figuratives.characters[name] * max(parent.byte_length, 1)
+    return e.ctx.const_to_reg(fill, span=e.span)
+
+
+_ZERO_NAMES = frozenset({"ZERO", "ZEROS", "ZEROES"})
 
 
 def _emit_single_value_test(
@@ -118,7 +117,6 @@ def _emit_single_value_test(
         subscripts=subscripts,
         span=span,
     )
-    parent_is_alpha = parent_ref.fl.type_descriptor.holds_characters
     parent_reg = ctx.emit_decode_field(
         parent_rr,
         parent_ref.fl,
@@ -127,11 +125,9 @@ def _emit_single_value_test(
         span=span,
     )
 
-    parent_len = parent_ref.fl.byte_length
-
     if cv.is_range:
         from_reg = _emit_88_value_reg(
-            ctx, cv.from_val, parent_is_alpha, parent_len, span=span
+            IrEmitter(ctx=ctx, span=span), cv.from_val, cv.figurative, parent_ref.fl
         )
         ge_result = ctx.fresh_reg()
         ctx.emit_inst(
@@ -159,7 +155,7 @@ def _emit_single_value_test(
             span=span,
         )
         to_reg = _emit_88_value_reg(
-            ctx, cv.to_val, parent_is_alpha, parent_len, span=span
+            IrEmitter(ctx=ctx, span=span), cv.to_val, cv.figurative, parent_ref.fl
         )
         le_result = ctx.fresh_reg()
         ctx.emit_inst(
@@ -185,7 +181,7 @@ def _emit_single_value_test(
         return and_result
 
     value_reg = _emit_88_value_reg(
-        ctx, cv.from_val, parent_is_alpha, parent_len, span=span
+        IrEmitter(ctx=ctx, span=span), cv.from_val, cv.figurative, parent_ref.fl
     )
     eq_result = ctx.fresh_reg()
     ctx.emit_inst(

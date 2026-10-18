@@ -8107,7 +8107,9 @@ class TestFigurativeValueFill:
 
     @covers(CobolFeature.VALUE_CLAUSE)
     def test_quoted_literal_value_left_verbatim(self):
-        """01 WS-S PIC X(6) VALUE 'SPACE' keeps the quoted literal text."""
+        """01 WS-S PIC X(6) VALUE 'SPACE' keeps the quoted literal text, and so
+        does a level-88 VALUE 'SPACES': SET writes the six characters and the
+        condition tests for them, while a level-88 VALUE SPACES is all spaces."""
         vm = _run_cobol(
             [
                 "IDENTIFICATION DIVISION.",
@@ -8115,13 +8117,29 @@ class TestFigurativeValueFill:
                 "DATA DIVISION.",
                 "WORKING-STORAGE SECTION.",
                 "01 WS-S PIC X(6) VALUE 'SPACE'.",
+                "01 WS-T PIC X(6) VALUE SPACES.",
+                "   88 T-WORD VALUE 'SPACES'.",
+                "   88 T-BLANK VALUE SPACES.",
+                "01 WS-R PIC X(4) VALUE '----'.",
                 "PROCEDURE DIVISION.",
                 "MAIN-PARA.",
+                "    IF T-WORD MOVE 'W' TO WS-R(1:1) END-IF.",
+                "    SET T-WORD TO TRUE.",
+                "    IF T-WORD MOVE 'W' TO WS-R(2:1) END-IF.",
+                "    IF T-BLANK MOVE 'B' TO WS-R(3:1) END-IF.",
+                "    MOVE WS-T TO WS-S.",
+                "    SET T-BLANK TO TRUE.",
+                "    IF T-BLANK MOVE 'B' TO WS-R(4:1) END-IF.",
                 "    STOP RUN.",
-            ]
+            ],
+            max_steps=5000,
         )
         region = _first_region(vm)
-        assert _decode_alpha(region, 0, 6) == "SPACE "
+        assert (
+            _decode_alpha(region, 0, 6),
+            _decode_alpha(region, 6, 6),
+            _decode_alpha(region, 12, 4),
+        ) == ("SPACES", "      ", "-W-B")
 
     @covers(CobolFeature.VALUE_CLAUSE)
     def test_value_zeros_on_zoned_decimal_initialises_to_zero(self):
