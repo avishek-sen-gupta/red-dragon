@@ -46,7 +46,7 @@ class DecimalPoint:
         if not node.get("numeric", False):
             return walked
         return walked | {
-            name: self.numeric_literal(walked[name])
+            name: self.numeric_literal(node[name])
             for name in _LITERAL_TEXT
             if name in walked
         }

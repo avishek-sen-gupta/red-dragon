@@ -159,7 +159,10 @@ public final class DataFieldSerializer {
         }
         obj.addProperty("level", group.getLevelNumber());
         obj.addProperty("pic", extractPic(group));
-        obj.addProperty("usage", extractUsage(group));
+        String usage = extractUsage(group);
+        if (usage != null) {
+            obj.addProperty("usage", usage);
+        }
         StatementSerializer.addSpan(obj, group.getCtx());
 
         String value = extractFirstValue(group);
@@ -441,16 +444,14 @@ public final class DataFieldSerializer {
     }
 
     /**
-     * The item's USAGE: its own clause, else the nearest enclosing group's, else
-     * DISPLAY. "The USAGE clause written at the group level applies to each
-     * elementary item in the group" (ANSI X3.23-1985 / ISO 1989 USAGE clause).
+     * The entry's own USAGE clause, or null when it has none. The ASG reader
+     * applies a group's USAGE to the items in it.
      */
     private static String extractUsage(DataDescriptionEntryGroup group) {
         if (group.getUsageClause() != null && group.getUsageClause().getUsageClauseType() != null) {
             return mapUsageType(group.getUsageClause().getUsageClauseType().name());
         }
-        DataDescriptionEntryGroup parent = group.getParentDataDescriptionEntryGroup();
-        return parent != null ? extractUsage(parent) : "DISPLAY";
+        return null;
     }
 
     /**
