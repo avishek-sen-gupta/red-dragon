@@ -234,8 +234,8 @@ def _emit_float_operation(
         Binop(
             result_reg=result_reg,
             operator=resolve_binop(ARITHMETIC_OPS[operation.op]),
-            left=_float_operand(ctx, operation.left.register, True, span=span),
-            right=_float_operand(ctx, operation.right.register, True, span=span),
+            left=_float_operand(scope, operation.left.register, True),
+            right=_float_operand(scope, operation.right.register, True),
         ),
         span=span,
     )
@@ -475,8 +475,8 @@ def _lower_ref_function_arg(scope: LoweringScope, arg: dict) -> Register:
     ctx, materialised, span = scope.ctx, scope.materialised, scope.span
     name = arg.get("name", "")
     if not ctx.has_field(name, materialised):
-        return _unresolvable_operand(ctx, name, span=span)
-    decoded = _lower_expr_dict(ctx, arg, materialised, span=span)
+        return _unresolvable_operand(scope, name)
+    decoded = _lower_expr_dict(scope, arg)
     return ctx.emit_to_string(decoded, span=span)
 
 

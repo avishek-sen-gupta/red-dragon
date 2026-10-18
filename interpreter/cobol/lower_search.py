@@ -262,9 +262,7 @@ def lower_search(
         if isinstance(when.condition, dict):
             cond_reg = ctx.lower_condition(when.condition, materialised, span=span)
         else:
-            cond_reg = _lower_condition_str(
-                ctx, when.condition, materialised, ctx._condition_index, span=span
-            )
+            cond_reg = _lower_condition_str(scope, when.condition, ctx._condition_index)
         when_true = ctx.fresh_label("search_when_true")
         when_next = ctx.fresh_label("search_when_next")
         ctx.emit_inst(
