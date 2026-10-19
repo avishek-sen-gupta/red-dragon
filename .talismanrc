@@ -1,5 +1,7 @@
 threshold: low
 fileignoreconfig:
+- filename: tests/unit/cobol/test_nist_harness_inputs.py
+  checksum: 1515a763c4df80be3383594cd88d695667722192e1c2149c5f2f3542a61bf553
 - filename: tests/integration/test_bridge_arithmetic_roles.py
   checksum: 7549863c3b6a8ef0a9f6225ceb6b358c437078b3f5974e011b04babc2e33a933
 - filename: interpreter/cobol/sort_ordering.py
@@ -287,7 +289,7 @@ fileignoreconfig:
 - filename: tests/nist/test_nc.py
   checksum: 164b3de065ac8fb0b0884dbcc166350473801ff472fddeaa630d7ab26df91026
 - filename: tests/nist/conftest.py
-  checksum: 1093c3811e1ceed6fc585aa0c6514d1928879c5e3aaf2a51cd04babc302d2c9e
+  checksum: e5b173eff058be3084db6bf220c2b6353bc30eea3fc50c962574c0c8fde8a4af
 - filename: interpreter/cobol/lower_perform.py
   checksum: e6cac512f59e64b0eb6ef613edfd1a76df82a116b8d4d50f6c8a28fa45c4c04a
 - filename: tests/unit/cobol/test_procedure_labels.py

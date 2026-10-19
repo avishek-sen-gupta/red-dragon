@@ -22,6 +22,8 @@ The sources run unedited. The harness (`tests/nist/conftest.py`) does what the C
 EXEC85 step does at an installation:
 
 - substitutes the implementor parameters (X-cards) as whole words in columns 7-72,
+  X-63 and X-64 (the native collating sequence, ascending and descending) in EBCDIC
+  order, red-dragon's native sequence,
 - maps each `ASSIGN TO XXXXX0nn` to a file in the test's directory,
 - supplies the program's input deck as 80-column records,
 - links its SUBRTN subprograms and runs the run units its job runs before it.

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from interpreter.cobol.ebcdic_table import EbcdicTable
 from tests.nist.conftest import input_deck, substitute_x_cards
 
 
@@ -45,3 +46,23 @@ def test_input_deck_is_the_data_cards_as_80_column_records(tmp_path: Path) -> No
         ["ABC".ljust(80), "D".ljust(80, "*")],
         [],
     )
+
+
+_CCVS_COLLATING_CHARACTERS = " $$()*+,-./0123456789;<=>ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+
+_LITERAL_START = 12
+
+
+def _card(name: str) -> str:
+    line = substitute_x_cards(f"000100     {name}.".ljust(72) + "ST1374.2")
+    return line[_LITERAL_START : line.index('".') + 1].strip('"')
+
+
+def test_x_cards_63_and_64_are_the_ccvs_characters_in_native_order() -> None:
+    ascending, descending = _card("XXXXX063"), _card("XXXXX064")
+    assert (
+        sorted(ascending),
+        "".join(sorted(ascending, key=lambda c: EbcdicTable.ASCII_TO_EBCDIC[ord(c)])),
+        descending,
+    ) == (sorted(_CCVS_COLLATING_CHARACTERS), ascending, ascending[::-1])

@@ -52,6 +52,8 @@ _X_CARD_RE = re.compile(r"(?<![\w-])XXXXX\d{3}(?![\w-])")
 _X_CARDS = {
     "XXXXX051": "SWITCH-1",
     "XXXXX052": "SWITCH-2",
+    "XXXXX063": '" .<(+$$*);-/,>=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"',
+    "XXXXX064": '"9876543210ZYXWVUTSRQPONMLKJIHGFEDCBA=>,/-;)*$$+(<. "',
     "XXXXX065": "0200",
     "XXXXX081": '"12345678"',
     "XXXXX090": "194",
