@@ -115,6 +115,7 @@ from interpreter.cobol.lower_program_exit import (
     lower_program_exit,
 )
 from interpreter.cobol.move_source import MoveSource, plain_move_source
+from interpreter.cobol.ordinal_dispatch_ir import emit_ordinal_dispatch
 from interpreter.cobol.receiver_result import ReceiverResult
 from interpreter.cobol.run_unit import RANDOM_STATE, RUN_UNIT_LAYOUT, RUN_UNIT_VAR
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
@@ -2215,27 +2216,11 @@ def _lower_computed_goto(scope: LoweringScope, computed: ComputedGoto) -> None:
     idx_reg = ctx.emit_decode_field(
         rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
     )
-    for k, target in enumerate(computed.targets, start=1):
-        k_reg = ctx.const_to_reg(k, span=span)
-        cmp_reg = ctx.fresh_reg()
-        ctx.emit_inst(
-            Binop(
-                result_reg=cmp_reg,
-                operator=resolve_binop("=="),
-                left=Register(str(idx_reg)),
-                right=Register(str(k_reg)),
-            ),
-            span=span,
-        )
-        match_lbl = ctx.fresh_label("goto_dep_match")
-        next_lbl = ctx.fresh_label("goto_dep_next")
-        ctx.emit_inst(
-            BranchIf(cond_reg=cmp_reg, branch_targets=(match_lbl, next_lbl)),
-            span=span,
-        )
-        ctx.emit_inst(Label_(label=match_lbl), span=span)
-        ctx.emit_inst(Branch(label=ctx.procedure_label(target)), span=span)
-        ctx.emit_inst(Label_(label=next_lbl), span=span)
+    emit_ordinal_dispatch(
+        scope.emitter,
+        idx_reg,
+        [ctx.procedure_label(target) for target in computed.targets],
+    )
 
 
 def lower_goto(

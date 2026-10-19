@@ -10,6 +10,11 @@ from cobol_asg.asg_types import CobolASG, CobolParagraph, CobolSection
 from cobol_asg.cobol_statements import CobolStatementType
 from cobol_asg.source_span import SourceSpan
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.cobol.lower_alter import (
+    alterable_goto,
+    emit_alter_dispatches,
+    lower_alterable_goto,
+)
 from interpreter.cobol.lower_program_exit import lower_program_exit
 from interpreter.cobol.procedure_labels import procedure_labels
 from interpreter.cobol.program_object import program_name, use_request_var
@@ -25,6 +30,7 @@ from interpreter.instructions import (
     SetContinuation,
     StoreVar,
 )
+from interpreter.ir import CodeLabel
 from interpreter.operator_kind import resolve_binop
 from interpreter.register import Register
 
@@ -61,10 +67,18 @@ def lower_procedure_division(
     # procedure instead of returning (red-dragon-i0jd).
     lower_program_exit(ctx, materialised, span=_end_of_flow_span(asg), implicit=True)
 
-    # Declaratives last: real flow above keeps the entry point on the first real
-    # element.
+    _lower_after_flow(ctx, asg, materialised)
+
+
+def _lower_after_flow(
+    ctx: EmitContext, asg: CobolASG, materialised: MaterialisedSectionedLayout
+) -> None:
+    """Declaratives last: real flow above keeps the entry point on the first real
+    element. Then the dispatch of every alterable GO TO, now that every ALTER is
+    known."""
     for section in asg.declaratives:
         lower_section(ctx, section, materialised)
+    emit_alter_dispatches(ctx)
 
 
 def global_uses(asg: CobolASG) -> list[CobolSection]:
@@ -201,16 +215,30 @@ def lower_paragraph(
     span = para.span
     labels = ctx.procedures
     section = ctx.section
-    ctx.emit_inst(Label_(label=labels.paragraph(para.name, section)), span=span)
+    paragraph = labels.paragraph(para.name, section)
+    ctx.emit_inst(Label_(label=paragraph), span=span)
     with ctx.in_paragraph(para.name):
-        for position, sentence in enumerate(_sentences(para)):
-            _lower_sentence(ctx, para, position, sentence, materialised)
+        _lower_paragraph_body(ctx, para, paragraph, materialised)
     exit_label = labels.paragraph_exit(para.name, section)
     if ctx.exit_requested(exit_label):
         ctx.emit_inst(Label_(label=exit_label), span=span)
     ctx.emit_inst(
         ResumeContinuation(name=labels.paragraph_end(para.name, section)), span=span
     )
+
+
+def _lower_paragraph_body(
+    ctx: EmitContext,
+    para: CobolParagraph,
+    paragraph: CodeLabel,
+    materialised: MaterialisedSectionedLayout,
+) -> None:
+    alterable = alterable_goto(para)
+    if alterable:
+        lower_alterable_goto(ctx, paragraph, alterable[0])
+        return
+    for position, sentence in enumerate(_sentences(para)):
+        _lower_sentence(ctx, para, position, sentence, materialised)
 
 
 def _sentences(para: CobolParagraph) -> list[list[CobolStatementType]]:

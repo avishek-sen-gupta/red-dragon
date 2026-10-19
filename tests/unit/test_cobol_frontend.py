@@ -68,6 +68,7 @@ from cobol_asg.set_operand import SetOperand
 from cobol_asg.unstring_delimiter import UnstringDelimiter
 from cobol_asg.unstring_receiver import UnstringReceiver
 from interpreter.cobol.cobol_constants import BuiltinName
+from interpreter.cobol.lower_alter import alter_var
 from interpreter.cobol.cobol_frontend import CobolFrontend
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.field_position import FieldPosition
@@ -93,6 +94,7 @@ from interpreter.instructions import (
     ResumeContinuation,
     SetContinuation,
     StoreField,
+    StoreVar,
     WriteRegion,
 )
 from interpreter.ir import CodeLabel, Opcode
@@ -2725,7 +2727,8 @@ class TestCallAlterEntryCancelLowering:
 
     @covers(CobolFeature.ALTER, CobolFeature.PIC_CLAUSE, CobolFeature.USAGE_DISPLAY)
     def test_alter_emits_store_var(self):
-        """ALTER should emit STORE_VAR for the altered paragraph target."""
+        """ALTER stores the target's ordinal among the paragraph's ALTER targets
+        into the paragraph's alter variable."""
         fields = [
             CobolField(name="WS-A", level=77, pic="9(1)", usage="DISPLAY", offset=0),
         ]
@@ -2736,11 +2739,14 @@ class TestCallAlterEntryCancelLowering:
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
-        stores = _find_opcodes(instructions, Opcode.STORE_VAR)
+        consts = _consts(instructions)
         alter_stores = [
-            s for s in stores if s.operands and "__alter_PARA-1" in str(s.operands[0])
+            consts[i.value_reg]
+            for i in instructions
+            if isinstance(i, StoreVar)
+            and i.name == alter_var("MAIN", CodeLabel("para_PARA-1"))
         ]
-        assert len(alter_stores) >= 1
+        assert alter_stores == [1]
 
     @covers(CobolFeature.ENTRY, CobolFeature.PIC_CLAUSE, CobolFeature.USAGE_DISPLAY)
     def test_entry_emits_label(self):
@@ -2810,11 +2816,11 @@ class TestCallAlterEntryCancelLowering:
     def test_working_storage_initialisation_is_performed_at_load_and_after_cancel(
         self,
     ):
-        """One block allocates WORKING-STORAGE with its VALUE clauses and takes
-        the program object out of its initial state. The init block runs through
-        it once at load, with no continuation set; the procedure's entry performs
-        it again only while the object is in its initial state, which is what
-        CANCEL sets."""
+        """One block allocates WORKING-STORAGE with its VALUE clauses, performs
+        the reset of every altered GO TO, and takes the program object out of its
+        initial state. The init block runs through it once at load, with no
+        continuation set; the procedure's entry performs it again only while the
+        object is in its initial state, which is what CANCEL sets."""
         fields = [
             CobolField(
                 name="WS-A", level=77, pic="9(1)", usage="DISPLAY", offset=0, value="7"
@@ -2824,7 +2830,13 @@ class TestCallAlterEntryCancelLowering:
         initial = CodeLabel("__ws_initial_main_0")
 
         assert _initial_state_block(ir) == (
-            [],
+            [
+                (
+                    "__alter_reset_main_0",
+                    CodeLabel("__alter_reset_done_main_0"),
+                    CodeLabel("__alter_reset_main_0"),
+                )
+            ],
             ["region", False],
             ["region", False],
             str(initial),
