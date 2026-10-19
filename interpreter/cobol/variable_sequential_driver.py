@@ -68,6 +68,9 @@ class VariableSequentialDriver(FileOrganizationDriver):
     def start(self, key: bytes, relop: str) -> AccessResult:
         return AccessResult(AccessCondition.OK)
 
+    def key_of_reference(self, number: int) -> AccessResult:
+        return AccessResult(AccessCondition.OK)
+
     def write(self, data: bytes, key: bytes = b"") -> AccessResult:
         if self._mode not in _WRITE_MODES:
             return AccessResult(AccessCondition.WRITE_NOT_PERMITTED)

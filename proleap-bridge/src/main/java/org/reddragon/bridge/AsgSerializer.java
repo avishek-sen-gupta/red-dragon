@@ -19,6 +19,7 @@ import io.proleap.cobol.asg.metamodel.environment.specialnames.AlphabetClause;
 import io.proleap.cobol.asg.metamodel.environment.specialnames.CurrencySignClause;
 import io.proleap.cobol.asg.metamodel.environment.specialnames.SpecialNamesParagraph;
 import io.proleap.cobol.asg.metamodel.environment.inputoutput.InputOutputSection;
+import io.proleap.cobol.asg.metamodel.environment.inputoutput.filecontrol.AlternateRecordKeyClause;
 import io.proleap.cobol.asg.metamodel.environment.inputoutput.filecontrol.FileControlEntry;
 import io.proleap.cobol.asg.metamodel.environment.inputoutput.filecontrol.FileControlParagraph;
 import io.proleap.cobol.asg.metamodel.identification.IdentificationDivision;
@@ -712,7 +713,7 @@ public final class AsgSerializer {
     /**
      * Serializes FILE-CONTROL entries from the ENVIRONMENT DIVISION to a JSON array.
      * Each entry has: file_name, assign_to, organization, access_mode, record_key,
-     * relative_key, file_status_var, optional.
+     * alternate_keys, relative_key, file_status_var, optional.
      */
     /** The reference a FILE-CONTROL clause that is absent carries: no name. */
     private static JsonObject unnamedRef() {
@@ -766,6 +767,15 @@ public final class AsgSerializer {
                 } else {
                     entry.add("record_key", unnamedRef());
                 }
+
+                JsonArray alternateKeys = new JsonArray();
+                for (AlternateRecordKeyClause clause : fce.getAlternateRecordKeyClauses()) {
+                    JsonObject alternate = new JsonObject();
+                    alternate.add("key", StatementSerializer.serializeRef(clause.getDataCall()));
+                    alternate.addProperty("duplicates", clause.isDuplicates());
+                    alternateKeys.add(alternate);
+                }
+                entry.add("alternate_keys", alternateKeys);
 
                 // RELATIVE KEY
                 if (fce.getRelativeKeyClause() != null && fce.getRelativeKeyClause().getRelativeKeyCall() != null) {

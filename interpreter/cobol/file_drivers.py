@@ -9,12 +9,19 @@ from __future__ import annotations
 
 import bisect
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import BinaryIO, Protocol, runtime_checkable
 
 from cobol_asg.file_enums import FileOrganization, OpenMode
 from interpreter.cobol.access_result import AccessCondition, AccessResult
+from interpreter.cobol.alternate_index import (
+    AlternateIndex,
+    IndexEntry,
+    after,
+    indexes_of,
+)
+from interpreter.cobol.alternate_key import AlternateKey
 from interpreter.cobol.flagged_slot import FlaggedSlot
 from interpreter.cobol.prime_key import PrimeKey
 from interpreter.cobol.record_shape import RecordShape
@@ -43,6 +50,7 @@ class FileOrganizationDriver(Protocol):
     def read_prev(self) -> AccessResult: ...
     def read_key(self, key: bytes) -> AccessResult: ...
     def start(self, key: bytes, relop: str) -> AccessResult: ...
+    def key_of_reference(self, number: int) -> AccessResult: ...
     def write(self, data: bytes, key: bytes = b"") -> AccessResult: ...
     def rewrite(self, data: bytes, key: bytes = b"") -> AccessResult: ...
     def delete(self, key: bytes = b"") -> AccessResult: ...
@@ -55,7 +63,7 @@ def open_driver(
     every consumer (COBOL adapter, IDCAMS, …) uses to reach a dataset."""
     org = shape.organization
     if org == FileOrganization.INDEXED:
-        drv: FileOrganizationDriver = IndexedDriver()
+        drv: FileOrganizationDriver = IndexedDriver(shape.alternates)
     elif org == FileOrganization.RELATIVE:
         drv = RelativeDriver()
     else:
@@ -113,6 +121,9 @@ class SequentialDriver:
     def start(self, key: bytes, relop: str) -> AccessResult:
         return AccessResult(condition=AccessCondition.OK)
 
+    def key_of_reference(self, number: int) -> AccessResult:
+        return AccessResult(condition=AccessCondition.OK)
+
     def write(self, data: bytes, key: bytes = b"") -> AccessResult:
         assert self._fh is not None
         if self._mode not in _WRITE_MODES:
@@ -132,12 +143,13 @@ class SequentialDriver:
 
 
 class IndexedDriver:
-    """Flat file of fixed-length records kept sorted by key.
+    """Flat file of fixed-length records kept sorted by prime key, with an index per
+    alternate record key built when the file opens; reads follow the key of reference.
 
     Binary search for O(log n) keyed reads; insert/delete shift the tail.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, alternates: Sequence[AlternateKey] = ()) -> None:
         self._fh: BinaryIO | None = None
         self._rl = 0
         self._koff = 0
@@ -145,6 +157,10 @@ class IndexedDriver:
         self._cursor = 0  # byte offset for sequential scan
         self._last_pos = 0  # byte offset of last-read record
         self._mode = OpenMode.INPUT
+        self._alternates = tuple(alternates)
+        self._indexes: tuple[AlternateIndex, ...] = ()
+        self._stored, self._reference = 0, 0
+        self._place: IndexEntry = (b"", 0, b"")
 
     def open(
         self,
@@ -153,9 +169,7 @@ class IndexedDriver:
         record_length: int,
         key: PrimeKey,
     ) -> None:
-        self._rl = record_length
-        self._koff = key.offset
-        self._klen = key.length
+        self._rl, self._koff, self._klen = record_length, key.offset, key.length
         self._cursor = 0
         self._mode = mode
         if mode == OpenMode.OUTPUT:
@@ -164,11 +178,92 @@ class IndexedDriver:
             self._fh = open(path, "r+b")
         else:
             self._fh = open(path, "rb")
+        self._index_records()
+
+    def _index_records(self) -> None:
+        records = [self._rec_at(slot) for slot in range(self._count())]
+        self._indexes = indexes_of(
+            self._alternates, [(record, self._prime(record)) for record in records]
+        )
+        self._stored = len(records)
+        self._reference = 0
+
+    def _prime(self, record: bytes) -> bytes:
+        return record[self._koff : self._koff + self._klen]
 
     def close(self) -> None:
         if self._fh:
             self._fh.close()
             self._fh = None
+
+    def key_of_reference(self, number: int) -> AccessResult:
+        self._reference = number
+        return AccessResult(condition=AccessCondition.OK)
+
+    def _index(self) -> AlternateIndex:
+        return self._indexes[self._reference - 1]
+
+    def _by_alternate(self) -> bool:
+        return self._reference > 0
+
+    def _alternate_record(self, slot: int) -> AccessResult:
+        index = self._index()
+        entry = index.entries[slot]
+        self._place = after(entry)
+        found, _ = self._find(entry[2])
+        self._last_pos = found * self._rl
+        condition = (
+            AccessCondition.DUPLICATES_FOLLOW
+            if index.follows(slot)
+            else AccessCondition.OK
+        )
+        return AccessResult(condition=condition, data=self._rec_at(found))
+
+    def _read_alternate_seq(self) -> AccessResult:
+        slot = self._index().next_from(self._place)
+        if slot >= len(self._index().entries):
+            return AccessResult(condition=AccessCondition.END_OF_FILE)
+        return self._alternate_record(slot)
+
+    def _read_alternate_key(self, key: bytes) -> AccessResult:
+        slot = self._index().first_leading(key, False)
+        if not self._index().holds(key):
+            return AccessResult(condition=AccessCondition.NOT_FOUND)
+        return self._alternate_record(slot)
+
+    def _start_alternate(self, key: bytes, relop: str) -> AccessResult:
+        index = self._index()
+        slot = index.first_leading(key, relop == ">")
+        within = slot < len(index.entries)
+        found = within and (
+            relop not in ("=", "==") or index.entries[slot][0][: len(key)] == key
+        )
+        if not found:
+            return AccessResult(condition=AccessCondition.NOT_FOUND)
+        self._place = index.entries[slot]
+        return AccessResult(condition=AccessCondition.OK)
+
+    def _store(self, record: bytes) -> None:
+        prime = self._prime(record)
+        self._indexes = tuple(
+            index.stored(record, self._stored, prime) for index in self._indexes
+        )
+        self._stored = self._stored + 1
+
+    def _unstore(self, prime: bytes) -> None:
+        self._indexes = tuple(index.without(prime) for index in self._indexes)
+
+    def _duplicate(self, found: bool, record: bytes) -> bool:
+        return found or self._refused(record, self._indexes)
+
+    def _refused(self, record: bytes, changed: Sequence[AlternateIndex]) -> bool:
+        return any(index.refuses(index.value_of(record)) for index in changed)
+
+    def _stored_condition(
+        self, record: bytes, changed: Sequence[AlternateIndex]
+    ) -> AccessCondition:
+        repeats = any(index.repeats(index.value_of(record)) for index in changed)
+        return AccessCondition.DUPLICATES_FOLLOW if repeats else AccessCondition.OK
 
     def _count(self) -> int:
         assert self._fh is not None
@@ -205,6 +300,8 @@ class IndexedDriver:
         return self._cursor + shift if slot * self._rl < self._cursor else self._cursor
 
     def read_seq(self) -> AccessResult:
+        if self._by_alternate():
+            return self._read_alternate_seq()
         assert self._fh is not None
         n = self._count()
         if self._cursor >= n * self._rl:
@@ -216,6 +313,8 @@ class IndexedDriver:
         return AccessResult(condition=AccessCondition.OK, data=data.ljust(self._rl))
 
     def read_prev(self) -> AccessResult:
+        if self._by_alternate():
+            raise NotImplementedError("READ PREVIOUS follows the prime key only")
         assert self._fh is not None
         # Mirror of read_seq: retreat one record and read it. The cursor points
         # one record past the last forward read, so the first READPREV after a
@@ -229,10 +328,13 @@ class IndexedDriver:
         return AccessResult(condition=AccessCondition.OK, data=data.ljust(self._rl))
 
     def read_key(self, key: bytes) -> AccessResult:
+        if self._by_alternate():
+            return self._read_alternate_key(key)
         slot, found = self._find(key)
         if not found:
             return AccessResult(condition=AccessCondition.NOT_FOUND)
         self._last_pos = slot * self._rl
+        self._cursor = self._last_pos + self._rl
         return AccessResult(condition=AccessCondition.OK, data=self._rec_at(slot))
 
     def _leading(self, key: bytes) -> Callable[[int], bytes]:
@@ -249,6 +351,11 @@ class IndexedDriver:
         return slot, exists and (relop not in ("=", "==") or leading(slot) == key)
 
     def start(self, key: bytes, relop: str) -> AccessResult:
+        if self._by_alternate():
+            return self._start_alternate(key, relop)
+        return self._start_prime(key, relop)
+
+    def _start_prime(self, key: bytes, relop: str) -> AccessResult:
         slot, found = self._start_slot(key, relop)
         # Position the cursor at the GTEQ slot even when it is past end-of-file
         # (slot == n): CICS seek-last browse (STARTBR past all keys, then
@@ -267,10 +374,11 @@ class IndexedDriver:
         if not key:
             key = data[self._koff : self._koff + self._klen]
         slot, found = self._find(key)
-        if found:
-            return AccessResult(condition=AccessCondition.DUPLICATE_KEY)
-        n = self._count()
         rec = data[: self._rl].ljust(self._rl)
+        if self._duplicate(found, rec):
+            return AccessResult(condition=AccessCondition.DUPLICATE_KEY)
+        condition = self._stored_condition(rec, self._indexes)
+        n = self._count()
         # Extend file by one record
         self._fh.seek(0, 2)
         self._fh.write(b"\x00" * self._rl)
@@ -282,7 +390,8 @@ class IndexedDriver:
         self._fh.seek(slot * self._rl)
         self._fh.write(rec)
         self._cursor = self._shifted_cursor(slot, self._rl)
-        return AccessResult(condition=AccessCondition.OK)
+        self._store(rec)
+        return AccessResult(condition=condition)
 
     def rewrite(self, data: bytes, key: bytes = b"") -> AccessResult:
         assert self._fh is not None
@@ -291,9 +400,44 @@ class IndexedDriver:
         slot, found = self._find(key)
         if not found:
             return AccessResult(condition=AccessCondition.NOT_FOUND)
-        self._fh.seek(slot * self._rl)
-        self._fh.write(data[: self._rl].ljust(self._rl))
-        return AccessResult(condition=AccessCondition.OK)
+        rec = data[: self._rl].ljust(self._rl)
+        return self._replaced(
+            self._fh, slot, rec, self._changed(self._rec_at(slot), rec)
+        )
+
+    def _changed(self, before: bytes, record: bytes) -> tuple[AlternateIndex, ...]:
+        return tuple(
+            index.without(self._prime(before))
+            for index in self._indexes
+            if index.value_of(before) != index.value_of(record)
+        )
+
+    def _replaced(
+        self,
+        fh: BinaryIO,
+        slot: int,
+        record: bytes,
+        changed: Sequence[AlternateIndex],
+    ) -> AccessResult:
+        if self._refused(record, changed):
+            return AccessResult(condition=AccessCondition.DUPLICATE_KEY)
+        condition = self._stored_condition(record, changed)
+        fh.seek(slot * self._rl)
+        fh.write(record)
+        self._restore(record, {index.key for index in changed})
+        return AccessResult(condition=condition)
+
+    def _restore(self, record: bytes, moved: set[AlternateKey]) -> None:
+        prime = self._prime(record)
+        self._indexes = tuple(
+            (
+                index.without(prime).stored(record, self._stored, prime)
+                if index.key in moved
+                else index
+            )
+            for index in self._indexes
+        )
+        self._stored = self._stored + 1
 
     def delete(self, key: bytes = b"") -> AccessResult:
         assert self._fh is not None
@@ -304,6 +448,7 @@ class IndexedDriver:
             if not found:
                 return AccessResult(condition=AccessCondition.NOT_FOUND)
             slot = s
+        self._unstore(self._prime(self._rec_at(slot)))
         self._remove_slot(slot)
         return AccessResult(condition=AccessCondition.OK)
 
@@ -414,6 +559,9 @@ class RelativeDriver:
     def _first_record_from(self, n: int) -> int:
         slots = range(max(n, 1), self._total_slots() + 1)
         return next((m for m in slots if self._record_at(m)), 0)
+
+    def key_of_reference(self, number: int) -> AccessResult:
+        return AccessResult(condition=AccessCondition.OK)
 
     def start(self, key: bytes, relop: str) -> AccessResult:
         n = self._n(key)

@@ -207,3 +207,6 @@ class RealFileIOProvider(CobolIOProvider):
 
     def _delete_record(self, filename: str, key: str, program: str) -> IOResult:
         return to_ioresult(self._files[filename].delete(self._key_bytes(filename, key)))
+
+    def _key_of_reference(self, filename: str, number: int, program: str) -> IOResult:
+        return to_ioresult(self._files[filename].key_of_reference(number))

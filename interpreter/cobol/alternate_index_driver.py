@@ -120,6 +120,9 @@ class AlternateIndexDriver:
         }
         return starts.get(relop, self._start_from)(key)
 
+    def key_of_reference(self, number: int) -> AccessResult:
+        return AccessResult(condition=AccessCondition.OK)
+
     def read_seq(self) -> AccessResult:
         if self._cursor >= len(self._view):
             return AccessResult(condition=AccessCondition.END_OF_FILE)
