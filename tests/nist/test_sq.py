@@ -13,6 +13,7 @@ exit. Excluded from the default test run; run on demand with `-m nist`.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -117,8 +118,10 @@ pytestmark = pytest.mark.nist
         "SQ230A",
     ],
 )
-def test_sq_program(prog: str, tmp_path: Path) -> None:
-    run_nist(prog, tmp_path)
+def test_sq_program(
+    prog: str, tmp_path: Path, record_property: Callable[[str, str], None]
+) -> None:
+    run_nist(prog, tmp_path, record_property)
 
 
 @pytest.mark.parametrize(

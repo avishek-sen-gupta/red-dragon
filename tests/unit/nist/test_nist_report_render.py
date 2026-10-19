@@ -23,6 +23,11 @@ _RESULTS = (
     ),
     NistResult(program="NC102A", outcome=NistOutcome.PASS, detail=""),
     NistResult(program="CM101M", outcome=NistOutcome.UNSUPPORTED, detail="no MCS"),
+    NistResult(
+        program="ST102A",
+        outcome=NistOutcome.VERIFIED_BY_CHECKER,
+        detail="verified by ST103A",
+    ),
 )
 
 _TABLE = (
@@ -31,7 +36,8 @@ _TABLE = (
     "| CM | 0 | 0 | 1 | 1 | 0.0 |\n"
     "| NC | 2 | 1 | 1 | 4 | 50.0 |\n"
     "| SQ | 1 | 1 | 0 | 2 | 50.0 |\n"
-    "| Overall | 3 | 2 | 2 | 7 | 42.9 |"
+    "| ST | 1 | 0 | 0 | 1 | 100.0 |\n"
+    "| Overall | 4 | 2 | 2 | 8 | 50.0 |"
 )
 
 
@@ -47,6 +53,10 @@ def test_report_lists_modules_then_categories_then_first_failure_lines() -> None
         "### pass (3)\n"
         "\n"
         "NC101A, NC102A, SQ102A\n"
+        "\n"
+        "### verified-by-checker (1)\n"
+        "\n"
+        "ST102A (verified by ST103A)\n"
         "\n"
         "### incomplete (1)\n"
         "\n"
@@ -77,6 +87,7 @@ def test_terminal_summary_is_the_module_table_and_category_counts() -> None:
         f"{_TABLE}\n"
         "\n"
         "pass: 3\n"
+        "verified-by-checker: 1\n"
         "incomplete: 1\n"
         "error: 1\n"
         "fips-flagger: 1\n"

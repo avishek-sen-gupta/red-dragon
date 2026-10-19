@@ -11,6 +11,7 @@ class NistOutcome(Enum):
     """Why a NIST program's test reached its verdict."""
 
     PASS = "pass"
+    VERIFIED_BY_CHECKER = "verified-by-checker"
     INCOMPLETE = "incomplete"
     SUMMARY_FAILURES = "summary-failures"
     INLINE_FAILURES = "inline-failures"
@@ -30,6 +31,7 @@ class NistOutcome(Enum):
 
 _VERDICTS = {
     NistOutcome.PASS: NistVerdict.PASS,
+    NistOutcome.VERIFIED_BY_CHECKER: NistVerdict.PASS,
     NistOutcome.INCOMPLETE: NistVerdict.FAIL,
     NistOutcome.SUMMARY_FAILURES: NistVerdict.FAIL,
     NistOutcome.INLINE_FAILURES: NistVerdict.FAIL,

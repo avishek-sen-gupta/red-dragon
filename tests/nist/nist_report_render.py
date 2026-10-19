@@ -39,13 +39,27 @@ def _programs(outcome: NistOutcome, results: Sequence[NistResult]) -> list[str]:
     return sorted(r.program for r in results if r.outcome is outcome)
 
 
+def _entry(result: NistResult) -> str:
+    if result.outcome is NistOutcome.VERIFIED_BY_CHECKER:
+        return f"{result.program} ({result.detail})"
+    return result.program
+
+
+def _entries(outcome: NistOutcome, results: Sequence[NistResult]) -> list[str]:
+    return [
+        _entry(r)
+        for r in sorted(results, key=lambda r: r.program)
+        if r.outcome is outcome
+    ]
+
+
 def _present(results: Sequence[NistResult]) -> list[NistOutcome]:
     return [o for o in NistOutcome if any(r.outcome is o for r in results)]
 
 
 def _category(outcome: NistOutcome, results: Sequence[NistResult]) -> str:
-    programs = _programs(outcome, results)
-    return f"### {outcome.value} ({len(programs)})\n\n{', '.join(programs)}"
+    entries = _entries(outcome, results)
+    return f"### {outcome.value} ({len(entries)})\n\n{', '.join(entries)}"
 
 
 def _failure_lines(results: Sequence[NistResult]) -> list[str]:
