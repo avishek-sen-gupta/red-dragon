@@ -24,9 +24,30 @@ EXEC85 step does at an installation:
 - substitutes the implementor parameters (X-cards) as whole words in columns 7-72,
   X-63 and X-64 (the native collating sequence, ascending and descending) in EBCDIC
   order, red-dragon's native sequence,
+- selects one optional-code variant where the deck offers T and U lines, as EXEC85's `*OPT`
+  card does (see below),
 - maps each `ASSIGN TO XXXXX0nn` to a file in the test's directory,
 - supplies the program's input deck as 80-column records,
 - links its SUBRTN subprograms and runs the run units its job runs before it.
+
+IX107A, IX207A and IX208A carry two optional variants of their key layout. The decks say:
+"FOR CODE WITH LETTERS T OR U ONLY ONE SHOULD BE SELECTED. ... THE T"S PROVIDE A 29
+CHARACTER INDEXED KEY SIZE FOR THE FILE AND THE U"S PROVIDE AN INDEXED KEY NO GREATER
+THAN 8 CHARACTERS." The corpus ships the cards of both variants commented out, with the
+letter in column 7 replaced by `*`. With neither variant selected, the records are short
+of RECORD CONTAINS 240. In IX207A and IX208A the alternate record key also lands on
+constant text of the CCVS record image, so a conforming WRITE gives 22 or a START finds
+nothing.
+
+The harness table `OPTION_SELECTIONS` selects T for all three. T is the full key size, and
+red-dragon does not limit how long a key may be. Because the letters are lost, the table names each T
+card by its sequence number, taken from the NIST distribution (newcob.val). Loading
+checks the selection against the source and fails if either check fails:
+- every listed card must be a comment line;
+- the program must carry the select-exactly-one instruction.
+
+A unit test checks that these three are the only corpus programs that carry the
+instruction.
 
 Each program gets a step budget of 2,000,000.
 
