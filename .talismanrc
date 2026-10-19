@@ -233,7 +233,7 @@ fileignoreconfig:
 - filename: docs/superpowers/plans/2026-09-02-cobol-asg-extraction.md
   checksum: 1bb3884f643d6ad83e78241061b223659d59b003d6e50bec4caad1f506953dfd
 - filename: .pre-commit-config.yaml
-  checksum: e87d3887a29cfe848c0dffd6e96797b6cf07cba71f5de1e398480b3e0e6623d1
+  checksum: d9bee24b3b5eaf5e76386502ae3f466708bb319db7d013462059ddb4a704db84
 - filename: guidelines/design-principles.md
   checksum: 6b22c098590bfe006953bc1fb467dc36ab434df36011435570debabfcfe4f837
 - filename: guidelines/lang/python/testing.md
