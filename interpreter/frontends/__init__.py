@@ -8,6 +8,7 @@ from pathlib import Path
 
 from cobol_asg.addressing_mode import AddressingMode
 from cobol_asg.cobol_parser import ProLeapCobolParser
+from cobol_asg.copybook_search import CopybookSearch
 from cobol_asg.frontend_extension import DialectParser
 from cobol_asg.lp32 import LP32_MODE
 from cobol_asg.subprocess_runner import RealSubprocessRunner
@@ -70,7 +71,7 @@ def get_cobol_frontend(
     parser = ProLeapCobolParser(
         RealSubprocessRunner(),
         os.environ.get("PROLEAP_BRIDGE_JAR", PROLEAP_BRIDGE_JAR),
-        copybook_dirs=copybook_dirs,
+        CopybookSearch(dirs=tuple(copybook_dirs)),
         addressing_mode=addressing_mode,
     )
     return CobolFrontend(

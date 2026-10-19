@@ -1,6 +1,7 @@
 import inspect
 
 from cobol_asg.cobol_parser import ProLeapCobolParser, make_cobol_parser
+from cobol_asg.copybook_search import CopybookSearch
 from tests.covers import NotLanguageFeature, covers
 
 
@@ -8,7 +9,7 @@ class TestCopybookDirsDefaults:
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_proleap_cobol_parser_copybook_dirs_defaults_to_empty_list(self):
         sig = inspect.signature(ProLeapCobolParser.__init__)
-        assert sig.parameters["copybook_dirs"].default == ()
+        assert sig.parameters["copybooks"].default == CopybookSearch()
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_make_cobol_parser_copybook_dirs_defaults_to_empty_list(self):

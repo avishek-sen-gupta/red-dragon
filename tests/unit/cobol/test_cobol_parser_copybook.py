@@ -9,6 +9,7 @@ import pytest
 
 from cobol_asg.cobol_parser import CobolParseError, ProLeapCobolParser
 from cobol_asg.copybook_library import CopybookLibrary
+from cobol_asg.copybook_search import CopybookSearch
 from cobol_asg.lp64 import Lp64
 from cobol_asg.subprocess_runner import SubprocessRunner
 from interpreter.cobol.features import CobolFeature
@@ -40,7 +41,9 @@ class _RecordingRunner(SubprocessRunner):
 def test_parse_appends_copybook_dir_args():
     runner = _RecordingRunner()
     parser = ProLeapCobolParser(
-        runner, "bridge.jar", copybook_dirs=[Path("/a/cpy"), Path("/b/cpy-bms")]
+        runner,
+        "bridge.jar",
+        CopybookSearch(dirs=(Path("/a/cpy"), Path("/b/cpy-bms"))),
     )
     parser.parse(b"       PROGRAM-ID. T.\n")
     assert "-copybook-dir" in runner.command
@@ -72,7 +75,9 @@ def test_parse_accepts_source_bytes_that_are_not_utf8():
 @covers(CobolFeature.MULTI_FILE_IMPORTS)
 def test_parse_appends_copybook_ext_args():
     runner = _RecordingRunner()
-    parser = ProLeapCobolParser(runner, "bridge.jar", copybook_exts=["txt", "CPY"])
+    parser = ProLeapCobolParser(
+        runner, "bridge.jar", CopybookSearch(exts=("txt", "CPY"))
+    )
     parser.parse(b"       PROGRAM-ID. T.\n")
     idxs = [i for i, a in enumerate(runner.command) if a == "-copybook-ext"]
     assert len(idxs) == 2
@@ -94,9 +99,11 @@ def test_each_copybook_library_reaches_the_bridge_as_its_name_and_directory():
     parser = ProLeapCobolParser(
         runner,
         "bridge.jar",
-        copybook_libraries=(
-            CopybookLibrary("LIB47", Path("/libs/one")),
-            CopybookLibrary("LIB48", Path("/libs/two")),
+        CopybookSearch(
+            libraries=(
+                CopybookLibrary("LIB47", Path("/libs/one")),
+                CopybookLibrary("LIB48", Path("/libs/two")),
+            )
         ),
     ).with_addressing_mode(Lp64())
     parser.parse(b"       PROGRAM-ID. T.\n")
@@ -121,7 +128,9 @@ def test_missing_copybook_raises_clean_error():
         "Could not find copy book MYBOOK in directory of COBOL input file"
     )
     runner = _RecordingRunner(failures=(raw,))
-    parser = ProLeapCobolParser(runner, "bridge.jar", copybook_dirs=[Path("/x/cpy")])
+    parser = ProLeapCobolParser(
+        runner, "bridge.jar", CopybookSearch(dirs=(Path("/x/cpy"),))
+    )
     with pytest.raises(CobolParseError) as excinfo:
         parser.parse(b"       COPY MYBOOK.\n")
     text = str(excinfo.value)
@@ -152,5 +161,5 @@ def test_get_cobol_frontend_builds_a_proleap_backed_frontend():
     frontend = get_cobol_frontend(copybook_dirs=[Path("/proj/cpy")], tolerant=True)
     assert type(frontend) is CobolFrontend
     assert type(frontend._parser) is ProLeapCobolParser
-    assert frontend._parser._copybook_dirs == [Path("/proj/cpy")]
+    assert frontend._parser._copybooks == CopybookSearch(dirs=(Path("/proj/cpy"),))
     assert frontend._options.tolerant is True

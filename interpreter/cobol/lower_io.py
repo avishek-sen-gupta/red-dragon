@@ -55,6 +55,7 @@ from interpreter.cobol.read_plan import ReadPlan
 from interpreter.cobol.relative_key import addressing_key, reported_key
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.cobol.status_class import StatusClass
+from interpreter.cobol.use_dispatch import UseDispatch
 from interpreter.cobol.use_selection import NO_USE, UseProcedure, use_procedures
 from interpreter.cobol.write_plan import WritePlan
 from interpreter.field_name import FieldName
@@ -244,23 +245,22 @@ def _emit_use_trigger(
         return
     ctx, span = scope.ctx, scope.span
     done = ctx.fresh_label("use_done")
-    mode_reg = scope.emitter.load(file_state_of(ctx._asg, file_name).mode)
-    _ = [
-        _emit_use_candidate(scope, use, mode_reg, (status_reg, done), handled)
-        for use in uses
-    ]
+    dispatch = UseDispatch(
+        mode_reg=scope.emitter.load(file_state_of(ctx._asg, file_name).mode),
+        status_reg=status_reg,
+        handled=handled,
+        done=done,
+    )
+    _ = [_emit_use_candidate(scope, use, dispatch) for use in uses]
     ctx.emit_inst(Label_(label=done), span=span)
 
 
 def _emit_use_candidate(
     scope: LoweringScope,
     use: UseProcedure,
-    mode_reg: Register,
-    outcome: tuple[Register, CodeLabel],
-    handled: Sequence[StatusClass],
+    dispatch: UseDispatch,
 ) -> None:
     ctx, span = scope.ctx, scope.span
-    status_reg, done = outcome
     next_lbl = ctx.fresh_label("use_mode_next")
     if use.mode:
         match_reg = ctx.fresh_reg()
@@ -268,7 +268,7 @@ def _emit_use_candidate(
             Binop(
                 result_reg=match_reg,
                 operator=resolve_binop("=="),
-                left=mode_reg,
+                left=dispatch.mode_reg,
                 right=ctx.const_to_reg(use.mode, span=span),
             ),
             span=span,
@@ -278,8 +278,8 @@ def _emit_use_candidate(
             BranchIf(cond_reg=match_reg, branch_targets=(do_lbl, next_lbl)), span=span
         )
         ctx.emit_inst(Label_(label=do_lbl), span=span)
-    _emit_conditional_use(scope, status_reg, use, handled)
-    ctx.emit_inst(Branch(label=done), span=span)
+    _emit_conditional_use(scope, dispatch.status_reg, use, dispatch.handled)
+    ctx.emit_inst(Branch(label=dispatch.done), span=span)
     ctx.emit_inst(Label_(label=next_lbl), span=span)
 
 
