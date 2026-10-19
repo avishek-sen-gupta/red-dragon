@@ -95,3 +95,4 @@ Dated snapshots of a full run, oldest first:
 
 - [2026-10-18](2026-10-18-conformance-report.md)
 - [2026-10-19](2026-10-19-conformance-report.md)
+- [2026-10-19, closing](2026-10-19-closing-conformance-report.md)
