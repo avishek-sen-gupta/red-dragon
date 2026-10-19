@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from cobol_asg.cobol_parser import ProLeapCobolParser
+from cobol_asg.copybook_search import CopybookSearch
 from cobol_asg.subprocess_runner import RealSubprocessRunner
 from tests.covers import NotLanguageFeature, covers
 from tests.integration.cobol_helpers import to_fixed
@@ -25,8 +26,7 @@ def _parser(jar: str, copybook_dir: Path) -> ProLeapCobolParser:
     return ProLeapCobolParser(
         RealSubprocessRunner(),
         jar,
-        copybook_dirs=[copybook_dir],
-        copybook_exts=["cpy"],
+        CopybookSearch(dirs=(copybook_dir,), exts=("cpy",)),
     )
 
 

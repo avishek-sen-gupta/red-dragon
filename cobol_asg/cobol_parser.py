@@ -18,6 +18,7 @@ from pathlib import Path
 from cobol_asg.addressing_mode import AddressingMode
 from cobol_asg.compilation_unit import CobolCompilationUnit
 from cobol_asg.copybook_library import CopybookLibrary
+from cobol_asg.copybook_search import NO_COPYBOOK_SEARCH, CopybookSearch
 from cobol_asg.lp32 import LP32_MODE
 from cobol_asg.source_text import decode_source
 from cobol_asg.subprocess_runner import (
@@ -56,37 +57,29 @@ class ProLeapCobolParser(CobolParser):
         self,
         runner: SubprocessRunner,
         bridge_jar: str,
-        copybook_dirs: Sequence[Path] = (),
-        copybook_exts: Sequence[str] = (),
+        copybooks: CopybookSearch = NO_COPYBOOK_SEARCH,
         addressing_mode: AddressingMode = LP32_MODE,
-        copybook_libraries: Sequence[CopybookLibrary] = (),
     ):
         self._runner = runner
         self._bridge_jar = bridge_jar
-        self._copybook_dirs: list[Path] = list(copybook_dirs)
-        self._copybook_exts: list[str] = list(copybook_exts)
+        self._copybooks = copybooks
         self._addressing_mode = addressing_mode
-        self._copybook_libraries: tuple[CopybookLibrary, ...] = tuple(
-            copybook_libraries
-        )
 
     def with_addressing_mode(self, mode: AddressingMode) -> ProLeapCobolParser:
         """The same parser, laying out USAGE POINTER items for ``mode``."""
         return ProLeapCobolParser(
             self._runner,
             self._bridge_jar,
-            self._copybook_dirs,
-            self._copybook_exts,
+            self._copybooks,
             mode,
-            self._copybook_libraries,
         )
 
     def _build_command(self) -> list[str]:
-        dirs = [arg for d in self._copybook_dirs for arg in ("-copybook-dir", str(d))]
-        exts = [arg for e in self._copybook_exts for arg in ("-copybook-ext", e)]
+        dirs = [arg for d in self._copybooks.dirs for arg in ("-copybook-dir", str(d))]
+        exts = [arg for e in self._copybooks.exts for arg in ("-copybook-ext", e)]
         libraries = [
             arg
-            for library in self._copybook_libraries
+            for library in self._copybooks.libraries
             for arg in ("-copybook-library", library.name, str(library.directory))
         ]
         return ["java", "-jar", self._bridge_jar, *dirs, *exts, *libraries]
@@ -146,7 +139,7 @@ class ProLeapCobolParser(CobolParser):
         msg = str(error)
         if "Could not find copy book" not in msg:
             return error
-        searched = [str(d) for d in self._copybook_dirs] or ["(none configured)"]
+        searched = [str(d) for d in self._copybooks.dirs] or ["(none configured)"]
         return CobolParseError(
             f"Copybook not found (searched directories: {searched}). "
             f"Underlying parser error: {msg}"
@@ -169,7 +162,7 @@ def make_cobol_parser(
     return ProLeapCobolParser(
         RealSubprocessRunner(),
         bridge_jar,
-        copybook_dirs=copybook_dirs,
-        copybook_exts=copybook_exts,
-        copybook_libraries=copybook_libraries,
+        CopybookSearch(
+            tuple(copybook_dirs), tuple(copybook_exts), tuple(copybook_libraries)
+        ),
     )

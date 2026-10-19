@@ -1717,9 +1717,10 @@ class EmitContext:
         status_item = entries[file_name].file_status_var
         owner = program_name(file_owner(self._asg, file_name))
         if owner != program_name(self._asg):
-            self._emit_owned_status(
-                owner, status_item, status_reg, materialised, span=span
+            owned_ref, owned_rr = self._resolve_owned_status(
+                owner, status_item, materialised, span=span
             )
+            self._emit_status_write(owned_ref, owned_rr, status_reg, span=span)
             return
         if not materialised.has_field(status_item.name):
             return
@@ -1732,15 +1733,14 @@ class EmitContext:
         )
         self._emit_status_write(target_ref, target_rr, status_reg, span=span)
 
-    def _emit_owned_status(
+    def _resolve_owned_status(
         self,
         owner: str,
         status_item: RefModOperand,
-        status_reg: Register,
         materialised: MaterialisedSectionedLayout,
         *,
         span: SourceSpan | None,
-    ) -> None:
+    ) -> tuple[ResolvedFieldRef, Register]:
         match, region_reg, region = next(
             materialised.owner_scope(owner).owned_matches(
                 status_item.name, status_item.qualifiers
@@ -1749,7 +1749,7 @@ class EmitContext:
         target_ref = self.resolve_field_ref_from(
             match.storage, region_reg, region, materialised, span=span
         )
-        self._emit_status_write(target_ref, region_reg, status_reg, span=span)
+        return target_ref, region_reg
 
     def _emit_status_write(
         self,
