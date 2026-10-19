@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from cobol_asg.file_enums import OpenMode
 from interpreter.cobol.access_result import AccessCondition
 from interpreter.cobol.cobol_constants import BuiltinName
-from interpreter.cobol.file_frame import FileFrame
 from interpreter.cobol.ir_emitter import IrEmitter
 from interpreter.cobol.sort_ordering import SortOrdering
 from interpreter.data_value import DataRecord
@@ -30,9 +29,9 @@ class SortPassIr:
     def copy(self, source: str, target: str) -> None:
         self.e.loop("sort_copy", lambda head, done: self._copied(source, target, done))
 
-    def order(self, frame: FileFrame, ordering: SortOrdering) -> None:
-        sort_file = frame.file_name
-        self._reopen(frame, OpenMode.INPUT)
+    def order(self, sort_file: str, ordering: SortOrdering) -> None:
+        self._close(sort_file)
+        self._open(sort_file, OpenMode.INPUT)
         records = self.e.var("sort_records", self.e.texts(()))
         self.e.loop(
             "sort_read",
@@ -122,11 +121,6 @@ class SortPassIr:
             self.e.text(""),
             self.program,
         )
-
-    def _reopen(self, frame: FileFrame, mode: OpenMode) -> None:
-        self._close(frame.file_name)
-        self.e.call("__cobol_declare_file", self._record(frame.data()), self.program)
-        self._open(frame.file_name, mode)
 
     def _open(self, filename: str, mode: OpenMode) -> None:
         self.e.call(

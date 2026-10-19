@@ -21,20 +21,18 @@ from cobol_asg.cobol_statements import (
     WriteStatement,
 )
 from cobol_asg.collating_sequence_phrase import CollatingSequencePhrase
-from cobol_asg.file_enums import FileOrganization, OpenMode
+from cobol_asg.file_enums import OpenMode
 from cobol_asg.program_collation import ProgramCollation
 from cobol_asg.sort_files import SortFiles
 from cobol_asg.sort_key import SortKey
 from interpreter.cobol.collating_sequences import collating_sequence_of
 from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.emit_context import EmitContext
-from interpreter.cobol.file_frame import FileFrame
 from interpreter.cobol.file_state import file_state_of
 from interpreter.cobol.file_verb_ir import FileVerbIr, emit_closed
 from interpreter.cobol.ir_emitter import IrEmitter
 from interpreter.cobol.lower_io import lower_close, lower_open, lower_read, lower_write
 from interpreter.cobol.lower_perform import emit_perform_branch
-from interpreter.cobol.prime_key import PrimeKey
 from interpreter.cobol.program_object import program_name
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.cobol.sort_field import SortField
@@ -176,13 +174,7 @@ class _SortLowering:
             _first_record(self.ctx, self.stmt.file_name)
         )
         self._passes().order(
-            FileFrame(
-                self.stmt.file_name,
-                FileOrganization.SEQUENTIAL,
-                PrimeKey(),
-                False,
-                record.byte_length,
-            ),
+            self.stmt.file_name,
             SortOrdering(
                 tuple(self._sort_field(key, record) for key in self.stmt.keys),
                 self._weights(),

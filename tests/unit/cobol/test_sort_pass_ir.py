@@ -5,14 +5,11 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from cobol_asg.file_enums import FileOrganization
 from cobol_asg.sort_key_direction import SortKeyDirection
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.features import CobolFeature
-from interpreter.cobol.file_frame import FileFrame
 from interpreter.cobol.ir_emitter import IrEmitter
-from interpreter.cobol.prime_key import PrimeKey
 from interpreter.cobol.sort_builtins import SORT_BUILTINS
 from interpreter.cobol.sort_field import SortField
 from interpreter.cobol.sort_key_encoding import SortKeyEncoding
@@ -40,9 +37,7 @@ def _copy(passes: SortPassIr) -> None:
 
 
 def _order(passes: SortPassIr) -> None:
-    passes.order(
-        FileFrame("SRT", FileOrganization.SEQUENTIAL, PrimeKey(), False, 2), _ORDERING
-    )
+    passes.order("SRT", _ORDERING)
 
 
 def _calls(emit: Callable[[SortPassIr], None]) -> list[tuple[str, int]]:
@@ -67,7 +62,6 @@ def test_sort_passes_call_only_file_primitives_and_the_ordering_builtin() -> Non
         [*read, ("__cobol_write_record", 4)],
         [
             ("__cobol_close_file", 2),
-            ("__cobol_declare_file", 2),
             ("__cobol_open_file", 3),
             *read,
             ("__list_set", 3),
