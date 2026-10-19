@@ -54,6 +54,7 @@ _COBOL_IO_DISPATCH: dict[FuncName, str] = {
     FuncName("__cobol_write_record"): "_write_record",
     FuncName("__cobol_rewrite_record"): "_rewrite_record",
     FuncName("__cobol_start_file"): "_start_file",
+    FuncName("__cobol_key_of_reference"): "_key_of_reference",
     FuncName("__cobol_delete_record"): "_delete_record",
     FuncName("__cobol_io_outcome"): "_io_outcome",
     FuncName("__cobol_io_data"): "_io_data",
@@ -172,6 +173,11 @@ class CobolIOProvider(ABC):
         when ``key`` is empty (sequential access)."""
         ...
 
+    @abstractmethod
+    def _key_of_reference(
+        self, filename: str, number: int, program: str
+    ) -> IOResult: ...
+
 
 @dataclass
 class StubFile:
@@ -213,6 +219,9 @@ class NullIOProvider(CobolIOProvider):
         return IOResult(AccessCondition.OK, None)
 
     def _delete_record(self, filename: str, key: str, program: str) -> IOResult:
+        return IOResult(AccessCondition.OK, None)
+
+    def _key_of_reference(self, filename: str, number: int, program: str) -> IOResult:
         return IOResult(AccessCondition.OK, None)
 
 
@@ -309,4 +318,8 @@ class StubIOProvider(CobolIOProvider):
             logger.info("StubIOProvider DELETE %s → removed %r", filename, removed)
         else:
             logger.info("StubIOProvider DELETE %s → no records", filename)
+        return IOResult(AccessCondition.OK, None)
+
+    def _key_of_reference(self, filename: str, number: int, program: str) -> IOResult:
+        logger.info("StubIOProvider KEY OF REFERENCE %s = %d (no-op)", filename, number)
         return IOResult(AccessCondition.OK, None)

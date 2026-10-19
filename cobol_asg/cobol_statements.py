@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import Union
 
 from cobol_asg.abbreviated_condition import resolve_condition
+from cobol_asg.alternate_record_key import AlternateRecordKey
 from cobol_asg.call_target import CallTarget
 from cobol_asg.cobol_expression import (
     ExprNode,
@@ -1530,6 +1531,7 @@ class FileControlEntry:
     organization: FileOrganization = FileOrganization.SEQUENTIAL
     access_mode: AccessMode = AccessMode.SEQUENTIAL
     record_key: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
+    alternate_keys: tuple[AlternateRecordKey, ...] = ()
     relative_key: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
     file_status_var: RefModOperand = field(
         default_factory=lambda: RefModOperand(name="")
@@ -1544,6 +1546,10 @@ class FileControlEntry:
             organization=FileOrganization(data.get("organization", "SEQUENTIAL")),
             access_mode=AccessMode(data.get("access_mode", "SEQUENTIAL")),
             record_key=RefModOperand.from_dict(data.get("record_key", {})),
+            alternate_keys=tuple(
+                AlternateRecordKey.from_dict(key)
+                for key in data.get("alternate_keys", [])
+            ),
             relative_key=RefModOperand.from_dict(data.get("relative_key", {})),
             file_status_var=RefModOperand.from_dict(data.get("file_status_var", {})),
             optional=data.get("optional", False),
@@ -1556,6 +1562,7 @@ class FileControlEntry:
             "organization": self.organization.value,
             "access_mode": self.access_mode.value,
             "record_key": self.record_key.to_dict(),
+            "alternate_keys": [key.to_dict() for key in self.alternate_keys],
             "relative_key": self.relative_key.to_dict(),
             "file_status_var": self.file_status_var.to_dict(),
             "optional": self.optional,

@@ -30,6 +30,7 @@ from interpreter.cobol.fd_record_format import (
 )
 from interpreter.cobol.field_resolution import whole_field_extent
 from interpreter.cobol.file_facts import (
+    key_number,
     largest_record,
     prime_key,
     record_area,
@@ -750,7 +751,34 @@ def _emit_relative_key_overflow(
     v.when(v.e.binop(">=", v.e.load(outcome.number), v.e.int_(10**digits)), overflowed)
 
 
+def _refer(v: FileVerbIr, file_name: str, reference: Sequence[int]) -> None:
+    _ = [
+        v.e.call(
+            "__cobol_key_of_reference", v.e.text(file_name), v.e.int_(n), v.program
+        )
+        for n in reference
+    ]
+
+
+def _key_of_reference(
+    scope: LoweringScope, entry: FileControlEntry, key: RefModOperand
+) -> tuple[int, ...]:
+    if not entry.alternate_keys:
+        return ()
+    return (key_number(scope.ctx._asg, entry, scope.materialised, key),)
+
+
+def _read_reference(scope: LoweringScope, stmt: ReadStatement) -> tuple[int, ...]:
+    entry = _entry(scope.ctx, stmt.file_name)
+    if _sequential_read(scope, stmt):
+        return ()
+    return _key_of_reference(
+        scope, entry, stmt.key if stmt.key.name else entry.record_key
+    )
+
+
 def _read_present(v: FileVerbIr, outcome: VerbOutcome, plan: ReadPlan) -> None:
+    _refer(v, plan.file_name, plan.reference)
     raw = v.called("__cobol_read_record", outcome, v.e.text(plan.file_name), plan.key)
     v.keep_record(raw, outcome)
     _keep_number_if(v, outcome, raw, plan.numbered)
@@ -822,6 +850,7 @@ def _read_plan(
         digits,
         _key_sequence(scope, stmt.file_name),
         bool(digits) or materialised.has_field(report.name),
+        _read_reference(scope, stmt),
     )
 
 
@@ -1116,10 +1145,7 @@ def _remember_written_key(
 ) -> None:
     if not keys:
         return
-    v.when(
-        v.status_is(outcome, FileLogicStatus.PERMITTED),
-        partial(_remember_key, v, record, keys),
-    )
+    v.when(v.successful(outcome), partial(_remember_key, v, record, keys))
 
 
 def _current_record_refusals(
@@ -1273,21 +1299,28 @@ def lower_start(
     relop_reg = Register(str(ctx.const_to_reg(stmt.relop or "=", span=span)))
     v = _verb(scope, stmt.file_name)
     outcome = v.outcome()
-    optional = _entry(ctx, stmt.file_name).optional
+    entry = _entry(ctx, stmt.file_name)
+    reference = _key_of_reference(
+        scope, entry, stmt.key if stmt.key.name else _file_key(entry)
+    )
+
+    def started() -> None:
+        _refer(v, stmt.file_name, reference)
+        _ignored(
+            v.called(
+                "__cobol_start_file",
+                outcome,
+                v.e.text(stmt.file_name),
+                key_reg,
+                relop_reg,
+            )
+        )
 
     def perform() -> None:
         v.unless_absent(
-            optional,
+            entry.optional,
             lambda: v.set_status(outcome, FileLogicStatus.NOT_FOUND),
-            lambda: _ignored(
-                v.called(
-                    "__cobol_start_file",
-                    outcome,
-                    v.e.text(stmt.file_name),
-                    key_reg,
-                    relop_reg,
-                )
-            ),
+            started,
         )
         v.set_position(FilePosition.NO_CURRENT_RECORD)
 
