@@ -59,3 +59,4 @@ raises the rate.
 Dated snapshots of a full run, oldest first:
 
 - [2026-10-18](2026-10-18-conformance-report.md)
+- [2026-10-19](2026-10-19-conformance-report.md)
