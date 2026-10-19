@@ -11,7 +11,6 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from itertools import groupby
 
 from cobol_asg.addressing_mode import AddressingMode
 from cobol_asg.alphabet import NATIVE_ALPHABET, Alphabet
@@ -42,7 +41,11 @@ from cobol_asg.nonnumeric_literal import literal_characters, written_literal
 from cobol_asg.program_attribute import ProgramAttribute
 from cobol_asg.program_conventions import ProgramConventions
 from cobol_asg.source_span import SourceSpan
-from cobol_asg.storage_layout import file_section_layout, section_layout
+from cobol_asg.storage_layout import (
+    file_section_layout,
+    record_areas,
+    section_layout,
+)
 
 logger = logging.getLogger(__name__)
 _NAME_OPERAND = "NAME"
@@ -67,8 +70,13 @@ def _program_collation(special: Mapping, alphabets: Sequence[Alphabet]) -> Alpha
     return phrase.alphanumeric_alphabet(alphabets)
 
 
-def _fd_name(record: Mapping) -> str:
-    return record.get("fd_name", "")
+def _record_area(
+    record_to_select: Mapping[str, str],
+    same: Sequence[Sequence[str]],
+    record_name: str,
+) -> str:
+    selected = record_to_select.get(record_name.upper(), "")
+    return next((names[0] for names in same if selected in names), selected)
 
 
 def _currency_from_special_names(data: dict) -> str:
@@ -205,6 +213,8 @@ class CobolASG:
         local_storage_fields: Local-Storage Section fields (per-call locals).
         file_fields: File Section (FD) record fields.
         file_descriptions: Each FD's RECORDING MODE and RECORD clause.
+        same_record_areas: The files of each SAME RECORD AREA clause, whose records
+            share one area of the File Section.
         sections: Procedure Division sections.
         paragraphs: Standalone paragraphs (no section).
         statements: Division-level bare statements (no paragraph or section).
@@ -225,6 +235,7 @@ class CobolASG:
     local_storage_fields: list[CobolField] = field(default_factory=list)
     file_fields: list[CobolField] = field(default_factory=list)
     file_descriptions: list[FileDescription] = field(default_factory=list)
+    same_record_areas: list[tuple[str, ...]] = field(default_factory=list)
     sections: list[CobolSection] = field(default_factory=list)
     paragraphs: list[CobolParagraph] = field(default_factory=list)
     statements: list[CobolStatementType] = field(default_factory=list)
@@ -309,11 +320,21 @@ class CobolASG:
                 ]
             ),
             file_fields=file_section_layout(
-                [
-                    [CobolField.from_dict(f, conventions) for f in records]
-                    for _, records in groupby(data.get("file_fields", []), _fd_name)
-                ]
+                record_areas(
+                    [
+                        CobolField.from_dict(f, conventions)
+                        for f in data.get("file_fields", [])
+                    ],
+                    lambda f: _record_area(
+                        record_to_select,
+                        data.get("same_record_areas", []),
+                        f.name,
+                    ),
+                )
             ),
+            same_record_areas=[
+                tuple(names) for names in data.get("same_record_areas", [])
+            ],
             file_descriptions=[
                 FileDescription.from_dict(d) for d in data.get("file_descriptions", [])
             ],
@@ -341,6 +362,11 @@ class CobolASG:
                 for c in data.get("special_names", {}).get("classes", [])
                 if _defines_a_set(c)
             ],
+        )
+
+    def record_area(self, record_name: str) -> str:
+        return _record_area(
+            self.file_record_to_select, self.same_record_areas, record_name
         )
 
     def to_dict(self) -> dict:
@@ -377,6 +403,11 @@ class CobolASG:
             | {section: items for section, items in listed.items() if items}
             | self._procedure_using_dict()
             | self._file_descriptions_dict()
+            | (
+                {"same_record_areas": [list(n) for n in self.same_record_areas]}
+                if self.same_record_areas
+                else {}
+            )
         )
 
     def _special_names_dict(self) -> dict:

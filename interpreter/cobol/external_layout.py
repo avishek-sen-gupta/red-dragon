@@ -8,12 +8,13 @@ import logging
 from collections.abc import Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
-from itertools import accumulate, groupby, pairwise
+from itertools import accumulate, pairwise
 
 from cobol_asg.asg_types import CobolASG, CobolField
 from cobol_asg.storage_layout import (
     byte_length,
     file_section_layout,
+    record_areas,
     section_layout,
 )
 from interpreter.cobol.external_area import ExternalArea, ExternalKind
@@ -69,16 +70,12 @@ def partition_external(asg: CobolASG) -> ExternalPartition:
 def _own_descriptions(
     asg: CobolASG, shared: AbstractSet[tuple[ExternalKind, str]]
 ) -> list[list[CobolField]]:
-    """The records of each FD that is not EXTERNAL, FD by FD."""
-    own = (
+    """The records of each record area that is not EXTERNAL, area by area: an FD's,
+    or the FDs' a SAME RECORD AREA clause names."""
+    own = [
         f for f in asg.file_fields if (ExternalKind.FILE, f.name.upper()) not in shared
-    )
-    return [
-        list(records)
-        for _, records in groupby(
-            own, lambda f: asg.file_record_to_select.get(f.name.upper(), "")
-        )
     ]
+    return record_areas(own, lambda f: asg.record_area(f.name))
 
 
 def _records(asg: CobolASG) -> tuple[_Described, ...]:

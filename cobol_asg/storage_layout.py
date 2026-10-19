@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from functools import reduce
 from itertools import accumulate
@@ -127,3 +127,20 @@ def file_section_layout(
 
 def _area_length(records: Sequence[CobolField]) -> int:
     return max((byte_length(r) for r in records if not r.renames_from.name), default=0)
+
+
+def record_areas(
+    records: Sequence[CobolField], area_of: Callable[[CobolField], str]
+) -> list[list[CobolField]]:
+    areas = list(
+        accumulate(
+            records,
+            lambda area, record: area if record.renames_from.name else area_of(record),
+            initial="",
+        )
+    )[1:]
+    return [
+        [record for record, area in zip(records, areas, strict=True) if area == name]
+        for i, name in enumerate(areas)
+        if name not in areas[:i]
+    ]

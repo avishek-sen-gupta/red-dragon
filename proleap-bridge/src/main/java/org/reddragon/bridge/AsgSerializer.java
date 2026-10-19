@@ -20,6 +20,7 @@ import io.proleap.cobol.asg.metamodel.environment.specialnames.CurrencySignClaus
 import io.proleap.cobol.asg.metamodel.environment.specialnames.SpecialNamesParagraph;
 import io.proleap.cobol.asg.metamodel.environment.inputoutput.InputOutputSection;
 import io.proleap.cobol.asg.metamodel.environment.inputoutput.filecontrol.AlternateRecordKeyClause;
+import io.proleap.cobol.asg.metamodel.environment.inputoutput.iocontrol.SameClause;
 import io.proleap.cobol.asg.metamodel.environment.inputoutput.filecontrol.FileControlEntry;
 import io.proleap.cobol.asg.metamodel.environment.inputoutput.filecontrol.FileControlParagraph;
 import io.proleap.cobol.asg.metamodel.identification.IdentificationDivision;
@@ -120,6 +121,7 @@ public final class AsgSerializer {
         serializeDataDivision(pu, asg);
         serializeProcedureDivision(pu, asg);
         asg.add("file_control", serializeFileControl(pu));
+        asg.add("same_record_areas", serializeSameRecordAreas(pu));
         JsonObject specialNames = serializeSpecialNames(pu);
         if (specialNames.size() > 0) {
             asg.add("special_names", specialNames);
@@ -724,6 +726,24 @@ public final class AsgSerializer {
         JsonObject ref = new JsonObject();
         ref.addProperty("name", "");
         return ref;
+    }
+
+    private static JsonArray serializeSameRecordAreas(ProgramUnit pu) {
+        JsonArray result = new JsonArray();
+        EnvironmentDivision env = pu.getEnvironmentDivision();
+        if (env == null || env.getInputOutputSection() == null
+                || env.getInputOutputSection().getIoControlParagraph() == null) {
+            return result;
+        }
+        for (SameClause clause : env.getInputOutputSection().getIoControlParagraph().getSameClauses()) {
+            if (clause.getForm() != SameClause.Form.RECORD) continue;
+            JsonArray files = new JsonArray();
+            for (Call fileCall : clause.getFileCalls()) {
+                files.add(fileCall.getName().toUpperCase());
+            }
+            result.add(files);
+        }
+        return result;
     }
 
     private static JsonArray serializeFileControl(ProgramUnit pu) {
