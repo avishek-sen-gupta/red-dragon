@@ -360,3 +360,59 @@ def test_merge_using_a_missing_file_merges_the_files_that_opened(
         ),
     )
     assert capsys.readouterr().out == "A1\nC2\nAT END\nEND\n"
+
+
+@covers(CobolFeature.SORT)
+def test_sort_of_variable_length_records_keeps_each_record_its_own_size(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    files = ("IN-F", "OUT-F", "SRT")
+    source = to_fixed(
+        [
+            "IDENTIFICATION DIVISION.",
+            "PROGRAM-ID. SORTVAR.",
+            "ENVIRONMENT DIVISION.",
+            "INPUT-OUTPUT SECTION.",
+            "FILE-CONTROL.",
+            *(f'    SELECT {name} ASSIGN TO "{name}".' for name in files),
+            "DATA DIVISION.",
+            "FILE SECTION.",
+            "FD IN-F RECORD IS VARYING IN SIZE.",
+            "01 IN-SHORT PIC X(3).",
+            "01 IN-LONG PIC X(8).",
+            "FD OUT-F RECORD IS VARYING IN SIZE.",
+            "01 OUT-SHORT PIC X(3).",
+            "01 OUT-LONG PIC X(8).",
+            "SD SRT RECORD IS VARYING IN SIZE.",
+            "01 S-SHORT.",
+            "    05 S-KEY PIC X.",
+            "    05 FILLER PIC XX.",
+            "01 S-LONG PIC X(8).",
+            "PROCEDURE DIVISION.",
+            "MAIN-PARA.",
+            "    OPEN OUTPUT IN-F.",
+            '    MOVE "BLONGREC" TO IN-LONG. WRITE IN-LONG.',
+            '    MOVE "ASH" TO IN-SHORT. WRITE IN-SHORT.',
+            '    MOVE "CLONGXYZ" TO IN-LONG. WRITE IN-LONG.',
+            "    CLOSE IN-F.",
+            "    SORT SRT ON ASCENDING KEY S-KEY USING IN-F GIVING OUT-F.",
+            "    OPEN INPUT OUT-F.",
+            *(
+                '    MOVE ALL "*" TO OUT-LONG. READ OUT-F. DISPLAY OUT-LONG.'
+                for _ in range(3)
+            ),
+            '    READ OUT-F AT END DISPLAY "EOF".',
+            "    CLOSE OUT-F.",
+            "    STOP RUN.",
+        ]
+    )
+    run(
+        source=source,
+        language="cobol",
+        max_steps=50000,
+        io_provider=RealFileIOProvider(
+            base_dir=tmp_path,
+            inputs=RunInputs(path_overrides={name: tmp_path / name for name in files}),
+        ),
+    )
+    assert capsys.readouterr().out == "ASH*****\nBLONGREC\nCLONGXYZ\nEOF\n"
