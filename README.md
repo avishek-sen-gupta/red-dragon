@@ -16,6 +16,8 @@ With complete source and all dependencies present, parse → lower → execute m
 
 **Scale:** 15 tree-sitter frontends + COBOL (139 enumerated features) + LLM frontends · 15,387 tests in the default run (`external` and `nist` markers excluded)
 
+**COBOL conformance:** measured against the NIST COBOL-85 test suite (CCVS) — see [NIST CCVS conformance](docs/nist/README.md) for the method and dated full-run snapshots, the latest being [2026-10-19](docs/nist/2026-10-19-closing-conformance-report.md).
+
 RedDragon covers the main features of each language, not every feature. Some features are implemented in a simplified, cross-language way.
 
 Also included:
