@@ -704,6 +704,10 @@ public final class AsgSerializer {
             if (para.getStatements() != null && !para.getStatements().isEmpty()) {
                 StatementSerializer.serializeSentences(para.getStatements(), paraObj);
             }
+            if (para.getCtx() instanceof CobolParser.ParagraphContext paragraphCtx
+                    && paragraphCtx.alteredGoTo() != null) {
+                StatementSerializer.serializeAlteredGoTo(paragraphCtx.alteredGoTo(), paraObj);
+            }
 
             arr.add(paraObj);
         }

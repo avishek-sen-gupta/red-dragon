@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from cobol_asg.cobol_parser import make_cobol_parser
 from interpreter.cobol.cobol_frontend import CobolFrontend
 from interpreter.cobol.features import CobolFeature
-from interpreter.instructions import Branch, Const, InstructionBase
+from interpreter.instructions import Branch, InstructionBase
 from interpreter.ir import CodeLabel
 from tests.covers import covers
 
@@ -57,6 +57,16 @@ def _lower() -> list[InstructionBase]:
                             },
                         ],
                     },
+                    {
+                        "name": "G1",
+                        "statements": [
+                            {
+                                "type": "GOTO",
+                                "form": "simple",
+                                "target": {"paragraph": "S1", "section": ""},
+                            },
+                        ],
+                    },
                 ],
             },
             {
@@ -89,9 +99,7 @@ class TestProcedureNameTargets:
             CodeLabel("para_S1"),
             CodeLabel("section_SEC2"),
             CodeLabel("para_S1"),
+            CodeLabel("para_G1_altered_goto"),
+            CodeLabel("para_S1"),
+            CodeLabel("section_SEC2"),
         ]
-        assert [
-            i.value
-            for i in instructions
-            if isinstance(i, Const) and i.value in ("section_SEC2", "para_SEC2")
-        ] == ["section_SEC2"]

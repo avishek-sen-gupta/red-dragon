@@ -1,4 +1,4 @@
-"""CALL, ALTER, ENTRY, CANCEL statement lowering."""
+"""CALL, ENTRY, CANCEL statement lowering."""
 
 from __future__ import annotations
 
@@ -7,13 +7,11 @@ from collections.abc import Sequence
 
 from cobol_asg.call_target import CallTarget
 from cobol_asg.cobol_statements import (
-    AlterStatement,
     CallStatement,
     CallUsingParam,
     CancelStatement,
     CobolStatementType,
     EntryStatement,
-    ProcedureRef,
 )
 from cobol_asg.cobol_types import CobolTypeDescriptor
 from cobol_asg.nonnumeric_literal import literal_characters
@@ -476,27 +474,6 @@ def _store_field(
         StoreField(obj_reg=obj, field_name=FieldName(name), value_reg=value),
         span=scope.span,
     )
-
-
-def lower_alter(
-    ctx: EmitContext,
-    stmt: AlterStatement,
-    _materialised: MaterialisedSectionedLayout,
-) -> None:
-    """ALTER para-1 TO PROCEED TO para-2."""
-    span = stmt.span
-    for pt in stmt.proceed_tos:
-        target_reg = ctx.const_to_reg(
-            str(ctx.procedure_label(ProcedureRef(paragraph=pt.target))), span=span
-        )
-        ctx.emit_inst(
-            StoreVar(
-                name=VarName(f"__alter_{pt.source}"),
-                value_reg=target_reg,
-            ),
-            span=span,
-        )
-        logger.info("ALTER %s TO PROCEED TO %s", pt.source, pt.target)
 
 
 def lower_entry(

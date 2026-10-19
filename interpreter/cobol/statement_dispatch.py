@@ -65,8 +65,8 @@ from interpreter.cobol.lower_arithmetic import (
     lower_stop_run,
 )
 from interpreter.cobol.lower_evaluate import lower_evaluate
+from interpreter.cobol.lower_alter import lower_alter
 from interpreter.cobol.lower_call import (
-    lower_alter,
     lower_call,
     lower_cancel,
     lower_entry,

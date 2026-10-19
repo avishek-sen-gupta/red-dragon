@@ -46,6 +46,7 @@ from cobol_memory.region_id import RegionId
 from interpreter import constants
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.cobol.lower_alter import perform_alter_reset
 from interpreter.cobol.lower_data_division import lower_data_division
 from interpreter.cobol.program_object import (
     ARGUMENTS_PARAM,
@@ -192,6 +193,7 @@ def _lower_initial_state(
     after a CANCEL."""
     ctx.emit_inst(Label_(label=_initial_label(program_id)), span=None)
     ws_reg = lower_data_division(ctx, ws_layout, RegionId.WORKING_STORAGE)
+    perform_alter_reset(ctx, program_id)
     singleton_reg = ctx.fresh_reg()
     ctx.emit_inst(
         LoadVar(result_reg=singleton_reg, name=program_var(program_id)), span=None

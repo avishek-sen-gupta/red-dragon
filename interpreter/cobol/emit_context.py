@@ -31,6 +31,8 @@ from cobol_asg.source_span import SourceSpan
 from cobol_memory.field_extent import FieldExtent, Precision
 from cobol_memory.region_id import RegionId
 from cobol_numeric.number import from_literal, is_cobol_number
+from interpreter.cobol.alter_table import AlterTable
+from interpreter.cobol.alterable_goto import AlterableGoto
 from interpreter.cobol.alphanumeric import (
     decode_alphanumeric,
     encode_hex_literal,
@@ -197,6 +199,7 @@ class EmitContext:
         self._paragraph: str = ""
         self._section: str = ""
         self._requested_exits: set[CodeLabel] = set()
+        self._alters: AlterTable = AlterTable()
         self._sentence: CodeLabel = CodeLabel("")
         self._perform_scopes: int = 0
         self._perform_leave: CodeLabel = CodeLabel("")
@@ -333,6 +336,17 @@ class EmitContext:
     def _request_exit(self, label: CodeLabel) -> CodeLabel:
         self._requested_exits = self._requested_exits | {label}
         return label
+
+    @property
+    def alters(self) -> AlterTable:
+        return self._alters
+
+    def record_alterable_goto(self, goto: AlterableGoto) -> None:
+        self._alters = self._alters.with_goto(goto)
+
+    def record_alter(self, paragraph: CodeLabel, target: CodeLabel) -> int:
+        self._alters = self._alters.with_target(paragraph, target)
+        return self._alters.ordinal(paragraph, target)
 
     # ── Core Primitives ───────────────────────────────────────────
 

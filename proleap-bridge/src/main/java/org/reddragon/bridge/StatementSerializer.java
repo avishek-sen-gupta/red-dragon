@@ -234,6 +234,23 @@ public final class StatementSerializer {
         }
     }
 
+    /**
+     * A paragraph that is only {@code GO TO.} parses as Cobol.g4's {@code alteredGoTo},
+     * for which ProLeap's ASG keeps no statement: it is the paragraph's one sentence, a
+     * GOTO of form "altered".
+     */
+    public static void serializeAlteredGoTo(CobolParser.AlteredGoToContext ctx, JsonObject into) {
+        JsonObject obj = newStatement("GOTO");
+        obj.addProperty("form", "altered");
+        addSpan(obj, ctx);
+        JsonArray stmts = new JsonArray();
+        stmts.add(obj);
+        JsonArray ends = new JsonArray();
+        ends.add(0);
+        into.add("statements", stmts);
+        into.add("sentence_ends", ends);
+    }
+
     private static void endSentence(JsonArray stmts, JsonArray ends) {
         int last = stmts.size() - 1;
         if (last < 0) {

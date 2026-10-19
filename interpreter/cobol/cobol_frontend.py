@@ -28,6 +28,7 @@ from interpreter.cobol.field_resolution import ResolvedFieldRef
 from interpreter.cobol.file_declarations import lower_file_declarations
 from interpreter.cobol.file_definitions_data import file_definitions_data
 from interpreter.cobol.layout_data import layout_data
+from interpreter.cobol.lower_alter import lower_alter_reset
 from interpreter.cobol.lower_data_division import (
     lower_file_area,
     lower_sectioned_data_division,
@@ -273,6 +274,7 @@ class CobolFrontend(Frontend):
         self._ctx.emit_inst(Label_(label=after_label))
         lower_file_area(self._ctx, self._program_id, sectioned.file)
         lower_use_request(self._ctx, asg)
+        lower_alter_reset(self._ctx, self._program_id)
 
         logger.debug(
             "COBOL frontend produced %d IR instructions",

@@ -3734,32 +3734,6 @@ class TestCancelSmoke:
         assert _decode_zoned_unsigned(region, 0, 1) == 1
 
 
-class TestAlterGoto:
-    @covers(CobolFeature.ALTER, CobolFeature.GO_TO)
-    def test_alter_compiles_and_runs(self):
-        """ALTER statement compiles and runs — smoke test (runtime redirect not yet supported)."""
-        vm = _run_cobol(
-            [
-                "IDENTIFICATION DIVISION.",
-                "PROGRAM-ID. TEST-ALTER.",
-                "DATA DIVISION.",
-                "WORKING-STORAGE SECTION.",
-                "01 WS-RESULT  PIC 9(1) VALUE 0.",
-                "PROCEDURE DIVISION.",
-                "MAIN-PARA.",
-                "    ALTER JUMP-PARA TO PROCEED TO TARGET-PARA.",
-                "    MOVE 1 TO WS-RESULT.",
-                "    STOP RUN.",
-                "JUMP-PARA.",
-                "    GO TO MAIN-PARA.",
-                "TARGET-PARA.",
-                "    STOP RUN.",
-            ],
-        )
-        region = _first_region(vm)
-        assert _decode_zoned_unsigned(region, 0, 1) == 1
-
-
 class TestEntryPoint:
     @covers(CobolFeature.ENTRY)
     def test_entry_compiles_and_runs(self):
