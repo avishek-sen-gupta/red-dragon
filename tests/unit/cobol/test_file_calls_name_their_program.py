@@ -205,6 +205,8 @@ def test_each_file_call_names_the_calling_program_last(tmp_path):
             ("__cobol_io_data", ("<__cobol_read_record>", "PGMX")),
             ("__cobol_close_file", ("F1", "PGMX")),
             ("__cobol_io_outcome", ("<__cobol_close_file>", "PGMX")),
+            ("__cobol_close_file", ("F1", "PGMX")),
+            ("__cobol_io_outcome", ("<__cobol_close_file>", "PGMX")),
         ],
         (
             ("declare_file", "PGMX"),

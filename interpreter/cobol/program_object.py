@@ -5,10 +5,12 @@ from __future__ import annotations
 from cobol_asg.asg_types import CobolASG
 from cobol_asg.contained_programs import UNNAMED_PROGRAM
 from interpreter.field_name import FieldName
+from interpreter.ir import CodeLabel
 from interpreter.var_name import VarName
 
 ENTRY_PREFIX = "__entry_"
 PROGRAM_PREFIX = "__prog_"
+CANCEL_PREFIX = "__cancel_"
 ARGUMENTS_PARAM = VarName("__call_arguments")
 WORKING_STORAGE_FIELD = FieldName("ws_handle")
 INITIAL_STATE_FIELD = FieldName("initial_state")
@@ -16,6 +18,14 @@ INITIAL_STATE_FIELD = FieldName("initial_state")
 
 def entry_var(program_id: str) -> VarName:
     return VarName(f"{ENTRY_PREFIX}{program_id.upper()}")
+
+
+def cancel_var(program_id: str) -> VarName:
+    return VarName(f"{CANCEL_PREFIX}{program_id.upper()}")
+
+
+def cancel_label(program_id: str) -> CodeLabel:
+    return CodeLabel(f"func_cancel_{program_id.lower()}_0")
 
 
 def program_var(program_id: str) -> VarName:

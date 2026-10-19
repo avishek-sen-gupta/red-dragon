@@ -36,6 +36,7 @@ from interpreter.cobol.lowering_scope import LoweringScope
 from interpreter.cobol.pointer_lowering import PointerLowering
 from interpreter.cobol.program_figuratives import ProgramFiguratives
 from interpreter.cobol.program_object import (
+    CANCEL_PREFIX,
     ENTRY_PREFIX,
     INITIAL_STATE_FIELD,
     entry_var,
@@ -537,7 +538,7 @@ def _cancel_program(scope: LoweringScope, target: CallTarget) -> None:
         span=span,
     )
     ctx.emit_inst(Label_(label=reset_label), span=span)
-    _mark_initial_state(scope, directory, name)
+    _reset_program(scope, directory, name)
     ctx.emit_inst(Branch(label=end_label), span=span)
     ctx.emit_inst(Label_(label=end_label), span=span)
     logger.info("CANCEL %s", target.describe())
@@ -565,6 +566,12 @@ def _cancelled_name(scope: LoweringScope, target: CallTarget) -> Register:
             return scope.ctx.const_to_reg(target.literal.upper(), span=scope.span)
 
 
+def _reset_program(scope: LoweringScope, directory: Register, name: Register) -> None:
+    """IBM's initial state for the next CALL, and the program's open files closed."""
+    _mark_initial_state(scope, directory, name)
+    _call_cancel_routine(scope, name)
+
+
 def _mark_initial_state(
     scope: LoweringScope, directory: Register, name: Register
 ) -> None:
@@ -579,6 +586,21 @@ def _mark_initial_state(
             obj_reg=program,
             field_name=INITIAL_STATE_FIELD,
             value_reg=ctx.const_to_reg(True, span=span),
+        ),
+        span=span,
+    )
+
+
+def _call_cancel_routine(scope: LoweringScope, name: Register) -> None:
+    """The cancelled program's own routine closes the files it left open."""
+    ctx, span = scope.ctx, scope.span
+    prefix = ctx.const_to_reg(CANCEL_PREFIX, span=span)
+    location = _emit_builtin(scope, BuiltinName.STRING_CONCAT_PAIR, (prefix, name))
+    ctx.emit_inst(
+        CallWithMemory(
+            result_reg=ctx.fresh_reg(),
+            location=location,
+            memory=_argument_array(scope, ()),
         ),
         span=span,
     )

@@ -182,7 +182,7 @@ def _cancel_reset(
         for i in instructions
         if isinstance(i, CallFunction) and str(i.func_name) == "dict_contains_key"
     )
-    directory, name = test.args
+    directory, name = (Register(str(a)) for a in test.args)
     branch = instructions[list(instructions).index(test) + 1]
     found = instructions[_label_at(instructions, branch.branch_targets[0]) + 1]
     return (
@@ -2763,8 +2763,9 @@ class TestCallAlterEntryCancelLowering:
     def test_cancel_marks_a_present_program_for_its_initial_state(self):
         """CANCEL 'SUBPROG' is IR: when the run unit's program directory holds
         SUBPROG, its program object's initial_state field is set, so its next
-        entry re-initialises WORKING-STORAGE. The only builtin it calls is the
-        primitive membership test of a heap object."""
+        entry re-initialises WORKING-STORAGE, and SUBPROG's cancel routine is
+        called by name. The only builtins it calls are primitives: the membership
+        test of a heap object and the concatenation that names the routine."""
         fields = [
             CobolField(name="WS-A", level=77, pic="9(1)", usage="DISPLAY", offset=0),
         ]
@@ -2777,7 +2778,7 @@ class TestCallAlterEntryCancelLowering:
         )
 
         assert (list(added.elements()), _cancel_reset(with_cancel)) == (
-            ["dict_contains_key"],
+            ["dict_contains_key", BuiltinName.STRING_CONCAT_PAIR],
             (PROGRAM_DIRECTORY, "SUBPROG", True, True, [True]),
         )
 

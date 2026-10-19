@@ -37,7 +37,7 @@ from interpreter.cobol.file_facts import (
 )
 from interpreter.cobol.file_logic_status import FileLogicStatus
 from interpreter.cobol.file_position import FilePosition
-from interpreter.cobol.file_state import file_state_of
+from interpreter.cobol.file_state import file_state, file_state_of
 from interpreter.cobol.file_verb_ir import (
     FileVerbIr,
     Refusal,
@@ -46,6 +46,7 @@ from interpreter.cobol.file_verb_ir import (
 )
 from interpreter.cobol.global_names import visible_file_entries, visible_record_files
 from interpreter.cobol.invalid_key_phrases import InvalidKeyPhrases
+from interpreter.cobol.ir_emitter import IrEmitter
 from interpreter.cobol.lowering_scope import LoweringScope
 from interpreter.cobol.prime_key import PrimeKey
 from interpreter.cobol.program_object import entry_var, program_name, use_request_var
@@ -460,6 +461,18 @@ def _lower_close_file(scope: LoweringScope, filename: str, with_lock: bool) -> N
     )
     _emit_use_trigger(scope, filename, status_reg, ())
     logger.info("CLOSE %s", filename)
+
+
+def emit_implicit_close(ctx: EmitContext, entry: FileControlEntry) -> None:
+    """The close CANCEL makes of a file its program left open: the CLOSE
+    statement's own close, with no FILE STATUS update and no USE procedure."""
+    e = IrEmitter(ctx, None)
+    v = FileVerbIr(
+        e,
+        file_state(program_name(ctx._asg), entry.file_name),
+        e.text(program_name(ctx._asg)),
+    )
+    v.when(v.open_(), partial(_emit_close, v, v.outcome(), entry, False))
 
 
 def _emit_close(
