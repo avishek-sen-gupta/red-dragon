@@ -1688,10 +1688,14 @@ class OpenStatement:
 
 @dataclass(frozen=True)
 class CloseStatement:
-    """CLOSE file1 [WITH LOCK] file2 ... — with_lock names the files closed WITH LOCK."""
+    """CLOSE file1 [phrase] file2 ... — each phrase list names the files it was
+    written on: WITH LOCK, REEL or UNIT, FOR REMOVAL, NO REWIND."""
 
     files: list[str] = field(default_factory=list)
     with_lock: list[str] = field(default_factory=list)
+    reel_unit: list[str] = field(default_factory=list)
+    for_removal: list[str] = field(default_factory=list)
+    no_rewind: list[str] = field(default_factory=list)
     span: SourceSpan | None = None
 
     @classmethod
@@ -1699,6 +1703,9 @@ class CloseStatement:
         return cls(
             files=data.get("files", []),
             with_lock=data.get("with_lock", []),
+            reel_unit=data.get("reel_unit", []),
+            for_removal=data.get("for_removal", []),
+            no_rewind=data.get("no_rewind", []),
             span=SourceSpan.from_dict(data),
         )
 
@@ -1707,6 +1714,9 @@ class CloseStatement:
             "type": "CLOSE",
             "files": list(self.files),
             "with_lock": list(self.with_lock),
+            "reel_unit": list(self.reel_unit),
+            "for_removal": list(self.for_removal),
+            "no_rewind": list(self.no_rewind),
         }
         if self.span is not None:
             self.span.write_into(result)

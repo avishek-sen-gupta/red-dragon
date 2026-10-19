@@ -819,12 +819,19 @@ class TestParseStatementDispatch:
         stmt = parse_statement(
             {
                 "type": "CLOSE",
-                "files": ["CUST-FILE", "ORDER-FILE"],
+                "files": ["CUST-FILE", "ORDER-FILE", "TAPE"],
                 "with_lock": ["ORDER-FILE"],
+                "reel_unit": ["TAPE"],
+                "for_removal": ["TAPE"],
+                "no_rewind": ["CUST-FILE"],
             }
         )
         assert stmt == CloseStatement(
-            files=["CUST-FILE", "ORDER-FILE"], with_lock=["ORDER-FILE"]
+            files=["CUST-FILE", "ORDER-FILE", "TAPE"],
+            with_lock=["ORDER-FILE"],
+            reel_unit=["TAPE"],
+            for_removal=["TAPE"],
+            no_rewind=["CUST-FILE"],
         )
 
     @covers(CobolFeature.READ)
@@ -1746,6 +1753,9 @@ class TestRoundTrip:
             "type": "CLOSE",
             "files": ["CUST-FILE", "ORDER-FILE"],
             "with_lock": ["ORDER-FILE"],
+            "reel_unit": ["CUST-FILE"],
+            "for_removal": [],
+            "no_rewind": ["CUST-FILE"],
         }
         assert self._round_trip(data) == data
 

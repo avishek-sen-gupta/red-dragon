@@ -14,7 +14,7 @@ from tests.nist.nist_failure import NistFailure
 from tests.nist.nist_outcome import NistOutcome
 
 _REPO = Path(__file__).resolve().parents[2]
-_PROGRAMS = ("SQ130A", "SQ123A", "SQ201M", "NC302M", "SQ302M", "CM101M")
+_PROGRAMS = ("SQ130A", "SG103A", "SQ201M", "NC302M", "SQ302M", "CM101M")
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
@@ -50,7 +50,8 @@ def test_report_command_categorises_a_pass_a_fail_an_error_and_skips(
         "|---|---:|---:|---:|---:|---:|\n"
         "| CM | 0 | 0 | 1 | 1 | 0.0 |\n"
         "| NC | 0 | 0 | 1 | 1 | 0.0 |\n"
-        "| SQ | 1 | 2 | 1 | 4 | 25.0 |\n"
+        "| SG | 0 | 1 | 0 | 1 | 0.0 |\n"
+        "| SQ | 1 | 1 | 1 | 3 | 33.3 |\n"
         "| Overall | 1 | 2 | 3 | 6 | 16.7 |\n"
         "\n"
         "## Categories\n"
@@ -61,7 +62,7 @@ def test_report_command_categorises_a_pass_a_fail_an_error_and_skips(
         "\n"
         "### summary-failures (1)\n"
         "\n"
-        "SQ123A\n"
+        "SG103A\n"
         "\n"
         "### error (1)\n"
         "\n"
@@ -77,7 +78,7 @@ def test_report_command_categorises_a_pass_a_fail_an_error_and_skips(
         "\n"
     )
     assert report.split("## First failure line per program\n\n")[1] == (
-        "- SQ123A (summary-failures): SQ123A: CCVS summary reports 2 failed test(s).\n"
+        "- SG103A (summary-failures): SG103A: CCVS summary reports 1 failed test(s).\n"
         "- SQ201M (error): UndeclaredDataNameError: line 363: data name "
         "'LINAGE-COUNTER' is not declared in the DATA DIVISION\n"
     )

@@ -175,7 +175,7 @@ fileignoreconfig:
 - filename: scripts/feature_coverage_audit.py
   checksum: a06f61ca7bdd0e20d1976b5535da86478a59345209191d09366ffcce7734e0cd
 - filename: tests/unit/test_cobol_statements.py
-  checksum: 708e7f6bbfabbcedfd8f5adc6f8fe90ede46c574e3ee983e8de498140c615cac
+  checksum: 39a6121f6dbdb579152444bc3b2a56ac97ed4f54b00277a1a7ec0c301cee39d5
 - filename: interpreter/frontends/javascript/features.py
   checksum: 662c2df0830d62ce56400986d1928f95ba4499f9239a591f6cd825897acd7149
 - filename: interpreter/frontends/ruby/features.py
@@ -253,7 +253,7 @@ fileignoreconfig:
 - filename: tests/unit/cobol/test_recorded_memory_effects.py
   checksum: ba151292b7ee1a3f747628e5950297f904de1c1cd625307f762f7a98b570b3de
 - filename: docs/frontend-design/cobol.md
-  checksum: 8cfc3feef933c2973a9c43bf2d7284fa1ca0533c930f862663b85dab0d158f9d
+  checksum: 3ee6e65276042c111e37954991c3dbf61269349b30b8cf0676d407c27a11a064
 - filename: tests/integration/test_cobol_call_using_addresses.py
   checksum: 353804977c7a3e5eb44a303f7e42a47ef1bdf9f837f41e396bf5033813c4fdb0
 - filename: tests/integration/test_cobol_call_using_slots.py
@@ -299,11 +299,11 @@ fileignoreconfig:
 - filename: tests/unit/cobol/test_io_statements.py
   checksum: f1d7f78a6301dacfe3155f92ed416c901afbc010bf1b94cef82098ebeb690d43
 - filename: cobol_asg/cobol_statements.py
-  checksum: 866feb8099dab733c527c548964e28581011ac261ab633406aee857f0e30b427
+  checksum: 063ec8d504e0d0acd5429fc39b8d79c21770aa2dd9b883b2de797976d50a5385
 - filename: proleap-bridge/src/main/java/org/reddragon/bridge/StatementSerializer.java
-  checksum: f171434ff2438a6e421f6fd711461d0daf457ffc613371bbb3b7d8d3c30a2b96
+  checksum: 1a265650ca40c6f660ccf669d7b6578cf4e005dde4c67af68496c5aa0e68863d
 - filename: interpreter/cobol/lower_io.py
-  checksum: abc846d3d95464ea03146c49841e83d2d626824752589eec33f3dedd910d28f7
+  checksum: a2e775777bc2b410871b7381e174fc7f359b3320dba1685e1e4600674e83136c
 - filename: tests/integration/test_cobol_use_declaratives.py
   checksum: d0c6ea039a432d727fde9ea777b1c4945dff7c0f5c3a4599a626bfd8df390072
 - filename: interpreter/cobol/open_file.py
@@ -372,4 +372,6 @@ fileignoreconfig:
   checksum: 9506d4093b8db8bbb28e690335478df3ac12f26ffba7a6a6b06575c91b457bc1
 - filename: interpreter/cobol/alternate_index.py
   checksum: 5761a6dc0a8376df593849cc0609c86f5ba62c9edf0297bfe6d5ab2e0f7d9006
+- filename: tests/integration/test_cobol_close_reel_unit.py
+  checksum: 718e0654bec935f5dec59e63b911f3df6f819bf07dc252a28054c86a393595b5
 version: "1.0"
