@@ -17,12 +17,21 @@ Emits (in order):
        STORE_FIELD %ptr, run, %run_reg
        CONST %init_reg, "func_init_params_<pid>_0"  → BoundFuncRef
        STORE_VAR __entry_<PID>, %init_reg
+       CONST %cancel_reg, "func_cancel_<pid>_0"     → BoundFuncRef
+       STORE_VAR __cancel_<PID>, %cancel_reg
        BRANCH __after_<pid>_0            → skip over procedure body
 
   2. func_init_params function — called by _handle_call_with_memory:
        LABEL func_init_params_<pid>_0
        SYMBOLIC param:__call_arguments
        BRANCH func_<pid>_0
+
+  3. func_cancel function — called by a CANCEL of this program, emitted after
+     the procedure body (cancel_routine.py), behind a branch to __after_<pid>_0:
+       LABEL func_cancel_<pid>_0
+       SYMBOLIC param:__call_arguments
+       close each open internal file
+       RETURN
 
 CANCEL sets initial_state; the procedure's entry (lower_ws_from_singleton)
 then performs the initial-state block again before binding __ws_region.
@@ -42,6 +51,8 @@ from interpreter.cobol.program_object import (
     ARGUMENTS_PARAM,
     INITIAL_STATE_FIELD,
     WORKING_STORAGE_FIELD,
+    cancel_label,
+    cancel_var,
     entry_var,
     program_var,
 )
@@ -131,6 +142,13 @@ def lower_program_init(
     )
 
     ctx.emit_inst(StoreVar(name=entry_var(program_id), value_reg=init_reg))
+    cancel_reg = ctx.fresh_reg()
+    ctx.emit_inst(
+        Const.func_ref(
+            cancel_reg, str(cancel_label(program_id)), params=[], return_type=UNKNOWN
+        )
+    )
+    ctx.emit_inst(StoreVar(name=cancel_var(program_id), value_reg=cancel_reg))
     ctx.emit_inst(Branch(label=after_label))
 
     ctx.emit_inst(Label_(label=init_params_label))

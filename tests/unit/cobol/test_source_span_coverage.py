@@ -310,6 +310,19 @@ def _skip_data_division_setup(raw):
     return raw[setup_end:]
 
 
+def _procedure_end(ir, program: str) -> int:
+    """Where a program's procedure ends: at the branch that skips the cancel
+    routine, which is emitted after the procedure and, being prologue-like
+    plumbing for CANCEL, carries no source location."""
+    routine = next(
+        i
+        for i, inst in enumerate(ir)
+        if inst.opcode.name == "LABEL" and str(inst.label) == f"func_cancel_{program}_0"
+    )
+    assert ir[routine - 1].opcode.name == "BRANCH"
+    return routine - 1
+
+
 def _procedure_body(ir):
     """Instructions between the program's entry label and its exit label,
     with the leading spanless data-division setup block removed.
@@ -322,11 +335,7 @@ def _procedure_body(ir):
         for i, inst in enumerate(ir)
         if inst.opcode.name == "LABEL" and str(inst.label) == "func_probe_0"
     )
-    end = next(
-        i
-        for i, inst in enumerate(ir)
-        if inst.opcode.name == "LABEL" and str(inst.label) == "__after_probe_0"
-    )
+    end = _procedure_end(ir, "probe")
     return _skip_data_division_setup(ir[start + 1 : end])
 
 
@@ -424,11 +433,7 @@ def _nested_procedure_body():
         for i, inst in enumerate(ir)
         if inst.opcode.name == "LABEL" and str(inst.label) == "func_nested_0"
     )
-    end = next(
-        i
-        for i, inst in enumerate(ir)
-        if inst.opcode.name == "LABEL" and str(inst.label) == "__after_nested_0"
-    )
+    end = _procedure_end(ir, "nested")
     return _skip_data_division_setup(ir[start + 1 : end])
 
 
@@ -542,11 +547,7 @@ def test_subscripted_access_instructions_are_located():
         for i, inst in enumerate(ir)
         if inst.opcode.name == "LABEL" and str(inst.label) == "func_subscr_0"
     )
-    end = next(
-        i
-        for i, inst in enumerate(ir)
-        if inst.opcode.name == "LABEL" and str(inst.label) == "__after_subscr_0"
-    )
+    end = _procedure_end(ir, "subscr")
     body = _skip_data_division_setup(ir[start + 1 : end])
     assert any(i.opcode.name == "BINOP" for i in body), (
         "expected subscript offset arithmetic in the body; the probe is not "
@@ -712,9 +713,7 @@ def _describe_unlocated(body) -> list[str]:
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_every_instruction_of_a_broad_program_is_located():
     ir = CobolFrontend(make_cobol_parser()).lower(E2E_SOURCE)
-    body = ir[
-        _label_index(ir, "func_e2epgm_0") + 1 : _label_index(ir, "__after_e2epgm_0")
-    ]
+    body = ir[_label_index(ir, "func_e2epgm_0") + 1 : _procedure_end(ir, "e2epgm")]
     setup = tuple(inst.opcode.name for inst in body[: len(_E2E_SETUP_OPCODES)])
     assert setup == _E2E_SETUP_OPCODES, (
         f"Leading instructions {setup} are not this program's data-division "

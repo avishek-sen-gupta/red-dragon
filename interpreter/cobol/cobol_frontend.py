@@ -20,6 +20,7 @@ from cobol_asg.asg_types import CobolASG
 from cobol_asg.cobol_parser import CobolParser
 from cobol_asg.cobol_statements import dialect_parsers_in_scope
 from cobol_asg.frontend_extension import DialectParser
+from interpreter.cobol.cancel_routine import lower_cancel_routine
 from interpreter.cobol.compile_options import CompileOptions
 from interpreter.cobol.condition_name_index import build_condition_index_over
 from interpreter.cobol.emit_context import EmitContext
@@ -40,7 +41,11 @@ from interpreter.cobol.lower_program_init import (
     lower_program_init,
     lower_ws_from_singleton,
 )
-from interpreter.cobol.program_object import UNNAMED_PROGRAM, program_name
+from interpreter.cobol.program_object import (
+    UNNAMED_PROGRAM,
+    cancel_label,
+    program_name,
+)
 from interpreter.cobol.run_unit import run_unit_allocation
 from interpreter.cobol.sectioned_layout import (
     MaterialisedSectionedLayout,
@@ -51,7 +56,7 @@ from interpreter.frontend import Frontend
 from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.frontends.symbol_table import SymbolTable
-from interpreter.instructions import InstructionBase, Label_
+from interpreter.instructions import Branch, InstructionBase, Label_
 from interpreter.ir import CodeLabel
 from interpreter.namespace_resolver import NamespaceResolver
 from interpreter.path_name import PathName
@@ -150,7 +155,8 @@ class CobolFrontend(Frontend):
 
     @property
     def func_symbol_table(self) -> dict[CodeLabel, FuncRef]:
-        """Expose func_PROGRAMID_0 and func_init_params_PROGRAMID_0 so that
+        """Expose func_PROGRAMID_0, func_init_params_PROGRAMID_0 and
+        func_cancel_PROGRAMID_0 so that
         Const instructions in the init block resolve to BoundFuncRef at runtime."""
         from interpreter.func_name import FuncName
 
@@ -160,11 +166,13 @@ class CobolFrontend(Frontend):
         pid_lower = pid.lower()
         proc_label = CodeLabel(f"func_{pid_lower}_0")
         init_params_label = CodeLabel(f"func_init_params_{pid_lower}_0")
+        cancel = cancel_label(pid)
         return {
             proc_label: FuncRef(name=FuncName(str(proc_label)), label=proc_label),
             init_params_label: FuncRef(
                 name=FuncName(str(init_params_label)), label=init_params_label
             ),
+            cancel: FuncRef(name=FuncName(str(cancel)), label=cancel),
         }
 
     def lower(
@@ -258,7 +266,10 @@ class CobolFrontend(Frontend):
         )
         lower_procedure_division(self._ctx, asg, materialised)
 
-        # Skip target — init block branches here to skip past procedure body
+        # The routine a CANCEL of this program calls, kept out of the procedure's
+        # fall-through path; then the skip target the init block branches to.
+        self._ctx.emit_inst(Branch(label=after_label))
+        lower_cancel_routine(self._ctx, self._program_id)
         self._ctx.emit_inst(Label_(label=after_label))
         lower_file_area(self._ctx, self._program_id, sectioned.file)
         lower_use_request(self._ctx, asg)
