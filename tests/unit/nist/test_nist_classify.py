@@ -71,6 +71,7 @@ def test_every_outcome_has_the_verdict_pytest_gives_it() -> None:
         NistOutcome.STEP_BUDGET_EXHAUSTED: NistVerdict.FAIL,
         NistOutcome.ERROR: NistVerdict.FAIL,
         NistOutcome.FIPS_FLAGGER: NistVerdict.SKIP,
+        NistOutcome.REEL_LINES_DELETED: NistVerdict.SKIP,
         NistOutcome.NO_PRINT_FILE: NistVerdict.SKIP,
         NistOutcome.SOURCE_MISSING: NistVerdict.SKIP,
         NistOutcome.UNSUPPORTED: NistVerdict.SKIP,

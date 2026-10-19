@@ -18,6 +18,7 @@ class NistOutcome(Enum):
     STEP_BUDGET_EXHAUSTED = "step-budget-exhausted"
     ERROR = "error"
     FIPS_FLAGGER = "fips-flagger"
+    REEL_LINES_DELETED = "reel-lines-deleted"
     NO_PRINT_FILE = "no-print-file"
     SOURCE_MISSING = "source-missing"
     UNSUPPORTED = "unsupported"
@@ -36,6 +37,7 @@ _VERDICTS = {
     NistOutcome.STEP_BUDGET_EXHAUSTED: NistVerdict.FAIL,
     NistOutcome.ERROR: NistVerdict.FAIL,
     NistOutcome.FIPS_FLAGGER: NistVerdict.SKIP,
+    NistOutcome.REEL_LINES_DELETED: NistVerdict.SKIP,
     NistOutcome.NO_PRINT_FILE: NistVerdict.SKIP,
     NistOutcome.SOURCE_MISSING: NistVerdict.SKIP,
     NistOutcome.UNSUPPORTED: NistVerdict.SKIP,

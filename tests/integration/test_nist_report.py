@@ -78,7 +78,7 @@ def test_report_command_categorises_a_pass_a_fail_an_error_and_skips(
         "\n"
     )
     assert report.split("## First failure line per program\n\n")[1] == (
-        "- SG103A (summary-failures): SG103A: CCVS summary reports 1 failed test(s).\n"
+        "- SG103A (summary-failures): SG103A: CCVS summary reports 3 failed test(s).\n"
         "- SQ201M (error): UndeclaredDataNameError: line 363: data name "
         "'LINAGE-COUNTER' is not declared in the DATA DIVISION\n"
     )
