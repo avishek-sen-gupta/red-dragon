@@ -9,6 +9,7 @@ class FileLogicStatus(Enum):
     PERMITTED = "00"
     DUPLICATES_FOLLOW = "02"
     OPTIONAL_ABSENT = "05"
+    NON_REEL_MEDIUM = "07"
     AT_END = "10"
     NOT_FOUND = "23"
     FILE_ABSENT = "35"

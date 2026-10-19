@@ -439,21 +439,22 @@ def lower_close(
     stmt: CloseStatement,
     materialised: MaterialisedSectionedLayout,
 ) -> None:
-    """CLOSE file1 file2 ... — close files via __cobol_close_file."""
+    """CLOSE file1 file2 ... — close files via __cobol_close_file. Every file here
+    is on a non-reel/unit medium: REEL or UNIT leaves it open, and REEL/UNIT, FOR
+    REMOVAL and NO REWIND each report 07."""
     scope = LoweringScope(ctx, materialised, stmt.span)
-    _ = [
-        _lower_close_file(scope, filename, filename in stmt.with_lock)
-        for filename in stmt.files
-    ]
+    _ = [_lower_close_file(scope, stmt, filename) for filename in stmt.files]
 
 
-def _lower_close_file(scope: LoweringScope, filename: str, with_lock: bool) -> None:
+def _lower_close_file(
+    scope: LoweringScope, stmt: CloseStatement, filename: str
+) -> None:
     v = _verb(scope, filename)
     outcome = v.outcome()
     v.guarded(
         (Refusal(v.closed, FileLogicStatus.NOT_OPEN),),
         outcome,
-        partial(_emit_close, v, outcome, _entry(scope.ctx, filename), with_lock),
+        partial(_close_as_phrased, v, outcome, stmt, _entry(scope.ctx, filename)),
         _nothing,
     )
     status_reg = v.e.load(outcome.status)
@@ -462,6 +463,24 @@ def _lower_close_file(scope: LoweringScope, filename: str, with_lock: bool) -> N
     )
     _emit_use_trigger(scope, filename, status_reg, ())
     logger.info("CLOSE %s", filename)
+
+
+def _close_as_phrased(
+    v: FileVerbIr, outcome: VerbOutcome, stmt: CloseStatement, entry: FileControlEntry
+) -> None:
+    """IBM's effect of CLOSE on a non-reel/unit file: REEL or UNIT is code F, the
+    file stays open with only its I-O status updated; any other CLOSE closes it.
+    A REEL/UNIT, FOR REMOVAL or NO REWIND phrase sets that status to 07."""
+    name = entry.file_name
+    if name in stmt.reel_unit:
+        v.set_status(outcome, FileLogicStatus.NON_REEL_MEDIUM)
+        return
+    _emit_close(v, outcome, entry, name in stmt.with_lock)
+    if name in stmt.no_rewind:
+        v.when(
+            v.status_is(outcome, FileLogicStatus.PERMITTED),
+            partial(v.set_status, outcome, FileLogicStatus.NON_REEL_MEDIUM),
+        )
 
 
 def emit_implicit_close(ctx: EmitContext, entry: FileControlEntry) -> None:

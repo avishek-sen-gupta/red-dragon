@@ -2062,38 +2062,63 @@ public final class StatementSerializer {
     private static JsonObject serializeClose(CloseStatement stmt) {
         JsonObject obj = newStatement("CLOSE");
         try {
-            JsonArray files = new JsonArray();
-            if (stmt.getCloseFiles() != null) {
-                stmt.getCloseFiles().stream()
-                    .map(io.proleap.cobol.asg.metamodel.procedure.close.CloseFile::getFileCall)
-                    .filter(c -> c != null)
-                    .map(StatementSerializer::extractCallName)
-                    .forEach(files::add);
-            }
-            obj.add("files", files);
-            JsonArray withLock = new JsonArray();
-            if (stmt.getCloseFiles() != null) {
-                stmt.getCloseFiles().stream()
-                    .filter(StatementSerializer::isClosedWithLock)
-                    .map(io.proleap.cobol.asg.metamodel.procedure.close.CloseFile::getFileCall)
-                    .filter(c -> c != null)
-                    .map(StatementSerializer::extractCallName)
-                    .forEach(withLock::add);
-            }
-            obj.add("with_lock", withLock);
+            // Each file's phrase as written (Cobol.g4 closeReelUnitStatement and
+            // closeRelativeStatement): the files that name REEL or UNIT, FOR
+            // REMOVAL, NO REWIND and LOCK. What a phrase does on a medium is the
+            // frontend's to decide. (red-dragon-sl30.94)
+            java.util.List<io.proleap.cobol.asg.metamodel.procedure.close.CloseFile> closeFiles =
+                    stmt.getCloseFiles() != null ? stmt.getCloseFiles() : java.util.List.of();
+            obj.add("files", closedFileNames(closeFiles, f -> true));
+            obj.add("with_lock", closedFileNames(closeFiles, StatementSerializer::isClosedWithLock));
+            obj.add("reel_unit", closedFileNames(closeFiles, f -> f.getCloseReelUnitStatement() != null));
+            obj.add("for_removal", closedFileNames(closeFiles,
+                    f -> f.getCloseReelUnitStatement() != null && f.getCloseReelUnitStatement().isForRemovel()));
+            obj.add("no_rewind", closedFileNames(closeFiles, StatementSerializer::isClosedWithNoRewind));
         } catch (Exception e) {
             LOG.fine("Could not extract CLOSE operands: " + e.getMessage());
         }
         return obj;
     }
 
+    private static JsonArray closedFileNames(
+            java.util.List<io.proleap.cobol.asg.metamodel.procedure.close.CloseFile> closeFiles,
+            java.util.function.Predicate<io.proleap.cobol.asg.metamodel.procedure.close.CloseFile> selected) {
+        JsonArray names = new JsonArray();
+        closeFiles.stream()
+            .filter(selected)
+            .map(io.proleap.cobol.asg.metamodel.procedure.close.CloseFile::getFileCall)
+            .filter(c -> c != null)
+            .map(StatementSerializer::extractCallName)
+            .forEach(names::add);
+        return names;
+    }
+
     private static boolean isClosedWithLock(
             io.proleap.cobol.asg.metamodel.procedure.close.CloseFile closeFile) {
         io.proleap.cobol.asg.metamodel.procedure.close.CloseRelativeStatement relative =
             closeFile.getCloseRelativeStatement();
-        return relative != null
-            && relative.getWithType()
-                == io.proleap.cobol.asg.metamodel.procedure.close.CloseRelativeStatement.WithType.LOCK;
+        io.proleap.cobol.asg.metamodel.procedure.close.CloseReelUnitStatement reelUnit =
+            closeFile.getCloseReelUnitStatement();
+        return (relative != null
+                && relative.getWithType()
+                    == io.proleap.cobol.asg.metamodel.procedure.close.CloseRelativeStatement.WithType.LOCK)
+            || (reelUnit != null
+                && reelUnit.getWithType()
+                    == io.proleap.cobol.asg.metamodel.procedure.close.CloseReelUnitStatement.WithType.LOCK);
+    }
+
+    private static boolean isClosedWithNoRewind(
+            io.proleap.cobol.asg.metamodel.procedure.close.CloseFile closeFile) {
+        io.proleap.cobol.asg.metamodel.procedure.close.CloseRelativeStatement relative =
+            closeFile.getCloseRelativeStatement();
+        io.proleap.cobol.asg.metamodel.procedure.close.CloseReelUnitStatement reelUnit =
+            closeFile.getCloseReelUnitStatement();
+        return (relative != null
+                && relative.getWithType()
+                    == io.proleap.cobol.asg.metamodel.procedure.close.CloseRelativeStatement.WithType.NO_REWIND)
+            || (reelUnit != null
+                && reelUnit.getWithType()
+                    == io.proleap.cobol.asg.metamodel.procedure.close.CloseReelUnitStatement.WithType.NO_REWIND);
     }
 
     private static JsonObject serializeRead(ReadStatement stmt) {
