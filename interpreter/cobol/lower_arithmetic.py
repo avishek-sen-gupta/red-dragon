@@ -834,6 +834,13 @@ def lower_move(
             == CobolDataCategory.NUMERIC_EDITED
             else value_str_reg
         ),
+        stored=(
+            _emit_stored_characters(scope, source_ref, source_rr)
+            if sent_whole
+            and not source_ref.fl.is_group
+            and _moves_to_a_group(scope, stmt.targets)
+            else value_str_reg
+        ),
         group=sent_whole and source_ref.fl.is_group,
     )
 
@@ -869,6 +876,32 @@ def lower_move(
             )
             effective_source = plain_move_source(filled)
         _store_move_value(scope, target, effective_source)
+
+
+def _moves_to_a_group(scope: LoweringScope, targets: Sequence[RefModOperand]) -> bool:
+    return any(
+        scope.ctx.has_field(target.name, scope.materialised)
+        and not target.is_reference_modified
+        and scope.materialised.resolve_match(target.name, target.qualifiers)[
+            0
+        ].storage.is_group
+        for target in targets
+    )
+
+
+def _emit_stored_characters(
+    scope: LoweringScope, ref: ResolvedFieldRef, region_reg: Register
+) -> Register:
+    """An elementary sender's stored bytes read as one alphanumeric item: what
+    a group receiver takes, with no conversion of internal representation
+    (IBM Enterprise COBOL LR, group moves)."""
+    return scope.ctx.emit_decode_field(
+        region_reg,
+        ref.fl.as_characters(),
+        ref.offset_reg,
+        extent=ref.extent,
+        span=scope.span,
+    )
 
 
 def _move_raw_figurative(
