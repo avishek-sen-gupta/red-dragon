@@ -14,17 +14,25 @@ from interpreter.register import Register
 class MoveSource:
     """The sender's value; what a character receiver takes (a numeric sender's
     digit image); what a numeric receiver takes (a numeric-edited sender's
-    de-edited value); and whether the sender is a group item, whose move fills
-    the receiver as characters. A reference-modified receiver takes the value."""
+    de-edited value); what a group receiver takes (the sender's stored bytes as
+    characters, unconverted); and whether the sender is a group item, whose move
+    fills the receiver as characters. A reference-modified receiver takes the
+    value."""
 
     value: Register
     characters: Register
     number: Register
+    stored: Register
     group: bool
 
     def value_for(self, target: RefModOperand, fl: FieldLayout) -> Register:
         if target.is_reference_modified:
             return self.value
+        return self._whole_receiver_value(fl)
+
+    def _whole_receiver_value(self, fl: FieldLayout) -> Register:
+        if fl.is_group:
+            return self.stored
         if fl.type_descriptor.holds_characters:
             return self.characters
         return self.number
@@ -38,4 +46,6 @@ class MoveSource:
 
 
 def plain_move_source(value: Register) -> MoveSource:
-    return MoveSource(value=value, characters=value, number=value, group=False)
+    return MoveSource(
+        value=value, characters=value, number=value, stored=value, group=False
+    )
