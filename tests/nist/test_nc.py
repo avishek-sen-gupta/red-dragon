@@ -12,6 +12,7 @@ DISPLAY rather than to a PRINT-FILE, so its displayed report is checked. Exclude
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -124,8 +125,10 @@ pytestmark = pytest.mark.nist
         "NC254A",
     ],
 )
-def test_nc_program(prog: str, tmp_path: Path) -> None:
-    run_nist(prog, tmp_path)
+def test_nc_program(
+    prog: str, tmp_path: Path, record_property: Callable[[str, str], None]
+) -> None:
+    run_nist(prog, tmp_path, record_property)
 
 
 @pytest.mark.parametrize(

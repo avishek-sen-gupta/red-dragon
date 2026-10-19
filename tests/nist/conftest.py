@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import itertools
 import re
-from collections.abc import Generator, Mapping, Sequence
+from collections.abc import Callable, Generator, Mapping, Sequence
 from functools import cache
 from pathlib import Path
 
@@ -113,6 +113,7 @@ _HEADER_RE = re.compile(
 )
 _SUBPRG = "SUBPRG"
 _SUBRTN = "SUBRTN"
+NIST_CHECKER_PROPERTY = "nist_checker"
 _MAX_STEPS = 2_000_000
 
 
@@ -251,20 +252,49 @@ def subroutines(prog: str) -> list[str]:
     ]
 
 
-def preceding_run_units(prog: str) -> list[str]:
-    """The run units a SUBPRG member follows in its CCVS job: the owner, then
-    each earlier member. They create the files this program reads."""
+_JobLinks = Sequence[tuple[str, str, str]]
+
+
+def _preceding_in(links: _JobLinks, prog: str) -> list[str]:
     owners = [
-        owner for owner, link, member in _links() if (link, member) == (_SUBPRG, prog)
+        owner for owner, link, member in links if (link, member) == (_SUBPRG, prog)
     ]
     return [
         *owners,
         *(
             member
-            for owner, link, member in _links()
+            for owner, link, member in links
             if link == _SUBPRG and owner in owners and member < prog
         ),
     ]
+
+
+def preceding_run_units(prog: str) -> list[str]:
+    """The run units a SUBPRG member follows in its CCVS job: the owner, then
+    each earlier member. They create the files this program reads."""
+    return _preceding_in(_links(), prog)
+
+
+def checking_program_in(links: _JobLinks, prog: str) -> str:
+    """The next unit of prog's job that runs it first: it checks the files a
+    unit that writes no report passes on. Fails when there is none."""
+    checkers = sorted(
+        member
+        for _, link, member in links
+        if link == _SUBPRG and prog in _preceding_in(links, member)
+    )
+    assert (
+        checkers != []
+    ), f"{prog}: writes no report, and no later unit of its job checks it"
+    return checkers[0]
+
+
+def checking_program(prog: str) -> str:
+    return checking_program_in(_links(), prog)
+
+
+def _is_job_member(prog: str) -> bool:
+    return any((link, member) == (_SUBPRG, prog) for _, link, member in _links())
 
 
 def _x_card_libraries(tmp_path: Path) -> tuple[CopybookLibrary, ...]:
@@ -321,17 +351,32 @@ def _run_unit(prog: str, tmp_path: Path, max_steps: int) -> tuple[Path, RunOutco
     return print_path, outcome
 
 
-def run_nist(prog: str, tmp_path: Path) -> None:
+def _run_job(prog: str, tmp_path: Path) -> Path:
+    for unit in preceding_run_units(prog):
+        _run_unit(unit, tmp_path, _MAX_STEPS)[0].unlink(missing_ok=True)
+    return run_within_budget(prog, tmp_path, _MAX_STEPS)
+
+
+def run_nist(
+    prog: str, tmp_path: Path, record_property: Callable[[str, str], None]
+) -> None:
     """Run a CCVS program as its job does, then assert it passed.
 
     The run units it follows run first in the same directory, so the files they
-    pass on are there; their reports are discarded before this program runs.
+    pass on are there; their reports are discarded before this program runs. A
+    job member that writes no report takes its checking program's verdict: that
+    program's job runs in a directory of its own and must pass, and the checker's
+    name is recorded for the report.
     """
     if not (NIST_DIR / f"{prog}.CBL").exists():
         raise NistSkip(NistOutcome.SOURCE_MISSING, f"NIST source not found: {prog}")
-    for unit in preceding_run_units(prog):
-        _run_unit(unit, tmp_path, _MAX_STEPS)[0].unlink(missing_ok=True)
-    assert_nist_pass(run_within_budget(prog, tmp_path, _MAX_STEPS), prog)
+    print_path = _run_job(prog, tmp_path)
+    if print_path.exists() or not _is_job_member(prog):
+        assert_nist_pass(print_path, prog)
+        return
+    checker = checking_program(prog)
+    record_property(NIST_CHECKER_PROPERTY, checker)
+    assert_nist_pass(_run_job(checker, tmp_path / checker), checker)
 
 
 def run_within_budget(prog: str, tmp_path: Path, max_steps: int) -> Path:
@@ -569,7 +614,12 @@ def pytest_runtest_makereport(
 ) -> Generator[None, pytest.TestReport, pytest.TestReport]:
     report = yield
     if _recorded(report):
-        result = nist_result(str(item.callspec.params["prog"]), call)
+        checkers = tuple(
+            str(value)
+            for name, value in item.user_properties
+            if name == NIST_CHECKER_PROPERTY
+        )
+        result = nist_result(str(item.callspec.params["prog"]), call, checkers)
         report.user_properties = [
             *report.user_properties,
             (_NIST_RESULT_PROPERTY, result.model_dump_json()),

@@ -29,6 +29,8 @@ EXEC85 step does at an installation:
 - maps each `ASSIGN TO XXXXX0nn` to a file in the test's directory,
 - supplies the program's input deck as 80-column records,
 - links its SUBRTN subprograms and runs the run units its job runs before it.
+- gives a job member that writes no report the verdict of the unit that checks it (see
+  below).
 
 IX107A, IX207A and IX208A carry two optional variants of their key layout. The decks say:
 "FOR CODE WITH LETTERS T OR U ONLY ONE SHOULD BE SELECTED. ... THE T"S PROVIDE A 29
@@ -49,6 +51,17 @@ checks the selection against the source and fails if either check fails:
 A unit test checks that these three are the only corpus programs that carry the
 instruction.
 
+Some SUBPRG run units write no report by CCVS design: ST102A, ST110A, ST113M, ST116A,
+ST120A and ST123A sort files that a later unit of the same job checks. Each such unit
+takes its checking program's verdict, a pass when the checker passes and a fail when it
+fails.
+
+The checker is derived from the decks' own `*HEADER,COBOL,owner,SUBPRG,member` job links,
+the data that orders a job's run units: it is the first later member of the job that runs
+the unit before itself. The unit's test then runs the checker's whole job in a directory
+of its own. If a job member writes no report and no later member checks it, the test
+fails. A program outside any job that writes no report is still `no-print-file`.
+
 Each program gets a step budget of 2,000,000.
 
 ## Verdicts and categories
@@ -60,6 +73,7 @@ category, decided by the type the harness raised, never by matching message text
 | Category | Verdict | Meaning |
 |---|---|---|
 | `pass` | pass | Ran to its banner with a clean summary. |
+| `verified-by-checker` | pass | A job member that writes no report; the later unit of its job that checks its files passed. The report names the checker ("verified by ST103A"). If the checker fails, the unit takes the checker's failure category, with a detail line starting "checked by". |
 | `summary-failures` | fail | Ran to its banner; the summary reports failed tests. |
 | `inline-failures` | fail | A detail line carries `FAIL*`. |
 | `incomplete` | fail | Wrote a report but stopped before the end-of-test banner. |

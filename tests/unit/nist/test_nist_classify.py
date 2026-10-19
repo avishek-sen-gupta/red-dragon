@@ -28,7 +28,7 @@ def _raising(exc: BaseException) -> Callable[[], None]:
 
 def _result(run: Callable[[], None]) -> NistResult:
     call = pytest.CallInfo[None].from_call(run, "call")
-    return nist_result("NC101A", call)
+    return nist_result("NC101A", call, ())
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
@@ -61,9 +61,32 @@ def test_each_raised_type_maps_to_one_outcome() -> None:
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_a_unit_checked_by_another_program_takes_that_programs_verdict() -> None:
+    failure = NistFailure(
+        NistOutcome.SUMMARY_FAILURES,
+        "ST103A: CCVS summary reports 2 failed test(s).",
+        "ST103A: CCVS summary reports 2 failed test(s).",
+    )
+    results = [
+        nist_result("ST102A", pytest.CallInfo[None].from_call(run, "call"), ("ST103A",))
+        for run in (_passes, _raising(failure))
+    ]
+
+    assert [(r.program, r.outcome, r.detail) for r in results] == [
+        ("ST102A", NistOutcome.VERIFIED_BY_CHECKER, "verified by ST103A"),
+        (
+            "ST102A",
+            NistOutcome.SUMMARY_FAILURES,
+            "checked by ST103A: ST103A: CCVS summary reports 2 failed test(s).",
+        ),
+    ]
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_every_outcome_has_the_verdict_pytest_gives_it() -> None:
     assert {o: o.verdict for o in NistOutcome} == {
         NistOutcome.PASS: NistVerdict.PASS,
+        NistOutcome.VERIFIED_BY_CHECKER: NistVerdict.PASS,
         NistOutcome.INCOMPLETE: NistVerdict.FAIL,
         NistOutcome.SUMMARY_FAILURES: NistVerdict.FAIL,
         NistOutcome.INLINE_FAILURES: NistVerdict.FAIL,

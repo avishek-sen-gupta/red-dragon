@@ -291,7 +291,7 @@ fileignoreconfig:
 - filename: tests/nist/test_nc.py
   checksum: 164b3de065ac8fb0b0884dbcc166350473801ff472fddeaa630d7ab26df91026
 - filename: tests/nist/conftest.py
-  checksum: e5b173eff058be3084db6bf220c2b6353bc30eea3fc50c962574c0c8fde8a4af
+  checksum: c4873d62b50029c7d66456c9b44637da3b8cb4afd755f5a58cf9ddaaf208b4c7
 - filename: interpreter/cobol/lower_perform.py
   checksum: e6cac512f59e64b0eb6ef613edfd1a76df82a116b8d4d50f6c8a28fa45c4c04a
 - filename: tests/unit/cobol/test_procedure_labels.py
@@ -355,13 +355,13 @@ fileignoreconfig:
 - filename: tests/nist/nist_classify.py
   checksum: 6e8e1d1a0dae38eb3fcdf85ccb2f957313cdb025315a54129edd29c5871bbfbe
 - filename: tests/unit/nist/test_nist_classify.py
-  checksum: b0b2b0a7b6d9a868f9566159074a8f9968f5c4f65a37e92db30afac6076563a3
+  checksum: cb66a1594c725970144537b5ed8d85d437c653621267d4e49aaa710712ff26cb
 - filename: tests/unit/nist/test_nist_report_render.py
   checksum: f5561612308a852a038e67fdaac5cd26fd7343d1abc60efee0c47356c3cf8e73
 - filename: tests/nist/nist_report_render.py
-  checksum: 5bcb241d599c7d0f2f9fde6e840a029d8705c5e6aa4aafca7878910b86fbfdfb
+  checksum: 3254cf529adb61dda84c7d49cb59fab679080687b518550b38c6f622d6af410c
 - filename: docs/nist/README.md
-  checksum: a5fc5e152a7647e5159b38c450601ad464926e8f820ed4d07745f68e120cf898
+  checksum: af0a1c25951668d04523b8080faaf847474b697400204aef73b4c7c2820c77ec
 - filename: cobol_asg/contained_programs.py
   checksum: d72977db03be5c3f07d9bb999dde8546f85010312f83419ad04a8b3a986eee26
 - filename: cobol_asg/alternate_record_key.py
