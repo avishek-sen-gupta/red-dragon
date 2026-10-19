@@ -1,7 +1,7 @@
 import pytest
 
 from cobol_asg.asg_types import CobolField
-from interpreter.cobol.data_layout import build_data_layout
+from interpreter.cobol.data_layout import DataLayout, build_data_layout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.lower_program_init import (
@@ -9,6 +9,7 @@ from interpreter.cobol.lower_program_init import (
     lower_ws_from_singleton,
 )
 from interpreter.cobol.run_unit import PROGRAM_DIRECTORY
+from interpreter.cobol.sectioned_layout import SectionedLayout
 from interpreter.cobol.statement_dispatch import dispatch_statement
 from interpreter.frontend import make_cobol_parser
 from interpreter.instructions import (
@@ -27,9 +28,13 @@ from interpreter.project.cobol_compile import compile_cobol
 from tests.covers import NotLanguageFeature, covers
 
 
-def _ws_layout_5bytes():
+def _ws_layout_5bytes() -> SectionedLayout:
     field = CobolField(name="WS-X", level=1, pic="X(5)", usage="DISPLAY", offset=0)
-    return build_data_layout([field])
+    return SectionedLayout(
+        working_storage=build_data_layout([field]),
+        linkage=DataLayout(),
+        local_storage=DataLayout(),
+    )
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

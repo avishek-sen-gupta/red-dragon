@@ -3,10 +3,11 @@ package org.reddragon.bridge;
 import com.google.gson.JsonObject;
 import io.proleap.cobol.CobolParser;
 import io.proleap.cobol.asg.metamodel.data.file.FileDescriptionEntry;
+import io.proleap.cobol.asg.metamodel.data.file.LinageClause;
 import io.proleap.cobol.asg.metamodel.data.file.RecordContainsClause;
 import io.proleap.cobol.asg.metamodel.IntegerLiteral;
 
-/** Serialises an FD's RECORDING MODE, RECORD, EXTERNAL and GLOBAL clauses: the facts its record format and its file connector's and file-name's scope are derived from. */
+/** Serialises an FD's RECORDING MODE, RECORD, EXTERNAL, GLOBAL and LINAGE clauses: the facts its record format, its logical page and its file connector's and file-name's scope are derived from. */
 final class FileDescriptionSerializer {
 
     private FileDescriptionSerializer() {}
@@ -18,6 +19,25 @@ final class FileDescriptionSerializer {
         result.addProperty("external", fd.getExternalClause() != null);
         result.addProperty("global", fd.getGlobalClause() != null);
         result.add("record_clause", recordClause(fd.getRecordContainsClause()));
+        if (fd.getLinageClause() != null) {
+            result.add("linage", linage(fd.getLinageClause()));
+        }
+        return result;
+    }
+
+    /** The LINAGE clause's operands as written; a phrase not written is absent. */
+    private static JsonObject linage(LinageClause clause) {
+        JsonObject result = new JsonObject();
+        result.add("lines", StatementSerializer.serializeFromValue(clause.getNumberOfLinesValueStmt()));
+        if (clause.getFootingAtValueStmt() != null) {
+            result.add("footing", StatementSerializer.serializeFromValue(clause.getFootingAtValueStmt()));
+        }
+        if (clause.getLinesAtTopValueStmt() != null) {
+            result.add("top", StatementSerializer.serializeFromValue(clause.getLinesAtTopValueStmt()));
+        }
+        if (clause.getLinesAtBottomValueStmt() != null) {
+            result.add("bottom", StatementSerializer.serializeFromValue(clause.getLinesAtBottomValueStmt()));
+        }
         return result;
     }
 

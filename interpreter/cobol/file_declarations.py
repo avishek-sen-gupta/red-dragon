@@ -16,7 +16,6 @@ from interpreter.cobol.sectioned_layout import (
     MaterialisedSectionedLayout,
     SectionedLayout,
 )
-from interpreter.cobol.special_registers import SPECIAL_REGISTERS_LAYOUT
 from interpreter.func_name import FuncName
 from interpreter.instructions import CallFunction, Const
 from interpreter.register import NO_REGISTER
@@ -29,7 +28,7 @@ def _layout_only(sectioned: SectionedLayout) -> MaterialisedSectionedLayout:
         linkage=(sectioned.linkage, NO_REGISTER),
         local_storage=(sectioned.local_storage, NO_REGISTER),
         file=(sectioned.file, NO_REGISTER),
-        special_registers=(SPECIAL_REGISTERS_LAYOUT, NO_REGISTER),
+        special_registers=(sectioned.special_registers, NO_REGISTER),
         indexes=(sectioned.indexes, NO_REGISTER),
         linkage_owners=sectioned.linkage_owners,
         external=sectioned.external,

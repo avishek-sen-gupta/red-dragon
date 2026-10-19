@@ -14,7 +14,7 @@ from tests.nist.nist_failure import NistFailure
 from tests.nist.nist_outcome import NistOutcome
 
 _REPO = Path(__file__).resolve().parents[2]
-_PROGRAMS = ("SQ130A", "SG103A", "SQ201M", "NC302M", "SQ302M", "CM101M")
+_PROGRAMS = ("SQ130A", "SG103A", "RW101A", "NC302M", "SQ302M", "CM101M")
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
@@ -50,8 +50,9 @@ def test_report_command_categorises_a_pass_a_fail_an_error_and_skips(
         "|---|---:|---:|---:|---:|---:|\n"
         "| CM | 0 | 0 | 1 | 1 | 0.0 |\n"
         "| NC | 0 | 0 | 1 | 1 | 0.0 |\n"
+        "| RW | 0 | 1 | 0 | 1 | 0.0 |\n"
         "| SG | 0 | 1 | 0 | 1 | 0.0 |\n"
-        "| SQ | 1 | 1 | 1 | 3 | 33.3 |\n"
+        "| SQ | 1 | 0 | 1 | 2 | 50.0 |\n"
         "| Overall | 1 | 2 | 3 | 6 | 16.7 |\n"
         "\n"
         "## Categories\n"
@@ -66,7 +67,7 @@ def test_report_command_categorises_a_pass_a_fail_an_error_and_skips(
         "\n"
         "### error (1)\n"
         "\n"
-        "SQ201M\n"
+        "RW101A\n"
         "\n"
         "### fips-flagger (2)\n"
         "\n"
@@ -78,9 +79,8 @@ def test_report_command_categorises_a_pass_a_fail_an_error_and_skips(
         "\n"
     )
     assert report.split("## First failure line per program\n\n")[1] == (
+        "- RW101A (error): ValueError: Unknown COBOL statement type: 'INITIATE'\n"
         "- SG103A (summary-failures): SG103A: CCVS summary reports 3 failed test(s).\n"
-        "- SQ201M (error): UndeclaredDataNameError: line 363: data name "
-        "'LINAGE-COUNTER' is not declared in the DATA DIVISION\n"
     )
 
 

@@ -48,6 +48,8 @@ from interpreter.cobol.file_verb_ir import (
 from interpreter.cobol.global_names import visible_file_entries, visible_record_files
 from interpreter.cobol.invalid_key_phrases import InvalidKeyPhrases
 from interpreter.cobol.ir_emitter import IrEmitter
+from interpreter.cobol.linage_page import emit_linage_open
+from interpreter.cobol.linage_write import linage_write
 from interpreter.cobol.lowering_scope import LoweringScope
 from interpreter.cobol.prime_key import PrimeKey
 from interpreter.cobol.program_object import entry_var, program_name, use_request_var
@@ -350,6 +352,7 @@ def _lower_open_file(scope: LoweringScope, filename: str, mode: OpenMode) -> Non
         partial(_emit_open, v, outcome, mode, _entry(scope.ctx, filename)),
         _nothing,
     )
+    emit_linage_open(scope, v, outcome, filename)
     status_reg = v.e.load(outcome.status)
     scope.ctx.emit_file_status_update(
         filename, status_reg, scope.materialised, span=scope.span
@@ -1220,6 +1223,7 @@ def lower_write(
         entry.organization is not FileOrganization.SEQUENTIAL,
     )
     _start_numbered(v, outcome, plan.numbered)
+    linage = linage_write(scope, v, file_name)
     _emit_guarded_update(
         v,
         outcome,
@@ -1238,6 +1242,7 @@ def lower_write(
             *_sequence_refusals(v, data_reg, sequence, "<"),
         ),
     )
+    linage.advanced(outcome, stmt.advancing)
     status_reg = v.e.load(outcome.status)
     ctx.emit_file_status_update(file_name, status_reg, materialised, span=span)
     _emit_record_number_report(
@@ -1254,6 +1259,7 @@ def lower_write(
         after_label,
     )
     ctx.emit_inst(Label_(label=after_label), span=span)
+    linage.respond(outcome, stmt)
     logger.info("WRITE %s FROM %s", stmt.record_name, stmt.from_field.name or "(none)")
 
 

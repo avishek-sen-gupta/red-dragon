@@ -2,7 +2,8 @@
 an EXTERNAL file, the run unit's: its open mode,
 whether it was closed WITH LOCK, where its position indicator stands, whether it is an
 OPTIONAL file opened INPUT while absent, the prime key of its last record read or
-written, and which verbs its open mode refuses."""
+written, which verbs its open mode refuses, and for a file with a LINAGE clause the page
+body and first footing line of its current logical page."""
 
 from __future__ import annotations
 
@@ -24,6 +25,8 @@ class FileState:
     read_refused: VarName
     write_refused: VarName
     update_refused: VarName
+    page_body: VarName
+    page_footing: VarName
 
 
 def file_state(program: str, file_name: str) -> FileState:
@@ -55,4 +58,6 @@ def _state(prefix: str) -> FileState:
         read_refused=VarName(f"{prefix}_read_refused"),
         write_refused=VarName(f"{prefix}_write_refused"),
         update_refused=VarName(f"{prefix}_update_refused"),
+        page_body=VarName(f"{prefix}_page_body"),
+        page_footing=VarName(f"{prefix}_page_footing"),
     )

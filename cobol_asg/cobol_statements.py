@@ -37,6 +37,8 @@ from cobol_asg.file_enums import AccessMode, FileOrganization, OpenMode, Recordi
 from cobol_asg.frontend_extension import DialectParser
 from cobol_asg.initialize_category import InitializeCategory
 from cobol_asg.initialize_replacing import InitializeReplacing
+from cobol_asg.linage_clause import LinageClause
+from cobol_asg.no_linage import NO_LINAGE, NoLinage
 from cobol_asg.operand_kind import OperandKind
 from cobol_asg.program_collation import PROGRAM_COLLATION, ProgramCollation
 from cobol_asg.ref_mod import (
@@ -52,6 +54,12 @@ from cobol_asg.sort_key import SortKey
 from cobol_asg.source_span import SourceSpan
 from cobol_asg.unstring_delimiter import UnstringDelimiter
 from cobol_asg.unstring_receiver import UnstringReceiver
+from cobol_asg.write_advancing import (
+    ONE_LINE_AFTER,
+    WriteAdvancing,
+    advancing_from_dict,
+    advancing_to_dict,
+)
 
 # ── Dialect parser injection ──────────────────────────────────────
 # Set by CobolFrontend.lower() for the duration of each parse call. Cicada
@@ -1627,13 +1635,15 @@ _RECORD_CLAUSES: dict[str, Callable[[Mapping], RecordClause]] = {
 
 @dataclass(frozen=True)
 class FileDescription:
-    """An FD's RECORDING MODE, RECORD, EXTERNAL and GLOBAL clauses, from the FILE SECTION."""
+    """An FD's RECORDING MODE, RECORD, EXTERNAL, GLOBAL and LINAGE clauses, from the
+    FILE SECTION."""
 
     fd_name: str
     recording_mode: RecordingMode
     record_clause: RecordClause
     external: bool = False
     is_global: bool = False
+    linage: LinageClause | NoLinage = NO_LINAGE
 
     @classmethod
     def from_dict(cls, data: Mapping) -> FileDescription:
@@ -1644,15 +1654,26 @@ class FileDescription:
             record_clause=_RECORD_CLAUSES[clause["kind"]](clause),
             external=data.get("external", False),
             is_global=data.get("global", False),
+            linage=(
+                LinageClause.from_dict(data["linage"])
+                if "linage" in data
+                else NO_LINAGE
+            ),
         )
 
     def to_dict(self) -> dict:
+        linage = (
+            {}
+            if isinstance(self.linage, NoLinage)
+            else {"linage": self.linage.to_dict()}
+        )
         return {
             "fd_name": self.fd_name,
             "recording_mode": self.recording_mode.value,
             "record_clause": self.record_clause.to_dict(),
             "external": self.external,
             "global": self.is_global,
+            **linage,
         }
 
 
@@ -1778,13 +1799,17 @@ class ReadStatement:
 
 @dataclass(frozen=True)
 class WriteStatement:
-    """WRITE record-name [FROM field] [INVALID KEY ...] [NOT INVALID KEY ...]."""
+    """WRITE record-name [FROM field] [BEFORE|AFTER ADVANCING ...] [AT END-OF-PAGE ...]
+    [NOT AT END-OF-PAGE ...] [INVALID KEY ...] [NOT INVALID KEY ...]."""
 
     record_name: str = ""
     from_field: RefModOperand = field(default_factory=lambda: RefModOperand(name=""))
     invalid_key: list[CobolStatementType] = field(default_factory=list)
     not_invalid_key: list[CobolStatementType] = field(default_factory=list)
     span: SourceSpan | None = None
+    advancing: WriteAdvancing = ONE_LINE_AFTER
+    at_end_of_page: list[CobolStatementType] = field(default_factory=list)
+    not_at_end_of_page: list[CobolStatementType] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: Mapping) -> WriteStatement:
@@ -1796,16 +1821,43 @@ class WriteStatement:
                 parse_statement(c) for c in data.get("not_invalid_key", [])
             ],
             span=SourceSpan.from_dict(data),
+            advancing=(
+                advancing_from_dict(data["advancing"])
+                if "advancing" in data
+                else ONE_LINE_AFTER
+            ),
+            at_end_of_page=[parse_statement(c) for c in data.get("at_end_of_page", [])],
+            not_at_end_of_page=[
+                parse_statement(c) for c in data.get("not_at_end_of_page", [])
+            ],
         )
 
     def to_dict(self) -> dict:
-        result: dict = {"type": "WRITE", "record_name": self.record_name}
-        if self.from_field.name:
-            result["from_field"] = self.from_field.to_dict()
-        if self.invalid_key:
-            result["invalid_key"] = [c.to_dict() for c in self.invalid_key]
-        if self.not_invalid_key:
-            result["not_invalid_key"] = [c.to_dict() for c in self.not_invalid_key]
+        phrases = {
+            "invalid_key": self.invalid_key,
+            "not_invalid_key": self.not_invalid_key,
+            "at_end_of_page": self.at_end_of_page,
+            "not_at_end_of_page": self.not_at_end_of_page,
+        }
+        advancing = (
+            {}
+            if self.advancing == ONE_LINE_AFTER
+            else {"advancing": advancing_to_dict(self.advancing)}
+        )
+        sender = (
+            {"from_field": self.from_field.to_dict()} if self.from_field.name else {}
+        )
+        result: dict = {
+            "type": "WRITE",
+            "record_name": self.record_name,
+            **advancing,
+            **sender,
+            **{
+                key: [c.to_dict() for c in body]
+                for key, body in phrases.items()
+                if body
+            },
+        }
         if self.span is not None:
             self.span.write_into(result)
         return result
