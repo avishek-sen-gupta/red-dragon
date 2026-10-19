@@ -58,10 +58,8 @@ from interpreter.cobol.program_object import (
     program_var,
 )
 from interpreter.cobol.run_unit import PROGRAM_DIRECTORY
-from interpreter.cobol.special_registers import (
-    RETURN_CODE_HANDLE,
-    SPECIAL_REGISTERS_LAYOUT,
-)
+from interpreter.cobol.sectioned_layout import SectionedLayout
+from interpreter.cobol.special_registers import RETURN_CODE_HANDLE
 from interpreter.continuation_name import ContinuationName
 from interpreter.field_name import FieldName
 from interpreter.instructions import (
@@ -87,7 +85,7 @@ from interpreter.var_name import VarName
 def lower_program_init(
     ctx: EmitContext,
     program_id: str,
-    ws_layout: DataLayout,
+    sectioned: SectionedLayout,
 ) -> CodeLabel:
     """Emit the singleton init block and func_init_params function.
 
@@ -115,7 +113,7 @@ def lower_program_init(
         )
     )
 
-    _lower_initial_state(ctx, program_id, ws_layout)
+    _lower_initial_state(ctx, program_id, sectioned.working_storage)
 
     # RETURN-CODE (and future special registers) get their own region, isolated
     # from WS/LS/LINKAGE/FILE so a MOVE into one cannot disturb another field's
@@ -123,7 +121,7 @@ def lower_program_init(
     # invocation: a subprogram is left in its last-used state, and a callee's
     # value must survive its own exit for the caller to copy it up.
     sr_reg = lower_data_division(
-        ctx, SPECIAL_REGISTERS_LAYOUT, RegionId.SPECIAL_REGISTERS
+        ctx, sectioned.special_registers, RegionId.SPECIAL_REGISTERS
     )
     ctx.emit_inst(
         StoreField(obj_reg=ptr_reg, field_name=RETURN_CODE_HANDLE, value_reg=sr_reg)

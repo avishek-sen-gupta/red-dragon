@@ -2203,6 +2203,17 @@ public final class StatementSerializer {
             if (from != null && from.getFromValueStmt() != null) {
                 obj.add("from_field", writeFromOperand(from.getFromValueStmt()));
             }
+            if (stmt.getAdvancingPhrase() != null) {
+                obj.add("advancing", writeAdvancing(stmt.getAdvancingPhrase()));
+            }
+            io.proleap.cobol.asg.metamodel.procedure.write.AtEndOfPagePhrase atEop = stmt.getAtEndOfPagePhrase();
+            obj.add("at_end_of_page",
+                    atEop != null && atEop.getStatements() != null
+                            ? serializeStatements(atEop.getStatements()) : new JsonArray());
+            io.proleap.cobol.asg.metamodel.procedure.write.NotAtEndOfPagePhrase notAtEop = stmt.getNotAtEndOfPagePhrase();
+            obj.add("not_at_end_of_page",
+                    notAtEop != null && notAtEop.getStatements() != null
+                            ? serializeStatements(notAtEop.getStatements()) : new JsonArray());
 
             // INVALID KEY / NOT INVALID KEY
             io.proleap.cobol.asg.metamodel.procedure.InvalidKeyPhrase invalidKey = stmt.getInvalidKeyPhrase();
@@ -2221,6 +2232,20 @@ public final class StatementSerializer {
             LOG.fine("Could not extract WRITE operands: " + e.getMessage());
         }
         return obj;
+    }
+
+    /** A WRITE's ADVANCING phrase as written: BEFORE or AFTER, and PAGE, a line count or a mnemonic-name. */
+    private static JsonObject writeAdvancing(io.proleap.cobol.asg.metamodel.procedure.write.AdvancingPhrase phrase) {
+        JsonObject result = new JsonObject();
+        result.addProperty("position", phrase.getPositionType().name());
+        result.addProperty("kind", phrase.getAdvancingType().name());
+        if (phrase.getAdvancingLines() != null) {
+            result.add("lines", serializeFromValue(phrase.getAdvancingLines().getLinesValueStmt()));
+        }
+        if (phrase.getAdvancingMnemonic() != null && phrase.getAdvancingMnemonic().getMnemonicCall() != null) {
+            result.addProperty("mnemonic", extractCallName(phrase.getAdvancingMnemonic().getMnemonicCall()));
+        }
+        return result;
     }
 
     /** A WRITE FROM sender: a data reference with its qualifiers, or a literal's text. */
@@ -2709,7 +2734,7 @@ public final class StatementSerializer {
         return obj;
     }
 
-    private static JsonElement serializeFromValue(ValueStmt vs) {
+    static JsonElement serializeFromValue(ValueStmt vs) {
         if (vs == null) {
             return litNode("");
         }
@@ -2874,7 +2899,11 @@ public final class StatementSerializer {
         });
     }
 
-    /** Appends the qualifier name {@code node} writes, when it writes one. */
+    /**
+     * Appends the qualifier name {@code node} writes, when it writes one. A file-name
+     * qualifies only {@code LINAGE-COUNTER OF file}: that counter is declared under its
+     * file, while a record is never qualified by the file it belongs to here.
+     */
     private static void addQualifierName(
             org.antlr.v4.runtime.tree.ParseTree node, JsonArray out) {
         if (node instanceof CobolParser.InDataContext) {
@@ -2887,6 +2916,9 @@ public final class StatementSerializer {
             if (base != null) {
                 out.add(base);
             }
+        } else if (node instanceof CobolParser.InFileContext
+                && node.getParent() instanceof CobolParser.QualifiedDataNameFormat4Context) {
+            out.add(((CobolParser.InFileContext) node).fileName().getText());
         }
     }
 

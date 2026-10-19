@@ -33,14 +33,11 @@ RETURN_CODE_HANDLE = FieldName("return_code_handle")
 # No VALUE clause: ALLOC_REGION zero-fills the region, and a 2-byte big-endian zero
 # already encodes RETURN-CODE's initial value 0 — so emitting an encode would only
 # add instruction noise (the binary-encode helper expands to BINOPs).
-SPECIAL_REGISTERS_LAYOUT = build_data_layout(
-    [
-        CobolField(
-            name=RETURN_CODE_NAME,
-            level=1,
-            pic="S9(4)",
-            usage="COMP",
-            offset=0,
-        )
-    ]
+RETURN_CODE_FIELD = CobolField(
+    name=RETURN_CODE_NAME,
+    level=1,
+    pic="S9(4)",
+    usage="COMP",
+    offset=0,
 )
+SPECIAL_REGISTERS_LAYOUT = build_data_layout([RETURN_CODE_FIELD])

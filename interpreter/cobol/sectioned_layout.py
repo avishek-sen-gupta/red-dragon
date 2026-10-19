@@ -24,9 +24,11 @@ from interpreter.cobol.external_area import ExternalArea
 from interpreter.cobol.external_binding import ExternalBinding
 from interpreter.cobol.external_layout import partition_external
 from interpreter.cobol.global_names import global_records
+from interpreter.cobol.linage_counters import special_registers_layout
 from interpreter.cobol.linkage_binding import LinkageBinding
 from interpreter.cobol.linkage_record import LinkageRecord
 from interpreter.cobol.program_object import program_name
+from interpreter.cobol.special_registers import SPECIAL_REGISTERS_LAYOUT
 from interpreter.cobol.undeclared_data_name import UndeclaredDataName
 from interpreter.register import NO_REGISTER, Register
 
@@ -51,6 +53,7 @@ class SectionedLayout:
         default_factory=dict
     )
     enclosing: tuple[EnclosingLayout, ...] = ()
+    special_registers: DataLayout = SPECIAL_REGISTERS_LAYOUT
 
 
 @dataclass(frozen=True)
@@ -250,6 +253,7 @@ def build_sectioned_layout(asg: CobolASG) -> SectionedLayout:
             for fl in build_data_layout(list(group)).all_fields()
         },
         enclosing=tuple(_enclosing_layout(outer) for outer in asg.enclosing),
+        special_registers=special_registers_layout(asg),
     )
 
 

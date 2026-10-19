@@ -1,5 +1,7 @@
 threshold: low
 fileignoreconfig:
+- filename: cobol_asg/linage_clause.py
+  checksum: c6046fd07fd0270c9e2d9f04a27827a2730a57a580f5554a4f2873370cbc6b11
 - filename: tests/unit/cobol/test_nist_harness_inputs.py
   checksum: 1515a763c4df80be3383594cd88d695667722192e1c2149c5f2f3542a61bf553
 - filename: tests/integration/test_bridge_arithmetic_roles.py
@@ -255,7 +257,7 @@ fileignoreconfig:
 - filename: tests/unit/cobol/test_recorded_memory_effects.py
   checksum: ba151292b7ee1a3f747628e5950297f904de1c1cd625307f762f7a98b570b3de
 - filename: docs/frontend-design/cobol.md
-  checksum: 433cb499fc9a22e0730120dd6545b4b6207159f9762e16724fc5ae54e47b65df
+  checksum: a587cfcb2e23ec1ffe06eb721adba8c406eb36a97c124f831ee17c34c460906f
 - filename: tests/integration/test_cobol_call_using_addresses.py
   checksum: 353804977c7a3e5eb44a303f7e42a47ef1bdf9f837f41e396bf5033813c4fdb0
 - filename: tests/integration/test_cobol_call_using_slots.py
@@ -301,7 +303,7 @@ fileignoreconfig:
 - filename: tests/unit/cobol/test_io_statements.py
   checksum: f1d7f78a6301dacfe3155f92ed416c901afbc010bf1b94cef82098ebeb690d43
 - filename: cobol_asg/cobol_statements.py
-  checksum: 063ec8d504e0d0acd5429fc39b8d79c21770aa2dd9b883b2de797976d50a5385
+  checksum: e4515380913542fefcdbc8e8826e5850f3d2231ae0ed87a4758657669f5a2d08
 - filename: proleap-bridge/src/main/java/org/reddragon/bridge/StatementSerializer.java
   checksum: 1a265650ca40c6f660ccf669d7b6578cf4e005dde4c67af68496c5aa0e68863d
 - filename: interpreter/cobol/lower_io.py

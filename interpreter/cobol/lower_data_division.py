@@ -22,10 +22,7 @@ from interpreter.cobol.sectioned_layout import (
     MaterialisedSectionedLayout,
     SectionedLayout,
 )
-from interpreter.cobol.special_registers import (
-    RETURN_CODE_HANDLE,
-    SPECIAL_REGISTERS_LAYOUT,
-)
+from interpreter.cobol.special_registers import RETURN_CODE_HANDLE
 from interpreter.field_name import FieldName
 from interpreter.instructions import (
     AllocRegion,
@@ -161,7 +158,7 @@ def lower_sectioned_data_division(
         linkage=(layout.linkage, NO_REGISTER),
         local_storage=(layout.local_storage, ls_reg),
         file=(layout.file, file_reg),
-        special_registers=(SPECIAL_REGISTERS_LAYOUT, sr_reg),
+        special_registers=(layout.special_registers, sr_reg),
         indexes=(layout.indexes, index_reg),
         linkage_bindings=bindings,
         linkage_owners=layout.linkage_owners,

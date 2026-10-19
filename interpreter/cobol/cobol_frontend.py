@@ -250,9 +250,7 @@ class CobolFrontend(Frontend):
         lower_external_areas(self._ctx, sectioned.external_areas)
 
         # Emit singleton init block (ALLOC_REGION for WS lives here, runs once)
-        after_label = lower_program_init(
-            self._ctx, self._program_id, sectioned.working_storage
-        )
+        after_label = lower_program_init(self._ctx, self._program_id, sectioned)
 
         # Procedure division function — entered through the program's entry function
         proc_label = CodeLabel(f"func_{self._program_id.lower()}_0")
