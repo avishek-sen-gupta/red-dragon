@@ -29,6 +29,7 @@ from interpreter.run import (
 from interpreter.vm.builtins import core_builtins
 from tests.nist.nist_classify import nist_result
 from tests.nist.nist_failure import NistFailure
+from tests.nist.nist_option import OptionSelection
 from tests.nist.nist_outcome import NistOutcome
 from tests.nist.nist_skip import NistSkip
 
@@ -63,6 +64,47 @@ _X_CARDS = {
 _X_CARD_LIBRARIES = {
     "XXXXX047": {"ALTLB": "ALTLB"},
     "XXXXX048": {"ALTLB": "ALTL1"},
+}
+_SELECT_ONE_VARIANT = "WITH LETTERS T OR U ONLY ONE SHOULD BE SELECTED."
+OPTION_SELECTIONS: Mapping[str, OptionSelection] = {
+    "IX107A": OptionSelection(
+        letter="T",
+        cards=frozenset({"014300", "015700", "016300", "016400", "016700", "016800"}),
+    ),
+    "IX207A": OptionSelection(
+        letter="T",
+        cards=frozenset(
+            {
+                "014400",
+                "014800",
+                "016200",
+                "016600",
+                "017500",
+                "017600",
+                "017900",
+                "018000",
+                "018200",
+                "018300",
+                "019000",
+                "019100",
+            }
+        ),
+    ),
+    "IX208A": OptionSelection(
+        letter="T",
+        cards=frozenset(
+            {
+                "013800",
+                "014300",
+                "015800",
+                "016300",
+                "017300",
+                "017600",
+                "017800",
+                "018100",
+            }
+        ),
+    ),
 }
 _SWITCH_SETTINGS = {"SWITCH-1": SwitchStatus.ON, "SWITCH-2": SwitchStatus.OFF}
 _X_CARD_FILE_RE = re.compile(r"XXXX[XPD](\d{3})")
@@ -145,8 +187,51 @@ def _x_card_file(assign_to: str) -> str:
     return _X_CARD_FILE_RE.sub(r"XXXXX\1", assign_to).lower()
 
 
+def _is_comment(line: str) -> bool:
+    return len(line) > 6 and line[6] == "*"
+
+
+def _activated(line: str, cards: frozenset[str]) -> str:
+    if _is_comment(line) and line[:6] in cards:
+        return line[:6] + " " + line[7:]
+    return line
+
+
+def select_option(src: str, prog: str, selection: OptionSelection) -> str:
+    """Activate the cards of the selected optional-code variant, as EXEC85's *OPT
+    card does. The corpus ships every variant card commented out with its letter
+    lost, so the cards are named by sequence number; each must be a comment line,
+    and the program must carry the deck's select-exactly-one instruction."""
+    lines = src.splitlines()
+    commented = sorted(line[:6] for line in lines if _is_comment(line))
+    selected = [card for card in commented if card in selection.cards]
+    remarks = [_words(c) for c in _comment_lines(src)]
+    assert (selected, _SELECT_ONE_VARIANT in remarks) == (
+        sorted(selection.cards),
+        True,
+    ), f"{prog}: not a program offering the {selection.letter} variant it is configured to select"
+    return "\n".join(_activated(line, selection.cards) for line in lines)
+
+
+def programs_offering_variants() -> tuple[str, ...]:
+    """The corpus programs whose deck says to select exactly one T or U variant."""
+    return tuple(
+        path.stem
+        for path in sorted(NIST_DIR.glob("*.CBL"))
+        if _SELECT_ONE_VARIANT in (_words(c) for c in _comment_lines(path.read_text()))
+    )
+
+
+def _with_option(prog: str, src: str) -> str:
+    if prog in OPTION_SELECTIONS:
+        return select_option(src, prog, OPTION_SELECTIONS[prog])
+    return src
+
+
 def _source(prog: str) -> str:
-    return substitute_x_cards((NIST_DIR / f"{prog}.CBL").read_text())
+    return substitute_x_cards(
+        _with_option(prog, (NIST_DIR / f"{prog}.CBL").read_text())
+    )
 
 
 @cache

@@ -361,7 +361,7 @@ fileignoreconfig:
 - filename: tests/nist/nist_report_render.py
   checksum: 5bcb241d599c7d0f2f9fde6e840a029d8705c5e6aa4aafca7878910b86fbfdfb
 - filename: docs/nist/README.md
-  checksum: 46491037b28d8b4c528b288e9c833c6ddb026bae89142ee0032aa88c1c22e385
+  checksum: a5fc5e152a7647e5159b38c450601ad464926e8f820ed4d07745f68e120cf898
 - filename: cobol_asg/contained_programs.py
   checksum: d72977db03be5c3f07d9bb999dde8546f85010312f83419ad04a8b3a986eee26
 - filename: cobol_asg/alternate_record_key.py
