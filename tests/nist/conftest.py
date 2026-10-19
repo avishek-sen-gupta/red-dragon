@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import re
 from collections.abc import Generator, Mapping, Sequence
 from functools import cache
@@ -412,6 +413,61 @@ def skip_flagger_program(prog: str, header: str, flags_expected: int) -> None:
         f"'TOTAL NUMBER OF FLAGS EXPECTED = {flags_expected}.') -- its verdict is "
         f"compile-time flagging messages, not run-time output; red-dragon has no "
         f"FIPS flagger",
+    )
+
+
+def _words(text: str) -> str:
+    return " ".join(text.split())
+
+
+def _code_lines(src: str) -> list[str]:
+    return [
+        _words(line[_TEXT_AREA_START:_TEXT_AREA_END])
+        for line in src.splitlines()
+        if len(line) > 6 and line[6] != "*" and line[_TEXT_AREA_START:].strip()
+    ]
+
+
+def exit_nested_under(src: str, reel_test: str, exit_test: str) -> bool:
+    """Whether ``IF exit_test`` is the very next code after an ``IF reel_test``
+    that no period ends: the comment lines between them took the period with
+    them, so the second IF is the first one's statement."""
+    code = _code_lines(src)
+    return any(
+        line == f"IF {_words(reel_test)}"
+        and following.startswith(f"IF {_words(exit_test)}")
+        for line, following in itertools.pairwise(code)
+    )
+
+
+def skip_reel_lines_deleted(
+    prog: str, deleted_remark: str, reel_test: str, exit_test: str
+) -> None:
+    """Classify a CCVS multi-reel/unit program whose deck ships its reel/unit
+    lines commented out, and skip it with a reason quoting them.
+
+    The deck's own remark (MOVE "CLOSE REEL DELETED" TO RE-MARK, itself
+    commented out) marks the deletion. The deleted lines carried the period that
+    ended ``IF reel_test``, so ``IF exit_test`` -- the write loop's only exit --
+    is nested under it and needs both conditions at once: the program as
+    distributed never ends on any conforming compiler. Both facts are checked
+    against the source, so the classification cannot drift.
+    """
+    src_path = NIST_DIR / f"{prog}.CBL"
+    if not src_path.exists():
+        raise NistSkip(NistOutcome.SOURCE_MISSING, f"NIST source not found: {src_path}")
+    src = src_path.read_text()
+    remarks = [_words(c) for c in _comment_lines(src)]
+    assert (
+        _words(deleted_remark) in remarks,
+        exit_nested_under(src, reel_test, exit_test),
+    ) == (True, True), f"{prog}: not the reel-lines-deleted program it is classified as"
+    raise NistSkip(
+        NistOutcome.REEL_LINES_DELETED,
+        f"{prog}: its deck comments out the reel/unit lines ('{_words(deleted_remark)}'), "
+        f"which took the period ending 'IF {reel_test}' with them, so 'IF {exit_test}', "
+        f"the write loop's only exit, is nested under it and can never be reached; "
+        f"as distributed the program does not terminate",
     )
 
 

@@ -6,7 +6,9 @@ A program passes only when it runs to its END OF TEST banner and its CCVS summar
 reports zero failed tests (tests/nist/conftest.py). A SUBPRG member runs after the run
 units before it in its CCVS job, which create the files it reads. The FIPS flagger
 programs (SQ302M, SQ303M, SQ401M) are classified, not run: their verdict is compile-time
-flagging messages. Excluded from the default test run; run on demand with `-m nist`.
+flagging messages. So are SQ109M and SQ110M, the multi-reel and multi-unit tests: their
+deck comments out the reel/unit lines, which leaves the write loop with no reachable
+exit. Excluded from the default test run; run on demand with `-m nist`.
 """
 
 from __future__ import annotations
@@ -17,7 +19,11 @@ import pytest
 
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
-from tests.nist.conftest import run_nist, skip_flagger_program
+from tests.nist.conftest import (
+    run_nist,
+    skip_flagger_program,
+    skip_reel_lines_deleted,
+)
 
 pytestmark = pytest.mark.nist
 
@@ -37,8 +43,6 @@ pytestmark = pytest.mark.nist
         "SQ106A",
         "SQ107A",
         "SQ108A",
-        "SQ109M",
-        "SQ110M",
         "SQ111A",
         "SQ112A",
         "SQ113A",
@@ -127,3 +131,27 @@ def test_sq_program(prog: str, tmp_path: Path) -> None:
 )
 def test_sq_flagger_program(prog: str, header: str, flags_expected: int) -> None:
     skip_flagger_program(prog, header, flags_expected)
+
+
+@covers(CobolFeature.CLOSE)
+@pytest.mark.parametrize(
+    "prog, deleted_remark, reel_test, exit_test",
+    [
+        (
+            "SQ109M",
+            'MOVE "CLOSE REEL DELETED" TO RE-MARK.',
+            "XRECORD-NUMBER (1) EQUAL TO 325",
+            "XRECORD-NUMBER (1) EQUAL TO 750",
+        ),
+        (
+            "SQ110M",
+            'MOVE "CLOSE UNIT DELETED" TO RE-MARK.',
+            "XRECORD-NUMBER (1) EQUAL TO 196",
+            "XRECORD-NUMBER (1) EQUAL TO 649",
+        ),
+    ],
+)
+def test_sq_reel_lines_deleted_program(
+    prog: str, deleted_remark: str, reel_test: str, exit_test: str
+) -> None:
+    skip_reel_lines_deleted(prog, deleted_remark, reel_test, exit_test)

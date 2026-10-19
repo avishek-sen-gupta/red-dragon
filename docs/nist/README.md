@@ -46,6 +46,7 @@ category, decided by the type the harness raised, never by matching message text
 | `step-budget-exhausted` | fail | The run used its whole step budget. |
 | `error` | fail | Compiling or running raised; the report names the exception type. |
 | `fips-flagger` | skip | A FIPS flagger program: its verdict is compile-time flagging messages, which red-dragon does not produce. Header and flag total are checked against the source. |
+| `reel-lines-deleted` | skip | A multi-reel or multi-unit program (SQ109M, SQ110M) whose deck comments out its reel/unit lines. Those lines held the period that ended an IF, so the write loop's only exit is nested under it and cannot be reached, and the program as distributed never terminates. The deck's deletion remark and the nesting are checked against the source. |
 | `no-print-file` | skip | The program wrote no report at all. |
 | `source-missing` | skip | The program's source is not in the corpus. |
 | `unsupported` | skip | A module red-dragon does not provide (CM needs a message control system; EXEC85 needs files the corpus lacks). |
