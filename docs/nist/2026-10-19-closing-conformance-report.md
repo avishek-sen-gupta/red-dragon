@@ -1,0 +1,80 @@
+# NIST CCVS conformance report, 2026-10-19 (closing)
+
+Point-in-time snapshot of `make nist-report` over the whole suite at red-dragon 31feca77, the stop condition of the conformance push (useful constructs only; DEBUG, Report Writer, segmentation and obsolete-feature programs are out of scope). Categories and the pass % definition are in [README.md](README.md).
+
+| Module | Pass | Fail | Skip | Total | Pass % |
+|---|---:|---:|---:|---:|---:|
+| CM | 0 | 0 | 9 | 9 | 0.0 |
+| DB | 0 | 10 | 5 | 15 | 0.0 |
+| EX | 0 | 0 | 1 | 1 | 0.0 |
+| IC | 24 | 0 | 1 | 25 | 96.0 |
+| IF | 42 | 0 | 3 | 45 | 93.3 |
+| IX | 39 | 0 | 3 | 42 | 92.9 |
+| NC | 92 | 0 | 3 | 95 | 96.8 |
+| OB | 5 | 2 | 0 | 7 | 71.4 |
+| RL | 32 | 0 | 3 | 35 | 91.4 |
+| RW | 0 | 6 | 0 | 6 | 0.0 |
+| SG | 6 | 4 | 3 | 13 | 46.2 |
+| SM | 15 | 0 | 2 | 17 | 88.2 |
+| SQ | 80 | 0 | 5 | 85 | 94.1 |
+| ST | 39 | 0 | 1 | 40 | 97.5 |
+| Overall | 374 | 22 | 39 | 435 | 86.0 |
+
+## Categories
+
+### pass (368)
+
+IC101A, IC103A, IC106A, IC108A, IC112A, IC114A, IC116M, IC201A, IC203A, IC207A, IC209A, IC213A, IC216A, IC222A, IC223A, IC224A, IC225A, IC226A, IC227A, IC228A, IC233A, IC234A, IC235A, IC237A, IF101A, IF102A, IF103A, IF104A, IF105A, IF106A, IF107A, IF108A, IF109A, IF110A, IF111A, IF112A, IF113A, IF114A, IF115A, IF116A, IF117A, IF118A, IF119A, IF120A, IF121A, IF122A, IF123A, IF124A, IF125A, IF126A, IF127A, IF128A, IF129A, IF130A, IF131A, IF132A, IF133A, IF134A, IF135A, IF136A, IF137A, IF138A, IF139A, IF140A, IF141A, IF142A, IX101A, IX102A, IX103A, IX104A, IX105A, IX106A, IX107A, IX108A, IX109A, IX110A, IX111A, IX112A, IX113A, IX114A, IX115A, IX116A, IX117A, IX118A, IX119A, IX120A, IX121A, IX201A, IX202A, IX203A, IX204A, IX205A, IX206A, IX207A, IX208A, IX209A, IX210A, IX211A, IX212A, IX213A, IX214A, IX215A, IX216A, IX217A, IX218A, NC101A, NC102A, NC103A, NC104A, NC105A, NC106A, NC107A, NC108M, NC109M, NC110M, NC111A, NC112A, NC113M, NC114M, NC115A, NC116A, NC117A, NC118A, NC119A, NC120A, NC121M, NC122A, NC123A, NC124A, NC125A, NC126A, NC127A, NC131A, NC132A, NC133A, NC134A, NC135A, NC136A, NC137A, NC138A, NC139A, NC140A, NC141A, NC170A, NC171A, NC172A, NC173A, NC174A, NC175A, NC176A, NC177A, NC201A, NC202A, NC203A, NC204M, NC205A, NC206A, NC207A, NC208A, NC209A, NC210A, NC211A, NC214M, NC215A, NC216A, NC217A, NC218A, NC219A, NC220M, NC221A, NC222A, NC223A, NC224A, NC225A, NC231A, NC232A, NC233A, NC234A, NC235A, NC236A, NC237A, NC238A, NC239A, NC240A, NC241A, NC242A, NC243A, NC244A, NC245A, NC246A, NC247A, NC248A, NC250A, NC251A, NC252A, NC253A, NC254A, OBIC1A, OBSQ1A, OBSQ3A, OBSQ4A, OBSQ5A, RL101A, RL102A, RL103A, RL104A, RL105A, RL106A, RL107A, RL108A, RL109A, RL110A, RL111A, RL112A, RL113A, RL114A, RL115A, RL116A, RL117A, RL118A, RL119A, RL201A, RL202A, RL203A, RL204A, RL205A, RL206A, RL207A, RL208A, RL209A, RL210A, RL211A, RL212A, RL213A, SG101A, SG104A, SG105A, SG106A, SG202A, SG204A, SM101A, SM102A, SM103A, SM104A, SM105A, SM106A, SM107A, SM201A, SM202A, SM203A, SM204A, SM205A, SM206A, SM207A, SM208A, SQ101M, SQ102A, SQ103A, SQ104A, SQ105A, SQ106A, SQ107A, SQ108A, SQ111A, SQ112A, SQ113A, SQ114A, SQ115A, SQ116A, SQ117A, SQ121A, SQ122A, SQ123A, SQ124A, SQ125A, SQ126A, SQ127A, SQ128A, SQ129A, SQ130A, SQ131A, SQ132A, SQ133A, SQ134A, SQ135A, SQ136A, SQ137A, SQ138A, SQ139A, SQ140A, SQ141A, SQ142A, SQ143A, SQ144A, SQ146A, SQ147A, SQ148A, SQ149A, SQ150A, SQ151A, SQ152A, SQ153A, SQ154A, SQ155A, SQ156A, SQ201M, SQ202A, SQ203A, SQ204A, SQ205A, SQ206A, SQ207M, SQ208M, SQ209M, SQ210M, SQ211A, SQ212A, SQ213A, SQ214A, SQ215A, SQ216A, SQ217A, SQ218A, SQ219A, SQ220A, SQ221A, SQ222A, SQ223A, SQ224A, SQ225A, SQ226A, SQ227A, SQ228A, SQ229A, SQ230A, ST101A, ST103A, ST104A, ST105A, ST106A, ST107A, ST108A, ST109A, ST111A, ST112M, ST114M, ST115A, ST117A, ST118A, ST119A, ST121A, ST122A, ST124A, ST125A, ST126A, ST127A, ST131A, ST132A, ST133A, ST134A, ST135A, ST136A, ST137A, ST139A, ST140A, ST144A, ST146A, ST147A
+
+### verified-by-checker (6)
+
+ST102A (verified by ST103A), ST110A (verified by ST111A), ST113M (verified by ST114M), ST116A (verified by ST117A), ST120A (verified by ST121A), ST123A (verified by ST124A)
+
+### incomplete (1)
+
+OBNC1M
+
+### summary-failures (5)
+
+OBNC2M, SG102A, SG103A, SG201A, SG203A
+
+### error (16)
+
+DB101A, DB102A, DB103M, DB104A, DB105A, DB201A, DB202A, DB203A, DB204A, DB205A, RW101A, RW102A, RW103A, RW104A, RW301M, RW302M
+
+### fips-flagger (29)
+
+CM303M, CM401M, DB301M, DB302M, DB303M, DB304M, DB305M, IC401M, IF401M, IF402M, IF403M, IX301M, IX302M, IX401M, NC302M, NC303M, NC401M, RL301M, RL302M, RL401M, SG302M, SG303M, SG401M, SM301M, SM401M, SQ302M, SQ303M, SQ401M, ST301M
+
+### reel-lines-deleted (2)
+
+SQ109M, SQ110M
+
+### unsupported (8)
+
+CM101M, CM102M, CM103M, CM104M, CM105M, CM201M, CM202M, EXEC85
+
+## First failure line per program
+
+- DB101A (error): UndeclaredDataNameError: line 222: data name 'DEBUG-LINE' is not declared in the DATA DIVISION
+- DB102A (error): UndeclaredDataNameError: line 216: data name 'DEBUG-LINE' is not declared in the DATA DIVISION
+- DB103M (error): UndeclaredDataNameError: line 214: data name 'DEBUG-LINE' is not declared in the DATA DIVISION
+- DB104A (error): UndeclaredDataNameError: line 287: data name 'DEBUG-LINE' is not declared in the DATA DIVISION
+- DB105A (error): UndeclaredDataNameError: line 513: data name 'DEBUG-NAME' is not declared in the DATA DIVISION
+- DB201A (error): UndeclaredDataNameError: line 233: data name 'DEBUG-LINE' is not declared in the DATA DIVISION
+- DB202A (error): UndeclaredDataNameError: line 259: data name 'DEBUG-LINE' is not declared in the DATA DIVISION
+- DB203A (error): UndeclaredDataNameError: line 276: data name 'DEBUG-LINE' is not declared in the DATA DIVISION
+- DB204A (error): UndeclaredDataNameError: line 287: data name 'DEBUG-LINE' is not declared in the DATA DIVISION
+- DB205A (error): ValueError: Unknown COBOL statement type: 'DISABLE'
+- OBNC1M (incomplete): OBNC1M: did not run to completion — 'END OF TEST' banner absent (32 record(s) written). Program halted before its summary.
+- OBNC2M (summary-failures): OBNC2M: CCVS summary reports 2 failed test(s).
+- RW101A (error): ValueError: Unknown COBOL statement type: 'INITIATE'
+- RW102A (error): ValueError: Unknown COBOL statement type: 'INITIATE'
+- RW103A (error): ValueError: Unknown COBOL statement type: 'INITIATE'
+- RW104A (error): ValueError: Unknown COBOL statement type: 'INITIATE'
+- RW301M (error): ValueError: Unknown COBOL statement type: 'INITIATE'
+- RW302M (error): ValueError: Unknown COBOL statement type: 'INITIATE'
+- SG102A (summary-failures): SG102A: CCVS summary reports 1 failed test(s).
+- SG103A (summary-failures): SG103A: CCVS summary reports 3 failed test(s).
+- SG201A (summary-failures): SG201A: CCVS summary reports 23 failed test(s).
+- SG203A (summary-failures): SG203A: CCVS summary reports 4 failed test(s).
