@@ -43,11 +43,11 @@ def lower_procedure_division(
     materialised: MaterialisedSectionedLayout,
 ) -> None:
     """Lower division-level bare statements, standalone paragraphs, and sections."""
-    for strat in ctx.extension_strategies:
-        strat.on_procedure_entry(ctx, materialised)
     ctx.procedures = procedure_labels(
         [*asg.sections, *asg.declaratives], asg.paragraphs
     )
+    for strat in ctx.extension_strategies:
+        strat.on_procedure_entry(ctx, materialised)
 
     _lower_use_requests(ctx, asg)
 

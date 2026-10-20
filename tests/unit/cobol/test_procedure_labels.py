@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
-from cobol_asg.asg_types import CobolParagraph, CobolSection
+from collections.abc import Mapping
+
+from cobol_asg.asg_types import CobolASG, CobolParagraph, CobolSection
 from cobol_asg.cobol_parser import make_cobol_parser
 from interpreter.cobol.cobol_frontend import CobolFrontend
+from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.features import CobolFeature
+from interpreter.cobol.lower_data_division import lower_sectioned_data_division
+from interpreter.cobol.lower_procedure import lower_procedure_division
 from interpreter.cobol.procedure_labels import procedure_labels
+from interpreter.cobol.sectioned_layout import build_sectioned_layout
+from interpreter.cobol.statement_dispatch import dispatch_statement
 from interpreter.continuation_name import ContinuationName
 from interpreter.instructions import Branch, Label_, SetContinuation
 from interpreter.ir import CodeLabel
@@ -178,4 +185,49 @@ class TestProcedureLabels:
             CodeLabel("para_S1_WORK"),
             CodeLabel("para_S2_INIT"),
             CodeLabel("para_S2_WORK"),
+        ]
+
+
+class _EntrySpy:
+    name = "entry-spy"
+
+    def __init__(self) -> None:
+        self.seen: list[CodeLabel] = []
+
+    def handles(self, stmt: object) -> bool:
+        return False
+
+    def preprocess_program_dict(self, data: Mapping[str, str]) -> dict[str, str]:
+        return dict(data)
+
+    def on_procedure_entry(self, ctx: EmitContext, materialised: object) -> None:
+        self.seen = [
+            ctx.procedures.procedure("err-para", "", "SEC-B"),
+            ctx.procedures.procedure("sec-a", "", ""),
+        ]
+
+    def lower(self, ctx: EmitContext, stmt: object, materialised: object) -> None:
+        pass
+
+
+class TestProcedureLabelsAtProcedureEntry:
+    @covers(CobolFeature.PERFORM, CobolFeature.GO_TO)
+    def test_an_extension_sees_the_programs_labels_on_procedure_entry(self):
+        """An extension lowering strategy emits branches to the program's own
+        procedures from on_procedure_entry, so the labels exist by then."""
+        asg = CobolASG(
+            program_id="ENTRY",
+            sections=[_section("SEC-A", "ERR-PARA"), _section("SEC-B", "ERR-PARA")],
+        )
+        spy = _EntrySpy()
+        ctx = EmitContext(dispatch_fn=dispatch_statement, extension_strategies=[spy])
+        materialised = lower_sectioned_data_division(
+            ctx, build_sectioned_layout(asg), "ENTRY"
+        )
+
+        lower_procedure_division(ctx, asg, materialised)
+
+        assert spy.seen == [
+            CodeLabel("para_SEC-B_ERR-PARA"),
+            CodeLabel("section_SEC-A"),
         ]
