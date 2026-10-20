@@ -37,7 +37,7 @@ class RedDragonExtensionLoweringStrategy(Protocol):
     def on_procedure_entry(
         self, ctx: EmitContext, materialised: MaterialisedSectionedLayout
     ) -> None:
-        """Called once at the start of the procedure division."""
+        """Called once at the start of the procedure division, after ``ctx.procedures`` holds the program's section and paragraph labels."""
         ...
 
     def lower(
