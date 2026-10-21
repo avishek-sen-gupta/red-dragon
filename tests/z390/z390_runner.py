@@ -1,5 +1,5 @@
 # pyright: standard
-"""Runs a program under z390 and reads its LOG: stdout is the run's lines minus z390's own EZ390 messages and register dumps."""
+"""Runs a program under z390 and reads its LOG: stdout is the run's lines minus z390's own EZ390 messages and register dumps; an abend's dump gives the registers and CC."""
 
 import re
 from collections.abc import Sequence
@@ -7,7 +7,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from hlasm_asg.subprocess_runner import SubprocessRunner
-from tests.integration.hlasm.hlasm_helpers import NO_RETURN_CODE, HlasmRun
+from tests.integration.hlasm.hlasm_helpers import NO_RETURN_CODE
+from tests.integration.hlasm.hlasm_machine import HlasmMachine
+from tests.integration.hlasm.hlasm_run import HlasmRun
 from tests.z390.z390_assembly_failed import Z390AssemblyFailed
 
 PROGRAM = "PROG"
@@ -17,6 +19,11 @@ RUN_END = re.compile(r"^EZ390I instructions/sec")
 ENDED = re.compile(r" EZ390 ENDED +RC= *(\d+) ")
 ABEND = re.compile(r"^EZ390E error +\d+ program aborting due to abend (\S+)$")
 Z390_MESSAGE = re.compile(r"^(EZ390|\s*R[0-9A-F]-R[0-9A-F] )")
+ABEND_PSW = re.compile(r" ABEND PSW=([0-9A-F]{8}) ")
+REGISTER_DUMP = re.compile(r"^ R([0-9A-F])-R[0-9A-F] ((?:[0-9A-F]{16} ?){4})$")
+PSW_CC_SHIFT = 12
+CC_MASK = 0b11
+HEX = 16
 
 
 def _run_lines(log: Sequence[str]) -> Sequence[str]:
@@ -51,6 +58,27 @@ def hlasm_run_of_log(log: Sequence[str]) -> HlasmRun:
     return HlasmRun(_return_code(_ended_rc(log), abend), abend, _stdout(lines))
 
 
+def _abend_cc(lines: Sequence[str]) -> int:
+    psw = next(int(m.group(1), HEX) for line in lines if (m := ABEND_PSW.search(line)))
+    return (psw >> PSW_CC_SHIFT) & CC_MASK
+
+
+def _dumped_registers(line: str) -> dict[int, int]:
+    match REGISTER_DUMP.match(line):
+        case None:
+            return {}
+        case dump:
+            first = int(dump.group(1), HEX)
+            values = dump.group(2).split()
+            return {first + i: int(value, HEX) for i, value in enumerate(values)}
+
+
+def hlasm_machine_of_log(log: Sequence[str]) -> HlasmMachine:
+    lines = _run_lines(log)
+    gprs = {r: v for line in lines for r, v in _dumped_registers(line).items()}
+    return HlasmMachine(hlasm_run_of_log(log), _abend_cc(lines), gprs)
+
+
 @dataclass(frozen=True)
 class Z390Runner:
     """Assembles, links and executes with z390's asmlg against z390's own macro library."""
@@ -59,6 +87,12 @@ class Z390Runner:
     runner: SubprocessRunner
 
     def run(self, source: str, tmp: Path) -> HlasmRun:
+        return hlasm_run_of_log(self._log(source, tmp))
+
+    def run_machine(self, source: str, tmp: Path) -> HlasmMachine:
+        return hlasm_machine_of_log(self._log(source, tmp))
+
+    def _log(self, source: str, tmp: Path) -> Sequence[str]:
         program = tmp / PROGRAM
         program.with_suffix(".MLC").write_text(source, encoding="ascii")
         ran = self.runner.run([str(self.home / "bash" / "asmlg"), str(program)])
@@ -66,4 +100,4 @@ class Z390Runner:
         if not log.exists():
             err = program.with_suffix(".ERR").read_text(encoding="latin-1")
             raise Z390AssemblyFailed(log.name, ran.returncode, err)
-        return hlasm_run_of_log(log.read_text(encoding="latin-1").splitlines())
+        return log.read_text(encoding="latin-1").splitlines()
