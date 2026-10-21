@@ -133,6 +133,8 @@ source_modules =
     interpreter.run
 forbidden_modules =
     interpreter.hlasm
+ignore_imports =
+    interpreter.frontends -> interpreter.hlasm.hlasm_frontend
 
 [importlinter:contract:hlasm-not-cobol]
 name = HLASM lowering must not import COBOL lowering directly

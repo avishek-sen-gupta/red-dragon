@@ -5,13 +5,14 @@ from __future__ import annotations
 import copy
 import logging
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from dataclasses import field as dataclass_field
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Union
 
+from hlasm_asg.hlasm_bridge_parser import make_hlasm_parser
 from interpreter import constants
 from interpreter.cfg import CFG, build_cfg
 from interpreter.constants import FoundationTypeName, Language, LLMProvider
@@ -38,6 +39,7 @@ from interpreter.overload.overload_resolver import (
 from interpreter.overload.resolution_strategy import ArityThenTypeStrategy
 from interpreter.project.cobol_compile import PROJECT_ROOT, compile_cobol
 from interpreter.project.entry_point import EntryPoint
+from interpreter.project.hlasm_compile import compile_hlasm
 from interpreter.project.linker import module_prefix
 from interpreter.project.program_entry import ProgramEntry
 from interpreter.project.program_not_in_image import ProgramNotInImage
@@ -180,6 +182,8 @@ def _field_fallback_for_language(lang: Language) -> FieldFallbackStrategy:
         return ImplicitThisFieldFallback()
     return NoFieldFallback()
 
+
+_IMAGE_LANGUAGES: frozenset[Language] = frozenset({Language.COBOL, Language.HLASM})
 
 _LEAKY_SCOPING_LANGS: frozenset[Language] = frozenset(
     {Language.RUBY, Language.PHP, Language.LUA}
@@ -1313,14 +1317,9 @@ def run(
             self._target.lower_time = duration
 
     observer: FrontendObserver = _StatsObserver(stats)
-    if lang == Language.COBOL:
-        # COBOL: compile via the shared compile_cobol API (behavior-preserving).
-        linked = compile_cobol(
-            source.encode("utf-8"),
-            parser=make_cobol_parser(copybook_dirs=copybook_dirs),
-            copybook_dirs=copybook_dirs,
-            observer=observer,
-            tolerant=tolerant,
+    if lang in _IMAGE_LANGUAGES:
+        linked = _compiled_image(
+            lang, source.encode("utf-8"), copybook_dirs, observer, tolerant
         )
         stats.ir_instruction_count = len(linked.merged_ir)
         stats.cfg_block_count = len(linked.merged_cfg.blocks)
@@ -1386,10 +1385,10 @@ def run(
             class_symbol_table=frontend.class_symbol_table,
         )
 
-    # For COBOL, when using the default top-level entry point, switch to
+    # For COBOL and HLASM, when using the default top-level entry point, switch to
     # function-entry mode so run_linked runs every module's init block first
     # (phase 1) then dispatches into the main program's procedure (phase 2).
-    if lang == Language.COBOL and entry_point.is_top_level:
+    if lang in _IMAGE_LANGUAGES and entry_point.is_top_level:
         _label = linked.entry_func_label
         entry_point = EntryPoint.function(lambda ref: ref.label == _label)
 
@@ -1414,6 +1413,26 @@ def run(
         logger.info("%s", stats.report())
 
     return vm
+
+
+def _compiled_image(
+    lang: Language,
+    source: bytes,
+    copybook_dirs: Sequence[Path],
+    observer: FrontendObserver,
+    tolerant: bool,
+) -> LinkedProgram:
+    match lang:
+        case Language.HLASM:
+            return compile_hlasm(source, parser=make_hlasm_parser())
+        case _:
+            return compile_cobol(
+                source,
+                parser=make_cobol_parser(copybook_dirs=copybook_dirs),
+                copybook_dirs=copybook_dirs,
+                observer=observer,
+                tolerant=tolerant,
+            )
 
 
 def _format_val(
