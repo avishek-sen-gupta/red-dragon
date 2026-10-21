@@ -39,6 +39,7 @@ EBCDIC = "ebcdic"
 PARAM_VALUE = Register("%p_value")
 PARAM_LEFT = Register("%p_left")
 PARAM_RIGHT = Register("%p_right")
+PARAM_CARRY = Register("%p_carry")
 
 SECTION_VAR_PREFIX = "__hlasm_sect_"
 

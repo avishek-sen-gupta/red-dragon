@@ -5,8 +5,11 @@ from collections.abc import Mapping, Sequence
 
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.hlasm_lowering_error import HlasmLoweringError
-from interpreter.instructions import InstructionBase, Return_
+from interpreter.instructions import InstructionBase, LoadIndex, Return_
 from interpreter.register import Register
+
+RESULT = 0
+CONDITION_CODE = 1
 
 
 def _returned_register(body: Sequence[InstructionBase]) -> Register:
@@ -41,3 +44,20 @@ def inline_ir(
         for step in steps
     ]
     return renamed[value]
+
+
+def _element(emitter: HlasmEmitter, pair: Register, at: int) -> Register:
+    reg = emitter.fresh_reg()
+    emitter.emit_inst(
+        LoadIndex(result_reg=reg, arr_reg=pair, index_reg=emitter.int_(at))
+    )
+    return reg
+
+
+def inline_result_and_cc(
+    emitter: HlasmEmitter,
+    body: Sequence[InstructionBase],
+    arguments: Mapping[Register, Register],
+) -> tuple[Register, Register]:
+    pair = inline_ir(emitter, body, arguments)
+    return _element(emitter, pair, RESULT), _element(emitter, pair, CONDITION_CODE)
