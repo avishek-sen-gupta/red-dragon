@@ -1,6 +1,7 @@
 # pyright: standard
-"""IR builders for fixed-width two's-complement arithmetic and its condition codes."""
+"""IR builders for fixed-width two's-complement arithmetic, bitwise connectives and their condition codes."""
 
+from interpreter.hlasm.boolean_connective import BooleanConnective
 from interpreter.hlasm.hlasm_constants import (
     LIST_SET,
     MAKE_LIST,
@@ -248,3 +249,37 @@ def build_compare_logical_cc_ir(func_name: str, bits: int) -> list[InstructionBa
             _wrap(f"{func_name}.r", PARAM_RIGHT, bits),
         ),
     )
+
+
+def _complemented_if(
+    prefix: str, value: Register, bits: int, complemented: bool
+) -> Fragment:
+    if complemented:
+        return _complement(prefix, value, bits)
+    return _wrap(prefix, value, bits)
+
+
+def build_boolean_cc_ir(
+    func_name: str, bits: int, connective: BooleanConnective
+) -> list[InstructionBase]:
+    left, left_ir = _wrap(f"{func_name}.l", PARAM_LEFT, bits)
+    right, right_ir = _complemented_if(
+        f"{func_name}.r", PARAM_RIGHT, bits, connective.complements_right
+    )
+    combined, combined_ir = _binop(
+        func_name, "combined", connective.operator, left, right
+    )
+    result, result_ir = _complemented_if(
+        f"{func_name}.s", combined, bits, connective.complements_result
+    )
+    nonzero, nonzero_ir = _nonzero_bit(func_name, result, bits)
+    pair, pair_ir = _pair(func_name, result, nonzero)
+    return [
+        *left_ir,
+        *right_ir,
+        *combined_ir,
+        *result_ir,
+        *nonzero_ir,
+        *pair_ir,
+        Return_(value_reg=pair),
+    ]

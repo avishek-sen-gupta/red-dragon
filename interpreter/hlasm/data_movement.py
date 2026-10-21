@@ -189,6 +189,15 @@ def field_mask(bits: int, shift: int) -> int:
     return ((1 << bits) - 1) << shift
 
 
+def field_of(bits: int, shift: int) -> Source:
+    def extract(emitter: HlasmEmitter, statement: MachineStatement) -> Register:
+        whole = emitter.load_gr64(reg_operand(statement, REGISTER_OPERAND))
+        moved = emitter.binop(BinopKind.RSHIFT, whole, emitter.int_(shift))
+        return emitter.binop(BinopKind.BIT_AND, moved, emitter.int_((1 << bits) - 1))
+
+    return extract
+
+
 def into_field(bits: int, shift: int) -> Sink:
     insert = into_bits(field_mask(bits, shift))
 
