@@ -21,9 +21,14 @@ from interpreter.hlasm.fixed_width_ir import (
     build_sub_signed_cc_ir,
 )
 from interpreter.hlasm.hlasm_constants import (
+    BITS_PER_BYTE,
+    DOUBLEWORD_BITS,
     DOUBLEWORD_BYTES,
+    HALFWORD_BITS,
+    HALFWORD_BYTES,
     PARAM_LEFT,
     PARAM_RIGHT,
+    WORD_BITS,
     WORD_BYTES,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
@@ -35,13 +40,6 @@ from interpreter.register import Register
 
 type Operation = Sequence[InstructionBase]
 
-HALFWORD = 2
-WORD = WORD_BYTES
-DOUBLEWORD = DOUBLEWORD_BYTES
-BYTE_BITS = 8
-HALFWORD_BITS = 16
-WORD_BITS = 32
-DOUBLEWORD_BITS = 64
 RESULT = 0
 CONDITION_CODE = 1
 
@@ -110,7 +108,7 @@ def to_storage_immediate(operation: Operation, width: int) -> StatementLowering:
             operation,
             (
                 emitter.load_storage(address, 0, width),
-                _immediate(1, BYTE_BITS)(emitter, statement),
+                _immediate(1, BITS_PER_BYTE)(emitter, statement),
             ),
             lambda value: emitter.store_storage(address, 0, width, value),
         )
@@ -126,10 +124,10 @@ def _doubleword(operation: Operation, left: Source, right: Source) -> StatementL
     return signed_arithmetic(operation, left, right, to_gr64)
 
 
-WORD_STORAGE = from_storage(WORD)
-DOUBLEWORD_STORAGE = from_storage(DOUBLEWORD)
-SIGNED_HALFWORD_STORAGE = _extended(from_storage(HALFWORD), HALFWORD_BITS)
-SIGNED_WORD_STORAGE = _extended(from_storage(WORD), WORD_BITS)
+WORD_STORAGE = from_storage(WORD_BYTES)
+DOUBLEWORD_STORAGE = from_storage(DOUBLEWORD_BYTES)
+SIGNED_HALFWORD_STORAGE = _extended(from_storage(HALFWORD_BYTES), HALFWORD_BITS)
+SIGNED_WORD_STORAGE = _extended(from_storage(WORD_BYTES), WORD_BITS)
 SIGNED_LOW_WORD = _extended(from_gr32(1), WORD_BITS)
 HALFWORD_IMMEDIATE = _immediate(1, HALFWORD_BITS)
 WORD_IMMEDIATE = _immediate(1, WORD_BITS)
@@ -145,7 +143,7 @@ ADDS: Mapping[str, StatementLowering] = {
     "AHI": _word(ADD_32, from_gr32(0), HALFWORD_IMMEDIATE),
     "AFI": _word(ADD_32, from_gr32(0), WORD_IMMEDIATE),
     "AHIK": _word(ADD_32, from_gr32(1), THIRD_HALFWORD_IMMEDIATE),
-    "ASI": to_storage_immediate(ADD_32, WORD),
+    "ASI": to_storage_immediate(ADD_32, WORD_BYTES),
     "AG": _doubleword(ADD_64, from_gr64(0), DOUBLEWORD_STORAGE),
     "AGR": _doubleword(ADD_64, from_gr64(0), from_gr64(1)),
     "AGRK": _doubleword(ADD_64, from_gr64(1), from_gr64(2)),
@@ -155,7 +153,7 @@ ADDS: Mapping[str, StatementLowering] = {
     "AGHI": _doubleword(ADD_64, from_gr64(0), HALFWORD_IMMEDIATE),
     "AGFI": _doubleword(ADD_64, from_gr64(0), WORD_IMMEDIATE),
     "AGHIK": _doubleword(ADD_64, from_gr64(1), THIRD_HALFWORD_IMMEDIATE),
-    "AGSI": to_storage_immediate(ADD_64, DOUBLEWORD),
+    "AGSI": to_storage_immediate(ADD_64, DOUBLEWORD_BYTES),
 }
 
 SUBTRACTS: Mapping[str, StatementLowering] = {
