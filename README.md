@@ -215,7 +215,7 @@ vm = run_linked(linked, ProgramEntry("HELLO"), max_steps=20_000,
                 initial_vm=initial_vm_state(), builtins=core_builtins())
 ```
 
-`compile_hlasm` assembles through the che4z bridge, lowers and links through files in a work directory, as COBOL does. The program is named after its entry: the symbol `END` names, else the first CSECT. On return, GR15's low word is in the `__hlasm_gprs` region; an abend leaves its code (`S0C1`, `U0042`) in `__hlasm_abend`. `get_hlasm_parser` puts our maclib (`hlasm-bridge/maclib/`: `WTO`, `ABEND`) ahead of the given SYSLIB; `WTO` writes a line to stdout. `run(source, language="hlasm")` does the same with our maclib alone. Only a few opcodes are lowered so far; see [HLASM Frontend Design](docs/frontend-design/hlasm.md).
+`compile_hlasm` assembles through the che4z bridge, lowers and links through files in a work directory, as COBOL does. The program is named after its entry: the symbol `END` names, else the first CSECT. On return, GR15's low word is in the `__hlasm_gprs` region; an abend leaves its code (`S0C1`, `U0042`) in `__hlasm_abend`. `get_hlasm_parser` puts our maclib (`hlasm-bridge/maclib/`: `WTO`, `ABEND`) ahead of the given SYSLIB; `WTO` writes a line to stdout. `run(source, language="hlasm", copybook_dirs=[...])` does the same, with `copybook_dirs` as the SYSLIB after our maclib. Only a few opcodes are lowered so far; see [HLASM Frontend Design](docs/frontend-design/hlasm.md).
 
 ### Programmatic API
 

@@ -80,7 +80,8 @@ when control branches to the return sentinel.
 ## Supervisor Calls and Our Maclib
 
 `get_hlasm_parser` puts `hlasm-bridge/maclib/` ahead of any caller's SYSLIB.
-`run()` and the tests assemble through it. The macros follow the z/OS operand
+`run()` and the tests assemble through it; `run(copybook_dirs=...)` supplies the
+caller's SYSLIB directories, searched after ours. The macros follow the z/OS operand
 conventions but expand only to lowered opcodes:
 
 | Macro | Expansion |
@@ -98,6 +99,9 @@ SVCs are lowered in IR over existing builtins; no SVC has a builtin of its own.
 - **Any other SVC number** logs the number and abends `S0C1`. This is a project
   choice, not z/OS behaviour.
 
+WTO costs about 15 VM steps per character, so `run()` needs `max_steps` well
+above its default of 100.
+
 Every IR instruction a statement lowers to carries that statement's line as its
 source location. A macro-generated statement carries the line of the macro call
 in the open-code source. Columns are 0: the bridge reports lines only.
@@ -110,7 +114,7 @@ in the open-code source. Columns are 0: the bridge reports lines only.
 - Emission is O(n²) in the number of IR instructions (red-dragon-6uyp.62).
 - Logical shifts are to be built in IR, not on the VM's `>>>`, which is not width-aware (red-dragon-srvz).
 - `EXTRN`, `ENTRY` and V-type constants are not resolved; V-constants hold zero (red-dragon-6uyp.8, red-dragon-6uyp.15).
-- `run()` passes only our maclib as SYSLIB; it has no parameter for others.
+- `ABEND` takes only a self-defining code of 0-4095. Register notation (`ABEND (R2)`) and larger codes are not supported.
 
 ## Test Coverage
 
@@ -124,6 +128,6 @@ in the open-code source. Columns are 0: the bridge reports lines only.
 | `tests/unit/hlasm/test_lowering_skeleton.py` | Labels, seed opcodes, dispatch, abends |
 | `tests/integration/hlasm/test_bridge_parser.py` | The real bridge: macro origins, refused assemblies |
 | `tests/integration/hlasm/test_storage_layout.py` | Section regions and address constants |
-| `tests/integration/hlasm/test_svc.py` | `WTO`, `ABEND` user and system codes, unlowered SVCs, `run()` with our maclib, call-site spans |
+| `tests/integration/hlasm/test_svc.py` | `WTO`, `ABEND` user and system codes, unlowered SVCs, `run()` with our maclib then `copybook_dirs`, call-site spans |
 | `tests/integration/hlasm/test_hlasm_compile.py` | Unit files, reuse, SYSLIB invalidation, `run()`, return code, default entry, BALR/BR, wild branch |
 | `tests/integration/hlasm/test_instruction_table.py`, `test_opcode_unit_coverage.py` | Instruction table and opcode-unit coverage |
