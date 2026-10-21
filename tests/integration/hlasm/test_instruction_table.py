@@ -6,76 +6,23 @@ from __future__ import annotations
 import os
 import subprocess
 from collections import Counter
-from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
-
+from hlasm_asg.instruction_table.architecture_level import ArchitectureLevel
+from hlasm_asg.instruction_table.instruction_table import InstructionTable
+from hlasm_asg.instruction_table.machine_instruction_row import MachineInstructionRow
+from hlasm_asg.instruction_table.mnemonic_row import MnemonicRow
+from hlasm_asg.instruction_table.operand import Operand
+from hlasm_asg.instruction_table.operand_kind import OperandKind
+from hlasm_asg.instruction_table.parameter import Parameter
+from hlasm_asg.instruction_table.parameter_kind import ParameterKind
+from hlasm_asg.instruction_table.privilege import Privilege
+from hlasm_asg.instruction_table.transform import Transform
+from hlasm_asg.instruction_table.transform_kind import TransformKind
 from tests.covers import NotLanguageFeature, covers
 
-
-class Parameter(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    kind: str
-    bits: int
-    signed: bool
-
-
-class Operand(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    kind: str
-    bits: int
-    signed: bool
-    first: Parameter
-    second: Parameter
-    optional: bool
-
-
-class Transform(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    kind: str
-    skip: int
-    value: int
-    source: int
-    insert: bool
-
-
-class MachineInstructionRow(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    mnemonic: str
-    format: str
-    privileged: Literal["not_privileged", "privileged", "conditionally_privileged"]
-    arch: str
-    operands: tuple[Operand, ...]
-    base: None
-    transforms: tuple[()]
-
-
-class MnemonicRow(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    mnemonic: str
-    format: str
-    privileged: Literal["not_privileged", "privileged", "conditionally_privileged"]
-    arch: str
-    operands: tuple[Operand, ...]
-    base: str
-    transforms: tuple[Transform, ...]
-
-
-class InstructionTable(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    format: int
-    instructions: tuple[MachineInstructionRow | MnemonicRow, ...]
-
-
-NO_PARAMETER = Parameter(kind="NONE", bits=0, signed=False)
+NO_PARAMETER = Parameter(kind=ParameterKind.NONE, bits=0, signed=False)
 REGISTER = Operand(
-    kind="REG",
+    kind=OperandKind.REG,
     bits=4,
     signed=False,
     first=NO_PARAMETER,
@@ -110,8 +57,8 @@ def test_instruction_table_lists_lr_lpsw_and_be() -> None:
     assert rows["LR"] == MachineInstructionRow(
         mnemonic="LR",
         format="RR",
-        privileged="not_privileged",
-        arch="UNI_ESA_XA_370_DOS_SINCE_ZOP",
+        privileged=Privilege.NOT_PRIVILEGED,
+        arch=ArchitectureLevel.UNI_ESA_XA_370_DOS_SINCE_ZOP,
         operands=(REGISTER, REGISTER),
         base=None,
         transforms=(),
@@ -119,15 +66,15 @@ def test_instruction_table_lists_lr_lpsw_and_be() -> None:
     assert rows["LPSW"] == MachineInstructionRow(
         mnemonic="LPSW",
         format="SI",
-        privileged="privileged",
-        arch="UNI_ESA_XA_370_DOS_SINCE_ZOP",
+        privileged=Privilege.PRIVILEGED,
+        arch=ArchitectureLevel.UNI_ESA_XA_370_DOS_SINCE_ZOP,
         operands=(
             Operand(
-                kind="DISP",
+                kind=OperandKind.DISP,
                 bits=12,
                 signed=False,
                 first=NO_PARAMETER,
-                second=Parameter(kind="BASE", bits=4, signed=False),
+                second=Parameter(kind=ParameterKind.BASE, bits=4, signed=False),
                 optional=False,
             ),
         ),
@@ -137,11 +84,11 @@ def test_instruction_table_lists_lr_lpsw_and_be() -> None:
     assert rows["BE"] == MnemonicRow(
         mnemonic="BE",
         format="RX-b",
-        privileged="not_privileged",
-        arch="UNI_ESA_XA_370_DOS_SINCE_ZOP",
+        privileged=Privilege.NOT_PRIVILEGED,
+        arch=ArchitectureLevel.UNI_ESA_XA_370_DOS_SINCE_ZOP,
         operands=(
             Operand(
-                kind="MASK",
+                kind=OperandKind.MASK,
                 bits=4,
                 signed=False,
                 first=NO_PARAMETER,
@@ -149,14 +96,16 @@ def test_instruction_table_lists_lr_lpsw_and_be() -> None:
                 optional=False,
             ),
             Operand(
-                kind="DISP",
+                kind=OperandKind.DISP,
                 bits=12,
                 signed=False,
-                first=Parameter(kind="IDX_REG", bits=4, signed=False),
-                second=Parameter(kind="BASE", bits=4, signed=False),
+                first=Parameter(kind=ParameterKind.IDX_REG, bits=4, signed=False),
+                second=Parameter(kind=ParameterKind.BASE, bits=4, signed=False),
                 optional=False,
             ),
         ),
         base="BC",
-        transforms=(Transform(kind="value", skip=0, value=8, source=0, insert=True),),
+        transforms=(
+            Transform(kind=TransformKind.VALUE, skip=0, value=8, source=0, insert=True),
+        ),
     )
