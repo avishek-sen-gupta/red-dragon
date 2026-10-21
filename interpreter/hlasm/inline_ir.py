@@ -9,13 +9,15 @@ from interpreter.instructions import InstructionBase, Return_
 from interpreter.register import Register
 
 
-def _returned_register(returned: InstructionBase) -> Register:
-    match returned:
-        case Return_(value_reg=Register() as value):
+def _returned_register(body: Sequence[InstructionBase]) -> Register:
+    match body[-1:]:
+        case [Return_(value_reg=Register() as value)]:
             return value
-        case _:
+        case last:
             raise HlasmLoweringError(
-                "inline IR body", "a final Return_ of a register", repr(returned)
+                "inline IR body",
+                "a final Return_ of a register",
+                repr(last[0]) if last else "an empty body",
             )
 
 
@@ -24,8 +26,8 @@ def inline_ir(
     body: Sequence[InstructionBase],
     arguments: Mapping[Register, Register],
 ) -> Register:
-    *steps, returned = body
-    value = _returned_register(returned)
+    steps = body[:-1]
+    value = _returned_register(body)
     renamed = {
         **arguments,
         **{

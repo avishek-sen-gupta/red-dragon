@@ -9,14 +9,16 @@ from hlasm_asg.program.mask_operand import MaskOperand
 from hlasm_asg.program.operand import Operand
 from hlasm_asg.program.reg_operand import RegOperand
 from hlasm_asg.program.reloc_imm_operand import RelocImmOperand
+from hlasm_asg.program.storage_length_operand import StorageLengthOperand
 from hlasm_asg.program.storage_operand import StorageOperand
+from hlasm_asg.program.vec_reg_operand import VecRegOperand
 from interpreter.hlasm.hlasm_lowering_error import HlasmLoweringError
 
 
 def _mismatch(statement: MachineStatement, index: int, expected: str) -> Exception:
     where = (
-        f"{statement.mnemonic} in {statement.section} at offset {statement.offset}"
-        f" operand {index}"
+        f"{statement.base_mnemonic} in {statement.section} at offset {statement.offset}"
+        f" ({statement.origin.file}:{statement.origin.line}) operand {index}"
     )
     found = (
         repr(statement.operands[index])
@@ -68,3 +70,21 @@ def reloc_operand(statement: MachineStatement, index: int) -> RelocImmOperand:
             return operand
         case _:
             raise _mismatch(statement, index, "a relocatable immediate")
+
+
+def storage_length_operand(
+    statement: MachineStatement, index: int
+) -> StorageLengthOperand:
+    match _at(statement, index):
+        case [StorageLengthOperand() as operand]:
+            return operand
+        case _:
+            raise _mismatch(statement, index, "a storage length operand")
+
+
+def vec_reg_operand(statement: MachineStatement, index: int) -> int:
+    match _at(statement, index):
+        case [VecRegOperand(value=value)]:
+            return value
+        case _:
+            raise _mismatch(statement, index, "a vector register")

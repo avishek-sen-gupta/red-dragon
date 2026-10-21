@@ -50,7 +50,7 @@ addresses.
 | `interpreter/hlasm/dc_encoding.py` | DC images: C, X, B, F, H, P, Z, A, Y |
 | `interpreter/hlasm/entry_state.py` | Entry resolution and entry registers (R14 = `0xFF0` return sentinel, R13 = 72-byte save area, R15 = entry address) |
 | `interpreter/hlasm/branch_dispatch.py` | `hl_dispatch`: maps a branch address to a statement label; a miss abends `S0C1` |
-| `interpreter/hlasm/operands.py` | `reg_operand`, `mask_operand`, `imm_operand`, `storage_operand`, `reloc_operand`: typed operand access; a mismatch raises `HlasmLoweringError` |
+| `interpreter/hlasm/operands.py` | `reg_operand`, `mask_operand`, `imm_operand`, `storage_operand`, `reloc_operand`, `storage_length_operand`, `vec_reg_operand`: typed operand access; a mismatch raises `HlasmLoweringError` |
 | `interpreter/hlasm/hlasm_lowering_error.py` | `HlasmLoweringError`: names the statement (mnemonic, section, offset, operand) and what was found |
 | `interpreter/hlasm/opcodes/seed.py` | The seed opcode lowerings |
 | `interpreter/hlasm/opcodes/svc.py` | SVC, by number |
