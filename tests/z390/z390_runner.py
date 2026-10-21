@@ -19,7 +19,7 @@ RUN_END = re.compile(r"^EZ390I instructions/sec")
 ENDED = re.compile(r" EZ390 ENDED +RC= *(\d+) ")
 ABEND = re.compile(r"^EZ390E error +\d+ program aborting due to abend (\S+)$")
 Z390_MESSAGE = re.compile(r"^(EZ390|\s*R[0-9A-F]-R[0-9A-F] )")
-ABEND_PSW = re.compile(r" ABEND PSW=([0-9A-F]{8}) ")
+ABEND_PSW = re.compile(r" ABEND PSW=([0-9A-F]{8})(?:[0-9A-F]{8})? ")
 REGISTER_DUMP = re.compile(r"^ R([0-9A-F])-R[0-9A-F] ((?:[0-9A-F]{16} ?){4})$")
 PSW_CC_SHIFT = 12
 CC_MASK = 0b11
