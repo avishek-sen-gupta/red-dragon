@@ -56,6 +56,21 @@ LOGICAL_SHIFTS: Mapping[str, Case] = {
         {5: HIGH_FILL | 0x08000000},
         CC_KEPT,
     ),
+    "SRL amount 33": (
+        SET_CC_ONE + "         L     2,NEG\n" "         SRL   2,33\n",
+        {2: HIGH_FILL},
+        CC_KEPT,
+    ),
+    "SRLK amount 32": (
+        SET_CC_ONE + "         L     3,NEG\n" "         SRLK  5,3,32\n",
+        {5: HIGH_FILL},
+        CC_KEPT,
+    ),
+    "SLLK amount 40": (
+        SET_CC_ONE + "         L     3,POS\n" "         SLLK  5,3,40\n",
+        {5: HIGH_FILL},
+        CC_KEPT,
+    ),
     "SRLG": (
         SET_CC_ONE + "         LG    3,DNEG\n" "         SRLG  5,3,63\n",
         {5: 0x00000000_00000001},
@@ -101,6 +116,16 @@ SIGNED_SHIFTS: Mapping[str, Case] = {
         "         LHI   2,-3\n" "         SLA   2,2\n",
         {2: HIGH_FILL | 0xFFFFFFF4},
         CC_NEGATIVE,
+    ),
+    "SRA amount 40": (
+        "         L     2,NEG\n" "         SRA   2,40\n",
+        {2: HIGH_FILL | 0xFFFFFFFF},
+        CC_NEGATIVE,
+    ),
+    "SLA amount 32": (
+        "         LHI   2,1\n" "         SLA   2,32\n",
+        {2: HIGH_FILL},
+        CC_OVERFLOW,
     ),
     "SLA overflow": (
         "         L     2,POS\n" "         SLA   2,1\n",
@@ -207,7 +232,7 @@ INSERTS: Mapping[str, Case] = {
 }
 
 HIGH_WORD_MOVES: Mapping[str, Case] = {
-    f"{mnemonic}": (
+    mnemonic: (
         SET_CC_ONE + SRC_AND_SRCP + f"         {mnemonic:<7}5,3\n",
         {5: value},
         CC_KEPT,
@@ -226,7 +251,7 @@ HIGH_WORD_MOVES: Mapping[str, Case] = {
 }
 
 HIGH_WORD_SHIFTS: Mapping[str, Case] = {
-    f"{mnemonic}": (
+    mnemonic: (
         SET_CC_ONE + SRC_AND_SRCP + f"         {mnemonic:<7}5,3,4\n",
         {5: value},
         CC_KEPT,

@@ -264,9 +264,9 @@ complement), OCRK, OCGRK (OR with complement), NNRK, NNGRK (NAND), NORK (NOTR), 
 overflow); SLDL, SRDL, SLDA, SRDA; RISBG, RISBGN, RISBHG, RISBLG, RNSBG, ROSBG, RXSBG.
 The amount is the low six bits of the D2(B2) address; no storage is referenced.
 
-- The left signed shifts keep the sign and shift the numeric bits. CC 3 when the exact
-  product by 2^n does not fit, which is a bit unlike the sign leaving the numeric part;
-  program-mask bit `1000` then abends `S0C8`.
+- The left signed shifts keep the sign and shift the numeric bits. CC 3 when a bit unlike
+  the sign leaves the numeric part (the exact product by 2^n does not fit); program-mask
+  bit `1000` then abends `S0C8`.
 - The double shifts treat the low words of R1 and R1+1 as one 64-bit operand. An odd R1
   abends `S0C6`; che4z refuses one at assembly, so only a built statement reaches it.
 - The RISBG family rotates the 64-bit R2 left by I5 (absent is 0) and works on the bits
@@ -276,9 +276,9 @@ The amount is the low six bits of the D2(B2) address; no storage is referenced.
   unchanged. RNSBG, ROSBG and RXSBG combine those bits with R1, set CC 0 or 1 from them,
   and replace them unless T (I3 bit 0) is on. The bridge resolves the extended mnemonics
   (RISBGZ, RNSBGT, LHHR, SLLHH, NHHR, ...) into these with the PoO immediates.
-- z390 shifts SLL by the amount mod 32 (Java's `<<`), so `SLL 2,33` shifts by 1; it does
-  not execute RISBGN (`S0C1`); and it fails to assemble SLLHH, SLLHL, SRLHH, SRLHL, SLLLH
-  and SRLLH. The z390 test pins each difference.
+- z390's 32-bit shifts (SLL, SRL, SLLK, SRLK, SRA) take the amount mod 32 (Java int
+  shifts), so `SRL 2,33` shifts by 1; it does not execute RISBGN (`S0C1`); and it fails
+  to assemble SLLHH, SLLHL, SRLHH, SRLHL, SLLLH and SRLLH. The z390 test pins each difference.
 
 **Branch on condition (red-dragon-6uyp.32).** BC, BCR, BIC, BRC, BRCL, BPP, BPRP. The
 bridge hands every extended mnemonic (B, BE, BNER, BIL, J, JLNOP, BRUL, ...) over as its
@@ -338,6 +338,7 @@ BRXLG (JXLEG). None changes the CC. BRCTH belongs to the high-word unit.
 - Emission is O(n²) in the number of IR instructions, and every branch, even to a static relative target, walks the dispatch chain (red-dragon-6uyp.62).
 - `EXTRN`, `ENTRY` and V-type constants are not resolved; V-constants hold zero (red-dragon-6uyp.8, red-dragon-6uyp.15).
 - Machine-instruction bytes are not in section storage (a spec non-goal: self-modifying code), so `EX` targets and `CLC` against code do not see them.
+- che4z encodes LHHR and LLHFR without the Z bit, where the Principles of Operation (Figure 7-397) define RISBHGZ and RISBLGZ; the range is the whole word, so the result is the same.
 - Bridge gaps: `*` in a later DC operand takes the statement address (red-dragon-6uyp.65); bit-length data reports byte length (red-dragon-6uyp.66); S-type constants are not USING-resolved (red-dragon-6uyp.67); complex-relocatable constants refuse the assembly (red-dragon-6uyp.68).
 - AMODE 24 and 64 are not modelled: SAM24, SAM64 and BASSM or BSM into those modes
   abend `S0C1` (red-dragon-6uyp.75). A BASSM or BSM to the return address returns
@@ -396,7 +397,7 @@ BRXLG (JXLEG). None changes the CC. BRCTH belongs to the high-word unit.
 | `tests/z390/test_signed_add_subtract_differential.py` | Every signed add and subtract mnemonic against z390 (`-m z390`) |
 | `tests/z390/test_logical_add_subtract_differential.py` | Every logical add and subtract mnemonic against z390; six z390 CC differences pinned (`-m z390`) |
 | `tests/z390/test_boolean_differential.py` | Every boolean mnemonic, NOTR and NOTGR against z390; eleven z390 differences (field CCs, XI, OC overlap) pinned (`-m z390`) |
-| `tests/z390/test_shift_rotate_differential.py` | Every shift and rotate case against z390; z390's SLL mod 32, RISBGN `S0C1` and refused shift-logical-high spellings pinned (`-m z390`) |
+| `tests/z390/test_shift_rotate_differential.py` | Every shift and rotate case against z390; z390's 32-bit shifts mod 32, RISBGN `S0C1` and refused shift-logical-high spellings pinned (`-m z390`) |
 | `tests/z390/test_compare_differential.py` | Every compare mnemonic against z390; the relative-long alignment difference pinned (`-m z390`) |
 | `tests/z390/test_branch_on_condition_differential.py` | Every branch on condition case against z390; the BIC, BPP and BPRP differences and branches into data pinned (`-m z390`) |
 | `tests/z390/test_branch_and_link_differential.py` | Every branch and link case and the mode-setting returns against z390; z390's AMODE 24 and 64 switches pinned (`-m z390`) |
