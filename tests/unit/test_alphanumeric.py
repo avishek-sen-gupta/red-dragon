@@ -9,8 +9,8 @@ from interpreter.cobol.alphanumeric import (
     encode_hex_literal,
     parse_hex_literal,
 )
-from interpreter.cobol.ebcdic_table import EbcdicTable
 from interpreter.cobol.features import CobolFeature
+from interpreter.encoding.ebcdic_table import EbcdicTable
 from tests.covers import covers
 
 EBCDIC_SPACE = 0x40

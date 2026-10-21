@@ -464,6 +464,20 @@ linking apart (ADR-185):
 - An `EntryPoint` run still takes the declarations of the program at
   `entry_func_label`, which `compile_cobol` sets to its main program.
 
+### 7.4 HLASM units
+
+`compile_hlasm(source, *, parser, work_dir)` (`hlasm_compile.py`) runs the same
+three stages for one assembly: `__main__-<digest>.ast.json`,
+`__main__-<digest>.unit.json`, then `image-<digest>.linked.json`. The digest covers
+the source and the parser's SYSLIB directories (`HlasmLoweringSettings`). The unit's
+`program` is the entry name and `programs` maps it to the namespaced entry label,
+which is also `entry_func_label`. Unlike COBOL, the start-up depends on the
+program (one region per section, entry registers), so link reads the AST file
+again to build it. Start-up registers carry `%hlasm_machine_`, `%hlasm.sect.`,
+`%hlasm.dc.` and `%hlasm_entry.` prefixes and lowering registers are `%N`, so the
+two never collide in the one frame both run in. `lower_hlasm_program` stops at the
+unit file.
+
 ---
 
 ## 8. Registry Namespace Awareness
@@ -530,6 +544,9 @@ interpreter/project/
     coprocessor_compile.py  CoprocessorSpec, compile_program(), lower_program() — one source's
                             programs lowered with every spec's prepass, strategy and dialect parser
     lowering_settings.py    LoweringSettings — the settings a compiled file's name digests
+    hlasm_compile.py        compile_hlasm(), lower_hlasm_program() — one HLASM assembly
+                            through the same three file stages
+    hlasm_lowering_settings.py HlasmLoweringSettings — the SYSLIB directories an HLASM file's name digests
     ir_codec.py             IrCodec — self-describing JSON for IR values
     unit_codec.py           UnitCodec — ModuleUnit <-> .unit.json
     linked_codec.py         LinkedCodec — LinkedProgram <-> .linked.json (CFG, registry rebuilt)

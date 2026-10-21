@@ -4,6 +4,7 @@ root_packages =
     cobol_asg
     cobol_memory
     cobol_numeric
+    hlasm_asg
 
 # The reason cobol_asg is a sibling of interpreter rather than a subpackage of
 # it: an import of interpreter.anything runs interpreter/__init__.py, which
@@ -18,6 +19,14 @@ name = The COBOL ASG surface must not import the interpreter
 type = forbidden
 source_modules =
     cobol_asg
+forbidden_modules =
+    interpreter
+
+[importlinter:contract:hlasm-asg-is-a-leaf]
+name = The HLASM ASG surface must not import the interpreter
+type = forbidden
+source_modules =
+    hlasm_asg
 forbidden_modules =
     interpreter
 
@@ -113,3 +122,34 @@ ignore_imports =
     interpreter.frontends -> interpreter.cobol.cobol_frontend
     interpreter.frontend_extension_lowering -> interpreter.cobol.emit_context
     interpreter.frontend_extension_lowering -> interpreter.cobol.sectioned_layout
+
+[importlinter:contract:hlasm-isolation]
+name = HLASM module only imported by frontend factory
+type = forbidden
+source_modules =
+    interpreter.vm
+    interpreter.handlers
+    interpreter.project
+    interpreter.run
+forbidden_modules =
+    interpreter.hlasm
+ignore_imports =
+    interpreter.frontends -> interpreter.hlasm.hlasm_frontend
+
+[importlinter:contract:hlasm-not-cobol]
+name = HLASM lowering must not import COBOL lowering directly
+type = forbidden
+source_modules =
+    interpreter.hlasm
+forbidden_modules =
+    interpreter.cobol
+allow_indirect_imports = True
+
+[importlinter:contract:cobol-not-hlasm]
+name = COBOL lowering must not import HLASM lowering directly
+type = forbidden
+source_modules =
+    interpreter.cobol
+forbidden_modules =
+    interpreter.hlasm
+allow_indirect_imports = True

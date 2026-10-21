@@ -254,7 +254,7 @@ class TestNestedLeafSubscriptStride:
 
     @covers(CobolFeature.OCCURS_FIXED)
     def test_nested_leaf_strides_by_group_element_size(self):
-        from interpreter.cobol.ebcdic_table import EbcdicTable
+        from interpreter.encoding.ebcdic_table import EbcdicTable
 
         vm = run_cobol(_nested_leaf_program(), max_steps=2000)
         region = _first_region(vm)

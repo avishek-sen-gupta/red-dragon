@@ -5,8 +5,8 @@ from collections.abc import Mapping, Sequence
 from cobol_asg.alphabet import NATIVE_ALPHABET, Alphabet
 from cobol_asg.asg_types import CobolASG
 from interpreter.cobol.collating_sequences import collating_sequence_of
-from interpreter.cobol.ebcdic_table import EbcdicTable
 from interpreter.cobol.features import CobolFeature
+from interpreter.encoding.ebcdic_table import EbcdicTable
 from tests.covers import covers
 
 

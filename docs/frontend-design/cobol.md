@@ -60,7 +60,7 @@ Files are under `interpreter/cobol/` unless prefixed with `cobol_asg/`.
 | `layout_data.py` | `DATA_LAYOUT`, `layout_data()`, and the reader `field_positions()` → `FieldPosition` per WORKING-STORAGE field |
 | `ir_encoders.py` | IR instruction builders for encode/decode (zoned, COMP-3, alphanumeric, string ops) |
 | `byte_builtins.py` | 19 low-level builtins for byte/nibble/list/string manipulation |
-| `ebcdic_table.py` | EBCDIC (CP037) ↔ Latin-1 translation tables, built from Python's `cp037` codec: a bijection, so every byte survives a decode and re-encode |
+| `interpreter/encoding/ebcdic_table.py` | EBCDIC (CP037) ↔ Latin-1 translation tables, built from Python's `cp037` codec: a bijection, so every byte survives a decode and re-encode |
 | `data_filters.py` | `align_decimal()`, `left_adjust()` for PIC formatting |
 | `zoned_decimal.py` | Zoned decimal encoding/decoding reference |
 | `comp3.py` | COMP-3 (packed decimal) encoding/decoding reference |

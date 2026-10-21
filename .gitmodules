@@ -1,3 +1,7 @@
 [submodule "proleap-bridge/proleap-cobol-parser"]
 	path = proleap-bridge/proleap-cobol-parser
 	url = git@github.com:avishek-sen-gupta/proleap-cobol-parser.git
+[submodule "hlasm-bridge/che4z"]
+	path = hlasm-bridge/che4z
+	url = https://github.com/avishek-sen-gupta/che-che4z-lsp-for-hlasm.git
+	branch = krakatoa-1.22.1

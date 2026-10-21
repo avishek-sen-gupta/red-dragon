@@ -52,11 +52,11 @@ from interpreter.cobol.cobol_constants import (
     CobolEncoding,
     NibblePosition,
 )
-from interpreter.cobol.ebcdic_table import EbcdicTable
 from interpreter.cobol.numeric_builtins import NUMERIC_BUILTINS
 from interpreter.cobol.program_presence import program_present
 from interpreter.cobol.run_unit import advanced, restarted, value_of
 from interpreter.cobol.sort_builtins import SORT_BUILTINS
+from interpreter.encoding.ebcdic_table import EbcdicTable
 from interpreter.func_name import FuncName
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.builtin import Builtin

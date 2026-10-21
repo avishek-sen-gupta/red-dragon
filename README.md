@@ -6,15 +6,15 @@
 
 ![CI](https://github.com/avishek-sen-gupta/red-dragon/actions/workflows/ci.yml/badge.svg) [![Technical Presentation](https://img.shields.io/badge/Technical-slides-blue)](presentation/technical-presentation.html) [![Overview Presentation](https://img.shields.io/badge/Overview-slides-green)](presentation/overview-presentation.html) [![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE.md)
 
-**RedDragon** lowers source in 15 tree-sitter languages and COBOL to one universal IR, and runs that IR on a VM. It is built for code that is often incomplete: legacy source, decompiled binaries, partial extracts, and codebases with missing dependencies.
+**RedDragon** lowers source in 15 tree-sitter languages, COBOL and HLASM to one universal IR, and runs that IR on a VM. It is built for code that is often incomplete: legacy source, decompiled binaries, partial extracts, and codebases with missing dependencies.
 
-- **Frontends.** Tree-sitter frontends (15 languages) and a ProLeap bridge (COBOL) lower well-formed source deterministically. An optional LLM repair loop fixes malformed fragments and re-parses. For languages with no frontend, an LLM lowers the source to IR directly.
+- **Frontends.** Tree-sitter frontends (15 languages), a ProLeap bridge (COBOL) and a che4z bridge (HLASM, early) lower well-formed source deterministically. An optional LLM repair loop fixes malformed fragments and re-parses. For languages with no frontend, an LLM lowers the source to IR directly.
 - **IR.** One flattened three-address code IR with [38 opcodes](docs/ir-reference.md) and source locations. Every frontend emits it.
 - **VM.** Executes the IR deterministically. When a call or import cannot be resolved, it creates a symbolic placeholder, or optionally asks an LLM for a plausible value, and keeps going.
 
 With complete source and all dependencies present, parse → lower → execute makes **0 LLM calls**. LLMs are used only where information is missing.
 
-**Scale:** 15 tree-sitter frontends + COBOL (139 enumerated features) + LLM frontends · 15,387 tests in the default run (`external` and `nist` markers excluded)
+**Scale:** 15 tree-sitter frontends + COBOL (139 enumerated features) + HLASM (early) + LLM frontends · 15,847 tests in the default run (`external`, `nist` and `z390` markers excluded)
 
 **COBOL conformance:** measured against the NIST COBOL-85 test suite (CCVS) — see [NIST CCVS conformance](docs/nist/README.md) for the method and dated full-run snapshots, the latest being [2026-10-19](docs/nist/2026-10-19-closing-conformance-report.md).
 
@@ -28,7 +28,7 @@ Also included:
 
 ### Package layout
 
-Four root packages, each a contract root in `.importlinter`:
+Five root packages, each a contract root in `.importlinter`:
 
 | Package | Contents |
 |---|---|
@@ -36,8 +36,9 @@ Four root packages, each a contract root in `.importlinter`:
 | `cobol_asg` | COBOL parsing via the ProLeap bridge, and data description |
 | `cobol_memory` | Byte-extent algebra for COBOL storage |
 | `cobol_numeric` | Exact COBOL fixed-point values and arithmetic |
+| `hlasm_asg` | HLASM parsing via the che4z bridge, the program and instruction-table models, and the opcode-unit table (`opcode_units.json`) |
 
-The three `cobol_*` packages are leaves: they must not import `interpreter`. Importing anything under `interpreter` loads the VM, so a consumer that only parses COBOL or computes byte ranges imports a `cobol_*` package alone.
+The three `cobol_*` packages and `hlasm_asg` are leaves: they must not import `interpreter`. Importing anything under `interpreter` loads the VM, so a consumer that only parses COBOL or computes byte ranges imports a `cobol_*` package alone.
 
 ### Used by
 
@@ -102,6 +103,7 @@ The VM lives in `interpreter/vm/`: `vm_types.py` (state model), `vm.py` (`apply_
 flowchart TD
     SRC[Source Code] --> DET["tree-sitter<br>15 languages"]
     SRC --> COBOL["ProLeap Bridge<br>COBOL"]
+    SRC --> HLASM["che4z Bridge<br>HLASM"]
     SRC --> LLM["LLM Frontend<br>any language"]
     SRC --> CHUNK["Chunked LLM<br>chunk → LLM × N → renumber → reassemble"]
 
@@ -109,6 +111,7 @@ flowchart TD
     REPAIR --> IR[Flattened TAC IR]
     DET -->|no errors| IR
     COBOL --> IR
+    HLASM --> IR
     LLM --> IR
     CHUNK --> IR
 
@@ -123,6 +126,7 @@ flowchart TD
 
 - **Python 3.13+** and **uv**
 - **JDK 17+** and **Maven** (COBOL only)
+- **CMake** 3.28+, **Ninja** and a C++20 compiler: `make test` and the pre-commit hook build the HLASM bridge
 
 ### Full build (including COBOL)
 
@@ -131,10 +135,10 @@ git clone --recurse-submodules https://github.com/avishek-sen-gupta/red-dragon.g
 cd red-dragon
 uv sync      # Python dependencies
 make setup   # submodules + ProLeap parser + bridge JAR
-make test    # full suite; builds the JAR first if missing
+make test    # full suite; builds the JAR if missing and the HLASM bridge incrementally
 ```
 
-`make help` lists the other targets (`jar`, `jar-force`, `parser`, `fmt`, `lint`). The JAR lands at `proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar`.
+`make help` lists the other targets (`jar`, `jar-force`, `parser`, `hlasm-bridge`, `fmt`, `lint`). The JAR lands at `proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar`. `make hlasm-bridge` builds the che4z submodule's `hlasm_ast_bridge` at `hlasm-bridge/che4z/build/bin/hlasm_ast_bridge`. It writes the instruction table (`--instruction-table`) or, given a source file and `--syslib` directories, the assembled program as JSON: sections, symbols, literals, and each machine and DC/DS statement with its offset and USING-resolved operands; tests read its path from `HLASM_AST_BRIDGE`, defaulting to that path. `make test` rebuilds it incrementally every run; the first build takes several minutes, a no-op rebuild about a second.
 
 The parser is installed into the local Maven repository, `~/.m2/repository` by default. Set `MAVEN_REPO_LOCAL=<dir>` to use another one: the parser staleness check and every `mvn` call (Makefile and `proleap-bridge/build.sh`) then use it. Give each parallel worktree its own, or their builds overwrite each other's installed parser.
 
@@ -196,6 +200,22 @@ uv run python -m interpreter cobol/MAINPROG.cbl --search-dir cobol/ --max-steps 
 ```
 
 `python -m interpreter MAIN.cbl [--search-dir DIR]...` compiles the main program and every program it statically CALLs that is found in the search directories (searched in order), then runs it from the main program. The search directories are also the copybook path. Other flags: `--max-steps` (default 50000), `--log-level`, `--verbose`. Set `PROLEAP_BRIDGE_JAR` to use a bridge JAR other than the default build output.
+
+### Running HLASM
+
+```python
+from interpreter.frontends import get_hlasm_parser
+from interpreter.project.hlasm_compile import compile_hlasm
+from interpreter.project.program_entry import ProgramEntry
+from interpreter.run import initial_vm_state, run_linked
+from interpreter.vm.builtins import core_builtins
+
+linked = compile_hlasm(source_bytes, parser=get_hlasm_parser([maclib_dir]))
+vm = run_linked(linked, ProgramEntry("HELLO"), max_steps=20_000,
+                initial_vm=initial_vm_state(), builtins=core_builtins())
+```
+
+`compile_hlasm` assembles through the che4z bridge, lowers and links through files in a work directory, as COBOL does. The program is named after its entry: the symbol `END` names, else the first CSECT. On return, GR15's low word is in the `__hlasm_gprs` region; an abend leaves its code (`S0C1`, `U0042`) in `__hlasm_abend`. `get_hlasm_parser` puts our maclib (`hlasm-bridge/maclib/`: `WTO`, `ABEND`) ahead of the given SYSLIB; `WTO` writes a line to stdout. `run(source, language="hlasm", copybook_dirs=[...])` does the same, with `copybook_dirs` as the SYSLIB after our maclib. Only a few opcodes are lowered so far; see [HLASM Frontend Design](docs/frontend-design/hlasm.md).
 
 ### Programmatic API
 
@@ -304,6 +324,8 @@ LinkedProgram
 15 deterministic tree-sitter frontends (0 LLM calls):
 
 Python, JavaScript, TypeScript, Java, Ruby, Go, PHP, C#, C, C++, Rust, Kotlin, Scala, Lua, Pascal
+
+Bridge frontends: COBOL ([design](docs/frontend-design/cobol.md)) and HLASM ([design](docs/frontend-design/hlasm.md), seed opcodes only).
 
 Control flow constructs (if/else, while, for, for-of/foreach, switch, break/continue, try/catch/finally, do-while) are lowered into real LABEL+BRANCH IR rather than `SYMBOLIC` placeholders. For-each style loops (for-of, for-in, range-for, enhanced-for) use DECL_VAR/LOAD_VAR for the loop index counter so that SSA-immutable registers correctly advance each iteration. Built-in functions `len()` and `keys()` produce concrete results from heap objects, and Lua `ipairs()`/`pairs()` wrappers are stripped at lowering time, ensuring all for-each loops terminate correctly. Spread/splat arguments (`*args` in Python/Ruby/Kotlin, `...arr` in JS, `...$arr` in PHP) are represented as `SpreadArguments` operands in the IR — the VM unpacks heap arrays into individual call arguments at execution time (ADR-109). Methods stored as heap object fields (Lua table OOP, JS/Python dynamic properties) are resolved by `CALL_METHOD` automatically (ADR-110).
 
@@ -455,7 +477,7 @@ The repair is:
 ## Testing
 
 ```bash
-make test                        # full suite; builds the ProLeap JAR if missing
+make test                        # full suite; builds the ProLeap JAR if missing, the HLASM bridge incrementally
 uv run pytest tests/unit/        # unit tests only
 uv run pytest tests/integration/ # integration tests only
 uv run pytest -n 0               # disable parallel execution
@@ -465,7 +487,7 @@ uv run pytest -m nist            # NIST-85 COBOL conformance suite
 
 Tests run in parallel via pytest-xdist. `tests/unit/` holds pure logic with no I/O; `tests/integration/` compiles and runs programs through the VM. LLMs are injected as fakes outside the `external` marker.
 
-The default run collects **15,387 tests**. It excludes 191 more marked `external` (live LLM APIs) or `nist` (NIST-85 COBOL suite).
+The default run collects **15,847 tests**. It excludes 468 more marked `external` (live LLM APIs), `nist` (NIST-85 COBOL suite) or `z390` (differential tests against z390).
 
 **Coverage areas:**
 
@@ -590,18 +612,22 @@ uv run pydeps interpreter --no-show -T png  # dependency graph (requires graphvi
 | [import-linter](https://import-linter.readthedocs.io/) | Architectural boundary contracts (configured in `.importlinter`) |
 | [pydeps](https://github.com/thebjorn/pydeps) | Module dependency visualization |
 
-Import-linter enforces eight contracts:
+Import-linter enforces twelve contracts:
 
 | Contract | Rule |
 |----------|------|
 | `cobol-asg-is-a-leaf` | `cobol_asg` must not import `interpreter` |
 | `cobol-memory-is-a-leaf` | `cobol_memory` must not import `interpreter` |
 | `cobol-numeric-is-a-leaf` | `cobol_numeric` must not import `interpreter` |
+| `hlasm-asg-is-a-leaf` | `hlasm_asg` must not import `interpreter` |
 | `vm-no-frontend` | VM and handlers must not import frontends |
 | `ir-is-leaf` | IR module must not import other interpreter modules |
 | `project-no-vm-internals` | Project module must not import VM or handler internals |
 | `frontend-independence` | Language frontends must not import each other |
 | `cobol-isolation` | VM, handlers, project and run layers must not import `interpreter.cobol` |
+| `hlasm-isolation` | VM, handlers, project and run layers must not import `interpreter.hlasm` |
+| `hlasm-not-cobol` | `interpreter.hlasm` must not import `interpreter.cobol` directly |
+| `cobol-not-hlasm` | `interpreter.cobol` must not import `interpreter.hlasm` directly |
 
 ## Documentation
 
@@ -609,6 +635,7 @@ Import-linter enforces eight contracts:
 - **[VM Design Document](docs/notes-on-vm-design.md)** — Comprehensive technical deep-dive into the VM architecture: IR design, CFG construction, state model, execution engine, call dispatch, best-effort execution, closures, LLM fallback, and end-to-end worked examples with code references
 - **[Frontend Design Document](docs/notes-on-frontend-design.md)** — Frontend subsystem overview: three frontend strategies (deterministic, LLM, chunked LLM), Frontend ABC contract, tree-sitter parser layer, LLM frontend with prompt engineering, chunked LLM frontend with register renumbering, factory routing, and end-to-end worked example
 - **[Per-Language Frontend Design](docs/frontend-design/)** — Exhaustive per-language documentation of all 15 deterministic frontends and the COBOL frontend: BaseFrontend context-mode architecture, GrammarConstants, TreeSitterEmitContext, common lowerers, dispatch tables, language-specific lowering methods, and worked examples for each language
+- **[HLASM Frontend Design](docs/frontend-design/hlasm.md)** — che4z bridge, machine state in VM regions, branch dispatch, compilation units, known gaps
 - **[COBOL Frontend Design](docs/frontend-design/cobol.md)** — ProLeap bridge architecture, PIC-driven encoding, 20-statement coverage matrix, PERFORM continuation semantics, SEARCH/STRING/INSPECT lowering patterns; 139-feature enumeration via `CobolFeature` enum (test-gated)
 - **[NIST CCVS Conformance](docs/nist/README.md)** — How COBOL conformance is measured against the NIST COBOL-85 suite: `make nist-report`, what the harness does to the programs, the outcome categories and the pass % definition, with dated full-run snapshots
 - **[Linker & Multi-File Design](docs/linker-design.md)** — Multi-file project pipeline: import discovery, resolution, per-module compilation, linking (namespace, rebase, merge), worked example, and per-language import extraction reference
