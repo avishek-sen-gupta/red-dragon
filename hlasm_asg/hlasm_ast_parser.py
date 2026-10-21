@@ -10,6 +10,8 @@ from hlasm_asg.program.hlasm_program import HlasmProgram
 
 
 class HlasmAstParser(Protocol):
-    def parse_to_file(self, source: bytes, out_path: Path) -> Path: ...
+    def parse_to_file(
+        self, source: bytes, source_name: str, out_path: Path
+    ) -> Path: ...
 
     def read(self, path: Path) -> HlasmProgram: ...

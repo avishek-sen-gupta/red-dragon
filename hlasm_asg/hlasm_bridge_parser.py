@@ -11,6 +11,7 @@ from pathlib import Path
 
 from hlasm_asg.diagnostic_report import DiagnosticReport
 from hlasm_asg.hlasm_ast_parser import HlasmAstParser
+from hlasm_asg.hlasm_bridge_failure import HlasmBridgeFailure
 from hlasm_asg.hlasm_parse_error import HlasmParseError
 from hlasm_asg.program.hlasm_program import HlasmProgram
 from hlasm_asg.real_subprocess_runner import RealSubprocessRunner
@@ -32,26 +33,34 @@ class HlasmBridgeParser(HlasmAstParser):
         self._bridge = bridge
         self._syslib = tuple(syslib)
 
-    def _command(self, source_path: Path) -> list[str]:
+    def _command(self, source_path: Path, source_name: str) -> list[str]:
         libraries = [arg for d in self._syslib for arg in ("--syslib", str(d))]
-        return [self._bridge, str(source_path), *libraries]
+        return [
+            self._bridge,
+            str(source_path),
+            "--source-name",
+            source_name,
+            *libraries,
+        ]
 
-    def _run(self, source: bytes) -> str:
+    def _run(self, source: bytes, source_name: str) -> str:
         with tempfile.TemporaryDirectory() as directory:
             source_path = Path(directory) / SOURCE_FILE_NAME
             source_path.write_bytes(source)
             logger.debug(
                 "Assembling %d bytes of HLASM via %s", len(source), self._bridge
             )
-            result = self._runner.run(self._command(source_path))
+            result = self._runner.run(self._command(source_path, source_name))
         if result.returncode == 0:
             return result.stdout
-        raise HlasmParseError(
-            DiagnosticReport.model_validate_json(result.stderr).diagnostics
-        )
+        if result.returncode == REFUSED_EXIT_CODE:
+            raise HlasmParseError(
+                DiagnosticReport.model_validate_json(result.stderr).diagnostics
+            )
+        raise HlasmBridgeFailure(result.returncode, result.stderr)
 
-    def parse_to_file(self, source: bytes, out_path: Path) -> Path:
-        out_path.write_text(self._run(source), encoding="utf-8")
+    def parse_to_file(self, source: bytes, source_name: str, out_path: Path) -> Path:
+        out_path.write_text(self._run(source, source_name), encoding="utf-8")
         return out_path
 
     def read(self, path: Path) -> HlasmProgram:

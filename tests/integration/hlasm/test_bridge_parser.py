@@ -4,11 +4,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from urllib.parse import unquote, urlparse
 
 import pytest
 
-from hlasm_asg.hlasm_bridge_parser import SOURCE_FILE_NAME, make_hlasm_parser
+from hlasm_asg.hlasm_bridge_parser import make_hlasm_parser
 from hlasm_asg.hlasm_parse_error import HlasmParseError
 from hlasm_asg.program.diagnostic import Diagnostic
 from hlasm_asg.program.macro_origin import MacroOrigin
@@ -20,8 +19,7 @@ MACRO_SOURCE = b"HELLO    CSECT\n         MYM\n         BR    14\n         END\n
 MACRO_LIBRARY = b"         MACRO\n         MYM\n         LA    3,1\n         MEND\n"
 
 
-def _path_of(uri: str) -> Path:
-    return Path(unquote(urlparse(uri).path))
+SOURCE_NAME = "src/hello.asm"
 
 
 @pytest.fixture
@@ -39,32 +37,31 @@ class TestBridgeParser:
     ):
         parser = make_hlasm_parser([syslib])
 
-        out = parser.parse_to_file(MACRO_SOURCE, tmp_path / "program.json")
+        out = parser.parse_to_file(MACRO_SOURCE, SOURCE_NAME, tmp_path / "program.json")
         program = parser.read(out)
 
         macro_origin, open_origin = [s.origin for s in program.statements]
-        assert _path_of(macro_origin.file).name == SOURCE_FILE_NAME
         assert macro_origin == MacroOrigin(
-            kind="MACRO", file=macro_origin.file, line=2, macro="MYM", depth=1
+            kind="MACRO", file=SOURCE_NAME, line=2, macro="MYM", depth=1
         )
-        assert open_origin == OpenCodeOrigin(
-            kind="OPEN_CODE", file=macro_origin.file, line=3
-        )
+        assert open_origin == OpenCodeOrigin(kind="OPEN_CODE", file=SOURCE_NAME, line=3)
         assert [section.name for section in program.sections] == ["HELLO"]
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_bridge_refuses_assembly_errors(self, tmp_path: Path):
         parser = make_hlasm_parser()
 
-        with pytest.raises(HlasmParseError) as refused:
-            parser.parse_to_file(b"         LA    99,0\n", tmp_path / "program.json")
+        with pytest.raises(HlasmParseError, match="M120 line 1") as refused:
+            parser.parse_to_file(
+                b"         LA    99,0\n", SOURCE_NAME, tmp_path / "program.json"
+            )
 
         (diagnostic,) = refused.value.diagnostics
         assert diagnostic == Diagnostic(
             code="M120",
             severity=Severity.ERROR,
             message="Error at LA instruction: register operand absolute value must be between 0 and 15",
-            file=diagnostic.file,
+            file=SOURCE_NAME,
             line=1,
         )
         assert not (tmp_path / "program.json").exists()
