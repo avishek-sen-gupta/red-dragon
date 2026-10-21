@@ -5,7 +5,7 @@ import io
 from contextlib import redirect_stdout
 from dataclasses import dataclass
 
-from hlasm_asg.hlasm_bridge_parser import make_hlasm_parser
+from interpreter.frontends import get_hlasm_parser
 from interpreter.project.hlasm_compile import compile_hlasm
 from interpreter.project.program_entry import ProgramEntry
 from interpreter.run import initial_vm_state, run_linked
@@ -50,7 +50,7 @@ def _return_code(vm: VMState, abend: str) -> int:
 
 
 def run_hlasm(source: str) -> HlasmRun:
-    linked = compile_hlasm(source.encode("utf-8"), parser=make_hlasm_parser())
+    linked = compile_hlasm(source.encode("utf-8"), parser=get_hlasm_parser())
     (entry,) = linked.programs
     console = io.StringIO()
     with redirect_stdout(console):

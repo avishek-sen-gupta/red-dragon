@@ -198,7 +198,7 @@ def test_unknown_opcodes_and_dispatch_misses_abend_s0c1(
         vm = _run(frontend)
     assert frontend.entry_label == CodeLabel("func_odd_0")
     assert [r.getMessage() for r in caplog.records] == [
-        "HLASM opcode SVC has no lowering; it abends S0C1"
+        "HLASM opcode SPM has no lowering; it abends S0C1"
     ]
     assert [_var(vm, "__hlasm_abend"), _low_words(vm)[15]] == ["S0C1", 3]
     assert _miss("branch_into_data.json")[:3] == ["S0C1", 4, 16]

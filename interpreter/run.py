@@ -12,12 +12,12 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Union
 
-from hlasm_asg.hlasm_bridge_parser import make_hlasm_parser
 from interpreter import constants
 from interpreter.cfg import CFG, build_cfg
 from interpreter.constants import FoundationTypeName, Language, LLMProvider
 from interpreter.frontend import get_frontend, make_cobol_parser
 from interpreter.frontend_observer import FrontendObserver
+from interpreter.frontends import get_hlasm_parser
 from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
@@ -1424,7 +1424,7 @@ def _compiled_image(
 ) -> LinkedProgram:
     match lang:
         case Language.HLASM:
-            return compile_hlasm(source, parser=make_hlasm_parser())
+            return compile_hlasm(source, parser=get_hlasm_parser())
         case _:
             return compile_cobol(
                 source,
