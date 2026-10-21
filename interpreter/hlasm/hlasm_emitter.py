@@ -1,6 +1,7 @@
 # pyright: standard
 """Accumulates HLASM lowering IR and emits reads and writes of the machine state."""
 
+import dataclasses
 from itertools import count
 
 from interpreter.func_name import FuncName
@@ -24,7 +25,7 @@ from interpreter.instructions import (
     StoreVar,
     WriteRegion,
 )
-from interpreter.ir import CodeLabel
+from interpreter.ir import CodeLabel, SourceLocation
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
 from interpreter.var_name import VarName
@@ -72,6 +73,20 @@ class HlasmEmitter:
         self.emit_inst(Const.int_(reg, value))
         return reg
 
+    def str_(self, value: str) -> Register:
+        reg = self.fresh_reg()
+        self.emit_inst(Const.string(reg, value))
+        return reg
+
+    def locate_from(self, start: int, location: SourceLocation) -> None:
+        self._instructions = (
+            *self._instructions[:start],
+            *(
+                dataclasses.replace(inst, source_location=location)
+                for inst in self._instructions[start:]
+            ),
+        )
+
     def _unsigned(self) -> Register:
         reg = self.fresh_reg()
         self.emit_inst(Const.bool_(reg, False))
@@ -90,7 +105,7 @@ class HlasmEmitter:
     def _gprs(self) -> Register:
         return self.load_var(GPRS_VAR)
 
-    def _call(self, func_name: FuncName, args: tuple[Register, ...]) -> Register:
+    def call(self, func_name: FuncName, args: tuple[Register, ...]) -> Register:
         reg = self.fresh_reg()
         self.emit_inst(CallFunction(result_reg=reg, func_name=func_name, args=args))
         return reg
@@ -105,7 +120,7 @@ class HlasmEmitter:
                 length=width,
             )
         )
-        return self._call(BINARY_BYTES_TO_INT, (image, self._unsigned()))
+        return self.call(BINARY_BYTES_TO_INT, (image, self._unsigned()))
 
     def _store(self, offset: int, width: int, value: Register) -> None:
         wrapped = self.fresh_reg()
@@ -113,7 +128,7 @@ class HlasmEmitter:
         self.emit_inst(
             Binop(result_reg=wrapped, operator=BinopKind.MOD, left=value, right=modulus)
         )
-        image = self._call(
+        image = self.call(
             INT_TO_BINARY_BYTES, (wrapped, self.int_(width), self._unsigned())
         )
         self.emit_inst(

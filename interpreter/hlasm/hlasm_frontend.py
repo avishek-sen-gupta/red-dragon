@@ -16,6 +16,7 @@ from interpreter.hlasm.hlasm_constants import OPERATION_EXCEPTION_ABEND
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.lower_statement import lower_statement
 from interpreter.hlasm.machine import machine_allocation
+from interpreter.hlasm.statement_location import statement_location
 from interpreter.hlasm.storage_layout import section_allocation
 from interpreter.instructions import Branch, InstructionBase, Label_
 from interpreter.ir import CodeLabel
@@ -91,4 +92,6 @@ class HlasmFrontend(Frontend):
             emitter.emit_inst(
                 Label_(label=statement_label(statement.section, statement.offset))
             )
+        start = len(emitter.instructions())
         lower_statement(emitter, statement)
+        emitter.locate_from(start, statement_location(statement.origin))

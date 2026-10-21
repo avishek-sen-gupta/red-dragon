@@ -1,11 +1,12 @@
 # pyright: standard
-"""Seed opcodes: LA, LR, SR and the register branches BCR, BASR, BALR."""
+"""Seed opcodes: LA, LR, SR, the register branches BCR, BASR, BALR and BRAS."""
 
 from collections.abc import Mapping
 
 from hlasm_asg.program.machine_statement import MachineStatement
 from hlasm_asg.program.mask_operand import MaskOperand
 from hlasm_asg.program.reg_operand import RegOperand
+from hlasm_asg.program.reloc_imm_operand import RelocImmOperand
 from hlasm_asg.program.storage_operand import StorageOperand
 from interpreter.hlasm.branch_dispatch import emit_branch
 from interpreter.hlasm.effective_address import effective_address
@@ -85,17 +86,34 @@ def _next_address(emitter: HlasmEmitter, statement: MachineStatement) -> Registe
     return emitter.binop(BinopKind.ADD, base, after)
 
 
-def lower_branch_and_link(emitter: HlasmEmitter, statement: MachineStatement) -> None:
-    r1, r2 = _reg(statement, 0), _reg(statement, 1)
-    target = emitter.load_gr32(r2)
+def _link(emitter: HlasmEmitter, statement: MachineStatement) -> None:
     link = emitter.binop(
         BinopKind.BIT_OR,
         _next_address(emitter, statement),
         emitter.int_(AMODE_31_LINK_BIT),
     )
-    emitter.store_gr32(r1, link)
+    emitter.store_gr32(_reg(statement, 0), link)
+
+
+def _relative_target(emitter: HlasmEmitter, statement: MachineStatement) -> Register:
+    operand = statement.operands[1]
+    assert isinstance(operand, RelocImmOperand)
+    base = emitter.load_var(section_var(operand.section))
+    return emitter.binop(BinopKind.ADD, base, emitter.int_(operand.offset))
+
+
+def lower_branch_and_link(emitter: HlasmEmitter, statement: MachineStatement) -> None:
+    r2 = _reg(statement, 1)
+    target = emitter.load_gr32(r2)
+    _link(emitter, statement)
     if r2 == 0:
         return
+    emit_branch(emitter, target)
+
+
+def lower_bras(emitter: HlasmEmitter, statement: MachineStatement) -> None:
+    target = _relative_target(emitter, statement)
+    _link(emitter, statement)
     emit_branch(emitter, target)
 
 
@@ -132,4 +150,5 @@ SEED_LOWERINGS: Mapping[str, StatementLowering] = {
     "BCR": lower_bcr,
     "BASR": lower_branch_and_link,
     "BALR": lower_branch_and_link,
+    "BRAS": lower_bras,
 }

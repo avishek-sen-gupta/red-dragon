@@ -204,18 +204,18 @@ uv run python -m interpreter cobol/MAINPROG.cbl --search-dir cobol/ --max-steps 
 ### Running HLASM
 
 ```python
-from hlasm_asg.hlasm_bridge_parser import make_hlasm_parser
+from interpreter.frontends import get_hlasm_parser
 from interpreter.project.hlasm_compile import compile_hlasm
 from interpreter.project.program_entry import ProgramEntry
 from interpreter.run import initial_vm_state, run_linked
 from interpreter.vm.builtins import core_builtins
 
-linked = compile_hlasm(source_bytes, parser=make_hlasm_parser([maclib_dir]))
+linked = compile_hlasm(source_bytes, parser=get_hlasm_parser([maclib_dir]))
 vm = run_linked(linked, ProgramEntry("HELLO"), max_steps=20_000,
                 initial_vm=initial_vm_state(), builtins=core_builtins())
 ```
 
-`compile_hlasm` assembles through the che4z bridge, lowers and links through files in a work directory, as COBOL does. The program is named after its entry: the symbol `END` names, else the first CSECT. On return, GR15's low word is in the `__hlasm_gprs` region; an abend leaves its code (`S0C1`) in `__hlasm_abend`. `run(source, language="hlasm")` does the same with no SYSLIB. Only a few opcodes are lowered so far; see [HLASM Frontend Design](docs/frontend-design/hlasm.md).
+`compile_hlasm` assembles through the che4z bridge, lowers and links through files in a work directory, as COBOL does. The program is named after its entry: the symbol `END` names, else the first CSECT. On return, GR15's low word is in the `__hlasm_gprs` region; an abend leaves its code (`S0C1`, `U0042`) in `__hlasm_abend`. `get_hlasm_parser` puts our maclib (`hlasm-bridge/maclib/`: `WTO`, `ABEND`) ahead of the given SYSLIB; `WTO` writes a line to stdout. `run(source, language="hlasm")` does the same with our maclib alone. Only a few opcodes are lowered so far; see [HLASM Frontend Design](docs/frontend-design/hlasm.md).
 
 ### Programmatic API
 

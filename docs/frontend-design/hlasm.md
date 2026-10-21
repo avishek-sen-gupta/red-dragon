@@ -8,7 +8,7 @@ The HLASM frontend lowers an IBM High Level Assembler program to IR. Parsing and
 assembly are the che4z language server's, through a forked bridge executable;
 Python lowers what che4z has already resolved. The machine claims z17 problem
 state in AMODE 31. Only the seed opcodes are lowered so far: LA, LR, SR, BCR,
-BASR and BALR. Any other opcode abends `S0C1` at run time.
+BASR, BALR, BRAS and SVC. Any other opcode abends `S0C1` at run time.
 
 ## Architecture
 
@@ -41,6 +41,8 @@ addresses.
 | Module | Purpose |
 |---|---|
 | `hlasm_asg/hlasm_bridge_parser.py` | `make_hlasm_parser(syslib)`, `HlasmBridgeParser`; exit 2 → `HlasmParseError`, other failures → `HlasmBridgeFailure` |
+| `interpreter/frontends/__init__.py` | `get_hlasm_parser(syslib)`: the bridge parser with `hlasm-bridge/maclib/` first on SYSLIB |
+| `hlasm-bridge/maclib/` | Our macros: `WTO`, `ABEND` |
 | `hlasm_asg/program/` | The bridge JSON models, one class per file |
 | `interpreter/hlasm/hlasm_frontend.py` | `HlasmFrontend(program)`: `lower()`, `start_up_ir()`, `entry_name`, `entry_label` |
 | `interpreter/hlasm/machine.py` | GPR region (`__hlasm_gprs`, 8 bytes per register), `__hlasm_cc`, `__hlasm_pm` |
@@ -49,6 +51,10 @@ addresses.
 | `interpreter/hlasm/entry_state.py` | Entry resolution and entry registers (R14 = `0xFF0` return sentinel, R13 = 72-byte save area, R15 = entry address) |
 | `interpreter/hlasm/branch_dispatch.py` | `hl_dispatch`: maps a branch address to a statement label; a miss abends `S0C1` |
 | `interpreter/hlasm/opcodes/seed.py` | The seed opcode lowerings |
+| `interpreter/hlasm/opcodes/svc.py` | SVC, by number |
+| `interpreter/hlasm/write_to_operator.py` | SVC 35 in IR |
+| `interpreter/hlasm/abend_completion.py` | SVC 13 in IR |
+| `interpreter/hlasm/statement_location.py` | Each statement's source line, set on the IR it lowers to |
 | `interpreter/hlasm/fixed_width_ir.py` | 32-bit signed add/subtract with condition code, built in IR |
 | `interpreter/hlasm/abend.py` | Stores the code in `__hlasm_abend`, then `Halt_` |
 
@@ -71,6 +77,31 @@ The entry is the symbol `END` names, or the first CSECT at offset 0 when `END`
 names none. The entry function is `func_<entry>_0`. It returns GR15's low word
 when control branches to the return sentinel.
 
+## Supervisor Calls and Our Maclib
+
+`get_hlasm_parser` puts `hlasm-bridge/maclib/` ahead of any caller's SYSLIB.
+`run()` and the tests assemble through it. The macros follow the z/OS operand
+conventions but expand only to lowered opcodes:
+
+| Macro | Expansion |
+|---|---|
+| `WTO 'text'` | `BRAS 1` around an inline list (AL2 length including the 4-byte header, AL2 MCS flags, the text), then `SVC 35` |
+| `ABEND code` | `LA 1,code` (user code, bits 20-31), then `SVC 13` |
+| `ABEND code,,,SYSTEM` | `LA 1,code`, twelve `LA 1,0(1,1)` doublings into bits 8-19, then `SVC 13`. `DUMP` and `STEP` are accepted and ignored. |
+
+SVCs are lowered in IR over existing builtins; no SVC has a builtin of its own.
+
+- **SVC 35** reads the text length from the list at R1, copies the text a byte at a
+  time, decodes it from EBCDIC and writes it as one line with `println`.
+- **SVC 13** records `S` and three hex digits when bits 8-19 of R1 are non-zero,
+  otherwise `U` and four decimal digits, in `__hlasm_abend`, then halts.
+- **Any other SVC number** logs the number and abends `S0C1`. This is a project
+  choice, not z/OS behaviour.
+
+Every IR instruction a statement lowers to carries that statement's line as its
+source location. A macro-generated statement carries the line of the macro call
+in the open-code source. Columns are 0: the bridge reports lines only.
+
 ## Known Gaps
 
 - Only the seed opcodes are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
@@ -79,7 +110,7 @@ when control branches to the return sentinel.
 - Emission is O(n²) in the number of IR instructions (red-dragon-6uyp.62).
 - Logical shifts are to be built in IR, not on the VM's `>>>`, which is not width-aware (red-dragon-srvz).
 - `EXTRN`, `ENTRY` and V-type constants are not resolved; V-constants hold zero (red-dragon-6uyp.8, red-dragon-6uyp.15).
-- `run()` passes no SYSLIB to the parser.
+- `run()` passes only our maclib as SYSLIB; it has no parameter for others.
 
 ## Test Coverage
 
@@ -93,5 +124,6 @@ when control branches to the return sentinel.
 | `tests/unit/hlasm/test_lowering_skeleton.py` | Labels, seed opcodes, dispatch, abends |
 | `tests/integration/hlasm/test_bridge_parser.py` | The real bridge: macro origins, refused assemblies |
 | `tests/integration/hlasm/test_storage_layout.py` | Section regions and address constants |
+| `tests/integration/hlasm/test_svc.py` | `WTO`, `ABEND` user and system codes, unlowered SVCs, `run()` with our maclib, call-site spans |
 | `tests/integration/hlasm/test_hlasm_compile.py` | Unit files, reuse, SYSLIB invalidation, `run()`, return code, default entry, BALR/BR, wild branch |
 | `tests/integration/hlasm/test_instruction_table.py`, `test_opcode_unit_coverage.py` | Instruction table and opcode-unit coverage |

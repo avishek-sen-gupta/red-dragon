@@ -12,6 +12,7 @@ from cobol_asg.copybook_search import CopybookSearch
 from cobol_asg.frontend_extension import DialectParser
 from cobol_asg.lp32 import LP32_MODE
 from cobol_asg.subprocess_runner import RealSubprocessRunner
+from hlasm_asg.hlasm_bridge_parser import HlasmBridgeParser, make_hlasm_parser
 from hlasm_asg.program.hlasm_program import HlasmProgram
 from interpreter.cobol.cobol_frontend import CobolFrontend, CompileOptions
 from interpreter.constants import Language
@@ -22,6 +23,7 @@ from interpreter.hlasm.hlasm_frontend import HlasmFrontend
 from interpreter.parser import TreeSitterParserFactory
 
 PROLEAP_BRIDGE_JAR = "proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar"
+HLASM_MACLIB = Path(__file__).resolve().parents[2] / "hlasm-bridge" / "maclib"
 _NULL_OBSERVER = NullFrontendObserver()
 
 # Lazy imports to avoid loading all frontends at startup
@@ -85,6 +87,10 @@ def get_cobol_frontend(
     )
 
 
+def get_hlasm_parser(syslib: Sequence[Path] = ()) -> HlasmBridgeParser:
+    return make_hlasm_parser((HLASM_MACLIB, *syslib))
+
+
 def get_hlasm_frontend(program: HlasmProgram) -> HlasmFrontend:
     return HlasmFrontend(program)
 
@@ -98,4 +104,5 @@ __all__ = [
     "get_cobol_frontend",
     "get_deterministic_frontend",
     "get_hlasm_frontend",
+    "get_hlasm_parser",
 ]
