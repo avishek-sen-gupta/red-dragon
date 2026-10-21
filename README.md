@@ -592,7 +592,7 @@ uv run pydeps interpreter --no-show -T png  # dependency graph (requires graphvi
 | [import-linter](https://import-linter.readthedocs.io/) | Architectural boundary contracts (configured in `.importlinter`) |
 | [pydeps](https://github.com/thebjorn/pydeps) | Module dependency visualization |
 
-Import-linter enforces eleven contracts:
+Import-linter enforces twelve contracts:
 
 | Contract | Rule |
 |----------|------|
