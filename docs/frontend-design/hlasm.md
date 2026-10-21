@@ -50,6 +50,8 @@ addresses.
 | `interpreter/hlasm/dc_encoding.py` | DC images: C, X, B, F, H, P, Z, A, Y |
 | `interpreter/hlasm/entry_state.py` | Entry resolution and entry registers (R14 = `0xFF0` return sentinel, R13 = 72-byte save area, R15 = entry address) |
 | `interpreter/hlasm/branch_dispatch.py` | `hl_dispatch`: maps a branch address to a statement label; a miss abends `S0C1` |
+| `interpreter/hlasm/operands.py` | `reg_operand`, `mask_operand`, `imm_operand`, `storage_operand`, `reloc_operand`: typed operand access; a mismatch raises `HlasmLoweringError` |
+| `interpreter/hlasm/hlasm_lowering_error.py` | `HlasmLoweringError`: names the statement (mnemonic, section, offset, operand) and what was found |
 | `interpreter/hlasm/opcodes/seed.py` | The seed opcode lowerings |
 | `interpreter/hlasm/opcodes/svc.py` | SVC, by number |
 | `interpreter/hlasm/write_to_operator.py` | SVC 35 in IR |
@@ -146,6 +148,7 @@ and HFP exponent underflow on), as z390's initial PSW `07850600` does.
 |---|---|
 | `tests/unit/hlasm/test_program_model.py` | Bridge JSON models |
 | `tests/unit/hlasm/test_bridge_exit_codes.py` | Parser exit-code handling |
+| `tests/unit/hlasm/test_operands.py` | Typed operand access and its failures |
 | `tests/unit/hlasm/test_machine.py` | Machine start-up state |
 | `tests/unit/hlasm/test_dc_encoding.py` | DC images |
 | `tests/unit/hlasm/test_fixed_width_ir.py` | Fixed-width arithmetic and condition codes |

@@ -4,8 +4,19 @@
 from collections.abc import Mapping, Sequence
 
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
+from interpreter.hlasm.hlasm_lowering_error import HlasmLoweringError
 from interpreter.instructions import InstructionBase, Return_
 from interpreter.register import Register
+
+
+def _returned_register(returned: InstructionBase) -> Register:
+    match returned:
+        case Return_(value_reg=Register() as value):
+            return value
+        case _:
+            raise HlasmLoweringError(
+                "inline IR body", "a final Return_ of a register", repr(returned)
+            )
 
 
 def inline_ir(
@@ -14,7 +25,7 @@ def inline_ir(
     arguments: Mapping[Register, Register],
 ) -> Register:
     *steps, returned = body
-    assert isinstance(returned, Return_)
+    value = _returned_register(returned)
     renamed = {
         **arguments,
         **{
@@ -27,5 +38,4 @@ def inline_ir(
         emitter.emit_inst(step.map_registers(lambda r: renamed.get(r, r)))
         for step in steps
     ]
-    assert isinstance(returned.value_reg, Register)
-    return renamed[returned.value_reg]
+    return renamed[value]
