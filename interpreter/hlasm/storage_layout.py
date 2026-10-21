@@ -14,6 +14,7 @@ from interpreter.hlasm.constant_image import ConstantImage
 from interpreter.hlasm.dc_encoding import DcPiece, dc_alignment, encode_dc
 from interpreter.hlasm.hlasm_constants import (
     BITS_PER_BYTE,
+    DOUBLEWORD_BYTES,
     INT_TO_BINARY_BYTES,
     SECTION_VAR_PREFIX,
 )
@@ -48,7 +49,7 @@ def _allocate(section: Section) -> tuple[InstructionBase, ...]:
     size = _reg(prefix, "size")
     region = _reg(prefix, "region")
     return (
-        Const.int_(size, section.length),
+        Const.int_(size, _align(section.length, DOUBLEWORD_BYTES)),
         AllocRegion(result_reg=region, size_reg=size),
         StoreVar(name=section_var(section.name), value_reg=region),
     )

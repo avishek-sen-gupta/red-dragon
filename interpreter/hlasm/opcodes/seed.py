@@ -5,7 +5,7 @@ from collections.abc import Mapping
 
 from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.hlasm.branch_dispatch import emit_branch
-from interpreter.hlasm.effective_address import effective_address
+from interpreter.hlasm.effective_address import effective_address, relative_address
 from interpreter.hlasm.fixed_width_ir import build_sub_signed_cc_ir
 from interpreter.hlasm.hlasm_constants import (
     AMODE_31_LINK_BIT,
@@ -82,12 +82,6 @@ def _link(emitter: HlasmEmitter, statement: MachineStatement) -> None:
     emitter.store_gr32(reg_operand(statement, 0), link)
 
 
-def _relative_target(emitter: HlasmEmitter, statement: MachineStatement) -> Register:
-    operand = reloc_operand(statement, 1)
-    base = emitter.load_var(section_var(operand.section))
-    return emitter.binop(BinopKind.ADD, base, emitter.int_(operand.offset))
-
-
 def lower_branch_and_link(emitter: HlasmEmitter, statement: MachineStatement) -> None:
     r2 = reg_operand(statement, 1)
     target = emitter.load_gr32(r2)
@@ -98,7 +92,7 @@ def lower_branch_and_link(emitter: HlasmEmitter, statement: MachineStatement) ->
 
 
 def lower_bras(emitter: HlasmEmitter, statement: MachineStatement) -> None:
-    target = _relative_target(emitter, statement)
+    target = relative_address(emitter, reloc_operand(statement, 1))
     _link(emitter, statement)
     emit_branch(emitter, target)
 
