@@ -44,10 +44,34 @@ def test_wto_writes_a_line():
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_run_assembles_against_our_maclib(capsys: pytest.CaptureFixture[str]):
-    vm = run(HELLO, language=Language.HLASM, max_steps=MAX_STEPS)
+def test_run_assembles_against_our_maclib_then_copybook_dirs(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+):
+    (tmp_path / "GREET.mac").write_bytes(
+        b"         MACRO\n"
+        b"         GREET\n"
+        b"         WTO   'HI'\n"
+        b"         LA    15,3\n"
+        b"         MEND\n"
+    )
+    source = (
+        "HELLO    CSECT\n"
+        "         WTO   'HELLO WORLD'\n"
+        "         GREET\n"
+        "         BR    14\n"
+        "         END\n"
+    )
 
-    assert hlasm_run_of(vm, capsys.readouterr().out) == HlasmRun(0, "", "HELLO WORLD\n")
+    vm = run(
+        source,
+        language=Language.HLASM,
+        max_steps=MAX_STEPS,
+        copybook_dirs=[tmp_path],
+    )
+
+    assert hlasm_run_of(vm, capsys.readouterr().out) == HlasmRun(
+        3, "", "HELLO WORLD\nHI\n"
+    )
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
