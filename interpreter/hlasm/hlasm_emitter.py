@@ -27,12 +27,14 @@ from interpreter.instructions import (
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
+from interpreter.var_name import VarName
 
 
 class HlasmEmitter:
     """The lowering's instruction sink; GPR values are unsigned images, stores wrap."""
 
-    def __init__(self) -> None:
+    def __init__(self, register_prefix: str = "") -> None:
+        self._register_prefix = register_prefix
         self._registers = count()
         self._labels = count()
         self._instructions: tuple[InstructionBase, ...] = ()
@@ -41,7 +43,7 @@ class HlasmEmitter:
         return self._instructions
 
     def fresh_reg(self) -> Register:
-        return Register(f"%{next(self._registers)}")
+        return Register(f"%{self._register_prefix}{next(self._registers)}")
 
     def fresh_label(self, prefix: str) -> CodeLabel:
         return CodeLabel(f"{prefix}_{next(self._labels)}")
@@ -65,7 +67,7 @@ class HlasmEmitter:
     def set_cc(self, value: Register) -> None:
         self.emit_inst(StoreVar(name=CC_VAR, value_reg=value))
 
-    def _int(self, value: int) -> Register:
+    def int_(self, value: int) -> Register:
         reg = self.fresh_reg()
         self.emit_inst(Const.int_(reg, value))
         return reg
@@ -75,10 +77,18 @@ class HlasmEmitter:
         self.emit_inst(Const.bool_(reg, False))
         return reg
 
-    def _gprs(self) -> Register:
+    def binop(self, operator: BinopKind, left: Register, right: Register) -> Register:
         reg = self.fresh_reg()
-        self.emit_inst(LoadVar(result_reg=reg, name=GPRS_VAR))
+        self.emit_inst(Binop(result_reg=reg, operator=operator, left=left, right=right))
         return reg
+
+    def load_var(self, name: VarName) -> Register:
+        reg = self.fresh_reg()
+        self.emit_inst(LoadVar(result_reg=reg, name=name))
+        return reg
+
+    def _gprs(self) -> Register:
+        return self.load_var(GPRS_VAR)
 
     def _call(self, func_name: FuncName, args: tuple[Register, ...]) -> Register:
         reg = self.fresh_reg()
@@ -91,7 +101,7 @@ class HlasmEmitter:
             LoadRegion(
                 result_reg=image,
                 region_reg=self._gprs(),
-                offset_reg=self._int(offset),
+                offset_reg=self.int_(offset),
                 length=width,
             )
         )
@@ -99,17 +109,17 @@ class HlasmEmitter:
 
     def _store(self, offset: int, width: int, value: Register) -> None:
         wrapped = self.fresh_reg()
-        modulus = self._int(1 << (BITS_PER_BYTE * width))
+        modulus = self.int_(1 << (BITS_PER_BYTE * width))
         self.emit_inst(
             Binop(result_reg=wrapped, operator=BinopKind.MOD, left=value, right=modulus)
         )
         image = self._call(
-            INT_TO_BINARY_BYTES, (wrapped, self._int(width), self._unsigned())
+            INT_TO_BINARY_BYTES, (wrapped, self.int_(width), self._unsigned())
         )
         self.emit_inst(
             WriteRegion(
                 region_reg=self._gprs(),
-                offset_reg=self._int(offset),
+                offset_reg=self.int_(offset),
                 length=width,
                 value_reg=image,
             )

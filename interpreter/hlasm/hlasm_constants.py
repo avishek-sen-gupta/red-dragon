@@ -2,6 +2,7 @@
 """Names and sizes of the HLASM machine model and its IR helpers."""
 
 from interpreter.func_name import FuncName
+from interpreter.ir import CodeLabel
 from interpreter.register import Register
 from interpreter.var_name import VarName
 
@@ -27,3 +28,21 @@ PARAM_LEFT = Register("%p_left")
 PARAM_RIGHT = Register("%p_right")
 
 SECTION_VAR_PREFIX = "__hlasm_sect_"
+
+ABEND_VAR = VarName("__hlasm_abend")
+TARGET_VAR = VarName("__hlasm_target")
+NO_ABEND = ""
+OPERATION_EXCEPTION_ABEND = "S0C1"
+
+RETURN_SENTINEL = 0x00000FF0
+ADDRESS_MASK_31 = 0x7FFFFFFF
+AMODE_31_LINK_BIT = 0x80000000
+SAVE_AREA_BYTES = 72
+ENTRY_SAVE_AREA_REGISTER = 13
+ENTRY_RETURN_REGISTER = 14
+ENTRY_ADDRESS_REGISTER = 15
+ENTRY_PARAMETER_REGISTER = 1
+RETURN_CODE_REGISTER = 15
+
+DISPATCH_LABEL = CodeLabel("hl_dispatch")
+RETURN_LABEL = CodeLabel("hl_return")
