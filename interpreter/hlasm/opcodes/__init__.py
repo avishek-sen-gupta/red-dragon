@@ -3,6 +3,9 @@
 
 from collections.abc import Mapping
 
+from interpreter.hlasm.opcodes.branch_on_condition import (
+    BRANCH_ON_CONDITION_LOWERINGS,
+)
 from interpreter.hlasm.opcodes.compare import COMPARE_LOWERINGS
 from interpreter.hlasm.opcodes.load_address_immediate import (
     LOAD_ADDRESS_IMMEDIATE_LOWERINGS,
@@ -25,5 +28,6 @@ OPCODE_LOWERINGS: Mapping[str, StatementLowering] = {
     **SIGNED_ADD_SUBTRACT_LOWERINGS,
     **LOGICAL_ADD_SUBTRACT_LOWERINGS,
     **COMPARE_LOWERINGS,
+    **BRANCH_ON_CONDITION_LOWERINGS,
     **SVC_LOWERINGS,
 }
