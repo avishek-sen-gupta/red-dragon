@@ -116,10 +116,12 @@ def build_to_signed_ir(func_name: str, bits: int) -> list[InstructionBase]:
     return [*signed_ir, Return_(value_reg=signed)]
 
 
-def build_add_signed_cc_ir(func_name: str, bits: int) -> list[InstructionBase]:
+def _signed_arithmetic_cc_ir(
+    func_name: str, bits: int, operator: BinopKind
+) -> list[InstructionBase]:
     left, left_ir = _to_signed(f"{func_name}.l", PARAM_LEFT, bits)
     right, right_ir = _to_signed(f"{func_name}.r", PARAM_RIGHT, bits)
-    exact, exact_ir = _binop(func_name, "exact", BinopKind.ADD, left, right)
+    exact, exact_ir = _binop(func_name, "exact", operator, left, right)
     result, result_ir = _to_signed(f"{func_name}.s", exact, bits)
     lost, lost_ir = _binop(func_name, "lost", BinopKind.SUB, exact, result)
     overflow, overflow_ir = _nonzero_bit(f"{func_name}.o", lost, bits)
@@ -136,6 +138,14 @@ def build_add_signed_cc_ir(func_name: str, bits: int) -> list[InstructionBase]:
         *pair_ir,
         Return_(value_reg=pair),
     ]
+
+
+def build_add_signed_cc_ir(func_name: str, bits: int) -> list[InstructionBase]:
+    return _signed_arithmetic_cc_ir(func_name, bits, BinopKind.ADD)
+
+
+def build_sub_signed_cc_ir(func_name: str, bits: int) -> list[InstructionBase]:
+    return _signed_arithmetic_cc_ir(func_name, bits, BinopKind.SUB)
 
 
 def build_add_logical_cc_ir(func_name: str, bits: int) -> list[InstructionBase]:
