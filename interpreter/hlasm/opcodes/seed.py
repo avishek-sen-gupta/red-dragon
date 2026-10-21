@@ -1,11 +1,11 @@
 # pyright: standard
-"""Seed opcodes: LA, LR, SR, the register branches BCR, BASR, BALR and BRAS."""
+"""Seed opcodes: LR, SR, the register branches BCR, BASR, BALR and BRAS."""
 
 from collections.abc import Mapping
 
 from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.hlasm.branch_dispatch import emit_branch
-from interpreter.hlasm.effective_address import effective_address, relative_address
+from interpreter.hlasm.effective_address import relative_address
 from interpreter.hlasm.fixed_width_ir import build_sub_signed_cc_ir
 from interpreter.hlasm.hlasm_constants import (
     AMODE_31_LINK_BIT,
@@ -19,7 +19,6 @@ from interpreter.hlasm.operands import (
     mask_operand,
     reg_operand,
     reloc_operand,
-    storage_operand,
 )
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.hlasm.storage_layout import section_var
@@ -38,13 +37,6 @@ def _element(emitter: HlasmEmitter, pair: Register, at: int) -> Register:
         LoadIndex(result_reg=reg, arr_reg=pair, index_reg=emitter.int_(at))
     )
     return reg
-
-
-def lower_la(emitter: HlasmEmitter, statement: MachineStatement) -> None:
-    emitter.store_gr32(
-        reg_operand(statement, 0),
-        effective_address(emitter, storage_operand(statement, 1)),
-    )
 
 
 def lower_lr(emitter: HlasmEmitter, statement: MachineStatement) -> None:
@@ -124,7 +116,6 @@ def lower_bcr(emitter: HlasmEmitter, statement: MachineStatement) -> None:
 
 
 SEED_LOWERINGS: Mapping[str, StatementLowering] = {
-    "LA": lower_la,
     "LR": lower_lr,
     "SR": lower_sr,
     "BCR": lower_bcr,

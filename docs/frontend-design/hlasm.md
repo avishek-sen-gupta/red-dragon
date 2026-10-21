@@ -7,8 +7,9 @@
 The HLASM frontend lowers an IBM High Level Assembler program to IR. Parsing and
 assembly are the che4z language server's, through a forked bridge executable;
 Python lowers what che4z has already resolved. The machine claims z17 problem
-state in AMODE 31. Lowered so far: the seed opcodes (LA, LR, SR, BCR, BASR,
-BALR, BRAS, SVC) and the load and store unit (see Opcode Units). Any other
+state in AMODE 31. Lowered so far: the seed opcodes (LR, SR, BCR, BASR, BALR,
+BRAS, SVC), the load and store unit, and the load address and immediates unit
+(see Opcode Units). Any other
 opcode abends `S0C1` at run time.
 
 ## Architecture
@@ -56,8 +57,9 @@ addresses.
 | `interpreter/hlasm/opcodes/seed.py` | The seed opcode lowerings |
 | `interpreter/hlasm/opcodes/svc.py` | SVC, by number |
 | `interpreter/hlasm/opcodes/load_store.py` | The load and store unit |
-| `interpreter/hlasm/data_movement.py` | `move(source, transforms, sink)`: storage, relative-long and register sources and sinks; sign extension, masks, byte reversal |
-| `interpreter/hlasm/effective_address.py` | `effective_address` (D(X,B), AMODE 31), `relative_address` (RELOC_IMM) |
+| `interpreter/hlasm/opcodes/load_address_immediate.py` | The load address and immediates unit |
+| `interpreter/hlasm/data_movement.py` | `move(source, transforms, sink)`: storage, relative-long, address, immediate and register sources and sinks; sign extension, masks, shifts, byte reversal, bit-field insertion |
+| `interpreter/hlasm/effective_address.py` | `effective_address` (D(X,B), AMODE 31), `indexed_address` (index scaled by the element size), `relative_address` (RELOC_IMM) |
 | `interpreter/hlasm/alignment_check.py` | An operand off its boundary abends `S0C6` |
 | `interpreter/hlasm/write_to_operator.py` | SVC 35 in IR |
 | `interpreter/hlasm/abend_completion.py` | SVC 13 in IR |
@@ -164,9 +166,25 @@ R15 to R0); ICM, ICMY (CC from the inserted bits), STCM, STCMY.
 - z390 refuses a relative-long operand in another CSECT, so the z390 tests keep
   relative operands in the same section; the VM tests cross sections.
 
+**Load address and immediates (red-dragon-6uyp.24).** LA, LAY, LAE, LAEY, LARL;
+LXAB, LXAH, LXAF, LXAG, LXAQ, LLXAB, LLXAH, LLXAF, LLXAG, LLXAQ; LHI, LGHI, LGFI;
+LLIHF, LLIHH, LLIHL, LLILF (LLGFI), LLILH, LLILL (LLGHI); IIHF, IIHH, IIHL, IILF
+(LFI), IILH, IILL. None changes the CC.
+
+- Addresses go into bits 33-63 with bit 32 zero; the high word is kept.
+- LXA* and LLXA*: (low word of X2 + DX2) shifted left 0-4, plus B2. In AMODE 31
+  only bits 33-63 are kept, and they depend only on the low 31 bits of each term,
+  so the signed and logical forms agree. che4z types their R1 as a mask operand.
+  z390 does not execute them (`S0C1`); their tests use values from the Principles
+  of Operation.
+- The bridge hands an immediate signed or unsigned (`LLILF X'FFFFFFFF'` arrives as
+  -1), so each lowering takes its field-width bit image first.
+- z390 raises `S0C5` for LAE and LAEY at an address beyond its storage; the
+  Principles of Operation make no storage reference. The z390 test pins that difference.
+
 ## Known Gaps
 
-- Only the seed opcodes and the load and store unit are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
+- Only the seed opcodes, the load and store unit and the load address and immediates unit are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
 - DC types beyond C, X, B, F, H, P, Z, A, Y and V, and any type extension, raise `UnsupportedDataType` (red-dragon-6uyp.63; floating point E, D, L: red-dragon-6uyp.21).
 - Falling through into DC/DS data or past a CSECT's end skips the data instead of executing it (red-dragon-6uyp.64).
 - Emission is O(n²) in the number of IR instructions (red-dragon-6uyp.62).
@@ -174,6 +192,7 @@ R15 to R0); ICM, ICMY (CC from the inserted bits), STCM, STCMY.
 - `EXTRN`, `ENTRY` and V-type constants are not resolved; V-constants hold zero (red-dragon-6uyp.8, red-dragon-6uyp.15).
 - Machine-instruction bytes are not in section storage (a spec non-goal: self-modifying code), so `EX` targets and `CLC` against code do not see them.
 - Bridge gaps: `*` in a later DC operand takes the statement address (red-dragon-6uyp.65); bit-length data reports byte length (red-dragon-6uyp.66); S-type constants are not USING-resolved (red-dragon-6uyp.67); complex-relocatable constants refuse the assembly (red-dragon-6uyp.68).
+- Access registers are not modelled: LAE and LAEY set only the general register.
 - `ABEND` takes only a self-defining code of 0-4095. Register notation (`ABEND (R2)`) and larger codes are not supported.
 
 ## Test Coverage
@@ -189,6 +208,8 @@ R15 to R0); ICM, ICMY (CC from the inserted bits), STCM, STCMY.
 | `tests/unit/hlasm/test_lowering_skeleton.py` | Labels, seed opcodes, dispatch, abends |
 | `tests/unit/hlasm/test_load_store_lowering.py` | Load and store IR: GPR and storage accesses, alignment branch, CC |
 | `tests/integration/hlasm/test_load_store.py` | Every load and store mnemonic on the VM, alignment abends |
+| `tests/unit/hlasm/test_load_address_immediate_lowering.py` | Load address and immediate IR: GPR widths read and written, index shift, no CC |
+| `tests/integration/hlasm/test_load_address_immediate.py` | Every load address and immediate mnemonic on the VM, CC unchanged |
 | `tests/integration/hlasm/test_bridge_parser.py` | The real bridge: macro origins, refused assemblies |
 | `tests/integration/hlasm/test_storage_layout.py` | Section regions and address constants |
 | `tests/integration/hlasm/test_svc.py` | `WTO`, `ABEND` user and system codes, unlowered SVCs, `run()` with our maclib then `copybook_dirs`, call-site spans |
@@ -197,3 +218,4 @@ R15 to R0); ICM, ICMY (CC from the inserted bits), STCM, STCMY.
 | `tests/z390/test_foundation_differential.py` | Return code, WTO, user abend and assembly failure against z390 (`-m z390`) |
 | `tests/z390/test_z390_log.py` | Registers and CC from a z390 abend dump (default run) |
 | `tests/z390/test_load_store_differential.py` | Load and store families, ICM CC, and the alignment difference against z390 (`-m z390`) |
+| `tests/z390/test_load_address_immediate_differential.py` | Address and immediate families against z390; the LAE `S0C5` and LXA `S0C1` differences (`-m z390`) |
