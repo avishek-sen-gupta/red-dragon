@@ -1,7 +1,7 @@
 # pyright: standard
 """Load and store opcodes: storage, register and relative-long moves, multiples and masked bytes."""
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 
 from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.hlasm.data_movement import (
@@ -195,7 +195,7 @@ def lower_lmd(emitter: HlasmEmitter, statement: MachineStatement) -> None:
     ]
 
 
-def _selected_positions(mask: int) -> tuple[int, ...]:
+def selected_positions(mask: int) -> tuple[int, ...]:
     return tuple(at for at, bit in enumerate(MASK_BITS) if mask & bit)
 
 
@@ -204,7 +204,7 @@ def _position_shift(position: int) -> int:
 
 
 def lower_insert_under_mask(emitter: HlasmEmitter, statement: MachineStatement) -> None:
-    positions = _selected_positions(mask_operand(statement, 1))
+    positions = selected_positions(mask_operand(statement, 1))
     if not positions:
         emitter.set_cc(emitter.int_(0))
         return
@@ -225,20 +225,25 @@ def lower_insert_under_mask(emitter: HlasmEmitter, statement: MachineStatement) 
     emitter.set_cc(inline_ir(emitter, SIGN_CC[width], {PARAM_VALUE: loaded}))
 
 
-def lower_store_under_mask(emitter: HlasmEmitter, statement: MachineStatement) -> None:
-    positions = _selected_positions(mask_operand(statement, 1))
-    if not positions:
-        return
+def register_bytes_under_mask(
+    emitter: HlasmEmitter, r: int, positions: Sequence[int]
+) -> Register:
     width = len(positions)
-    value = emitter.load_gr32(reg_operand(statement, 0))
     moves = tuple(
         (_position_shift(p), width - 1 - at) for at, p in enumerate(positions)
     )
+    return gather_bytes(emitter, emitter.load_gr32(r), moves)
+
+
+def lower_store_under_mask(emitter: HlasmEmitter, statement: MachineStatement) -> None:
+    positions = selected_positions(mask_operand(statement, 1))
+    if not positions:
+        return
     emitter.store_storage(
         _operand_address(emitter, statement, 2),
         0,
-        width,
-        gather_bytes(emitter, value, moves),
+        len(positions),
+        register_bytes_under_mask(emitter, reg_operand(statement, 0), positions),
     )
 
 

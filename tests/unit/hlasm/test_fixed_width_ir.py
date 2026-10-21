@@ -7,6 +7,8 @@ from interpreter.hlasm.fixed_width_ir import (
     build_add_logical_carry_cc_ir,
     build_add_logical_cc_ir,
     build_add_signed_cc_ir,
+    build_compare_logical_cc_ir,
+    build_compare_signed_cc_ir,
     build_sign_cc_ir,
     build_sub_logical_borrow_cc_ir,
     build_sub_signed_cc_ir,
@@ -119,3 +121,29 @@ def test_sign_cc_is_zero_leftmost_bit_one_or_other():
     assert [
         returned_value(cc_16, {"%p_value": v}) for v in (0, 0x8000, 0xFFFF, 0x7FFF, 1)
     ] == [0, 1, 1, 2, 2]
+
+
+def test_compare_cc_is_equal_low_or_high_under_the_signed_or_logical_reading():
+    signed_32 = build_compare_signed_cc_ir("cmp32", 32)
+    logical_32 = build_compare_logical_cc_ir("cmpl32", 32)
+    vectors = ((7, 7), (0x80000000, 1), (1, 0x80000000), (0xFFFFFFFF, -1), (-2, 5))
+    assert [_pair_of(signed_32, left, right) for left, right in vectors] == [
+        0,
+        1,
+        2,
+        0,
+        1,
+    ]
+    assert [_pair_of(logical_32, left, right) for left, right in vectors] == [
+        0,
+        2,
+        1,
+        0,
+        2,
+    ]
+    assert [
+        _pair_of(build_compare_signed_cc_ir("cmp64", 64), -(1 << 63), (1 << 63) - 1),
+        _pair_of(build_compare_logical_cc_ir("cmpl64", 64), (1 << 64) - 1, 0),
+        _pair_of(build_compare_signed_cc_ir("cmp16", 16), 0x8000, 0x7FFF),
+        _pair_of(build_compare_logical_cc_ir("cmpl8", 8), 0x80, 0x7F),
+    ] == [1, 2, 1, 2]

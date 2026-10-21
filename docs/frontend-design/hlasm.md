@@ -61,6 +61,7 @@ addresses.
 | `interpreter/hlasm/opcodes/load_address_immediate.py` | The load address and immediates unit |
 | `interpreter/hlasm/opcodes/signed_add_subtract.py` | The signed add and subtract unit |
 | `interpreter/hlasm/opcodes/logical_add_subtract.py` | The logical add and subtract unit |
+| `interpreter/hlasm/opcodes/compare.py` | The compare unit, signed and logical |
 | `interpreter/hlasm/data_movement.py` | `move(source, transforms, sink)`: storage, relative-long, address, immediate and register sources and sinks; sign extension, masks, shifts, byte reversal, bit-field insertion |
 | `interpreter/hlasm/effective_address.py` | `effective_address` (D(X,B), AMODE 31), `indexed_address` (index scaled by the element size), `relative_address` (RELOC_IMM) |
 | `interpreter/hlasm/alignment_check.py` | An operand off its boundary abends `S0C6` |
@@ -216,9 +217,23 @@ CC = 2 × carry + (result ≠ 0). No overflow interruption.
   for the signed-immediate forms (it reports a borrow as a carry). The z390 test pins
   each difference.
 
+**Compare (red-dragon-6uyp.28).** Signed C, CY, CR, CFI, CRL, CH, CHY, CHI, CHRL, CHSI,
+CHHSI, CG, CGR, CGRL, CGF, CGFR, CGFI, CGFRL, CGH, CGHI, CGHRL, CGHSI; logical CL, CLY,
+CLR, CLFI, CLRL, CLHRL, CLFHSI, CLHHSI, CLI, CLIY, CLG, CLGR, CLGRL, CLGF, CLGFR, CLGFI,
+CLGFRL, CLGHRL, CLGHSI, CLM, CLMY. CC 0 equal, 1 first operand low, 2 high; nothing is
+stored.
+
+- The CC is the sign of first − second, each taken signed or unsigned at the compare width.
+- Signed forms sign-extend a shorter second operand; logical forms zero-extend it. CHHSI and
+  CLHHSI compare 16 bits, CLI and CLIY 8.
+- CLM and CLMY compare the low-word bytes the mask selects with that many storage bytes.
+  Mask 0 sets CC 0 and reads no storage.
+- Word and doubleword relative-long operands check alignment and abend `S0C6`; z390 does
+  not, and the z390 test pins that difference.
+
 ## Known Gaps
 
-- Only the seed opcodes and the load and store, load address and immediates, signed add and subtract, and logical add and subtract units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
+- Only the seed opcodes and the load and store, load address and immediates, signed add and subtract, logical add and subtract, and compare units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
 - DC types beyond C, X, B, F, H, P, Z, A, Y and V, and any type extension, raise `UnsupportedDataType` (red-dragon-6uyp.63; floating point E, D, L: red-dragon-6uyp.21).
 - Falling through into DC/DS data or past a CSECT's end skips the data instead of executing it (red-dragon-6uyp.64).
 - Emission is O(n²) in the number of IR instructions (red-dragon-6uyp.62).
@@ -228,7 +243,7 @@ CC = 2 × carry + (result ≠ 0). No overflow interruption.
 - Bridge gaps: `*` in a later DC operand takes the statement address (red-dragon-6uyp.65); bit-length data reports byte length (red-dragon-6uyp.66); S-type constants are not USING-resolved (red-dragon-6uyp.67); complex-relocatable constants refuse the assembly (red-dragon-6uyp.68).
 - Access registers are not modelled: LAE and LAEY set only the general register.
 - In AMODE 31, LM, STM and LMD do not wrap EA + offset at 2 GiB.
-- ICM with mask 0 raises no access exception for its operand.
+- ICM and CLM with mask 0 raise no access exception for their operand.
 - Nothing sets the program mask until SPM lands (red-dragon-6uyp.45), so `S0C8` is tested only on the VM with the mask set directly, not end to end.
 - `ABEND` takes only a self-defining code of 0-4095. Register notation (`ABEND (R2)`) and larger codes are not supported.
 
@@ -251,6 +266,8 @@ CC = 2 × carry + (result ≠ 0). No overflow interruption.
 | `tests/integration/hlasm/test_signed_add_subtract.py` | Every signed add and subtract mnemonic on the VM: result, CC 0-3 |
 | `tests/unit/hlasm/test_logical_add_subtract_lowering.py` | Logical add and subtract IR: operand widths, carry-in read, CC, no trap |
 | `tests/integration/hlasm/test_logical_add_subtract.py` | Every logical add and subtract mnemonic on the VM: result, CC with carry and borrow |
+| `tests/unit/hlasm/test_compare_lowering.py` | Compare IR: operand widths read, nothing written, only the CC set, relative-long alignment |
+| `tests/integration/hlasm/test_compare.py` | Every compare mnemonic on the VM: CC, operands unchanged, alignment abends |
 | `tests/integration/hlasm/test_bridge_parser.py` | The real bridge: macro origins, refused assemblies |
 | `tests/integration/hlasm/test_storage_layout.py` | Section regions and address constants |
 | `tests/integration/hlasm/test_svc.py` | `WTO`, `ABEND` user and system codes, unlowered SVCs, `run()` with our maclib then `copybook_dirs`, call-site spans |
@@ -262,3 +279,4 @@ CC = 2 × carry + (result ≠ 0). No overflow interruption.
 | `tests/z390/test_load_address_immediate_differential.py` | Address and immediate families against z390; the LAE `S0C5` and LXA `S0C1` differences (`-m z390`) |
 | `tests/z390/test_signed_add_subtract_differential.py` | Every signed add and subtract mnemonic against z390 (`-m z390`) |
 | `tests/z390/test_logical_add_subtract_differential.py` | Every logical add and subtract mnemonic against z390; six z390 CC differences pinned (`-m z390`) |
+| `tests/z390/test_compare_differential.py` | Every compare mnemonic against z390; the relative-long alignment difference pinned (`-m z390`) |
