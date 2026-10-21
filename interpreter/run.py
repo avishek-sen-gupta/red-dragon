@@ -10,7 +10,7 @@ from dataclasses import dataclass, replace
 from dataclasses import field as dataclass_field
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Union
+from typing import Any, Literal, TypeIs, Union
 
 from interpreter import constants
 from interpreter.cfg import CFG, build_cfg
@@ -184,6 +184,13 @@ def _field_fallback_for_language(lang: Language) -> FieldFallbackStrategy:
 
 
 _IMAGE_LANGUAGES: frozenset[Language] = frozenset({Language.COBOL, Language.HLASM})
+
+_ImageLanguage = Literal[Language.COBOL, Language.HLASM]
+
+
+def _is_image_language(lang: Language) -> TypeIs[_ImageLanguage]:
+    return lang in _IMAGE_LANGUAGES
+
 
 _LEAKY_SCOPING_LANGS: frozenset[Language] = frozenset(
     {Language.RUBY, Language.PHP, Language.LUA}
@@ -1317,7 +1324,7 @@ def run(
             self._target.lower_time = duration
 
     observer: FrontendObserver = _StatsObserver(stats)
-    if lang in _IMAGE_LANGUAGES:
+    if _is_image_language(lang):
         linked = _compiled_image(
             lang, source.encode("utf-8"), copybook_dirs, observer, tolerant
         )
@@ -1388,7 +1395,7 @@ def run(
     # For COBOL and HLASM, when using the default top-level entry point, switch to
     # function-entry mode so run_linked runs every module's init block first
     # (phase 1) then dispatches into the main program's procedure (phase 2).
-    if lang in _IMAGE_LANGUAGES and entry_point.is_top_level:
+    if _is_image_language(lang) and entry_point.is_top_level:
         _label = linked.entry_func_label
         entry_point = EntryPoint.function(lambda ref: ref.label == _label)
 
@@ -1416,7 +1423,7 @@ def run(
 
 
 def _compiled_image(
-    lang: Language,
+    lang: _ImageLanguage,
     source: bytes,
     copybook_dirs: Sequence[Path],
     observer: FrontendObserver,
@@ -1425,7 +1432,7 @@ def _compiled_image(
     match lang:
         case Language.HLASM:
             return compile_hlasm(source, parser=get_hlasm_parser(copybook_dirs))
-        case _:
+        case Language.COBOL:
             return compile_cobol(
                 source,
                 parser=make_cobol_parser(copybook_dirs=copybook_dirs),
