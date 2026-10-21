@@ -21,7 +21,7 @@ def _store_then_load(emitter: HlasmEmitter) -> tuple[Register, ...]:
     seven = _const(emitter, 7)
     emitter.store_gr32(15, seven)
     emitter.store_gr64(3, _const(emitter, -2))
-    emitter.set_cc(seven)
+    emitter.set_cc(_const(emitter, 3))
     return (
         emitter.load_gr64(15),
         emitter.load_gr32(15),
@@ -50,7 +50,7 @@ def test_gpr_words_are_big_endian_with_the_low_word_at_plus_four():
     assert [
         frame_vars[VarName("__hlasm_cc")].value,
         frame_vars[VarName("__hlasm_pm")].value,
-    ] == [7, 0]
+    ] == [3, 0]
     assert [emitter.fresh_label("hl"), emitter.fresh_label("hl")] == [
         CodeLabel("hl_0"),
         CodeLabel("hl_1"),

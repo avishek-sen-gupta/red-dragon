@@ -52,3 +52,4 @@ def test_add_logical_32_cc():
         _add(add, left, right)
         for left, right in ((0xFFFFFFFF, 1), (1, 1), (0, 0), (0xFFFFFFFF, 2))
     ] == [[0, 2], [2, 1], [0, 0], [1, 3]]
+    assert _add(build_add_logical_cc_ir("addl64", 64), (1 << 64) - 1, 1) == [0, 2]
