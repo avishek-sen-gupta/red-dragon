@@ -33,6 +33,10 @@ class HlasmBridgeParser(HlasmAstParser):
         self._bridge = bridge
         self._syslib = tuple(syslib)
 
+    @property
+    def syslib(self) -> tuple[Path, ...]:
+        return self._syslib
+
     def _command(self, source_path: Path, source_name: str) -> list[str]:
         libraries = [arg for d in self._syslib for arg in ("--syslib", str(d))]
         return [

@@ -34,7 +34,7 @@ FRONTEND_LLM = "llm"
 FRONTEND_CHUNKED_LLM = "chunked_llm"
 
 SUPPORTED_DETERMINISTIC_LANGUAGES: tuple[str, ...] = tuple(
-    lang.value for lang in Language if lang != Language.COBOL
+    lang.value for lang in Language if lang not in (Language.COBOL, Language.HLASM)
 )
 
 

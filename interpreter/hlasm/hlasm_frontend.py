@@ -31,6 +31,10 @@ class HlasmFrontend(Frontend):
         self._entry = resolve_entry(program)
 
     @property
+    def entry_name(self) -> str:
+        return self._entry.name
+
+    @property
     def entry_label(self) -> CodeLabel:
         return CodeLabel(f"func_{self._entry.name.lower()}_0")
 
