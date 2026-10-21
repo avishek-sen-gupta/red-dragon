@@ -376,7 +376,7 @@ class CobolASG:
             "data_fields": [f.to_dict() for f in self.data_fields],
             "linkage_fields": [f.to_dict() for f in self.linkage_fields],
             "local_storage_fields": [f.to_dict() for f in self.local_storage_fields],
-            "file_fields": [f.to_dict() for f in self.file_fields],
+            "file_fields": [self._file_field_dict(f) for f in self.file_fields],
             "sections": [s.to_dict() for s in self.sections],
             "paragraphs": [p.to_dict() for p in self.paragraphs],
             "statements": [s.to_dict() for s in self.statements],
@@ -447,6 +447,10 @@ class CobolASG:
         return frozenset(
             fd.fd_name.upper() for fd in self.file_descriptions if fd.external
         )
+
+    def _file_field_dict(self, record: CobolField) -> dict:
+        selected = self.file_record_to_select.get(record.name.upper(), "")
+        return record.to_dict() | ({"fd_name": selected} if selected else {})
 
     def _file_descriptions_dict(self) -> dict:
         if not self.file_descriptions:
