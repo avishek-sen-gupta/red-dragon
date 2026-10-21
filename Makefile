@@ -33,7 +33,7 @@ help:
 	@echo "make test       - full suite (builds the JAR if missing)"
 	@echo "make nist-report - run the NIST CCVS suite and write a categorised report to nist-reports/"
 	@echo "make jar        - build the ProLeap bridge JAR if it is missing"
-	@echo "make hlasm-bridge - build the che4z hlasm_ast_bridge binary if it is missing"
+	@echo "make hlasm-bridge - build the che4z hlasm_ast_bridge binary (incremental)"
 	@echo "make parser     - install the vendored ProLeap parser into MAVEN_REPO_LOCAL if stale/missing"
 	@echo "make parser-force - reinstall the ProLeap parser unconditionally"
 	@echo "make jar-force  - rebuild the ProLeap bridge JAR (run after changing Java/bridge sources)"
@@ -84,10 +84,8 @@ jar-force: $(PROLEAP_PARSER_JAR)
 $(HLASM_BRIDGE_DIR)/CMakeLists.txt:
 	git submodule update --init --recursive
 
-$(HLASM_AST_BRIDGE): $(HLASM_BRIDGE_DIR)/CMakeLists.txt
+hlasm-bridge: $(HLASM_BRIDGE_DIR)/CMakeLists.txt
 	cd hlasm-bridge/che4z && BUILD_TYPE=Release ./build.sh --target hlasm_ast_bridge
-
-hlasm-bridge: $(HLASM_AST_BRIDGE)
 
 test: jar hlasm-bridge
 	$(PYTEST) $(PYTEST_ARGS)

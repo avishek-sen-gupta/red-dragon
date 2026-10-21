@@ -132,10 +132,10 @@ git clone --recurse-submodules https://github.com/avishek-sen-gupta/red-dragon.g
 cd red-dragon
 uv sync      # Python dependencies
 make setup   # submodules + ProLeap parser + bridge JAR
-make test    # full suite; builds the JAR and the HLASM bridge first if missing
+make test    # full suite; builds the JAR if missing and the HLASM bridge incrementally
 ```
 
-`make help` lists the other targets (`jar`, `jar-force`, `parser`, `hlasm-bridge`, `fmt`, `lint`). The JAR lands at `proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar`. `make hlasm-bridge` builds the che4z submodule's `hlasm_ast_bridge` at `hlasm-bridge/che4z/build/bin/hlasm_ast_bridge`; tests read its path from `HLASM_AST_BRIDGE`, which `make test` sets. The first build takes several minutes.
+`make help` lists the other targets (`jar`, `jar-force`, `parser`, `hlasm-bridge`, `fmt`, `lint`). The JAR lands at `proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar`. `make hlasm-bridge` builds the che4z submodule's `hlasm_ast_bridge` at `hlasm-bridge/che4z/build/bin/hlasm_ast_bridge`; tests read its path from `HLASM_AST_BRIDGE`, which `make test` sets. `make test` rebuilds it incrementally every run; the first build takes several minutes, a no-op rebuild about a second.
 
 The parser is installed into the local Maven repository, `~/.m2/repository` by default. Set `MAVEN_REPO_LOCAL=<dir>` to use another one: the parser staleness check and every `mvn` call (Makefile and `proleap-bridge/build.sh`) then use it. Give each parallel worktree its own, or their builds overwrite each other's installed parser.
 
@@ -456,7 +456,7 @@ The repair is:
 ## Testing
 
 ```bash
-make test                        # full suite; builds the ProLeap JAR and HLASM bridge if missing
+make test                        # full suite; builds the ProLeap JAR if missing, the HLASM bridge incrementally
 uv run pytest tests/unit/        # unit tests only
 uv run pytest tests/integration/ # integration tests only
 uv run pytest -n 0               # disable parallel execution
