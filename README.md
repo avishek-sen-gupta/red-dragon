@@ -6,7 +6,7 @@
 
 ![CI](https://github.com/avishek-sen-gupta/red-dragon/actions/workflows/ci.yml/badge.svg) [![Technical Presentation](https://img.shields.io/badge/Technical-slides-blue)](presentation/technical-presentation.html) [![Overview Presentation](https://img.shields.io/badge/Overview-slides-green)](presentation/overview-presentation.html) [![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE.md)
 
-**RedDragon** lowers source in 15 tree-sitter languages and COBOL to one universal IR, and runs that IR on a VM. It is built for code that is often incomplete: legacy source, decompiled binaries, partial extracts, and codebases with missing dependencies.
+**RedDragon** lowers source in 15 tree-sitter languages, COBOL and HLASM to one universal IR, and runs that IR on a VM. It is built for code that is often incomplete: legacy source, decompiled binaries, partial extracts, and codebases with missing dependencies.
 
 - **Frontends.** Tree-sitter frontends (15 languages), a ProLeap bridge (COBOL) and a che4z bridge (HLASM, early) lower well-formed source deterministically. An optional LLM repair loop fixes malformed fragments and re-parses. For languages with no frontend, an LLM lowers the source to IR directly.
 - **IR.** One flattened three-address code IR with [38 opcodes](docs/ir-reference.md) and source locations. Every frontend emits it.
@@ -14,7 +14,7 @@
 
 With complete source and all dependencies present, parse → lower → execute makes **0 LLM calls**. LLMs are used only where information is missing.
 
-**Scale:** 15 tree-sitter frontends + COBOL (139 enumerated features) + LLM frontends · 15,387 tests in the default run (`external`, `nist` and `z390` markers excluded)
+**Scale:** 15 tree-sitter frontends + COBOL (139 enumerated features) + HLASM (early) + LLM frontends · 15,847 tests in the default run (`external`, `nist` and `z390` markers excluded)
 
 **COBOL conformance:** measured against the NIST COBOL-85 test suite (CCVS) — see [NIST CCVS conformance](docs/nist/README.md) for the method and dated full-run snapshots, the latest being [2026-10-19](docs/nist/2026-10-19-closing-conformance-report.md).
 
@@ -126,7 +126,7 @@ flowchart TD
 
 - **Python 3.13+** and **uv**
 - **JDK 17+** and **Maven** (COBOL only)
-- **CMake**, **Ninja** and a C++20 compiler (HLASM only)
+- **CMake** 3.28+, **Ninja** and a C++20 compiler: `make test` and the pre-commit hook build the HLASM bridge
 
 ### Full build (including COBOL)
 
@@ -487,7 +487,7 @@ uv run pytest -m nist            # NIST-85 COBOL conformance suite
 
 Tests run in parallel via pytest-xdist. `tests/unit/` holds pure logic with no I/O; `tests/integration/` compiles and runs programs through the VM. LLMs are injected as fakes outside the `external` marker.
 
-The default run collects **15,387 tests**. It excludes 191 more marked `external` (live LLM APIs) or `nist` (NIST-85 COBOL suite).
+The default run collects **15,847 tests**. It excludes 468 more marked `external` (live LLM APIs), `nist` (NIST-85 COBOL suite) or `z390` (differential tests against z390).
 
 **Coverage areas:**
 
