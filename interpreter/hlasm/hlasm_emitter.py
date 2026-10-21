@@ -1,0 +1,116 @@
+# pyright: standard
+"""Accumulates HLASM lowering IR and emits reads and writes of the machine state."""
+
+from itertools import count
+
+from interpreter.func_name import FuncName
+from interpreter.hlasm.hlasm_constants import (
+    BINARY_BYTES_TO_INT,
+    BITS_PER_BYTE,
+    CC_VAR,
+    GPR_BYTES,
+    GPRS_VAR,
+    INT_TO_BINARY_BYTES,
+    LOW_WORD_OFFSET,
+    WORD_BYTES,
+)
+from interpreter.instructions import (
+    Binop,
+    CallFunction,
+    Const,
+    InstructionBase,
+    LoadRegion,
+    LoadVar,
+    StoreVar,
+    WriteRegion,
+)
+from interpreter.ir import CodeLabel
+from interpreter.operator_kind import BinopKind
+from interpreter.register import Register
+
+
+class HlasmEmitter:
+    """The lowering's instruction sink; GPR values are unsigned images, stores wrap."""
+
+    def __init__(self) -> None:
+        self._registers = count()
+        self._labels = count()
+        self._instructions: tuple[InstructionBase, ...] = ()
+
+    def instructions(self) -> tuple[InstructionBase, ...]:
+        return self._instructions
+
+    def fresh_reg(self) -> Register:
+        return Register(f"%{next(self._registers)}")
+
+    def fresh_label(self, prefix: str) -> CodeLabel:
+        return CodeLabel(f"{prefix}_{next(self._labels)}")
+
+    def emit_inst(self, inst: InstructionBase) -> InstructionBase:
+        self._instructions = (*self._instructions, inst)
+        return inst
+
+    def load_gr32(self, r: int) -> Register:
+        return self._load(GPR_BYTES * r + LOW_WORD_OFFSET, WORD_BYTES)
+
+    def load_gr64(self, r: int) -> Register:
+        return self._load(GPR_BYTES * r, GPR_BYTES)
+
+    def store_gr32(self, r: int, value: Register) -> None:
+        self._store(GPR_BYTES * r + LOW_WORD_OFFSET, WORD_BYTES, value)
+
+    def store_gr64(self, r: int, value: Register) -> None:
+        self._store(GPR_BYTES * r, GPR_BYTES, value)
+
+    def set_cc(self, value: Register) -> None:
+        self.emit_inst(StoreVar(name=CC_VAR, value_reg=value))
+
+    def _int(self, value: int) -> Register:
+        reg = self.fresh_reg()
+        self.emit_inst(Const.int_(reg, value))
+        return reg
+
+    def _unsigned(self) -> Register:
+        reg = self.fresh_reg()
+        self.emit_inst(Const.bool_(reg, False))
+        return reg
+
+    def _gprs(self) -> Register:
+        reg = self.fresh_reg()
+        self.emit_inst(LoadVar(result_reg=reg, name=GPRS_VAR))
+        return reg
+
+    def _call(self, func_name: FuncName, args: tuple[Register, ...]) -> Register:
+        reg = self.fresh_reg()
+        self.emit_inst(CallFunction(result_reg=reg, func_name=func_name, args=args))
+        return reg
+
+    def _load(self, offset: int, width: int) -> Register:
+        image = self.fresh_reg()
+        self.emit_inst(
+            LoadRegion(
+                result_reg=image,
+                region_reg=self._gprs(),
+                offset_reg=self._int(offset),
+                length=width,
+            )
+        )
+        return self._call(BINARY_BYTES_TO_INT, (image, self._unsigned()))
+
+    def _store(self, offset: int, width: int, value: Register) -> None:
+        wrapped = self.fresh_reg()
+        modulus = self._int(1 << (BITS_PER_BYTE * width))
+        self.emit_inst(
+            Binop(result_reg=wrapped, operator=BinopKind.MOD, left=value, right=modulus)
+        )
+        image = self._call(
+            INT_TO_BINARY_BYTES, (wrapped, self._int(width), self._unsigned())
+        )
+        self.emit_inst(
+            WriteRegion(
+                region_reg=self._gprs(),
+                offset_reg=self._int(offset),
+                length=width,
+                value_reg=image,
+            )
+        )

@@ -122,3 +122,21 @@ ignore_imports =
     interpreter.frontends -> interpreter.cobol.cobol_frontend
     interpreter.frontend_extension_lowering -> interpreter.cobol.emit_context
     interpreter.frontend_extension_lowering -> interpreter.cobol.sectioned_layout
+
+[importlinter:contract:hlasm-isolation]
+name = HLASM module only imported by frontend factory
+type = forbidden
+source_modules =
+    interpreter.vm
+    interpreter.handlers
+    interpreter.project
+    interpreter.run
+forbidden_modules =
+    interpreter.hlasm
+
+[importlinter:contract:cobol-hlasm-independence]
+name = COBOL and HLASM lowering must not import each other
+type = independence
+modules =
+    interpreter.cobol
+    interpreter.hlasm
