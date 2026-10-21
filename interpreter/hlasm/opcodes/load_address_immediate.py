@@ -17,13 +17,15 @@ from interpreter.hlasm.data_movement import (
     to_gr64,
 )
 from interpreter.hlasm.effective_address import indexed_address
-from interpreter.hlasm.hlasm_constants import ADDRESS_MASK_31
+from interpreter.hlasm.hlasm_constants import (
+    ADDRESS_MASK_31,
+    HALFWORD_BITS,
+    WORD_BITS,
+)
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.operands import mask_operand, storage_operand
 from interpreter.hlasm.statement_lowering import StatementLowering
 
-HALFWORD_BITS = 16
-WORD_BITS = 32
 TARGET_OPERAND = 0
 ADDRESS_OPERAND = 1
 
