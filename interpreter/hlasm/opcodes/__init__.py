@@ -15,6 +15,7 @@ from interpreter.hlasm.opcodes.load_store import LOAD_STORE_LOWERINGS
 from interpreter.hlasm.opcodes.logical_add_subtract import (
     LOGICAL_ADD_SUBTRACT_LOWERINGS,
 )
+from interpreter.hlasm.opcodes.loop_branch import LOOP_BRANCH_LOWERINGS
 from interpreter.hlasm.opcodes.signed_add_subtract import (
     SIGNED_ADD_SUBTRACT_LOWERINGS,
 )
@@ -29,5 +30,6 @@ OPCODE_LOWERINGS: Mapping[str, StatementLowering] = {
     **COMPARE_LOWERINGS,
     **BRANCH_ON_CONDITION_LOWERINGS,
     **BRANCH_AND_LINK_LOWERINGS,
+    **LOOP_BRANCH_LOWERINGS,
     **SVC_LOWERINGS,
 }

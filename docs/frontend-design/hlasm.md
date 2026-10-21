@@ -9,7 +9,8 @@ assembly are the che4z language server's, through a forked bridge executable;
 Python lowers what che4z has already resolved. The machine claims z17 problem
 state and stays in AMODE 31. Lowered so far: SVC and the load and store, load
 address and immediates, signed add and subtract, logical add and subtract, compare,
-branch on condition and branch and link units (see Opcode Units).
+branch on condition, branch and link, and branch on count and index units (see
+Opcode Units).
 Any other opcode abends `S0C1` at run time.
 
 ## Architecture
@@ -62,6 +63,7 @@ addresses.
 | `interpreter/hlasm/opcodes/compare.py` | The compare unit, signed and logical |
 | `interpreter/hlasm/opcodes/branch_on_condition.py` | The branch on condition unit |
 | `interpreter/hlasm/opcodes/branch_and_link.py` | The branch and link unit and the addressing-mode instructions |
+| `interpreter/hlasm/opcodes/loop_branch.py` | The branch on count and branch on index unit |
 | `interpreter/hlasm/data_movement.py` | `move(source, transforms, sink)`: storage, relative-long, address, immediate and register sources and sinks; sign extension, masks, shifts, byte reversal, bit-field insertion |
 | `interpreter/hlasm/effective_address.py` | `effective_address` (D(X,B), AMODE 31), `indexed_address` (index scaled by the element size), `relative_address` (RELOC_IMM) |
 | `interpreter/hlasm/alignment_check.py` | An operand off its boundary abends `S0C6` |
@@ -266,9 +268,23 @@ BASSM, BSM, SAM24, SAM31, SAM64, TAM. None changes the CC except TAM.
 - BASR, BALR and BRAS moved here from the seed module; LR moved to load and store.
 - z390 models AMODE 24 and 64; its test pins that difference.
 
+**Branch on count and branch on index (red-dragon-6uyp.34).** BCT, BCTR, BCTG, BCTGR,
+BRCT (JCT), BRCTG (JCTG); BXH, BXHG, BXLE, BXLEG, BRXH (JXH), BRXHG (JXHG), BRXLE (JXLE),
+BRXLG (JXLEG). None changes the CC. BRCTH belongs to the high-word unit.
+
+- The branch address is generated first, then R1 is replaced, wrapped to 32 bits (low word
+  only) or 64.
+- Count forms subtract one and branch when the result is nonzero. BCTR and BCTGR with R2 = 0
+  count without branching.
+- Index forms add the increment (R3) and compare the sum, signed, with the compare value
+  (R3 + 1 when R3 is even, else R3): BXH forms branch when high, BXLE forms when low or equal.
+  Both are read before R1 is written, so R1 = R3 + 1 compares the original value.
+- z390 reads BCTR's and BCTGR's R2, and every index form's compare value, after writing R1.
+  The z390 test pins BCTR 5,5, BXH 7,6 and BXHG 7,6.
+
 ## Known Gaps
 
-- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, branch on condition and branch and link units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
+- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, branch on condition, branch and link, and branch on count and index units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
 - DC types beyond C, X, B, F, H, P, Z, A, Y and V, and any type extension, raise `UnsupportedDataType` (red-dragon-6uyp.63; floating point E, D, L: red-dragon-6uyp.21).
 - Falling through into DC/DS data or past a CSECT's end skips the data instead of executing it (red-dragon-6uyp.64).
 - Emission is O(n²) in the number of IR instructions, and every branch, even to a static relative target, walks the dispatch chain (red-dragon-6uyp.62).
@@ -311,6 +327,8 @@ BASSM, BSM, SAM24, SAM31, SAM64, TAM. None changes the CC except TAM.
 | `tests/integration/hlasm/test_branch_on_condition.py` | Every branch on condition mnemonic and a spread of extended mnemonics on the VM: path taken, CC unchanged, branches into data abend `S0C1` |
 | `tests/unit/hlasm/test_branch_and_link_lowering.py` | Branch and link IR: target read before the link is written, the AMODE 31 link word, the BASSM and BSM mode test, SAM and TAM |
 | `tests/integration/hlasm/test_branch_and_link.py` | Every branch and link mnemonic, JAS and JASL on the VM: link relative to the next instruction, path, CC; BSM 0,14 and BASSM 14,14 return to the caller; AMODE 24 and 64 switches xfailed (red-dragon-6uyp.75) |
+| `tests/unit/hlasm/test_loop_branch_lowering.py` | Branch on count and index IR: target first, operands read before R1 is written, wrap, nonzero or signed test |
+| `tests/integration/hlasm/test_loop_branch.py` | Every branch on count and index mnemonic, JCT, JCTG and the JX spellings on the VM: counting loops, register overlaps, signed wrap, CC unchanged |
 | `tests/integration/hlasm/test_bridge_parser.py` | The real bridge: macro origins, refused assemblies |
 | `tests/integration/hlasm/test_storage_layout.py` | Section regions and address constants |
 | `tests/integration/hlasm/test_svc.py` | `WTO`, `ABEND` user and system codes, unlowered SVCs, `run()` with our maclib then `copybook_dirs`, call-site spans |
@@ -325,3 +343,4 @@ BASSM, BSM, SAM24, SAM31, SAM64, TAM. None changes the CC except TAM.
 | `tests/z390/test_compare_differential.py` | Every compare mnemonic against z390; the relative-long alignment difference pinned (`-m z390`) |
 | `tests/z390/test_branch_on_condition_differential.py` | Every branch on condition case against z390; the BIC, BPP and BPRP differences pinned (`-m z390`) |
 | `tests/z390/test_branch_and_link_differential.py` | Every branch and link case and the mode-setting returns against z390; z390's AMODE 24 and 64 switches pinned (`-m z390`) |
+| `tests/z390/test_loop_branch_differential.py` | Every branch on count and index case against z390; z390's late reads of R2 and the compare value pinned (`-m z390`) |
