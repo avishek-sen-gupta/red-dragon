@@ -7,8 +7,9 @@
 The HLASM frontend lowers an IBM High Level Assembler program to IR. Parsing and
 assembly are the che4z language server's, through a forked bridge executable;
 Python lowers what che4z has already resolved. The machine claims z17 problem
-state in AMODE 31. Only the seed opcodes are lowered so far: LA, LR, SR, BCR,
-BASR, BALR, BRAS and SVC. Any other opcode abends `S0C1` at run time.
+state in AMODE 31. Lowered so far: the seed opcodes (LA, LR, SR, BCR, BASR,
+BALR, BRAS, SVC) and the load and store unit (see Opcode Units). Any other
+opcode abends `S0C1` at run time.
 
 ## Architecture
 
@@ -46,7 +47,7 @@ addresses.
 | `hlasm_asg/program/` | The bridge JSON models, one class per file |
 | `interpreter/hlasm/hlasm_frontend.py` | `HlasmFrontend(program)`: `lower()`, `start_up_ir()`, `entry_name`, `entry_label` |
 | `interpreter/hlasm/machine.py` | GPR region (`__hlasm_gprs`, 8 bytes per register), `__hlasm_cc`, `__hlasm_pm` |
-| `interpreter/hlasm/storage_layout.py` | One region per section (`__hlasm_sect_<NAME>`) and its DC images; DC registers carry a per-piece index |
+| `interpreter/hlasm/storage_layout.py` | One region per section (`__hlasm_sect_<NAME>`), sized up to a doubleword multiple so section bases stay doubleword aligned, and its DC images; DC registers carry a per-piece index |
 | `interpreter/hlasm/dc_encoding.py` | DC images: C, X, B, F, H, P, Z, A, Y |
 | `interpreter/hlasm/entry_state.py` | Entry resolution and entry registers (R14 = `0xFF0` return sentinel, R13 = 72-byte save area, R15 = entry address) |
 | `interpreter/hlasm/branch_dispatch.py` | `hl_dispatch`: maps a branch address to a statement label; a miss abends `S0C1` |
@@ -54,10 +55,14 @@ addresses.
 | `interpreter/hlasm/hlasm_lowering_error.py` | `HlasmLoweringError`: names the statement (mnemonic, section, offset, operand) and what was found |
 | `interpreter/hlasm/opcodes/seed.py` | The seed opcode lowerings |
 | `interpreter/hlasm/opcodes/svc.py` | SVC, by number |
+| `interpreter/hlasm/opcodes/load_store.py` | The load and store unit |
+| `interpreter/hlasm/data_movement.py` | `move(source, transforms, sink)`: storage, relative-long and register sources and sinks; sign extension, masks, byte reversal |
+| `interpreter/hlasm/effective_address.py` | `effective_address` (D(X,B), AMODE 31), `relative_address` (RELOC_IMM) |
+| `interpreter/hlasm/alignment_check.py` | An operand off its boundary abends `S0C6` |
 | `interpreter/hlasm/write_to_operator.py` | SVC 35 in IR |
 | `interpreter/hlasm/abend_completion.py` | SVC 13 in IR |
 | `interpreter/hlasm/statement_location.py` | Each statement's source line, set on the IR it lowers to |
-| `interpreter/hlasm/fixed_width_ir.py` | 32-bit signed add/subtract with condition code, built in IR |
+| `interpreter/hlasm/fixed_width_ir.py` | Fixed-width signed add/subtract with condition code, and the sign CC (0 zero, 1 leftmost bit one, 2 other), built in IR |
 | `interpreter/hlasm/abend.py` | Stores the code in `__hlasm_abend`, then `Halt_` |
 
 ## Compilation Units
@@ -137,9 +142,31 @@ A run that leaves no `.LOG` raises `Z390AssemblyFailed` with asmlg's exit code
 and the `.ERR` text. The machine starts with program mask `0110` (decimal overflow
 and HFP exponent underflow on), as z390's initial PSW `07850600` does.
 
+## Opcode Units
+
+Storage is the VM's flat byte memory: `HlasmEmitter.load_storage` and
+`store_storage` read and write a compile-time width at an address. A 32-bit
+result writes only the GPR's low word.
+
+**Load and store (red-dragon-6uyp.23).** L, LY, LG, LGF, LH, LHY, LGH, LB, LGB,
+LLC, LLGC, LLH, LLGH, LLGF, LLGT, LZRF, LZRG, LLZRGF, LRV, LRVG, LRVH, IC, ICY,
+LGG, LLGFSG; the register forms LR, LGR, LBR, LGBR, LHR, LGHR, LGFR, LLCR, LLGCR,
+LLHR, LLGHR, LLGFR, LLGTR, LRVR, LRVGR; relative-long LRL, LGRL, LGFRL, LLGFRL,
+LHRL, LGHRL, LLHRL, LLGHRL, STRL, STGRL, STHRL; ST, STY, STG, STH, STHY, STC,
+STCY, STRV, STRVG, STRVH; LM, LMY, LMG, STM, STMY, STMG, LMD (R1 to R3 wraps from
+R15 to R0); ICM, ICMY (CC from the inserted bits), STCM, STCMY.
+
+- Guarded storage is never enabled, so LGG and LLGFSG never raise a guarded-storage
+  event. In AMODE 31 they keep bits 33-63 of the loaded value; LLGFSG's shift is 0.
+- Word and doubleword relative-long operands, LGG and LLGFSG check alignment and
+  abend `S0C6`. z390 does not check relative-long alignment; the z390 test pins
+  that difference.
+- z390 refuses a relative-long operand in another CSECT, so the z390 tests keep
+  relative operands in the same section; the VM tests cross sections.
+
 ## Known Gaps
 
-- Only the seed opcodes are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
+- Only the seed opcodes and the load and store unit are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
 - DC types beyond C, X, B, F, H, P, Z, A, Y and V, and any type extension, raise `UnsupportedDataType` (red-dragon-6uyp.63; floating point E, D, L: red-dragon-6uyp.21).
 - Falling through into DC/DS data or past a CSECT's end skips the data instead of executing it (red-dragon-6uyp.64).
 - Emission is O(n²) in the number of IR instructions (red-dragon-6uyp.62).
@@ -160,6 +187,8 @@ and HFP exponent underflow on), as z390's initial PSW `07850600` does.
 | `tests/unit/hlasm/test_dc_encoding.py` | DC images |
 | `tests/unit/hlasm/test_fixed_width_ir.py` | Fixed-width arithmetic and condition codes |
 | `tests/unit/hlasm/test_lowering_skeleton.py` | Labels, seed opcodes, dispatch, abends |
+| `tests/unit/hlasm/test_load_store_lowering.py` | Load and store IR: GPR and storage accesses, alignment branch, CC |
+| `tests/integration/hlasm/test_load_store.py` | Every load and store mnemonic on the VM, alignment abends |
 | `tests/integration/hlasm/test_bridge_parser.py` | The real bridge: macro origins, refused assemblies |
 | `tests/integration/hlasm/test_storage_layout.py` | Section regions and address constants |
 | `tests/integration/hlasm/test_svc.py` | `WTO`, `ABEND` user and system codes, unlowered SVCs, `run()` with our maclib then `copybook_dirs`, call-site spans |
@@ -167,3 +196,4 @@ and HFP exponent underflow on), as z390's initial PSW `07850600` does.
 | `tests/integration/hlasm/test_instruction_table.py`, `test_opcode_unit_coverage.py` | Instruction table and opcode-unit coverage |
 | `tests/z390/test_foundation_differential.py` | Return code, WTO, user abend and assembly failure against z390 (`-m z390`) |
 | `tests/z390/test_z390_log.py` | Registers and CC from a z390 abend dump (default run) |
+| `tests/z390/test_load_store_differential.py` | Load and store families, ICM CC, and the alignment difference against z390 (`-m z390`) |

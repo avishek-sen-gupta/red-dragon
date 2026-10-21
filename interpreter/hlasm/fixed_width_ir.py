@@ -95,15 +95,25 @@ def _overflow_cc(prefix: str, base_cc: Register, overflow: Register) -> Fragment
     return cc, (*gap_ir, *lift_ir, *cc_ir)
 
 
-def _signed_cc(
-    prefix: str, result: Register, overflow: Register, bits: int
-) -> Fragment:
+def _sign_cc(prefix: str, result: Register, bits: int) -> Fragment:
     nonzero, nonzero_ir = _nonzero_bit(f"{prefix}.res", result, bits)
     negative, negative_ir = _sign_bit(prefix, result, bits)
     doubled, doubled_ir = _binop_const(prefix, "nz2", BinopKind.MUL, nonzero, 2)
     base, base_ir = _binop(prefix, "cc_base", BinopKind.SUB, doubled, negative)
+    return base, (*nonzero_ir, *negative_ir, *doubled_ir, *base_ir)
+
+
+def _signed_cc(
+    prefix: str, result: Register, overflow: Register, bits: int
+) -> Fragment:
+    base, base_ir = _sign_cc(prefix, result, bits)
     cc, cc_ir = _overflow_cc(prefix, base, overflow)
-    return cc, (*nonzero_ir, *negative_ir, *doubled_ir, *base_ir, *cc_ir)
+    return cc, (*base_ir, *cc_ir)
+
+
+def build_sign_cc_ir(func_name: str, bits: int) -> list[InstructionBase]:
+    cc, cc_ir = _sign_cc(func_name, PARAM_VALUE, bits)
+    return [*cc_ir, Return_(value_reg=cc)]
 
 
 def build_wrap_ir(func_name: str, bits: int) -> list[InstructionBase]:

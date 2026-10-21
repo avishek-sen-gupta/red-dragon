@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from interpreter.hlasm.fixed_width_ir import (
     build_add_logical_cc_ir,
     build_add_signed_cc_ir,
+    build_sign_cc_ir,
     build_sub_signed_cc_ir,
     build_to_signed_ir,
     build_wrap_ir,
@@ -72,3 +73,10 @@ def test_add_logical_32_cc():
         for left, right in ((0xFFFFFFFF, 1), (1, 1), (0, 0), (0xFFFFFFFF, 2))
     ] == [[0, 2], [2, 1], [0, 0], [1, 3]]
     assert _pair_of(build_add_logical_cc_ir("addl64", 64), (1 << 64) - 1, 1) == [0, 2]
+
+
+def test_sign_cc_is_zero_leftmost_bit_one_or_other():
+    cc_16 = build_sign_cc_ir("cc16", 16)
+    assert [
+        returned_value(cc_16, {"%p_value": v}) for v in (0, 0x8000, 0xFFFF, 0x7FFF, 1)
+    ] == [0, 1, 1, 2, 2]
