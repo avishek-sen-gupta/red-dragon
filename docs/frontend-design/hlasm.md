@@ -8,8 +8,9 @@ The HLASM frontend lowers an IBM High Level Assembler program to IR. Parsing and
 assembly are the che4z language server's, through a forked bridge executable;
 Python lowers what che4z has already resolved. The machine claims z17 problem
 state in AMODE 31. Lowered so far: the seed opcodes (LR, BCR, BASR, BALR,
-BRAS, SVC), the load and store unit, the load address and immediates unit, and
-the signed add and subtract unit (see Opcode Units). Any other
+BRAS, SVC), the load and store unit, the load address and immediates unit, the
+signed add and subtract unit, and the logical add and subtract unit (see Opcode
+Units). Any other
 opcode abends `S0C1` at run time.
 
 ## Architecture
@@ -59,6 +60,7 @@ addresses.
 | `interpreter/hlasm/opcodes/load_store.py` | The load and store unit |
 | `interpreter/hlasm/opcodes/load_address_immediate.py` | The load address and immediates unit |
 | `interpreter/hlasm/opcodes/signed_add_subtract.py` | The signed add and subtract unit |
+| `interpreter/hlasm/opcodes/logical_add_subtract.py` | The logical add and subtract unit |
 | `interpreter/hlasm/data_movement.py` | `move(source, transforms, sink)`: storage, relative-long, address, immediate and register sources and sinks; sign extension, masks, shifts, byte reversal, bit-field insertion |
 | `interpreter/hlasm/effective_address.py` | `effective_address` (D(X,B), AMODE 31), `indexed_address` (index scaled by the element size), `relative_address` (RELOC_IMM) |
 | `interpreter/hlasm/alignment_check.py` | An operand off its boundary abends `S0C6` |
@@ -66,7 +68,8 @@ addresses.
 | `interpreter/hlasm/write_to_operator.py` | SVC 35 in IR |
 | `interpreter/hlasm/abend_completion.py` | SVC 13 in IR |
 | `interpreter/hlasm/statement_location.py` | Each statement's source line, set on the IR it lowers to |
-| `interpreter/hlasm/fixed_width_ir.py` | Fixed-width signed add/subtract with condition code, and the sign CC (0 zero, 1 leftmost bit one, 2 other), built in IR |
+| `interpreter/hlasm/fixed_width_ir.py` | Fixed-width signed add/subtract and logical add/subtract with carry-in, each with its condition code, and the sign CC (0 zero, 1 leftmost bit one, 2 other), built in IR |
+| `interpreter/hlasm/inline_ir.py` | Splices a builder's IR under fresh registers; `inline_result_and_cc` splits its (result, CC) pair |
 | `interpreter/hlasm/abend.py` | Stores the code in `__hlasm_abend`, then `Halt_` |
 
 ## Compilation Units
@@ -197,9 +200,25 @@ SRK, SH, SHY, SG, SGR, SGRK, SGF, SGFR, SGH. CC 0 zero, 1 negative, 2 positive,
 - ASI and AGSI read, add and write back the storage operand.
 - SR moved here from the seed module and gained the `S0C8` check.
 
+**Logical add and subtract (red-dragon-6uyp.26).** AL, ALY, ALR, ALRK, ALFI, ALHSIK,
+ALSI, ALG, ALGR, ALGRK, ALGF, ALGFR, ALGFI, ALGHSIK, ALGSI, ALC, ALCR, ALCG, ALCGR; SL,
+SLY, SLR, SLRK, SLFI, SLG, SLGR, SLGRK, SLGF, SLGFR, SLGFI, SLB, SLBR, SLBG, SLBGR.
+CC = 2 × carry + (result ≠ 0). No overflow interruption.
+
+- Subtraction is first + ones' complement of second + carry-in: 1 for SL forms, CC bit 2
+  (CC 2 or 3) for SLB forms. A borrow is no carry, so SL sets CC 1, 2 or 3; SLB can set
+  CC 0. ALC forms add CC bit 2.
+- ALGF, ALGFR, ALGFI, SLGF, SLGFR, SLGFI zero-extend a 32-bit second operand.
+- ALHSIK, ALGHSIK (16-bit) and ALSI, ALGSI (8-bit) sign-extend the immediate and add it
+  unsigned. For a negative immediate that is SUBTRACT LOGICAL of its magnitude, the CC the
+  Principles of Operation prescribe.
+- z390 sets a different CC for ALGRK and SLGRK (its CC helper reads stale operands) and
+  for the signed-immediate forms (it reports a borrow as a carry). The z390 test pins
+  each difference.
+
 ## Known Gaps
 
-- Only the seed opcodes and the load and store, load address and immediates, and signed add and subtract units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
+- Only the seed opcodes and the load and store, load address and immediates, signed add and subtract, and logical add and subtract units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
 - DC types beyond C, X, B, F, H, P, Z, A, Y and V, and any type extension, raise `UnsupportedDataType` (red-dragon-6uyp.63; floating point E, D, L: red-dragon-6uyp.21).
 - Falling through into DC/DS data or past a CSECT's end skips the data instead of executing it (red-dragon-6uyp.64).
 - Emission is O(n²) in the number of IR instructions (red-dragon-6uyp.62).
@@ -230,6 +249,8 @@ SRK, SH, SHY, SG, SGR, SGRK, SGF, SGFR, SGH. CC 0 zero, 1 negative, 2 positive,
 | `tests/integration/hlasm/test_load_address_immediate.py` | Every load address and immediate mnemonic on the VM, CC unchanged |
 | `tests/unit/hlasm/test_signed_add_subtract_lowering.py` | Signed add and subtract IR: operand widths, CC, the `S0C8` trap and its program-mask condition |
 | `tests/integration/hlasm/test_signed_add_subtract.py` | Every signed add and subtract mnemonic on the VM: result, CC 0-3 |
+| `tests/unit/hlasm/test_logical_add_subtract_lowering.py` | Logical add and subtract IR: operand widths, carry-in read, CC, no trap |
+| `tests/integration/hlasm/test_logical_add_subtract.py` | Every logical add and subtract mnemonic on the VM: result, CC with carry and borrow |
 | `tests/integration/hlasm/test_bridge_parser.py` | The real bridge: macro origins, refused assemblies |
 | `tests/integration/hlasm/test_storage_layout.py` | Section regions and address constants |
 | `tests/integration/hlasm/test_svc.py` | `WTO`, `ABEND` user and system codes, unlowered SVCs, `run()` with our maclib then `copybook_dirs`, call-site spans |
@@ -240,3 +261,4 @@ SRK, SH, SHY, SG, SGR, SGRK, SGF, SGFR, SGH. CC 0 zero, 1 negative, 2 positive,
 | `tests/z390/test_load_store_differential.py` | Load and store families, ICM CC, and the alignment difference against z390 (`-m z390`) |
 | `tests/z390/test_load_address_immediate_differential.py` | Address and immediate families against z390; the LAE `S0C5` and LXA `S0C1` differences (`-m z390`) |
 | `tests/z390/test_signed_add_subtract_differential.py` | Every signed add and subtract mnemonic against z390 (`-m z390`) |
+| `tests/z390/test_logical_add_subtract_differential.py` | Every logical add and subtract mnemonic against z390; six z390 CC differences pinned (`-m z390`) |

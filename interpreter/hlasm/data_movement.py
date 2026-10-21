@@ -107,6 +107,16 @@ def immediate(bits: int) -> Source:
     return image
 
 
+def signed_immediate(index: int, bits: int) -> Source:
+    extend = signed(bits)
+
+    def image(emitter: HlasmEmitter, statement: MachineStatement) -> Register:
+        field = imm_operand(statement, index) & ((1 << bits) - 1)
+        return extend(emitter, emitter.int_(field))
+
+    return image
+
+
 def from_gr32(index: int) -> Source:
     return lambda emitter, statement: emitter.load_gr32(reg_operand(statement, index))
 

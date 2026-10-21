@@ -11,6 +11,7 @@ from interpreter.hlasm.data_movement import (
     from_gr64,
     from_storage,
     signed,
+    signed_immediate,
     to_gr32,
     to_gr64,
 )
@@ -32,29 +33,19 @@ from interpreter.hlasm.hlasm_constants import (
     WORD_BYTES,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
-from interpreter.hlasm.inline_ir import inline_ir
-from interpreter.hlasm.operands import imm_operand, storage_operand
+from interpreter.hlasm.inline_ir import inline_result_and_cc
+from interpreter.hlasm.operands import storage_operand
 from interpreter.hlasm.statement_lowering import StatementLowering
-from interpreter.instructions import InstructionBase, LoadIndex
+from interpreter.instructions import InstructionBase
 from interpreter.register import Register
 
 type Operation = Sequence[InstructionBase]
 
-RESULT = 0
-CONDITION_CODE = 1
 
 ADD_32 = build_add_signed_cc_ir("hlasm.add32", WORD_BITS)
 ADD_64 = build_add_signed_cc_ir("hlasm.add64", DOUBLEWORD_BITS)
 SUB_32 = build_sub_signed_cc_ir("hlasm.sub32", WORD_BITS)
 SUB_64 = build_sub_signed_cc_ir("hlasm.sub64", DOUBLEWORD_BITS)
-
-
-def _element(emitter: HlasmEmitter, pair: Register, at: int) -> Register:
-    reg = emitter.fresh_reg()
-    emitter.emit_inst(
-        LoadIndex(result_reg=reg, arr_reg=pair, index_reg=emitter.int_(at))
-    )
-    return reg
 
 
 def _apply(
@@ -64,9 +55,10 @@ def _apply(
     store: Callable[[Register], None],
 ) -> None:
     left, right = operands
-    pair = inline_ir(emitter, operation, {PARAM_LEFT: left, PARAM_RIGHT: right})
-    store(_element(emitter, pair, RESULT))
-    cc = _element(emitter, pair, CONDITION_CODE)
+    result, cc = inline_result_and_cc(
+        emitter, operation, {PARAM_LEFT: left, PARAM_RIGHT: right}
+    )
+    store(result)
     emitter.set_cc(cc)
     emit_fixed_point_overflow_check(emitter, cc)
 
@@ -74,16 +66,6 @@ def _apply(
 def _extended(source: Source, bits: int) -> Source:
     extend = signed(bits)
     return lambda emitter, statement: extend(emitter, source(emitter, statement))
-
-
-def _immediate(index: int, bits: int) -> Source:
-    extend = signed(bits)
-
-    def image(emitter: HlasmEmitter, statement: MachineStatement) -> Register:
-        field = imm_operand(statement, index) & ((1 << bits) - 1)
-        return extend(emitter, emitter.int_(field))
-
-    return image
 
 
 def signed_arithmetic(
@@ -108,7 +90,7 @@ def to_storage_immediate(operation: Operation, width: int) -> StatementLowering:
             operation,
             (
                 emitter.load_storage(address, 0, width),
-                _immediate(1, BITS_PER_BYTE)(emitter, statement),
+                signed_immediate(1, BITS_PER_BYTE)(emitter, statement),
             ),
             lambda value: emitter.store_storage(address, 0, width, value),
         )
@@ -129,9 +111,9 @@ DOUBLEWORD_STORAGE = from_storage(DOUBLEWORD_BYTES)
 SIGNED_HALFWORD_STORAGE = _extended(from_storage(HALFWORD_BYTES), HALFWORD_BITS)
 SIGNED_WORD_STORAGE = _extended(from_storage(WORD_BYTES), WORD_BITS)
 SIGNED_LOW_WORD = _extended(from_gr32(1), WORD_BITS)
-HALFWORD_IMMEDIATE = _immediate(1, HALFWORD_BITS)
-WORD_IMMEDIATE = _immediate(1, WORD_BITS)
-THIRD_HALFWORD_IMMEDIATE = _immediate(2, HALFWORD_BITS)
+HALFWORD_IMMEDIATE = signed_immediate(1, HALFWORD_BITS)
+WORD_IMMEDIATE = signed_immediate(1, WORD_BITS)
+THIRD_HALFWORD_IMMEDIATE = signed_immediate(2, HALFWORD_BITS)
 
 ADDS: Mapping[str, StatementLowering] = {
     "A": _word(ADD_32, from_gr32(0), WORD_STORAGE),

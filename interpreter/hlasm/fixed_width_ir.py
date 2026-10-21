@@ -4,6 +4,7 @@
 from interpreter.hlasm.hlasm_constants import (
     LIST_SET,
     MAKE_LIST,
+    PARAM_CARRY,
     PARAM_LEFT,
     PARAM_RIGHT,
     PARAM_VALUE,
@@ -158,20 +159,16 @@ def build_sub_signed_cc_ir(func_name: str, bits: int) -> list[InstructionBase]:
     return _signed_arithmetic_cc_ir(func_name, bits, BinopKind.SUB)
 
 
-def build_add_logical_cc_ir(func_name: str, bits: int) -> list[InstructionBase]:
-    left, left_ir = _wrap(f"{func_name}.l", PARAM_LEFT, bits)
-    right, right_ir = _wrap(f"{func_name}.r", PARAM_RIGHT, bits)
-    exact, exact_ir = _binop(func_name, "exact", BinopKind.ADD, left, right)
-    result, result_ir = _wrap(f"{func_name}.s", exact, bits)
-    carry, carry_ir = _binop_const(func_name, "carry", BinopKind.RSHIFT, exact, bits)
+def _logical_cc_ir(func_name: str, bits: int, exact: Fragment) -> list[InstructionBase]:
+    total, total_ir = exact
+    result, result_ir = _wrap(f"{func_name}.s", total, bits)
+    carry, carry_ir = _binop_const(func_name, "carry", BinopKind.RSHIFT, total, bits)
     nonzero, nonzero_ir = _nonzero_bit(func_name, result, bits)
     carry2, carry2_ir = _binop_const(func_name, "carry2", BinopKind.MUL, carry, 2)
     cc, cc_ir = _binop(func_name, "cc", BinopKind.ADD, carry2, nonzero)
     pair, pair_ir = _pair(func_name, result, cc)
     return [
-        *left_ir,
-        *right_ir,
-        *exact_ir,
+        *total_ir,
         *result_ir,
         *carry_ir,
         *nonzero_ir,
@@ -180,3 +177,41 @@ def build_add_logical_cc_ir(func_name: str, bits: int) -> list[InstructionBase]:
         *pair_ir,
         Return_(value_reg=pair),
     ]
+
+
+def _logical_sum(func_name: str, bits: int, right: Fragment) -> Fragment:
+    addend, addend_ir = right
+    left, left_ir = _wrap(f"{func_name}.l", PARAM_LEFT, bits)
+    exact, exact_ir = _binop(func_name, "exact", BinopKind.ADD, left, addend)
+    return exact, (*addend_ir, *left_ir, *exact_ir)
+
+
+def _with_carry_in(func_name: str, partial: Fragment) -> Fragment:
+    total, total_ir = partial
+    exact, exact_ir = _binop(func_name, "carried", BinopKind.ADD, total, PARAM_CARRY)
+    return exact, (*total_ir, *exact_ir)
+
+
+def _complement(prefix: str, value: Register, bits: int) -> Fragment:
+    wrapped, wrapped_ir = _wrap(prefix, value, bits)
+    flipped, flipped_ir = _binop_const(
+        prefix, "complement", BinopKind.BIT_XOR, wrapped, (1 << bits) - 1
+    )
+    return flipped, (*wrapped_ir, *flipped_ir)
+
+
+def build_add_logical_cc_ir(func_name: str, bits: int) -> list[InstructionBase]:
+    right = _wrap(f"{func_name}.r", PARAM_RIGHT, bits)
+    return _logical_cc_ir(func_name, bits, _logical_sum(func_name, bits, right))
+
+
+def build_add_logical_carry_cc_ir(func_name: str, bits: int) -> list[InstructionBase]:
+    right = _wrap(f"{func_name}.r", PARAM_RIGHT, bits)
+    partial = _logical_sum(func_name, bits, right)
+    return _logical_cc_ir(func_name, bits, _with_carry_in(func_name, partial))
+
+
+def build_sub_logical_borrow_cc_ir(func_name: str, bits: int) -> list[InstructionBase]:
+    right = _complement(f"{func_name}.r", PARAM_RIGHT, bits)
+    partial = _logical_sum(func_name, bits, right)
+    return _logical_cc_ir(func_name, bits, _with_carry_in(func_name, partial))
