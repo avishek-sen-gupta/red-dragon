@@ -4,7 +4,6 @@
 import logging
 from collections.abc import Callable, Mapping
 
-from hlasm_asg.program.imm_operand import ImmOperand
 from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.hlasm.abend import emit_abend
 from interpreter.hlasm.abend_completion import emit_abend_completion
@@ -14,6 +13,7 @@ from interpreter.hlasm.hlasm_constants import (
     WTO_SVC,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
+from interpreter.hlasm.operands import imm_operand
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.hlasm.write_to_operator import emit_write_to_operator
 
@@ -25,14 +25,8 @@ _SERVICES: Mapping[int, Callable[[HlasmEmitter], None]] = {
 }
 
 
-def _number(statement: MachineStatement) -> int:
-    operand = statement.operands[0]
-    assert isinstance(operand, ImmOperand)
-    return operand.value
-
-
 def lower_svc(emitter: HlasmEmitter, statement: MachineStatement) -> None:
-    number = _number(statement)
+    number = imm_operand(statement, 0)
     if number in _SERVICES:
         _SERVICES[number](emitter)
         return
