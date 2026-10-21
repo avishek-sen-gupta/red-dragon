@@ -44,6 +44,8 @@ consumer that only reads COBOL or computes byte ranges must not pay for the VM.
 - **JDK 17+ and Maven**, for the ProLeap COBOL parser bridge. `make jar` builds
   `proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar`, `make test` depends on
   it, and the parser JAR itself resolves from `~/.m2`.
+- **CMake 3.28+, Ninja and a C++20 compiler**, for the che4z HLASM bridge. `make test`
+  builds it incrementally at `hlasm-bridge/che4z/build/bin/hlasm_ast_bridge`.
 - Talisman — secret scanning
 - beads (`bd`) over Dolt — issue tracking
 - ast-grep and ripgrep on PATH
