@@ -50,7 +50,7 @@ def test_gpr_words_are_big_endian_with_the_low_word_at_plus_four():
     assert [
         frame_vars[VarName("__hlasm_cc")].value,
         frame_vars[VarName("__hlasm_pm")].value,
-    ] == [3, 0]
+    ] == [3, 0b0110]
     assert [emitter.fresh_label("hl"), emitter.fresh_label("hl")] == [
         CodeLabel("hl_0"),
         CodeLabel("hl_1"),

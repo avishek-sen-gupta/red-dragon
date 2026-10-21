@@ -8,6 +8,7 @@ from pathlib import Path
 
 from hlasm_asg.subprocess_runner import SubprocessRunner
 from tests.integration.hlasm.hlasm_helpers import NO_RETURN_CODE, HlasmRun
+from tests.z390.z390_assembly_failed import Z390AssemblyFailed
 
 PROGRAM = "PROG"
 NO_ABEND = ""
@@ -60,6 +61,9 @@ class Z390Runner:
     def run(self, source: str, tmp: Path) -> HlasmRun:
         program = tmp / PROGRAM
         program.with_suffix(".MLC").write_text(source, encoding="ascii")
-        self.runner.run([str(self.home / "bash" / "asmlg"), str(program)])
-        log = program.with_suffix(".LOG").read_text(encoding="latin-1")
-        return hlasm_run_of_log(log.splitlines())
+        ran = self.runner.run([str(self.home / "bash" / "asmlg"), str(program)])
+        log = program.with_suffix(".LOG")
+        if not log.exists():
+            err = program.with_suffix(".ERR").read_text(encoding="latin-1")
+            raise Z390AssemblyFailed(log.name, ran.returncode, err)
+        return hlasm_run_of_log(log.read_text(encoding="latin-1").splitlines())
