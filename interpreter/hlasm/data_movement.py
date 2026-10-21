@@ -185,6 +185,22 @@ def into_bits(field_mask: int) -> Sink:
     return insert
 
 
+def field_mask(bits: int, shift: int) -> int:
+    return ((1 << bits) - 1) << shift
+
+
+def into_field(bits: int, shift: int) -> Sink:
+    insert = into_bits(field_mask(bits, shift))
+
+    def place(
+        emitter: HlasmEmitter, statement: MachineStatement, value: Register
+    ) -> None:
+        moved = emitter.binop(BinopKind.LSHIFT, value, emitter.int_(shift))
+        insert(emitter, statement, moved)
+
+    return place
+
+
 def into_low_bytes(width: int) -> Sink:
     def insert(
         emitter: HlasmEmitter, statement: MachineStatement, value: Register
