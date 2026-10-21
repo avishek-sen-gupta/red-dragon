@@ -300,6 +300,9 @@ BRXLG (JXLEG). None changes the CC. BRCTH belongs to the high-word unit.
 - Access registers are not modelled: LAE and LAEY set only the general register.
 - In AMODE 31, LM, STM and LMD do not wrap EA + offset at 2 GiB.
 - ICM and CLM with mask 0 raise no access exception for their operand.
+- Section bases are doubleword aligned only by allocation order. The VM's bump allocator
+  starts at 4096 and does not align, so the GPR region (128 bytes) comes first and each
+  section is sized up to a doubleword multiple. Addresses differ from z390's load point.
 - Nothing sets the program mask until SPM lands (red-dragon-6uyp.45), so `S0C8` is tested only on the VM with the mask set directly, not end to end.
 - `ABEND` takes only a self-defining code of 0-4095. Register notation (`ABEND (R2)`) and larger codes are not supported.
 
