@@ -28,7 +28,7 @@ Also included:
 
 ### Package layout
 
-Four root packages, each a contract root in `.importlinter`:
+Five root packages, each a contract root in `.importlinter`:
 
 | Package | Contents |
 |---|---|
@@ -36,8 +36,9 @@ Four root packages, each a contract root in `.importlinter`:
 | `cobol_asg` | COBOL parsing via the ProLeap bridge, and data description |
 | `cobol_memory` | Byte-extent algebra for COBOL storage |
 | `cobol_numeric` | Exact COBOL fixed-point values and arithmetic |
+| `hlasm_asg` | HLASM instruction-table models and the opcode-unit table (`opcode_units.json`) |
 
-The three `cobol_*` packages are leaves: they must not import `interpreter`. Importing anything under `interpreter` loads the VM, so a consumer that only parses COBOL or computes byte ranges imports a `cobol_*` package alone.
+The three `cobol_*` packages and `hlasm_asg` are leaves: they must not import `interpreter`. Importing anything under `interpreter` loads the VM, so a consumer that only parses COBOL or computes byte ranges imports a `cobol_*` package alone.
 
 ### Used by
 
@@ -591,13 +592,14 @@ uv run pydeps interpreter --no-show -T png  # dependency graph (requires graphvi
 | [import-linter](https://import-linter.readthedocs.io/) | Architectural boundary contracts (configured in `.importlinter`) |
 | [pydeps](https://github.com/thebjorn/pydeps) | Module dependency visualization |
 
-Import-linter enforces eight contracts:
+Import-linter enforces nine contracts:
 
 | Contract | Rule |
 |----------|------|
 | `cobol-asg-is-a-leaf` | `cobol_asg` must not import `interpreter` |
 | `cobol-memory-is-a-leaf` | `cobol_memory` must not import `interpreter` |
 | `cobol-numeric-is-a-leaf` | `cobol_numeric` must not import `interpreter` |
+| `hlasm-asg-is-a-leaf` | `hlasm_asg` must not import `interpreter` |
 | `vm-no-frontend` | VM and handlers must not import frontends |
 | `ir-is-leaf` | IR module must not import other interpreter modules |
 | `project-no-vm-internals` | Project module must not import VM or handler internals |

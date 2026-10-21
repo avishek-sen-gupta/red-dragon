@@ -4,6 +4,7 @@ root_packages =
     cobol_asg
     cobol_memory
     cobol_numeric
+    hlasm_asg
 
 # The reason cobol_asg is a sibling of interpreter rather than a subpackage of
 # it: an import of interpreter.anything runs interpreter/__init__.py, which
@@ -18,6 +19,14 @@ name = The COBOL ASG surface must not import the interpreter
 type = forbidden
 source_modules =
     cobol_asg
+forbidden_modules =
+    interpreter
+
+[importlinter:contract:hlasm-asg-is-a-leaf]
+name = The HLASM ASG surface must not import the interpreter
+type = forbidden
+source_modules =
+    hlasm_asg
 forbidden_modules =
     interpreter
 
