@@ -184,6 +184,11 @@ def signed(bits: int) -> Transform:
     return extend
 
 
+def sign_extended(source: Source, bits: int) -> Source:
+    extend = signed(bits)
+    return lambda emitter, statement: extend(emitter, source(emitter, statement))
+
+
 def shifted(bits: int) -> Transform:
     return lambda emitter, value: emitter.binop(
         BinopKind.LSHIFT, value, emitter.int_(bits)

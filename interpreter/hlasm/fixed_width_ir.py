@@ -215,3 +215,36 @@ def build_sub_logical_borrow_cc_ir(func_name: str, bits: int) -> list[Instructio
     right = _complement(f"{func_name}.r", PARAM_RIGHT, bits)
     partial = _logical_sum(func_name, bits, right)
     return _logical_cc_ir(func_name, bits, _with_carry_in(func_name, partial))
+
+
+def _compare_cc_ir(
+    func_name: str, bits: int, operands: tuple[Fragment, Fragment]
+) -> list[InstructionBase]:
+    (left, left_ir), (right, right_ir) = operands
+    difference, difference_ir = _binop(
+        func_name, "difference", BinopKind.SUB, left, right
+    )
+    cc, cc_ir = _sign_cc(func_name, difference, bits + 1)
+    return [*left_ir, *right_ir, *difference_ir, *cc_ir, Return_(value_reg=cc)]
+
+
+def build_compare_signed_cc_ir(func_name: str, bits: int) -> list[InstructionBase]:
+    return _compare_cc_ir(
+        func_name,
+        bits,
+        (
+            _to_signed(f"{func_name}.l", PARAM_LEFT, bits),
+            _to_signed(f"{func_name}.r", PARAM_RIGHT, bits),
+        ),
+    )
+
+
+def build_compare_logical_cc_ir(func_name: str, bits: int) -> list[InstructionBase]:
+    return _compare_cc_ir(
+        func_name,
+        bits,
+        (
+            _wrap(f"{func_name}.l", PARAM_LEFT, bits),
+            _wrap(f"{func_name}.r", PARAM_RIGHT, bits),
+        ),
+    )

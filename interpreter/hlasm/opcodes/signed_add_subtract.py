@@ -10,7 +10,7 @@ from interpreter.hlasm.data_movement import (
     from_gr32,
     from_gr64,
     from_storage,
-    signed,
+    sign_extended,
     signed_immediate,
     to_gr32,
     to_gr64,
@@ -63,11 +63,6 @@ def _apply(
     emit_fixed_point_overflow_check(emitter, cc)
 
 
-def _extended(source: Source, bits: int) -> Source:
-    extend = signed(bits)
-    return lambda emitter, statement: extend(emitter, source(emitter, statement))
-
-
 def signed_arithmetic(
     operation: Operation, left: Source, right: Source, sink: Sink
 ) -> StatementLowering:
@@ -108,9 +103,9 @@ def _doubleword(operation: Operation, left: Source, right: Source) -> StatementL
 
 WORD_STORAGE = from_storage(WORD_BYTES)
 DOUBLEWORD_STORAGE = from_storage(DOUBLEWORD_BYTES)
-SIGNED_HALFWORD_STORAGE = _extended(from_storage(HALFWORD_BYTES), HALFWORD_BITS)
-SIGNED_WORD_STORAGE = _extended(from_storage(WORD_BYTES), WORD_BITS)
-SIGNED_LOW_WORD = _extended(from_gr32(1), WORD_BITS)
+SIGNED_HALFWORD_STORAGE = sign_extended(from_storage(HALFWORD_BYTES), HALFWORD_BITS)
+SIGNED_WORD_STORAGE = sign_extended(from_storage(WORD_BYTES), WORD_BITS)
+SIGNED_LOW_WORD = sign_extended(from_gr32(1), WORD_BITS)
 HALFWORD_IMMEDIATE = signed_immediate(1, HALFWORD_BITS)
 WORD_IMMEDIATE = signed_immediate(1, WORD_BITS)
 THIRD_HALFWORD_IMMEDIATE = signed_immediate(2, HALFWORD_BITS)
