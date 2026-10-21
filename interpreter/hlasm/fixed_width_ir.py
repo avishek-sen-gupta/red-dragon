@@ -118,6 +118,11 @@ def build_sign_cc_ir(func_name: str, bits: int) -> list[InstructionBase]:
     return [*cc_ir, Return_(value_reg=cc)]
 
 
+def build_nonzero_ir(func_name: str, bits: int) -> list[InstructionBase]:
+    nonzero, nonzero_ir = _nonzero_bit(func_name, PARAM_VALUE, bits)
+    return [*nonzero_ir, Return_(value_reg=nonzero)]
+
+
 def build_wrap_ir(func_name: str, bits: int) -> list[InstructionBase]:
     wrapped, wrapped_ir = _wrap(func_name, PARAM_VALUE, bits)
     return [*wrapped_ir, Return_(value_reg=wrapped)]

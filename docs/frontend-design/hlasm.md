@@ -72,7 +72,7 @@ addresses.
 | `interpreter/hlasm/alignment_check.py` | An operand off its boundary abends `S0C6` |
 | `interpreter/hlasm/fixed_point_overflow.py` | CC 3 with program-mask bit `1000` on abends `S0C8` |
 | `interpreter/hlasm/write_to_operator.py` | SVC 35 in IR |
-| `interpreter/hlasm/byte_loop.py` | An IR loop over the byte offsets of a compile-time length, the offset in `__hlasm_ss_at` |
+| `interpreter/hlasm/byte_loop.py` | An IR loop over the byte offsets of a compile-time length, the offset in `__hlasm_ss_at`, the bound and step constants set before the loop |
 | `interpreter/hlasm/boolean_connective.py` | A bitwise connective: the binop and whether the right operand or the result is complemented; the eight connectives |
 | `interpreter/hlasm/abend_completion.py` | SVC 13 in IR |
 | `interpreter/hlasm/statement_location.py` | Each statement's source line, set on the IR it lowers to |
@@ -248,7 +248,10 @@ complement), OCRK, OCGRK (OR with complement), NNRK, NNGRK (NAND), NORK (NOTR), 
   32-63) and replace only that field. The CC reflects that field alone.
 - NC, OC and XC run one IR loop over the L bytes, left to right, storing each result byte
   before the next is fetched, so overlapping operands follow the Principles of Operation
-  (`XC A,A` clears; `OC A+1(n),A` propagates the first byte). The loop is not unrolled.
+  (`XC A,A` clears; `OC A+1(n),A` propagates the first byte). The loop is not unrolled;
+  each byte is fetched, combined, stored and OR-ed into `__hlasm_ss_any`, and the CC is set
+  once after the loop. The bridge passes L as written; an explicit 0 runs one byte, as the
+  assembled length code 0 does.
 - z390 leaves the CC unchanged for NIHF, NILF, OIHF, OILF, XIHF and XILF, sets it from the
   whole 32-bit word for the halfword forms, sign-extends the byte in XI (a zero result with
   both bytes over `X'7F'` sets CC 1), and runs OC in 8-, 4-, 2- and 1-byte pieces, so overlap
@@ -319,7 +322,6 @@ BRXLG (JXLEG). None changes the CC. BRCTH belongs to the high-word unit.
   whatever mode it selects.
 - Access registers are not modelled: LAE and LAEY set only the general register.
 - In AMODE 31, LM, STM, LMD, NC, OC and XC do not wrap EA + offset at 2 GiB.
-- NC, OC and XC take the length as written; an explicit length of 0, which HLASM assembles as one byte, is not handled.
 - ICM and CLM with mask 0 raise no access exception for their operand.
 - Section bases are doubleword aligned only by allocation order. The VM's bump allocator
   starts at 4096 and does not align, so the GPR region (128 bytes) comes first and each
@@ -349,7 +351,7 @@ BRXLG (JXLEG). None changes the CC. BRCTH belongs to the high-word unit.
 | `tests/unit/hlasm/test_compare_lowering.py` | Compare IR: operand widths read, nothing written, only the CC set, relative-long alignment |
 | `tests/integration/hlasm/test_compare.py` | Every compare mnemonic on the VM: CC, operands unchanged, alignment abends |
 | `tests/unit/hlasm/test_boolean_lowering.py` | Boolean IR: operand widths, the field read and replaced, the CC; NC/OC/XC as one byte loop of fixed size |
-| `tests/integration/hlasm/test_boolean.py` | Every boolean mnemonic, NOTR and NOTGR on the VM: result, CC 0 and 1, field CCs, overlapping storage operands |
+| `tests/integration/hlasm/test_boolean.py` | Every boolean mnemonic, NOTR and NOTGR on the VM: result, CC 0 and 1, field CCs, overlapping storage operands, implicit and explicit-0 lengths |
 | `tests/unit/hlasm/test_branch_on_condition_lowering.py` | Branch on condition IR: the CC mask test, each form's target, the forms that lower to nothing |
 | `tests/integration/hlasm/test_branch_extended_mnemonics.py` | Every branch on condition extended spelling reaches its base mnemonic and mask through the bridge; JCT, JCTG, the JX spellings, JAS and JASL reach theirs with R1 |
 | `tests/integration/hlasm/test_branch_on_condition.py` | Every branch on condition mnemonic and a spread of extended mnemonics on the VM: path taken, CC unchanged, branches into data abend `S0C1` |
@@ -368,7 +370,7 @@ BRXLG (JXLEG). None changes the CC. BRCTH belongs to the high-word unit.
 | `tests/z390/test_load_address_immediate_differential.py` | Address and immediate families against z390; the LAE `S0C5` and LXA `S0C1` differences (`-m z390`) |
 | `tests/z390/test_signed_add_subtract_differential.py` | Every signed add and subtract mnemonic against z390 (`-m z390`) |
 | `tests/z390/test_logical_add_subtract_differential.py` | Every logical add and subtract mnemonic against z390; six z390 CC differences pinned (`-m z390`) |
-| `tests/z390/test_boolean_differential.py` | Every boolean mnemonic, NOTR and NOTGR against z390; nine z390 differences (field CCs, XI, OC overlap) pinned (`-m z390`) |
+| `tests/z390/test_boolean_differential.py` | Every boolean mnemonic, NOTR and NOTGR against z390; eleven z390 differences (field CCs, XI, OC overlap) pinned (`-m z390`) |
 | `tests/z390/test_compare_differential.py` | Every compare mnemonic against z390; the relative-long alignment difference pinned (`-m z390`) |
 | `tests/z390/test_branch_on_condition_differential.py` | Every branch on condition case against z390; the BIC, BPP and BPRP differences and branches into data pinned (`-m z390`) |
 | `tests/z390/test_branch_and_link_differential.py` | Every branch and link case and the mode-setting returns against z390; z390's AMODE 24 and 64 switches pinned (`-m z390`) |

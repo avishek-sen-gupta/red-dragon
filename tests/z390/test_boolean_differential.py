@@ -20,6 +20,8 @@ ABENDED = HlasmRun(return_code=0, abend="U0001", stdout="")
 
 Z390_MACHINE: Mapping[str, tuple[int, Mapping[int, int]]] = {
     "NIHF": (0, programs.CASES["NIHF"][1]),
+    "NILF": (1, programs.CASES["NILF"][1]),
+    "XIHF": (1, programs.CASES["XIHF"][1]),
     "OIHF": (0, programs.CASES["OIHF"][1]),
     "OILF": (0, programs.CASES["OILF"][1]),
     "XILF": (0, programs.CASES["XILF"][1]),

@@ -33,6 +33,7 @@ BASE = 12
 GPRS = "__hlasm_gprs"
 CC = "__hlasm_cc"
 AT = "__hlasm_ss_at"
+ANY = "__hlasm_ss_any"
 
 
 def _statement(mnemonic: str, operands: Sequence[Operand]) -> MachineStatement:
@@ -163,8 +164,9 @@ def test_each_form_reads_and_writes_its_operand_widths_then_sets_cc():
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_storage_to_storage_forms_are_one_byte_loop_whatever_the_length():
+def test_storage_to_storage_forms_are_one_byte_loop_of_at_least_one_byte():
     short = _lowered(_statement("NC", (_with_length(8, 1), _storage(40))))
+    explicit_zero = _lowered(_statement("OC", (_with_length(8, 0), _storage(40))))
     longest = _lowered(_statement("XC", (_with_length(8, 256), _storage(40))))
 
     assert (len(short), _accesses(longest), _control(longest)) == (
@@ -177,16 +179,21 @@ def test_storage_to_storage_forms_are_one_byte_loop_whatever_the_length():
             ("WriteRegion", "storage", 1, 0),
         ],
         [
-            f"StoreVar:{CC}",
+            f"StoreVar:{ANY}",
             f"StoreVar:{AT}",
             "Label_",
             "BranchIf",
             "Label_",
-            f"StoreVar:{CC}",
+            f"StoreVar:{ANY}",
             f"StoreVar:{AT}",
             "Branch",
             "Label_",
+            f"StoreVar:{CC}",
         ],
     )
-    assert (_bounds(short), _bounds(longest)) == ([1], [256])
+    assert (_bounds(short), _bounds(explicit_zero), _bounds(longest)) == (
+        [1],
+        [1],
+        [256],
+    )
     assert [i for i in longest if isinstance(i, Symbolic)] == []

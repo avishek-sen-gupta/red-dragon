@@ -74,6 +74,7 @@ WTO_LENGTH_BYTES = 2
 WTO_TEXT_VAR = VarName("__hlasm_wto_text")
 WTO_AT_VAR = VarName("__hlasm_wto_at")
 BYTE_LOOP_AT_VAR = VarName("__hlasm_ss_at")
+BYTES_COMBINED_VAR = VarName("__hlasm_ss_any")
 
 RETURN_SENTINEL = 0x00000FF0
 ADDRESS_MASK_31 = 0x7FFFFFFF
