@@ -1,5 +1,5 @@
 # pyright: standard
-"""Shift and rotate programs leave the same declared registers and CC in RedDragon and in z390, bar z390's known SLL, RISBGN and shift-logical-high errors."""
+"""Shift and rotate programs leave the same declared registers and CC in RedDragon and in z390, bar z390's known 32-bit shift, RISBGN and shift-logical-high errors."""
 
 from collections.abc import Mapping
 from pathlib import Path
@@ -24,6 +24,18 @@ OPERATION = HlasmRun(return_code=0, abend="S0C1", stdout="")
 Z390_MACHINE: Mapping[str, HlasmMachine] = {
     "SLL amount 33 from a base register": HlasmMachine(
         ABENDED, programs.CC_KEPT, {2: storage.HIGH_FILL | 0x00000002}
+    ),
+    "SRL amount 33": HlasmMachine(
+        ABENDED, programs.CC_KEPT, {2: storage.HIGH_FILL | 0x40000000}
+    ),
+    "SRLK amount 32": HlasmMachine(
+        ABENDED, programs.CC_KEPT, {5: storage.HIGH_FILL | 0x80000001}
+    ),
+    "SLLK amount 40": HlasmMachine(
+        ABENDED, programs.CC_KEPT, {5: storage.HIGH_FILL | 0xFF7FFE00}
+    ),
+    "SRA amount 40": HlasmMachine(
+        ABENDED, programs.CC_NEGATIVE, {2: storage.HIGH_FILL | 0xFF800000}
     ),
     "RISBGN": HlasmMachine(OPERATION, programs.CC_KEPT, {5: storage.FILL}),
     "RISBGNZ": HlasmMachine(OPERATION, programs.CC_KEPT, {5: storage.FILL}),

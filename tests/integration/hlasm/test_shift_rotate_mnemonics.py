@@ -7,24 +7,22 @@ from pathlib import Path
 from hlasm_asg.program.imm_operand import ImmOperand
 from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.frontends import get_hlasm_parser
+from interpreter.hlasm.opcodes.shift_rotate import CONTROL_BIT
 from tests.covers import NotLanguageFeature, covers
-
-ZERO_REMAINING = 0x80
-TEST_RESULTS = 0x80
 
 SPELLINGS: Mapping[str, tuple[str, str, tuple[int, ...]]] = {
     "LHHR": ("5,3", "RISBHG", (0, 31)),
-    "LLCHLR": ("5,3", "RISBHG", (24, ZERO_REMAINING | 31, 32)),
+    "LLCHLR": ("5,3", "RISBHG", (24, CONTROL_BIT | 31, 32)),
     "LLHFR": ("5,3", "RISBLG", (0, 31, 32)),
-    "SLLHH": ("5,3,4", "RISBHG", (0, ZERO_REMAINING | 27, 4)),
-    "SRLHH": ("5,3,4", "RISBHG", (4, ZERO_REMAINING | 31, 60)),
-    "SRLLH": ("5,3,4", "RISBLG", (4, ZERO_REMAINING | 31, 28)),
+    "SLLHH": ("5,3,4", "RISBHG", (0, CONTROL_BIT | 27, 4)),
+    "SRLHH": ("5,3,4", "RISBHG", (4, CONTROL_BIT | 31, 60)),
+    "SRLLH": ("5,3,4", "RISBLG", (4, CONTROL_BIT | 31, 28)),
     "NHHR": ("5,3", "RNSBG", (0, 31)),
     "OLHR": ("5,3", "ROSBG", (32, 63, 32)),
     "XHLR": ("5,3", "RXSBG", (0, 31, 32)),
-    "RNSBGT": ("5,3,40,43", "RNSBG", (TEST_RESULTS | 40, 43)),
-    "RISBGZ": ("5,3,40,43,4", "RISBG", (40, ZERO_REMAINING | 43, 4)),
-    "RISBGNZ": ("5,3,40,43", "RISBGN", (40, ZERO_REMAINING | 43)),
+    "RNSBGT": ("5,3,40,43", "RNSBG", (CONTROL_BIT | 40, 43)),
+    "RISBGZ": ("5,3,40,43,4", "RISBG", (40, CONTROL_BIT | 43, 4)),
+    "RISBGNZ": ("5,3,40,43", "RISBGN", (40, CONTROL_BIT | 43)),
 }
 
 

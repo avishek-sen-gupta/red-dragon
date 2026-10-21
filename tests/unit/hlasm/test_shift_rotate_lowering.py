@@ -11,6 +11,7 @@ from hlasm_asg.program.reg_operand import RegOperand
 from hlasm_asg.program.storage_operand import StorageOperand
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.opcodes import OPCODE_LOWERINGS
+from interpreter.hlasm.opcodes.shift_rotate import CONTROL_BIT
 from interpreter.hlasm.register_span import HIGH_WORD, LOW_WORD, WHOLE_REGISTER
 from interpreter.instructions import (
     BranchIf,
@@ -29,8 +30,6 @@ BASE = 12
 GPRS = "__hlasm_gprs"
 CC = "StoreVar:__hlasm_cc"
 OVERFLOW_TRAP = [CC, "BranchIf", "StoreVar:__hlasm_abend", "Halt_"]
-ZERO_REMAINING = 0x80
-TEST_RESULTS = 0x80
 
 
 def _statement(mnemonic: str, operands: Sequence[Operand]) -> MachineStatement:
@@ -166,10 +165,10 @@ def test_an_odd_first_register_of_a_double_shift_is_a_specification_exception():
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_register_spans_select_a_wrapping_range_of_bit_positions():
     assert [
-        WHOLE_REGISTER.selected(40, ZERO_REMAINING | 43),
-        WHOLE_REGISTER.selected(TEST_RESULTS | 62, 1),
+        WHOLE_REGISTER.selected(40, CONTROL_BIT | 43),
+        WHOLE_REGISTER.selected(CONTROL_BIT | 62, 1),
         WHOLE_REGISTER.selected(0, 63),
-        HIGH_WORD.selected(24, ZERO_REMAINING | 7),
+        HIGH_WORD.selected(24, CONTROL_BIT | 7),
         LOW_WORD.selected(8, 11),
         LOW_WORD.selected(31, 0),
     ] == [
@@ -194,15 +193,13 @@ def test_rotate_selected_bits_forms_write_r1_unless_testing_and_set_cc_as_define
             _statement("RISBG", (_reg(5), _reg(3), _imm(40), _imm(43), _imm(4)))
         ),
         "RISBGN": _lowered(
-            _statement(
-                "RISBGN", (_reg(5), _reg(3), _imm(40), _imm(ZERO_REMAINING | 43))
-            )
+            _statement("RISBGN", (_reg(5), _reg(3), _imm(40), _imm(CONTROL_BIT | 43)))
         ),
         "RISBHG": _lowered(
             _statement("RISBHG", (_reg(5), _reg(3), _imm(0), _imm(31), _imm(32)))
         ),
         "RNSBG test": _lowered(
-            _statement("RNSBG", (_reg(5), _reg(3), _imm(TEST_RESULTS | 40), _imm(43)))
+            _statement("RNSBG", (_reg(5), _reg(3), _imm(CONTROL_BIT | 40), _imm(43)))
         ),
         "ROSBG": _lowered(
             _statement("ROSBG", (_reg(5), _reg(3), _imm(62), _imm(1), _imm(-4)))
