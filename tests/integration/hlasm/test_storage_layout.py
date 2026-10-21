@@ -90,7 +90,7 @@ def test_address_constant_holds_runtime_address(tmp_path: Path):
 
 
 @pytest.mark.xfail(
-    reason="V-type constants hold zero until the linkage unit resolves them — red-dragon-6uyp.15",
+    reason="V-type constants hold zero until the linkage unit resolves them — red-dragon-6uyp.8",
     strict=True,
 )
 @covers(NotLanguageFeature.INFRASTRUCTURE)
