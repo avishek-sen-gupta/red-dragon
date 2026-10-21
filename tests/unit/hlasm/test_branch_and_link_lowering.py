@@ -138,7 +138,14 @@ LINK_R5 = [
 ]
 DISPATCH = ["StoreVar __hlasm_target reg", "Branch hl_dispatch"]
 ABEND_S0C1 = ["StoreVar __hlasm_abend S0C1", "Halt_"]
-MODE_TEST = ["& 2147483649", "== 2147483648", "BranchIf"]
+MODE_TEST = [
+    "& 2147483647",
+    "== 4080",
+    "BranchIf",
+    "& 2147483649",
+    "== 2147483648",
+    "BranchIf",
+]
 SET_MODE_BIT_R5 = [
     GPRS,
     "LoadRegion 44+4",

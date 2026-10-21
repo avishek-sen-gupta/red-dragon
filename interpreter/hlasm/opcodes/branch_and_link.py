@@ -8,14 +8,17 @@ from interpreter.hlasm.abend import emit_abend
 from interpreter.hlasm.branch_dispatch import emit_branch
 from interpreter.hlasm.data_movement import relative_target, storage_address
 from interpreter.hlasm.hlasm_constants import (
+    ADDRESS_MASK_31,
     AMODE_31_LINK_BIT,
     OPERATION_EXCEPTION_ABEND,
+    RETURN_SENTINEL,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.operands import reg_operand
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.hlasm.storage_layout import section_var
 from interpreter.instructions import BranchIf, Label_
+from interpreter.ir import CodeLabel
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
 
@@ -56,13 +59,30 @@ def _insert_mode_bit(emitter: HlasmEmitter, statement: MachineStatement) -> None
     emitter.store_gr32(r1, marked)
 
 
-def _set_mode_and_branch(emitter: HlasmEmitter, target: Register) -> None:
+def _returning(emitter: HlasmEmitter, target: Register) -> Register:
+    address = emitter.binop(BinopKind.BIT_AND, target, emitter.int_(ADDRESS_MASK_31))
+    return emitter.binop(BinopKind.EQ, address, emitter.int_(RETURN_SENTINEL))
+
+
+def _stays_in_amode_31(emitter: HlasmEmitter, target: Register) -> Register:
     mode = emitter.binop(BinopKind.BIT_AND, target, emitter.int_(MODE_BITS))
-    stays = emitter.binop(BinopKind.EQ, mode, emitter.int_(AMODE_31_LINK_BIT))
+    return emitter.binop(BinopKind.EQ, mode, emitter.int_(AMODE_31_LINK_BIT))
+
+
+def _branch_when(
+    emitter: HlasmEmitter, condition: Register, taken: CodeLabel, prefix: str
+) -> None:
+    fall = emitter.fresh_label(prefix)
+    emitter.emit_inst(BranchIf(cond_reg=condition, branch_targets=(taken, fall)))
+    emitter.emit_inst(Label_(label=fall))
+
+
+def _set_mode_and_branch(emitter: HlasmEmitter, target: Register) -> None:
     amode_31 = emitter.fresh_label("hl_amode_31")
-    other_mode = emitter.fresh_label("hl_amode_other")
-    emitter.emit_inst(BranchIf(cond_reg=stays, branch_targets=(amode_31, other_mode)))
-    emitter.emit_inst(Label_(label=other_mode))
+    _branch_when(emitter, _returning(emitter, target), amode_31, "hl_amode_test")
+    _branch_when(
+        emitter, _stays_in_amode_31(emitter, target), amode_31, "hl_amode_other"
+    )
     emit_abend(emitter, OPERATION_EXCEPTION_ABEND)
     emitter.emit_inst(Label_(label=amode_31))
     emit_branch(emitter, target)
