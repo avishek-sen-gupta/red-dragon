@@ -139,7 +139,24 @@ def test_instruction_table_lists_lr_lpsw_and_be() -> None:
         format="RX-b",
         privileged="not_privileged",
         arch="UNI_ESA_XA_370_DOS_SINCE_ZOP",
-        operands=rows["BC"].operands,
+        operands=(
+            Operand(
+                kind="MASK",
+                bits=4,
+                signed=False,
+                first=NO_PARAMETER,
+                second=NO_PARAMETER,
+                optional=False,
+            ),
+            Operand(
+                kind="DISP",
+                bits=12,
+                signed=False,
+                first=Parameter(kind="IDX_REG", bits=4, signed=False),
+                second=Parameter(kind="BASE", bits=4, signed=False),
+                optional=False,
+            ),
+        ),
         base="BC",
         transforms=(Transform(kind="value", skip=0, value=8, source=0, insert=True),),
     )
