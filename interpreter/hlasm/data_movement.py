@@ -28,6 +28,7 @@ LOW_WORD_MASK = 0xFFFFFFFF
 REGISTER_MASK = 0xFFFFFFFF_FFFFFFFF
 REGISTER_OPERAND = 0
 SECOND_OPERAND = 1
+ALIGNED_RELATIVE_WIDTHS = frozenset({4, 8})
 
 
 def _ones(width: int) -> int:
@@ -81,8 +82,14 @@ def from_aligned_storage(width: int) -> Source:
     return _load_from(_aligned(storage_address, width), width)
 
 
+def _relative(width: int) -> Callable[[HlasmEmitter, MachineStatement], Register]:
+    if width in ALIGNED_RELATIVE_WIDTHS:
+        return _aligned(relative_target, width)
+    return relative_target
+
+
 def from_relative(width: int) -> Source:
-    return _load_from(_aligned(relative_target, width), width)
+    return _load_from(_relative(width), width)
 
 
 def to_storage(width: int) -> Sink:
@@ -90,7 +97,7 @@ def to_storage(width: int) -> Sink:
 
 
 def to_relative(width: int) -> Sink:
-    return _store_to(_aligned(relative_target, width), width)
+    return _store_to(_relative(width), width)
 
 
 def immediate(bits: int) -> Source:

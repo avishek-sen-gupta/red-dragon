@@ -48,7 +48,7 @@ addresses.
 | `hlasm_asg/program/` | The bridge JSON models, one class per file |
 | `interpreter/hlasm/hlasm_frontend.py` | `HlasmFrontend(program)`: `lower()`, `start_up_ir()`, `entry_name`, `entry_label` |
 | `interpreter/hlasm/machine.py` | GPR region (`__hlasm_gprs`, 8 bytes per register), `__hlasm_cc`, `__hlasm_pm` |
-| `interpreter/hlasm/storage_layout.py` | One region per section (`__hlasm_sect_<NAME>`), sized up to a doubleword multiple so section bases stay doubleword aligned, and its DC images; DC registers carry a per-piece index |
+| `interpreter/hlasm/storage_layout.py` | One region per section (`__hlasm_sect_<NAME>`) and its DC images; DC registers carry a per-piece index. Section bases are doubleword aligned: regions are allocated in order from address 4096, the 128-byte GPR region first, and each section is sized up to a doubleword multiple |
 | `interpreter/hlasm/dc_encoding.py` | DC images: C, X, B, F, H, P, Z, A, Y |
 | `interpreter/hlasm/entry_state.py` | Entry resolution and entry registers (R14 = `0xFF0` return sentinel, R13 = 72-byte save area, R15 = entry address) |
 | `interpreter/hlasm/branch_dispatch.py` | `hl_dispatch`: maps a branch address to a statement label; a miss abends `S0C1` |
@@ -193,6 +193,8 @@ LLIHF, LLIHH, LLIHL, LLILF (LLGFI), LLILH, LLILL (LLGHI); IIHF, IIHH, IIHL, IILF
 - Machine-instruction bytes are not in section storage (a spec non-goal: self-modifying code), so `EX` targets and `CLC` against code do not see them.
 - Bridge gaps: `*` in a later DC operand takes the statement address (red-dragon-6uyp.65); bit-length data reports byte length (red-dragon-6uyp.66); S-type constants are not USING-resolved (red-dragon-6uyp.67); complex-relocatable constants refuse the assembly (red-dragon-6uyp.68).
 - Access registers are not modelled: LAE and LAEY set only the general register.
+- In AMODE 31, LM, STM and LMD do not wrap EA + offset at 2 GiB.
+- ICM with mask 0 raises no access exception for its operand.
 - `ABEND` takes only a self-defining code of 0-4095. Register notation (`ABEND (R2)`) and larger codes are not supported.
 
 ## Test Coverage

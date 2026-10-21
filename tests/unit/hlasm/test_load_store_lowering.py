@@ -102,18 +102,21 @@ def test_load_reads_the_base_then_a_storage_word_into_the_low_word():
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_relative_long_doubleword_load_checks_alignment_before_loading():
-    ir = _lowered(
-        _statement(
-            "LGRL", (_reg(3), RelocImmOperand(kind="RELOC_IMM", section="T", offset=16))
-        )
-    )
+def test_relative_long_loads_check_alignment_only_for_words_and_doublewords():
+    target = RelocImmOperand(kind="RELOC_IMM", section="T", offset=16)
+    ir = _lowered(_statement("LGRL", (_reg(3), target)))
+    halfword = _lowered(_statement("LHRL", (_reg(3), target)))
 
     assert _accesses(ir) == [
         ("LoadRegion", "storage", 8, 0),
         ("WriteRegion", "gpr", 8, 8 * 3),
     ]
     assert _control(ir) == ["BranchIf", "StoreVar:__hlasm_abend", "Halt_"]
+    assert _accesses(halfword) == [
+        ("LoadRegion", "storage", 2, 0),
+        ("WriteRegion", "gpr", 4, 8 * 3 + 4),
+    ]
+    assert _control(halfword) == []
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
