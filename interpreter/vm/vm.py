@@ -402,8 +402,6 @@ class Operators:
 
     UNCOMPUTABLE = _Uncomputable()
 
-    UNSIGNED_SHIFT_MODULUS = 2**64
-
     BINOP_TABLE: dict[str, Callable[..., Any]] = (
         {  # Any: operator dispatch — heterogeneous runtime values
             "+": lambda a, b: a + b,
@@ -437,7 +435,6 @@ class Operators:
             "~": lambda a, b: a ^ b,  # Lua bitwise XOR
             "<<": lambda a, b: a << b,
             ">>": lambda a, b: a >> b,
-            ">>>": lambda a, b: (a % Operators.UNSIGNED_SHIFT_MODULUS) >> b,
             "..": lambda a, b: str(a) + str(b),
             ".": lambda a, b: str(a) + str(b),
             "===": lambda a, b: a == b,
