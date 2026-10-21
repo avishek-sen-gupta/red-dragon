@@ -6,6 +6,7 @@ from collections.abc import Callable, Mapping
 from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.hlasm.branch_dispatch import emit_branch
 from interpreter.hlasm.data_movement import (
+    from_gr32,
     from_storage,
     relative_target,
     storage_address,
@@ -75,11 +76,7 @@ def _on_condition(target: Target) -> StatementLowering:
     return lower
 
 
-def _register_target(emitter: HlasmEmitter, statement: MachineStatement) -> Register:
-    return emitter.load_gr32(reg_operand(statement, 1))
-
-
-_bcr_on_condition = _on_condition(_register_target)
+_bcr_on_condition = _on_condition(from_gr32(1))
 
 
 def lower_bcr(emitter: HlasmEmitter, statement: MachineStatement) -> None:

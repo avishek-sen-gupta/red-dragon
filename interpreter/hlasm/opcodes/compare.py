@@ -9,12 +9,11 @@ from interpreter.hlasm.data_movement import (
     from_gr32,
     from_gr64,
     from_relative,
-    from_storage,
+    from_storage_at,
     immediate,
     sign_extended,
-    signed_immediate,
+    storage_address_at,
 )
-from interpreter.hlasm.effective_address import effective_address
 from interpreter.hlasm.fixed_width_ir import (
     build_compare_logical_cc_ir,
     build_compare_signed_cc_ir,
@@ -25,6 +24,7 @@ from interpreter.hlasm.hlasm_constants import (
     DOUBLEWORD_BYTES,
     HALFWORD_BITS,
     HALFWORD_BYTES,
+    ONE_BYTE,
     PARAM_LEFT,
     PARAM_RIGHT,
     WORD_BITS,
@@ -36,14 +36,22 @@ from interpreter.hlasm.opcodes.load_store import (
     register_bytes_under_mask,
     selected_positions,
 )
-from interpreter.hlasm.operands import mask_operand, reg_operand, storage_operand
+from interpreter.hlasm.opcodes.operand_sources import (
+    DOUBLEWORD_STORAGE,
+    HALFWORD_IMMEDIATE,
+    LOGICAL_WORD_IMMEDIATE,
+    SIGNED_HALFWORD_STORAGE,
+    SIGNED_LOW_WORD,
+    SIGNED_WORD_STORAGE,
+    WORD_IMMEDIATE,
+    WORD_STORAGE,
+)
+from interpreter.hlasm.operands import mask_operand, reg_operand
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.instructions import InstructionBase
-from interpreter.register import Register
 
 type Comparison = Sequence[InstructionBase]
 
-BYTE = 1
 FIRST_OPERAND = 0
 MASK_OPERAND = 1
 MASKED_STORAGE_OPERAND = 2
@@ -70,11 +78,7 @@ def compare(comparison: Comparison, left: Source, right: Source) -> StatementLow
 
 
 def from_first_storage(width: int) -> Source:
-    def load(emitter: HlasmEmitter, statement: MachineStatement) -> Register:
-        address = effective_address(emitter, storage_operand(statement, FIRST_OPERAND))
-        return emitter.load_storage(address, 0, width)
-
-    return load
+    return from_storage_at(FIRST_OPERAND, width)
 
 
 def lower_compare_under_mask(
@@ -87,27 +91,17 @@ def lower_compare_under_mask(
     field = register_bytes_under_mask(
         emitter, reg_operand(statement, FIRST_OPERAND), positions
     )
-    address = effective_address(
-        emitter, storage_operand(statement, MASKED_STORAGE_OPERAND)
-    )
+    address = storage_address_at(MASKED_STORAGE_OPERAND)(emitter, statement)
     stored = emitter.load_storage(address, 0, len(positions))
     emitter.set_cc(
         inline_ir(emitter, LOGICAL_32, {PARAM_LEFT: field, PARAM_RIGHT: stored})
     )
 
 
-WORD_STORAGE = from_storage(WORD_BYTES)
-DOUBLEWORD_STORAGE = from_storage(DOUBLEWORD_BYTES)
-SIGNED_HALFWORD_STORAGE = sign_extended(from_storage(HALFWORD_BYTES), HALFWORD_BITS)
-SIGNED_WORD_STORAGE = sign_extended(from_storage(WORD_BYTES), WORD_BITS)
-SIGNED_LOW_WORD = sign_extended(from_gr32(1), WORD_BITS)
 SIGNED_HALFWORD_RELATIVE = sign_extended(from_relative(HALFWORD_BYTES), HALFWORD_BITS)
 SIGNED_WORD_RELATIVE = sign_extended(from_relative(WORD_BYTES), WORD_BITS)
-HALFWORD_IMMEDIATE = signed_immediate(1, HALFWORD_BITS)
-WORD_IMMEDIATE = signed_immediate(1, WORD_BITS)
 LOGICAL_BYTE_IMMEDIATE = immediate(BITS_PER_BYTE)
 LOGICAL_HALFWORD_IMMEDIATE = immediate(HALFWORD_BITS)
-LOGICAL_WORD_IMMEDIATE = immediate(WORD_BITS)
 
 SIGNED_COMPARES: Mapping[str, StatementLowering] = {
     "C": compare(SIGNED_32, from_gr32(0), WORD_STORAGE),
@@ -149,8 +143,8 @@ LOGICAL_COMPARES: Mapping[str, StatementLowering] = {
     "CLHHSI": compare(
         LOGICAL_16, from_first_storage(HALFWORD_BYTES), LOGICAL_HALFWORD_IMMEDIATE
     ),
-    "CLI": compare(LOGICAL_8, from_first_storage(BYTE), LOGICAL_BYTE_IMMEDIATE),
-    "CLIY": compare(LOGICAL_8, from_first_storage(BYTE), LOGICAL_BYTE_IMMEDIATE),
+    "CLI": compare(LOGICAL_8, from_first_storage(ONE_BYTE), LOGICAL_BYTE_IMMEDIATE),
+    "CLIY": compare(LOGICAL_8, from_first_storage(ONE_BYTE), LOGICAL_BYTE_IMMEDIATE),
     "CLG": compare(LOGICAL_64, from_gr64(0), DOUBLEWORD_STORAGE),
     "CLGR": compare(LOGICAL_64, from_gr64(0), from_gr64(1)),
     "CLGRL": compare(LOGICAL_64, from_gr64(0), from_relative(DOUBLEWORD_BYTES)),
