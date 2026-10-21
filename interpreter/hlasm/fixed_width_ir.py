@@ -1,5 +1,5 @@
 # pyright: standard
-"""IR builders for fixed-width two's-complement arithmetic, bitwise connectives and their condition codes."""
+"""IR builders for fixed-width two's-complement arithmetic, bitwise connectives, shifts and rotates, and their condition codes."""
 
 from interpreter.hlasm.boolean_connective import BooleanConnective
 from interpreter.hlasm.hlasm_constants import (
@@ -21,6 +21,8 @@ from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
 
 type Fragment = tuple[Register, tuple[InstructionBase, ...]]
+
+MAXIMUM_SHIFT_BITS = 64
 
 
 def _reg(prefix: str, role: str) -> Register:
@@ -288,3 +290,101 @@ def build_boolean_cc_ir(
         *pair_ir,
         Return_(value_reg=pair),
     ]
+
+
+def _value_ir(value: Fragment) -> list[InstructionBase]:
+    result, result_ir = value
+    return [*result_ir, Return_(value_reg=result)]
+
+
+def _shifted_left(prefix: str, value: Register, bits: int) -> Fragment:
+    moved, moved_ir = _binop(prefix, "moved", BinopKind.LSHIFT, value, PARAM_RIGHT)
+    result, result_ir = _wrap(prefix, moved, bits)
+    return result, (*moved_ir, *result_ir)
+
+
+def build_shift_left_logical_ir(func_name: str, bits: int) -> list[InstructionBase]:
+    value, value_ir = _wrap(f"{func_name}.l", PARAM_LEFT, bits)
+    result, result_ir = _shifted_left(func_name, value, bits)
+    return _value_ir((result, (*value_ir, *result_ir)))
+
+
+def build_shift_right_logical_ir(func_name: str, bits: int) -> list[InstructionBase]:
+    value, value_ir = _wrap(f"{func_name}.l", PARAM_LEFT, bits)
+    result, result_ir = _binop(func_name, "moved", BinopKind.RSHIFT, value, PARAM_RIGHT)
+    return _value_ir((result, (*value_ir, *result_ir)))
+
+
+def build_rotate_left_ir(func_name: str, bits: int) -> list[InstructionBase]:
+    value, value_ir = _wrap(f"{func_name}.l", PARAM_LEFT, bits)
+    count, count_ir = _binop_const(func_name, "count", BinopKind.MOD, PARAM_RIGHT, bits)
+    width, width_ir = _const(func_name, "width", bits)
+    back, back_ir = _binop(func_name, "back", BinopKind.SUB, width, count)
+    up, up_ir = _binop(func_name, "up", BinopKind.LSHIFT, value, count)
+    down, down_ir = _binop(func_name, "down", BinopKind.RSHIFT, value, back)
+    joined, joined_ir = _binop(func_name, "joined", BinopKind.BIT_OR, up, down)
+    result, result_ir = _wrap(f"{func_name}.s", joined, bits)
+    return _value_ir(
+        (
+            result,
+            (
+                *value_ir,
+                *count_ir,
+                *width_ir,
+                *back_ir,
+                *up_ir,
+                *down_ir,
+                *joined_ir,
+                *result_ir,
+            ),
+        ),
+    )
+
+
+def _with_cc(func_name: str, result: Fragment, cc: Fragment) -> list[InstructionBase]:
+    (value, value_ir), (code, code_ir) = result, cc
+    pair, pair_ir = _pair(func_name, value, code)
+    return [*value_ir, *code_ir, *pair_ir, Return_(value_reg=pair)]
+
+
+def _sign_kept_shift(prefix: str, image: Register, bits: int) -> Fragment:
+    sign, sign_ir = _binop_const(
+        prefix, "sign_kept", BinopKind.BIT_AND, image, 1 << (bits - 1)
+    )
+    moved, moved_ir = _binop(prefix, "moved", BinopKind.LSHIFT, image, PARAM_RIGHT)
+    numeric, numeric_ir = _binop_const(
+        prefix, "numeric", BinopKind.BIT_AND, moved, (1 << (bits - 1)) - 1
+    )
+    result, result_ir = _binop(prefix, "result", BinopKind.BIT_OR, sign, numeric)
+    return result, (*sign_ir, *moved_ir, *numeric_ir, *result_ir)
+
+
+def _shifted_out_unlike_sign(prefix: str, image: Register, bits: int) -> Fragment:
+    signed, signed_ir = _to_signed(f"{prefix}.v", image, bits)
+    exact, exact_ir = _binop(prefix, "exact", BinopKind.LSHIFT, signed, PARAM_RIGHT)
+    fitted, fitted_ir = _to_signed(f"{prefix}.f", exact, bits)
+    lost, lost_ir = _binop(prefix, "lost", BinopKind.SUB, exact, fitted)
+    overflow, overflow_ir = _nonzero_bit(f"{prefix}.o", lost, bits + MAXIMUM_SHIFT_BITS)
+    return overflow, (*signed_ir, *exact_ir, *fitted_ir, *lost_ir, *overflow_ir)
+
+
+def build_shift_left_signed_cc_ir(func_name: str, bits: int) -> list[InstructionBase]:
+    image, image_ir = _wrap(f"{func_name}.l", PARAM_LEFT, bits)
+    result, result_ir = _sign_kept_shift(func_name, image, bits)
+    overflow, overflow_ir = _shifted_out_unlike_sign(func_name, image, bits)
+    cc, cc_ir = _signed_cc(func_name, result, overflow, bits)
+    return _with_cc(
+        func_name,
+        (result, (*image_ir, *result_ir)),
+        (cc, (*overflow_ir, *cc_ir)),
+    )
+
+
+def build_shift_right_signed_cc_ir(func_name: str, bits: int) -> list[InstructionBase]:
+    signed, signed_ir = _to_signed(f"{func_name}.l", PARAM_LEFT, bits)
+    moved, moved_ir = _binop(func_name, "moved", BinopKind.RSHIFT, signed, PARAM_RIGHT)
+    result, result_ir = _wrap(f"{func_name}.s", moved, bits)
+    cc, cc_ir = _sign_cc(func_name, result, bits)
+    return _with_cc(
+        func_name, (result, (*signed_ir, *moved_ir, *result_ir)), (cc, cc_ir)
+    )

@@ -56,6 +56,16 @@ def imm_operand(statement: MachineStatement, index: int) -> int:
             raise _mismatch(statement, index, "an immediate")
 
 
+def optional_imm_operand(statement: MachineStatement, index: int, absent: int) -> int:
+    match _at(statement, index):
+        case [ImmOperand(value=value)]:
+            return value
+        case []:
+            return absent
+        case _:
+            raise _mismatch(statement, index, "an immediate or no operand")
+
+
 def storage_operand(statement: MachineStatement, index: int) -> StorageOperand:
     match _at(statement, index):
         case [StorageOperand() as operand]:

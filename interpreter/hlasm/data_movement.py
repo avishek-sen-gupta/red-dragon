@@ -12,6 +12,7 @@ from interpreter.hlasm.hlasm_constants import (
     BYTE_MASK,
     LOW_WORD_MASK,
     REGISTER_MASK,
+    WORD_BITS,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.operands import (
@@ -157,6 +158,24 @@ def to_gr64(
     emitter: HlasmEmitter, statement: MachineStatement, value: Register
 ) -> None:
     emitter.store_gr64(reg_operand(statement, REGISTER_OPERAND), value)
+
+
+def from_even_odd_pair(emitter: HlasmEmitter, statement: MachineStatement) -> Register:
+    r = reg_operand(statement, REGISTER_OPERAND)
+    high = emitter.binop(
+        BinopKind.LSHIFT, emitter.load_gr32(r), emitter.int_(WORD_BITS)
+    )
+    return emitter.binop(BinopKind.BIT_OR, high, emitter.load_gr32(r + 1))
+
+
+def to_even_odd_pair(
+    emitter: HlasmEmitter, statement: MachineStatement, value: Register
+) -> None:
+    r = reg_operand(statement, REGISTER_OPERAND)
+    emitter.store_gr32(
+        r, emitter.binop(BinopKind.RSHIFT, value, emitter.int_(WORD_BITS))
+    )
+    emitter.store_gr32(r + 1, value)
 
 
 def merge_low_word(
