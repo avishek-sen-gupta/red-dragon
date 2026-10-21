@@ -606,7 +606,8 @@ Import-linter enforces eleven contracts:
 | `frontend-independence` | Language frontends must not import each other |
 | `cobol-isolation` | VM, handlers, project and run layers must not import `interpreter.cobol` |
 | `hlasm-isolation` | VM, handlers, project and run layers must not import `interpreter.hlasm` |
-| `cobol-hlasm-independence` | `interpreter.cobol` and `interpreter.hlasm` must not import each other |
+| `hlasm-not-cobol` | `interpreter.hlasm` must not import `interpreter.cobol` directly |
+| `cobol-not-hlasm` | `interpreter.cobol` must not import `interpreter.hlasm` directly |
 
 ## Documentation
 
