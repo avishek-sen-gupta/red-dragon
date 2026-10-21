@@ -20,6 +20,11 @@ from interpreter.hlasm.fixed_width_ir import (
     build_boolean_cc_ir,
     build_compare_logical_cc_ir,
     build_compare_signed_cc_ir,
+    build_rotate_left_ir,
+    build_shift_left_logical_ir,
+    build_shift_left_signed_cc_ir,
+    build_shift_right_logical_ir,
+    build_shift_right_signed_cc_ir,
     build_sign_cc_ir,
     build_sub_logical_borrow_cc_ir,
     build_sub_signed_cc_ir,
@@ -196,3 +201,73 @@ def test_boolean_connectives_set_the_result_and_cc_zero_or_nonzero_at_the_width(
         _pair_of(build_boolean_cc_ir("b8.and", 8, AND), 0xFF, -16),
         _pair_of(build_boolean_cc_ir("b8.or", 8, OR), 0x0F, -16),
     ] == [[doubleword, 1], [doubleword - 1, 1], [0, 0], [0xF0, 1], [0xFF, 1]]
+
+
+def test_logical_shifts_and_rotates_move_every_bit_within_the_width():
+    word = (
+        build_shift_left_logical_ir("sll32", 32),
+        build_shift_right_logical_ir("srl32", 32),
+        build_rotate_left_ir("rll32", 32),
+    )
+    doubleword = (
+        build_shift_left_logical_ir("sll64", 64),
+        build_shift_right_logical_ir("srl64", 64),
+        build_rotate_left_ir("rll64", 64),
+    )
+    assert [
+        [_pair_of(shift, 0x80000001, amount) for amount in (0, 1, 31, 32, 33, 63)]
+        for shift in word
+    ] == [
+        [0x80000001, 0x00000002, 0x80000000, 0, 0, 0],
+        [0x80000001, 0x40000000, 0x00000001, 0, 0, 0],
+        [0x80000001, 0x00000003, 0xC0000000, 0x80000001, 0x00000003, 0xC0000000],
+    ]
+    assert [
+        [_pair_of(shift, 0x80000000_00000001, amount) for amount in (0, 1, 63)]
+        for shift in doubleword
+    ] == [
+        [0x80000000_00000001, 0x00000000_00000002, 0x80000000_00000000],
+        [0x80000000_00000001, 0x40000000_00000000, 0x00000000_00000001],
+        [0x80000000_00000001, 0x00000000_00000003, 0xC0000000_00000000],
+    ]
+
+
+def test_signed_shifts_keep_the_sign_and_set_cc_with_overflow_on_the_left():
+    left_32 = build_shift_left_signed_cc_ir("sla32", 32)
+    right_32 = build_shift_right_signed_cc_ir("sra32", 32)
+    assert [
+        _pair_of(left_32, value, amount)
+        for value, amount in (
+            (0xFFFFFFFD, 2),
+            (5, 3),
+            (0, 40),
+            (0x7FFF7FFE, 1),
+            (1, 33),
+            (0xFFFFFFFF, 31),
+            (0xFFFFFFFF, 32),
+            (0x80000000, 0),
+        )
+    ] == [
+        [0xFFFFFFF4, 1],
+        [40, 2],
+        [0, 0],
+        [0x7FFEFFFC, 3],
+        [0, 3],
+        [0x80000000, 1],
+        [0x80000000, 3],
+        [0x80000000, 1],
+    ]
+    assert [
+        _pair_of(right_32, value, amount)
+        for value, amount in (
+            (0x80000001, 1),
+            (0x7FFF7FFE, 31),
+            (0xFFFFFFFB, 63),
+            (6, 1),
+        )
+    ] == [[0xC0000000, 1], [0, 0], [0xFFFFFFFF, 1], [3, 2]]
+    assert [
+        _pair_of(build_shift_left_signed_cc_ir("sla64", 64), 0x80000000_00000081, 1),
+        _pair_of(build_shift_left_signed_cc_ir("sla64", 64), 0xFFFFFFFF, 1),
+        _pair_of(build_shift_right_signed_cc_ir("sra64", 64), 1 << 63, 63),
+    ] == [[0x80000000_00000102, 3], [0x1_FFFFFFFE, 2], [(1 << 64) - 1, 1]]

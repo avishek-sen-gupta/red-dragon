@@ -12,6 +12,7 @@ from interpreter.hlasm.inline_ir import inline_ir
 from interpreter.hlasm.operands import (
     imm_operand,
     mask_operand,
+    optional_imm_operand,
     reg_operand,
     reloc_operand,
     storage_length_operand,
@@ -62,6 +63,10 @@ def test_accessors_return_matching_operand_values():
     assert reloc_operand(STATEMENT, 4).offset == 20
     assert storage_length_operand(STATEMENT, 5).length == 7
     assert vec_reg_operand(STATEMENT, 6) == 17
+    assert (
+        optional_imm_operand(STATEMENT, 2, 0),
+        optional_imm_operand(STATEMENT, 7, 0),
+    ) == (35, 0)
 
 
 REG = "RegOperand(kind='REG', value=3)"
@@ -92,6 +97,9 @@ def test_mismatched_or_missing_operand_raises_error_naming_the_statement():
         )
         for expected, accessor, wrong, found in ACCESSORS
     ]
+    assert _message(
+        lambda statement, index: optional_imm_operand(statement, index, 0), 0
+    ) == (f"{where} 0: expected an immediate or no operand, found {REG}")
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
