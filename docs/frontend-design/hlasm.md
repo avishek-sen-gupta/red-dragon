@@ -9,7 +9,7 @@ assembly are the che4z language server's, through a forked bridge executable;
 Python lowers what che4z has already resolved. The machine claims z17 problem
 state and stays in AMODE 31. Lowered so far: SVC and the load and store, load
 address and immediates, signed add and subtract, logical add and subtract, compare,
-branch on condition, branch and link, and branch on count and index units (see
+boolean, branch on condition, branch and link, and branch on count and index units (see
 Opcode Units).
 Any other opcode abends `S0C1` at run time.
 
@@ -61,19 +61,22 @@ addresses.
 | `interpreter/hlasm/opcodes/signed_add_subtract.py` | The signed add and subtract unit |
 | `interpreter/hlasm/opcodes/logical_add_subtract.py` | The logical add and subtract unit |
 | `interpreter/hlasm/opcodes/compare.py` | The compare unit, signed and logical |
+| `interpreter/hlasm/opcodes/boolean.py` | The boolean unit: AND, OR, exclusive OR and the complemented connectives |
 | `interpreter/hlasm/opcodes/branch_on_condition.py` | The branch on condition unit |
 | `interpreter/hlasm/opcodes/branch_and_link.py` | The branch and link unit and the addressing-mode instructions |
 | `interpreter/hlasm/opcodes/loop_branch.py` | The branch on count and branch on index unit |
 | `interpreter/hlasm/opcodes/operand_sources.py` | Named second-operand sources shared by the arithmetic and compare units |
 | `interpreter/hlasm/opcodes/result_and_cc.py` | Splices a (result, CC) builder over register, storage or immediate operands and stores both; its storage-immediate read-modify-write |
-| `interpreter/hlasm/data_movement.py` | `move(source, transforms, sink)`: storage, relative-long, address, immediate and register sources and sinks, addressed by operand index; sign extension, `MOD 2^n` wrap, masks, shifts, byte reversal, bit-field insertion (`into_field`); the storage-immediate read-modify-write |
-| `interpreter/hlasm/effective_address.py` | `effective_address` (D(X,B), AMODE 31), `indexed_address` (index scaled by the element size), `relative_address` (RELOC_IMM) |
+| `interpreter/hlasm/data_movement.py` | `move(source, transforms, sink)`: storage, relative-long, address, immediate and register sources and sinks, addressed by operand index; sign extension, `MOD 2^n` wrap, masks, shifts, byte reversal, bit fields (`field_of`, `into_field`); the storage-immediate read-modify-write |
+| `interpreter/hlasm/effective_address.py` | `effective_address` (D(X,B), AMODE 31), `length_operand_address` (D(L,B)), `indexed_address` (index scaled by the element size), `relative_address` (RELOC_IMM) |
 | `interpreter/hlasm/alignment_check.py` | An operand off its boundary abends `S0C6` |
 | `interpreter/hlasm/fixed_point_overflow.py` | CC 3 with program-mask bit `1000` on abends `S0C8` |
 | `interpreter/hlasm/write_to_operator.py` | SVC 35 in IR |
+| `interpreter/hlasm/byte_loop.py` | An IR loop over the byte offsets of a compile-time length, the offset in `__hlasm_ss_at` |
+| `interpreter/hlasm/boolean_connective.py` | A bitwise connective: the binop and whether the right operand or the result is complemented; the eight connectives |
 | `interpreter/hlasm/abend_completion.py` | SVC 13 in IR |
 | `interpreter/hlasm/statement_location.py` | Each statement's source line, set on the IR it lowers to |
-| `interpreter/hlasm/fixed_width_ir.py` | Fixed-width signed add/subtract and logical add/subtract with carry-in, each with its condition code, and the sign CC (0 zero, 1 leftmost bit one, 2 other), built in IR |
+| `interpreter/hlasm/fixed_width_ir.py` | Fixed-width signed add/subtract and logical add/subtract with carry-in, bitwise connectives, each with its condition code, and the sign CC (0 zero, 1 leftmost bit one, 2 other), built in IR |
 | `interpreter/hlasm/inline_ir.py` | Splices a builder's IR under fresh registers; `inline_result_and_cc` splits its (result, CC) pair |
 | `interpreter/hlasm/abend.py` | Stores the code in `__hlasm_abend`, then `Halt_` |
 
@@ -235,6 +238,22 @@ stored.
 - Word and doubleword relative-long operands check alignment and abend `S0C6`; z390 does
   not, and the z390 test pins that difference.
 
+**Boolean (red-dragon-6uyp.30).** N, NY, NR, NRK, NG, NGR, NGRK, NI, NIY, NC, NIHF, NIHH,
+NIHL, NILF, NILH, NILL; O, OY, OR, ORK, OG, OGR, OGRK, OI, OIY, OC, OIHF, OIHH, OIHL, OILF,
+OILH, OILL; X, XY, XR, XRK, XG, XGR, XGRK, XI, XIY, XC, XIHF, XILF; NCRK, NCGRK (AND with
+complement), OCRK, OCGRK (OR with complement), NNRK, NNGRK (NAND), NORK (NOTR), NOGRK
+(NOTGR) (NOR), NXRK, NXGRK (NOT exclusive OR). CC 0 result zero, 1 nonzero.
+
+- The register-immediate forms combine I2 with one field of R1 (NIHH bits 0-15 ... NILF
+  32-63) and replace only that field. The CC reflects that field alone.
+- NC, OC and XC run one IR loop over the L bytes, left to right, storing each result byte
+  before the next is fetched, so overlapping operands follow the Principles of Operation
+  (`XC A,A` clears; `OC A+1(n),A` propagates the first byte). The loop is not unrolled.
+- z390 leaves the CC unchanged for NIHF, NILF, OIHF, OILF, XIHF and XILF, sets it from the
+  whole 32-bit word for the halfword forms, sign-extends the byte in XI (a zero result with
+  both bytes over `X'7F'` sets CC 1), and runs OC in 8-, 4-, 2- and 1-byte pieces, so overlap
+  differs. The z390 test pins each difference.
+
 **Branch on condition (red-dragon-6uyp.32).** BC, BCR, BIC, BRC, BRCL, BPP, BPRP. The
 bridge hands every extended mnemonic (B, BE, BNER, BIL, J, JLNOP, BRUL, ...) over as its
 base mnemonic with the mask filled in. The branch is taken when mask bit `8 >> CC` is one;
@@ -287,7 +306,7 @@ BRXLG (JXLEG). None changes the CC. BRCTH belongs to the high-word unit.
 
 ## Known Gaps
 
-- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, branch on condition, branch and link, and branch on count and index units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
+- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, boolean, branch on condition, branch and link, and branch on count and index units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
 - DC types beyond C, X, B, F, H, P, Z, A, Y and V, and any type extension, raise `UnsupportedDataType` (red-dragon-6uyp.63; floating point E, D, L: red-dragon-6uyp.21).
 - Falling through into DC/DS data or past a CSECT's end skips the data instead of executing it, and a branch into data abends `S0C1` (red-dragon-6uyp.64).
 - Emission is O(n²) in the number of IR instructions, and every branch, even to a static relative target, walks the dispatch chain (red-dragon-6uyp.62).
@@ -299,7 +318,8 @@ BRXLG (JXLEG). None changes the CC. BRCTH belongs to the high-word unit.
   abend `S0C1` (red-dragon-6uyp.75). A BASSM or BSM to the return address returns
   whatever mode it selects.
 - Access registers are not modelled: LAE and LAEY set only the general register.
-- In AMODE 31, LM, STM and LMD do not wrap EA + offset at 2 GiB.
+- In AMODE 31, LM, STM, LMD, NC, OC and XC do not wrap EA + offset at 2 GiB.
+- NC, OC and XC take the length as written; an explicit length of 0, which HLASM assembles as one byte, is not handled.
 - ICM and CLM with mask 0 raise no access exception for their operand.
 - Section bases are doubleword aligned only by allocation order. The VM's bump allocator
   starts at 4096 and does not align, so the GPR region (128 bytes) comes first and each
@@ -316,7 +336,7 @@ BRXLG (JXLEG). None changes the CC. BRCTH belongs to the high-word unit.
 | `tests/unit/hlasm/test_operands.py` | Typed operand access and its failures |
 | `tests/unit/hlasm/test_machine.py` | Machine start-up state |
 | `tests/unit/hlasm/test_dc_encoding.py` | DC images |
-| `tests/unit/hlasm/test_fixed_width_ir.py` | Fixed-width arithmetic and condition codes |
+| `tests/unit/hlasm/test_fixed_width_ir.py` | Fixed-width arithmetic, bitwise connectives and condition codes |
 | `tests/unit/hlasm/test_lowering_skeleton.py` | Labels, LR, BASR, BALR, BRAS and BCR, dispatch, abends |
 | `tests/unit/hlasm/test_load_store_lowering.py` | Load and store IR: GPR and storage accesses, alignment branch, CC, no SYMBOLIC |
 | `tests/integration/hlasm/test_load_store.py` | Every load and store mnemonic on the VM: registers, run status and CC; alignment abends |
@@ -328,6 +348,8 @@ BRXLG (JXLEG). None changes the CC. BRCTH belongs to the high-word unit.
 | `tests/integration/hlasm/test_logical_add_subtract.py` | Every logical add and subtract mnemonic on the VM: result, CC with carry and borrow |
 | `tests/unit/hlasm/test_compare_lowering.py` | Compare IR: operand widths read, nothing written, only the CC set, relative-long alignment |
 | `tests/integration/hlasm/test_compare.py` | Every compare mnemonic on the VM: CC, operands unchanged, alignment abends |
+| `tests/unit/hlasm/test_boolean_lowering.py` | Boolean IR: operand widths, the field read and replaced, the CC; NC/OC/XC as one byte loop of fixed size |
+| `tests/integration/hlasm/test_boolean.py` | Every boolean mnemonic, NOTR and NOTGR on the VM: result, CC 0 and 1, field CCs, overlapping storage operands |
 | `tests/unit/hlasm/test_branch_on_condition_lowering.py` | Branch on condition IR: the CC mask test, each form's target, the forms that lower to nothing |
 | `tests/integration/hlasm/test_branch_extended_mnemonics.py` | Every branch on condition extended spelling reaches its base mnemonic and mask through the bridge; JCT, JCTG, the JX spellings, JAS and JASL reach theirs with R1 |
 | `tests/integration/hlasm/test_branch_on_condition.py` | Every branch on condition mnemonic and a spread of extended mnemonics on the VM: path taken, CC unchanged, branches into data abend `S0C1` |
@@ -346,6 +368,7 @@ BRXLG (JXLEG). None changes the CC. BRCTH belongs to the high-word unit.
 | `tests/z390/test_load_address_immediate_differential.py` | Address and immediate families against z390; the LAE `S0C5` and LXA `S0C1` differences (`-m z390`) |
 | `tests/z390/test_signed_add_subtract_differential.py` | Every signed add and subtract mnemonic against z390 (`-m z390`) |
 | `tests/z390/test_logical_add_subtract_differential.py` | Every logical add and subtract mnemonic against z390; six z390 CC differences pinned (`-m z390`) |
+| `tests/z390/test_boolean_differential.py` | Every boolean mnemonic, NOTR and NOTGR against z390; nine z390 differences (field CCs, XI, OC overlap) pinned (`-m z390`) |
 | `tests/z390/test_compare_differential.py` | Every compare mnemonic against z390; the relative-long alignment difference pinned (`-m z390`) |
 | `tests/z390/test_branch_on_condition_differential.py` | Every branch on condition case against z390; the BIC, BPP and BPRP differences and branches into data pinned (`-m z390`) |
 | `tests/z390/test_branch_and_link_differential.py` | Every branch and link case and the mode-setting returns against z390; z390's AMODE 24 and 64 switches pinned (`-m z390`) |

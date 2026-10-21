@@ -1,7 +1,8 @@
 # pyright: standard
-"""Operand addresses: the AMODE 31 effective address of D(X,B), its element-scaled form, and a relative-immediate target."""
+"""Operand addresses: the AMODE 31 effective address of D(X,B) and D(L,B), its element-scaled form, and a relative-immediate target."""
 
 from hlasm_asg.program.reloc_imm_operand import RelocImmOperand
+from hlasm_asg.program.storage_length_operand import StorageLengthOperand
 from hlasm_asg.program.storage_operand import StorageOperand
 from interpreter.hlasm.hlasm_constants import ADDRESS_MASK_31
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
@@ -33,6 +34,20 @@ def indexed_address(
 
 def effective_address(emitter: HlasmEmitter, operand: StorageOperand) -> Register:
     return indexed_address(emitter, operand, 0)
+
+
+def length_operand_address(
+    emitter: HlasmEmitter, operand: StorageLengthOperand
+) -> Register:
+    return effective_address(
+        emitter,
+        StorageOperand(
+            kind="STORAGE",
+            displacement=operand.displacement,
+            index=0,
+            base=operand.base,
+        ),
+    )
 
 
 def relative_address(emitter: HlasmEmitter, operand: RelocImmOperand) -> Register:

@@ -3,6 +3,7 @@
 
 from collections.abc import Mapping
 
+from interpreter.hlasm.opcodes.boolean import BOOLEAN_LOWERINGS
 from interpreter.hlasm.opcodes.branch_and_link import BRANCH_AND_LINK_LOWERINGS
 from interpreter.hlasm.opcodes.branch_on_condition import (
     BRANCH_ON_CONDITION_LOWERINGS,
@@ -28,6 +29,7 @@ OPCODE_LOWERINGS: Mapping[str, StatementLowering] = {
     **SIGNED_ADD_SUBTRACT_LOWERINGS,
     **LOGICAL_ADD_SUBTRACT_LOWERINGS,
     **COMPARE_LOWERINGS,
+    **BOOLEAN_LOWERINGS,
     **BRANCH_ON_CONDITION_LOWERINGS,
     **BRANCH_AND_LINK_LOWERINGS,
     **LOOP_BRANCH_LOWERINGS,

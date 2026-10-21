@@ -3,10 +3,21 @@
 
 from collections.abc import Sequence
 
+from interpreter.hlasm.boolean_connective import (
+    AND,
+    AND_WITH_COMPLEMENT,
+    NAND,
+    NOR,
+    NOT_XOR,
+    OR,
+    OR_WITH_COMPLEMENT,
+    XOR,
+)
 from interpreter.hlasm.fixed_width_ir import (
     build_add_logical_carry_cc_ir,
     build_add_logical_cc_ir,
     build_add_signed_cc_ir,
+    build_boolean_cc_ir,
     build_compare_logical_cc_ir,
     build_compare_signed_cc_ir,
     build_sign_cc_ir,
@@ -147,3 +158,41 @@ def test_compare_cc_is_equal_low_or_high_under_the_signed_or_logical_reading():
         _pair_of(build_compare_signed_cc_ir("cmp16", 16), 0x8000, 0x7FFF),
         _pair_of(build_compare_logical_cc_ir("cmpl8", 8), 0x80, 0x7F),
     ] == [1, 2, 1, 2]
+
+
+def test_boolean_connectives_set_the_result_and_cc_zero_or_nonzero_at_the_width():
+    word = 0xFFFFFFFF
+    doubleword = (1 << 64) - 1
+    vectors_32 = {
+        "and": (AND, ((0xF0F0F0F0, 0x0F0F0F0F), (0xFF00FF00, 0x0FF00FF0))),
+        "or": (OR, ((0, 0), (0x80000000, 1))),
+        "xor": (XOR, ((0x1234, 0x1234), (0xFFFF0000, word))),
+        "andc": (AND_WITH_COMPLEMENT, ((5, 5), (0xFFFF0000, 0xFF00FF00))),
+        "orc": (OR_WITH_COMPLEMENT, ((0, word), (0, 0xFFFF0000))),
+        "nand": (NAND, ((word, word), (0, 0))),
+        "nor": (NOR, ((1, 0xFFFFFFFE), (0, 0))),
+        "nxor": (NOT_XOR, ((0, word), (0x5A, 0x5A))),
+    }
+    assert {
+        name: [
+            _pair_of(build_boolean_cc_ir(f"b32.{name}", 32, connective), left, right)
+            for left, right in pairs
+        ]
+        for name, (connective, pairs) in vectors_32.items()
+    } == {
+        "and": [[0, 0], [0x0F000F00, 1]],
+        "or": [[0, 0], [0x80000001, 1]],
+        "xor": [[0, 0], [0x0000FFFF, 1]],
+        "andc": [[0, 0], [0x00FF0000, 1]],
+        "orc": [[0, 0], [0x0000FFFF, 1]],
+        "nand": [[0, 0], [word, 1]],
+        "nor": [[0, 0], [word, 1]],
+        "nxor": [[0, 0], [word, 1]],
+    }
+    assert [
+        _pair_of(build_boolean_cc_ir("b64.nor", 64, NOR), 0, 0),
+        _pair_of(build_boolean_cc_ir("b64.andc", 64, AND_WITH_COMPLEMENT), -1, 1),
+        _pair_of(build_boolean_cc_ir("b16.and", 16, AND), 0x0123, 0xFEDC),
+        _pair_of(build_boolean_cc_ir("b8.and", 8, AND), 0xFF, -16),
+        _pair_of(build_boolean_cc_ir("b8.or", 8, OR), 0x0F, -16),
+    ] == [[doubleword, 1], [doubleword - 1, 1], [0, 0], [0xF0, 1], [0xFF, 1]]
