@@ -42,6 +42,16 @@ OTHER    CSECT
 """
 
 
+OVERLAY_SOURCE = b"""\
+TEST     CSECT
+         BR    14
+         DC    F'1'
+         ORG   TEST+4
+         DC    F'2'
+         END   TEST
+"""
+
+
 def _assemble(source: bytes, tmp_path: Path) -> HlasmProgram:
     parser = make_hlasm_parser()
     return parser.read(
@@ -87,6 +97,19 @@ def test_address_constant_holds_runtime_address(tmp_path: Path):
         *[0, 0, 0, 5],
     ]
     assert section_var("WORK") not in vm.current_frame.local_vars
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_org_overlay_pieces_get_distinct_registers_and_the_later_piece_wins(
+    tmp_path: Path,
+):
+    program = _assemble(OVERLAY_SOURCE, tmp_path)
+    ir = section_allocation(program)
+    results = [i.result_reg for i in ir if i.result_reg.is_present()]
+    vm = _start(program)
+
+    assert len(results) == len(set(results))
+    assert vm.load(_base(vm, "TEST") + 4, 4) == [0, 0, 0, 2]
 
 
 @pytest.mark.xfail(

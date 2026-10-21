@@ -122,8 +122,8 @@ def _value(prefix: str, piece: DcPiece) -> Fragment:
             return _address_value(prefix, piece)
 
 
-def _write(placed: PlacedPiece) -> tuple[InstructionBase, ...]:
-    prefix = f"hlasm.dc.{placed.section}.{placed.offset}"
+def _write(index: int, placed: PlacedPiece) -> tuple[InstructionBase, ...]:
+    prefix = f"hlasm.dc.{placed.section}.{placed.offset}.{index}"
     value, value_ir = _value(prefix, placed.piece)
     width, unsigned, image, region, offset = (
         _reg(prefix, role) for role in ("width", "unsigned", "image", "region", "at")
@@ -153,5 +153,8 @@ def section_allocation(program: HlasmProgram) -> tuple[InstructionBase, ...]:
     names = frozenset(section.name for section in sections)
     return (
         *chain.from_iterable(_allocate(section) for section in sections),
-        *chain.from_iterable(_write(placed) for placed in _placed(program, names)),
+        *chain.from_iterable(
+            _write(index, placed)
+            for index, placed in enumerate(_placed(program, names))
+        ),
     )
