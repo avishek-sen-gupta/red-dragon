@@ -106,6 +106,25 @@ Every IR instruction a statement lowers to carries that statement's line as its
 source location. A macro-generated statement carries the line of the macro call
 in the open-code source. Columns are 0: the bridge reports lines only.
 
+## Differential Tests Against z390
+
+`tests/z390/` runs each program in RedDragon and in z390 and compares the return
+code, the abend code and the WTO lines. Under z390 the program assembles against
+z390's own macro library. The tests carry the `z390` marker, which the default run
+excludes. Build z390 (`javac` the sources into `z390.jar`, as its `bash/bldjar`
+does), then:
+
+```bash
+Z390_HOME=/path/to/z390 uv run pytest -m z390 tests/z390 -n0
+```
+
+`Z390_HOME` unset fails the tests rather than skipping them. `Z390Runner` runs
+`bash/asmlg` and reads the program's `.LOG`. The return code comes from the
+`EZ390 ENDED RC=` line, or is 0 after an abend. The abend code comes from
+`program aborting due to abend`. The WTO lines are the run's lines minus z390's
+`EZ390` messages and register dumps. Registers are not compared: z390 starts the
+high words at `F4F4F4F4` and R1, R13 and R14 at its own addresses.
+
 ## Known Gaps
 
 - Only the seed opcodes are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
@@ -131,3 +150,4 @@ in the open-code source. Columns are 0: the bridge reports lines only.
 | `tests/integration/hlasm/test_svc.py` | `WTO`, `ABEND` user and system codes, unlowered SVCs, `run()` with our maclib then `copybook_dirs`, call-site spans |
 | `tests/integration/hlasm/test_hlasm_compile.py` | Unit files, reuse, SYSLIB invalidation, `run()`, return code, default entry, BALR/BR, wild branch |
 | `tests/integration/hlasm/test_instruction_table.py`, `test_opcode_unit_coverage.py` | Instruction table and opcode-unit coverage |
+| `tests/z390/test_foundation_differential.py` | Return code, WTO and user abend against z390 (`-m z390`) |

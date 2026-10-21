@@ -47,11 +47,12 @@ allow-direct-references = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-n auto --dist=worksteal -m 'not external and not nist'"
+addopts = "-n auto --dist=worksteal -m 'not external and not nist and not z390'"
 markers = [
     "external: tests requiring external services (LLM APIs); run with -m external",
     "carddemo_e2e: AWS CardDemo end-to-end CICS tests; mandatory locally, skipped in CI (see tests/integration/cics/conftest.py)",
     "nist: NIST-85 COBOL conformance suite; excluded from the default run, run on demand with `-m nist` (most currently fail — see red-dragon-m0oa.7)",
+    "z390: differential tests against the z390 assembler/emulator; excluded from the default run, run with -m z390 (needs Z390_HOME)",
 ]
 tdd_guard_project_root = "~/code/red-dragon"
 
