@@ -2,6 +2,10 @@
 PROLEAP_BRIDGE_JAR ?= $(CURDIR)/proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar
 export PROLEAP_BRIDGE_JAR
 
+HLASM_AST_BRIDGE ?= $(CURDIR)/hlasm-bridge/che4z/build/bin/hlasm_ast_bridge
+export HLASM_AST_BRIDGE
+HLASM_BRIDGE_DIR := $(CURDIR)/hlasm-bridge/che4z
+
 # The local Maven repository every mvn call uses, and where the parser
 # staleness check looks. Override it to give a worktree its own repo, so
 # parallel worktrees do not overwrite each other's installed parser.
@@ -22,13 +26,14 @@ PROLEAP_PARSER_JAR := $(MAVEN_REPO_LOCAL)/io/github/uwol/proleap-cobol-parser/$(
 PYTEST      = uv run python -m pytest
 PYTEST_ARGS ?=
 
-.PHONY: help setup test nist-report jar jar-force parser parser-force fmt lint
+.PHONY: help setup test nist-report jar jar-force parser parser-force hlasm-bridge fmt lint
 
 help:
 	@echo "make setup      - initialise submodules + build the ProLeap JAR (run once after clone)"
 	@echo "make test       - full suite (builds the JAR if missing)"
 	@echo "make nist-report - run the NIST CCVS suite and write a categorised report to nist-reports/"
 	@echo "make jar        - build the ProLeap bridge JAR if it is missing"
+	@echo "make hlasm-bridge - build the che4z hlasm_ast_bridge binary if it is missing"
 	@echo "make parser     - install the vendored ProLeap parser into MAVEN_REPO_LOCAL if stale/missing"
 	@echo "make parser-force - reinstall the ProLeap parser unconditionally"
 	@echo "make jar-force  - rebuild the ProLeap bridge JAR (run after changing Java/bridge sources)"
@@ -41,6 +46,7 @@ help:
 	@echo "MAVEN_REPO_LOCAL=$(MAVEN_REPO_LOCAL)"
 	@echo "PROLEAP_BRIDGE_JAR=$(PROLEAP_BRIDGE_JAR)"
 	@echo "PROLEAP_PARSER_JAR=$(PROLEAP_PARSER_JAR)"
+	@echo "HLASM_AST_BRIDGE=$(HLASM_AST_BRIDGE)"
 
 # One-time setup from a fresh clone: pull submodules, install the parser into
 # MAVEN_REPO_LOCAL (via the jar's prerequisites), then build the bridge JAR.
@@ -75,7 +81,15 @@ jar: $(PROLEAP_BRIDGE_JAR)
 jar-force: $(PROLEAP_PARSER_JAR)
 	cd proleap-bridge && mvn "-Dmaven.repo.local=$(MAVEN_REPO_LOCAL)" -DskipTests package -q
 
-test: jar
+$(HLASM_BRIDGE_DIR)/CMakeLists.txt:
+	git submodule update --init --recursive
+
+$(HLASM_AST_BRIDGE): $(HLASM_BRIDGE_DIR)/CMakeLists.txt
+	cd hlasm-bridge/che4z && BUILD_TYPE=Release ./build.sh --target hlasm_ast_bridge
+
+hlasm-bridge: $(HLASM_AST_BRIDGE)
+
+test: jar hlasm-bridge
 	$(PYTEST) $(PYTEST_ARGS)
 
 nist-report: jar
