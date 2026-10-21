@@ -122,6 +122,15 @@ def test_indexed_address_shifts_the_index_sum_before_adding_the_base():
         ("WriteRegion", *_low(2)),
     ]
     assert _shifts(ir) == [3]
+    binops = [i for i in ir if isinstance(i, Binop)]
+    assert [b.operator for b in binops] == [
+        BinopKind.ADD,
+        BinopKind.LSHIFT,
+        BinopKind.ADD,
+        BinopKind.BIT_AND,
+        BinopKind.MOD,
+    ]
+    assert [b.left for b in binops[1:4]] == [b.result_reg for b in binops[0:3]]
     assert _untouched_control(ir) == []
 
 

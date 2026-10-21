@@ -2,6 +2,7 @@
 """Load and store programs shared by the VM tests and the z390 differential tests."""
 
 RETURN = "         BR    14\n"
+RETURN_ZERO = "         LHI   15,0\n" + RETURN
 ABEND = "         ABEND 1\n"
 FILL = 0xA5A5A5A5A5A5A5A5
 HIGH_FILL = 0xA5A5A5A5_00000000

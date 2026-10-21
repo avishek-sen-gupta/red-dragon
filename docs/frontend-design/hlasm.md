@@ -249,7 +249,8 @@ the CC is unchanged.
   machine statement abends `S0C1`. Branching straight to a static relative target's label
   is deferred as a performance item (red-dragon-6uyp.62).
 - z390 branches BIC to the operand address instead of the doubleword stored there, and
-  abends `S0C1` on BPP and BPRP. The z390 test pins both differences.
+  abends `S0C1` on BPP and BPRP. A branch into data runs the data bytes in z390 (J, BC
+  and BRCL to FILL end `S0C2`); here it abends `S0C1`. The z390 test pins all three.
 
 **Branch and link (red-dragon-6uyp.33).** BAL, BALR, BAS, BASR, BRAS (JAS), BRASL (JASL),
 BASSM, BSM, SAM24, SAM31, SAM64, TAM. None changes the CC except TAM.
@@ -287,7 +288,7 @@ BRXLG (JXLEG). None changes the CC. BRCTH belongs to the high-word unit.
 
 - Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, branch on condition, branch and link, and branch on count and index units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
 - DC types beyond C, X, B, F, H, P, Z, A, Y and V, and any type extension, raise `UnsupportedDataType` (red-dragon-6uyp.63; floating point E, D, L: red-dragon-6uyp.21).
-- Falling through into DC/DS data or past a CSECT's end skips the data instead of executing it (red-dragon-6uyp.64).
+- Falling through into DC/DS data or past a CSECT's end skips the data instead of executing it, and a branch into data abends `S0C1` (red-dragon-6uyp.64).
 - Emission is O(n²) in the number of IR instructions, and every branch, even to a static relative target, walks the dispatch chain (red-dragon-6uyp.62).
 - Logical shifts are to be built in IR, not on the VM's `>>>`, which is not width-aware (red-dragon-srvz).
 - `EXTRN`, `ENTRY` and V-type constants are not resolved; V-constants hold zero (red-dragon-6uyp.8, red-dragon-6uyp.15).
@@ -313,9 +314,9 @@ BRXLG (JXLEG). None changes the CC. BRCTH belongs to the high-word unit.
 | `tests/unit/hlasm/test_dc_encoding.py` | DC images |
 | `tests/unit/hlasm/test_fixed_width_ir.py` | Fixed-width arithmetic and condition codes |
 | `tests/unit/hlasm/test_lowering_skeleton.py` | Labels, LR, BASR, BALR, BRAS and BCR, dispatch, abends |
-| `tests/unit/hlasm/test_load_store_lowering.py` | Load and store IR: GPR and storage accesses, alignment branch, CC |
-| `tests/integration/hlasm/test_load_store.py` | Every load and store mnemonic on the VM, alignment abends |
-| `tests/unit/hlasm/test_load_address_immediate_lowering.py` | Load address and immediate IR: GPR widths read and written, index shift, no CC |
+| `tests/unit/hlasm/test_load_store_lowering.py` | Load and store IR: GPR and storage accesses, alignment branch, CC, no SYMBOLIC |
+| `tests/integration/hlasm/test_load_store.py` | Every load and store mnemonic on the VM: registers, run status and CC; alignment abends |
+| `tests/unit/hlasm/test_load_address_immediate_lowering.py` | Load address and immediate IR: GPR widths read and written, index sum shifted before the base is added, no CC |
 | `tests/integration/hlasm/test_load_address_immediate.py` | Every load address and immediate mnemonic on the VM, CC unchanged |
 | `tests/unit/hlasm/test_signed_add_subtract_lowering.py` | Signed add and subtract IR: operand widths, CC, the `S0C8` trap and its program-mask condition |
 | `tests/integration/hlasm/test_signed_add_subtract.py` | Every signed add and subtract mnemonic on the VM: result, CC 0-3 |
@@ -324,10 +325,10 @@ BRXLG (JXLEG). None changes the CC. BRCTH belongs to the high-word unit.
 | `tests/unit/hlasm/test_compare_lowering.py` | Compare IR: operand widths read, nothing written, only the CC set, relative-long alignment |
 | `tests/integration/hlasm/test_compare.py` | Every compare mnemonic on the VM: CC, operands unchanged, alignment abends |
 | `tests/unit/hlasm/test_branch_on_condition_lowering.py` | Branch on condition IR: the CC mask test, each form's target, the forms that lower to nothing |
-| `tests/integration/hlasm/test_branch_extended_mnemonics.py` | Every branch on condition extended spelling reaches its base mnemonic and mask through the bridge |
+| `tests/integration/hlasm/test_branch_extended_mnemonics.py` | Every branch on condition extended spelling reaches its base mnemonic and mask through the bridge; JCT, JCTG, the JX spellings, JAS and JASL reach theirs with R1 |
 | `tests/integration/hlasm/test_branch_on_condition.py` | Every branch on condition mnemonic and a spread of extended mnemonics on the VM: path taken, CC unchanged, branches into data abend `S0C1` |
 | `tests/unit/hlasm/test_branch_and_link_lowering.py` | Branch and link IR: target read before the link is written, the AMODE 31 link word, the BASSM and BSM mode test, SAM and TAM |
-| `tests/integration/hlasm/test_branch_and_link.py` | Every branch and link mnemonic, JAS and JASL on the VM: link relative to the next instruction, path, CC; BSM 0,14 and BASSM 14,14 return to the caller; AMODE 24 and 64 switches xfailed (red-dragon-6uyp.75) |
+| `tests/integration/hlasm/test_branch_and_link.py` | Every branch and link mnemonic, JAS and JASL on the VM: link relative to the next instruction, path, CC; BSM 0,14 and BASSM 14,14 return to the caller; SAM24, SAM64 and switches into AMODE 24 or 64 abend `S0C1`, entering those modes xfailed (red-dragon-6uyp.75) |
 | `tests/unit/hlasm/test_loop_branch_lowering.py` | Branch on count and index IR: target first, operands read before R1 is written, wrap, nonzero or signed test |
 | `tests/integration/hlasm/test_loop_branch.py` | Every branch on count and index mnemonic, JCT, JCTG and the JX spellings on the VM: counting loops, register overlaps, signed wrap, CC unchanged |
 | `tests/integration/hlasm/test_bridge_parser.py` | The real bridge: macro origins, refused assemblies |
@@ -342,6 +343,6 @@ BRXLG (JXLEG). None changes the CC. BRCTH belongs to the high-word unit.
 | `tests/z390/test_signed_add_subtract_differential.py` | Every signed add and subtract mnemonic against z390 (`-m z390`) |
 | `tests/z390/test_logical_add_subtract_differential.py` | Every logical add and subtract mnemonic against z390; six z390 CC differences pinned (`-m z390`) |
 | `tests/z390/test_compare_differential.py` | Every compare mnemonic against z390; the relative-long alignment difference pinned (`-m z390`) |
-| `tests/z390/test_branch_on_condition_differential.py` | Every branch on condition case against z390; the BIC, BPP and BPRP differences pinned (`-m z390`) |
+| `tests/z390/test_branch_on_condition_differential.py` | Every branch on condition case against z390; the BIC, BPP and BPRP differences and branches into data pinned (`-m z390`) |
 | `tests/z390/test_branch_and_link_differential.py` | Every branch and link case and the mode-setting returns against z390; z390's AMODE 24 and 64 switches pinned (`-m z390`) |
 | `tests/z390/test_loop_branch_differential.py` | Every branch on count and index case against z390; z390's late reads of R2 and the compare value pinned (`-m z390`) |

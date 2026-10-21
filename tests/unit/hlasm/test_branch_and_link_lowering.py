@@ -83,6 +83,7 @@ def _shape(mnemonic: str, operands: Sequence[Operand]) -> list[str]:
                 WriteRegion,
                 Binop,
                 Halt_,
+                Symbolic,
             ),
         )
     ]
@@ -196,11 +197,6 @@ def test_set_mode_forms_branch_only_into_amode_31_and_abend_otherwise():
         "BSM 5,0": SET_MODE_BIT_R5,
         "BSM 0,0": [],
     }
-    assert [
-        i
-        for i in _lowered("BSM", (_reg(LINK), _reg(TARGET)))
-        if isinstance(i, Symbolic)
-    ] == []
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
