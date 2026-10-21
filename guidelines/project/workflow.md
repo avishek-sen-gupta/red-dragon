@@ -36,7 +36,7 @@ make test PYTEST_ARGS="-q"                                        # builds the J
 ### Pyright: per-file promotion, not a repo-wide flag
 
 `pyrightconfig.json` sets `typeCheckingMode: basic` for the whole repo. Files are
-promoted individually by adding `# pyright: standard` as the first line; 240 files
+promoted individually by adding `# pyright: standard` as the first line; 401 files
 carry it today. A promoted file is held to zero errors. An unpromoted file is not,
 and its errors are expected rather than a regression.
 
@@ -119,13 +119,13 @@ turns up something pertinent — a rejected approach, an edge case, a related is
   left behind. Integration tests compile, execute through the VM, and assert
   concrete output values.
 - `@covers` from `tests/covers.py` marks which language feature a test exercises;
-  233 test files use it. The hook that once enforced it is gone, so it rests on
+  457 test files use it. The hook that once enforced it is gone, so it rests on
   review.
 - An `xfail` reason must cite the bead id, so the gap stays traceable:
   `@pytest.mark.xfail(reason="... — red-dragon-xxxx")`. Exclude languages that
   genuinely lack the feature rather than xfailing them (C has no classes).
-- The default run excludes `external` and `nist` (see `project-context.md`). Do
-  not read a green default run as covering them.
+- The default run excludes `external`, `nist` and `z390` (see `project-context.md`).
+  Do not read a green default run as covering them.
 
 ### Talisman
 

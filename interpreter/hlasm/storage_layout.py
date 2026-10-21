@@ -14,6 +14,7 @@ from interpreter.hlasm.constant_image import ConstantImage
 from interpreter.hlasm.dc_encoding import DcPiece, dc_alignment, encode_dc
 from interpreter.hlasm.hlasm_constants import (
     BITS_PER_BYTE,
+    DOUBLEWORD_BYTES,
     INT_TO_BINARY_BYTES,
     SECTION_VAR_PREFIX,
 )
@@ -48,7 +49,7 @@ def _allocate(section: Section) -> tuple[InstructionBase, ...]:
     size = _reg(prefix, "size")
     region = _reg(prefix, "region")
     return (
-        Const.int_(size, section.length),
+        Const.int_(size, _align(section.length, DOUBLEWORD_BYTES)),
         AllocRegion(result_reg=region, size_reg=size),
         StoreVar(name=section_var(section.name), value_reg=region),
     )
@@ -122,8 +123,8 @@ def _value(prefix: str, piece: DcPiece) -> Fragment:
             return _address_value(prefix, piece)
 
 
-def _write(placed: PlacedPiece) -> tuple[InstructionBase, ...]:
-    prefix = f"hlasm.dc.{placed.section}.{placed.offset}"
+def _write(index: int, placed: PlacedPiece) -> tuple[InstructionBase, ...]:
+    prefix = f"hlasm.dc.{placed.section}.{placed.offset}.{index}"
     value, value_ir = _value(prefix, placed.piece)
     width, unsigned, image, region, offset = (
         _reg(prefix, role) for role in ("width", "unsigned", "image", "region", "at")
@@ -153,5 +154,8 @@ def section_allocation(program: HlasmProgram) -> tuple[InstructionBase, ...]:
     names = frozenset(section.name for section in sections)
     return (
         *chain.from_iterable(_allocate(section) for section in sections),
-        *chain.from_iterable(_write(placed) for placed in _placed(program, names)),
+        *chain.from_iterable(
+            _write(index, placed)
+            for index, placed in enumerate(_placed(program, names))
+        ),
     )
