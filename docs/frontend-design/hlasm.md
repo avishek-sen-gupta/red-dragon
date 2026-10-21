@@ -124,8 +124,15 @@ Z390_HOME=/path/to/z390 uv run pytest -m z390 tests/z390 -n0
 `bash/asmlg` and reads the program's `.LOG`. The return code comes from the
 `EZ390 ENDED RC=` line, or is 0 after an abend. The abend code comes from
 `program aborting due to abend`. The WTO lines are the run's lines minus z390's
-`EZ390` messages and register dumps. Registers are not compared: z390 starts the
-high words at `F4F4F4F4` and R1, R13 and R14 at its own addresses.
+`EZ390` messages and register dumps.
+
+Registers and the CC are compared through `HlasmMachine`: `run_hlasm_machine` reads
+all 16 GPRs (64-bit) and `__hlasm_cc`; `Z390Runner.run_machine` reads them from the
+dump z390 prints on an abend, the CC from the `ABEND PSW`. So a register test ends
+in `ABEND n`, which both maclibs expand to `LA 1,n` and `SVC 13`. Compare only the
+registers the test declares (`restricted_to`): z390 starts the high words at
+`F4F4F4F4` and R0, R1, R13, R14 and R15 at its own values. A declared register that a
+32-bit instruction writes needs its high word set first, by `LG` or `LMG`.
 A run that leaves no `.LOG` raises `Z390AssemblyFailed` with asmlg's exit code
 and the `.ERR` text. The machine starts with program mask `0110` (decimal overflow
 and HFP exponent underflow on), as z390's initial PSW `07850600` does.
@@ -159,3 +166,4 @@ and HFP exponent underflow on), as z390's initial PSW `07850600` does.
 | `tests/integration/hlasm/test_hlasm_compile.py` | Unit files, reuse, SYSLIB invalidation, `run()`, return code, default entry, BALR/BR, wild branch |
 | `tests/integration/hlasm/test_instruction_table.py`, `test_opcode_unit_coverage.py` | Instruction table and opcode-unit coverage |
 | `tests/z390/test_foundation_differential.py` | Return code, WTO, user abend and assembly failure against z390 (`-m z390`) |
+| `tests/z390/test_z390_log.py` | Registers and CC from a z390 abend dump (default run) |
