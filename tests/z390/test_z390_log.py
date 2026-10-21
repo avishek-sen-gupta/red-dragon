@@ -1,10 +1,15 @@
 # pyright: standard
-"""An abending z390 LOG yields the run, the PSW condition code and the dumped registers."""
+"""An abending z390 LOG yields the run, the PSW condition code (short or AMODE 64 PSW) and the dumped registers."""
 
 from tests.covers import NotLanguageFeature, covers
 from tests.integration.hlasm.hlasm_machine import HlasmMachine
 from tests.integration.hlasm.hlasm_run import HlasmRun
 from tests.z390.z390_runner import hlasm_machine_of_log
+
+AMODE_64_PSW = (
+    "EZ390E error  11 ABEND PSW=0785360180000000 00000000000FFEEC 0A0D"
+    "         SVC   ABEND U0042"
+)
 
 ABENDED_LOG = (
     "16:57:43 PROG      EZ390 START USING z390 V1.8.05 ON J2SE 21.0.12 10/21/26",
@@ -36,3 +41,9 @@ def test_abend_dump_gives_cc_and_registers():
         },
     )
     assert sorted(machine.gprs) == list(range(16))
+    assert (
+        hlasm_machine_of_log(
+            tuple(AMODE_64_PSW if "ABEND PSW" in line else line for line in ABENDED_LOG)
+        ).cc
+        == 3
+    )

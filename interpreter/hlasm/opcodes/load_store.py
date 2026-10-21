@@ -95,6 +95,7 @@ STORAGE_LOADS: Mapping[str, StatementLowering] = {
 }
 
 REGISTER_LOADS: Mapping[str, StatementLowering] = {
+    "LR": move(from_gr32(1), (), to_gr32),
     "LGR": move(from_gr64(1), (), to_gr64),
     "LBR": move(from_gr32(1), (signed(BITS_PER_BYTE),), to_gr32),
     "LGBR": move(from_gr32(1), (signed(BITS_PER_BYTE),), to_gr64),
