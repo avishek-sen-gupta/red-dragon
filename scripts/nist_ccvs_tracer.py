@@ -24,8 +24,8 @@ import tempfile
 from pathlib import Path
 
 from interpreter.cli_output import emit
-from interpreter.cobol.ebcdic_table import EbcdicTable
 from interpreter.cobol.layout_data import field_positions
+from interpreter.encoding.ebcdic_table import EbcdicTable
 from interpreter.frontends import get_cobol_frontend
 from interpreter.instructions import Data
 from tests.nist.conftest import NIST_DIR, make_provider

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from interpreter.cobol.ebcdic_table import EbcdicTable
+from interpreter.encoding.ebcdic_table import EbcdicTable
 from tests.nist.conftest import assert_nist_pass
 from tests.nist.nist_failure import NistFailure
 from tests.nist.nist_outcome import NistOutcome

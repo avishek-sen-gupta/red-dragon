@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 
 from interpreter.cobol.cobol_constants import ByteConstants
-from interpreter.cobol.ebcdic_table import EbcdicTable
+from interpreter.encoding.ebcdic_table import EbcdicTable
 
 logger = logging.getLogger(__name__)
 
