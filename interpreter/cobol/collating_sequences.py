@@ -11,8 +11,8 @@ from cobol_asg.alphabet_kind import AlphabetKind
 from cobol_asg.alphabet_link import AlphabetLink
 from cobol_asg.alphabet_literal_kind import AlphabetLiteralKind
 from interpreter.cobol.collating_sequence import CollatingSequence
-from interpreter.cobol.ebcdic_table import EbcdicTable
 from interpreter.cobol.figurative_constants import COBOL_FIGURATIVE_CONSTANTS
+from interpreter.encoding.ebcdic_table import EbcdicTable
 
 Positions = tuple[tuple[int, ...], ...]
 

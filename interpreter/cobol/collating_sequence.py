@@ -5,9 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from types import MappingProxyType
 
-from interpreter.cobol.ebcdic_table import EbcdicTable
 from interpreter.cobol.figurative_constants import COBOL_FIGURATIVE_CONSTANTS
 from interpreter.cobol.program_figuratives import ProgramFiguratives
+from interpreter.encoding.ebcdic_table import EbcdicTable
 
 _HIGH_VALUE_NAMES = ("HIGH-VALUE", "HIGH-VALUES")
 _LOW_VALUE_NAMES = ("LOW-VALUE", "LOW-VALUES")

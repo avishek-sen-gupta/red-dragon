@@ -13,9 +13,9 @@ import pytest
 from cobol_asg.cobol_parser import ProLeapCobolParser
 from cobol_asg.copybook_library import CopybookLibrary
 from cobol_asg.switch_status import SwitchStatus
-from interpreter.cobol.ebcdic_table import EbcdicTable
 from interpreter.cobol.real_file_provider import RealFileIOProvider
 from interpreter.cobol.run_inputs import RunInputs
+from interpreter.encoding.ebcdic_table import EbcdicTable
 from interpreter.frontend import make_cobol_parser
 from interpreter.project.cobol_compile import compile_cobol
 from interpreter.project.entry_point import EntryPoint

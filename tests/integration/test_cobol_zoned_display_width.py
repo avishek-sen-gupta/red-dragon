@@ -14,8 +14,8 @@ context reads back out of them.
 
 import pytest
 
-from interpreter.cobol.ebcdic_table import EbcdicTable
 from interpreter.cobol.features import CobolFeature
+from interpreter.encoding.ebcdic_table import EbcdicTable
 from tests.covers import covers
 from tests.integration.cobol_helpers import (
     bridge_jar,  # noqa: F401
