@@ -220,7 +220,9 @@ FIELD_IMMEDIATES: Mapping[str, Case] = {
         CC_NONZERO,
     ),
     "NILF": (
-        "         LG    2,SRC\n" "         NILF  2,X'76543210'\n",
+        "         LG    2,SRC\n"
+        "         CHI   2,0\n"
+        "         NILF  2,X'76543210'\n",
         {2: 0x01234567_00000000},
         CC_ZERO,
     ),
@@ -261,7 +263,9 @@ FIELD_IMMEDIATES: Mapping[str, Case] = {
         CC_NONZERO,
     ),
     "XIHF": (
-        "         LG    2,SRC\n" "         XIHF  2,X'01234567'\n",
+        "         LG    2,SRC\n"
+        "         CHI   2,0\n"
+        "         XIHF  2,X'01234567'\n",
         {2: 0x00000000_89ABCDEF},
         CC_ZERO,
     ),
@@ -297,6 +301,19 @@ STORAGE_TO_STORAGE: Mapping[str, Case] = {
     ),
 }
 
+STORAGE_TO_STORAGE_LENGTHS: Mapping[str, Case] = {
+    "XC implicit length": (
+        "         XC    SRC,SRC\n" "         LG    7,SRC\n" "         LG    8,SRCP\n",
+        {7: 0, 8: 0xFEDCBA98_76543210},
+        CC_ZERO,
+    ),
+    "XC length 0": (
+        "         XC    OUT(0),OUT\n" "         LG    7,OUT\n",
+        {7: 0x00FFFFFF_FFFFFFFF},
+        CC_ZERO,
+    ),
+}
+
 CASES: Mapping[str, Case] = {
     **ANDS,
     **ORS,
@@ -305,4 +322,5 @@ CASES: Mapping[str, Case] = {
     **STORAGE_IMMEDIATES,
     **FIELD_IMMEDIATES,
     **STORAGE_TO_STORAGE,
+    **STORAGE_TO_STORAGE_LENGTHS,
 }

@@ -33,19 +33,20 @@ from interpreter.hlasm.effective_address import (
     effective_address,
     length_operand_address,
 )
-from interpreter.hlasm.fixed_width_ir import build_boolean_cc_ir
+from interpreter.hlasm.fixed_width_ir import build_boolean_cc_ir, build_nonzero_ir
 from interpreter.hlasm.hlasm_constants import (
     BITS_PER_BYTE,
-    CC_VAR,
+    BYTES_COMBINED_VAR,
     DOUBLEWORD_BITS,
     HALFWORD_BITS,
     ONE_BYTE,
     PARAM_LEFT,
     PARAM_RIGHT,
+    PARAM_VALUE,
     WORD_BITS,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
-from interpreter.hlasm.inline_ir import inline_result_and_cc
+from interpreter.hlasm.inline_ir import inline_ir
 from interpreter.hlasm.opcodes.operand_sources import DOUBLEWORD_STORAGE, WORD_STORAGE
 from interpreter.hlasm.opcodes.result_and_cc import (
     Operation,
@@ -54,6 +55,7 @@ from interpreter.hlasm.opcodes.result_and_cc import (
 )
 from interpreter.hlasm.operands import storage_length_operand, storage_operand
 from interpreter.hlasm.statement_lowering import StatementLowering
+from interpreter.instructions import StoreVar
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
 
@@ -63,6 +65,8 @@ HIGH_WORD_SHIFT = 32
 HIGH_HALFWORD_SHIFT = 48
 LOW_HIGH_HALFWORD_SHIFT = 16
 NO_SHIFT = 0
+
+NONZERO_BYTE = build_nonzero_ir("hlasm.nonzero8", BITS_PER_BYTE)
 
 
 def _operation(connective: BooleanConnective, bits: int) -> Operation:
@@ -90,38 +94,38 @@ def _storage_byte(connective: BooleanConnective) -> StatementLowering:
 
 def _combine_byte(
     emitter: HlasmEmitter,
-    operation: Operation,
+    operator: BinopKind,
     addresses: tuple[Register, Register],
     at: Register,
 ) -> None:
     first, second = (emitter.binop(BinopKind.ADD, a, at) for a in addresses)
-    result, cc = inline_result_and_cc(
-        emitter,
-        operation,
-        {
-            PARAM_LEFT: emitter.load_storage(first, 0, ONE_BYTE),
-            PARAM_RIGHT: emitter.load_storage(second, 0, ONE_BYTE),
-        },
+    result = emitter.binop(
+        operator,
+        emitter.load_storage(first, 0, ONE_BYTE),
+        emitter.load_storage(second, 0, ONE_BYTE),
     )
     emitter.store_storage(first, 0, ONE_BYTE, result)
-    emitter.set_cc(emitter.binop(BinopKind.BIT_OR, emitter.load_var(CC_VAR), cc))
+    combined = emitter.binop(
+        BinopKind.BIT_OR, emitter.load_var(BYTES_COMBINED_VAR), result
+    )
+    emitter.emit_inst(StoreVar(name=BYTES_COMBINED_VAR, value_reg=combined))
 
 
-def _storage_to_storage(connective: BooleanConnective) -> StatementLowering:
-    operation = _operation(connective, BITS_PER_BYTE)
-
+def _storage_to_storage(operator: BinopKind) -> StatementLowering:
     def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
         first = storage_length_operand(statement, FIRST_OPERAND)
         addresses = (
             length_operand_address(emitter, first),
             effective_address(emitter, storage_operand(statement, SECOND_OPERAND)),
         )
-        emitter.set_cc(emitter.int_(0))
+        emitter.emit_inst(StoreVar(name=BYTES_COMBINED_VAR, value_reg=emitter.int_(0)))
         emit_byte_loop(
             emitter,
-            first.length,
-            lambda at: _combine_byte(emitter, operation, addresses, at),
+            max(first.length, ONE_BYTE),
+            lambda at: _combine_byte(emitter, operator, addresses, at),
         )
+        combined = emitter.load_var(BYTES_COMBINED_VAR)
+        emitter.set_cc(inline_ir(emitter, NONZERO_BYTE, {PARAM_VALUE: combined}))
 
     return lower
 
@@ -165,7 +169,7 @@ ANDS: Mapping[str, StatementLowering] = {
     "NILF": _field(AND, WORD_BITS, NO_SHIFT),
     "NILH": _field(AND, HALFWORD_BITS, LOW_HIGH_HALFWORD_SHIFT),
     "NILL": _field(AND, HALFWORD_BITS, NO_SHIFT),
-    "NC": _storage_to_storage(AND),
+    "NC": _storage_to_storage(BinopKind.BIT_AND),
 }
 
 ORS: Mapping[str, StatementLowering] = {
@@ -184,7 +188,7 @@ ORS: Mapping[str, StatementLowering] = {
     "OILF": _field(OR, WORD_BITS, NO_SHIFT),
     "OILH": _field(OR, HALFWORD_BITS, LOW_HIGH_HALFWORD_SHIFT),
     "OILL": _field(OR, HALFWORD_BITS, NO_SHIFT),
-    "OC": _storage_to_storage(OR),
+    "OC": _storage_to_storage(BinopKind.BIT_OR),
 }
 
 EXCLUSIVE_ORS: Mapping[str, StatementLowering] = {
@@ -199,7 +203,7 @@ EXCLUSIVE_ORS: Mapping[str, StatementLowering] = {
     "XIY": _storage_byte(XOR),
     "XIHF": _field(XOR, WORD_BITS, HIGH_WORD_SHIFT),
     "XILF": _field(XOR, WORD_BITS, NO_SHIFT),
-    "XC": _storage_to_storage(XOR),
+    "XC": _storage_to_storage(BinopKind.BIT_XOR),
 }
 
 COMPLEMENTED: Mapping[str, StatementLowering] = {
