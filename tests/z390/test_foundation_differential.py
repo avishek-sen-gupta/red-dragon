@@ -7,6 +7,7 @@ import pytest
 
 from tests.covers import NotLanguageFeature, covers
 from tests.integration.hlasm.hlasm_helpers import HlasmRun, run_hlasm
+from tests.z390.z390_assembly_failed import Z390AssemblyFailed
 from tests.z390.z390_runner import Z390Runner
 
 pytestmark = pytest.mark.z390
@@ -55,3 +56,19 @@ def test_user_abend_matches(z390: Z390Runner, tmp_path: Path):
 
     expected = HlasmRun(return_code=0, abend="U0042", stdout="")
     assert differential(z390, source, tmp_path) == (expected, expected)
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_assembly_failure_reports_exit_code_and_err(z390: Z390Runner, tmp_path: Path):
+    source = (
+        "BAD      CSECT\n"
+        "         FOOBAR 1,2\n"
+        "         BR    14\n"
+        "         END\n"
+    )
+
+    with pytest.raises(Z390AssemblyFailed) as failed:
+        z390.run(source, tmp_path)
+
+    err = (tmp_path / "PROG.ERR").read_text(encoding="latin-1")
+    assert str(failed.value) == f"z390 left no PROG.LOG: asmlg exited 12\n{err}"

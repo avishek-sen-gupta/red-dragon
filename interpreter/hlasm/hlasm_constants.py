@@ -16,7 +16,7 @@ WORD_BYTES = 4
 LOW_WORD_OFFSET = 4
 BITS_PER_BYTE = 8
 INITIAL_CC = 0
-INITIAL_PROGRAM_MASK = 0
+INITIAL_PROGRAM_MASK = 0b0110
 
 INT_TO_BINARY_BYTES = FuncName("__int_to_binary_bytes")
 BINARY_BYTES_TO_INT = FuncName("__binary_bytes_to_int")

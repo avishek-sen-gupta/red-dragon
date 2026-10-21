@@ -124,6 +124,9 @@ Z390_HOME=/path/to/z390 uv run pytest -m z390 tests/z390 -n0
 `program aborting due to abend`. The WTO lines are the run's lines minus z390's
 `EZ390` messages and register dumps. Registers are not compared: z390 starts the
 high words at `F4F4F4F4` and R1, R13 and R14 at its own addresses.
+A run that leaves no `.LOG` raises `Z390AssemblyFailed` with asmlg's exit code
+and the `.ERR` text. The machine starts with program mask `0110` (decimal overflow
+and HFP exponent underflow on), as z390's initial PSW `07850600` does.
 
 ## Known Gaps
 
@@ -150,4 +153,4 @@ high words at `F4F4F4F4` and R1, R13 and R14 at its own addresses.
 | `tests/integration/hlasm/test_svc.py` | `WTO`, `ABEND` user and system codes, unlowered SVCs, `run()` with our maclib then `copybook_dirs`, call-site spans |
 | `tests/integration/hlasm/test_hlasm_compile.py` | Unit files, reuse, SYSLIB invalidation, `run()`, return code, default entry, BALR/BR, wild branch |
 | `tests/integration/hlasm/test_instruction_table.py`, `test_opcode_unit_coverage.py` | Instruction table and opcode-unit coverage |
-| `tests/z390/test_foundation_differential.py` | Return code, WTO and user abend against z390 (`-m z390`) |
+| `tests/z390/test_foundation_differential.py` | Return code, WTO, user abend and assembly failure against z390 (`-m z390`) |
