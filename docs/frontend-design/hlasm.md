@@ -260,6 +260,9 @@ BASSM, BSM, SAM24, SAM31, SAM64, TAM. None changes the CC except TAM.
 - BASSM and BSM branch only into AMODE 31: R2 bit 32 one and bit 63 zero. A target
   selecting AMODE 24 or 64 abends `S0C1` after R1 is written; SAM24 and SAM64 abend
   `S0C1` too (red-dragon-6uyp.75). SAM31 does nothing. TAM sets CC 1.
+- The entry R14 (`0xFF0`) has bit 32 off, as in z390, so `BSM 0,14` selects AMODE 24.
+  A BASSM or BSM whose target is the return address returns before the mode test:
+  nothing runs after it.
 - BASR, BALR and BRAS moved here from the seed module; LR moved to load and store.
 - z390 models AMODE 24 and 64; its test pins that difference.
 
@@ -273,7 +276,9 @@ BASSM, BSM, SAM24, SAM31, SAM64, TAM. None changes the CC except TAM.
 - `EXTRN`, `ENTRY` and V-type constants are not resolved; V-constants hold zero (red-dragon-6uyp.8, red-dragon-6uyp.15).
 - Machine-instruction bytes are not in section storage (a spec non-goal: self-modifying code), so `EX` targets and `CLC` against code do not see them.
 - Bridge gaps: `*` in a later DC operand takes the statement address (red-dragon-6uyp.65); bit-length data reports byte length (red-dragon-6uyp.66); S-type constants are not USING-resolved (red-dragon-6uyp.67); complex-relocatable constants refuse the assembly (red-dragon-6uyp.68).
-- AMODE 24 and 64 are not modelled: SAM24, SAM64 and BASSM or BSM into those modes abend `S0C1`. The entry R14 (`0xFF0`) has bit 32 zero, so `BSM 0,14` back to the caller abends (red-dragon-6uyp.75).
+- AMODE 24 and 64 are not modelled: SAM24, SAM64 and BASSM or BSM into those modes
+  abend `S0C1` (red-dragon-6uyp.75). A BASSM or BSM to the return address returns
+  whatever mode it selects.
 - Access registers are not modelled: LAE and LAEY set only the general register.
 - In AMODE 31, LM, STM and LMD do not wrap EA + offset at 2 GiB.
 - ICM and CLM with mask 0 raise no access exception for their operand.
@@ -305,7 +310,7 @@ BASSM, BSM, SAM24, SAM31, SAM64, TAM. None changes the CC except TAM.
 | `tests/integration/hlasm/test_branch_extended_mnemonics.py` | Every branch on condition extended spelling reaches its base mnemonic and mask through the bridge |
 | `tests/integration/hlasm/test_branch_on_condition.py` | Every branch on condition mnemonic and a spread of extended mnemonics on the VM: path taken, CC unchanged, branches into data abend `S0C1` |
 | `tests/unit/hlasm/test_branch_and_link_lowering.py` | Branch and link IR: target read before the link is written, the AMODE 31 link word, the BASSM and BSM mode test, SAM and TAM |
-| `tests/integration/hlasm/test_branch_and_link.py` | Every branch and link mnemonic, JAS and JASL on the VM: link relative to the next instruction, path, CC; AMODE 24 and 64 switches xfailed (red-dragon-6uyp.75) |
+| `tests/integration/hlasm/test_branch_and_link.py` | Every branch and link mnemonic, JAS and JASL on the VM: link relative to the next instruction, path, CC; BSM 0,14 and BASSM 14,14 return to the caller; AMODE 24 and 64 switches xfailed (red-dragon-6uyp.75) |
 | `tests/integration/hlasm/test_bridge_parser.py` | The real bridge: macro origins, refused assemblies |
 | `tests/integration/hlasm/test_storage_layout.py` | Section regions and address constants |
 | `tests/integration/hlasm/test_svc.py` | `WTO`, `ABEND` user and system codes, unlowered SVCs, `run()` with our maclib then `copybook_dirs`, call-site spans |
@@ -319,4 +324,4 @@ BASSM, BSM, SAM24, SAM31, SAM64, TAM. None changes the CC except TAM.
 | `tests/z390/test_logical_add_subtract_differential.py` | Every logical add and subtract mnemonic against z390; six z390 CC differences pinned (`-m z390`) |
 | `tests/z390/test_compare_differential.py` | Every compare mnemonic against z390; the relative-long alignment difference pinned (`-m z390`) |
 | `tests/z390/test_branch_on_condition_differential.py` | Every branch on condition case against z390; the BIC, BPP and BPRP differences pinned (`-m z390`) |
-| `tests/z390/test_branch_and_link_differential.py` | Every branch and link case against z390; z390's AMODE 24 and 64 switches pinned (`-m z390`) |
+| `tests/z390/test_branch_and_link_differential.py` | Every branch and link case and the mode-setting returns against z390; z390's AMODE 24 and 64 switches pinned (`-m z390`) |

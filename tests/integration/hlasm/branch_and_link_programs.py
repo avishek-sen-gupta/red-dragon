@@ -33,6 +33,7 @@ TARGETS = (
     "A24SUB   DC    A(MODESUB)\n"
     "A31SUB   DC    A(X'80000000'+MODESUB)\n"
     "A64SUB   DC    A(MODESUB+1)\n"
+    "ANEXT    DC    A(X'80000000'+NEXT)\n"
 )
 
 
@@ -90,6 +91,7 @@ LINK_CASES: Mapping[str, LinkCase] = {
     "BASSM": (AMODE_31_TARGET_IN_R4 + _line("BASSM", "5,4"), True),
     "BASSM 5,0": (_line("BASSM", "5,0"), False),
     "BASSM 5,5": (_line("L", "5,ASUB") + _line("BASSM", "5,5"), True),
+    "BSM 5,5": (_line("L", "5,ANEXT") + _line("BSM", "5,5"), False),
 }
 
 PRESET_R6 = _line("LHI", "6,7")
@@ -155,3 +157,13 @@ MODE_SWITCH_CASES: Mapping[str, ModeCase] = {
         FILL,
     ),
 }
+
+RETURN_CODE = 7
+CALLER_RETURNS: Mapping[str, str] = {
+    "BSM 0,14": _line("BSM", "0,14"),
+    "BASSM 14,14": _line("BASSM", "14,14"),
+}
+
+
+def return_program(code: str) -> str:
+    return f"T        CSECT\n{_line('LHI', f'15,{RETURN_CODE}')}{code}         END\n"

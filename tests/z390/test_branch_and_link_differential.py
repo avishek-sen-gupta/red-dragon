@@ -7,7 +7,7 @@ import pytest
 
 from tests.covers import NotLanguageFeature, covers
 from tests.integration.hlasm import branch_and_link_programs as programs
-from tests.integration.hlasm.hlasm_helpers import run_hlasm_machine
+from tests.integration.hlasm.hlasm_helpers import run_hlasm, run_hlasm_machine
 from tests.integration.hlasm.hlasm_machine import HlasmMachine
 from tests.integration.hlasm.hlasm_run import HlasmRun
 from tests.integration.hlasm.load_store_programs import FILL
@@ -82,3 +82,14 @@ def test_z390_leaves_amode_31_where_reddragon_abends(
         ),
         _mode(ABENDED, cc, taken, mode_register),
     )
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+@pytest.mark.parametrize("case", list(programs.CALLER_RETURNS))
+def test_mode_setting_return_to_the_caller_matches(
+    z390: Z390Runner, tmp_path: Path, case: str
+):
+    source = programs.return_program(programs.CALLER_RETURNS[case])
+    returned = HlasmRun(return_code=programs.RETURN_CODE, abend="", stdout="")
+
+    assert (run_hlasm(source), z390.run(source, tmp_path)) == (returned, returned)
