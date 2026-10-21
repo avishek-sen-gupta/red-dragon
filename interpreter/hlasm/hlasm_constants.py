@@ -25,3 +25,5 @@ LIST_SET = FuncName("__list_set")
 PARAM_VALUE = Register("%p_value")
 PARAM_LEFT = Register("%p_left")
 PARAM_RIGHT = Register("%p_right")
+
+SECTION_VAR_PREFIX = "__hlasm_sect_"
