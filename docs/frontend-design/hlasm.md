@@ -7,9 +7,9 @@
 The HLASM frontend lowers an IBM High Level Assembler program to IR. Parsing and
 assembly are the che4z language server's, through a forked bridge executable;
 Python lowers what che4z has already resolved. The machine claims z17 problem
-state in AMODE 31. Lowered so far: the seed opcodes (LR, SR, BCR, BASR, BALR,
-BRAS, SVC), the load and store unit, and the load address and immediates unit
-(see Opcode Units). Any other
+state in AMODE 31. Lowered so far: the seed opcodes (LR, BCR, BASR, BALR,
+BRAS, SVC), the load and store unit, the load address and immediates unit, and
+the signed add and subtract unit (see Opcode Units). Any other
 opcode abends `S0C1` at run time.
 
 ## Architecture
@@ -58,9 +58,11 @@ addresses.
 | `interpreter/hlasm/opcodes/svc.py` | SVC, by number |
 | `interpreter/hlasm/opcodes/load_store.py` | The load and store unit |
 | `interpreter/hlasm/opcodes/load_address_immediate.py` | The load address and immediates unit |
+| `interpreter/hlasm/opcodes/signed_add_subtract.py` | The signed add and subtract unit |
 | `interpreter/hlasm/data_movement.py` | `move(source, transforms, sink)`: storage, relative-long, address, immediate and register sources and sinks; sign extension, masks, shifts, byte reversal, bit-field insertion |
 | `interpreter/hlasm/effective_address.py` | `effective_address` (D(X,B), AMODE 31), `indexed_address` (index scaled by the element size), `relative_address` (RELOC_IMM) |
 | `interpreter/hlasm/alignment_check.py` | An operand off its boundary abends `S0C6` |
+| `interpreter/hlasm/fixed_point_overflow.py` | CC 3 with program-mask bit `1000` on abends `S0C8` |
 | `interpreter/hlasm/write_to_operator.py` | SVC 35 in IR |
 | `interpreter/hlasm/abend_completion.py` | SVC 13 in IR |
 | `interpreter/hlasm/statement_location.py` | Each statement's source line, set on the IR it lowers to |
@@ -182,9 +184,22 @@ LLIHF, LLIHH, LLIHL, LLILF (LLGFI), LLILH, LLILL (LLGHI); IIHF, IIHH, IIHL, IILF
 - z390 raises `S0C5` for LAE and LAEY at an address beyond its storage; the
   Principles of Operation make no storage reference. The z390 test pins that difference.
 
+**Signed add and subtract (red-dragon-6uyp.25).** A, AY, AR, ARK, AH, AHY, AHI,
+AFI, AHIK, ASI, AG, AGR, AGRK, AGF, AGFR, AGH, AGHI, AGFI, AGHIK, AGSI; S, SY, SR,
+SRK, SH, SHY, SG, SGR, SGRK, SGF, SGFR, SGH. CC 0 zero, 1 negative, 2 positive,
+3 overflow.
+
+- Overflow keeps the wrapped result and sets CC 3. When program-mask bit `1000`
+  (fixed-point overflow) is on, the run then abends `S0C8`. The initial mask has it
+  off.
+- AGF, AGFR, SGF, SGFR sign-extend a 32-bit second operand; AH, AHY, AGH, SH, SHY,
+  SGH a halfword; AHI, AGHI, AHIK, AGHIK a 16-bit immediate; ASI, AGSI an 8-bit one.
+- ASI and AGSI read, add and write back the storage operand.
+- SR moved here from the seed module and gained the `S0C8` check.
+
 ## Known Gaps
 
-- Only the seed opcodes, the load and store unit and the load address and immediates unit are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
+- Only the seed opcodes and the load and store, load address and immediates, and signed add and subtract units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
 - DC types beyond C, X, B, F, H, P, Z, A, Y and V, and any type extension, raise `UnsupportedDataType` (red-dragon-6uyp.63; floating point E, D, L: red-dragon-6uyp.21).
 - Falling through into DC/DS data or past a CSECT's end skips the data instead of executing it (red-dragon-6uyp.64).
 - Emission is O(n²) in the number of IR instructions (red-dragon-6uyp.62).
@@ -195,6 +210,7 @@ LLIHF, LLIHH, LLIHL, LLILF (LLGFI), LLILH, LLILL (LLGHI); IIHF, IIHH, IIHL, IILF
 - Access registers are not modelled: LAE and LAEY set only the general register.
 - In AMODE 31, LM, STM and LMD do not wrap EA + offset at 2 GiB.
 - ICM with mask 0 raises no access exception for its operand.
+- Nothing sets the program mask until SPM lands (red-dragon-6uyp.45), so `S0C8` is tested only on the VM with the mask set directly, not end to end.
 - `ABEND` takes only a self-defining code of 0-4095. Register notation (`ABEND (R2)`) and larger codes are not supported.
 
 ## Test Coverage
@@ -212,6 +228,8 @@ LLIHF, LLIHH, LLIHL, LLILF (LLGFI), LLILH, LLILL (LLGHI); IIHF, IIHH, IIHL, IILF
 | `tests/integration/hlasm/test_load_store.py` | Every load and store mnemonic on the VM, alignment abends |
 | `tests/unit/hlasm/test_load_address_immediate_lowering.py` | Load address and immediate IR: GPR widths read and written, index shift, no CC |
 | `tests/integration/hlasm/test_load_address_immediate.py` | Every load address and immediate mnemonic on the VM, CC unchanged |
+| `tests/unit/hlasm/test_signed_add_subtract_lowering.py` | Signed add and subtract IR: operand widths, CC, the `S0C8` trap and its program-mask condition |
+| `tests/integration/hlasm/test_signed_add_subtract.py` | Every signed add and subtract mnemonic on the VM: result, CC 0-3 |
 | `tests/integration/hlasm/test_bridge_parser.py` | The real bridge: macro origins, refused assemblies |
 | `tests/integration/hlasm/test_storage_layout.py` | Section regions and address constants |
 | `tests/integration/hlasm/test_svc.py` | `WTO`, `ABEND` user and system codes, unlowered SVCs, `run()` with our maclib then `copybook_dirs`, call-site spans |
@@ -221,3 +239,4 @@ LLIHF, LLIHH, LLIHL, LLILF (LLGFI), LLILH, LLILL (LLGHI); IIHF, IIHH, IIHL, IILF
 | `tests/z390/test_z390_log.py` | Registers and CC from a z390 abend dump (default run) |
 | `tests/z390/test_load_store_differential.py` | Load and store families, ICM CC, and the alignment difference against z390 (`-m z390`) |
 | `tests/z390/test_load_address_immediate_differential.py` | Address and immediate families against z390; the LAE `S0C5` and LXA `S0C1` differences (`-m z390`) |
+| `tests/z390/test_signed_add_subtract_differential.py` | Every signed add and subtract mnemonic against z390 (`-m z390`) |

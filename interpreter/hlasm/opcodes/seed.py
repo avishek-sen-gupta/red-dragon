@@ -1,20 +1,13 @@
 # pyright: standard
-"""Seed opcodes: LR, SR, the register branches BCR, BASR, BALR and BRAS."""
+"""Seed opcodes: LR, the register branches BCR, BASR, BALR and BRAS."""
 
 from collections.abc import Mapping
 
 from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.hlasm.branch_dispatch import emit_branch
 from interpreter.hlasm.effective_address import relative_address
-from interpreter.hlasm.fixed_width_ir import build_sub_signed_cc_ir
-from interpreter.hlasm.hlasm_constants import (
-    AMODE_31_LINK_BIT,
-    CC_VAR,
-    PARAM_LEFT,
-    PARAM_RIGHT,
-)
+from interpreter.hlasm.hlasm_constants import AMODE_31_LINK_BIT, CC_VAR
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
-from interpreter.hlasm.inline_ir import inline_ir
 from interpreter.hlasm.operands import (
     mask_operand,
     reg_operand,
@@ -22,41 +15,18 @@ from interpreter.hlasm.operands import (
 )
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.hlasm.storage_layout import section_var
-from interpreter.instructions import BranchIf, Label_, LoadIndex
+from interpreter.instructions import BranchIf, Label_
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
 
-_SUB_32 = build_sub_signed_cc_ir("hlasm.sub32", 32)
 _CC_MASK_TOP = 8
 _ALWAYS = 15
-
-
-def _element(emitter: HlasmEmitter, pair: Register, at: int) -> Register:
-    reg = emitter.fresh_reg()
-    emitter.emit_inst(
-        LoadIndex(result_reg=reg, arr_reg=pair, index_reg=emitter.int_(at))
-    )
-    return reg
 
 
 def lower_lr(emitter: HlasmEmitter, statement: MachineStatement) -> None:
     emitter.store_gr32(
         reg_operand(statement, 0), emitter.load_gr32(reg_operand(statement, 1))
     )
-
-
-def lower_sr(emitter: HlasmEmitter, statement: MachineStatement) -> None:
-    r1 = reg_operand(statement, 0)
-    pair = inline_ir(
-        emitter,
-        _SUB_32,
-        {
-            PARAM_LEFT: emitter.load_gr32(r1),
-            PARAM_RIGHT: emitter.load_gr32(reg_operand(statement, 1)),
-        },
-    )
-    emitter.store_gr32(r1, _element(emitter, pair, 0))
-    emitter.set_cc(_element(emitter, pair, 1))
 
 
 def _next_address(emitter: HlasmEmitter, statement: MachineStatement) -> Register:
@@ -117,7 +87,6 @@ def lower_bcr(emitter: HlasmEmitter, statement: MachineStatement) -> None:
 
 SEED_LOWERINGS: Mapping[str, StatementLowering] = {
     "LR": lower_lr,
-    "SR": lower_sr,
     "BCR": lower_bcr,
     "BASR": lower_branch_and_link,
     "BALR": lower_branch_and_link,
