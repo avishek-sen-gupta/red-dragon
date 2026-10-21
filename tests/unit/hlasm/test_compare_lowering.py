@@ -142,13 +142,12 @@ def test_each_form_reads_its_operand_widths_and_sets_only_the_cc():
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_word_and_doubleword_relative_forms_check_alignment_and_halfword_forms_do_not():
-    branches = {
-        m: [
-            i
-            for i in _lowered(_statement(m, (_reg(2), _relative(6))))
-            if isinstance(i, BranchIf)
-        ]
+    lowered = {
+        m: _lowered(_statement(m, (_reg(2), _relative(6))))
         for m in ("CRL", "CGRL", "CGFRL", "CLRL", "CLGRL", "CLGFRL", "CHRL", "CLGHRL")
+    }
+    branches = {
+        m: [i for i in ir if isinstance(i, BranchIf)] for m, ir in lowered.items()
     }
 
     assert {m: len(found) for m, found in branches.items()} == {
@@ -161,3 +160,4 @@ def test_word_and_doubleword_relative_forms_check_alignment_and_halfword_forms_d
         "CHRL": 0,
         "CLGHRL": 0,
     }
+    assert [i for ir in lowered.values() for i in ir if isinstance(i, Symbolic)] == []

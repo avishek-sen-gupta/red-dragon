@@ -73,7 +73,9 @@ def _shape(ir: Sequence[InstructionBase]) -> list[str]:
     return [
         _describe(i, consts)
         for i in ir
-        if isinstance(i, (LoadVar, StoreVar, BranchIf, Branch, LoadRegion, Binop))
+        if isinstance(
+            i, (LoadVar, StoreVar, BranchIf, Branch, LoadRegion, Binop, Symbolic)
+        )
     ]
 
 

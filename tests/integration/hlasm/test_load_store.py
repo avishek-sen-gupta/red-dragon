@@ -12,94 +12,85 @@ from tests.integration.hlasm.hlasm_run import HlasmRun
 SPECIFICATION = HlasmRun(return_code=0, abend="S0C6", stdout="")
 
 
-def _registers(
+COMPLETED = HlasmRun(return_code=0, abend="", stdout="")
+INITIAL_CC = 0
+
+
+def _machine(
     program: Callable[[str, str], str], body: str, results: Mapping[int, int]
-) -> Mapping[int, int]:
-    return run_hlasm_machine(program(body, programs.RETURN)).restricted_to(results).gprs
+) -> HlasmMachine:
+    return run_hlasm_machine(program(body, programs.RETURN_ZERO)).restricted_to(results)
+
+
+def _completed(results: Mapping[int, int]) -> HlasmMachine:
+    return HlasmMachine(COMPLETED, INITIAL_CC, results)
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_storage_loads_into_low_word_extend_and_keep_high_word():
     based = programs.based_program
-    assert (
-        _registers(based, programs.STORAGE_LOADS_32, programs.STORAGE_LOADS_32_RESULTS)
-        == programs.STORAGE_LOADS_32_RESULTS
-    )
-    assert (
-        _registers(based, programs.PARTIAL_INSERTS, programs.PARTIAL_INSERTS_RESULTS)
-        == programs.PARTIAL_INSERTS_RESULTS
-    )
+    assert _machine(
+        based, programs.STORAGE_LOADS_32, programs.STORAGE_LOADS_32_RESULTS
+    ) == _completed(programs.STORAGE_LOADS_32_RESULTS)
+    assert _machine(
+        based, programs.PARTIAL_INSERTS, programs.PARTIAL_INSERTS_RESULTS
+    ) == _completed(programs.PARTIAL_INSERTS_RESULTS)
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_storage_loads_into_full_register_extend_to_64_bits():
     based = programs.based_program
-    assert (
-        _registers(based, programs.STORAGE_LOADS_64, programs.STORAGE_LOADS_64_RESULTS)
-        == programs.STORAGE_LOADS_64_RESULTS
-    )
-    assert (
-        _registers(based, programs.MORE_LOADS_64, programs.MORE_LOADS_64_RESULTS)
-        == programs.MORE_LOADS_64_RESULTS
-    )
+    assert _machine(
+        based, programs.STORAGE_LOADS_64, programs.STORAGE_LOADS_64_RESULTS
+    ) == _completed(programs.STORAGE_LOADS_64_RESULTS)
+    assert _machine(
+        based, programs.MORE_LOADS_64, programs.MORE_LOADS_64_RESULTS
+    ) == _completed(programs.MORE_LOADS_64_RESULTS)
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_guarded_loads_keep_bits_33_to_63_without_guarded_storage():
-    assert (
-        _registers(
-            programs.based_program,
-            programs.GUARDED_LOADS,
-            programs.GUARDED_LOADS_RESULTS,
-        )
-        == programs.GUARDED_LOADS_RESULTS
-    )
+    assert _machine(
+        programs.based_program,
+        programs.GUARDED_LOADS,
+        programs.GUARDED_LOADS_RESULTS,
+    ) == _completed(programs.GUARDED_LOADS_RESULTS)
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_register_loads_extend_reverse_and_mask():
     based = programs.based_program
-    assert (
-        _registers(based, programs.REGISTER_LOADS, programs.REGISTER_LOADS_RESULTS)
-        == programs.REGISTER_LOADS_RESULTS
-    )
-    assert (
-        _registers(
-            based, programs.MORE_REGISTER_LOADS, programs.MORE_REGISTER_LOADS_RESULTS
-        )
-        == programs.MORE_REGISTER_LOADS_RESULTS
-    )
+    assert _machine(
+        based, programs.REGISTER_LOADS, programs.REGISTER_LOADS_RESULTS
+    ) == _completed(programs.REGISTER_LOADS_RESULTS)
+    assert _machine(
+        based, programs.MORE_REGISTER_LOADS, programs.MORE_REGISTER_LOADS_RESULTS
+    ) == _completed(programs.MORE_REGISTER_LOADS_RESULTS)
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_relative_loads_reach_another_section():
-    assert (
-        _registers(
-            programs.relative_program,
-            programs.RELATIVE_LOADS,
-            programs.RELATIVE_LOADS_RESULTS,
-        )
-        == programs.RELATIVE_LOADS_RESULTS
-    )
+    assert _machine(
+        programs.relative_program,
+        programs.RELATIVE_LOADS,
+        programs.RELATIVE_LOADS_RESULTS,
+    ) == _completed(programs.RELATIVE_LOADS_RESULTS)
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_stores_write_the_low_bytes_and_reversals():
     based = programs.based_program
-    assert _registers(based, programs.STORES, programs.STORES_RESULTS) == (
-        programs.STORES_RESULTS
+    assert _machine(based, programs.STORES, programs.STORES_RESULTS) == (
+        _completed(programs.STORES_RESULTS)
     )
-    assert _registers(based, programs.MORE_STORES, programs.MORE_STORES_RESULTS) == (
-        programs.MORE_STORES_RESULTS
+    assert _machine(based, programs.MORE_STORES, programs.MORE_STORES_RESULTS) == (
+        _completed(programs.MORE_STORES_RESULTS)
     )
-    assert (
-        _registers(
-            programs.relative_program,
-            programs.RELATIVE_STORES,
-            programs.RELATIVE_STORES_RESULTS,
-        )
-        == programs.RELATIVE_STORES_RESULTS
-    )
+    assert _machine(
+        programs.relative_program,
+        programs.RELATIVE_STORES,
+        programs.RELATIVE_STORES_RESULTS,
+    ) == _completed(programs.RELATIVE_STORES_RESULTS)
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
@@ -114,22 +105,16 @@ def test_multiples_wrap_from_r15_to_r0_and_move_words_or_doublewords():
             programs.LOAD_MULTIPLE_WRAPPING_RESULTS,
         )
     )
-    assert (
-        _registers(
-            programs.based_program, programs.MULTIPLES, programs.MULTIPLES_RESULTS
-        )
-        == programs.MULTIPLES_RESULTS
-    )
+    assert _machine(
+        programs.based_program, programs.MULTIPLES, programs.MULTIPLES_RESULTS
+    ) == _completed(programs.MULTIPLES_RESULTS)
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_store_characters_under_mask_stores_the_selected_bytes_contiguously():
-    assert (
-        _registers(
-            programs.based_program, programs.STORE_MASKED, programs.STORE_MASKED_RESULTS
-        )
-        == programs.STORE_MASKED_RESULTS
-    )
+    assert _machine(
+        programs.based_program, programs.STORE_MASKED, programs.STORE_MASKED_RESULTS
+    ) == _completed(programs.STORE_MASKED_RESULTS)
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

@@ -84,7 +84,7 @@ def _control(ir: Sequence[InstructionBase]) -> list[str]:
     return [
         f"StoreVar:{i.name}" if isinstance(i, StoreVar) else type(i).__name__
         for i in ir
-        if isinstance(i, BranchIf | Halt_ | StoreVar)
+        if isinstance(i, BranchIf | Halt_ | StoreVar | Symbolic)
     ]
 
 
@@ -98,7 +98,6 @@ def test_load_reads_the_base_then_a_storage_word_into_the_low_word():
         ("WriteRegion", "gpr", 4, 8 * 2 + 4),
     ]
     assert _control(ir) == []
-    assert [i for i in ir if isinstance(i, Symbolic)] == []
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
@@ -151,3 +150,4 @@ def test_store_multiple_wraps_and_writes_one_word_per_register():
             )
         ),
     ]
+    assert _control(ir) == []

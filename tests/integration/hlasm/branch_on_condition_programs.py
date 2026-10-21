@@ -166,9 +166,9 @@ CASES: Mapping[str, Case] = {
     **BRANCH_PREDICTION,
 }
 
-INTO_DATA = (
+DIRECT_INTO_DATA = (
     _line("J", "FILL"),
     _line("BC", "15,FILL"),
     _line("BRCL", "15,FILL"),
-    _line("BI", "DATATGT"),
 )
+INTO_DATA = (*DIRECT_INTO_DATA, _line("BI", "DATATGT"))

@@ -1,12 +1,12 @@
 # pyright: standard
-"""The bridge resolves every branch on condition extended mnemonic to its base mnemonic and mask."""
+"""The bridge resolves every branch extended mnemonic to its base mnemonic, with its mask or its first register."""
 
 from collections.abc import Mapping
 from pathlib import Path
 
 from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.frontends import get_hlasm_parser
-from interpreter.hlasm.operands import mask_operand
+from interpreter.hlasm.operands import mask_operand, reg_operand
 from tests.covers import NotLanguageFeature, covers
 
 CONDITIONS: Mapping[str, int] = {
@@ -51,11 +51,22 @@ SPELLINGS: Mapping[str, tuple[str, int, str]] = {
     **{f"JL{c}": ("BRCL", m, "TGT") for c, m in CONDITIONS.items()},
 }
 
+REGISTER_SPELLINGS: Mapping[str, tuple[str, int, str]] = {
+    "JCT": ("BRCT", 3, "3,TGT"),
+    "JCTG": ("BRCTG", 3, "3,TGT"),
+    "JXH": ("BRXH", 4, "4,6,TGT"),
+    "JXHG": ("BRXHG", 4, "4,6,TGT"),
+    "JXLE": ("BRXLE", 4, "4,6,TGT"),
+    "JXLEG": ("BRXLG", 4, "4,6,TGT"),
+    "JAS": ("BRAS", 14, "14,TGT"),
+    "JASL": ("BRASL", 14, "14,TGT"),
+}
+
 
 def _source() -> bytes:
     lines = "".join(
         f"         {spelling:<6}{operands}\n"
-        for spelling, (*_, operands) in SPELLINGS.items()
+        for spelling, (*_, operands) in {**SPELLINGS, **REGISTER_SPELLINGS}.items()
     )
     return (
         "T        CSECT\n"
@@ -75,12 +86,21 @@ def test_every_extended_spelling_reaches_its_base_mnemonic_and_mask(tmp_path: Pa
     program = parser.read(
         parser.parse_to_file(_source(), "branches.asm", tmp_path / "branches.json")
     )
-    resolved = {
+    machine = [s for s in program.statements if isinstance(s, MachineStatement)]
+    masked = {
         s.mnemonic: (s.base_mnemonic, mask_operand(s, 0))
-        for s in program.statements
-        if isinstance(s, MachineStatement) and s.mnemonic in SPELLINGS
+        for s in machine
+        if s.mnemonic in SPELLINGS
+    }
+    registered = {
+        s.mnemonic: (s.base_mnemonic, reg_operand(s, 0))
+        for s in machine
+        if s.mnemonic in REGISTER_SPELLINGS
     }
 
-    assert resolved == {
+    assert masked == {
         spelling: (base, mask) for spelling, (base, mask, _) in SPELLINGS.items()
+    }
+    assert registered == {
+        spelling: (base, r) for spelling, (base, r, _) in REGISTER_SPELLINGS.items()
     }

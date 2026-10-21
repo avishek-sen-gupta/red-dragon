@@ -72,7 +72,17 @@ def _shape(mnemonic: str, operands: Sequence[Operand]) -> list[str]:
         _describe(i, consts)
         for i in ir
         if isinstance(
-            i, (LoadVar, StoreVar, BranchIf, Branch, LoadRegion, WriteRegion, Binop)
+            i,
+            (
+                LoadVar,
+                StoreVar,
+                BranchIf,
+                Branch,
+                LoadRegion,
+                WriteRegion,
+                Binop,
+                Symbolic,
+            ),
         )
     ]
 
@@ -198,12 +208,3 @@ def test_branch_on_index_reads_increment_and_compare_value_before_writing_r1():
         "BRXHG": _index(RELATIVE_TARGET, (48, 56, 32), 8, ">"),
         "BRXLG 5,5": _index(RELATIVE_TARGET, (40, 40, 40), 8, "<="),
     }
-    assert [
-        i
-        for mnemonic, operands in (
-            ("BCT", (_reg(4), _storage(16))),
-            ("BXH", (*pair, _storage(16))),
-        )
-        for i in _lowered(mnemonic, operands)
-        if isinstance(i, Symbolic)
-    ] == []

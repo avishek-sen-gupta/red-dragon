@@ -220,6 +220,21 @@ UNDER_MASK: Mapping[str, Case] = {
         {5: HIGH_FILL},
         LOW,
     ),
+    "CLM mask 1111": (
+        "         L     2,NEG\n" "         CLM   2,B'1111',POS\n",
+        {2: HIGH_FILL | 0x80000001},
+        HIGH,
+    ),
+    "CLM mask 0001": (
+        "         L     2,NEG\n" "         CLM   2,B'0001',POS+3\n",
+        {2: HIGH_FILL | 0x80000001},
+        LOW,
+    ),
+    "CLM first byte decides": (
+        "         L     3,POS\n" "         CLM   3,B'1010',NEG\n",
+        {3: HIGH_FILL | 0x7FFF7FFE},
+        LOW,
+    ),
 }
 
 CASES: Mapping[str, Case] = {**SIGNED, **LOGICAL, **UNDER_MASK}

@@ -1,5 +1,5 @@
 # pyright: standard
-"""Branch on condition programs take the same path and keep the same CC in RedDragon and in z390, bar z390's BIC and its missing BPP and BPRP."""
+"""Branch on condition programs take the same path and keep the same CC in RedDragon and in z390, bar z390's BIC, its missing BPP and BPRP, and branches into data."""
 
 from pathlib import Path
 
@@ -17,6 +17,8 @@ pytestmark = pytest.mark.z390
 
 ABENDED = HlasmRun(return_code=0, abend="U0001", stdout="")
 OPERATION = HlasmRun(return_code=0, abend="S0C1", stdout="")
+PRIVILEGED_OPERATION = HlasmRun(return_code=0, abend="S0C2", stdout="")
+Z390_RAN_FILL_CC = 1
 PATH = (programs.PATH_REGISTER,)
 Z390_OPERATION_EXCEPTION = frozenset(
     {"BIC", "BI", "BINE", "BIO", "BIH", "BI high word and bit 32", "BPP", "BPRP"}
@@ -55,4 +57,22 @@ def test_taken_bic_and_branch_prediction_abend_s0c1_in_z390_only(
     ) == (
         _expected(case),
         HlasmMachine(OPERATION, cc, {programs.PATH_REGISTER: FILL}),
+    )
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+@pytest.mark.parametrize("branch", programs.DIRECT_INTO_DATA)
+def test_branch_into_data_abends_s0c1_here_while_z390_executes_the_data(
+    z390: Z390Runner, tmp_path: Path, branch: str
+):
+    source = programs.path_program(0, branch)
+
+    assert (
+        run_hlasm_machine(source).restricted_to(PATH),
+        z390.run_machine(source, tmp_path).restricted_to(PATH),
+    ) == (
+        HlasmMachine(OPERATION, 0, {programs.PATH_REGISTER: FILL}),
+        HlasmMachine(
+            PRIVILEGED_OPERATION, Z390_RAN_FILL_CC, {programs.PATH_REGISTER: FILL}
+        ),
     )
