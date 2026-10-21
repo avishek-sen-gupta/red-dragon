@@ -71,9 +71,9 @@ class HlasmBridgeParser(HlasmAstParser):
         return HlasmProgram.model_validate_json(path.read_text(encoding="utf-8"))
 
 
+def bridge_executable() -> str:
+    return os.environ.get(BRIDGE_ENV_VAR, DEFAULT_BRIDGE)
+
+
 def make_hlasm_parser(syslib: Sequence[Path] = ()) -> HlasmBridgeParser:
-    return HlasmBridgeParser(
-        RealSubprocessRunner(),
-        os.environ.get(BRIDGE_ENV_VAR, DEFAULT_BRIDGE),
-        syslib,
-    )
+    return HlasmBridgeParser(RealSubprocessRunner(), bridge_executable(), syslib)
