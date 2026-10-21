@@ -378,4 +378,6 @@ fileignoreconfig:
   checksum: 5761a6dc0a8376df593849cc0609c86f5ba62c9edf0297bfe6d5ab2e0f7d9006
 - filename: tests/integration/test_cobol_close_reel_unit.py
   checksum: 718e0654bec935f5dec59e63b911f3df6f819bf07dc252a28054c86a393595b5
+- filename: hlasm-bridge/che4z
+  checksum: 0bf45a37ca21c791d7526bd0089c070b1fb653f02a1f77e6044eb2a44a3e0fc1
 version: "1.0"
