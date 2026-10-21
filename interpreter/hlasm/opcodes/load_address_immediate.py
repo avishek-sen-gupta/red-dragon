@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.hlasm.data_movement import (
     immediate,
-    into_bits,
+    into_field,
     keep,
     move,
     relative_target,
@@ -30,16 +30,12 @@ TARGET_OPERAND = 0
 ADDRESS_OPERAND = 1
 
 
-def _field_mask(bits: int, shift: int) -> int:
-    return ((1 << bits) - 1) << shift
-
-
 def _logical(bits: int, shift: int) -> StatementLowering:
     return move(immediate(bits), (shifted(shift),), to_gr64)
 
 
 def _inserted(bits: int, shift: int) -> StatementLowering:
-    return move(immediate(bits), (shifted(shift),), into_bits(_field_mask(bits, shift)))
+    return move(immediate(bits), (), into_field(bits, shift))
 
 
 def _indexed(shift: int) -> StatementLowering:
