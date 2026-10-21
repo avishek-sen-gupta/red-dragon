@@ -3,12 +3,12 @@
 
 from __future__ import annotations
 
-import os
 import subprocess
 from collections import Counter
 from pathlib import Path
 
 import hlasm_asg
+from hlasm_asg.hlasm_bridge_parser import bridge_executable
 from hlasm_asg.instruction_table.architecture_level import ArchitectureLevel
 from hlasm_asg.instruction_table.instruction_table import InstructionTable
 from hlasm_asg.instruction_table.machine_instruction_row import MachineInstructionRow
@@ -60,7 +60,7 @@ SIE_LINKAGE_STACK_ASN_MEASUREMENT_GUARDED_STORAGE = frozenset(
 
 def _covered_mnemonics() -> set[str]:
     completed = subprocess.run(
-        [os.environ["HLASM_AST_BRIDGE"], "--instruction-table"],
+        [bridge_executable(), "--instruction-table"],
         capture_output=True,
         check=True,
         text=True,
