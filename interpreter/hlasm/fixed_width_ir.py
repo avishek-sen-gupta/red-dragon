@@ -22,7 +22,7 @@ type Fragment = tuple[Register, tuple[InstructionBase, ...]]
 
 
 def _reg(prefix: str, role: str) -> Register:
-    return Register(f"%{prefix}_{role}")
+    return Register(f"%{prefix}.{role}")
 
 
 def _const(prefix: str, role: str, value: int) -> Fragment:
@@ -40,7 +40,7 @@ def _binop(
 def _binop_const(
     prefix: str, role: str, operator: BinopKind, left: Register, right: int
 ) -> Fragment:
-    constant, constant_ir = _const(prefix, f"{role}_k", right)
+    constant, constant_ir = _const(f"{prefix}.{role}", "k", right)
     result, result_ir = _binop(prefix, role, operator, left, constant)
     return result, (*constant_ir, *result_ir)
 
@@ -98,7 +98,7 @@ def _overflow_cc(prefix: str, base_cc: Register, overflow: Register) -> Fragment
 def _signed_cc(
     prefix: str, result: Register, overflow: Register, bits: int
 ) -> Fragment:
-    nonzero, nonzero_ir = _nonzero_bit(f"{prefix}_res", result, bits)
+    nonzero, nonzero_ir = _nonzero_bit(f"{prefix}.res", result, bits)
     negative, negative_ir = _sign_bit(prefix, result, bits)
     doubled, doubled_ir = _binop_const(prefix, "nz2", BinopKind.MUL, nonzero, 2)
     base, base_ir = _binop(prefix, "cc_base", BinopKind.SUB, doubled, negative)
@@ -117,12 +117,12 @@ def build_to_signed_ir(func_name: str, bits: int) -> list[InstructionBase]:
 
 
 def build_add_signed_cc_ir(func_name: str, bits: int) -> list[InstructionBase]:
-    left, left_ir = _to_signed(f"{func_name}_l", PARAM_LEFT, bits)
-    right, right_ir = _to_signed(f"{func_name}_r", PARAM_RIGHT, bits)
+    left, left_ir = _to_signed(f"{func_name}.l", PARAM_LEFT, bits)
+    right, right_ir = _to_signed(f"{func_name}.r", PARAM_RIGHT, bits)
     exact, exact_ir = _binop(func_name, "exact", BinopKind.ADD, left, right)
-    result, result_ir = _to_signed(f"{func_name}_s", exact, bits)
+    result, result_ir = _to_signed(f"{func_name}.s", exact, bits)
     lost, lost_ir = _binop(func_name, "lost", BinopKind.SUB, exact, result)
-    overflow, overflow_ir = _nonzero_bit(f"{func_name}_o", lost, bits)
+    overflow, overflow_ir = _nonzero_bit(f"{func_name}.o", lost, bits)
     cc, cc_ir = _signed_cc(func_name, result, overflow, bits)
     pair, pair_ir = _pair(func_name, result, cc)
     return [
@@ -139,10 +139,10 @@ def build_add_signed_cc_ir(func_name: str, bits: int) -> list[InstructionBase]:
 
 
 def build_add_logical_cc_ir(func_name: str, bits: int) -> list[InstructionBase]:
-    left, left_ir = _wrap(f"{func_name}_l", PARAM_LEFT, bits)
-    right, right_ir = _wrap(f"{func_name}_r", PARAM_RIGHT, bits)
+    left, left_ir = _wrap(f"{func_name}.l", PARAM_LEFT, bits)
+    right, right_ir = _wrap(f"{func_name}.r", PARAM_RIGHT, bits)
     exact, exact_ir = _binop(func_name, "exact", BinopKind.ADD, left, right)
-    result, result_ir = _wrap(f"{func_name}_s", exact, bits)
+    result, result_ir = _wrap(f"{func_name}.s", exact, bits)
     carry, carry_ir = _binop_const(func_name, "carry", BinopKind.RSHIFT, exact, bits)
     nonzero, nonzero_ir = _nonzero_bit(func_name, result, bits)
     carry2, carry2_ir = _binop_const(func_name, "carry2", BinopKind.MUL, carry, 2)
