@@ -124,8 +124,8 @@ turns up something pertinent — a rejected approach, an edge case, a related is
 - An `xfail` reason must cite the bead id, so the gap stays traceable:
   `@pytest.mark.xfail(reason="... — red-dragon-xxxx")`. Exclude languages that
   genuinely lack the feature rather than xfailing them (C has no classes).
-- The default run excludes `external` and `nist` (see `project-context.md`). Do
-  not read a green default run as covering them.
+- The default run excludes `external`, `nist` and `z390` (see `project-context.md`).
+  Do not read a green default run as covering them.
 
 ### Talisman
 
