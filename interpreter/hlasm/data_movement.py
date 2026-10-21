@@ -7,7 +7,12 @@ from functools import reduce
 from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.hlasm.alignment_check import emit_alignment_check
 from interpreter.hlasm.effective_address import effective_address, relative_address
-from interpreter.hlasm.hlasm_constants import BITS_PER_BYTE
+from interpreter.hlasm.hlasm_constants import (
+    BITS_PER_BYTE,
+    BYTE_MASK,
+    LOW_WORD_MASK,
+    REGISTER_MASK,
+)
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.operands import (
     imm_operand,
@@ -22,10 +27,11 @@ from interpreter.register import Register
 type Source = Callable[[HlasmEmitter, MachineStatement], Register]
 type Transform = Callable[[HlasmEmitter, Register], Register]
 type Sink = Callable[[HlasmEmitter, MachineStatement, Register], None]
+type Apply = Callable[
+    [HlasmEmitter, tuple[Register, Register], Callable[[Register], None]], None
+]
 
-BYTE_MASK = 0xFF
-LOW_WORD_MASK = 0xFFFFFFFF
-REGISTER_MASK = 0xFFFFFFFF_FFFFFFFF
+FIRST_OPERAND = 0
 REGISTER_OPERAND = 0
 SECOND_OPERAND = 1
 ALIGNED_RELATIVE_WIDTHS = frozenset({4, 8})
@@ -35,12 +41,24 @@ def _ones(width: int) -> int:
     return (1 << (BITS_PER_BYTE * width)) - 1
 
 
-def storage_address(emitter: HlasmEmitter, statement: MachineStatement) -> Register:
-    return effective_address(emitter, storage_operand(statement, SECOND_OPERAND))
+def wrapped(emitter: HlasmEmitter, value: Register, bits: int) -> Register:
+    return emitter.binop(BinopKind.MOD, value, emitter.int_(1 << bits))
 
 
-def relative_target(emitter: HlasmEmitter, statement: MachineStatement) -> Register:
-    return relative_address(emitter, reloc_operand(statement, SECOND_OPERAND))
+def storage_address_at(index: int) -> Source:
+    return lambda emitter, statement: effective_address(
+        emitter, storage_operand(statement, index)
+    )
+
+
+def relative_target_at(index: int) -> Source:
+    return lambda emitter, statement: relative_address(
+        emitter, reloc_operand(statement, index)
+    )
+
+
+storage_address = storage_address_at(SECOND_OPERAND)
+relative_target = relative_target_at(SECOND_OPERAND)
 
 
 def _aligned(
@@ -76,6 +94,10 @@ def _store_to(
 
 def from_storage(width: int) -> Source:
     return _load_from(storage_address, width)
+
+
+def from_storage_at(index: int, width: int) -> Source:
+    return _load_from(storage_address_at(index), width)
 
 
 def from_aligned_storage(width: int) -> Source:
@@ -178,8 +200,9 @@ def signed(bits: int) -> Transform:
 
     def extend(emitter: HlasmEmitter, value: Register) -> Register:
         biased = emitter.binop(BinopKind.ADD, value, emitter.int_(half))
-        wrapped = emitter.binop(BinopKind.MOD, biased, emitter.int_(1 << bits))
-        return emitter.binop(BinopKind.SUB, wrapped, emitter.int_(half))
+        return emitter.binop(
+            BinopKind.SUB, wrapped(emitter, biased, bits), emitter.int_(half)
+        )
 
     return extend
 
@@ -238,5 +261,23 @@ def move(
             source(emitter, statement),
         )
         sink(emitter, statement, value)
+
+    return lower
+
+
+def storage_immediate(width: int, apply: Apply) -> StatementLowering:
+    address_of = storage_address_at(FIRST_OPERAND)
+    byte_immediate = signed_immediate(SECOND_OPERAND, BITS_PER_BYTE)
+
+    def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
+        address = address_of(emitter, statement)
+        apply(
+            emitter,
+            (
+                emitter.load_storage(address, 0, width),
+                byte_immediate(emitter, statement),
+            ),
+            lambda value: emitter.store_storage(address, 0, width, value),
+        )
 
     return lower

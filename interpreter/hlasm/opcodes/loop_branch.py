@@ -5,11 +5,18 @@ from collections.abc import Callable, Mapping
 
 from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.hlasm.branch_dispatch import emit_branch
-from interpreter.hlasm.data_movement import relative_target, signed, storage_address
-from interpreter.hlasm.effective_address import effective_address, relative_address
+from interpreter.hlasm.data_movement import (
+    from_gr32,
+    relative_target,
+    relative_target_at,
+    signed,
+    storage_address,
+    storage_address_at,
+    wrapped,
+)
 from interpreter.hlasm.hlasm_constants import DOUBLEWORD_BITS, WORD_BITS
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
-from interpreter.hlasm.operands import reg_operand, reloc_operand, storage_operand
+from interpreter.hlasm.operands import reg_operand
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.instructions import BranchIf, Label_
 from interpreter.operator_kind import BinopKind
@@ -45,14 +52,10 @@ def _branch_when(emitter: HlasmEmitter, condition: Register, target: Register) -
     emitter.emit_inst(Label_(label=fall))
 
 
-def _wrapped(emitter: HlasmEmitter, value: Register, bits: int) -> Register:
-    return emitter.binop(BinopKind.MOD, value, emitter.int_(1 << bits))
-
-
 def _count(emitter: HlasmEmitter, statement: MachineStatement, bits: int) -> Register:
     r1 = reg_operand(statement, FIRST_OPERAND)
     less_one = emitter.binop(BinopKind.SUB, LOADS[bits](emitter, r1), emitter.int_(1))
-    result = _wrapped(emitter, less_one, bits)
+    result = wrapped(emitter, less_one, bits)
     STORES[bits](emitter, r1, result)
     return result
 
@@ -68,12 +71,7 @@ def _on_count(bits: int, target: Target) -> StatementLowering:
 
 
 def _on_register_count(bits: int) -> StatementLowering:
-    branching = _on_count(
-        bits,
-        lambda emitter, statement: emitter.load_gr32(
-            reg_operand(statement, SECOND_OPERAND)
-        ),
-    )
+    branching = _on_count(bits, from_gr32(SECOND_OPERAND))
 
     def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
         if reg_operand(statement, SECOND_OPERAND) == NO_BRANCH_REGISTER:
@@ -84,16 +82,8 @@ def _on_register_count(bits: int) -> StatementLowering:
     return lower
 
 
-def _index_storage_target(
-    emitter: HlasmEmitter, statement: MachineStatement
-) -> Register:
-    return effective_address(emitter, storage_operand(statement, INDEX_TARGET_OPERAND))
-
-
-def _index_relative_target(
-    emitter: HlasmEmitter, statement: MachineStatement
-) -> Register:
-    return relative_address(emitter, reloc_operand(statement, INDEX_TARGET_OPERAND))
+INDEX_STORAGE_TARGET = storage_address_at(INDEX_TARGET_OPERAND)
+INDEX_RELATIVE_TARGET = relative_target_at(INDEX_TARGET_OPERAND)
 
 
 def _step_index(
@@ -104,7 +94,7 @@ def _step_index(
     increment = LOADS[bits](emitter, r3)
     compare_value = LOADS[bits](emitter, r3 | COMPARE_VALUE_BIT)
     total = emitter.binop(BinopKind.ADD, LOADS[bits](emitter, r1), increment)
-    result = _wrapped(emitter, total, bits)
+    result = wrapped(emitter, total, bits)
     STORES[bits](emitter, r1, result)
     return result, compare_value
 
@@ -130,12 +120,12 @@ LOOP_BRANCH_LOWERINGS: Mapping[str, StatementLowering] = {
     "BCTGR": _on_register_count(DOUBLEWORD_BITS),
     "BRCT": _on_count(WORD_BITS, relative_target),
     "BRCTG": _on_count(DOUBLEWORD_BITS, relative_target),
-    "BXH": _on_index(WORD_BITS, BinopKind.GT, _index_storage_target),
-    "BXHG": _on_index(DOUBLEWORD_BITS, BinopKind.GT, _index_storage_target),
-    "BXLE": _on_index(WORD_BITS, BinopKind.LE, _index_storage_target),
-    "BXLEG": _on_index(DOUBLEWORD_BITS, BinopKind.LE, _index_storage_target),
-    "BRXH": _on_index(WORD_BITS, BinopKind.GT, _index_relative_target),
-    "BRXHG": _on_index(DOUBLEWORD_BITS, BinopKind.GT, _index_relative_target),
-    "BRXLE": _on_index(WORD_BITS, BinopKind.LE, _index_relative_target),
-    "BRXLG": _on_index(DOUBLEWORD_BITS, BinopKind.LE, _index_relative_target),
+    "BXH": _on_index(WORD_BITS, BinopKind.GT, INDEX_STORAGE_TARGET),
+    "BXHG": _on_index(DOUBLEWORD_BITS, BinopKind.GT, INDEX_STORAGE_TARGET),
+    "BXLE": _on_index(WORD_BITS, BinopKind.LE, INDEX_STORAGE_TARGET),
+    "BXLEG": _on_index(DOUBLEWORD_BITS, BinopKind.LE, INDEX_STORAGE_TARGET),
+    "BRXH": _on_index(WORD_BITS, BinopKind.GT, INDEX_RELATIVE_TARGET),
+    "BRXHG": _on_index(DOUBLEWORD_BITS, BinopKind.GT, INDEX_RELATIVE_TARGET),
+    "BRXLE": _on_index(WORD_BITS, BinopKind.LE, INDEX_RELATIVE_TARGET),
+    "BRXLG": _on_index(DOUBLEWORD_BITS, BinopKind.LE, INDEX_RELATIVE_TARGET),
 }

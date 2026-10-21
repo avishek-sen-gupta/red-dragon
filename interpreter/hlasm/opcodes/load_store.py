@@ -27,10 +27,13 @@ from interpreter.hlasm.fixed_width_ir import build_sign_cc_ir
 from interpreter.hlasm.hlasm_constants import (
     ADDRESS_MASK_31,
     BITS_PER_BYTE,
+    BYTE_MASK,
     DOUBLEWORD_BYTES,
     GPR_COUNT,
     HALFWORD_BITS,
     HALFWORD_BYTES,
+    HALFWORD_MASK,
+    ONE_BYTE,
     PARAM_VALUE,
     WORD_BITS,
     WORD_BYTES,
@@ -44,11 +47,8 @@ from interpreter.register import Register
 type RegisterWrite = Callable[[HlasmEmitter, int, Register], None]
 type RegisterRead = Callable[[HlasmEmitter, int], Register]
 
-BYTE = 1
 RIGHTMOST_BYTE_ZERO_32 = 0xFFFFFF00
 RIGHTMOST_BYTE_ZERO_64 = 0xFFFFFFFF_FFFFFF00
-BYTE_MASK = 0xFF
-HALFWORD_MASK = 0xFFFF
 LOW_WORD_POSITIONS = 4
 MASK_BITS = (0b1000, 0b0100, 0b0010, 0b0001)
 SIGN_CC = {
@@ -61,16 +61,16 @@ STORAGE_LOADS: Mapping[str, StatementLowering] = {
     "LY": move(from_storage(WORD_BYTES), (), to_gr32),
     "LH": move(from_storage(HALFWORD_BYTES), (signed(HALFWORD_BITS),), to_gr32),
     "LHY": move(from_storage(HALFWORD_BYTES), (signed(HALFWORD_BITS),), to_gr32),
-    "LB": move(from_storage(BYTE), (signed(BITS_PER_BYTE),), to_gr32),
-    "LLC": move(from_storage(BYTE), (), to_gr32),
+    "LB": move(from_storage(ONE_BYTE), (signed(BITS_PER_BYTE),), to_gr32),
+    "LLC": move(from_storage(ONE_BYTE), (), to_gr32),
     "LLH": move(from_storage(HALFWORD_BYTES), (), to_gr32),
     "LZRF": move(from_storage(WORD_BYTES), (keep(RIGHTMOST_BYTE_ZERO_32),), to_gr32),
     "LRV": move(from_storage(WORD_BYTES), (reversed_bytes(WORD_BYTES),), to_gr32),
     "LG": move(from_storage(DOUBLEWORD_BYTES), (), to_gr64),
     "LGF": move(from_storage(WORD_BYTES), (signed(WORD_BITS),), to_gr64),
     "LGH": move(from_storage(HALFWORD_BYTES), (signed(HALFWORD_BITS),), to_gr64),
-    "LGB": move(from_storage(BYTE), (signed(BITS_PER_BYTE),), to_gr64),
-    "LLGC": move(from_storage(BYTE), (), to_gr64),
+    "LGB": move(from_storage(ONE_BYTE), (signed(BITS_PER_BYTE),), to_gr64),
+    "LLGC": move(from_storage(ONE_BYTE), (), to_gr64),
     "LLGH": move(from_storage(HALFWORD_BYTES), (), to_gr64),
     "LLGF": move(from_storage(WORD_BYTES), (), to_gr64),
     "LLGT": move(from_storage(WORD_BYTES), (keep(ADDRESS_MASK_31),), to_gr64),
@@ -85,8 +85,8 @@ STORAGE_LOADS: Mapping[str, StatementLowering] = {
         from_aligned_storage(DOUBLEWORD_BYTES), (keep(ADDRESS_MASK_31),), to_gr64
     ),
     "LLGFSG": move(from_aligned_storage(WORD_BYTES), (keep(ADDRESS_MASK_31),), to_gr64),
-    "IC": move(from_storage(BYTE), (), into_low_bytes(BYTE)),
-    "ICY": move(from_storage(BYTE), (), into_low_bytes(BYTE)),
+    "IC": move(from_storage(ONE_BYTE), (), into_low_bytes(ONE_BYTE)),
+    "ICY": move(from_storage(ONE_BYTE), (), into_low_bytes(ONE_BYTE)),
     "LRVH": move(
         from_storage(HALFWORD_BYTES),
         (reversed_bytes(HALFWORD_BYTES),),
@@ -129,8 +129,8 @@ STORES: Mapping[str, StatementLowering] = {
     "STG": move(from_gr64(0), (), to_storage(DOUBLEWORD_BYTES)),
     "STH": move(from_gr32(0), (), to_storage(HALFWORD_BYTES)),
     "STHY": move(from_gr32(0), (), to_storage(HALFWORD_BYTES)),
-    "STC": move(from_gr32(0), (), to_storage(BYTE)),
-    "STCY": move(from_gr32(0), (), to_storage(BYTE)),
+    "STC": move(from_gr32(0), (), to_storage(ONE_BYTE)),
+    "STCY": move(from_gr32(0), (), to_storage(ONE_BYTE)),
     "STRV": move(from_gr32(0), (reversed_bytes(WORD_BYTES),), to_storage(WORD_BYTES)),
     "STRVG": move(
         from_gr64(0), (reversed_bytes(DOUBLEWORD_BYTES),), to_storage(DOUBLEWORD_BYTES)

@@ -9,24 +9,19 @@ from interpreter.hlasm.data_movement import (
     Source,
     from_gr32,
     from_gr64,
-    from_storage,
-    immediate,
-    signed_immediate,
+    storage_immediate,
     to_gr32,
     to_gr64,
 )
-from interpreter.hlasm.effective_address import effective_address
 from interpreter.hlasm.fixed_width_ir import (
     build_add_logical_carry_cc_ir,
     build_add_logical_cc_ir,
     build_sub_logical_borrow_cc_ir,
 )
 from interpreter.hlasm.hlasm_constants import (
-    BITS_PER_BYTE,
     CC_VAR,
     DOUBLEWORD_BITS,
     DOUBLEWORD_BYTES,
-    HALFWORD_BITS,
     PARAM_CARRY,
     PARAM_LEFT,
     PARAM_RIGHT,
@@ -35,7 +30,12 @@ from interpreter.hlasm.hlasm_constants import (
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.inline_ir import inline_result_and_cc
-from interpreter.hlasm.operands import storage_operand
+from interpreter.hlasm.opcodes.operand_sources import (
+    DOUBLEWORD_STORAGE,
+    LOGICAL_WORD_IMMEDIATE,
+    THIRD_HALFWORD_IMMEDIATE,
+    WORD_STORAGE,
+)
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.instructions import InstructionBase
 from interpreter.operator_kind import BinopKind
@@ -91,19 +91,15 @@ def logical_arithmetic(
 
 
 def to_storage_immediate(operation: Operation, width: int) -> StatementLowering:
-    def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
-        address = effective_address(emitter, storage_operand(statement, 0))
-        _apply(
+    return storage_immediate(
+        width,
+        lambda emitter, operands, store: _apply(
             emitter,
             operation,
-            {
-                PARAM_LEFT: emitter.load_storage(address, 0, width),
-                PARAM_RIGHT: signed_immediate(1, BITS_PER_BYTE)(emitter, statement),
-            },
-            lambda value: emitter.store_storage(address, 0, width, value),
-        )
-
-    return lower
+            {PARAM_LEFT: operands[0], PARAM_RIGHT: operands[1]},
+            store,
+        ),
+    )
 
 
 def _sum(
@@ -124,11 +120,6 @@ def _carried(
     )
 
 
-WORD_STORAGE = from_storage(WORD_BYTES)
-DOUBLEWORD_STORAGE = from_storage(DOUBLEWORD_BYTES)
-WORD_IMMEDIATE = immediate(WORD_BITS)
-THIRD_HALFWORD_SIGNED_IMMEDIATE = signed_immediate(2, HALFWORD_BITS)
-
 ADD_WORD = _sum(ADD_32, to_gr32)
 ADD_DOUBLEWORD = _sum(ADD_64, to_gr64)
 ADD_CARRY_WORD = _carried(ADD_CARRY_32, to_gr32, carry_in)
@@ -143,16 +134,16 @@ ADDS: Mapping[str, StatementLowering] = {
     "ALY": ADD_WORD(from_gr32(0), WORD_STORAGE),
     "ALR": ADD_WORD(from_gr32(0), from_gr32(1)),
     "ALRK": ADD_WORD(from_gr32(1), from_gr32(2)),
-    "ALFI": ADD_WORD(from_gr32(0), WORD_IMMEDIATE),
-    "ALHSIK": ADD_WORD(from_gr32(1), THIRD_HALFWORD_SIGNED_IMMEDIATE),
+    "ALFI": ADD_WORD(from_gr32(0), LOGICAL_WORD_IMMEDIATE),
+    "ALHSIK": ADD_WORD(from_gr32(1), THIRD_HALFWORD_IMMEDIATE),
     "ALSI": to_storage_immediate(ADD_32, WORD_BYTES),
     "ALG": ADD_DOUBLEWORD(from_gr64(0), DOUBLEWORD_STORAGE),
     "ALGR": ADD_DOUBLEWORD(from_gr64(0), from_gr64(1)),
     "ALGRK": ADD_DOUBLEWORD(from_gr64(1), from_gr64(2)),
     "ALGF": ADD_DOUBLEWORD(from_gr64(0), WORD_STORAGE),
     "ALGFR": ADD_DOUBLEWORD(from_gr64(0), from_gr32(1)),
-    "ALGFI": ADD_DOUBLEWORD(from_gr64(0), WORD_IMMEDIATE),
-    "ALGHSIK": ADD_DOUBLEWORD(from_gr64(1), THIRD_HALFWORD_SIGNED_IMMEDIATE),
+    "ALGFI": ADD_DOUBLEWORD(from_gr64(0), LOGICAL_WORD_IMMEDIATE),
+    "ALGHSIK": ADD_DOUBLEWORD(from_gr64(1), THIRD_HALFWORD_IMMEDIATE),
     "ALGSI": to_storage_immediate(ADD_64, DOUBLEWORD_BYTES),
     "ALC": ADD_CARRY_WORD(from_gr32(0), WORD_STORAGE),
     "ALCR": ADD_CARRY_WORD(from_gr32(0), from_gr32(1)),
@@ -165,13 +156,13 @@ SUBTRACTS: Mapping[str, StatementLowering] = {
     "SLY": SUB_WORD(from_gr32(0), WORD_STORAGE),
     "SLR": SUB_WORD(from_gr32(0), from_gr32(1)),
     "SLRK": SUB_WORD(from_gr32(1), from_gr32(2)),
-    "SLFI": SUB_WORD(from_gr32(0), WORD_IMMEDIATE),
+    "SLFI": SUB_WORD(from_gr32(0), LOGICAL_WORD_IMMEDIATE),
     "SLG": SUB_DOUBLEWORD(from_gr64(0), DOUBLEWORD_STORAGE),
     "SLGR": SUB_DOUBLEWORD(from_gr64(0), from_gr64(1)),
     "SLGRK": SUB_DOUBLEWORD(from_gr64(1), from_gr64(2)),
     "SLGF": SUB_DOUBLEWORD(from_gr64(0), WORD_STORAGE),
     "SLGFR": SUB_DOUBLEWORD(from_gr64(0), from_gr32(1)),
-    "SLGFI": SUB_DOUBLEWORD(from_gr64(0), WORD_IMMEDIATE),
+    "SLGFI": SUB_DOUBLEWORD(from_gr64(0), LOGICAL_WORD_IMMEDIATE),
     "SLB": SUB_BORROW_WORD(from_gr32(0), WORD_STORAGE),
     "SLBR": SUB_BORROW_WORD(from_gr32(0), from_gr32(1)),
     "SLBG": SUB_BORROW_DOUBLEWORD(from_gr64(0), DOUBLEWORD_STORAGE),

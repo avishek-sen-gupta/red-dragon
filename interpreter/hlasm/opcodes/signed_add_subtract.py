@@ -9,24 +9,18 @@ from interpreter.hlasm.data_movement import (
     Source,
     from_gr32,
     from_gr64,
-    from_storage,
-    sign_extended,
-    signed_immediate,
+    storage_immediate,
     to_gr32,
     to_gr64,
 )
-from interpreter.hlasm.effective_address import effective_address
 from interpreter.hlasm.fixed_point_overflow import emit_fixed_point_overflow_check
 from interpreter.hlasm.fixed_width_ir import (
     build_add_signed_cc_ir,
     build_sub_signed_cc_ir,
 )
 from interpreter.hlasm.hlasm_constants import (
-    BITS_PER_BYTE,
     DOUBLEWORD_BITS,
     DOUBLEWORD_BYTES,
-    HALFWORD_BITS,
-    HALFWORD_BYTES,
     PARAM_LEFT,
     PARAM_RIGHT,
     WORD_BITS,
@@ -34,7 +28,16 @@ from interpreter.hlasm.hlasm_constants import (
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.inline_ir import inline_result_and_cc
-from interpreter.hlasm.operands import storage_operand
+from interpreter.hlasm.opcodes.operand_sources import (
+    DOUBLEWORD_STORAGE,
+    HALFWORD_IMMEDIATE,
+    SIGNED_HALFWORD_STORAGE,
+    SIGNED_LOW_WORD,
+    SIGNED_WORD_STORAGE,
+    THIRD_HALFWORD_IMMEDIATE,
+    WORD_IMMEDIATE,
+    WORD_STORAGE,
+)
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.instructions import InstructionBase
 from interpreter.register import Register
@@ -78,19 +81,10 @@ def signed_arithmetic(
 
 
 def to_storage_immediate(operation: Operation, width: int) -> StatementLowering:
-    def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
-        address = effective_address(emitter, storage_operand(statement, 0))
-        _apply(
-            emitter,
-            operation,
-            (
-                emitter.load_storage(address, 0, width),
-                signed_immediate(1, BITS_PER_BYTE)(emitter, statement),
-            ),
-            lambda value: emitter.store_storage(address, 0, width, value),
-        )
-
-    return lower
+    return storage_immediate(
+        width,
+        lambda emitter, operands, store: _apply(emitter, operation, operands, store),
+    )
 
 
 def _word(operation: Operation, left: Source, right: Source) -> StatementLowering:
@@ -100,15 +94,6 @@ def _word(operation: Operation, left: Source, right: Source) -> StatementLowerin
 def _doubleword(operation: Operation, left: Source, right: Source) -> StatementLowering:
     return signed_arithmetic(operation, left, right, to_gr64)
 
-
-WORD_STORAGE = from_storage(WORD_BYTES)
-DOUBLEWORD_STORAGE = from_storage(DOUBLEWORD_BYTES)
-SIGNED_HALFWORD_STORAGE = sign_extended(from_storage(HALFWORD_BYTES), HALFWORD_BITS)
-SIGNED_WORD_STORAGE = sign_extended(from_storage(WORD_BYTES), WORD_BITS)
-SIGNED_LOW_WORD = sign_extended(from_gr32(1), WORD_BITS)
-HALFWORD_IMMEDIATE = signed_immediate(1, HALFWORD_BITS)
-WORD_IMMEDIATE = signed_immediate(1, WORD_BITS)
-THIRD_HALFWORD_IMMEDIATE = signed_immediate(2, HALFWORD_BITS)
 
 ADDS: Mapping[str, StatementLowering] = {
     "A": _word(ADD_32, from_gr32(0), WORD_STORAGE),
