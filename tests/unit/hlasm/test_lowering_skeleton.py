@@ -160,9 +160,11 @@ def test_seed_opcodes_branch_link_and_return_through_the_dispatch():
     base = int(_var(vm, "__hlasm_sect_MAIN"))
     gprs = int(_var(vm, "__hlasm_gprs"))
     back = base + 34
-    assert [words[r] for r in (3, 4, 6, 7, 10, 11, 12, 14, 15)] == [
+    assert [words[r] for r in (2, 3, 4, 5, 6, 7, 10, 11, 12, 14, 15)] == [
+        0x80000000 | (base + 42),
         0xFFFFFFFE,
         7,
+        0x80000000 | (base + 48),
         base + 28,
         0x80000000 | back,
         back,
@@ -176,8 +178,19 @@ def test_seed_opcodes_branch_link_and_return_through_the_dispatch():
     assert vm.region_get(Address(str(words[13]))) == bytearray(72)
 
 
+def _miss(fixture: str) -> list[int | str]:
+    vm = _run(HlasmFrontend(_program(fixture)))
+    words = _low_words(vm)
+    return [
+        _var(vm, "__hlasm_abend"),
+        words[15],
+        words[6] - int(_var(vm, "__hlasm_sect_MAIN")),
+        words[6] - words[13],
+    ]
+
+
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_unknown_opcode_abends_s0c1_and_names_the_mnemonic(
+def test_unknown_opcodes_and_dispatch_misses_abend_s0c1(
     caplog: pytest.LogCaptureFixture,
 ):
     frontend = HlasmFrontend(_program("unknown_opcode.json"))
@@ -188,3 +201,5 @@ def test_unknown_opcode_abends_s0c1_and_names_the_mnemonic(
         "HLASM opcode SVC has no lowering; it abends S0C1"
     ]
     assert [_var(vm, "__hlasm_abend"), _low_words(vm)[15]] == ["S0C1", 3]
+    assert _miss("branch_into_data.json")[:3] == ["S0C1", 4, 16]
+    assert [_miss("branch_into_dsect.json")[at] for at in (0, 1, 3)] == ["S0C1", 5, 4]
