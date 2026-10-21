@@ -243,8 +243,8 @@ the CC is unchanged.
   AMODE 31 keeps its bits 33-63.
 - BPP and BPRP are hints with no architected effect and lower to nothing.
 - Every target, relative ones included, goes through `hl_dispatch`; a target that is not a
-  machine statement abends `S0C1`. A lowering sees one statement, not the program, so it
-  cannot branch to a relative target's label directly.
+  machine statement abends `S0C1`. Branching straight to a static relative target's label
+  is deferred as a performance item (red-dragon-6uyp.62).
 - z390 branches BIC to the operand address instead of the doubleword stored there, and
   abends `S0C1` on BPP and BPRP. The z390 test pins both differences.
 
@@ -286,6 +286,7 @@ the CC is unchanged.
 | `tests/unit/hlasm/test_compare_lowering.py` | Compare IR: operand widths read, nothing written, only the CC set, relative-long alignment |
 | `tests/integration/hlasm/test_compare.py` | Every compare mnemonic on the VM: CC, operands unchanged, alignment abends |
 | `tests/unit/hlasm/test_branch_on_condition_lowering.py` | Branch on condition IR: the CC mask test, each form's target, the forms that lower to nothing |
+| `tests/integration/hlasm/test_branch_extended_mnemonics.py` | Every branch on condition extended spelling reaches its base mnemonic and mask through the bridge |
 | `tests/integration/hlasm/test_branch_on_condition.py` | Every branch on condition mnemonic and a spread of extended mnemonics on the VM: path taken, CC unchanged, branches into data abend `S0C1` |
 | `tests/integration/hlasm/test_bridge_parser.py` | The real bridge: macro origins, refused assemblies |
 | `tests/integration/hlasm/test_storage_layout.py` | Section regions and address constants |

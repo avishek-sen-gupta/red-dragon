@@ -141,7 +141,9 @@ def test_mask_fifteen_branches_without_a_test_and_no_ops_lower_to_nothing():
     lowered = {
         "BC": _lowered("BC", (_mask(15), _storage(16))),
         "BRC": _lowered("BRC", (_mask(15), _relative(40))),
+        "BRCL": _lowered("BRCL", (_mask(15), _relative(40))),
         "BIC": _lowered("BIC", (_mask(15), _storage(16))),
+        "BCR": _lowered("BCR", (_mask(15), _reg(BASE))),
     }
     nothing = [
         _lowered("BC", (_mask(0), _storage(16))),
@@ -161,5 +163,5 @@ def test_mask_fifteen_branches_without_a_test_and_no_ops_lower_to_nothing():
     assert [
         [i for i in ir if isinstance(i, (BranchIf, WriteRegion, Symbolic))]
         for ir in lowered.values()
-    ] == [[], [], []]
+    ] == [[]] * len(lowered)
     assert nothing == [()] * len(nothing)
