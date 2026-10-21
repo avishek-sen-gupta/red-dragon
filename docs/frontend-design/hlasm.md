@@ -7,11 +7,10 @@
 The HLASM frontend lowers an IBM High Level Assembler program to IR. Parsing and
 assembly are the che4z language server's, through a forked bridge executable;
 Python lowers what che4z has already resolved. The machine claims z17 problem
-state in AMODE 31. Lowered so far: the seed opcodes (LR, BCR, BASR, BALR,
-BRAS, SVC), the load and store unit, the load address and immediates unit, the
-signed add and subtract unit, and the logical add and subtract unit (see Opcode
-Units). Any other
-opcode abends `S0C1` at run time.
+state in AMODE 31. Lowered so far: the seed opcodes (LR, BASR, BALR, BRAS,
+SVC) and the load and store, load address and immediates, signed add and subtract,
+logical add and subtract, compare and branch on condition units (see Opcode Units).
+Any other opcode abends `S0C1` at run time.
 
 ## Architecture
 
@@ -62,6 +61,7 @@ addresses.
 | `interpreter/hlasm/opcodes/signed_add_subtract.py` | The signed add and subtract unit |
 | `interpreter/hlasm/opcodes/logical_add_subtract.py` | The logical add and subtract unit |
 | `interpreter/hlasm/opcodes/compare.py` | The compare unit, signed and logical |
+| `interpreter/hlasm/opcodes/branch_on_condition.py` | The branch on condition unit |
 | `interpreter/hlasm/data_movement.py` | `move(source, transforms, sink)`: storage, relative-long, address, immediate and register sources and sinks; sign extension, masks, shifts, byte reversal, bit-field insertion |
 | `interpreter/hlasm/effective_address.py` | `effective_address` (D(X,B), AMODE 31), `indexed_address` (index scaled by the element size), `relative_address` (RELOC_IMM) |
 | `interpreter/hlasm/alignment_check.py` | An operand off its boundary abends `S0C6` |
@@ -231,12 +231,29 @@ stored.
 - Word and doubleword relative-long operands check alignment and abend `S0C6`; z390 does
   not, and the z390 test pins that difference.
 
+**Branch on condition (red-dragon-6uyp.32).** BC, BCR, BIC, BRC, BRCL, BPP, BPRP. The
+bridge hands every extended mnemonic (B, BE, BNER, BIL, J, JLNOP, BRUL, ...) over as its
+base mnemonic with the mask filled in. The branch is taken when mask bit `8 >> CC` is one;
+the CC is unchanged.
+
+- Mask 0 lowers to nothing; mask 15 branches without testing the CC.
+- BC branches to the D2(X2,B2) address, BCR to R2, BRC and BRCL to the relative target.
+  BCR with R2 = 0 does not branch, so BCR 15,0 and BCR 14,0 (serialization) are no-ops.
+- BIC branches to the doubleword stored at D2(X2,B2), read only when the branch is taken.
+  AMODE 31 keeps its bits 33-63.
+- BPP and BPRP are hints with no architected effect and lower to nothing.
+- Every target, relative ones included, goes through `hl_dispatch`; a target that is not a
+  machine statement abends `S0C1`. A lowering sees one statement, not the program, so it
+  cannot branch to a relative target's label directly.
+- z390 branches BIC to the operand address instead of the doubleword stored there, and
+  abends `S0C1` on BPP and BPRP. The z390 test pins both differences.
+
 ## Known Gaps
 
-- Only the seed opcodes and the load and store, load address and immediates, signed add and subtract, logical add and subtract, and compare units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
+- Only the seed opcodes and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare and branch on condition units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
 - DC types beyond C, X, B, F, H, P, Z, A, Y and V, and any type extension, raise `UnsupportedDataType` (red-dragon-6uyp.63; floating point E, D, L: red-dragon-6uyp.21).
 - Falling through into DC/DS data or past a CSECT's end skips the data instead of executing it (red-dragon-6uyp.64).
-- Emission is O(n²) in the number of IR instructions (red-dragon-6uyp.62).
+- Emission is O(n²) in the number of IR instructions, and every branch, even to a static relative target, walks the dispatch chain (red-dragon-6uyp.62).
 - Logical shifts are to be built in IR, not on the VM's `>>>`, which is not width-aware (red-dragon-srvz).
 - `EXTRN`, `ENTRY` and V-type constants are not resolved; V-constants hold zero (red-dragon-6uyp.8, red-dragon-6uyp.15).
 - Machine-instruction bytes are not in section storage (a spec non-goal: self-modifying code), so `EX` targets and `CLC` against code do not see them.
@@ -257,7 +274,7 @@ stored.
 | `tests/unit/hlasm/test_machine.py` | Machine start-up state |
 | `tests/unit/hlasm/test_dc_encoding.py` | DC images |
 | `tests/unit/hlasm/test_fixed_width_ir.py` | Fixed-width arithmetic and condition codes |
-| `tests/unit/hlasm/test_lowering_skeleton.py` | Labels, seed opcodes, dispatch, abends |
+| `tests/unit/hlasm/test_lowering_skeleton.py` | Labels, seed opcodes and BCR, dispatch, abends |
 | `tests/unit/hlasm/test_load_store_lowering.py` | Load and store IR: GPR and storage accesses, alignment branch, CC |
 | `tests/integration/hlasm/test_load_store.py` | Every load and store mnemonic on the VM, alignment abends |
 | `tests/unit/hlasm/test_load_address_immediate_lowering.py` | Load address and immediate IR: GPR widths read and written, index shift, no CC |
@@ -268,6 +285,8 @@ stored.
 | `tests/integration/hlasm/test_logical_add_subtract.py` | Every logical add and subtract mnemonic on the VM: result, CC with carry and borrow |
 | `tests/unit/hlasm/test_compare_lowering.py` | Compare IR: operand widths read, nothing written, only the CC set, relative-long alignment |
 | `tests/integration/hlasm/test_compare.py` | Every compare mnemonic on the VM: CC, operands unchanged, alignment abends |
+| `tests/unit/hlasm/test_branch_on_condition_lowering.py` | Branch on condition IR: the CC mask test, each form's target, the forms that lower to nothing |
+| `tests/integration/hlasm/test_branch_on_condition.py` | Every branch on condition mnemonic and a spread of extended mnemonics on the VM: path taken, CC unchanged, branches into data abend `S0C1` |
 | `tests/integration/hlasm/test_bridge_parser.py` | The real bridge: macro origins, refused assemblies |
 | `tests/integration/hlasm/test_storage_layout.py` | Section regions and address constants |
 | `tests/integration/hlasm/test_svc.py` | `WTO`, `ABEND` user and system codes, unlowered SVCs, `run()` with our maclib then `copybook_dirs`, call-site spans |
@@ -280,3 +299,4 @@ stored.
 | `tests/z390/test_signed_add_subtract_differential.py` | Every signed add and subtract mnemonic against z390 (`-m z390`) |
 | `tests/z390/test_logical_add_subtract_differential.py` | Every logical add and subtract mnemonic against z390; six z390 CC differences pinned (`-m z390`) |
 | `tests/z390/test_compare_differential.py` | Every compare mnemonic against z390; the relative-long alignment difference pinned (`-m z390`) |
+| `tests/z390/test_branch_on_condition_differential.py` | Every branch on condition case against z390; the BIC, BPP and BPRP differences pinned (`-m z390`) |
