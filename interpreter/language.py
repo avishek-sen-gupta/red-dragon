@@ -36,3 +36,4 @@ class Language(StrEnum):
     LUA = "lua"
     PASCAL = "pascal"
     COBOL = "cobol"
+    HLASM = "hlasm"

@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import struct
 
-from interpreter.cobol.ebcdic_table import EbcdicTable
 from interpreter.cobol.features import CobolFeature
+from interpreter.encoding.ebcdic_table import EbcdicTable
 from tests.covers import covers
 from tests.integration.cobol_helpers import run_cobol_programs, ws_region
 

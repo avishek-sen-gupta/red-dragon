@@ -1,9 +1,9 @@
 ## Project Context
 
 - **Language:** Python 3.13+ (`requires-python = ">=3.13,<4.0"`)
-- **Purpose:** RedDragon — an experimental toolkit for "executing" frequently-incomplete code (legacy source, decompiled binaries, partial extracts, missing dependencies), lowering 15 tree-sitter languages and COBOL to one 37-opcode IR and running it on a VM.
+- **Purpose:** RedDragon — an experimental toolkit for "executing" frequently-incomplete code (legacy source, decompiled binaries, partial extracts, missing dependencies), lowering 15 tree-sitter languages, COBOL and HLASM to one 38-opcode IR and running it on a VM.
 - **Package manager:** uv — `uv run` prefixes every Python command
-- **Test framework:** pytest with pytest-xdist, parallel by default. `addopts = "-n auto --dist=worksteal -m 'not external and not nist'"`, so the default run **excludes** two marker sets.
+- **Test framework:** pytest with pytest-xdist, parallel by default. `addopts = "-n auto --dist=worksteal -m 'not external and not nist and not z390'"`, so the default run **excludes** three marker sets.
 - **Formatter:** Black
 - **Type checker:** Pyright, `pyrightconfig.json` — `typeCheckingMode: basic` over `interpreter`, `cobol_asg`, with per-file promotion to `standard` (see `project/workflow.md`)
 - **Linter:** python-fp-lint, `fp.json`, with the ratchet baseline in `fp-baseline.json`
@@ -17,20 +17,22 @@
 
 ### Test markers
 
-Registered in `pyproject.toml`. Two are excluded from the default run:
+Registered in `pyproject.toml`. Three are excluded from the default run:
 
 - `external` — needs live LLM APIs; run with `-m external`
 - `nist` — the NIST-85 COBOL conformance suite; run with `-m nist` (most currently fail, see red-dragon-m0oa.7)
+- `z390` — HLASM differential tests against z390; run with `-m z390`, `Z390_HOME` set to a built z390 checkout
 - `carddemo_e2e` — AWS CardDemo end-to-end CICS tests, skipped in CI
 
 ### Package layout
 
-The four import-linter root packages — `interpreter`, `cobol_asg`, `cobol_memory`,
-`cobol_numeric` — are siblings, not subpackages, and the contracts exist to keep
+The five import-linter root packages — `interpreter`, `cobol_asg`, `cobol_memory`,
+`cobol_numeric`, `hlasm_asg` — are siblings, not subpackages, and the contracts exist to keep
 them that way: importing anything under `interpreter` runs
 `interpreter/__init__.py`, which loads the VM. `cobol_asg` parses COBOL,
 `interpreter.cobol` lowers it, and `cobol_memory` holds storage algebra. A
 consumer that only reads COBOL or computes byte ranges must not pay for the VM.
+`hlasm_asg` runs the che4z bridge and models its JSON; `interpreter.hlasm` lowers it.
 
 ## External Dependencies
 

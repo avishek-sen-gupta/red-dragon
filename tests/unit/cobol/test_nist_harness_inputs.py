@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from interpreter.cobol.ebcdic_table import EbcdicTable
+from interpreter.encoding.ebcdic_table import EbcdicTable
 from tests.nist.conftest import input_deck, substitute_x_cards
 
 

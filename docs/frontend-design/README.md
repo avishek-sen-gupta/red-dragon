@@ -27,6 +27,7 @@ For the `BaseFrontend` class, `TreeSitterEmitContext`, and common lowerer infras
 | [pascal.md](pascal.md) | `frontends/pascal/` | Pascal frontend -- begin/end blocks, procedure/function distinction |
 | [rust.md](rust.md) | `frontends/rust/` | Rust frontend -- let bindings, match, closures, impl blocks, macros |
 | [cobol.md](cobol.md) | `interpreter/cobol/cobol_frontend.py` | COBOL frontend -- ProLeap bridge, byte-addressed regions, PIC encoding |
+| [hlasm.md](hlasm.md) | `interpreter/hlasm/hlasm_frontend.py` | HLASM frontend -- che4z bridge, machine state in regions, branch dispatch |
 
 ---
 

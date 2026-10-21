@@ -3,8 +3,8 @@ like COMP: the items declared after it start right after those bytes."""
 
 from __future__ import annotations
 
-from interpreter.cobol.ebcdic_table import EbcdicTable
 from interpreter.cobol.features import CobolFeature
+from interpreter.encoding.ebcdic_table import EbcdicTable
 from tests.covers import covers
 from tests.integration.cobol_helpers import run_cobol_programs, ws_region
 

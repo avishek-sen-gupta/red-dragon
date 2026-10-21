@@ -1,6 +1,6 @@
 """Tests for EBCDIC ↔ ASCII bidirectional conversion tables."""
 
-from interpreter.cobol.ebcdic_table import EbcdicTable
+from interpreter.encoding.ebcdic_table import EbcdicTable
 
 
 class TestEbcdicTable:

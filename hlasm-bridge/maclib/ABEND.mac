@@ -1,0 +1,12 @@
+         MACRO
+&NAME    ABEND &CODE,&DUMP,&STEP,&TYPE
+         LCLA  &SHIFT
+&NAME    LA    1,&CODE
+         AIF   ('&TYPE' NE 'SYSTEM').SVC
+.SHIFT   ANOP
+         LA    1,0(1,1)
+&SHIFT   SETA  &SHIFT+1
+         AIF   (&SHIFT LT 12).SHIFT
+.SVC     ANOP
+         SVC   13
+         MEND

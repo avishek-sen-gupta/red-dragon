@@ -9,7 +9,7 @@ from cobol_asg.alphabet_item import AlphabetItem
 from cobol_asg.alphabet_link import AlphabetLink
 from cobol_asg.class_definition import ClassDefinition
 from interpreter.cobol.collating_sequences import literal_native_bytes
-from interpreter.cobol.ebcdic_table import EbcdicTable
+from interpreter.encoding.ebcdic_table import EbcdicTable
 
 _ClassBytes = tuple[frozenset[int], int]
 

@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from interpreter.cobol.ebcdic_table import EbcdicTable
+from interpreter.encoding.ebcdic_table import EbcdicTable
 
 # The character the EBCDIC byte 0xFF decodes to, so HIGH-VALUE compares equal to
 # a decoded field holding 0xFF and encodes back to 0xFF.
