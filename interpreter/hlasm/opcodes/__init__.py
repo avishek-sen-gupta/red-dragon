@@ -3,6 +3,9 @@
 
 from collections.abc import Mapping
 
+from interpreter.hlasm.opcodes.load_address_immediate import (
+    LOAD_ADDRESS_IMMEDIATE_LOWERINGS,
+)
 from interpreter.hlasm.opcodes.load_store import LOAD_STORE_LOWERINGS
 from interpreter.hlasm.opcodes.seed import SEED_LOWERINGS
 from interpreter.hlasm.opcodes.svc import SVC_LOWERINGS
@@ -11,5 +14,6 @@ from interpreter.hlasm.statement_lowering import StatementLowering
 OPCODE_LOWERINGS: Mapping[str, StatementLowering] = {
     **SEED_LOWERINGS,
     **LOAD_STORE_LOWERINGS,
+    **LOAD_ADDRESS_IMMEDIATE_LOWERINGS,
     **SVC_LOWERINGS,
 }

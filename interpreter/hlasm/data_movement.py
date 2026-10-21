@@ -1,5 +1,5 @@
 # pyright: standard
-"""Register and storage moves composed of a source, transforms and a sink."""
+"""Register, storage, address and immediate moves composed of a source, transforms and a sink."""
 
 from collections.abc import Callable, Sequence
 from functools import reduce
@@ -9,7 +9,12 @@ from interpreter.hlasm.alignment_check import emit_alignment_check
 from interpreter.hlasm.effective_address import effective_address, relative_address
 from interpreter.hlasm.hlasm_constants import BITS_PER_BYTE
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
-from interpreter.hlasm.operands import reg_operand, reloc_operand, storage_operand
+from interpreter.hlasm.operands import (
+    imm_operand,
+    reg_operand,
+    reloc_operand,
+    storage_operand,
+)
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
@@ -20,20 +25,21 @@ type Sink = Callable[[HlasmEmitter, MachineStatement, Register], None]
 
 BYTE_MASK = 0xFF
 LOW_WORD_MASK = 0xFFFFFFFF
+REGISTER_MASK = 0xFFFFFFFF_FFFFFFFF
 REGISTER_OPERAND = 0
-ADDRESS_OPERAND = 1
+SECOND_OPERAND = 1
 
 
 def _ones(width: int) -> int:
     return (1 << (BITS_PER_BYTE * width)) - 1
 
 
-def _storage_address(emitter: HlasmEmitter, statement: MachineStatement) -> Register:
-    return effective_address(emitter, storage_operand(statement, ADDRESS_OPERAND))
+def storage_address(emitter: HlasmEmitter, statement: MachineStatement) -> Register:
+    return effective_address(emitter, storage_operand(statement, SECOND_OPERAND))
 
 
-def _relative_address(emitter: HlasmEmitter, statement: MachineStatement) -> Register:
-    return relative_address(emitter, reloc_operand(statement, ADDRESS_OPERAND))
+def relative_target(emitter: HlasmEmitter, statement: MachineStatement) -> Register:
+    return relative_address(emitter, reloc_operand(statement, SECOND_OPERAND))
 
 
 def _aligned(
@@ -68,23 +74,30 @@ def _store_to(
 
 
 def from_storage(width: int) -> Source:
-    return _load_from(_storage_address, width)
+    return _load_from(storage_address, width)
 
 
 def from_aligned_storage(width: int) -> Source:
-    return _load_from(_aligned(_storage_address, width), width)
+    return _load_from(_aligned(storage_address, width), width)
 
 
 def from_relative(width: int) -> Source:
-    return _load_from(_aligned(_relative_address, width), width)
+    return _load_from(_aligned(relative_target, width), width)
 
 
 def to_storage(width: int) -> Sink:
-    return _store_to(_storage_address, width)
+    return _store_to(storage_address, width)
 
 
 def to_relative(width: int) -> Sink:
-    return _store_to(_aligned(_relative_address, width), width)
+    return _store_to(_aligned(relative_target, width), width)
+
+
+def immediate(bits: int) -> Source:
+    def image(emitter: HlasmEmitter, statement: MachineStatement) -> Register:
+        return emitter.int_(imm_operand(statement, SECOND_OPERAND) & ((1 << bits) - 1))
+
+    return image
 
 
 def from_gr32(index: int) -> Source:
@@ -118,6 +131,21 @@ def merge_low_word(
     emitter.store_gr32(r, emitter.binop(BinopKind.BIT_OR, kept, inserted))
 
 
+def into_bits(field_mask: int) -> Sink:
+    def insert(
+        emitter: HlasmEmitter, statement: MachineStatement, value: Register
+    ) -> None:
+        r = reg_operand(statement, REGISTER_OPERAND)
+        kept = emitter.binop(
+            BinopKind.BIT_AND,
+            emitter.load_gr64(r),
+            emitter.int_(REGISTER_MASK & ~field_mask),
+        )
+        emitter.store_gr64(r, emitter.binop(BinopKind.BIT_OR, kept, value))
+
+    return insert
+
+
 def into_low_bytes(width: int) -> Sink:
     def insert(
         emitter: HlasmEmitter, statement: MachineStatement, value: Register
@@ -137,6 +165,12 @@ def signed(bits: int) -> Transform:
         return emitter.binop(BinopKind.SUB, wrapped, emitter.int_(half))
 
     return extend
+
+
+def shifted(bits: int) -> Transform:
+    return lambda emitter, value: emitter.binop(
+        BinopKind.LSHIFT, value, emitter.int_(bits)
+    )
 
 
 def keep(mask: int) -> Transform:

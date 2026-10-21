@@ -1,5 +1,5 @@
 # pyright: standard
-"""Operand addresses: the AMODE 31 effective address of D(X,B), and a relative-immediate target."""
+"""Operand addresses: the AMODE 31 effective address of D(X,B), its element-scaled form, and a relative-immediate target."""
 
 from hlasm_asg.program.reloc_imm_operand import RelocImmOperand
 from hlasm_asg.program.storage_operand import StorageOperand
@@ -16,11 +16,23 @@ def _plus_register(emitter: HlasmEmitter, total: Register, r: int) -> Register:
     return emitter.binop(BinopKind.ADD, total, emitter.load_gr32(r))
 
 
-def effective_address(emitter: HlasmEmitter, operand: StorageOperand) -> Register:
+def _scaled(emitter: HlasmEmitter, value: Register, shift: int) -> Register:
+    if shift == 0:
+        return value
+    return emitter.binop(BinopKind.LSHIFT, value, emitter.int_(shift))
+
+
+def indexed_address(
+    emitter: HlasmEmitter, operand: StorageOperand, shift: int
+) -> Register:
     displaced = emitter.int_(operand.displacement)
     indexed = _plus_register(emitter, displaced, operand.index)
-    based = _plus_register(emitter, indexed, operand.base)
+    based = _plus_register(emitter, _scaled(emitter, indexed, shift), operand.base)
     return emitter.binop(BinopKind.BIT_AND, based, emitter.int_(ADDRESS_MASK_31))
+
+
+def effective_address(emitter: HlasmEmitter, operand: StorageOperand) -> Register:
+    return indexed_address(emitter, operand, 0)
 
 
 def relative_address(emitter: HlasmEmitter, operand: RelocImmOperand) -> Register:
