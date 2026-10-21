@@ -65,6 +65,9 @@ class HlasmEmitter:
     def store_gr64(self, r: int, value: Register) -> None:
         self._store(GPR_BYTES * r, GPR_BYTES, value)
 
+    def store_gr_high32(self, r: int, value: Register) -> None:
+        self._store(GPR_BYTES * r, WORD_BYTES, value)
+
     def set_cc(self, value: Register) -> None:
         self.emit_inst(StoreVar(name=CC_VAR, value_reg=value))
 
@@ -111,18 +114,26 @@ class HlasmEmitter:
         return reg
 
     def _load(self, offset: int, width: int) -> Register:
+        return self.load_storage(self._gprs(), offset, width)
+
+    def _store(self, offset: int, width: int, value: Register) -> None:
+        self.store_storage(self._gprs(), offset, width, value)
+
+    def load_storage(self, region: Register, offset: int, width: int) -> Register:
         image = self.fresh_reg()
         self.emit_inst(
             LoadRegion(
                 result_reg=image,
-                region_reg=self._gprs(),
+                region_reg=region,
                 offset_reg=self.int_(offset),
                 length=width,
             )
         )
         return self.call(BINARY_BYTES_TO_INT, (image, self._unsigned()))
 
-    def _store(self, offset: int, width: int, value: Register) -> None:
+    def store_storage(
+        self, region: Register, offset: int, width: int, value: Register
+    ) -> None:
         wrapped = self.fresh_reg()
         modulus = self.int_(1 << (BITS_PER_BYTE * width))
         self.emit_inst(
@@ -133,7 +144,7 @@ class HlasmEmitter:
         )
         self.emit_inst(
             WriteRegion(
-                region_reg=self._gprs(),
+                region_reg=region,
                 offset_reg=self.int_(offset),
                 length=width,
                 value_reg=image,

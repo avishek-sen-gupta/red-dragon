@@ -3,7 +3,6 @@
 
 import io
 from contextlib import redirect_stdout
-from dataclasses import dataclass
 
 from interpreter.frontends import get_hlasm_parser
 from interpreter.project.hlasm_compile import compile_hlasm
@@ -12,33 +11,30 @@ from interpreter.run import initial_vm_state, run_linked
 from interpreter.var_name import VarName
 from interpreter.vm.builtins import core_builtins
 from interpreter.vm.vm_types import VMState
+from tests.integration.hlasm.hlasm_machine import HlasmMachine
+from tests.integration.hlasm.hlasm_run import HlasmRun
 
 MAX_STEPS = 20_000
 GPR_BYTES = 8
 LOW_WORD_OFFSET = 4
 WORD_BYTES = 4
+GPR_COUNT = 16
 RETURN_CODE_REGISTER = 15
 NO_RETURN_CODE = 0
-
-
-@dataclass(frozen=True)
-class HlasmRun:
-    """What a standalone run left: R15 on return, the abend code, the console."""
-
-    return_code: int
-    abend: str
-    stdout: str
 
 
 def _var(vm: VMState, name: str) -> int | str:
     return vm.call_stack[0].local_vars[VarName(name)].value
 
 
-def _low_word(vm: VMState, register: int) -> int:
-    at = int(_var(vm, "__hlasm_gprs")) + GPR_BYTES * register + LOW_WORD_OFFSET
-    loaded = vm.load(at, WORD_BYTES)
+def _gpr_bytes(vm: VMState, offset: int, width: int) -> int:
+    loaded = vm.load(int(_var(vm, "__hlasm_gprs")) + offset, width)
     assert isinstance(loaded, list)
     return int.from_bytes(bytes(loaded), "big")
+
+
+def _low_word(vm: VMState, register: int) -> int:
+    return _gpr_bytes(vm, GPR_BYTES * register + LOW_WORD_OFFSET, WORD_BYTES)
 
 
 def _return_code(vm: VMState, abend: str) -> int:
@@ -49,7 +45,7 @@ def _return_code(vm: VMState, abend: str) -> int:
             return NO_RETURN_CODE
 
 
-def run_hlasm(source: str) -> HlasmRun:
+def _run_vm(source: str) -> tuple[VMState, str]:
     linked = compile_hlasm(source.encode("utf-8"), parser=get_hlasm_parser())
     (entry,) = linked.programs
     console = io.StringIO()
@@ -61,7 +57,20 @@ def run_hlasm(source: str) -> HlasmRun:
             initial_vm=initial_vm_state(),
             builtins=core_builtins(),
         )
-    return hlasm_run_of(vm, console.getvalue())
+    return vm, console.getvalue()
+
+
+def run_hlasm(source: str) -> HlasmRun:
+    return hlasm_run_of(*_run_vm(source))
+
+
+def run_hlasm_machine(source: str) -> HlasmMachine:
+    vm, stdout = _run_vm(source)
+    return HlasmMachine(
+        hlasm_run_of(vm, stdout),
+        int(_var(vm, "__hlasm_cc")),
+        {r: _gpr_bytes(vm, GPR_BYTES * r, GPR_BYTES) for r in range(GPR_COUNT)},
+    )
 
 
 def hlasm_run_of(vm: VMState, stdout: str) -> HlasmRun:
