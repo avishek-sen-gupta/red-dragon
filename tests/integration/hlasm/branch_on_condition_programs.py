@@ -71,6 +71,8 @@ def cross_section_program() -> str:
 BRANCH_ON_CONDITION: Mapping[str, Case] = {
     "BC": (0, _line("BC", "8,TAKEN"), True),
     "BC not selected": (0, _line("BC", "6,TAKEN"), False),
+    "BC 12 at CC 1": (1, _line("BC", "12,TAKEN"), True),
+    "BC 12 at CC 2": (2, _line("BC", "12,TAKEN"), False),
     "BC indexed": (1, "         LA    5,4\n" + _line("BC", "4,TAKEN-4(5)"), True),
     "B": (3, _line("B", "TAKEN"), True),
     "BE": (0, _line("BE", "TAKEN"), True),
@@ -117,6 +119,10 @@ BRANCH_INDIRECT_ON_CONDITION: Mapping[str, Case] = {
 
 BRANCH_RELATIVE_ON_CONDITION: Mapping[str, Case] = {
     "BRC": (2, _line("BRC", "2,TAKEN"), True),
+    "BRC 5 at CC 3": (3, _line("BRC", "5,TAKEN"), True),
+    "BRC 5 at CC 2": (2, _line("BRC", "5,TAKEN"), False),
+    "BRC 10 at CC 0": (0, _line("BRC", "10,TAKEN"), True),
+    "BRC 10 at CC 1": (1, _line("BRC", "10,TAKEN"), False),
     "J": (3, _line("J", "TAKEN"), True),
     "JE": (0, _line("JE", "TAKEN"), True),
     "JNE": (0, _line("JNE", "TAKEN"), False),
@@ -133,6 +139,8 @@ BRANCH_RELATIVE_ON_CONDITION: Mapping[str, Case] = {
 
 BRANCH_RELATIVE_ON_CONDITION_LONG: Mapping[str, Case] = {
     "BRCL": (1, _line("BRCL", "4,TAKEN"), True),
+    "BRCL 9 at CC 0": (0, _line("BRCL", "9,TAKEN"), True),
+    "BRCL 9 at CC 2": (2, _line("BRCL", "9,TAKEN"), False),
     "JLU": (0, _line("JLU", "TAKEN"), True),
     "JLE": (0, _line("JLE", "TAKEN"), True),
     "JLNE": (0, _line("JLNE", "TAKEN"), False),
