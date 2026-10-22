@@ -5,8 +5,8 @@
 ## Overview
 
 Arithmetic, rounding and exception conditions for BFP (IEEE binary), HFP and DFP, per
-the Principles of Operation chapters 9 and 18-20. HLASM lowering (red-dragon-6uyp.50
-onward) will call it through builtins; until then nothing in `interpreter` imports it.
+the Principles of Operation chapters 9 and 18-20. HLASM lowering reaches it through
+the builtins in `interpreter/hlasm/bfp_builtins.py` (red-dragon-6uyp.51).
 
 - **No bytes.** Values are frozen records of sign, kind, significand and exponent. IR
   encodes and decodes the bit images.

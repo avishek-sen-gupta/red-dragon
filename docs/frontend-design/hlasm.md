@@ -103,6 +103,7 @@ addresses.
 | `interpreter/hlasm/checksum.py` | CKSM |
 | `interpreter/hlasm/clock_instructions.py` | STCK, STCKF, STCKE, ECTG |
 | `interpreter/hlasm/machine_clock.py`, `clock_builtins.py` | `MachineClock` (TOD clock, CPU timer); `clock_builtins(clock)`, the `__hlasm_tod_clock` and `__hlasm_cpu_timer` builtins over it |
+| `interpreter/hlasm/bfp_builtins.py`, `bfp_fields.py`, `bfp_layout.py`, `bfp_operation.py`, `bfp_slots.py` | `bfp_builtins()`, one `__hlasm_bfp_<operation>_<format>` builtin per operation and format over `zarch_float`; operands arrive as `[sign, biased exponent, fraction]` lists and results leave as fields plus the trap, flag and DXC bits (ruling R43) |
 | `interpreter/hlasm/system_machine_clock.py` | `SystemMachineClock`, the host clock over injected wall and process-CPU nanosecond readings: TOD from wall time since 1900-01-01 UTC (no leap seconds), CPU timer down from 2^63 - 1 at 4096 units per microsecond |
 | `interpreter/hlasm/cpu_attributes.py` | ECAG's constant attributes |
 | `interpreter/hlasm/facility_list.py` | STFLE's constant facility list |
@@ -875,9 +876,10 @@ SRNMT, STD, STDY, STE, STEY, STFPC. PFPO is in .56 (ruling R42). Rulings R34, R3
   whatever mode it selects.
 - Access registers hold values only; no instruction addresses through them. LAE and LAEY do
   not set access register R1 (red-dragon-6uyp.86).
-- `run()` defaults to `DEFAULT_BUILTINS`, which has no clock builtins, so a clock instruction
-  there stores what the unresolved-call strategy gives. Callers that give `builtins` composed
-  with `clock_builtins(clock)` get a clock; the `interpreter.py` CLI supplies a `SystemMachineClock`.
+- `run()` defaults to `DEFAULT_BUILTINS`, which has no clock or BFP builtins, so a clock or
+  BFP instruction there stores what the unresolved-call strategy gives. Callers compose
+  `clock_builtins(clock)` and `bfp_builtins()`; the `interpreter.py` CLI does both, with a
+  `SystemMachineClock`.
 - Only LFAS and SFASR store a DXC: a compare-and-trap or load-and-trap trap and a decimal data
   exception abend `S0C7` and leave the FPC's DXC unchanged (red-dragon-6uyp.87).
 - In AMODE 31, LM, STM, LMD, NC, OC, XC, the decimal instructions and the storage moves, compares and translates do not wrap
