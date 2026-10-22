@@ -33,18 +33,35 @@ from zarch_float.bfp_arithmetic import (
     bfp_square_root,
     bfp_subtract,
 )
-from zarch_float.bfp_convert import bfp_round_to_integral, bfp_widened
+from zarch_float.bfp_convert import (
+    bfp_from_integer,
+    bfp_load_rounded,
+    bfp_round_to_integral,
+    bfp_to_integer,
+    bfp_widened,
+)
 from zarch_float.bfp_divide_to_integer import bfp_divide_to_integer
 from zarch_float.bfp_divide_to_integer_result import BfpDivideToIntegerResult
 from zarch_float.bfp_result import BfpResult
 from zarch_float.bfp_value import BfpValue
 from zarch_float.condition import Condition
+from zarch_float.float_kind import FloatKind
+from zarch_float.integer_format import (
+    SIGNED_32,
+    SIGNED_64,
+    UNSIGNED_32,
+    UNSIGNED_64,
+    IntegerFormat,
+)
+from zarch_float.integer_result import IntegerResult
 from zarch_float.rounding_mode import BFP_MODIFIER_MODES, RoundingMode
 
 type _Binary = Callable[[BfpValue, BfpValue, RoundingMode], BfpResult]
 type _Fused = Callable[[BfpValue, BfpValue, BfpValue, RoundingMode], BfpResult]
 type _Unary = Callable[[BfpValue, RoundingMode], BfpResult]
 type _Bits = Mapping[Condition, int]
+
+INVALID_CC = 3
 
 _TRAPS: _Bits = {
     Condition.INVALID: INVALID_BIT,
@@ -132,6 +149,48 @@ def _lengthened(source: BfpLayout, target: BfpLayout) -> Builtin:
     return call
 
 
+def _integer_cc(a: BfpValue, result: IntegerResult) -> int:
+    signed_cc = (a.kind is not FloatKind.ZERO) * (2 - a.negative)
+    return INVALID_CC if Condition.INVALID in result.conditions else signed_cc
+
+
+def _integer_outcome(a: BfpValue, result: IntegerResult, image: int) -> list[int]:
+    fields = [image, 0, 0]
+    return [
+        *fields,
+        *fields,
+        _bits(result.conditions, _TRAPS),
+        _bits(result.conditions, _FLAGS),
+        0,
+        _bits(result.conditions, _DETAILS),
+        _integer_cc(a, result),
+    ]
+
+
+def _to_integer(target: IntegerFormat, layout: BfpLayout) -> Builtin:
+    def call(args: Sequence[TypedValue], vm: VMState) -> BuiltinResult:
+        mode, a = args
+        operand = _operand(a, layout)
+        result = bfp_to_integer(operand, target, _mode(mode))
+        image = result.value & (target.maximum - target.minimum)
+        return BuiltinResult(value=_integer_outcome(operand, result, image))
+
+    return call
+
+
+def _from_integer(layout: BfpLayout) -> Builtin:
+    def call(args: Sequence[TypedValue], vm: VMState) -> BuiltinResult:
+        mode, n = args
+        result = bfp_from_integer(int(n.value), layout.format, _mode(mode))
+        return BuiltinResult(value=_outcome(result, 0))
+
+    return call
+
+
+def _rounded_into(target: BfpLayout) -> _Unary:
+    return lambda a, mode: bfp_load_rounded(a, target.format, mode)
+
+
 def _divided_cc(divided: BfpDivideToIntegerResult) -> int:
     special = divided.quotient_overflow or divided.quotient.is_nan()
     return 2 * int(divided.partial) + int(special)
@@ -171,8 +230,34 @@ _UNARIES: Mapping[BfpOperation, _Unary] = {
 }
 
 
+_INTEGER_FORMATS: Mapping[BfpOperation, IntegerFormat] = {
+    BfpOperation.TO_FIXED_32: SIGNED_32,
+    BfpOperation.TO_FIXED_64: SIGNED_64,
+    BfpOperation.TO_LOGICAL_32: UNSIGNED_32,
+    BfpOperation.TO_LOGICAL_64: UNSIGNED_64,
+}
+_ROUNDINGS = (
+    (BfpOperation.ROUNDED_TO_SHORT, LONG_LAYOUT, SHORT_LAYOUT),
+    (BfpOperation.ROUNDED_TO_SHORT, EXTENDED_LAYOUT, SHORT_LAYOUT),
+    (BfpOperation.ROUNDED_TO_LONG, EXTENDED_LAYOUT, LONG_LAYOUT),
+)
+
+
 def bfp_builtins() -> Mapping[FuncName, Builtin]:
     return {
+        **{
+            bfp_builtin_name(op, layout): _to_integer(target, layout)
+            for op, target in _INTEGER_FORMATS.items()
+            for layout in _ALL
+        },
+        **{
+            bfp_builtin_name(BfpOperation.FROM_FIXED, layout): _from_integer(layout)
+            for layout in _SHORT_AND_LONG
+        },
+        **{
+            bfp_builtin_name(op, source): _unary(_rounded_into(target), source)
+            for op, source, target in _ROUNDINGS
+        },
         **{
             bfp_builtin_name(op, layout): _binary(rule, layout)
             for op, rule in _BINARIES.items()

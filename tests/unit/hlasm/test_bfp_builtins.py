@@ -16,6 +16,7 @@ from zarch_float.float_kind import FloatKind
 
 NEAREST_EVEN = 4
 TOWARD_ZERO = 5
+TOWARD_NEGATIVE = 7
 FRACTION_HALF = 1 << 51
 
 
@@ -155,5 +156,111 @@ def test_builtins_return_value_scaled_value_trap_flags_dxcs_and_cc():
             0,
             255,
             1 << 22 | 1,
+        ],
+    }
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_conversion_builtins_report_the_integer_image_and_cc_or_the_rounded_value():
+    assert {
+        "to fixed inexact": _call(
+            "__hlasm_bfp_to_fixed_32_long", [NEAREST_EVEN, _long(2.5)]
+        ),
+        "to fixed incremented": _call(
+            "__hlasm_bfp_to_fixed_32_long", [NEAREST_EVEN, _long(-3.5)]
+        ),
+        "to fixed nan": _call(
+            "__hlasm_bfp_to_fixed_32_short", [NEAREST_EVEN, [0, 255, 1 << 22]]
+        ),
+        "to fixed minus zero": _call(
+            "__hlasm_bfp_to_fixed_64_long", [NEAREST_EVEN, _long(-0.0)]
+        ),
+        "to logical negative": _call(
+            "__hlasm_bfp_to_logical_64_extended", [NEAREST_EVEN, [1, 16383, 0]]
+        ),
+        "to logical too large": _call(
+            "__hlasm_bfp_to_logical_32_long", [TOWARD_ZERO, _long(2.0**32)]
+        ),
+        "from fixed": _call("__hlasm_bfp_from_fixed_short", [NEAREST_EVEN, 2**24 + 1]),
+        "from fixed toward minus": _call(
+            "__hlasm_bfp_from_fixed_long", [TOWARD_NEGATIVE, -(2**53 + 1)]
+        ),
+        "rounded overflow": _call(
+            "__hlasm_bfp_rounded_to_short_long",
+            [NEAREST_EVEN, [0, 2046, (1 << 52) - 1]],
+        ),
+        "rounded snan": _call(
+            "__hlasm_bfp_rounded_to_long_extended", [NEAREST_EVEN, [1, 0x7FFF, 1 << 60]]
+        ),
+    } == {
+        "to fixed inexact": [2, 0, 0, 2, 0, 0, 0x08, 0x08, 0, 0x08, 2],
+        "to fixed incremented": [
+            0xFFFFFFFC,
+            0,
+            0,
+            0xFFFFFFFC,
+            0,
+            0,
+            0x08,
+            0x08,
+            0,
+            0x0C,
+            1,
+        ],
+        "to fixed nan": [
+            0x80000000,
+            0,
+            0,
+            0x80000000,
+            0,
+            0,
+            0x88,
+            0x88,
+            0,
+            0x08,
+            3,
+        ],
+        "to fixed minus zero": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        "to logical negative": [0, 0, 0, 0, 0, 0, 0x88, 0x88, 0, 0x08, 3],
+        "to logical too large": [
+            0xFFFFFFFF,
+            0,
+            0,
+            0xFFFFFFFF,
+            0,
+            0,
+            0x88,
+            0x88,
+            0,
+            0x08,
+            3,
+        ],
+        "from fixed": [0, 151, 0, 0, 151, 0, 0x08, 0x08, 0, 0x08, 0],
+        "from fixed toward minus": [
+            1,
+            1076,
+            1,
+            1,
+            1076,
+            1,
+            0x08,
+            0x08,
+            0,
+            0x0C,
+            0,
+        ],
+        "rounded overflow": [0, 255, 0, 0, 1535, 0, 0x28, 0x28, 0x2C, 0x0C, 0],
+        "rounded snan": [
+            1,
+            2047,
+            1 << 51 | 1,
+            1,
+            2047,
+            1 << 51 | 1,
+            0x80,
+            0x80,
+            0,
+            0,
+            0,
         ],
     }
