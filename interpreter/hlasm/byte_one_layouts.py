@@ -62,6 +62,7 @@ LENGTH_BYTE = _layout(ByteOneField(LOW, BYTE, 0, _LENGTH))
 LENGTH_NIBBLES = _layout(
     ByteOneField(HIGH, NIBBLE, 0, _LENGTH), ByteOneField(LOW, NIBBLE, 1, _LENGTH)
 )
+LENGTH_AND_IMMEDIATE = _layout(ByteOneField(HIGH, NIBBLE, 0, _LENGTH), _low(2))
 IMMEDIATE_BYTE = _layout(_byte(1))
 NUMBER_BYTE = _layout(_byte(0))
 
@@ -72,7 +73,7 @@ BYTE_ONE_LAYOUTS: Mapping[Shape, ByteOneLayout] = {
     ("SIY", (S, V)): IMMEDIATE_BYTE,
     ("SS-a", (S, S)): LENGTH_BYTE,
     ("SS-b", (S, S)): LENGTH_NIBBLES,
-    ("SS-c", (S, S, V)): _layout(ByteOneField(HIGH, NIBBLE, 0, _LENGTH), _low(2)),
+    ("SS-c", (S, S, V)): LENGTH_AND_IMMEDIATE,
     ("SS-e", (V, V, S, S)): R1_R2,
     ("SS-e", (V, S, V, S)): R1_R3,
     ("SS-f", (S, S)): _layout(ByteOneField(LOW, BYTE, 1, _LENGTH)),
