@@ -14,6 +14,7 @@ from interpreter.hlasm.boolean_connective import (
     XOR,
 )
 from interpreter.hlasm.fixed_width_ir import (
+    build_absolute_signed_cc_ir,
     build_add_logical_carry_cc_ir,
     build_add_logical_cc_ir,
     build_add_signed_cc_ir,
@@ -21,7 +22,10 @@ from interpreter.hlasm.fixed_width_ir import (
     build_compare_logical_cc_ir,
     build_compare_signed_cc_ir,
     build_divide_truncating_ir,
+    build_load_test_cc_ir,
     build_multiply_signed_cc_ir,
+    build_negate_signed_cc_ir,
+    build_negative_absolute_cc_ir,
     build_rotate_left_ir,
     build_shift_left_logical_ir,
     build_shift_left_signed_cc_ir,
@@ -323,4 +327,39 @@ def test_truncating_divide_rounds_toward_zero_and_gives_the_remainder_the_divide
         [0, 0],
         [1 << 63, 0],
         [1 << 63, (1 << 63) + 5],
+    ]
+
+
+def _of(func_ir: Sequence[InstructionBase], value: int) -> int | list[int]:
+    return returned_value(func_ir, {"%p_value": value})
+
+
+def test_load_complement_positive_and_negative_set_cc_with_overflow_only_at_the_minimum():
+    minimum_32, minimum_64 = 0x80000000, 1 << 63
+    tests = (
+        (build_load_test_cc_ir("lt32", 32), (0xFFFFFFFE, 0, 7)),
+        (build_negate_signed_cc_ir("lc32", 32), (5, 0xFFFFFFFB, 0, minimum_32)),
+        (build_absolute_signed_cc_ir("lp32", 32), (0xFFFFFFFB, 5, 0, minimum_32)),
+        (build_negative_absolute_cc_ir("ln32", 32), (5, 0xFFFFFFFB, 0, minimum_32)),
+    )
+    assert [[_of(ir, v) for v in values] for ir, values in tests] == [
+        [[-2, 1], [0, 0], [7, 2]],
+        [[-5, 1], [5, 2], [0, 0], [-0x80000000, 3]],
+        [[5, 2], [5, 2], [0, 0], [-0x80000000, 3]],
+        [[-5, 1], [-5, 1], [0, 0], [-0x80000000, 1]],
+    ]
+    assert [
+        _of(build_load_test_cc_ir("lt64", 64), -(1 << 63)),
+        _of(build_negate_signed_cc_ir("lc64", 64), minimum_64),
+        _of(build_negate_signed_cc_ir("lc64", 64), -1),
+        _of(build_absolute_signed_cc_ir("lp64", 64), minimum_64),
+        _of(build_absolute_signed_cc_ir("lp64", 64), -(1 << 40)),
+        _of(build_negative_absolute_cc_ir("ln64", 64), 1 << 40),
+    ] == [
+        [-(1 << 63), 1],
+        [-(1 << 63), 3],
+        [1, 2],
+        [-(1 << 63), 3],
+        [1 << 40, 2],
+        [-(1 << 40), 1],
     ]

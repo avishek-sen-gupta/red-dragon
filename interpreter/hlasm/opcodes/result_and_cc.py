@@ -20,10 +20,11 @@ def apply_result_and_cc(
     operation: Operation,
     arguments: Mapping[Register, Register],
     store: Callable[[Register], None],
-) -> None:
+) -> Register:
     result, cc = inline_pair(emitter, operation, arguments)
     store(result)
     emitter.set_cc(cc)
+    return cc
 
 
 def result_and_cc(
@@ -44,12 +45,16 @@ def result_and_cc(
 def storage_immediate_result_and_cc(
     operation: Operation, width: int
 ) -> StatementLowering:
-    return storage_immediate(
-        width,
-        lambda emitter, operands, store: apply_result_and_cc(
+    def apply(
+        emitter: HlasmEmitter,
+        operands: tuple[Register, Register],
+        store: Callable[[Register], None],
+    ) -> None:
+        apply_result_and_cc(
             emitter,
             operation,
             {PARAM_LEFT: operands[0], PARAM_RIGHT: operands[1]},
             store,
-        ),
-    )
+        )
+
+    return storage_immediate(width, apply)
