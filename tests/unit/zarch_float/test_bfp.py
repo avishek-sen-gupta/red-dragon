@@ -9,6 +9,7 @@ from collections.abc import Callable
 
 from tests.covers import NotLanguageFeature, covers
 from tests.unit.zarch_float.bfp_bits import (
+    from_bits,
     long_bits,
     long_of,
     short_bits,
@@ -31,6 +32,7 @@ from zarch_float.bfp_convert import (
     bfp_load_rounded,
     bfp_round_to_integral,
     bfp_to_integer,
+    bfp_widened,
 )
 from zarch_float.bfp_format import EXTENDED, LONG, SHORT
 from zarch_float.bfp_result import BfpResult, bfp_exact
@@ -379,4 +381,21 @@ def test_fixed_point_conversions_round_and_saturate():
         IntegerResult(0, out_of_range),
         IntegerResult(-(2**63), out_of_range),
         IntegerResult(0, NONE),
+    ]
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_widening_is_exact_and_keeps_signaling_nans():
+    assert [
+        bfp_widened(short_of(1.5), LONG),
+        bfp_widened(short_of(-(2.0**-149)), LONG),
+        bfp_widened(short_of(-math.inf), LONG),
+        bfp_widened(BfpValue(SHORT, False, FloatKind.SNAN, 1), LONG),
+        bfp_widened(long_of(-0.0), LONG),
+    ] == [
+        long_of(1.5),
+        long_of(-(2.0**-149)),
+        long_of(-math.inf),
+        from_bits(0x7FF00000_20000000, LONG),
+        long_of(-0.0),
     ]

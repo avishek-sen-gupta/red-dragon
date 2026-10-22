@@ -16,11 +16,8 @@ class BfpOperation(Enum):
     SQUARE_ROOT = "square_root"
     MULTIPLY_ADD = "multiply_add"
     MULTIPLY_SUBTRACT = "multiply_subtract"
-    COMPARE = "compare"
-    COMPARE_SIGNALING = "compare_signaling"
     ROUND_TO_INTEGRAL = "round_to_integral"
     DIVIDE_TO_INTEGER = "divide_to_integer"
-    TEST_DATA_CLASS = "test_data_class"
 
 
 def bfp_builtin_name(operation: BfpOperation, layout: BfpLayout) -> FuncName:

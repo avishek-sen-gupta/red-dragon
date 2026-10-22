@@ -18,7 +18,6 @@ from interpreter.hlasm.bfp_slots import (
     INEXACT_BIT,
     INVALID_BIT,
     OVERFLOW_BIT,
-    SCALED_SLOT,
     UNDERFLOW_BIT,
 )
 from interpreter.types.typed_value import TypedValue
@@ -34,21 +33,17 @@ from zarch_float.bfp_arithmetic import (
     bfp_square_root,
     bfp_subtract,
 )
-from zarch_float.bfp_compare import bfp_compare, bfp_compare_signaling
 from zarch_float.bfp_convert import bfp_round_to_integral, bfp_widened
-from zarch_float.bfp_data_class import bfp_test_data_class
 from zarch_float.bfp_divide_to_integer import bfp_divide_to_integer
 from zarch_float.bfp_divide_to_integer_result import BfpDivideToIntegerResult
 from zarch_float.bfp_result import BfpResult
 from zarch_float.bfp_value import BfpValue
-from zarch_float.comparison_result import ComparisonResult
 from zarch_float.condition import Condition
 from zarch_float.rounding_mode import BFP_MODIFIER_MODES, RoundingMode
 
 type _Binary = Callable[[BfpValue, BfpValue, RoundingMode], BfpResult]
 type _Fused = Callable[[BfpValue, BfpValue, BfpValue, RoundingMode], BfpResult]
 type _Unary = Callable[[BfpValue, RoundingMode], BfpResult]
-type _Comparing = Callable[[BfpValue, BfpValue], ComparisonResult]
 type _Bits = Mapping[Condition, int]
 
 _TRAPS: _Bits = {
@@ -70,7 +65,6 @@ _DETAILS: _Bits = {
     Condition.INEXACT: INEXACT_BIT,
     Condition.INCREMENTED: INCREMENTED_BIT,
 }
-_NO_FIELDS = [0] * SCALED_SLOT * 2
 
 
 def _bits(conditions: frozenset[Condition], bits: _Bits) -> int:
@@ -138,17 +132,6 @@ def _lengthened(source: BfpLayout, target: BfpLayout) -> Builtin:
     return call
 
 
-def _comparing(rule: _Comparing, layout: BfpLayout) -> Builtin:
-    def call(args: Sequence[TypedValue], vm: VMState) -> BuiltinResult:
-        a, b = args
-        compared = rule(_operand(a, layout), _operand(b, layout))
-        conditions = _bits(compared.conditions, _TRAPS)
-        outcome = [*_NO_FIELDS, conditions, conditions, 0, 0]
-        return BuiltinResult(value=[*outcome, compared.comparison.value])
-
-    return call
-
-
 def _divided_cc(divided: BfpDivideToIntegerResult) -> int:
     special = divided.quotient_overflow or divided.quotient.is_nan()
     return 2 * int(divided.partial) + int(special)
@@ -165,15 +148,6 @@ def _divide_to_integer(layout: BfpLayout) -> Builtin:
         )
         outcome = _outcome(divided.remainder, _divided_cc(divided))
         return BuiltinResult(value=[*outcome, *fields_of(divided.quotient).as_list()])
-
-    return call
-
-
-def _test_data_class(layout: BfpLayout) -> Builtin:
-    def call(args: Sequence[TypedValue], vm: VMState) -> BuiltinResult:
-        a, mask = args
-        selected = bfp_test_data_class(_operand(a, layout), int(mask.value))
-        return BuiltinResult(value=int(selected))
 
     return call
 
@@ -195,10 +169,6 @@ _UNARIES: Mapping[BfpOperation, _Unary] = {
     BfpOperation.SQUARE_ROOT: bfp_square_root,
     BfpOperation.ROUND_TO_INTEGRAL: bfp_round_to_integral,
 }
-_COMPARINGS: Mapping[BfpOperation, _Comparing] = {
-    BfpOperation.COMPARE: bfp_compare,
-    BfpOperation.COMPARE_SIGNALING: bfp_compare_signaling,
-}
 
 
 def bfp_builtins() -> Mapping[FuncName, Builtin]:
@@ -219,21 +189,10 @@ def bfp_builtins() -> Mapping[FuncName, Builtin]:
             for layout in _ALL
         },
         **{
-            bfp_builtin_name(op, layout): _comparing(rule, layout)
-            for op, rule in _COMPARINGS.items()
-            for layout in _ALL
-        },
-        **{
             bfp_builtin_name(
                 BfpOperation.DIVIDE_TO_INTEGER, layout
             ): _divide_to_integer(layout)
             for layout in _SHORT_AND_LONG
-        },
-        **{
-            bfp_builtin_name(BfpOperation.TEST_DATA_CLASS, layout): _test_data_class(
-                layout
-            )
-            for layout in _ALL
         },
         bfp_builtin_name(BfpOperation.MULTIPLY_LENGTHENED, SHORT_LAYOUT): _lengthened(
             SHORT_LAYOUT, LONG_LAYOUT

@@ -17,7 +17,6 @@ from zarch_float.float_kind import FloatKind
 NEAREST_EVEN = 4
 TOWARD_ZERO = 5
 FRACTION_HALF = 1 << 51
-ZEROS = [0, 0, 0, 0, 0, 0]
 
 
 def _call(name: str, args: Sequence[int | list[int]]) -> int | list[int]:
@@ -89,11 +88,6 @@ def test_builtins_return_value_scaled_value_trap_flags_dxcs_and_cc():
         "lengthened": _call(
             "__hlasm_bfp_multiply_lengthened_short", [[0, 127, 1 << 22], [0, 255, 1]]
         ),
-        "compare": _call("__hlasm_bfp_compare_long", [[0, 2047, 1 << 51], _long(1.0)]),
-        "signaling": _call(
-            "__hlasm_bfp_compare_signaling_long", [[0, 2047, 1 << 51], _long(1.0)]
-        ),
-        "low": _call("__hlasm_bfp_compare_long", [_long(-1.0), _long(1.0)]),
         "divide to integer": _call(
             "__hlasm_bfp_divide_to_integer_long",
             [NEAREST_EVEN, NEAREST_EVEN, _long(7.0), _long(2.0)],
@@ -106,8 +100,6 @@ def test_builtins_return_value_scaled_value_trap_flags_dxcs_and_cc():
             "__hlasm_bfp_divide_to_integer_short",
             [NEAREST_EVEN, NEAREST_EVEN, [0, 127, 0], [0, 255, 1]],
         ),
-        "data class": _call("__hlasm_bfp_test_data_class_long", [_long(-0.0), 0x400]),
-        "other class": _call("__hlasm_bfp_test_data_class_long", [_long(-0.0), 0x800]),
     } == {
         "add": [*_long(3.0), *_long(3.0), 0, 0, 0, 0, 0],
         "overflow": [0, 255, 0, 0, 135, 0, 0x28, 0x28, 0x20, 0x0C, 0],
@@ -137,9 +129,6 @@ def test_builtins_return_value_scaled_value_trap_flags_dxcs_and_cc():
             0,
             0,
         ],
-        "compare": [*ZEROS, 0, 0, 0, 0, 3],
-        "signaling": [*ZEROS, 0x80, 0x80, 0, 0, 3],
-        "low": [*ZEROS, 0, 0, 0, 0, 1],
         "divide to integer": [*_long(-1.0), *_long(-1.0), 0, 0, 0, 0, 0, *_long(4.0)],
         "partial": [
             *_long(64.0),
@@ -167,6 +156,4 @@ def test_builtins_return_value_scaled_value_trap_flags_dxcs_and_cc():
             255,
             1 << 22 | 1,
         ],
-        "data class": 1,
-        "other class": 0,
     }

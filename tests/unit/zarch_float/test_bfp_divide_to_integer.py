@@ -1,15 +1,13 @@
 # pyright: standard
-"""BFP DIVIDE TO INTEGER, TEST DATA CLASS and exact widening against PoO figures 19-22 and 19-26."""
+"""BFP DIVIDE TO INTEGER against PoO figure 19-22 and its final/partial rule."""
 
 import math
 
 from tests.covers import NotLanguageFeature, covers
-from tests.unit.zarch_float.bfp_bits import from_bits, long_of, short_of
-from zarch_float.bfp_convert import bfp_widened
-from zarch_float.bfp_data_class import bfp_test_data_class
+from tests.unit.zarch_float.bfp_bits import long_of, short_of
 from zarch_float.bfp_divide_to_integer import bfp_divide_to_integer
 from zarch_float.bfp_divide_to_integer_result import BfpDivideToIntegerResult
-from zarch_float.bfp_format import LONG, SHORT
+from zarch_float.bfp_format import LONG
 from zarch_float.bfp_nan import default_nan
 from zarch_float.bfp_result import BfpResult, bfp_exact
 from zarch_float.bfp_value import BfpValue
@@ -148,43 +146,3 @@ def test_final_remainder_rounds_by_the_fpc_mode_and_reports_tininess():
             False,
         ),
     )
-
-
-@covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_data_class_selects_one_figure_19_26_bit_per_class_and_sign():
-    operands = {
-        "+0": long_of(0.0),
-        "-0": long_of(-0.0),
-        "+normal": long_of(1.5),
-        "-normal": long_of(-1.5),
-        "+subnormal": long_of(5e-324),
-        "-subnormal": long_of(-5e-324),
-        "+inf": long_of(INF),
-        "-inf": long_of(-INF),
-        "+qnan": QNAN,
-        "-qnan": QNAN.negated(),
-        "+snan": SNAN.negated(),
-        "-snan": SNAN,
-    }
-
-    assert {
-        name: [bit for bit in range(52, 64) if bfp_test_data_class(v, 1 << (63 - bit))]
-        for name, v in operands.items()
-    } == {name: [52 + at] for at, name in enumerate(operands)}
-
-
-@covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_widening_is_exact_and_keeps_signaling_nans():
-    assert [
-        bfp_widened(short_of(1.5), LONG),
-        bfp_widened(short_of(-(2.0**-149)), LONG),
-        bfp_widened(short_of(-INF), LONG),
-        bfp_widened(BfpValue(SHORT, False, FloatKind.SNAN, 1), LONG),
-        bfp_widened(long_of(-0.0), LONG),
-    ] == [
-        long_of(1.5),
-        long_of(-(2.0**-149)),
-        long_of(-INF),
-        from_bits(0x7FF00000_20000000, LONG),
-        long_of(-0.0),
-    ]

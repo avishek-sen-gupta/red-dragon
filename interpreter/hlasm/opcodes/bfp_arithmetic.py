@@ -16,8 +16,6 @@ from interpreter.hlasm.bfp_slots import CC_SLOT, INEXACT_BIT, QUOTIENT_SLOT
 from interpreter.hlasm.data_movement import (
     Source,
     from_storage_at,
-    keep,
-    storage_address_at,
 )
 from interpreter.hlasm.hlasm_constants import (
     BITS_PER_BYTE,
@@ -47,7 +45,6 @@ type Quieted = Callable[[MachineStatement], int]
 
 VALID_MODIFIERS = frozenset({0, 1, 3, 4, 5, 6, 7})
 INEXACT_CONTROL = 0b0100
-DATA_CLASS_BITS = 0xFFF
 FIRST, SECOND, THIRD, FOURTH = 0, 1, 2, 3
 
 
@@ -103,7 +100,7 @@ def _stored(index: int, layout: BfpLayout, after: AfterStore) -> Deliver:
     return deliver
 
 
-def _compared(
+def _result_cc(
     emitter: HlasmEmitter, statement: MachineStatement, result: Register, slot: Register
 ) -> None:
     emitter.set_cc(list_item(emitter, result, CC_SLOT))
@@ -121,7 +118,7 @@ def _divided(layout: BfpLayout) -> Deliver:
     ) -> None:
         remainder(emitter, statement, result, slot)
         quotient(emitter, statement, result, emitter.int_(QUOTIENT_SLOT))
-        _compared(emitter, statement, result, slot)
+        _result_cc(emitter, statement, result, slot)
 
     return deliver
 
@@ -262,34 +259,6 @@ def _lengthened(
     )
 
 
-def _compare(
-    operation: BfpOperation, layout: BfpLayout, second: Source
-) -> StatementLowering:
-    return _ieee(
-        (operation, layout),
-        (_fields(_fpr(FIRST, layout), layout), _fields(second, layout)),
-        _compared,
-    )
-
-
-def _compare_forms(
-    operation: BfpOperation, names: tuple[str, str, str, str, str]
-) -> Mapping[str, StatementLowering]:
-    short, long, extended, short_storage, long_storage = names
-    return {
-        short: _compare(operation, SHORT_LAYOUT, _fpr(SECOND, SHORT_LAYOUT)),
-        long: _compare(operation, LONG_LAYOUT, _fpr(SECOND, LONG_LAYOUT)),
-        extended: pairs(
-            (FIRST, SECOND),
-            _compare(operation, EXTENDED_LAYOUT, _fpr(SECOND, EXTENDED_LAYOUT)),
-        ),
-        short_storage: _compare(
-            operation, SHORT_LAYOUT, _storage(SECOND, SHORT_LAYOUT)
-        ),
-        long_storage: _compare(operation, LONG_LAYOUT, _storage(SECOND, LONG_LAYOUT)),
-    }
-
-
 def _integral(layout: BfpLayout, quieted: Quieted) -> StatementLowering:
     return _checked(
         _invalid_modifier(SECOND),
@@ -318,19 +287,6 @@ def _divide_to_integer(layout: BfpLayout) -> StatementLowering:
             ),
         ),
     )
-
-
-def _test_data_class(layout: BfpLayout) -> StatementLowering:
-    name = bfp_builtin_name(BfpOperation.TEST_DATA_CLASS, layout)
-    operand = _fields(_fpr(FIRST, layout), layout)
-    address = storage_address_at(SECOND)
-
-    def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
-        fields = operand(emitter, statement)
-        mask = keep(DATA_CLASS_BITS)(emitter, address(emitter, statement))
-        emitter.set_cc(emitter.call(name, (fields, mask)))
-
-    return lower
 
 
 ADD_SUBTRACT: Mapping[str, StatementLowering] = {
@@ -366,11 +322,7 @@ SQUARE_ROOT_FUSED: Mapping[str, StatementLowering] = {
     **_fused_forms(BfpOperation.MULTIPLY_SUBTRACT, ("MSEBR", "MSDBR", "MSEB", "MSDB")),
 }
 
-COMPARE_INTEGRAL: Mapping[str, StatementLowering] = {
-    **_compare_forms(BfpOperation.COMPARE, ("CEBR", "CDBR", "CXBR", "CEB", "CDB")),
-    **_compare_forms(
-        BfpOperation.COMPARE_SIGNALING, ("KEBR", "KDBR", "KXBR", "KEB", "KDB")
-    ),
+INTEGRAL: Mapping[str, StatementLowering] = {
     "FIEBR": _integral(SHORT_LAYOUT, _signals_all),
     "FIDBR": _integral(LONG_LAYOUT, _signals_all),
     "FIXBR": pairs((FIRST, THIRD), _integral(EXTENDED_LAYOUT, _signals_all)),
@@ -379,14 +331,11 @@ COMPARE_INTEGRAL: Mapping[str, StatementLowering] = {
     "FIXBRA": pairs((FIRST, THIRD), _integral(EXTENDED_LAYOUT, _inexact_control)),
     "DIEBR": _divide_to_integer(SHORT_LAYOUT),
     "DIDBR": _divide_to_integer(LONG_LAYOUT),
-    "TCEB": _test_data_class(SHORT_LAYOUT),
-    "TCDB": _test_data_class(LONG_LAYOUT),
-    "TCXB": pairs((FIRST,), _test_data_class(EXTENDED_LAYOUT)),
 }
 
 BFP_ARITHMETIC_LOWERINGS: Mapping[str, StatementLowering] = {
     **ADD_SUBTRACT,
     **MULTIPLY_DIVIDE,
     **SQUARE_ROOT_FUSED,
-    **COMPARE_INTEGRAL,
+    **INTEGRAL,
 }

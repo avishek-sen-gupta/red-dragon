@@ -1,5 +1,5 @@
 # pyright: standard
-"""BFP arithmetic programs leave the same declared registers, CC and abend in RedDragon and in z390, bar z390's faults below; those expectations come from the Principles of Operation (figures 19-14 to 19-26). z390 writes X'F4F4F4F4' into bits 32-63 of some short results, rounds the fused product before adding, gives CC 1 for unordered compares and NaN sign forms, ignores the round-toward-minus sign of an exact zero sum, computes extended multiplies inexactly, rejects R1 = 1 for AXBR, any nonzero modifier for FIxBRA and DIxBR, and LTDBR leaves an SNaN unquieted. It takes no invalid-operation or inexact trap."""
+"""BFP arithmetic programs leave the same declared registers, CC and abend in RedDragon and in z390, bar z390's faults below; those expectations come from the Principles of Operation (figures 19-14 to 19-26). z390 writes X'F4F4F4F4' into bits 32-63 of some short results, rounds the fused product before adding, gives CC 1 for unordered compares and NaN sign forms, ignores the round-toward-minus sign of an exact zero sum, computes extended multiplies inexactly, rejects R1 = 1 for AXBR, any nonzero modifier for FIxBRA and DIxBR, and LTDBR leaves an SNaN unquieted. Its TCDB matches neither subnormals, infinities nor NaNs by Figure 19-26 and matches -0 to another bit. It takes no invalid-operation or inexact trap."""
 
 from collections.abc import Mapping
 from pathlib import Path
@@ -114,6 +114,24 @@ Z390_PINNED: Mapping[str, HlasmMachine] = {
             9: _cc(2),
             4: 0,
         },
+    ),
+    "TCDB selects the class bit, zeros to subnormals": _z390(
+        programs.COMPLETED,
+        0,
+        {2: _cc(1), 3: _cc(1), 4: _cc(1), 5: _cc(1), 6: _cc(0), 7: _cc(0)},
+    ),
+    "TCDB selects the class bit, infinities to SNaNs": _z390(
+        programs.COMPLETED, 0, {r: _cc(0) for r in range(2, 8)}
+    ),
+    "TCDB misses every other bit, zeros to subnormals": _z390(
+        programs.COMPLETED,
+        1,
+        {2: _cc(0), 3: _cc(1), 4: _cc(0), 5: _cc(0), 6: _cc(1), 7: _cc(1)},
+    ),
+    "TCDB misses every other bit, infinities to SNaNs": _z390(
+        programs.COMPLETED,
+        0,
+        {2: _cc(1), 3: _cc(1), 4: _cc(0), 5: _cc(0), 6: _cc(0), 7: _cc(0)},
     ),
 }
 AGREED = [case for case in programs.CASES if case not in Z390_PINNED]

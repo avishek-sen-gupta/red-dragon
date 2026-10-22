@@ -141,6 +141,29 @@ def image_cc(emitter: HlasmEmitter, image: Register, layout: BfpLayout) -> Regis
     )
 
 
+def magnitude_of(emitter: HlasmEmitter, image: Register, layout: BfpLayout) -> Register:
+    return keep(layout.magnitude_mask)(emitter, image)
+
+
+def nan_of(emitter: HlasmEmitter, image: Register, layout: BfpLayout) -> Register:
+    magnitude = magnitude_of(emitter, image, layout)
+    return emitter.binop(BinopKind.GT, magnitude, emitter.int_(layout.infinity))
+
+
+def quiet_of(emitter: HlasmEmitter, image: Register, layout: BfpLayout) -> Register:
+    quiet = keep(layout.quiet_bit)(emitter, image)
+    return emitter.binop(BinopKind.NE, quiet, emitter.int_(0))
+
+
+def signaling_nan_of(
+    emitter: HlasmEmitter, image: Register, layout: BfpLayout
+) -> Register:
+    loud = emitter.binop(
+        BinopKind.EQ, quiet_of(emitter, image, layout), emitter.int_(0)
+    )
+    return emitter.binop(BinopKind.MUL, nan_of(emitter, image, layout), loud)
+
+
 def current_mode(emitter: HlasmEmitter) -> Register:
     mode = keep(MODE_FIELD)(emitter, emitter.load_var(FPC_VAR))
     shifted = emitter.binop(BinopKind.ADD, mode, emitter.int_(FPC_TO_MODIFIER))

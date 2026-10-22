@@ -18,6 +18,7 @@ from interpreter.hlasm.opcodes.bfp_ir import (
     emit_ieee_ladder,
     image_cc,
     load_image,
+    signaling_nan_of,
     store_image,
 )
 from interpreter.hlasm.opcodes.floating_point_support import pairs
@@ -72,18 +73,10 @@ def _sign_form(change: SignChange, layout: BfpLayout) -> StatementLowering:
     return lower
 
 
-def _signaling(emitter: HlasmEmitter, image: Register, layout: BfpLayout) -> Register:
-    magnitude = keep(layout.magnitude_mask)(emitter, image)
-    nan = emitter.binop(BinopKind.GT, magnitude, emitter.int_(layout.infinity))
-    quiet = keep(layout.quiet_bit)(emitter, image)
-    loud = emitter.binop(BinopKind.EQ, quiet, emitter.int_(0))
-    return emitter.binop(BinopKind.MUL, nan, loud)
-
-
 def _load_and_test(layout: BfpLayout) -> StatementLowering:
     def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
         image = load_image(emitter, reg_operand(statement, SOURCE), layout)
-        snan = _signaling(emitter, image, layout)
+        snan = signaling_nan_of(emitter, image, layout)
         quieting = emitter.binop(BinopKind.MUL, snan, emitter.int_(layout.quiet_bit))
         result = emitter.binop(BinopKind.BIT_OR, image, quieting)
         invalid = emitter.binop(BinopKind.MUL, snan, emitter.int_(INVALID_BIT))

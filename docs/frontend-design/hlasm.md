@@ -99,7 +99,8 @@ addresses.
 | `interpreter/hlasm/opcodes/high_word.py` | The high-word unit |
 | `interpreter/hlasm/opcodes/miscellaneous.py` | The miscellaneous unit: access registers, LCBB, MC, hints, traps |
 | `interpreter/hlasm/opcodes/floating_point_support.py` | The floating-point-support unit: FPR moves, sign forms, the FPC, its checks and the simulated-IEEE trap |
-| `interpreter/hlasm/opcodes/bfp_arithmetic.py` | The BFP arithmetic unit's builtin forms: add, subtract, multiply, divide, square root, fused, compare, load FP integer, divide to integer, test data class |
+| `interpreter/hlasm/opcodes/bfp_arithmetic.py` | The BFP arithmetic unit's builtin forms: add, subtract, multiply, divide, square root, fused, load FP integer, divide to integer |
+| `interpreter/hlasm/opcodes/bfp_class.py` | BFP COMPARE, COMPARE AND SIGNAL and TEST DATA CLASS, in IR (ruling R44) |
 | `interpreter/hlasm/opcodes/bfp_sign.py` | BFP LOAD AND TEST and the sign forms, in IR |
 | `interpreter/hlasm/opcodes/bfp_ir.py`, `interpreter/hlasm/ieee_outcome.py` | BFP image IR: field lists, encoding, FPR access by format, an image's CC, and the IEEE trap ladder over an `IeeeOutcome` |
 | `interpreter/hlasm/program_status.py` | SPM, IPM, EPSW |
@@ -868,8 +869,13 @@ SQXBR, SXBR, TCDB, TCEB, TCXB. Rulings R34, R41, R43.
   `S0C7` with nothing stored. An enabled overflow or underflow (tininess) stores the scaled
   result, sets DXC 2x or 1x, and abends. Otherwise the result is stored, the unenabled flags
   are ORed into FPC byte 1, and an enabled inexact sets DXC 08 or 0C and abends.
-- CC: add, subtract and the sign forms from the stored image; compares from the comparison;
-  DIxBR per Figure 19-22; TCxB 0 or 1. The rest leave it.
+- CxB, KxB and TCxB are IR on the image (ruling R44): a NaN is a magnitude above the
+  infinity image, ordering compares magnitude times (1 - 2 x sign), and TCxB picks mask bit
+  11 - 2 x class - sign. CxB signals on an SNaN, KxB on any NaN, through the ladder.
+- CC: add, subtract and the sign forms from the stored image; compares from the order, or 3
+  when unordered; DIxBR per Figure 19-22 (final when |q| < 2^p or q is an integer, since
+  past 2^p the two nearest integers are not both representable); TCxB 0 or 1. The rest
+  leave it.
 - Short results replace FPR bits 0-31 only. Extended operands use pairs (r, r+2). An invalid
   pair, an M3 or M4 of 2 or 8-15, or DIxBR registers that are not distinct abend `S0C6` at
   compile time. FIxBRA M4 bit 1 suppresses inexact.
@@ -878,8 +884,8 @@ SQXBR, SXBR, TCDB, TCEB, TCXB. Rulings R34, R41, R43.
 - z390 writes X'F4F4F4F4' into bits 32-63 of some short results, rounds the fused product,
   gives CC 1 for unordered compares and NaN sign forms, ignores the round-toward-minus sign
   of an exact zero sum, multiplies extended inexactly, rejects AXBR R1 = 1 and any FIxBRA or
-  DIxBR modifier, does not quiet LTDBR's SNaN, picks other fused NaNs, and takes no invalid
-  or inexact trap. The z390 test pins each (red-dragon-6uyp.74).
+  DIxBR modifier, does not quiet LTDBR's SNaN, picks other fused NaNs, misclassifies
+  subnormals, infinities, NaNs and -0 in TCDB, and takes no invalid or inexact trap. The z390 test pins each (red-dragon-6uyp.74).
 
 ## Known Gaps
 
@@ -1040,8 +1046,8 @@ SQXBR, SXBR, TCDB, TCEB, TCXB. Rulings R34, R41, R43.
 | `tests/unit/hlasm/test_floating_point_support_lowering.py` | Floating-point-support IR: FPR region offsets and widths, short forms on 4 bytes; invalid pairs abend before any access; FPC checks before the FPC store, the LFAS/SFASR trap after it; no SYMBOLIC |
 | `tests/integration/hlasm/test_floating_point_support.py` | Every floating-point-support mnemonic on the VM through GRs: moves, low word kept, sign forms, FPC loads and rounding modes, `S0C6` with the FPC unchanged, each Figure 9-21 DXC with `S0C7`; EX of LER |
 | `tests/z390/test_floating_point_support_differential.py` | Every floating-point-support case against z390; its initial FPC, short loads, HFP sign forms, missing checks and signaling pinned (`-m z390`) |
-| `tests/unit/hlasm/test_bfp_builtins.py` | BFP builtins: fields to values and back for every class; each builtin's value, scaled value, trap, flags, DXCs and CC |
-| `tests/unit/hlasm/test_bfp_arithmetic_lowering.py` | BFP IR: operands in argument order, one builtin call, then the trap ladder; static `S0C6` before any access; sign forms without a builtin; no SYMBOLIC in all 70 |
-| `tests/integration/hlasm/test_bfp_arithmetic.py` | Every BFP arithmetic mnemonic on the VM: result images, CC and FPC flags; each trap's delivered value, DXC and `S0C7`; fused NaN order and 0 x inf with an SNaN addend |
+| `tests/unit/hlasm/test_bfp_builtins.py` | BFP builtins: fields to values and back for every class; each builtin family's value, scaled value, trap, flags, DXCs and CC |
+| `tests/unit/hlasm/test_bfp_arithmetic_lowering.py` | BFP IR: operands in argument order, one builtin call, then the trap ladder; static `S0C6` before any access; compares, test data class and sign forms without a builtin; no SYMBOLIC in all 70 |
+| `tests/integration/hlasm/test_bfp_arithmetic.py` | Every BFP arithmetic mnemonic on the VM: result images, CC and FPC flags; signed compares and every TCDB class bit; each trap's delivered value, DXC and `S0C7`; fused NaN order and 0 x inf with an SNaN addend |
 | `tests/z390/test_bfp_arithmetic_differential.py` | Every BFP arithmetic case against z390; its faults pinned (`-m z390`) |
 | `tests/z390/test_conditional_select_count_differential.py` | Every conditional, select and count case against z390; the instructions z390 does not execute and its whole-register SELFHR pinned (`-m z390`) |
