@@ -1,5 +1,5 @@
 # pyright: standard
-"""Sets CC 1 when the first of two unequal byte images is the lower, else CC 2, then branches on."""
+"""The storage compares' condition codes: a constant CC on a branch, and CC 1 or 2 from two unequal unsigned unit values."""
 
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.instructions import Branch, BranchIf, Label_
@@ -7,6 +7,7 @@ from interpreter.ir import CodeLabel
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
 
+EQUAL_CC = 0
 FIRST_LOW_CC = 1
 FIRST_HIGH_CC = 2
 
@@ -20,9 +21,9 @@ def emit_cc_constant(
 
 
 def emit_unequal_order(
-    emitter: HlasmEmitter, images: tuple[Register, Register], then: CodeLabel
+    emitter: HlasmEmitter, values: tuple[Register, Register], then: CodeLabel
 ) -> None:
-    first, second = images
+    first, second = values
     low, high = emitter.fresh_label("hl_first_low"), emitter.fresh_label(
         "hl_first_high"
     )

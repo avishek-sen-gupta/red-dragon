@@ -90,7 +90,7 @@ class HlasmEmitter:
             ),
         )
 
-    def _unsigned(self) -> Register:
+    def unsigned_flag(self) -> Register:
         reg = self.fresh_reg()
         self.emit_inst(Const.bool_(reg, False))
         return reg
@@ -121,7 +121,7 @@ class HlasmEmitter:
 
     def load_storage(self, region: Register, offset: int, width: int) -> Register:
         image = self.load_bytes(region, self.int_(offset), width)
-        return self.call(BINARY_BYTES_TO_INT, (image, self._unsigned()))
+        return self.call(BINARY_BYTES_TO_INT, (image, self.unsigned_flag()))
 
     def store_storage(
         self, region: Register, offset: int, width: int, value: Register
@@ -135,7 +135,7 @@ class HlasmEmitter:
 
     def image(self, value: Register, width: int) -> Register:
         return self.call(
-            INT_TO_BINARY_BYTES, (value, self.int_(width), self._unsigned())
+            INT_TO_BINARY_BYTES, (value, self.int_(width), self.unsigned_flag())
         )
 
     def load_bytes(self, region: Register, offset: Register, width: int) -> Register:

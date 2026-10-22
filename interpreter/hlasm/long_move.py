@@ -48,7 +48,8 @@ def _move_then_pad(emitter: HlasmEmitter, operands: LongOperands, pad: Pad) -> N
         ONE_BYTE,
         lambda at: copy_byte(emitter, addresses, at),
     )
-    image, width = pad
+    value, width = pad
+    image = emitter.image(value, width)
     emit_counted_loop(
         emitter,
         (moved, operands.first_length),

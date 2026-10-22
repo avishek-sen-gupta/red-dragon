@@ -42,6 +42,9 @@ Z390_MACHINE: Mapping[str, HlasmMachine] = {
     "CLST first ends first registers": HlasmMachine(
         ABENDED, 1, {2: HIGH_FILL | 0xFFFFFFFE, 4: HIGH_FILL | 0xFFFFFFFE}
     ),
+    "CLST clears bit 32": HlasmMachine(
+        ABENDED, 3, {2: HIGH_FILL | 0x7FFFFFFE, 4: HIGH_FILL | 0x7FFFFFFE}
+    ),
     "CLST second ends first": HlasmMachine(ABENDED, 0, {}),
     "CLST high ending character": HlasmMachine(ABENDED, 0, {}),
     "CLST reserved GR0 bits": HlasmMachine(ABENDED, 1, {}),
@@ -50,6 +53,9 @@ Z390_MACHINE: Mapping[str, HlasmMachine] = {
     "CUSE pad": HlasmMachine(ABENDED, 0, BOTH_ZERO),
     "CUSE pad registers": HlasmMachine(ABENDED, 2, {2: HIGH_FILL | 2, 4: HIGH_FILL}),
     "CUSE zero substring": HlasmMachine(ABENDED, 2, BOTH_ZERO),
+    "CUSE zero substring clears bit 32": HlasmMachine(
+        ABENDED, 3, {2: HIGH_FILL | 6, 4: HIGH_FILL | 6}
+    ),
     "CUSE negative length": HlasmMachine(ABENDED, 2, BOTH_ZERO),
     "CUSE lengths zero": HlasmMachine(ABENDED, 1, BOTH_ZERO),
 }

@@ -83,14 +83,50 @@ def count_down(
     emitter.store_gr32(r + 1, emitter.binop(BinopKind.BIT_OR, kept, remaining))
 
 
+def advance_operand(
+    emitter: HlasmEmitter,
+    r: int,
+    operand: tuple[Register, Register, Register],
+    compared: Register,
+    length_mask: int,
+) -> None:
+    address, length, written = operand
+    advanced = smaller(emitter, compared, length)
+    advance_address(emitter, r, address, advanced)
+    count_down(emitter, r, emitter.binop(BinopKind.SUB, written, advanced), length_mask)
+
+
+def advance_operands(
+    emitter: HlasmEmitter,
+    pairs: Pairs,
+    operands: LongOperands,
+    progress: tuple[tuple[Register, Register], Register],
+    length_mask: int,
+) -> None:
+    written, compared = progress
+    advance_operand(
+        emitter,
+        pairs[0],
+        (operands.first, operands.first_length, written[0]),
+        compared,
+        length_mask,
+    )
+    advance_operand(
+        emitter,
+        pairs[1],
+        (operands.second, operands.second_length, written[1]),
+        compared,
+        length_mask,
+    )
+
+
 def register_pad(emitter: HlasmEmitter, second: int) -> Pad:
     shifted = emitter.binop(
         BinopKind.RSHIFT,
         emitter.load_gr32(second + 1),
         emitter.int_(REGISTER_PAD_SHIFT),
     )
-    pad = emitter.binop(BinopKind.BIT_AND, shifted, emitter.int_(BYTE_MASK))
-    return emitter.image(pad, ONE_BYTE), ONE_BYTE
+    return emitter.binop(BinopKind.BIT_AND, shifted, emitter.int_(BYTE_MASK)), ONE_BYTE
 
 
 def address_pad(emitter: HlasmEmitter, statement: MachineStatement, width: int) -> Pad:
@@ -100,7 +136,7 @@ def address_pad(emitter: HlasmEmitter, statement: MachineStatement, width: int) 
         address,
         emitter.int_((1 << (BITS_PER_BYTE * width)) - 1),
     )
-    return emitter.image(pad, width), width
+    return pad, width
 
 
 def no_length_check(emitter: HlasmEmitter, operands: LongOperands) -> None:
