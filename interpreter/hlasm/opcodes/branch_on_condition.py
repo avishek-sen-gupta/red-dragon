@@ -5,6 +5,7 @@ from collections.abc import Callable, Mapping
 
 from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.hlasm.branch_dispatch import emit_branch
+from interpreter.hlasm.conditional import emit_when
 from interpreter.hlasm.data_movement import (
     from_gr32,
     from_storage,
@@ -15,7 +16,6 @@ from interpreter.hlasm.hlasm_constants import CC_VAR, DOUBLEWORD_BYTES
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.operands import mask_operand, reg_operand
 from interpreter.hlasm.statement_lowering import StatementLowering
-from interpreter.instructions import BranchIf, Label_
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
 
@@ -29,10 +29,8 @@ MASK_OPERAND = 0
 NO_BRANCH_REGISTER = 0
 
 
-def _selected(emitter: HlasmEmitter, mask: int) -> Register:
-    shifted = emitter.binop(
-        BinopKind.RSHIFT, emitter.int_(CC_MASK_TOP), emitter.load_var(CC_VAR)
-    )
+def mask_selects(emitter: HlasmEmitter, cc: Register, mask: int) -> Register:
+    shifted = emitter.binop(BinopKind.RSHIFT, emitter.int_(CC_MASK_TOP), cc)
     selected = emitter.binop(BinopKind.BIT_AND, shifted, emitter.int_(mask))
     return emitter.binop(BinopKind.NE, selected, emitter.int_(0))
 
@@ -40,17 +38,11 @@ def _selected(emitter: HlasmEmitter, mask: int) -> Register:
 def _conditional(
     emitter: HlasmEmitter, statement: MachineStatement, mask: int, target: Target
 ) -> None:
-    taken_label = emitter.fresh_label("hl_bc_taken")
-    fall_label = emitter.fresh_label("hl_bc_fall")
-    emitter.emit_inst(
-        BranchIf(
-            cond_reg=_selected(emitter, mask),
-            branch_targets=(taken_label, fall_label),
-        )
+    emit_when(
+        emitter,
+        mask_selects(emitter, emitter.load_var(CC_VAR), mask),
+        lambda: emit_branch(emitter, target(emitter, statement)),
     )
-    emitter.emit_inst(Label_(label=taken_label))
-    emit_branch(emitter, target(emitter, statement))
-    emitter.emit_inst(Label_(label=fall_label))
 
 
 def _never(

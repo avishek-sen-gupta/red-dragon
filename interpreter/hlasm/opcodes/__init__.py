@@ -16,6 +16,9 @@ from interpreter.hlasm.opcodes.compare import (
     COMPARE_FIELD_LOWERINGS,
     COMPARE_LOWERINGS,
 )
+from interpreter.hlasm.opcodes.compare_branch_trap import (
+    COMPARE_BRANCH_TRAP_LOWERINGS,
+)
 from interpreter.hlasm.opcodes.load_address_immediate import (
     LOAD_ADDRESS_IMMEDIATE_LOWERINGS,
 )
@@ -58,6 +61,7 @@ OPCODE_LOWERINGS: Mapping[str, StatementLowering] = {
     **SIGNED_ADD_SUBTRACT_LOWERINGS,
     **LOGICAL_ADD_SUBTRACT_LOWERINGS,
     **COMPARE_LOWERINGS,
+    **COMPARE_BRANCH_TRAP_LOWERINGS,
     **BOOLEAN_LOWERINGS,
     **SHIFT_ROTATE_LOWERINGS,
     **MULTIPLY_DIVIDE_LOWERINGS,
