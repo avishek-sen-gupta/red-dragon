@@ -12,9 +12,9 @@ from tests.integration.hlasm.hlasm_helpers import run_hlasm_float, run_hlasm_fpc
 @pytest.mark.parametrize("case", list(programs.CASES))
 def test_bfp_instruction_leaves_the_registers_cc_and_fpc(case: str):
     body, registers = programs.CASES[case][:2]
-    machine, left = run_hlasm_fpc(programs.program(body))
+    machine, fpc = run_hlasm_fpc(programs.program(body))
 
-    assert (machine.restricted_to(registers), left) == (
+    assert (machine.restricted_to(registers), fpc) == (
         programs.expected(case),
         programs.CASES[case][4],
     )
@@ -24,8 +24,8 @@ def test_bfp_instruction_leaves_the_registers_cc_and_fpc(case: str):
 @pytest.mark.parametrize("case", list(programs.TRAPS))
 def test_ieee_trap_delivers_or_suppresses_then_abends_with_the_dxc(case: str):
     body, fprs = programs.TRAPS[case][:2]
-    machine, left, fpc = run_hlasm_float(programs.program(body))
+    machine, fpr_images, fpc = run_hlasm_float(programs.program(body))
 
-    assert (machine.run, machine.cc, {r: left[r] for r in fprs}, fpc) == (
+    assert (machine.run, machine.cc, {r: fpr_images[r] for r in fprs}, fpc) == (
         programs.expected_trap(case)
     )

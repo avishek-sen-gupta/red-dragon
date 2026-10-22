@@ -41,7 +41,7 @@ from interpreter.register import Register
 
 type Deliver = Callable[[HlasmEmitter, MachineStatement, Register, Register], None]
 type AfterStore = Callable[[HlasmEmitter, Register], None]
-type Quieted = Callable[[MachineStatement], int]
+type SuppressedBits = Callable[[MachineStatement], int]
 
 VALID_MODIFIERS = frozenset({0, 1, 3, 4, 5, 6, 7})
 INEXACT_CONTROL = 0b0100
@@ -136,14 +136,14 @@ def _ieee(
     builtin: tuple[BfpOperation, BfpLayout],
     arguments: Sequence[Source],
     deliver: Deliver,
-    quieted: Quieted = _signals_all,
+    suppressed: SuppressedBits = _signals_all,
 ) -> StatementLowering:
     name = bfp_builtin_name(*builtin)
 
     def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
         args = tuple(argument(emitter, statement) for argument in arguments)
         result = emitter.call(name, args)
-        outcome = without(emitter, outcome_of(emitter, result), quieted(statement))
+        outcome = without(emitter, outcome_of(emitter, result), suppressed(statement))
         emit_ieee_ladder(
             emitter, outcome, lambda slot: deliver(emitter, statement, result, slot)
         )
@@ -172,24 +172,15 @@ def _shared_registers(statement: MachineStatement) -> bool:
     return len(set(registers)) < len(registers)
 
 
-def _register_form(
-    operation: BfpOperation, layout: BfpLayout, after: AfterStore
+def _two_operand(
+    operation: BfpOperation,
+    layout: BfpLayout,
+    second: Callable[[int, BfpLayout], Source],
+    after: AfterStore,
 ) -> StatementLowering:
     operands = (
         _fields(_fpr(FIRST, layout), layout),
-        _fields(_fpr(SECOND, layout), layout),
-    )
-    return _ieee(
-        (operation, layout), (_current, *operands), _stored(FIRST, layout, after)
-    )
-
-
-def _storage_form(
-    operation: BfpOperation, layout: BfpLayout, after: AfterStore
-) -> StatementLowering:
-    operands = (
-        _fields(_fpr(FIRST, layout), layout),
-        _fields(_storage(SECOND, layout), layout),
+        _fields(second(SECOND, layout), layout),
     )
     return _ieee(
         (operation, layout), (_current, *operands), _stored(FIRST, layout, after)
@@ -203,14 +194,18 @@ def _binary(
 ) -> Mapping[str, StatementLowering]:
     short, long, extended, short_storage, long_storage = names
     return {
-        short: _register_form(operation, SHORT_LAYOUT, after_of(SHORT_LAYOUT)),
-        long: _register_form(operation, LONG_LAYOUT, after_of(LONG_LAYOUT)),
+        short: _two_operand(operation, SHORT_LAYOUT, _fpr, after_of(SHORT_LAYOUT)),
+        long: _two_operand(operation, LONG_LAYOUT, _fpr, after_of(LONG_LAYOUT)),
         extended: pairs(
             (FIRST, SECOND),
-            _register_form(operation, EXTENDED_LAYOUT, after_of(EXTENDED_LAYOUT)),
+            _two_operand(operation, EXTENDED_LAYOUT, _fpr, after_of(EXTENDED_LAYOUT)),
         ),
-        short_storage: _storage_form(operation, SHORT_LAYOUT, after_of(SHORT_LAYOUT)),
-        long_storage: _storage_form(operation, LONG_LAYOUT, after_of(LONG_LAYOUT)),
+        short_storage: _two_operand(
+            operation, SHORT_LAYOUT, _storage, after_of(SHORT_LAYOUT)
+        ),
+        long_storage: _two_operand(
+            operation, LONG_LAYOUT, _storage, after_of(LONG_LAYOUT)
+        ),
     }
 
 
@@ -259,14 +254,14 @@ def _lengthened(
     )
 
 
-def _integral(layout: BfpLayout, quieted: Quieted) -> StatementLowering:
+def _integral(layout: BfpLayout, suppressed: SuppressedBits) -> StatementLowering:
     return _checked(
         _invalid_modifier(SECOND),
         _ieee(
             (BfpOperation.ROUND_TO_INTEGRAL, layout),
             (_modifier(SECOND), _fields(_fpr(THIRD, layout), layout)),
             _stored(FIRST, layout, _no_cc),
-            quieted,
+            suppressed,
         ),
     )
 
