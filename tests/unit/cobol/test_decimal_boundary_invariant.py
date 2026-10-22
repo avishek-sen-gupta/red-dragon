@@ -1,4 +1,4 @@
-"""Only cobol_numeric and zarch_float may touch ``decimal`` (red-dragon-4q25.1, ADR-194).
+"""Only cobol_numeric and zarch_float's DFP modules may touch ``decimal`` (red-dragon-4q25.1, ADR-194).
 
 The silent failure mode this guards: a module that quietly builds a Decimal or
 imports the module spreads representation-specific handling outside the
@@ -17,7 +17,8 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 DECIMAL_USE = re.compile(
     r"^\s*(from\s+decimal\s+import|import\s+decimal)\b|\bDecimal\(", re.MULTILINE
 )
-SCANNED_ROOTS = ("interpreter", "cobol_asg", "cobol_memory", "hlasm_asg")
+SCANNED_ROOTS = ("interpreter", "cobol_asg", "cobol_memory", "hlasm_asg", "zarch_float")
+DFP_MODULES = {"zarch_float/dfp_arithmetic.py", "zarch_float/dfp_context.py"}
 
 
 def _decimal_users() -> set[str]:
@@ -26,14 +27,14 @@ def _decimal_users() -> set[str]:
         for root in SCANNED_ROOTS
         for path in (REPO_ROOT / root).rglob("*.py")
         if DECIMAL_USE.search(path.read_text())
-    }
+    } - DFP_MODULES
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_decimal_is_used_only_inside_cobol_numeric_and_zarch_float():
+def test_decimal_is_used_only_inside_cobol_numeric_and_the_dfp_modules():
     offenders = sorted(_decimal_users())
     assert offenders == [], (
-        f"decimal used outside cobol_numeric and zarch_float: {offenders}. Route the "
+        f"decimal used outside cobol_numeric and the DFP modules: {offenders}. Route the "
         "calculation through one of them so the representation stays swappable."
     )
 
