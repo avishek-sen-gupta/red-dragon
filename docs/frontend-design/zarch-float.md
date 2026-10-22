@@ -59,3 +59,25 @@ Rules taken from the PoO:
 - NaNs: the first SNaN in operand order, quieted, with INVALID; else the first QNaN.
   For fused multiply-add, 0 × ∞ gives the default NaN even when op1 is a NaN.
 - An exact zero sum of opposite signs is +0, or −0 under round toward −∞.
+
+## HFP
+
+`HfpValue(format, negative, fraction, exponent)`: 0.fraction × 16^exponent, the fraction
+`format.digits` hex digits (6, 14, 28), the exponent the characteristic − 64 and unbounded.
+`HfpResult(value, conditions)`. The caller wraps the characteristic modulo 128 when the
+interruption is taken, or forces a true zero when HFP_EXPONENT_UNDERFLOW or
+HFP_SIGNIFICANCE is masked. HFP_DIVIDE and HFP_SQUARE_ROOT return the operand unchanged:
+the operation is suppressed.
+
+| Function | Notes |
+|---|---|
+| `hfp_add`, `hfp_subtract` | `(a, b, normalize)`: one guard digit; unnormalized results keep leading zeros and test zero without the guard digit |
+| `hfp_compare` | The normalized-subtraction difference with its guard digit, so digits beyond it are lost |
+| `hfp_multiply` | `(a, b, target)`: the exact product truncated; `target` LONG from SHORT operands gives MDER, EXTENDED from LONG gives MXDR |
+| `hfp_divide`, `hfp_halve` | Exact quotient, normalized and truncated |
+| `hfp_square_root` | Truncated to one guard digit, then a half is added at it (SQER, SQDR, SQXR) |
+| `hfp_load_rounded`, `hfp_load_lengthened` | LOAD ROUNDED adds a half at the first dropped bit; a carry shifts right |
+| `hfp_from_integer`, `hfp_to_integer` | From: normalized, truncated. To: under the M3 method; out of range gives an end of the range with OUT_OF_RANGE (CC 3) |
+
+Zero fractions give a positive true zero from multiply, divide, halve, square root and
+CONVERT FROM FIXED, as figure 18-1 states.

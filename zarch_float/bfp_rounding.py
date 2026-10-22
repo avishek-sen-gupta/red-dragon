@@ -9,7 +9,7 @@ from zarch_float.bfp_format import BfpFormat
 from zarch_float.bfp_result import BfpResult
 from zarch_float.bfp_value import BfpValue
 from zarch_float.condition import Condition, raised
-from zarch_float.exact_rounding import round_ratio
+from zarch_float.exact_rounding import leading_exponent, round_ratio
 from zarch_float.float_kind import FloatKind
 from zarch_float.rounding_mode import RoundingMode
 
@@ -23,11 +23,6 @@ _OVERFLOWS_TO_INFINITY: Mapping[RoundingMode, Callable[[bool], bool]] = {
     RoundingMode.TOWARD_POSITIVE: lambda negative: not negative,
     RoundingMode.TOWARD_NEGATIVE: lambda negative: negative,
 }
-
-
-def leading_exponent(magnitude: Fraction) -> int:
-    estimate = magnitude.numerator.bit_length() - magnitude.denominator.bit_length()
-    return estimate - int(magnitude < Fraction(2) ** estimate)
 
 
 def _finite(

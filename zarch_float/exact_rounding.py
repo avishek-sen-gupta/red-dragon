@@ -1,7 +1,8 @@
 # pyright: standard
-"""Rounds an exact non-negative ratio to an integer; prepare-for-shorter is the binary rule."""
+"""Exact-value primitives: rounding a ratio to an integer (binary RFS), the leading bit."""
 
 from collections.abc import Callable, Mapping
+from fractions import Fraction
 
 from zarch_float.rounded_integer import RoundedInteger
 from zarch_float.rounding_mode import RoundingMode
@@ -26,3 +27,8 @@ def round_ratio(
     half = (2 * remainder > denominator) - (2 * remainder < denominator)
     up = remainder != 0 and _ROUNDS_UP[mode](kept, half, negative)
     return RoundedInteger(kept + int(up), remainder != 0, up)
+
+
+def leading_exponent(magnitude: Fraction) -> int:
+    estimate = magnitude.numerator.bit_length() - magnitude.denominator.bit_length()
+    return estimate - int(magnitude < Fraction(2) ** estimate)
