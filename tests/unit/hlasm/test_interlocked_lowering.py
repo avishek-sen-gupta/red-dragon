@@ -1,7 +1,10 @@
 # pyright: standard
 """Interlocked-update lowerings: the boundary check before any operand, one compare that swaps or reloads, CAL's second operand checked only when it is loaded, the load-and-operate stores in PoO order with the overflow check, TS, and odd pair registers abending S0C6 before any read."""
 
+import logging
 from collections.abc import Sequence
+
+import pytest
 
 from hlasm_asg.program.operand import Operand
 from interpreter.hlasm.executed_field import ExecutedField
@@ -287,13 +290,18 @@ def test_plo_checks_gr0_and_the_test_bit_before_selecting_one_block_per_function
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_plo_under_ex_lowers_once_with_r1_and_r3_taken_from_the_field_at_run_time():
+def test_plo_under_ex_lowers_once_with_r1_and_r3_taken_from_the_field_at_run_time_and_warns_of_its_size(
+    caplog: pytest.LogCaptureFixture,
+):
     statement = machine_statement("PLO", PLO_OPERANDS)
     written, executed = HlasmEmitter(), HlasmEmitter()
-    OPCODE_LOWERINGS["PLO"](written, statement)
-    DATA_FIELD_LOWERINGS["PLO"].lower(
-        executed, statement, ExecutedField(Register("%byte"))
-    )
+    with caplog.at_level(
+        logging.WARNING, logger="interpreter.hlasm.perform_locked_operation"
+    ):
+        OPCODE_LOWERINGS["PLO"](written, statement)
+        DATA_FIELD_LOWERINGS["PLO"].lower(
+            executed, statement, ExecutedField(Register("%byte"))
+        )
     nibbles = [
         describe(i, {}) for i in executed.instructions()[:8] if isinstance(i, Binop)
     ]
@@ -301,4 +309,12 @@ def test_plo_under_ex_lowers_once_with_r1_and_r3_taken_from_the_field_at_run_tim
     assert (
         len(executed.instructions()) - len(written.instructions()),
         nibbles,
-    ) == (6, [">> reg", "& reg", ">> reg", "& reg"])
+        [r.getMessage() for r in caplog.records],
+    ) == (
+        6,
+        [">> reg", "& reg", ">> reg", "& reg"],
+        [
+            "PLO in T at offset 2 (t.asm:1): lowered to 7282 IR instructions, a block per function code (red-dragon-6uyp.83)",
+            "PLO in T at offset 2 (t.asm:1): lowered to 7288 IR instructions, a block per function code (red-dragon-6uyp.83)",
+        ],
+    )

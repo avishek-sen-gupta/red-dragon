@@ -700,7 +700,8 @@ lower as CU12 and CU21.
 - One CPU (ruling R33): interlocked updates, serialization and what other CPUs or channel programs
   observe hold trivially; no lock is modelled. LPD and LPDG always set CC 0.
 - Each PLO statement lowers its whole function-code table inline, about 7,300 IR instructions; the
-  50 codes that do not use R1 or R3 could be emitted once per program (red-dragon-6uyp.83).
+  50 codes that do not use R1 or R3 could be emitted once per program (red-dragon-6uyp.83). Lowering
+  logs a warning per PLO statement with its IR count.
 - `ABEND` takes only a self-defining code of 0-4095. Register notation (`ABEND (R2)`) and larger codes are not supported.
 
 ## Test Coverage
