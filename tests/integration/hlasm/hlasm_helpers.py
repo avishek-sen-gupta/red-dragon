@@ -5,6 +5,7 @@ import io
 from contextlib import redirect_stdout
 
 from interpreter.frontends import get_hlasm_parser
+from interpreter.hlasm.bfp_builtins import bfp_builtins
 from interpreter.hlasm.clock_builtins import clock_builtins
 from interpreter.project.hlasm_compile import compile_hlasm
 from interpreter.project.program_entry import ProgramEntry
@@ -62,7 +63,7 @@ def _run_vm(source: str) -> tuple[VMState, str]:
             max_steps=MAX_STEPS,
             initial_vm=initial_vm_state(),
             builtins=compose_builtins(
-                core_builtins(), clock_builtins(FixedMachineClock())
+                core_builtins(), clock_builtins(FixedMachineClock()), bfp_builtins()
             ),
         )
     return vm, console.getvalue()
