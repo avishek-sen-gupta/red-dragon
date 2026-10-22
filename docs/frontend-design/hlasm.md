@@ -574,10 +574,9 @@ SELFHRO, ...) to the base mnemonic with M3, or M4 for SELECT.
 - The counts are branch-free IR (SWAR population, a right smear for the leading zeros and the
   leftmost one). BEXTG and BDEPG loop once per one bit of the mask, right to left, about 22 VM
   steps each, moving one bit between that mask bit and a cursor that starts at 2^(64 - n).
-- che4z encodes the NE/NZ, NL/NM and NH/NP suffixes of LOC, LOCG, LOCR, LOCGR, STOC and STOCG as
-  6, 10 and 12; the Principles of Operation give 7, 11 and 13, as z390 does for LOCRNE
-  (red-dragon-6uyp.82). It
-  matters only at CC 3.
+- The NE/NZ, NL/NM and NH/NP suffixes are 7, 11 and 13 (Figure J-1). Our che4z fork corrects
+  LOC, LOCG, LOCR, LOCGR, STOC and STOCG, which upstream che4z encodes as 6, 10 and 12 (ruling
+  R32, red-dragon-6uyp.82).
 - z390 does not execute LOCHI, LOCGHI, LOCHHI, LOCFHR, LOCFH, STOCFH, CLZG, CTZG, BEXTG or BDEPG
   (`S0C1`), and SELFHR moves the whole register. The z390 test pins both; those expectations
   come from the Principles of Operation.
@@ -698,5 +697,5 @@ SELFHRO, ...) to the base mnemonic with M3, or M4 for SELECT.
 | `tests/z390/test_loop_branch_differential.py` | Every branch on count and index case against z390; z390's late reads of R2 and the compare value pinned (`-m z390`) |
 | `tests/unit/hlasm/test_conditional_select_count_lowering.py` | Conditional, select and count IR: the CC mask tested before any operand, SELECT's reads before its write, FLOGR's odd pair `S0C6`, branch-free counts with no builtin, one loop for BEXTG and BDEPG, the count IR's values |
 | `tests/integration/hlasm/test_conditional_select_count.py` | Every conditional, select and count mnemonic and every extended suffix on the VM: met and unmet conditions, masks 0 and 15, kept halves, aliased registers, zero and full operands; CC |
-| `tests/integration/hlasm/test_conditional_select_count_mnemonics.py` | Every load/store-on-condition and SELECT extended spelling reaches its base mnemonic and mask; che4z's facility-1 negated masks xfailed (red-dragon-6uyp.82) |
+| `tests/integration/hlasm/test_conditional_select_count_mnemonics.py` | Every load/store-on-condition and SELECT extended spelling reaches its base mnemonic and Figure J-1 mask |
 | `tests/z390/test_conditional_select_count_differential.py` | Every conditional, select and count case against z390; the instructions z390 does not execute and its whole-register SELFHR pinned (`-m z390`) |
