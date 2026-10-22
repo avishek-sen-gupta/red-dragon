@@ -20,7 +20,6 @@ from interpreter.hlasm.bfp_slots import (
     SCALING_BITS,
     SUPPRESSING_BITS,
     TRAP_SLOT,
-    VALUE_SLOT,
 )
 from interpreter.hlasm.conditional import emit_when
 from interpreter.hlasm.data_movement import keep
@@ -47,7 +46,7 @@ from interpreter.instructions import StoreVar
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
 
-type Deliver = Callable[[int], None]
+type Deliver = Callable[[Register], None]
 
 FPC_TO_MODIFIER = 4
 NAN_CC = 3
@@ -110,10 +109,17 @@ def list_item(emitter: HlasmEmitter, items: Register, slot: int) -> Register:
     return emitter.call(LIST_GET, (items, emitter.int_(slot)))
 
 
-def image_at(
-    emitter: HlasmEmitter, result: Register, slot: int, layout: BfpLayout
+def _field_at(
+    emitter: HlasmEmitter, result: Register, slot: Register, at: int
 ) -> Register:
-    sign, biased, fraction = (list_item(emitter, result, slot + at) for at in range(3))
+    index = emitter.binop(BinopKind.ADD, slot, emitter.int_(at))
+    return emitter.call(LIST_GET, (result, index))
+
+
+def image_at(
+    emitter: HlasmEmitter, result: Register, slot: Register, layout: BfpLayout
+) -> Register:
+    sign, biased, fraction = (_field_at(emitter, result, slot, at) for at in range(3))
     placed = emitter.binop(
         BinopKind.BIT_OR,
         emitter.binop(BinopKind.LSHIFT, sign, emitter.int_(layout.sign_shift)),
@@ -181,14 +187,19 @@ def _when_any(emitter: HlasmEmitter, bits: Register, then: Callable[[], None]) -
     emit_when(emitter, emitter.binop(BinopKind.NE, bits, emitter.int_(0)), then)
 
 
-def _delivered_scaled(
-    emitter: HlasmEmitter, fpc: Register, outcome: IeeeOutcome, deliver: Deliver
-) -> Callable[[], None]:
-    def scaled() -> None:
-        deliver(SCALED_SLOT)
-        emit_data_exception(emitter, fpc, outcome.scaled_dxc)
-
-    return scaled
+def _deliver_once(
+    emitter: HlasmEmitter,
+    fpc: Register,
+    enabled: Register,
+    outcome: IeeeOutcome,
+    deliver: Deliver,
+) -> None:
+    scaling = keep(SCALING_BITS)(emitter, enabled)
+    scaled = emitter.binop(BinopKind.NE, scaling, emitter.int_(0))
+    deliver(emitter.binop(BinopKind.MUL, scaled, emitter.int_(SCALED_SLOT)))
+    emit_when(
+        emitter, scaled, lambda: emit_data_exception(emitter, fpc, outcome.scaled_dxc)
+    )
 
 
 def emit_ieee_ladder(
@@ -200,12 +211,7 @@ def emit_ieee_ladder(
     _when_any(
         emitter, suppressing, lambda: emit_data_exception(emitter, fpc, suppressing)
     )
-    _when_any(
-        emitter,
-        keep(SCALING_BITS)(emitter, enabled),
-        _delivered_scaled(emitter, fpc, outcome, deliver),
-    )
-    deliver(VALUE_SLOT)
+    _deliver_once(emitter, fpc, enabled, outcome, deliver)
     flagged = _flagged(emitter, fpc, outcome.flags, enabled)
     emitter.emit_inst(StoreVar(name=FPC_VAR, value_reg=flagged))
     _when_any(

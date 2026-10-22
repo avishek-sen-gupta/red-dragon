@@ -1,5 +1,5 @@
 # pyright: standard
-"""BFP arithmetic lowerings: operands read in builtin-argument order, one builtin call, then the trap ladder (suppress, deliver scaled, deliver and flag, inexact trap); static checks abend before any access; sign forms are IR alone."""
+"""BFP arithmetic lowerings: operands read in builtin-argument order, one builtin call, then the trap ladder (suppress, one delivery of the value or the scaled value, flags, inexact trap); static checks abend before any access; sign forms are IR alone."""
 
 from collections.abc import Mapping, Sequence
 from functools import singledispatch
@@ -111,7 +111,6 @@ def _ladder(*deliver: str) -> list[str]:
         *deliver,
         WRITE_FPC,
         DATA,
-        *deliver,
         WRITE_FPC,
         WRITE_FPC,
         DATA,

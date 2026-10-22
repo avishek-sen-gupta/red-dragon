@@ -41,7 +41,7 @@ from interpreter.hlasm.operands import mask_operand, optional_mask_operand, reg_
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.register import Register
 
-type Deliver = Callable[[HlasmEmitter, MachineStatement, Register, int], None]
+type Deliver = Callable[[HlasmEmitter, MachineStatement, Register, Register], None]
 type AfterStore = Callable[[HlasmEmitter, Register], None]
 type Quieted = Callable[[MachineStatement], int]
 
@@ -91,7 +91,10 @@ def _cc_of(layout: BfpLayout) -> AfterStore:
 
 def _stored(index: int, layout: BfpLayout, after: AfterStore) -> Deliver:
     def deliver(
-        emitter: HlasmEmitter, statement: MachineStatement, result: Register, slot: int
+        emitter: HlasmEmitter,
+        statement: MachineStatement,
+        result: Register,
+        slot: Register,
     ) -> None:
         image = image_at(emitter, result, slot, layout)
         store_image(emitter, reg_operand(statement, index), layout, image)
@@ -101,7 +104,7 @@ def _stored(index: int, layout: BfpLayout, after: AfterStore) -> Deliver:
 
 
 def _compared(
-    emitter: HlasmEmitter, statement: MachineStatement, result: Register, slot: int
+    emitter: HlasmEmitter, statement: MachineStatement, result: Register, slot: Register
 ) -> None:
     emitter.set_cc(list_item(emitter, result, CC_SLOT))
 
@@ -111,10 +114,13 @@ def _divided(layout: BfpLayout) -> Deliver:
     quotient = _stored(SECOND, layout, _no_cc)
 
     def deliver(
-        emitter: HlasmEmitter, statement: MachineStatement, result: Register, slot: int
+        emitter: HlasmEmitter,
+        statement: MachineStatement,
+        result: Register,
+        slot: Register,
     ) -> None:
         remainder(emitter, statement, result, slot)
-        quotient(emitter, statement, result, QUOTIENT_SLOT)
+        quotient(emitter, statement, result, emitter.int_(QUOTIENT_SLOT))
         _compared(emitter, statement, result, slot)
 
     return deliver
