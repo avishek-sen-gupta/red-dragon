@@ -1,5 +1,5 @@
 # pyright: standard
-"""BFP arithmetic programs leave the same declared registers, CC and abend in RedDragon and in z390, bar z390's faults below; those expectations come from the Principles of Operation (figures 19-14 to 19-26). z390 writes X'F4F4F4F4' into bits 32-63 of some short results, rounds the fused product before adding, gives CC 1 for unordered compares, ignores the round-toward-minus sign of an exact zero sum, computes extended multiplies inexactly, rejects R1 = 1 for AXBR, any nonzero modifier for FIxBRA and DIxBR, It takes no invalid-operation or inexact trap."""
+"""BFP arithmetic programs leave the same declared registers, CC and abend in RedDragon and in z390, bar z390's faults below; those expectations come from the Principles of Operation (figures 19-14 to 19-26). z390 writes X'F4F4F4F4' into bits 32-63 of some short results, rounds the fused product before adding, gives CC 1 for unordered compares and NaN sign forms, ignores the round-toward-minus sign of an exact zero sum, computes extended multiplies inexactly, rejects R1 = 1 for AXBR, any nonzero modifier for FIxBRA and DIxBR, and LTDBR leaves an SNaN unquieted. It takes no invalid-operation or inexact trap."""
 
 from collections.abc import Mapping
 from pathlib import Path
@@ -76,6 +76,45 @@ Z390_PINNED: Mapping[str, HlasmMachine] = {
     ),
     "DIEBR quotient overflow": _z390(SPECIFICATION, 2, {2: FILL, 3: FILL}),
     "DIDBR": _z390(SPECIFICATION, 2, {2: FILL, 3: FILL}),
+    "LTEBR LTDBR LTXBR": _z390(
+        programs.COMPLETED,
+        0,
+        {8: _cc(1), 2: 0x7FF00000_00000009, 9: _cc(1), 3: 0, 4: 0},
+    ),
+    "LCEBR LCDBR LCXBR": _z390(
+        programs.COMPLETED,
+        1,
+        {
+            2: 0xBF800000_00000000 | Z390_LOW,
+            8: _cc(1),
+            3: 0xFFF00000_00000009,
+            9: _cc(1),
+            4: 0xC0000000_00000000,
+            5: 0,
+        },
+    ),
+    "LNEBR LNDBR LNXBR": _z390(
+        programs.COMPLETED,
+        1,
+        {
+            2: 0xBF800000_00000000 | Z390_LOW,
+            8: _cc(1),
+            3: 0x80000000_00000000,
+            9: _cc(0),
+            4: 0xC0000000_00000000,
+        },
+    ),
+    "LPEBR LPDBR LPXBR": _z390(
+        programs.COMPLETED,
+        0,
+        {
+            2: 0x3FC00000_00000000 | Z390_LOW,
+            8: _cc(2),
+            3: 0x7FF00000_00000000,
+            9: _cc(2),
+            4: 0,
+        },
+    ),
 }
 AGREED = [case for case in programs.CASES if case not in Z390_PINNED]
 
@@ -84,6 +123,7 @@ Z390_TRAPS: Mapping[str, tuple[str, int]] = {
     "inexact traps after the store": (programs.COMPLETED, 2),
     "inexact traps with the masked overflow flagged": (programs.COMPLETED, 2),
     "compare and signal traps on a QNaN": (programs.COMPLETED, 1),
+    "load and test traps on an SNaN": (programs.COMPLETED, 1),
     "load FP integer traps inexact": (programs.COMPLETED, 2),
     "divide to integer suppresses an invalid operand": (SPECIFICATION, 2),
     "divide to integer scales a tiny final remainder": (SPECIFICATION, 2),
