@@ -60,6 +60,7 @@ TARGETS = (
     "ORC      OC    0(0,6),0(7)\n"
     "SCANR    TRTR  3(0,6),FUNCS\n"
     "SPREAD   MVC   1(0,6),0(6)\n"
+    "BLOCKS   CLC   LOWHIGH(0),HIGHLOW\n"
     "BRANCH   BC    0,SUB-4\n"
     "SUB      LHI   8,1\n"
     "         ABEND 1\n"
@@ -68,6 +69,8 @@ TARGETS = (
     "SAME     DC    X'0123456789000000'\n"
     "CODES    DC    X'0706050403020100'\n"
     "FUNCS    DC    X'00000000C1000000'\n"
+    "LOWHIGH  DC    X'00000001FFFF'\n"
+    "HIGHLOW  DC    X'000000020000'\n"
 )
 
 
@@ -254,6 +257,12 @@ CASES: Mapping[str, ExecuteCase] = {
         _executed("5", "COMPAREC"),
         ABENDED,
         2,
+        {PATH_REGISTER: FELL_THROUGH},
+    ),
+    "CLC length from a register, low in the first block": (
+        _executed("5", "BLOCKS"),
+        ABENDED,
+        1,
         {PATH_REGISTER: FELL_THROUGH},
     ),
     "XC length from a register": (

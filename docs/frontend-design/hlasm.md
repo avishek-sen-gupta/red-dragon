@@ -93,7 +93,7 @@ addresses.
 | `interpreter/hlasm/lower_statement.py` | Lowers one statement: EX and EXRL through `execute.py`, any other machine instruction through `OPCODE_LOWERINGS` |
 | `interpreter/hlasm/machine_statements.py` | `MachineStatements`: the assembly's machine statements by section and offset |
 | `interpreter/hlasm/execute.py` | EX and EXRL: resolve the target, check it; lower a data-field target once with byte 1 computed in IR, any other target as one inline copy per byte-1 value |
-| `interpreter/hlasm/data_field.py`, `written_field.py`, `executed_field.py` | `DataField`: a byte-1 data field (SS length code, SI immediate, SVC number) as a lowering sees it. `WrittenField` is the assembled byte: block region reads and writes, a compile-time dispatch. `ExecutedField` is EX's register: byte loops, a chain of equality tests |
+| `interpreter/hlasm/data_field.py`, `written_field.py`, `executed_field.py` | `DataField`: a byte-1 data field (SS length code, SI immediate, SVC number) as a lowering sees it. `WrittenField` is the assembled byte: block region reads and writes, a compile-time dispatch. `ExecutedField` is EX's register: one block per set bit of the length, a chain of equality tests |
 | `interpreter/hlasm/field_lowering.py` | `FieldLowering(layout, lower)`: a lowering given its data field; `written_lowerings` adapts them for `OPCODE_LOWERINGS` with `WrittenField`; `with_field_source` turns the field into a `Source` |
 | `interpreter/hlasm/byte_one_layouts.py` | Byte 1 of each instruction format, by format and operand shape (`operand_slot.py`); an unlisted shape is an opcode byte. Names the data-field layouts: `LENGTH_BYTE`, `LENGTH_NIBBLES`, `IMMEDIATE_BYTE`, `NUMBER_BYTE` |
 | `interpreter/hlasm/byte_one_layout.py`, `byte_one_field.py` | A format's byte-1 fields, ignored bits and opcode bits; the byte a statement encodes, the values R1 can make of it, the statement a value decodes to |
@@ -438,7 +438,7 @@ MVHI, MVGHI; MVCL, MVCLE, MVCLU; MVST. Only MVCL, MVCLE, MVCLU and MVST set the 
 **Storage compares (red-dragon-6uyp.36).** CLC, CLCL, CLCLE, CLCLU, CLST, CUSE. Unsigned, left to
 right: CC 0 equal, 1 first low, 2 first high. Storage is never written.
 
-- CLC reads the two L-byte values as unsigned ints, each in one block (a byte loop under EX), then tests them equal (CC 0) or orders them (CC 1 or 2); registers unchanged. 34 VM steps at any length.
+- CLC reads the two L-byte values as unsigned ints, each in one block (one block per set bit of the length under EX), then tests them equal (CC 0) or orders them (CC 1 or 2); registers unchanged. 34 VM steps at any length.
 - CLCL: 24-bit lengths, pad in R2+1 bits 32-39. CLCLE and CLCLU: 32-bit lengths, pad from the
   D2(B2) address (one byte; two for CLCLU, which compares 2-byte characters and abends `S0C6` on
   an odd length). The shorter operand is extended with the pad. With k the offset of the first
@@ -505,8 +505,10 @@ variant expansion (ruling R30).
   field as a `DataField`: `WrittenField` for a plain statement, `ExecutedField(v)` under EX.
   The lowering is the same code either way. Only three operations differ by kind, all in the
   field: a span read and a span copy (one block LOAD_REGION/WRITE_REGION for a written length;
-  a byte loop for v, since region lengths are compile-time) and a dispatch (a compile-time pick
-  for a written SVC number; equality tests on v). Overlap handling is the lowering's, so MVC,
+  for v, whose length is not a compile-time constant, one block of 2^k bytes for each set bit k
+  from 8 down to 0, at offset (length AND NOT (2^(k+1) - 1)), so offsets increase; a read
+  joins the blocks as ints; red-dragon-6uyp.81) and a dispatch (a compile-time pick for a written SVC number; equality
+  tests on v). Overlap handling is the lowering's, so MVC,
   MVN, MVZ and TR stay byte at a time when destructive.
 - Other fields (R30): a binary tree of `<` tests over the values v can reach (the supersets of
   the target's byte) selects one inline copy, lowered through `OPCODE_LOWERINGS` with its
@@ -518,10 +520,10 @@ variant expansion (ruling R30).
   any of them.
 - A target that is EX, EXRL, TBEGIN, TBEGINC, TEND or TABORT abends `S0C3`; an odd EX target
   `S0C6`, before R1 is read.
-- Size and cost: `EX 2,MOVE` with `MOVE MVC 0(0,3),0(4)` lowers to 73 IR instructions (13,324
-  under R30); 16 such sites compile in 0.26 s (40 s under R30). An 80-byte move under EX costs
-  685 VM steps (65 under R30, which moved a block); a plain `MVC` of 80 bytes stays at 29.
-  An 80-byte CLC under EX costs 1,983 steps (83 under R30). A plain SVC keeps its one service:
+- Size and cost: `EX 2,MOVE` with `MOVE MVC 0(0,3),0(4)` lowers to 140 IR instructions (13,324
+  under R30); 16 such sites compile in 0.42 s (40 s under R30). An 80-byte move under EX costs
+  75 VM steps (65 under R30); a plain `MVC` of 80 bytes stays at 29. An 80-byte CLC under EX
+  costs 141 steps (83 under R30), 314 IR instructions. A plain SVC keeps its one service:
   39 IR instructions against 107 for the chain.
 - z390 does not check the odd EX target (it abends `S0C1`), links an executed BRAS after the
   BRAS, and sets CC 1 for an ALSI carry, as it does without EX. The z390 test pins all three.
@@ -535,8 +537,6 @@ variant expansion (ruling R30).
 - Compile time is linear in IR size but about 0.17 ms per IR instruction, nearly all in the linker
   and the unit codec (red-dragon-fu6c). EX of a register-field target (RR, RX, RS, RI, RIL and
   the like) still expands up to 256 copies.
-- EX of an SS data-field target reads and copies its runtime-length span a byte at a time,
-  about 8 to 12 VM steps per byte (red-dragon-6uyp.81).
 - `EXTRN`, `ENTRY` and V-type constants are not resolved; V-constants hold zero (red-dragon-6uyp.8, red-dragon-6uyp.15).
 - Machine-instruction bytes are not in section storage (a spec non-goal: self-modifying code), so `CLC` against code does not see them. EX finds its target at assembly instead.
 - An EX target written with an explicit base or an index, an EXRL to an absolute target, or one

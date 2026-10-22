@@ -346,8 +346,11 @@ def test_a_data_field_target_lowers_once_with_byte_one_from_r1():
                 ("LoadRegion", 4),
                 ("LoadRegion", 1),
                 ("WriteRegion", 1),
-                ("LoadRegion", 1),
-                ("WriteRegion", 1),
+                *(
+                    access
+                    for size in (256, 128, 64, 32, 16, 8, 4, 2, 1)
+                    for access in (("LoadRegion", size), ("WriteRegion", size))
+                ),
             ],
             False,
         ),
