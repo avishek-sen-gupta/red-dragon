@@ -27,7 +27,7 @@ from interpreter.hlasm.hlasm_constants import (
     WORD_BYTES,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
-from interpreter.hlasm.inline_ir import inline_result_and_cc
+from interpreter.hlasm.inline_ir import inline_pair
 from interpreter.hlasm.opcodes.operand_sources import (
     DOUBLEWORD_STORAGE,
     HALFWORD_IMMEDIATE,
@@ -58,9 +58,7 @@ def _apply(
     store: Callable[[Register], None],
 ) -> None:
     left, right = operands
-    result, cc = inline_result_and_cc(
-        emitter, operation, {PARAM_LEFT: left, PARAM_RIGHT: right}
-    )
+    result, cc = inline_pair(emitter, operation, {PARAM_LEFT: left, PARAM_RIGHT: right})
     store(result)
     emitter.set_cc(cc)
     emit_fixed_point_overflow_check(emitter, cc)

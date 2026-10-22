@@ -61,11 +61,3 @@ def inline_pair(
 ) -> tuple[Register, Register]:
     pair = inline_ir(emitter, body, arguments)
     return _element(emitter, pair, FIRST), _element(emitter, pair, SECOND)
-
-
-def inline_result_and_cc(
-    emitter: HlasmEmitter,
-    body: Sequence[InstructionBase],
-    arguments: Mapping[Register, Register],
-) -> tuple[Register, Register]:
-    return inline_pair(emitter, body, arguments)

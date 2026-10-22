@@ -82,7 +82,7 @@ addresses.
 | `interpreter/hlasm/abend_completion.py` | SVC 13 in IR |
 | `interpreter/hlasm/statement_location.py` | Each statement's source line, set on the IR it lowers to |
 | `interpreter/hlasm/fixed_width_ir.py` | Fixed-width signed add/subtract/multiply and logical add/subtract with carry-in, bitwise connectives, logical and signed shifts and rotates, each with its condition code, the sign CC (0 zero, 1 leftmost bit one, 2 other), and division truncating toward zero, built in IR |
-| `interpreter/hlasm/inline_ir.py` | Splices a builder's IR under fresh registers; `inline_pair` splits a returned pair, `inline_result_and_cc` its (result, CC) |
+| `interpreter/hlasm/inline_ir.py` | Splices a builder's IR under fresh registers; `inline_pair` splits a returned pair, such as (result, CC) |
 | `interpreter/hlasm/abend.py` | Stores the code in `__hlasm_abend`, then `Halt_` |
 
 ## Compilation Units
@@ -300,8 +300,10 @@ multiply R3 by R2.
 - A zero divisor or a quotient out of range abends `S0C9` before any register is written;
   the program mask does not apply.
 - Every pair form abends `S0C6` on an odd R1.
-- z390 checks only the zero divisor in DR, DL and DSGR: an oversized quotient is truncated
-  and stored. The z390 test pins those three.
+- z390 checks only the zero divisor in D, DR, DL, DLR, DSG, DSGR, DSGF and DSGFR: an
+  oversized quotient is truncated and stored. In DLG and DLGR it raises fixed-point
+  overflow (`S0C8`, masked by the initial program mask, so the run goes on) instead of
+  `S0C9`. The z390 test pins one case per mnemonic, DLGR for the 128-bit pair.
 
 **Branch on condition (red-dragon-6uyp.32).** BC, BCR, BIC, BRC, BRCL, BPP, BPRP. The
 bridge hands every extended mnemonic (B, BE, BNER, BIL, J, JLNOP, BRUL, ...) over as its

@@ -112,6 +112,15 @@ CHECKED_PRODUCTS: Mapping[str, Case] = {
         {5: HIGH_FILL},
         CC_ZERO,
     ),
+    "MSRKC overflow": (
+        "         L     3,NEG\n" "         LHI   4,-3\n" "         MSRKC 5,4,3\n",
+        {
+            3: HIGH_FILL | 0x80000001,
+            4: HIGH_FILL | 0xFFFFFFFD,
+            5: HIGH_FILL | 0x7FFFFFFD,
+        },
+        CC_OVERFLOW,
+    ),
     "MSGC": (
         "         LGHI  3,-4\n" "         MSGC  3,SRC\n",
         {3: 0xFB72EA61_D950C844},
@@ -280,6 +289,50 @@ DIVIDE_EXCEPTIONS: Mapping[str, Case] = {
         + "         LHI   5,1\n"
         + "         DR    2,5\n",
         {2: HIGH_FILL | 0x00000001, 3: HIGH_FILL},
+        CC_KEPT,
+    ),
+    "D quotient beyond a signed word": (
+        SET_CC_ONE
+        + "         LHI   2,0\n"
+        + "         L     3,NEG\n"
+        + "         D     2,WORDS\n",
+        {2: HIGH_FILL, 3: HIGH_FILL | 0x80000001},
+        CC_KEPT,
+    ),
+    "DLR quotient beyond an unsigned word": (
+        SET_CC_ONE
+        + "         LHI   2,5\n"
+        + "         LHI   3,0\n"
+        + "         LHI   5,5\n"
+        + "         DLR   2,5\n",
+        {2: HIGH_FILL | 0x00000005, 3: HIGH_FILL},
+        CC_KEPT,
+    ),
+    "DLGR quotient beyond a doubleword": (
+        SET_CC_ONE
+        + "         LGHI  4,1\n"
+        + "         LGHI  5,0\n"
+        + "         LGHI  7,1\n"
+        + "         DLGR  4,7\n",
+        {4: 1, 5: 0},
+        CC_KEPT,
+    ),
+    "DSG minimum by minus one": (
+        SET_CC_ONE + "         LLIHF 5,X'80000000'\n" "         DSG   4,OUT\n",
+        {4: FILL, 5: 0x80000000_00000000},
+        CC_KEPT,
+    ),
+    "DSGF minimum by minus one": (
+        SET_CC_ONE + "         LLIHF 5,X'80000000'\n" "         DSGF  4,OUT\n",
+        {4: FILL, 5: 0x80000000_00000000},
+        CC_KEPT,
+    ),
+    "DSGFR minimum by minus one": (
+        SET_CC_ONE
+        + "         LLIHF 5,X'80000000'\n"
+        + "         LHI   7,-1\n"
+        + "         DSGFR 4,7\n",
+        {4: FILL, 5: 0x80000000_00000000},
         CC_KEPT,
     ),
     "DL quotient beyond an unsigned word": (

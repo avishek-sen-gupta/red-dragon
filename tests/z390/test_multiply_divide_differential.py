@@ -1,5 +1,5 @@
 # pyright: standard
-"""Multiply and divide programs leave the same declared registers and CC in RedDragon and in z390, bar z390's missing quotient-overflow divide exceptions."""
+"""Multiply and divide programs leave the same declared registers and CC in RedDragon and in z390, bar quotient overflow: z390 stores the truncated quotient, or for DLGR raises a masked fixed-point overflow, where the PoO abends S0C9."""
 
 from collections.abc import Mapping
 from pathlib import Path
@@ -19,16 +19,29 @@ pytestmark = pytest.mark.z390
 ABENDED = HlasmRun(return_code=0, abend="U0001", stdout="")
 FIXED_POINT_DIVIDE = HlasmRun(return_code=0, abend="S0C9", stdout="")
 
+WORD_PAIR_CLEARED = HlasmMachine(
+    ABENDED, programs.CC_KEPT, {2: storage.HIGH_FILL, 3: storage.HIGH_FILL}
+)
+MINIMUM_QUOTIENT_ZERO_REMAINDER = HlasmMachine(
+    ABENDED, programs.CC_KEPT, {4: 0, 5: 0x80000000_00000000}
+)
+
 Z390_MACHINE: Mapping[str, HlasmMachine] = {
-    "DR quotient beyond a signed word": HlasmMachine(
-        ABENDED, programs.CC_KEPT, {2: storage.HIGH_FILL, 3: storage.HIGH_FILL}
+    "DR quotient beyond a signed word": WORD_PAIR_CLEARED,
+    "D quotient beyond a signed word": HlasmMachine(
+        ABENDED,
+        programs.CC_KEPT,
+        {2: storage.HIGH_FILL, 3: storage.HIGH_FILL | 0x80000001},
     ),
-    "DL quotient beyond an unsigned word": HlasmMachine(
-        ABENDED, programs.CC_KEPT, {2: storage.HIGH_FILL, 3: storage.HIGH_FILL}
+    "DL quotient beyond an unsigned word": WORD_PAIR_CLEARED,
+    "DLR quotient beyond an unsigned word": WORD_PAIR_CLEARED,
+    "DLGR quotient beyond a doubleword": HlasmMachine(
+        ABENDED, programs.CC_KEPT, {4: 1, 5: 0}
     ),
-    "DSGR minimum by minus one": HlasmMachine(
-        ABENDED, programs.CC_KEPT, {4: 0, 5: 0x80000000_00000000}
-    ),
+    "DSG minimum by minus one": MINIMUM_QUOTIENT_ZERO_REMAINDER,
+    "DSGR minimum by minus one": MINIMUM_QUOTIENT_ZERO_REMAINDER,
+    "DSGF minimum by minus one": MINIMUM_QUOTIENT_ZERO_REMAINDER,
+    "DSGFR minimum by minus one": MINIMUM_QUOTIENT_ZERO_REMAINDER,
 }
 
 MATCHING_EXCEPTIONS = [
@@ -64,7 +77,7 @@ def test_divide_exception_matches(z390: Z390Runner, tmp_path: Path, case: str):
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 @pytest.mark.parametrize("case", list(Z390_MACHINE))
-def test_quotient_overflow_abends_here_but_z390_keeps_the_truncated_quotient(
+def test_quotient_overflow_abends_here_but_z390_stores_it_or_masks_it_as_overflow(
     z390: Z390Runner, tmp_path: Path, case: str
 ):
     body, results, cc = programs.DIVIDE_EXCEPTIONS[case]

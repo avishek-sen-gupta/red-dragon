@@ -297,8 +297,9 @@ def test_multiply_signed_keeps_the_low_bits_and_sets_cc_3_when_the_product_does_
             (1 << 32, 1 << 31),
             (1 << 32, 1 << 30),
             ((1 << 63) - 1, (1 << 63) - 1),
+            (1 << 34, 1 << 34),
         )
-    ] == [[-(1 << 63), 3], [-(1 << 63), 3], [1 << 62, 2], [1, 3]]
+    ] == [[-(1 << 63), 3], [-(1 << 63), 3], [1 << 62, 2], [1, 3], [0, 3]]
 
 
 def test_truncating_divide_rounds_toward_zero_and_gives_the_remainder_the_dividend_sign():

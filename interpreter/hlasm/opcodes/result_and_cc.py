@@ -7,7 +7,7 @@ from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.hlasm.data_movement import Sink, Source, storage_immediate
 from interpreter.hlasm.hlasm_constants import PARAM_LEFT, PARAM_RIGHT
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
-from interpreter.hlasm.inline_ir import inline_result_and_cc
+from interpreter.hlasm.inline_ir import inline_pair
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.instructions import InstructionBase
 from interpreter.register import Register
@@ -21,7 +21,7 @@ def apply_result_and_cc(
     arguments: Mapping[Register, Register],
     store: Callable[[Register], None],
 ) -> None:
-    result, cc = inline_result_and_cc(emitter, operation, arguments)
+    result, cc = inline_pair(emitter, operation, arguments)
     store(result)
     emitter.set_cc(cc)
 
