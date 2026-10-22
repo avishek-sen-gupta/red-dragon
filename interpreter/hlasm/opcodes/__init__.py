@@ -59,6 +59,9 @@ from interpreter.hlasm.opcodes.under_mask import (
     TEST_UNDER_MASK_FIELD_LOWERINGS,
     TEST_UNDER_MASK_LOWERINGS,
 )
+from interpreter.hlasm.opcodes.unicode_string_search import (
+    UNICODE_STRING_SEARCH_LOWERINGS,
+)
 from interpreter.hlasm.statement_lowering import StatementLowering
 
 OPCODE_LOWERINGS: Mapping[str, StatementLowering] = {
@@ -82,6 +85,7 @@ OPCODE_LOWERINGS: Mapping[str, StatementLowering] = {
     **TRANSLATE_LOWERINGS,
     **CONDITIONAL_SELECT_COUNT_LOWERINGS,
     **INTERLOCKED_LOWERINGS,
+    **UNICODE_STRING_SEARCH_LOWERINGS,
 }
 
 DATA_FIELD_LOWERINGS: Mapping[str, FieldLowering] = {

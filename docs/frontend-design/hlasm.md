@@ -9,7 +9,7 @@ assembly are the che4z language server's, through a forked bridge executable;
 Python lowers what che4z has already resolved. The machine claims z17 problem
 state and stays in AMODE 31. Lowered so far: SVC and the load and store, load
 address and immediates, signed add and subtract, logical add and subtract, compare,
-compare and branch or trap, boolean, shift and rotate, multiply and divide, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, and interlocked-update units (see
+compare and branch or trap, boolean, shift and rotate, multiply and divide, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, and Unicode conversion and string search units (see
 Opcode Units).
 Any other opcode abends `S0C1` at run time.
 
@@ -82,7 +82,7 @@ addresses.
 | `interpreter/hlasm/long_spans.py` | Walks two long operands a unit at a time: the common units, then the longer tail against the pad |
 | `interpreter/hlasm/compare_string.py` | CLST |
 | `interpreter/hlasm/compare_substring.py` | CUSE |
-| `interpreter/hlasm/ending_character.py` | MVST's and CLST's GR0 ending character and its `S0C6` check |
+| `interpreter/hlasm/ending_character.py` | The GR0 character of MVST, CLST, SRST (one byte) and SRSTU (two bytes) and its `S0C6` check |
 | `interpreter/hlasm/compare_cc.py` | The storage compares' and translates' CCs: a constant CC on a branch; one CC for a loop run to its end, another for a branch out; CC 1 or 2 from two unequal unit values |
 | `interpreter/hlasm/unit_value.py` | The unsigned value of a 1- or 2-byte unit, from its image or at a register offset; compares run on ints, never on byte images |
 | `interpreter/hlasm/opcodes/translate.py` | The translate unit; TR, TRT, TRTR |
@@ -127,6 +127,12 @@ addresses.
 | `interpreter/hlasm/perform_locked_operation.py` | PLO: GR0 checks, the test bit, the function-code tree |
 | `interpreter/hlasm/locked_operation.py`, `locked_operations.py`, `plo_frame.py` | A PLO function code as data (`Spot`s resolved against R1 and R3 numbers, the D2 and D4 addresses and the checked list addresses) and the table of codes 0-61 |
 | `interpreter/hlasm/value_tree.py` | `emit_value_switch`: one block per run-time value under a tree of `<` tests, then a join; EX, CSST, PLO |
+| `interpreter/hlasm/opcodes/unicode_string_search.py` | The Unicode conversion and string search unit |
+| `interpreter/hlasm/search_string.py` | SRST, SRSTU |
+| `interpreter/hlasm/unicode_conversion.py` | CU12, CU14, CU21, CU24, CU41, CU42 (CUTFU, CUUTF): the step loop, CCs and register updates |
+| `interpreter/hlasm/unicode_decoders.py`, `unicode_encoders.py` | UTF-8, UTF-16 and UTF-32 readers (code point, exhaustion, well-formedness) and writers (room check, store) |
+| `interpreter/hlasm/conversion_cursor.py`, `conversion_labels.py` | A conversion step's offsets and its exits |
+| `interpreter/hlasm/range_dispatch.py`, `bit_fields.py` | Branch on ascending bounds; masked, shifted and ORed bit fields |
 
 ## Compilation Units
 
@@ -631,9 +637,32 @@ CSST; LAA, LAAG, LAAL, LAALG, LAN, LANG, LAO, LAOG, LAX, LAXG; LPD, LPDG, LPQ, S
   (CC 3 for a zero sum with carry). The z390 test pins each; those expectations come from the
   Principles of Operation.
 
+**Unicode conversion and string search (red-dragon-6uyp.43).** CU12, CU14, CU21, CU24, CU41,
+CU42, CUTFU, CUUTF, SRST, SRSTU. CUTFU and CUUTF reach the lowering as their own mnemonics and
+lower as CU12 and CU21.
+
+- The conversions take R1 and R2 as even pairs (odd: `S0C6`), lengths in R1+1 and R2+1. Each
+  character converts in turn, in one execution: CC 0 when R2 cannot hold the next character
+  (judged from its lead unit), CC 2 at an invalid one with R2 at it, CC 1 when R1 cannot hold the
+  result. CC 2 beats CC 1. Both pairs then advance and count down; addresses lose bit 32.
+- M3 bit 3 (W) turns on well-formedness checks for CU12, CU14, CU21 and CU24. UTF-8 without W:
+  80-BF and F8-FF are invalid leads, continuation bits 0-1 are ignored. With W: C0, C1 and F5-F7
+  too, continuations must be 80-BF, three-byte values 800-FFFF but not D800-DFFF, four-byte
+  10000-10FFFF. UTF-16 with W: a high surrogate needs a low one after it, and an isolated low
+  surrogate is invalid. UTF-32 D800-DFFF and values over 10FFFF are always invalid.
+- Model choices (z17): isolated low surrogates with W and UTF-32 DC00-DFFF are invalid; the PoO
+  let older models convert them.
+- A four-byte UTF-8 character or a surrogate pair becomes a UTF-16 pair (zabcd = uvwxy - 1, z
+  dropped) or four UTF-8 bytes, so an overlong four-byte UTF-8 without W still yields a pair.
+- SRST and SRSTU search from R2 while the unit starts below R1. GR0 bits 32-55 (SRST) or 32-47
+  (SRSTU) nonzero abend `S0C6`. Found: R1 is its address, bit 32 zero, CC 1. Otherwise CC 2 and
+  both registers unchanged; R1 = R2 is CC 2 at once.
+- z390 abends `S0C1` on every conversion and on SRSTU; its SRST matches. The z390 test pins the
+  `S0C1`s.
+
 ## Known Gaps
 
-- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, and interlocked-update units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
+- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, and Unicode conversion and string search units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
 - DC types beyond C, X, B, F, H, P, Z, A, Y and V, and any type extension, raise `UnsupportedDataType` (red-dragon-6uyp.63; floating point E, D, L: red-dragon-6uyp.21).
 - Falling through into DC/DS data or past a CSECT's end skips the data instead of executing it, and a branch into data abends `S0C1` (red-dragon-6uyp.64).
 - Every branch, even to a static relative target, walks the dispatch chain (red-dragon-6uyp.80).
@@ -658,8 +687,9 @@ CSST; LAA, LAAG, LAAL, LAALG, LAN, LANG, LAO, LAOG, LAX, LAXG; LPD, LPDG, LPQ, S
   and stores no DXC.
 - In AMODE 31, LM, STM, LMD, NC, OC, XC and the storage moves, compares and translates do not wrap
   EA + offset at 2 GiB; MVCL's overlap test ignores operands that wrap.
-- MVCLE, MVCLU, MVST, CLCLE, CLCLU, CLST, CUSE, TRE, TROO, TROT, TRTO, TRTT, TRTE and TRTRE
-  finish in one execution, since the CPU-determined amount may be the whole operand: they never
+- SRST and SRSTU with R1 below R2 search past the top of storage instead of wrapping to 0.
+- MVCLE, MVCLU, MVST, CLCLE, CLCLU, CLST, CUSE, TRE, TROO, TROT, TRTO, TRTT, TRTE, TRTRE,
+  SRST, SRSTU and the Unicode conversions finish in one execution, since the CPU-determined amount may be the whole operand: they never
   set CC 3 (ruling R28). MVCLU abends `S0C6` on an odd length, which the
   Principles of Operation leave to the model.
 - ICM and CLM with mask 0 raise no access exception for their operand.
@@ -757,4 +787,7 @@ CSST; LAA, LAAG, LAAL, LAALG, LAN, LANG, LAO, LAOG, LAX, LAXG; LPD, LPDG, LPQ, S
 | `tests/integration/hlasm/test_perform_locked_operation.py` | Every PLO function code on the VM, all compares equal and each one missed, from the tests' own reading of Figure 7-380 and a byte model: registers, all operand and parameter-list storage, unequal-results byte, CC; the test bit, GR0 bits 32-54, code 62, odd registers, misaligned D2, D4, list and listed operands with storage unchanged, EX of PLO |
 | `tests/z390/test_perform_locked_operation_differential.py` | A PLO case per operation shape: the PoO expectation here, z390's `S0C1` pinned (`-m z390`) |
 | `tests/z390/test_interlocked_differential.py` | Every interlocked case against z390; its missing CAL and CSST, unchecked boundaries and LAAL CC pinned (`-m z390`) |
+| `tests/unit/hlasm/test_unicode_string_search_lowering.py` | Conversion and search IR: each form's unit widths read and written, no comparison on a byte image, the checks M3's W bit adds, odd pairs abend `S0C6`, GR0 checked before the search reads storage |
+| `tests/integration/hlasm/test_unicode_string_search.py` | Every conversion and search mnemonic on the VM: output, lengths, addresses and CC 0-2; truncated characters, W on and off for overlong, surrogate, continuation and isolated surrogates; SRST and SRSTU found, not found, end excluded, SRSTU's two-byte compare and odd end, bit 32; GR0 `S0C6` with storage unchanged |
+| `tests/z390/test_unicode_string_search_differential.py` | SRST against z390; z390's `S0C1` on the conversions and SRSTU pinned (`-m z390`) |
 | `tests/z390/test_conditional_select_count_differential.py` | Every conditional, select and count case against z390; the instructions z390 does not execute and its whole-register SELFHR pinned (`-m z390`) |
