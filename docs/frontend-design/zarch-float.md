@@ -81,3 +81,32 @@ the operation is suppressed.
 
 Zero fractions give a positive true zero from multiply, divide, halve, square root and
 CONVERT FROM FIXED, as figure 18-1 states.
+
+## DFP
+
+`DfpValue(format, negative, kind, significand, exponent)`: right-units view, significand ×
+10^exponent; a zero keeps its exponent (its quantum). A NaN's significand is its payload.
+Formats: `SHORT` (7 digits, only for LOAD LENGTHENED and LOAD ROUNDED), `LONG`, `EXTENDED`.
+`DfpResult` mirrors `BfpResult`; the trap scale is 10^∓576/9216 (LOAD ROUNDED by source,
+192/3072).
+
+`dfp_context.py` is the only `decimal` boundary besides `dfp_arithmetic.py`'s operation
+types: contexts with the format's precision and exponent range, `clamp=1`, traps off.
+`decimal` follows IEEE 754-2008 decimal, so its ideal exponents are the preferred quanta,
+Subnormal is tininess before rounding (TINY), and ROUND_05UP is round to prepare for
+shorter precision. INCREMENTED compares with the exact `Fraction`.
+
+| Function | Notes |
+|---|---|
+| `dfp_add`, `dfp_subtract`, `dfp_multiply`, `dfp_divide` | `(a, b, mode)`, `a` the second operand of the instruction |
+| `dfp_quantize` | `(value, quantum, mode)`: NaNs are chosen in the PoO's order (quantum operand first), which is not `decimal`'s |
+| `dfp_reround` | `(value, significance, mode)` |
+| `dfp_compare`, `dfp_compare_signaling` | `ComparisonResult` |
+| `dfp_load_rounded`, `dfp_load_lengthened` | NaN payloads lose leftmost digits or keep them |
+| `dfp_round_to_integral` | LOAD FP INTEGER |
+| `dfp_from_integer`, `dfp_to_integer` | Out of range and NaN raise INVALID without INEXACT, unlike BFP |
+
+QUANTUM is raised as the PoO defines the quantum-exception condition: inexact, or an exact
+finite result off the preferred quantum; DIVIDE's own four cases; and, for LOAD FP INTEGER,
+QUANTIZE and REROUND, a delivered quantum other than the source's. QUANTIZE, REROUND and
+LOAD FP INTEGER report only INVALID, INEXACT, INCREMENTED and QUANTUM.

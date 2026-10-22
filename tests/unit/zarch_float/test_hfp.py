@@ -109,7 +109,10 @@ def test_multiply_divide_and_halve_truncate_exact_intermediates():
         0x41300000,
         frozenset({Condition.HFP_DIVIDE}),
     )
-    assert _out(hfp_divide(short(0x80000000), three)) == (0x00000000, NONE)
+    assert [
+        _out(hfp_divide(short(0x80000000), three)),
+        _out(hfp_multiply(short(0xC5000000), three, SHORT)),
+    ] == [(0x00000000, NONE), (0x00000000, NONE)]
     assert _out(hfp_multiply(short(0x01100000), short(0x01100000), SHORT)) == (
         0x41100000,
         UNDERFLOW,
@@ -118,7 +121,9 @@ def test_multiply_divide_and_halve_truncate_exact_intermediates():
         0x3D100000,
         OVERFLOW,
     )
-    assert _out(hfp_multiply(short(0xC5000000), three, SHORT)) == (0x00000000, NONE)
+    assert hfp_multiply(
+        long(0x4110000000000001), long(0x4110000000000001), EXTENDED
+    ) == (HfpResult(HfpValue(EXTENDED, False, 0x1000000000000200000000000010, 1), NONE))
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
