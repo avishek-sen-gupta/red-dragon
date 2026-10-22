@@ -702,9 +702,12 @@ its own module.
   R2+1 becomes 0, CC 0.
 - Clocks (ruling R36): `__hlasm_tod_clock` returns the 104-bit TOD clock and `__hlasm_cpu_timer`
   the CPU timer, read from a `MachineClock` given to `clock_builtins`; a builtin because a
-  clock reads outside the program. STCK stores bits 0-63, or one more than the last STCK
-  value if that is not later, so values are unique; STCKF stores bits 0-63; STCKE stores
-  epoch 0, the 104 bits with bit 103 on, and a zero programmable field. All set CC 0. ECTG
+  clock reads outside the program. STCK and STCKE are unique and in execution order (PoO
+  4-51): `__hlasm_tod_last` keeps the last one as a 104-bit value, an STCK value extended
+  with 40 zeros. STCK stores clock bits 0-63, raised to one above the last value's bits
+  0-63 if not later. STCKE stores epoch 0, the 104 bits with bit 103 on, raised to one above
+  the last value (bit 103 kept on) if not later, and a zero programmable field. STCKF stores
+  clock bits 0-63 and is not ordered. All set CC 0. ECTG
   fetches its three operands, then GR0 ← first − CPU timer, GR1 ← second, R3 ← third.
 - ECAG (ruling R37) returns constants, z17-like rather than published: cache topology
   X'04070B0B00000000', 256-byte lines, 128 KiB, 36 MiB, 360 MiB and 2,880 MiB, 8, 18, 48
@@ -726,7 +729,8 @@ its own module.
   AGR, LCR, LCGR, LPR, LPGR, MSC, MSRKC, MSGC, MSGRKC, SLA, SLAK, SLAG, SLDA, AHHHR, AIH, LAA
   and LAAG that way against z390.
 - z390 abends `S0C1` on CKSM, EPSW, ECAG, LCBB and MC and `S0C5` on ECTG; leaves the CC after
-  STCK and STCKE; stores zeros for STCKE's bits 64-103; stores one doubleword for STFLE with
+  STCK and STCKE; stores zeros for STCKE's bits 64-103 and does not order STCKE against STCK
+  or STCKE; stores one doubleword for STFLE with
   CC 0, GR0 unchanged and no boundary check; does not check LAM and STAM boundaries; and starts
   the access registers at F4F4F4F4. The z390 test pins each.
 
@@ -868,6 +872,6 @@ its own module.
 | `tests/integration/hlasm/test_high_word.py` | Every high-word mnemonic and JCTH on the VM: results with the low word kept, CC 0-3, ALSIHN keeping the CC, negative immediates, signed against logical compares, masks 0 and partial, LMH and STMH wrapping, BRCTH wrap, LFHAT trap |
 | `tests/z390/test_high_word_differential.py` | Every high-word case against z390; its `S0FF` for LFHAT and its ALSIH negative-immediate CC pinned (`-m z390`) |
 | `tests/unit/hlasm/test_miscellaneous_lowering.py` | Miscellaneous IR: the CC, mask and registers SPM, IPM and EPSW touch; access-register moves through their region; LAM's boundary check first; clock forms call their builtin and ECTG fetches all operands first; hints lower to nothing, traps abend `S0D3`; the `S0C6` checks before any store; no SYMBOLIC |
-| `tests/integration/hlasm/test_miscellaneous.py` | Every miscellaneous mnemonic on the VM with a fixed clock: registers, CC, abend; AR wrap and boundaries, CKSM tail and carry, ECAG selections, STFLE short, exact and complete, LCBB, STCK uniqueness, MC under EX; `S0C8` end to end after SPM; boundary abends store nothing |
+| `tests/integration/hlasm/test_miscellaneous.py` | Every miscellaneous mnemonic on the VM with a fixed clock: registers, CC, abend; AR wrap and boundaries, CKSM tail and carry, ECAG selections, STFLE short, exact and complete, LCBB, STCK and STCKE order, MC under EX; `S0C8` end to end after SPM; boundary abends store nothing |
 | `tests/z390/test_miscellaneous_differential.py` | Every miscellaneous case against z390; the instructions z390 does not execute, its clock CCs and STCKE bits, STFLE, unchecked AR boundaries and initial access registers pinned (`-m z390`) |
 | `tests/z390/test_conditional_select_count_differential.py` | Every conditional, select and count case against z390; the instructions z390 does not execute and its whole-register SELFHR pinned (`-m z390`) |

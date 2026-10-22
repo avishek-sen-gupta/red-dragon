@@ -1,7 +1,7 @@
 # pyright: standard
 """Miscellaneous programs leave the same declared registers, CC and abend in RedDragon and in z390, bar the instructions z390 does not execute, its unchecked boundaries, its STFLE and clock CCs, and its initial access registers; those expectations come from the Principles of Operation."""
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
 import pytest
@@ -47,7 +47,7 @@ Z390_PINNED: Mapping[str, HlasmMachine] = {
     "ECAG sizes and ways": _z390("S0C1", 2, _filled(*range(2, 11))),
     "LCBB short": _z390("S0C1", 0, _filled(2, 3, 4)),
     "LCBB sixteen": _z390("S0C1", 0, _filled(3, 4)),
-    "ECTG": _z390("S0C5", 2, {}),
+    "ECTG": _z390("S0C5", 2, {0: 7, 1: 9}),
     "STFLE short": _z390("U0001", 0, {2: 0, 3: Z390_FACILITY_WORD, 4: ONES}),
     "STFLE complete": _z390(
         "U0001", 0, {2: 0x1FF, 3: Z390_FACILITY_WORD, 4: ONES, 5: ONES}
@@ -66,8 +66,19 @@ CLOCK_RELATIONS: Mapping[str, tuple[int, int]] = {
     "STCK unique": (1, 1),
     "STCKF": (0, 0),
     "STCKE": ((programs.EXTENDED_CLOCK & ONES) >> STCKE_PROGRAMMABLE_BITS, 0),
+    "STCKE twice": (2 << STCKE_PROGRAMMABLE_BITS, 0),
+    "STCK after STCKE": (1, 0),
 }
-Z390_CLOCK_CC = {"STCK unique": 2, "STCKF": 0, "STCKE": 2}
+Z390_CLOCK_CC = {
+    "STCK unique": 2,
+    "STCKF": 0,
+    "STCKE": 2,
+    "STCKE twice": 2,
+    "STCK after STCKE": 2,
+}
+CLOCK_REGISTERS = {2: 0, 3: 0, 4: 0, 5: 0}
+STCKE_CLOCK_SHIFT = 8
+STCKE_LOW_CLOCK_SHIFT = 56
 AGREED = [
     case
     for case in programs.CASES
@@ -110,18 +121,35 @@ def test_principles_of_operation_result_where_z390_differs(
     ) == (ours, theirs)
 
 
+def _quadword(machine: HlasmMachine, r: int) -> int:
+    return (machine.gprs[r] << 64) | machine.gprs[r + 1]
+
+
+def _stcke_clock(machine: HlasmMachine) -> int:
+    return (machine.gprs[2] << STCKE_CLOCK_SHIFT) | (
+        machine.gprs[3] >> STCKE_LOW_CLOCK_SHIFT
+    )
+
+
+CLOCK_RELATION_OF: Mapping[str, Callable[[HlasmMachine], int]] = {
+    "STCK unique": lambda m: m.gprs[3] - m.gprs[2],
+    "STCKF": lambda m: m.gprs[3] - m.gprs[2],
+    "STCKE": lambda m: m.gprs[3] >> STCKE_PROGRAMMABLE_BITS,
+    "STCKE twice": lambda m: _quadword(m, 4) - _quadword(m, 2),
+    "STCK after STCKE": lambda m: m.gprs[4] - _stcke_clock(m),
+}
+
+
 def _clock_relation(case: str, machine: HlasmMachine) -> int:
-    if case == "STCKE":
-        return machine.gprs[3] >> STCKE_PROGRAMMABLE_BITS
-    return machine.gprs[3] - machine.gprs[2]
+    return CLOCK_RELATION_OF[case](machine)
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 @pytest.mark.parametrize("case", list(CLOCK_RELATIONS))
-def test_clocks_set_cc_zero_where_z390_keeps_it_for_stck_and_stcke(
+def test_clocks_set_cc_zero_and_keep_order_where_z390_does_neither_for_stcke(
     z390: Z390Runner, tmp_path: Path, case: str
 ):
-    ours, theirs = _both(z390, tmp_path, case, {2: 0, 3: 0})
+    ours, theirs = _both(z390, tmp_path, case, CLOCK_REGISTERS)
 
     assert (
         (ours.run, ours.cc, _clock_relation(case, ours)),

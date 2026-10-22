@@ -6,6 +6,7 @@ from functools import singledispatch
 
 from hlasm_asg.program.operand import Operand
 from hlasm_asg.program.reloc_imm_operand import RelocImmOperand
+from interpreter.hlasm.byte_one_layouts import IMMEDIATE_BYTE
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.opcodes import DATA_FIELD_LOWERINGS, OPCODE_LOWERINGS
 from interpreter.instructions import (
@@ -174,8 +175,8 @@ def test_clock_forms_read_their_builtin_and_ectg_fetches_every_operand_first():
 
     assert traces == {
         "STCK": [
-            "call __hlasm_tod_clock",
             "LoadVar __hlasm_tod_last",
+            "call __hlasm_tod_clock",
             "StoreVar __hlasm_tod_last reg",
             ADDRESS,
             "write storage +8",
@@ -189,6 +190,8 @@ def test_clock_forms_read_their_builtin_and_ectg_fetches_every_operand_first():
         ],
         "STCKE": [
             "call __hlasm_tod_clock",
+            "LoadVar __hlasm_tod_last",
+            "StoreVar __hlasm_tod_last reg",
             ADDRESS,
             "write storage +16",
             "StoreVar __hlasm_cc 0",
@@ -228,7 +231,7 @@ def test_hints_lower_to_nothing_and_traps_abend_s0d3():
         _trace(_lowered("TRAP4", (D8,))),
         _trace(_lowered("MC", (D8, imm_operand(15)))),
     ] == [["StoreVar __hlasm_abend S0D3"], ["StoreVar __hlasm_abend S0D3"], [CHECK]]
-    assert "MC" in DATA_FIELD_LOWERINGS
+    assert DATA_FIELD_LOWERINGS["MC"].layout == IMMEDIATE_BYTE
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
