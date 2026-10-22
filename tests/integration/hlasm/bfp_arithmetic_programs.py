@@ -38,6 +38,11 @@ DATA = (
     "DQNAN    DC    X'7FF8000000000005'\n"
     "DQNAN2   DC    X'7FF800000000000A'\n"
     "DSNAN    DC    X'7FF0000000000009'\n"
+    "DM0      DC    X'8000000000000000'\n"
+    "DSUB     DC    X'0000000000000001'\n"
+    "DMSUB    DC    X'8000000000000001'\n"
+    "DMQNAN   DC    X'FFF8000000000005'\n"
+    "DMSNAN   DC    X'FFF0000000000009'\n"
     "DTHIRD   DC    X'3FD5555555555555'\n"
     "DUP      DC    X'3FF0000000400000'\n"
     "DDOWN    DC    X'3FEFFFFFFF800000'\n"
@@ -100,6 +105,42 @@ def _cc_word(cc: int) -> int:
 
 def _case(body: str, registers: Mapping[int, int], cc: int, fpc: int = 0) -> Case:
     return (_fpc(0) + PRESET + body, registers, cc, COMPLETED, fpc)
+
+
+CLASSES = (
+    "D0",
+    "DM0",
+    "D1",
+    "DM1",
+    "DSUB",
+    "DMSUB",
+    "DINF",
+    "DMINF",
+    "DQNAN",
+    "DMQNAN",
+    "DSNAN",
+    "DMSNAN",
+)
+
+
+def _classes(selected: int, others: int, first: int) -> str:
+    return "".join(
+        _lines(
+            f"LD 1,{label}",
+            f"TCDB 1,X'{(1 << (11 - at)) * selected | (0xFFF ^ (1 << (11 - at))) * others:03X}'",
+        )
+        + _cc(2 + at - first)
+        for at, label in enumerate(CLASSES)
+        if first <= at < first + 6
+    )
+
+
+def _class_case(selected: int, others: int, first: int) -> Case:
+    return _case(
+        _classes(selected, others, first),
+        {2 + at: _cc_word(selected) for at in range(6)},
+        selected,
+    )
 
 
 def program(body: str) -> str:
@@ -302,10 +343,25 @@ COMPARES: Mapping[str, Case] = {
         {8: _cc_word(1)},
         2,
     ),
+    "CDBR signed order": _case(
+        _lines("LD 1,DM2", "LD 2,DM1", "CDBR 1,2")
+        + _cc(8)
+        + _lines("LD 1,DM0", "LD 2,D0", "CDBR 1,2")
+        + _cc(9)
+        + _lines("LD 1,DINF", "CDB 1,DINF")
+        + _cc(10)
+        + _lines("LD 1,DM1", "CDB 1,DMINF"),
+        {8: _cc_word(1), 9: _cc_word(0), 10: _cc_word(0)},
+        2,
+    ),
     "KXBR": _case(_extended(1, "X1") + _extended(4, "X2") + _lines("KXBR 1,4"), {}, 1),
 }
 
 INTEGRAL: Mapping[str, Case] = {
+    "TCDB selects the class bit, zeros to subnormals": _class_case(1, 0, 0),
+    "TCDB selects the class bit, infinities to SNaNs": _class_case(1, 0, 6),
+    "TCDB misses every other bit, zeros to subnormals": _class_case(0, 1, 0),
+    "TCDB misses every other bit, infinities to SNaNs": _class_case(0, 1, 6),
     "FIEBR FIEBRA": _case(
         _short(1, 2, 3)
         + _lines("LE 2,SM2P5", "FIEBR 1,0,2", "LGDR 2,1", "FIEBRA 3,1,2,4", "LGDR 3,3"),

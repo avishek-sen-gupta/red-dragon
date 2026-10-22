@@ -1,5 +1,5 @@
 # pyright: standard
-"""BFP arithmetic lowerings: operands read in builtin-argument order, one builtin call, then the trap ladder (suppress, one delivery of the value or the scaled value, flags, inexact trap); static checks abend before any access; sign forms are IR alone."""
+"""BFP arithmetic lowerings: operands read in builtin-argument order, one builtin call, then the trap ladder (suppress, one delivery of the value or the scaled value, flags, inexact trap); static checks abend before any access; compares, test data class and sign forms are IR alone."""
 
 from collections.abc import Mapping, Sequence
 from functools import singledispatch
@@ -193,7 +193,7 @@ def test_ieee_forms_read_operands_in_argument_order_then_call_then_trap():
             "call multiply_lengthened_long",
             *_ladder("write fpr 32+8", "write fpr 48+8"),
         ],
-        "CDBR": ["read fpr 8+8", "read fpr 16+8", "call compare_long", *_ladder(CC)],
+        "CDBR": ["read fpr 8+8", "read fpr 16+8", *_ladder(CC)],
         "FIEBR": [
             READ_FPC,
             "read fpr 16+4",
@@ -220,7 +220,7 @@ def test_ieee_forms_read_operands_in_argument_order_then_call_then_trap():
             "call divide_to_integer_short",
             *_ladder("write fpr 8+4", "write fpr 24+4", CC),
         ],
-        "TCDB": ["read fpr 8+8", ADDRESS, "call test_data_class_long", CC],
+        "TCDB": ["read fpr 8+8", ADDRESS, CC],
     }
 
 
