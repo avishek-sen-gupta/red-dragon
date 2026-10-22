@@ -113,6 +113,17 @@ MOVES: Mapping[str, Case] = {
         + _line("LGDR", "5,6"),
         {2: 0, 3: 0, 4: 0x76543210, 5: 0},
     ),
+    "EX LER": _kept(
+        _line("LD", "1,SRCP")
+        + _line("LD", "2,SRC")
+        + _line("LA", "7,X'12'")
+        + _line("EX", "7,EXLER")
+        + _line("LGDR", "2,1")
+        + _line("J", "EXDONE")
+        + "EXLER    LER   0,0\n"
+        + "EXDONE   DS    0H\n",
+        {2: 0x01234567_76543210},
+    ),
     "LXR invalid pair": _abends(_line("LXR", "2,0"), SPECIFICATION),
     "LZXR invalid pair": _abends(_line("LZXR", "3"), SPECIFICATION),
 }
@@ -248,6 +259,14 @@ CHECKED: Mapping[str, tuple[Case, int]] = {
     "SFASR underflow trap": (
         _abends(_fpc(0x00100000) + _gr_fpc("SFASR", 0x18000001), DATA_EXCEPTION),
         0x18101301,
+    ),
+    "SFASR overflow trap exact": (
+        _abends(_fpc(0x00200000) + _gr_fpc("SFASR", 0x20000000), DATA_EXCEPTION),
+        0x20202300,
+    ),
+    "LFAS underflow trap inexact": (
+        _abends(_fpc(0x00180000) + _stored_fpc("LFAS", 0x10000000), DATA_EXCEPTION),
+        0x10181B00,
     ),
     "SFASR priority": (
         _abends(_fpc(0x00880000) + _gr_fpc("SFASR", 0x88000000), DATA_EXCEPTION),
