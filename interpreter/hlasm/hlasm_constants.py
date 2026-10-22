@@ -103,6 +103,7 @@ CHECKSUM_VAR = VarName("__hlasm_cksm_sum")
 CHECKSUM_TAIL_VAR = VarName("__hlasm_cksm_tail")
 DECIMAL_VALUE_VAR = VarName("__hlasm_dec_value")
 DECIMAL_INVALID_VAR = VarName("__hlasm_dec_invalid")
+UNPACK_CARRY_VAR = VarName("__hlasm_unpk_carry")
 
 RETURN_SENTINEL = 0x00000FF0
 ADDRESS_MASK_31 = 0x7FFFFFFF

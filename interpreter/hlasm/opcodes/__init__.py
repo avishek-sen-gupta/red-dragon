@@ -22,6 +22,10 @@ from interpreter.hlasm.opcodes.compare_branch_trap import (
 from interpreter.hlasm.opcodes.conditional_select_count import (
     CONDITIONAL_SELECT_COUNT_LOWERINGS,
 )
+from interpreter.hlasm.opcodes.decimal_conversion import (
+    DECIMAL_CONVERSION_FIELD_LOWERINGS,
+    DECIMAL_CONVERSION_LOWERINGS,
+)
 from interpreter.hlasm.opcodes.high_word import HIGH_WORD_LOWERINGS
 from interpreter.hlasm.opcodes.interlocked import (
     INTERLOCKED_FIELD_LOWERINGS,
@@ -103,6 +107,7 @@ OPCODE_LOWERINGS: Mapping[str, StatementLowering] = {
     **MISCELLANEOUS_LOWERINGS,
     **PACKED_ARITHMETIC_LOWERINGS,
     **PACKED_COMPARE_TEST_LOWERINGS,
+    **DECIMAL_CONVERSION_LOWERINGS,
 }
 
 DATA_FIELD_LOWERINGS: Mapping[str, FieldLowering] = {
@@ -119,4 +124,5 @@ DATA_FIELD_LOWERINGS: Mapping[str, FieldLowering] = {
     **MISCELLANEOUS_FIELD_LOWERINGS,
     **PACKED_ARITHMETIC_FIELD_LOWERINGS,
     **PACKED_COMPARE_TEST_FIELD_LOWERINGS,
+    **DECIMAL_CONVERSION_FIELD_LOWERINGS,
 }

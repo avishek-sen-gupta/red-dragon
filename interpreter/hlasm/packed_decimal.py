@@ -64,14 +64,14 @@ def at_least(emitter: HlasmEmitter, value: Register, bound: Register) -> Registe
     return emitter.binop(BinopKind.GE, value, bound)
 
 
-def _sign_factor(emitter: HlasmEmitter, negative: Register) -> Register:
+def sign_factor(emitter: HlasmEmitter, negative: Register) -> Register:
     doubled = _bin(emitter, BinopKind.MUL, negative, 2)
     return emitter.binop(BinopKind.SUB, emitter.int_(1), doubled)
 
 
 def signed_value(emitter: HlasmEmitter, value: PackedValue) -> Register:
     return emitter.binop(
-        BinopKind.MUL, value.magnitude, _sign_factor(emitter, value.negative)
+        BinopKind.MUL, value.magnitude, sign_factor(emitter, value.negative)
     )
 
 
@@ -212,5 +212,5 @@ def store_with_cc(
 
 def store_signed(emitter: HlasmEmitter, field: PackedField, value: Register) -> None:
     negative = negative_bit(emitter, value)
-    magnitude = emitter.binop(BinopKind.MUL, value, _sign_factor(emitter, negative))
+    magnitude = emitter.binop(BinopKind.MUL, value, sign_factor(emitter, negative))
     store_with_cc(emitter, field, magnitude, negative)

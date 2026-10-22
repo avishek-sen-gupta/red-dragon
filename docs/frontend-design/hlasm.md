@@ -9,7 +9,7 @@ assembly are the che4z language server's, through a forked bridge executable;
 Python lowers what che4z has already resolved. The machine claims z17 problem
 state and stays in AMODE 31. Lowered so far: SVC and the load and store, load
 address and immediates, signed add and subtract, logical add and subtract, compare,
-compare and branch or trap, boolean, shift and rotate, multiply and divide, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, miscellaneous, packed-decimal arithmetic and packed-decimal compare and test units (see
+compare and branch or trap, boolean, shift and rotate, multiply and divide, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, miscellaneous, packed-decimal arithmetic, packed-decimal compare and test and decimal conversion units (see
 Opcode Units).
 Any other opcode abends `S0C1` at run time.
 
@@ -147,6 +147,8 @@ addresses.
 | `interpreter/hlasm/packed_decimal.py`, `packed_value.py`, `packed_field.py`, `packed_digit_reader.py`, `packed_byte_sink.py` | A signed-packed field (address, run-time length) read into a magnitude, a negative bit, a bad-digit bit and a bad-sign bit; stored right to left with sign C or D; the overflow test and CC by int compares |
 | `interpreter/hlasm/packed_operands.py` | The packed operands as fields with L1 (and SS-b's L2) from byte 1, read and checked together |
 | `interpreter/hlasm/decimal_exceptions.py` | `S0C7` and `S0CB` before any store; `S0CA` after the store when program-mask bit `0100` is on |
+| `interpreter/hlasm/opcodes/decimal_conversion.py` | The decimal conversion unit |
+| `interpreter/hlasm/decimal_packing.py`, `digit_source.py`, `character_field.py` | Pack digits into a signed-packed field and unpack them into zoned, ASCII or Unicode characters, right to left one result unit at a time; bytes left of the source read as zero |
 | `interpreter/hlasm/range_dispatch.py`, `bit_fields.py` | Branch on ascending bounds; masked, shifted and ORed bit fields |
 
 ## Compilation Units
@@ -778,9 +780,32 @@ its own module.
   unassigned and ignored.
 - z390 agrees on every case.
 
+**Decimal conversion (red-dragon-6uyp.48).** CVB, CVBY, CVBG, CVD, CVDY, CVDG, PACK, PKA, PKU,
+UNPK, UNPKA, UNPKU. Rulings R1, R29, R31, R34, R39.
+
+- CVB and CVBY read 8 packed bytes, CVBG 16, abending `S0C7` on an invalid code with R1
+  unchanged. A CVB or CVBY result outside 32 bits puts its low 32 bits in R1's low word, then
+  abends `S0C9`; CVBG outside 64 bits abends `S0C9` with R1 unchanged. -0 converts to 0.
+- CVD and CVDY take R1's low word, CVDG all 64 bits, and store 8 or 16 bytes with sign C or
+  D. A binary zero is +0, so no negative zero arises. The CC is unchanged throughout.
+- PACK and UNPK check nothing. Each result byte is stored right after its source bytes are
+  fetched, right to left, so overlapping operands behave as the Principles of Operation
+  describe; UNPK fetches a source byte once for two result bytes. The rightmost byte swaps its
+  nibbles. Source bytes left of the operand read as zero; extra source digits are dropped.
+- PKA and PKU store 16 bytes with sign C, taking the low four bits of each byte or two-byte
+  character; a 32-character source loses its leftmost. UNPKA and UNPKU unpack 16 bytes into
+  ASCII or Unicode digits; a 32-character result gets a zero leftmost. They set CC 0 for sign
+  A, C, E or F, 1 for B or D and 3 otherwise; digits are not checked and nothing abends
+  `S0C7` (the Principles of Operation, chapter 8). L2 over 32 bytes (PKA), L1 over 32 bytes
+  (UNPKA), or over 64 or odd (PKU, UNPKU) abends `S0C6` before any store.
+- EX (ruling R31) lowers each storage form once: PACK and UNPK on `LENGTH_NIBBLES`, PKA and
+  PKU on `SECOND_LENGTH_BYTE`, UNPKA and UNPKU on `LENGTH_BYTE`.
+- z390 suppresses an out-of-range CVB and CVBY instead of storing the low word, stores a stale
+  value for CVDY, and abends `S0C1` on PKU and UNPKU. The z390 test pins each.
+
 ## Known Gaps
 
-- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, miscellaneous, packed-decimal arithmetic and packed-decimal compare and test units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
+- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, miscellaneous, packed-decimal arithmetic, packed-decimal compare and test and decimal conversion units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
 - DC types beyond C, X, B, F, H, P, Z, A, Y and V, and any type extension, raise `UnsupportedDataType` (red-dragon-6uyp.63; floating point E, D, L: red-dragon-6uyp.21).
 - Falling through into DC/DS data or past a CSECT's end skips the data instead of executing it, and a branch into data abends `S0C1` (red-dragon-6uyp.64).
 - Every branch, even to a static relative target, walks the dispatch chain (red-dragon-6uyp.80).
@@ -925,4 +950,7 @@ its own module.
 | `tests/unit/hlasm/test_packed_compare_test_lowering.py` | CP and TP IR: CP's reads and `S0C7` before its CC, TP's read then CC, no store; EX layouts; no SYMBOLIC |
 | `tests/integration/hlasm/test_packed_compare_test.py` | CP and TP on the VM: CP at unequal lengths, -0 against +0, alternate signs, 31 digits, `S0C7` with the CC kept; TP CC 0-3 at 1, 2, 3 and 16 bytes; EX lengths |
 | `tests/z390/test_packed_compare_test_differential.py` | Every CP and TP case against z390 (`-m z390`) |
+| `tests/unit/hlasm/test_decimal_conversion_lowering.py` | Decimal conversion IR: CVB's `S0C7`, R1 write, then `S0C9`; CVBG's `S0C9` before its write; `S0C6` before the first store; UNPKA/UNPKU set the CC last; EX layouts; no SYMBOLIC |
+| `tests/integration/hlasm/test_decimal_conversion.py` | Every decimal conversion mnemonic on the VM: CVB limits, -0, `S0C7`, `S0C9` with the low word stored; CVBG `S0C9` suppressed; CVD/CVDG signs and the high word; PACK and UNPK truncation, padding and overlap; PKA/PKU/UNPKA/UNPKU at full length, CCs and `S0C6`; EX lengths |
+| `tests/z390/test_decimal_conversion_differential.py` | Every decimal conversion case against z390; CVB `S0C9`, CVDY, PKU and UNPKU pinned (`-m z390`) |
 | `tests/z390/test_conditional_select_count_differential.py` | Every conditional, select and count case against z390; the instructions z390 does not execute and its whole-register SELFHR pinned (`-m z390`) |
