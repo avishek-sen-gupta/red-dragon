@@ -1,103 +1,46 @@
 # pyright: standard
 """BFP arithmetic, compare, load FP integer, divide to integer and test data class: IR splits the operand images, a zarch_float builtin computes, and the trap ladder delivers (ruling R43)."""
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping
 
 from hlasm_asg.program.machine_statement import MachineStatement
-from interpreter.hlasm.abend import emit_abend
 from interpreter.hlasm.bfp_layout import (
     EXTENDED_LAYOUT,
     LONG_LAYOUT,
     SHORT_LAYOUT,
     BfpLayout,
 )
-from interpreter.hlasm.bfp_operation import BfpOperation, bfp_builtin_name
-from interpreter.hlasm.bfp_slots import CC_SLOT, INEXACT_BIT, QUOTIENT_SLOT
-from interpreter.hlasm.data_movement import (
-    Source,
-    from_storage_at,
-)
-from interpreter.hlasm.hlasm_constants import (
-    BITS_PER_BYTE,
-    SPECIFICATION_EXCEPTION_ABEND,
-)
+from interpreter.hlasm.bfp_operation import BfpOperation
+from interpreter.hlasm.bfp_slots import CC_SLOT, QUOTIENT_SLOT
+from interpreter.hlasm.data_movement import Source
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
-from interpreter.hlasm.opcodes.bfp_ir import (
-    current_mode,
-    emit_ieee_ladder,
-    fields_list,
-    image_at,
-    image_cc,
-    list_item,
-    load_image,
-    outcome_of,
-    store_image,
-    without,
+from interpreter.hlasm.opcodes.bfp_forms import (
+    FIRST,
+    FOURTH,
+    SECOND,
+    THIRD,
+    AfterStore,
+    Deliver,
+    SuppressedBits,
+    cc_of,
+    checked,
+    current,
+    fields,
+    fpr,
+    ieee,
+    inexact_control,
+    invalid_modifier,
+    modifier,
+    no_cc,
+    signals_all,
+    storage,
+    stored,
 )
+from interpreter.hlasm.opcodes.bfp_ir import list_item
 from interpreter.hlasm.opcodes.floating_point_support import pairs
-from interpreter.hlasm.operands import mask_operand, optional_mask_operand, reg_operand
+from interpreter.hlasm.operands import reg_operand
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.register import Register
-
-type Deliver = Callable[[HlasmEmitter, MachineStatement, Register, Register], None]
-type AfterStore = Callable[[HlasmEmitter, Register], None]
-type SuppressedBits = Callable[[MachineStatement], int]
-
-VALID_MODIFIERS = frozenset({0, 1, 3, 4, 5, 6, 7})
-INEXACT_CONTROL = 0b0100
-FIRST, SECOND, THIRD, FOURTH = 0, 1, 2, 3
-
-
-def _fpr(index: int, layout: BfpLayout) -> Source:
-    return lambda emitter, statement: load_image(
-        emitter, reg_operand(statement, index), layout
-    )
-
-
-def _storage(index: int, layout: BfpLayout) -> Source:
-    return from_storage_at(index, layout.width // BITS_PER_BYTE)
-
-
-def _fields(image: Source, layout: BfpLayout) -> Source:
-    return lambda emitter, statement: fields_list(
-        emitter, image(emitter, statement), layout
-    )
-
-
-def _current(emitter: HlasmEmitter, statement: MachineStatement) -> Register:
-    return current_mode(emitter)
-
-
-def _modifier(index: int) -> Source:
-    def mode(emitter: HlasmEmitter, statement: MachineStatement) -> Register:
-        modifier = mask_operand(statement, index)
-        if modifier == 0:
-            return current_mode(emitter)
-        return emitter.int_(modifier)
-
-    return mode
-
-
-def _no_cc(emitter: HlasmEmitter, image: Register) -> None:
-    return None
-
-
-def _cc_of(layout: BfpLayout) -> AfterStore:
-    return lambda emitter, image: emitter.set_cc(image_cc(emitter, image, layout))
-
-
-def _stored(index: int, layout: BfpLayout, after: AfterStore) -> Deliver:
-    def deliver(
-        emitter: HlasmEmitter,
-        statement: MachineStatement,
-        result: Register,
-        slot: Register,
-    ) -> None:
-        image = image_at(emitter, result, slot, layout)
-        store_image(emitter, reg_operand(statement, index), layout, image)
-        after(emitter, image)
-
-    return deliver
 
 
 def _result_cc(
@@ -107,8 +50,8 @@ def _result_cc(
 
 
 def _divided(layout: BfpLayout) -> Deliver:
-    remainder = _stored(FIRST, layout, _no_cc)
-    quotient = _stored(SECOND, layout, _no_cc)
+    remainder = stored(FIRST, layout, no_cc)
+    quotient = stored(SECOND, layout, no_cc)
 
     def deliver(
         emitter: HlasmEmitter,
@@ -123,50 +66,6 @@ def _divided(layout: BfpLayout) -> Deliver:
     return deliver
 
 
-def _signals_all(statement: MachineStatement) -> int:
-    return 0
-
-
-def _inexact_control(statement: MachineStatement) -> int:
-    controlled = optional_mask_operand(statement, FOURTH, 0) & INEXACT_CONTROL
-    return INEXACT_BIT * bool(controlled)
-
-
-def _ieee(
-    builtin: tuple[BfpOperation, BfpLayout],
-    arguments: Sequence[Source],
-    deliver: Deliver,
-    suppressed: SuppressedBits = _signals_all,
-) -> StatementLowering:
-    name = bfp_builtin_name(*builtin)
-
-    def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
-        args = tuple(argument(emitter, statement) for argument in arguments)
-        result = emitter.call(name, args)
-        outcome = without(emitter, outcome_of(emitter, result), suppressed(statement))
-        emit_ieee_ladder(
-            emitter, outcome, lambda slot: deliver(emitter, statement, result, slot)
-        )
-
-    return lower
-
-
-def _checked(
-    raised: Callable[[MachineStatement], bool], lowering: StatementLowering
-) -> StatementLowering:
-    def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
-        if raised(statement):
-            emit_abend(emitter, SPECIFICATION_EXCEPTION_ABEND)
-            return
-        lowering(emitter, statement)
-
-    return lower
-
-
-def _invalid_modifier(index: int) -> Callable[[MachineStatement], bool]:
-    return lambda statement: mask_operand(statement, index) not in VALID_MODIFIERS
-
-
 def _shared_registers(statement: MachineStatement) -> bool:
     registers = [reg_operand(statement, index) for index in (FIRST, SECOND, THIRD)]
     return len(set(registers)) < len(registers)
@@ -179,12 +78,10 @@ def _two_operand(
     after: AfterStore,
 ) -> StatementLowering:
     operands = (
-        _fields(_fpr(FIRST, layout), layout),
-        _fields(second(SECOND, layout), layout),
+        fields(fpr(FIRST, layout), layout),
+        fields(second(SECOND, layout), layout),
     )
-    return _ieee(
-        (operation, layout), (_current, *operands), _stored(FIRST, layout, after)
-    )
+    return ieee((operation, layout), (current, *operands), stored(FIRST, layout, after))
 
 
 def _binary(
@@ -194,41 +91,41 @@ def _binary(
 ) -> Mapping[str, StatementLowering]:
     short, long, extended, short_storage, long_storage = names
     return {
-        short: _two_operand(operation, SHORT_LAYOUT, _fpr, after_of(SHORT_LAYOUT)),
-        long: _two_operand(operation, LONG_LAYOUT, _fpr, after_of(LONG_LAYOUT)),
+        short: _two_operand(operation, SHORT_LAYOUT, fpr, after_of(SHORT_LAYOUT)),
+        long: _two_operand(operation, LONG_LAYOUT, fpr, after_of(LONG_LAYOUT)),
         extended: pairs(
             (FIRST, SECOND),
-            _two_operand(operation, EXTENDED_LAYOUT, _fpr, after_of(EXTENDED_LAYOUT)),
+            _two_operand(operation, EXTENDED_LAYOUT, fpr, after_of(EXTENDED_LAYOUT)),
         ),
         short_storage: _two_operand(
-            operation, SHORT_LAYOUT, _storage, after_of(SHORT_LAYOUT)
+            operation, SHORT_LAYOUT, storage, after_of(SHORT_LAYOUT)
         ),
         long_storage: _two_operand(
-            operation, LONG_LAYOUT, _storage, after_of(LONG_LAYOUT)
+            operation, LONG_LAYOUT, storage, after_of(LONG_LAYOUT)
         ),
     }
 
 
 def _without_cc(layout: BfpLayout) -> AfterStore:
-    return _no_cc
+    return no_cc
 
 
 def _square_root(layout: BfpLayout, operand: Source) -> StatementLowering:
-    return _ieee(
+    return ieee(
         (BfpOperation.SQUARE_ROOT, layout),
-        (_current, _fields(operand, layout)),
-        _stored(FIRST, layout, _no_cc),
+        (current, fields(operand, layout)),
+        stored(FIRST, layout, no_cc),
     )
 
 
 def _fused(
     operation: BfpOperation, layout: BfpLayout, second: Source
 ) -> StatementLowering:
-    operands = (_fpr(SECOND, layout), second, _fpr(FIRST, layout))
-    return _ieee(
+    operands = (fpr(SECOND, layout), second, fpr(FIRST, layout))
+    return ieee(
         (operation, layout),
-        (_current, *(_fields(operand, layout) for operand in operands)),
-        _stored(FIRST, layout, _no_cc),
+        (current, *(fields(operand, layout) for operand in operands)),
+        stored(FIRST, layout, no_cc),
     )
 
 
@@ -237,30 +134,30 @@ def _fused_forms(
 ) -> Mapping[str, StatementLowering]:
     short, long, short_storage, long_storage = names
     return {
-        short: _fused(operation, SHORT_LAYOUT, _fpr(THIRD, SHORT_LAYOUT)),
-        long: _fused(operation, LONG_LAYOUT, _fpr(THIRD, LONG_LAYOUT)),
-        short_storage: _fused(operation, SHORT_LAYOUT, _storage(THIRD, SHORT_LAYOUT)),
-        long_storage: _fused(operation, LONG_LAYOUT, _storage(THIRD, LONG_LAYOUT)),
+        short: _fused(operation, SHORT_LAYOUT, fpr(THIRD, SHORT_LAYOUT)),
+        long: _fused(operation, LONG_LAYOUT, fpr(THIRD, LONG_LAYOUT)),
+        short_storage: _fused(operation, SHORT_LAYOUT, storage(THIRD, SHORT_LAYOUT)),
+        long_storage: _fused(operation, LONG_LAYOUT, storage(THIRD, LONG_LAYOUT)),
     }
 
 
 def _lengthened(
     source: BfpLayout, target: BfpLayout, second: Source
 ) -> StatementLowering:
-    return _ieee(
+    return ieee(
         (BfpOperation.MULTIPLY_LENGTHENED, source),
-        (_fields(_fpr(FIRST, source), source), _fields(second, source)),
-        _stored(FIRST, target, _no_cc),
+        (fields(fpr(FIRST, source), source), fields(second, source)),
+        stored(FIRST, target, no_cc),
     )
 
 
 def _integral(layout: BfpLayout, suppressed: SuppressedBits) -> StatementLowering:
-    return _checked(
-        _invalid_modifier(SECOND),
-        _ieee(
+    return checked(
+        invalid_modifier(SECOND),
+        ieee(
             (BfpOperation.ROUND_TO_INTEGRAL, layout),
-            (_modifier(SECOND), _fields(_fpr(THIRD, layout), layout)),
-            _stored(FIRST, layout, _no_cc),
+            (modifier(SECOND), fields(fpr(THIRD, layout), layout)),
+            stored(FIRST, layout, no_cc),
             suppressed,
         ),
     )
@@ -268,16 +165,16 @@ def _integral(layout: BfpLayout, suppressed: SuppressedBits) -> StatementLowerin
 
 def _divide_to_integer(layout: BfpLayout) -> StatementLowering:
     operands = (
-        _fields(_fpr(FIRST, layout), layout),
-        _fields(_fpr(THIRD, layout), layout),
+        fields(fpr(FIRST, layout), layout),
+        fields(fpr(THIRD, layout), layout),
     )
-    return _checked(
-        _invalid_modifier(FOURTH),
-        _checked(
+    return checked(
+        invalid_modifier(FOURTH),
+        checked(
             _shared_registers,
-            _ieee(
+            ieee(
                 (BfpOperation.DIVIDE_TO_INTEGER, layout),
-                (_modifier(FOURTH), _current, *operands),
+                (modifier(FOURTH), current, *operands),
                 _divided(layout),
             ),
         ),
@@ -285,8 +182,8 @@ def _divide_to_integer(layout: BfpLayout) -> StatementLowering:
 
 
 ADD_SUBTRACT: Mapping[str, StatementLowering] = {
-    **_binary(BfpOperation.ADD, ("AEBR", "ADBR", "AXBR", "AEB", "ADB"), _cc_of),
-    **_binary(BfpOperation.SUBTRACT, ("SEBR", "SDBR", "SXBR", "SEB", "SDB"), _cc_of),
+    **_binary(BfpOperation.ADD, ("AEBR", "ADBR", "AXBR", "AEB", "ADB"), cc_of),
+    **_binary(BfpOperation.SUBTRACT, ("SEBR", "SDBR", "SXBR", "SEB", "SDB"), cc_of),
 }
 
 MULTIPLY_DIVIDE: Mapping[str, StatementLowering] = {
@@ -294,36 +191,36 @@ MULTIPLY_DIVIDE: Mapping[str, StatementLowering] = {
         BfpOperation.MULTIPLY, ("MEEBR", "MDBR", "MXBR", "MEEB", "MDB"), _without_cc
     ),
     **_binary(BfpOperation.DIVIDE, ("DEBR", "DDBR", "DXBR", "DEB", "DDB"), _without_cc),
-    "MDEBR": _lengthened(SHORT_LAYOUT, LONG_LAYOUT, _fpr(SECOND, SHORT_LAYOUT)),
-    "MDEB": _lengthened(SHORT_LAYOUT, LONG_LAYOUT, _storage(SECOND, SHORT_LAYOUT)),
+    "MDEBR": _lengthened(SHORT_LAYOUT, LONG_LAYOUT, fpr(SECOND, SHORT_LAYOUT)),
+    "MDEB": _lengthened(SHORT_LAYOUT, LONG_LAYOUT, storage(SECOND, SHORT_LAYOUT)),
     "MXDBR": pairs(
-        (FIRST,), _lengthened(LONG_LAYOUT, EXTENDED_LAYOUT, _fpr(SECOND, LONG_LAYOUT))
+        (FIRST,), _lengthened(LONG_LAYOUT, EXTENDED_LAYOUT, fpr(SECOND, LONG_LAYOUT))
     ),
     "MXDB": pairs(
         (FIRST,),
-        _lengthened(LONG_LAYOUT, EXTENDED_LAYOUT, _storage(SECOND, LONG_LAYOUT)),
+        _lengthened(LONG_LAYOUT, EXTENDED_LAYOUT, storage(SECOND, LONG_LAYOUT)),
     ),
 }
 
 SQUARE_ROOT_FUSED: Mapping[str, StatementLowering] = {
-    "SQEBR": _square_root(SHORT_LAYOUT, _fpr(SECOND, SHORT_LAYOUT)),
-    "SQDBR": _square_root(LONG_LAYOUT, _fpr(SECOND, LONG_LAYOUT)),
+    "SQEBR": _square_root(SHORT_LAYOUT, fpr(SECOND, SHORT_LAYOUT)),
+    "SQDBR": _square_root(LONG_LAYOUT, fpr(SECOND, LONG_LAYOUT)),
     "SQXBR": pairs(
-        (FIRST, SECOND), _square_root(EXTENDED_LAYOUT, _fpr(SECOND, EXTENDED_LAYOUT))
+        (FIRST, SECOND), _square_root(EXTENDED_LAYOUT, fpr(SECOND, EXTENDED_LAYOUT))
     ),
-    "SQEB": _square_root(SHORT_LAYOUT, _storage(SECOND, SHORT_LAYOUT)),
-    "SQDB": _square_root(LONG_LAYOUT, _storage(SECOND, LONG_LAYOUT)),
+    "SQEB": _square_root(SHORT_LAYOUT, storage(SECOND, SHORT_LAYOUT)),
+    "SQDB": _square_root(LONG_LAYOUT, storage(SECOND, LONG_LAYOUT)),
     **_fused_forms(BfpOperation.MULTIPLY_ADD, ("MAEBR", "MADBR", "MAEB", "MADB")),
     **_fused_forms(BfpOperation.MULTIPLY_SUBTRACT, ("MSEBR", "MSDBR", "MSEB", "MSDB")),
 }
 
 INTEGRAL: Mapping[str, StatementLowering] = {
-    "FIEBR": _integral(SHORT_LAYOUT, _signals_all),
-    "FIDBR": _integral(LONG_LAYOUT, _signals_all),
-    "FIXBR": pairs((FIRST, THIRD), _integral(EXTENDED_LAYOUT, _signals_all)),
-    "FIEBRA": _integral(SHORT_LAYOUT, _inexact_control),
-    "FIDBRA": _integral(LONG_LAYOUT, _inexact_control),
-    "FIXBRA": pairs((FIRST, THIRD), _integral(EXTENDED_LAYOUT, _inexact_control)),
+    "FIEBR": _integral(SHORT_LAYOUT, signals_all),
+    "FIDBR": _integral(LONG_LAYOUT, signals_all),
+    "FIXBR": pairs((FIRST, THIRD), _integral(EXTENDED_LAYOUT, signals_all)),
+    "FIEBRA": _integral(SHORT_LAYOUT, inexact_control),
+    "FIDBRA": _integral(LONG_LAYOUT, inexact_control),
+    "FIXBRA": pairs((FIRST, THIRD), _integral(EXTENDED_LAYOUT, inexact_control)),
     "DIEBR": _divide_to_integer(SHORT_LAYOUT),
     "DIDBR": _divide_to_integer(LONG_LAYOUT),
 }

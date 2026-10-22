@@ -75,36 +75,36 @@ def _line(mnemonic: str, operands: str) -> str:
     return f"         {mnemonic:<6} {operands}\n"
 
 
-def _lines(*statements: str) -> str:
+def lines(*statements: str) -> str:
     return "".join(_line(*statement.split(" ", 1)) for statement in statements)
 
 
-def _fpc(value: int) -> str:
+def set_fpc(value: int) -> str:
     return _line("IILF", f"7,X'{value:08X}'") + _line("SFPC", "7")
 
 
-def _cc(register: int) -> str:
+def cc_into(register: int) -> str:
     return _line("IPM", f"{register}") + _line("SRL", f"{register},28")
 
 
-def _short(*registers: int) -> str:
+def zeroed_short(*registers: int) -> str:
     return "".join(_line("LZDR", f"{r}") for r in registers)
 
 
-def _extended(register: int, label: str) -> str:
+def extended_from(register: int, label: str) -> str:
     return _line("LD", f"{register},{label}") + _line("LD", f"{register + 2},{label}+8")
 
 
-def _high(value: int) -> int:
+def high_word(value: int) -> int:
     return value << 32
 
 
-def _cc_word(cc: int) -> int:
+def cc_word(cc: int) -> int:
     return HIGH_FILL | cc
 
 
-def _case(body: str, registers: Mapping[int, int], cc: int, fpc: int = 0) -> Case:
-    return (_fpc(0) + PRESET + body, registers, cc, COMPLETED, fpc)
+def case_of(body: str, registers: Mapping[int, int], cc: int, fpc: int = 0) -> Case:
+    return (set_fpc(0) + PRESET + body, registers, cc, COMPLETED, fpc)
 
 
 CLASSES = (
@@ -125,20 +125,20 @@ CLASSES = (
 
 def _classes(selected: int, others: int, first: int) -> str:
     return "".join(
-        _lines(
+        lines(
             f"LD 1,{label}",
             f"TCDB 1,X'{(1 << (11 - at)) * selected | (0xFFF ^ (1 << (11 - at))) * others:03X}'",
         )
-        + _cc(2 + at - first)
+        + cc_into(2 + at - first)
         for at, label in enumerate(CLASSES)
         if first <= at < first + 6
     )
 
 
 def _class_case(selected: int, others: int, first: int) -> Case:
-    return _case(
+    return case_of(
         _classes(selected, others, first),
-        {2 + at: _cc_word(selected) for at in range(6)},
+        {2 + at: cc_word(selected) for at in range(6)},
         selected,
     )
 
@@ -148,83 +148,83 @@ def program(body: str) -> str:
 
 
 ADD_SUBTRACT: Mapping[str, Case] = {
-    "AEBR AEB": _case(
-        _short(1, 2)
-        + _lines("LE 1,S1", "LE 2,S2", "AEBR 1,2", "LGDR 2,1", "AEB 1,SM8", "LGDR 3,1"),
-        {2: _high(0x40400000), 3: _high(0xC0A00000)},
+    "AEBR AEB": case_of(
+        zeroed_short(1, 2)
+        + lines("LE 1,S1", "LE 2,S2", "AEBR 1,2", "LGDR 2,1", "AEB 1,SM8", "LGDR 3,1"),
+        {2: high_word(0x40400000), 3: high_word(0xC0A00000)},
         1,
     ),
-    "ADBR ADB": _case(
-        _lines("LD 1,D1", "LD 2,D2", "ADBR 1,2", "LGDR 2,1")
-        + _cc(8)
-        + _lines("ADB 1,DM3", "LGDR 3,1"),
-        {2: 0x40080000_00000000, 8: _cc_word(2), 3: 0},
+    "ADBR ADB": case_of(
+        lines("LD 1,D1", "LD 2,D2", "ADBR 1,2", "LGDR 2,1")
+        + cc_into(8)
+        + lines("ADB 1,DM3", "LGDR 3,1"),
+        {2: 0x40080000_00000000, 8: cc_word(2), 3: 0},
         0,
     ),
-    "AXBR": _case(
-        _extended(1, "X1")
-        + _extended(4, "X2")
-        + _lines("AXBR 1,4", "LGDR 2,1", "LGDR 3,3"),
+    "AXBR": case_of(
+        extended_from(1, "X1")
+        + extended_from(4, "X2")
+        + lines("AXBR 1,4", "LGDR 2,1", "LGDR 3,3"),
         {2: 0x40008000_00000000, 3: 0x800},
         2,
     ),
-    "SEBR SEB": _case(
-        _short(1, 2)
-        + _lines("LE 1,S3", "LE 2,S1", "SEBR 1,2", "LGDR 2,1", "SEB 1,S3", "LGDR 3,1"),
-        {2: _high(0x40000000), 3: _high(0xBF800000)},
+    "SEBR SEB": case_of(
+        zeroed_short(1, 2)
+        + lines("LE 1,S3", "LE 2,S1", "SEBR 1,2", "LGDR 2,1", "SEB 1,S3", "LGDR 3,1"),
+        {2: high_word(0x40000000), 3: high_word(0xBF800000)},
         1,
     ),
-    "SDBR SDB": _case(
-        _lines("LD 1,D1", "LD 2,D3", "SDBR 1,2", "LGDR 2,1")
-        + _cc(8)
-        + _fpc(3)
-        + _lines("SDB 1,DM2", "LGDR 3,1"),
-        {2: 0xC0000000_00000000, 8: _cc_word(1), 3: 0x80000000_00000000},
+    "SDBR SDB": case_of(
+        lines("LD 1,D1", "LD 2,D3", "SDBR 1,2", "LGDR 2,1")
+        + cc_into(8)
+        + set_fpc(3)
+        + lines("SDB 1,DM2", "LGDR 3,1"),
+        {2: 0xC0000000_00000000, 8: cc_word(1), 3: 0x80000000_00000000},
         0,
         3,
     ),
-    "SXBR": _case(
-        _extended(1, "X3")
-        + _extended(4, "X2")
-        + _lines("SXBR 1,4", "LGDR 2,1", "LGDR 3,3"),
+    "SXBR": case_of(
+        extended_from(1, "X3")
+        + extended_from(4, "X2")
+        + lines("SXBR 1,4", "LGDR 2,1", "LGDR 3,3"),
         {2: 0x3FFF0000_00000000, 3: 0},
         2,
     ),
 }
 
 MULTIPLY_DIVIDE: Mapping[str, Case] = {
-    "MEEBR MEEB": _case(
-        _short(1, 2)
-        + _lines(
+    "MEEBR MEEB": case_of(
+        zeroed_short(1, 2)
+        + lines(
             "LE 1,S3", "LE 2,S2", "MEEBR 1,2", "LGDR 2,1", "MEEB 1,SM8", "LGDR 3,1"
         ),
-        {2: _high(0x40C00000), 3: _high(0xC2400000)},
+        {2: high_word(0x40C00000), 3: high_word(0xC2400000)},
         PRESET_CC,
     ),
-    "MDBR MDB": _case(
-        _lines("LD 1,D3", "LD 2,DHALF", "MDBR 1,2", "LGDR 2,1", "MDB 1,D2", "LGDR 3,1"),
+    "MDBR MDB": case_of(
+        lines("LD 1,D3", "LD 2,DHALF", "MDBR 1,2", "LGDR 2,1", "MDB 1,D2", "LGDR 3,1"),
         {2: 0x3FF80000_00000000, 3: 0x40080000_00000000},
         PRESET_CC,
     ),
-    "MXBR": _case(
-        _extended(1, "X1")
-        + _extended(4, "X2")
-        + _lines("MXBR 1,4", "LGDR 2,1", "LGDR 3,3"),
+    "MXBR": case_of(
+        extended_from(1, "X1")
+        + extended_from(4, "X2")
+        + lines("MXBR 1,4", "LGDR 2,1", "LGDR 3,3"),
         {2: 0x40000000_00000000, 3: 0x1000},
         PRESET_CC,
     ),
-    "MDEBR MDEB": _case(
-        _short(1, 2, 3)
-        + _lines(
+    "MDEBR MDEB": case_of(
+        zeroed_short(1, 2, 3)
+        + lines(
             "LE 1,STHIRD", "LE 2,S3", "MDEBR 1,2", "LGDR 2,1", "LE 3,S2", "MDEB 3,SM8"
         )
-        + _lines("LGDR 3,3"),
+        + lines("LGDR 3,3"),
         {2: 0x3FF00000_08000000, 3: 0xC0300000_00000000},
         PRESET_CC,
     ),
-    "MXDBR MXDB": _case(
-        _lines("LD 1,DTHIRD", "LD 2,D3", "MXDBR 1,2", "LGDR 2,1", "LGDR 3,3")
-        + _lines("LD 4,D2", "MXDB 4,DM3", "LGDR 4,4", "LGDR 5,6"),
+    "MXDBR MXDB": case_of(
+        lines("LD 1,DTHIRD", "LD 2,D3", "MXDBR 1,2", "LGDR 2,1", "LGDR 3,3")
+        + lines("LD 4,D2", "MXDB 4,DM3", "LGDR 4,4", "LGDR 5,6"),
         {
             2: 0x3FFEFFFF_FFFFFFFF,
             3: 0xF8000000_00000000,
@@ -233,83 +233,83 @@ MULTIPLY_DIVIDE: Mapping[str, Case] = {
         },
         PRESET_CC,
     ),
-    "MDB underflow nontrap": _case(
-        _lines("LD 1,DNMIN", "MDB 1,DTHIRD", "LGDR 2,1"),
+    "MDB underflow nontrap": case_of(
+        lines("LD 1,DNMIN", "MDB 1,DTHIRD", "LGDR 2,1"),
         {2: 0x00055555_55555555},
         PRESET_CC,
         0x00180000,
     ),
-    "DEBR DEB": _case(
-        _short(1, 2)
-        + _lines("LE 1,S1", "LE 2,S2", "DEBR 1,2", "LGDR 2,1", "DEB 1,S3", "LGDR 3,1"),
-        {2: _high(0x3F000000), 3: _high(0x3E2AAAAB)},
+    "DEBR DEB": case_of(
+        zeroed_short(1, 2)
+        + lines("LE 1,S1", "LE 2,S2", "DEBR 1,2", "LGDR 2,1", "DEB 1,S3", "LGDR 3,1"),
+        {2: high_word(0x3F000000), 3: high_word(0x3E2AAAAB)},
         PRESET_CC,
         INEXACT_FLAG,
     ),
-    "DDBR DDB": _case(
-        _lines("LD 1,D3", "LD 2,D2", "DDBR 1,2", "LGDR 2,1", "DDB 1,D0", "LGDR 3,1"),
+    "DDBR DDB": case_of(
+        lines("LD 1,D3", "LD 2,D2", "DDBR 1,2", "LGDR 2,1", "DDB 1,D0", "LGDR 3,1"),
         {2: 0x3FF80000_00000000, 3: 0x7FF00000_00000000},
         PRESET_CC,
         DIVIDE_FLAG,
     ),
-    "DXBR": _case(
-        _extended(1, "X3")
-        + _extended(4, "X2")
-        + _lines("DXBR 1,4", "LGDR 2,1", "LGDR 3,3"),
+    "DXBR": case_of(
+        extended_from(1, "X3")
+        + extended_from(4, "X2")
+        + lines("DXBR 1,4", "LGDR 2,1", "LGDR 3,3"),
         {2: 0x3FFF8000_00000000, 3: 0},
         PRESET_CC,
     ),
 }
 
 ROOTS_FUSED: Mapping[str, Case] = {
-    "SQEBR SQEB": _case(
-        _short(1, 2, 3)
-        + _lines("LE 2,S4", "SQEBR 1,2", "LGDR 2,1", "SQEB 3,S2", "LGDR 3,3"),
-        {2: _high(0x40000000), 3: _high(0x3FB504F3)},
+    "SQEBR SQEB": case_of(
+        zeroed_short(1, 2, 3)
+        + lines("LE 2,S4", "SQEBR 1,2", "LGDR 2,1", "SQEB 3,S2", "LGDR 3,3"),
+        {2: high_word(0x40000000), 3: high_word(0x3FB504F3)},
         PRESET_CC,
         INEXACT_FLAG,
     ),
-    "SQDBR SQDB": _case(
-        _lines("LD 2,D9", "SQDBR 1,2", "LGDR 2,1", "SQDB 3,DM1", "LGDR 3,3"),
+    "SQDBR SQDB": case_of(
+        lines("LD 2,D9", "SQDBR 1,2", "LGDR 2,1", "SQDB 3,DM1", "LGDR 3,3"),
         {2: 0x40080000_00000000, 3: 0x7FF80000_00000000},
         PRESET_CC,
         INVALID_FLAG,
     ),
-    "SQXBR": _case(
-        _extended(4, "X4") + _lines("SQXBR 1,4", "LGDR 2,1", "LGDR 3,3"),
+    "SQXBR": case_of(
+        extended_from(4, "X4") + lines("SQXBR 1,4", "LGDR 2,1", "LGDR 3,3"),
         {2: 0x40000000_00000000, 3: 0},
         PRESET_CC,
     ),
-    "MAEBR MAEB": _case(
-        _short(1, 2, 3)
-        + _lines("LE 1,S1", "LE 3,S2", "LE 2,S3", "MAEBR 1,3,2", "LGDR 2,1")
-        + _lines("MAEB 1,3,S1", "LGDR 3,1"),
-        {2: _high(0x40E00000), 3: _high(0x41100000)},
+    "MAEBR MAEB": case_of(
+        zeroed_short(1, 2, 3)
+        + lines("LE 1,S1", "LE 3,S2", "LE 2,S3", "MAEBR 1,3,2", "LGDR 2,1")
+        + lines("MAEB 1,3,S1", "LGDR 3,1"),
+        {2: high_word(0x40E00000), 3: high_word(0x41100000)},
         PRESET_CC,
     ),
-    "MADBR MADB": _case(
-        _lines("LD 1,DM1", "LD 3,DUP", "LD 2,DDOWN", "MADBR 1,3,2", "LGDR 2,1")
-        + _lines("LD 4,D1", "LD 5,D2", "MADB 4,5,D3", "LGDR 3,4"),
+    "MADBR MADB": case_of(
+        lines("LD 1,DM1", "LD 3,DUP", "LD 2,DDOWN", "MADBR 1,3,2", "LGDR 2,1")
+        + lines("LD 4,D1", "LD 5,D2", "MADB 4,5,D3", "LGDR 3,4"),
         {2: 0xBC300000_00000000, 3: 0x401C0000_00000000},
         PRESET_CC,
     ),
-    "MSEBR MSEB": _case(
-        _short(1, 2, 3)
-        + _lines("LE 1,S1", "LE 3,S2", "LE 2,S3", "MSEBR 1,3,2", "LGDR 2,1")
-        + _lines("MSEB 1,3,S3", "LGDR 3,1"),
-        {2: _high(0x40A00000), 3: _high(0x3F800000)},
+    "MSEBR MSEB": case_of(
+        zeroed_short(1, 2, 3)
+        + lines("LE 1,S1", "LE 3,S2", "LE 2,S3", "MSEBR 1,3,2", "LGDR 2,1")
+        + lines("MSEB 1,3,S3", "LGDR 3,1"),
+        {2: high_word(0x40A00000), 3: high_word(0x3F800000)},
         PRESET_CC,
     ),
-    "MSDBR MSDB": _case(
-        _lines("LD 1,D7", "LD 3,D2", "LD 2,D3", "MSDBR 1,3,2", "LGDR 2,1")
-        + _lines("MSDB 1,3,D2", "LGDR 3,1"),
+    "MSDBR MSDB": case_of(
+        lines("LD 1,D7", "LD 3,D2", "LD 2,D3", "MSDBR 1,3,2", "LGDR 2,1")
+        + lines("MSDB 1,3,D2", "LGDR 3,1"),
         {2: 0xBFF00000_00000000, 3: 0x40140000_00000000},
         PRESET_CC,
     ),
-    "MADBR NaN order": _case(
-        _lines("LD 1,DSNAN", "LD 3,DQNAN", "LD 2,D1", "MADBR 1,3,2", "LGDR 2,1")
-        + _lines("LD 4,DQNAN", "LD 5,DQNAN2", "LD 6,D1", "MADBR 4,5,6", "LGDR 3,4")
-        + _lines("LD 8,DSNAN", "LD 9,D0", "LD 10,DINF", "MADBR 8,9,10", "LGDR 4,8"),
+    "MADBR NaN order": case_of(
+        lines("LD 1,DSNAN", "LD 3,DQNAN", "LD 2,D1", "MADBR 1,3,2", "LGDR 2,1")
+        + lines("LD 4,DQNAN", "LD 5,DQNAN2", "LD 6,D1", "MADBR 4,5,6", "LGDR 3,4")
+        + lines("LD 8,DSNAN", "LD 9,D0", "LD 10,DINF", "MADBR 8,9,10", "LGDR 4,8"),
         {2: 0x7FF80000_00000009, 3: 0x7FF80000_0000000A, 4: 0x7FF80000_00000000},
         PRESET_CC,
         INVALID_FLAG,
@@ -317,44 +317,51 @@ ROOTS_FUSED: Mapping[str, Case] = {
 }
 
 COMPARES: Mapping[str, Case] = {
-    "CEBR CEB": _case(
-        _short(1, 2)
-        + _lines("LE 1,S1", "LE 2,S2", "CEBR 1,2")
-        + _cc(8)
-        + _lines("CEB 1,SQNAN"),
-        {8: _cc_word(1)},
+    "CEBR CEB": case_of(
+        zeroed_short(1, 2)
+        + lines("LE 1,S1", "LE 2,S2", "CEBR 1,2")
+        + cc_into(8)
+        + lines("CEB 1,SQNAN"),
+        {8: cc_word(1)},
         3,
     ),
-    "CDBR CDB": _case(
-        _lines("LD 1,D2", "LD 2,D1", "CDBR 1,2") + _cc(8) + _lines("CDB 1,DSNAN"),
-        {8: _cc_word(2)},
-        3,
-        INVALID_FLAG,
-    ),
-    "CXBR": _case(_extended(1, "X2") + _extended(4, "X2") + _lines("CXBR 1,4"), {}, 0),
-    "KEBR KEB": _case(
-        _short(1) + _lines("LE 1,S1", "KEBR 1,1") + _cc(8) + _lines("KEB 1,SQNAN"),
-        {8: _cc_word(0)},
+    "CDBR CDB": case_of(
+        lines("LD 1,D2", "LD 2,D1", "CDBR 1,2") + cc_into(8) + lines("CDB 1,DSNAN"),
+        {8: cc_word(2)},
         3,
         INVALID_FLAG,
     ),
-    "KDBR KDB": _case(
-        _lines("LD 1,D1", "LD 2,DINF", "KDBR 1,2") + _cc(8) + _lines("KDB 1,DMINF"),
-        {8: _cc_word(1)},
+    "CXBR": case_of(
+        extended_from(1, "X2") + extended_from(4, "X2") + lines("CXBR 1,4"), {}, 0
+    ),
+    "KEBR KEB": case_of(
+        zeroed_short(1)
+        + lines("LE 1,S1", "KEBR 1,1")
+        + cc_into(8)
+        + lines("KEB 1,SQNAN"),
+        {8: cc_word(0)},
+        3,
+        INVALID_FLAG,
+    ),
+    "KDBR KDB": case_of(
+        lines("LD 1,D1", "LD 2,DINF", "KDBR 1,2") + cc_into(8) + lines("KDB 1,DMINF"),
+        {8: cc_word(1)},
         2,
     ),
-    "CDBR signed order": _case(
-        _lines("LD 1,DM2", "LD 2,DM1", "CDBR 1,2")
-        + _cc(8)
-        + _lines("LD 1,DM0", "LD 2,D0", "CDBR 1,2")
-        + _cc(9)
-        + _lines("LD 1,DINF", "CDB 1,DINF")
-        + _cc(10)
-        + _lines("LD 1,DM1", "CDB 1,DMINF"),
-        {8: _cc_word(1), 9: _cc_word(0), 10: _cc_word(0)},
+    "CDBR signed order": case_of(
+        lines("LD 1,DM2", "LD 2,DM1", "CDBR 1,2")
+        + cc_into(8)
+        + lines("LD 1,DM0", "LD 2,D0", "CDBR 1,2")
+        + cc_into(9)
+        + lines("LD 1,DINF", "CDB 1,DINF")
+        + cc_into(10)
+        + lines("LD 1,DM1", "CDB 1,DMINF"),
+        {8: cc_word(1), 9: cc_word(0), 10: cc_word(0)},
         2,
     ),
-    "KXBR": _case(_extended(1, "X1") + _extended(4, "X2") + _lines("KXBR 1,4"), {}, 1),
+    "KXBR": case_of(
+        extended_from(1, "X1") + extended_from(4, "X2") + lines("KXBR 1,4"), {}, 1
+    ),
 }
 
 INTEGRAL: Mapping[str, Case] = {
@@ -362,130 +369,130 @@ INTEGRAL: Mapping[str, Case] = {
     "TCDB selects the class bit, infinities to SNaNs": _class_case(1, 0, 6),
     "TCDB misses every other bit, zeros to subnormals": _class_case(0, 1, 0),
     "TCDB misses every other bit, infinities to SNaNs": _class_case(0, 1, 6),
-    "FIEBR FIEBRA": _case(
-        _short(1, 2, 3)
-        + _lines("LE 2,SM2P5", "FIEBR 1,0,2", "LGDR 2,1", "FIEBRA 3,1,2,4", "LGDR 3,3"),
-        {2: _high(0xC0000000), 3: _high(0xC0400000)},
+    "FIEBR FIEBRA": case_of(
+        zeroed_short(1, 2, 3)
+        + lines("LE 2,SM2P5", "FIEBR 1,0,2", "LGDR 2,1", "FIEBRA 3,1,2,4", "LGDR 3,3"),
+        {2: high_word(0xC0000000), 3: high_word(0xC0400000)},
         PRESET_CC,
         INEXACT_FLAG,
     ),
-    "FIDBR FIDBRA": _case(
-        _lines("LD 2,D2P5", "FIDBR 1,0,2", "LGDR 2,1", "FIDBRA 3,6,2,0", "LGDR 3,3"),
+    "FIDBR FIDBRA": case_of(
+        lines("LD 2,D2P5", "FIDBR 1,0,2", "LGDR 2,1", "FIDBRA 3,6,2,0", "LGDR 3,3"),
         {2: 0x40000000_00000000, 3: 0x40080000_00000000},
         PRESET_CC,
         INEXACT_FLAG,
     ),
-    "FIXBR FIXBRA": _case(
-        _extended(4, "XM2P5")
-        + _lines("FIXBR 1,5,4", "LGDR 2,1", "LGDR 3,3")
-        + _fpc(0)
-        + _lines("FIXBRA 8,7,4,4", "LGDR 4,8", "LGDR 5,10"),
+    "FIXBR FIXBRA": case_of(
+        extended_from(4, "XM2P5")
+        + lines("FIXBR 1,5,4", "LGDR 2,1", "LGDR 3,3")
+        + set_fpc(0)
+        + lines("FIXBRA 8,7,4,4", "LGDR 4,8", "LGDR 5,10"),
         {2: 0xC0000000_00000000, 3: 0, 4: 0xC0008000_00000000, 5: 0},
         PRESET_CC,
     ),
-    "DIEBR": _case(
-        _short(1, 2, 3)
-        + _lines("LE 1,S7", "LE 2,S2", "DIEBR 1,3,2,5", "LGDR 2,1", "LGDR 3,3"),
-        {2: _high(0x3F800000), 3: _high(0x40400000)},
+    "DIEBR": case_of(
+        zeroed_short(1, 2, 3)
+        + lines("LE 1,S7", "LE 2,S2", "DIEBR 1,3,2,5", "LGDR 2,1", "LGDR 3,3"),
+        {2: high_word(0x3F800000), 3: high_word(0x40400000)},
         0,
     ),
-    "DIEBR DIDBR in the current mode": _case(
-        _short(1, 2, 3)
-        + _fpc(1)
-        + _lines("LE 1,S7", "LE 2,S2", "DIEBR 1,3,2,0", "LGDR 2,1", "LGDR 3,3")
-        + _lines("LD 4,D7", "LD 5,D2", "DIDBR 4,6,5,0", "LGDR 4,4", "LGDR 5,6"),
+    "DIEBR DIDBR in the current mode": case_of(
+        zeroed_short(1, 2, 3)
+        + set_fpc(1)
+        + lines("LE 1,S7", "LE 2,S2", "DIEBR 1,3,2,0", "LGDR 2,1", "LGDR 3,3")
+        + lines("LD 4,D7", "LD 5,D2", "DIDBR 4,6,5,0", "LGDR 4,4", "LGDR 5,6"),
         {
-            2: _high(0x3F800000),
-            3: _high(0x40400000),
+            2: high_word(0x3F800000),
+            3: high_word(0x40400000),
             4: 0x3FF00000_00000000,
             5: 0x40080000_00000000,
         },
         0,
         1,
     ),
-    "DIEBR quotient overflow": _case(
-        _short(1, 2, 3)
-        + _lines("LE 1,SBIG", "LE 2,SNMIN", "DIEBR 1,3,2,4", "LGDR 2,1", "LGDR 3,3"),
-        {2: 0, 3: _high(0x5E000000)},
+    "DIEBR quotient overflow": case_of(
+        zeroed_short(1, 2, 3)
+        + lines("LE 1,SBIG", "LE 2,SNMIN", "DIEBR 1,3,2,4", "LGDR 2,1", "LGDR 3,3"),
+        {2: 0, 3: high_word(0x5E000000)},
         1,
     ),
-    "DIDBR": _case(
-        _lines("LD 1,DP60", "LD 2,D3", "DIDBR 1,3,2,4", "LGDR 2,1", "LGDR 3,3"),
+    "DIDBR": case_of(
+        lines("LD 1,DP60", "LD 2,D3", "DIDBR 1,3,2,4", "LGDR 2,1", "LGDR 3,3"),
         {2: 0x40500000_00000000, 3: 0x43955555_55555555},
         2,
     ),
-    "TCEB TCDB TCXB": _case(
-        _short(1)
-        + _lines("LE 1,SM0", "TCEB 1,X'400'")
-        + _cc(8)
-        + _lines("LD 2,DINF", "TCDB 2,X'800'")
-        + _cc(9)
-        + _extended(4, "X1")
-        + _lines("TCXB 4,X'200'"),
-        {8: _cc_word(1), 9: _cc_word(0)},
+    "TCEB TCDB TCXB": case_of(
+        zeroed_short(1)
+        + lines("LE 1,SM0", "TCEB 1,X'400'")
+        + cc_into(8)
+        + lines("LD 2,DINF", "TCDB 2,X'800'")
+        + cc_into(9)
+        + extended_from(4, "X1")
+        + lines("TCXB 4,X'200'"),
+        {8: cc_word(1), 9: cc_word(0)},
         1,
     ),
 }
 
 SIGN_FORMS: Mapping[str, Case] = {
-    "LTEBR LTDBR LTXBR": _case(
-        _short(2)
-        + _lines("LE 2,SM1P5", "LTEBR 1,2")
-        + _cc(8)
-        + _lines("LD 4,DSNAN", "LTDBR 3,4", "LGDR 2,3")
-        + _cc(9)
-        + _lines("LZXR 12", "LTXBR 8,12", "LGDR 3,8", "LGDR 4,10"),
-        {8: _cc_word(1), 2: 0x7FF80000_00000009, 9: _cc_word(3), 3: 0, 4: 0},
+    "LTEBR LTDBR LTXBR": case_of(
+        zeroed_short(2)
+        + lines("LE 2,SM1P5", "LTEBR 1,2")
+        + cc_into(8)
+        + lines("LD 4,DSNAN", "LTDBR 3,4", "LGDR 2,3")
+        + cc_into(9)
+        + lines("LZXR 12", "LTXBR 8,12", "LGDR 3,8", "LGDR 4,10"),
+        {8: cc_word(1), 2: 0x7FF80000_00000009, 9: cc_word(3), 3: 0, 4: 0},
         0,
         INVALID_FLAG,
     ),
-    "LCEBR LCDBR LCXBR": _case(
-        _short(1, 2)
-        + _lines("LE 2,S1", "LCEBR 1,2", "LGDR 2,1")
-        + _cc(8)
-        + _lines("LD 4,DSNAN", "LCDBR 3,4", "LGDR 3,3")
-        + _cc(9)
-        + _extended(12, "X2")
-        + _lines("LCXBR 8,12", "LGDR 4,8", "LGDR 5,10"),
+    "LCEBR LCDBR LCXBR": case_of(
+        zeroed_short(1, 2)
+        + lines("LE 2,S1", "LCEBR 1,2", "LGDR 2,1")
+        + cc_into(8)
+        + lines("LD 4,DSNAN", "LCDBR 3,4", "LGDR 3,3")
+        + cc_into(9)
+        + extended_from(12, "X2")
+        + lines("LCXBR 8,12", "LGDR 4,8", "LGDR 5,10"),
         {
-            2: _high(0xBF800000),
-            8: _cc_word(1),
+            2: high_word(0xBF800000),
+            8: cc_word(1),
             3: 0xFFF00000_00000009,
-            9: _cc_word(3),
+            9: cc_word(3),
             4: 0xC0000000_00000000,
             5: 0,
         },
         1,
     ),
-    "LNEBR LNDBR LNXBR": _case(
-        _short(1, 2)
-        + _lines("LE 2,S1", "LNEBR 1,2", "LGDR 2,1")
-        + _cc(8)
-        + _lines("LD 4,D0", "LNDBR 3,4", "LGDR 3,3")
-        + _cc(9)
-        + _extended(12, "X2")
-        + _lines("LCXBR 12,12", "LNXBR 8,12", "LGDR 4,8"),
+    "LNEBR LNDBR LNXBR": case_of(
+        zeroed_short(1, 2)
+        + lines("LE 2,S1", "LNEBR 1,2", "LGDR 2,1")
+        + cc_into(8)
+        + lines("LD 4,D0", "LNDBR 3,4", "LGDR 3,3")
+        + cc_into(9)
+        + extended_from(12, "X2")
+        + lines("LCXBR 12,12", "LNXBR 8,12", "LGDR 4,8"),
         {
-            2: _high(0xBF800000),
-            8: _cc_word(1),
+            2: high_word(0xBF800000),
+            8: cc_word(1),
             3: 0x80000000_00000000,
-            9: _cc_word(0),
+            9: cc_word(0),
             4: 0xC0000000_00000000,
         },
         1,
     ),
-    "LPEBR LPDBR LPXBR": _case(
-        _short(1, 2)
-        + _lines("LE 2,SM1P5", "LPEBR 1,2", "LGDR 2,1")
-        + _cc(8)
-        + _lines("LD 4,DMINF", "LPDBR 3,4", "LGDR 3,3")
-        + _cc(9)
-        + _lines("LZXR 12", "LCXBR 12,12", "LPXBR 8,12", "LGDR 4,8"),
+    "LPEBR LPDBR LPXBR": case_of(
+        zeroed_short(1, 2)
+        + lines("LE 2,SM1P5", "LPEBR 1,2", "LGDR 2,1")
+        + cc_into(8)
+        + lines("LD 4,DMINF", "LPDBR 3,4", "LGDR 3,3")
+        + cc_into(9)
+        + lines("LZXR 12", "LCXBR 12,12", "LPXBR 8,12", "LGDR 4,8"),
         {
-            2: _high(0x3FC00000),
-            8: _cc_word(2),
+            2: high_word(0x3FC00000),
+            8: cc_word(2),
             3: 0x7FF00000_00000000,
-            9: _cc_word(2),
+            9: cc_word(2),
             4: 0,
         },
         0,
@@ -493,8 +500,8 @@ SIGN_FORMS: Mapping[str, Case] = {
 }
 
 CASES: Mapping[str, Case] = {
-    "FIDBRA inexact control under an enabled mask": _case(
-        _fpc(0x08000000) + _lines("LD 2,D2P5", "FIDBRA 1,4,2,4", "LGDR 2,1"),
+    "FIDBRA inexact control under an enabled mask": case_of(
+        set_fpc(0x08000000) + lines("LD 2,D2P5", "FIDBRA 1,4,2,4", "LGDR 2,1"),
         {2: 0x40000000_00000000},
         PRESET_CC,
         0x08000000,
@@ -508,58 +515,58 @@ CASES: Mapping[str, Case] = {
 }
 
 
-def _trap(body: str, fprs: Mapping[int, int], fpc: int, cc: int = PRESET_CC) -> Trap:
-    return (_fpc(fpc & 0xFF000000) + PRESET + body, fprs, cc, fpc)
+def trap_of(body: str, fprs: Mapping[int, int], fpc: int, cc: int = PRESET_CC) -> Trap:
+    return (set_fpc(fpc & 0xFF000000) + PRESET + body, fprs, cc, fpc)
 
 
 TRAPS: Mapping[str, Trap] = {
-    "invalid suppresses": _trap(
-        _lines("LD 1,D7", "LD 2,DM1", "SQDBR 1,2"), {1: 0x401C0000_00000000}, 0x80008000
+    "invalid suppresses": trap_of(
+        lines("LD 1,D7", "LD 2,DM1", "SQDBR 1,2"), {1: 0x401C0000_00000000}, 0x80008000
     ),
-    "division by zero suppresses": _trap(
-        _lines("LD 1,D1", "LD 2,D0", "DDBR 1,2"), {1: 0x3FF00000_00000000}, 0x40004000
+    "division by zero suppresses": trap_of(
+        lines("LD 1,D1", "LD 2,D0", "DDBR 1,2"), {1: 0x3FF00000_00000000}, 0x40004000
     ),
-    "overflow delivers the scaled result": _trap(
-        _lines("LD 1,DMAX", "LD 2,D2", "MDBR 1,2"), {1: 0x1FFFFFFF_FFFFFFFF}, 0x20002000
+    "overflow delivers the scaled result": trap_of(
+        lines("LD 1,DMAX", "LD 2,D2", "MDBR 1,2"), {1: 0x1FFFFFFF_FFFFFFFF}, 0x20002000
     ),
-    "underflow delivers the scaled result": _trap(
-        _lines("LD 1,DNMIN", "LD 2,DHALF", "MDBR 1,2"),
+    "underflow delivers the scaled result": trap_of(
+        lines("LD 1,DNMIN", "LD 2,DHALF", "MDBR 1,2"),
         {1: 0x60000000_00000000},
         0x10001000,
     ),
-    "add overflow sets the cc from the scaled result": _trap(
-        _short(1) + _lines("LE 1,SMAX", "AEBR 1,1"),
-        {1: _high(0x1FFFFFFF)},
+    "add overflow sets the cc from the scaled result": trap_of(
+        zeroed_short(1) + lines("LE 1,SMAX", "AEBR 1,1"),
+        {1: high_word(0x1FFFFFFF)},
         0x20002000,
         2,
     ),
-    "inexact traps after the store": _trap(
-        _lines("LD 1,D1", "LD 2,D3", "DDBR 1,2"), {1: 0x3FD55555_55555555}, 0x08000800
+    "inexact traps after the store": trap_of(
+        lines("LD 1,D1", "LD 2,D3", "DDBR 1,2"), {1: 0x3FD55555_55555555}, 0x08000800
     ),
-    "inexact traps with the masked overflow flagged": _trap(
-        _lines("LD 1,DMAX", "LD 2,D2", "MDBR 1,2"), {1: 0x7FF00000_00000000}, 0x08200C00
+    "inexact traps with the masked overflow flagged": trap_of(
+        lines("LD 1,DMAX", "LD 2,D2", "MDBR 1,2"), {1: 0x7FF00000_00000000}, 0x08200C00
     ),
-    "compare and signal traps on a QNaN": _trap(
-        _lines("LD 1,D1", "LD 2,DQNAN", "KDBR 1,2"),
+    "compare and signal traps on a QNaN": trap_of(
+        lines("LD 1,D1", "LD 2,DQNAN", "KDBR 1,2"),
         {1: 0x3FF00000_00000000},
         0x80008000,
     ),
-    "load and test traps on an SNaN": _trap(
-        _lines("LD 1,D7", "LD 2,DSNAN", "LTDBR 1,2"),
+    "load and test traps on an SNaN": trap_of(
+        lines("LD 1,D7", "LD 2,DSNAN", "LTDBR 1,2"),
         {1: 0x401C0000_00000000},
         0x80008000,
     ),
-    "load FP integer traps inexact": _trap(
-        _lines("LD 2,D2P5", "FIDBR 1,4,2"), {1: 0x40000000_00000000}, 0x08000800
+    "load FP integer traps inexact": trap_of(
+        lines("LD 2,D2P5", "FIDBR 1,4,2"), {1: 0x40000000_00000000}, 0x08000800
     ),
-    "divide to integer suppresses an invalid operand": _trap(
-        _lines("LD 1,DINF", "LD 2,D1", "LD 3,D7", "DIDBR 1,3,2,4"),
+    "divide to integer suppresses an invalid operand": trap_of(
+        lines("LD 1,DINF", "LD 2,D1", "LD 3,D7", "DIDBR 1,3,2,4"),
         {1: 0x7FF00000_00000000, 3: 0x401C0000_00000000},
         0x80008000,
     ),
-    "divide to integer scales a tiny final remainder": _trap(
-        _short(1, 2, 3) + _lines("LE 1,STINY3", "LE 2,STINY2", "DIEBR 1,3,2,4"),
-        {1: _high(0xD5000000), 3: _high(0x40000000)},
+    "divide to integer scales a tiny final remainder": trap_of(
+        zeroed_short(1, 2, 3) + lines("LE 1,STINY3", "LE 2,STINY2", "DIEBR 1,3,2,4"),
+        {1: high_word(0xD5000000), 3: high_word(0x40000000)},
         0x10001000,
         0,
     ),
