@@ -9,7 +9,7 @@ assembly are the che4z language server's, through a forked bridge executable;
 Python lowers what che4z has already resolved. The machine claims z17 problem
 state and stays in AMODE 31. Lowered so far: SVC and the load and store, load
 address and immediates, signed add and subtract, logical add and subtract, compare,
-compare and branch or trap, boolean, shift and rotate, multiply and divide, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, miscellaneous and packed-decimal arithmetic units (see
+compare and branch or trap, boolean, shift and rotate, multiply and divide, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, miscellaneous, packed-decimal arithmetic and packed-decimal compare and test units (see
 Opcode Units).
 Any other opcode abends `S0C1` at run time.
 
@@ -110,7 +110,7 @@ addresses.
 | `interpreter/hlasm/execute.py` | EX and EXRL: resolve the target, check it; lower a data-field target once with byte 1 computed in IR, any other target as one inline copy per byte-1 value |
 | `interpreter/hlasm/data_field.py`, `written_field.py`, `executed_field.py` | `DataField`: a byte-1 data field (SS length code, SI immediate, SVC number) as a lowering sees it. `WrittenField` is the assembled byte: block region reads and writes, a compile-time dispatch. `ExecutedField` is EX's register: one block per set bit of the length, a chain of equality tests |
 | `interpreter/hlasm/field_lowering.py` | `FieldLowering(layout, lower)`: a lowering given its data field; `written_lowerings` adapts them for `OPCODE_LOWERINGS` with `WrittenField`; `with_field_source` turns the field into a `Source` |
-| `interpreter/hlasm/byte_one_layouts.py` | Byte 1 of each instruction format, by format and operand shape (`operand_slot.py`); an unlisted shape is an opcode byte. Names the data-field layouts: `LENGTH_BYTE`, `LENGTH_NIBBLES`, `LENGTH_AND_IMMEDIATE`, `IMMEDIATE_BYTE`, `NUMBER_BYTE` |
+| `interpreter/hlasm/byte_one_layouts.py` | Byte 1 of each instruction format, by format and operand shape (`operand_slot.py`); an unlisted shape is an opcode byte. Names the data-field layouts: `LENGTH_BYTE`, `LENGTH_NIBBLES`, `LENGTH_HIGH_NIBBLE`, `LENGTH_AND_IMMEDIATE`, `IMMEDIATE_BYTE`, `NUMBER_BYTE` |
 | `interpreter/hlasm/byte_one_layout.py`, `byte_one_field.py` | A format's byte-1 fields, ignored bits and opcode bits; the byte a statement encodes, the values R1 can make of it, the statement a value decodes to |
 | `interpreter/hlasm/byte_one_part.py`, `operand_value_part.py`, `storage_index_part.py`, `length_code_part.py` | What a byte-1 field holds: an R, M or I value, an X2 index, or a length code (written length minus one) |
 | `interpreter/hlasm/opcodes/operand_sources.py` | Named second-operand sources shared by the arithmetic, compare, compare-and-branch and load-sign units |
@@ -143,7 +143,9 @@ addresses.
 | `interpreter/hlasm/unicode_decoders.py`, `unicode_encoders.py` | UTF-8, UTF-16 and UTF-32 readers (code point, exhaustion, well-formedness) and writers (room check, store) |
 | `interpreter/hlasm/conversion_cursor.py`, `conversion_labels.py` | A conversion step's offsets and its exits |
 | `interpreter/hlasm/opcodes/packed_arithmetic.py` | The packed-decimal arithmetic unit |
-| `interpreter/hlasm/packed_decimal.py`, `packed_value.py`, `packed_field.py`, `packed_digit_reader.py`, `packed_byte_sink.py` | A signed-packed field (address, run-time length) read into a magnitude, a negative bit and an invalid bit; stored right to left with sign C or D; the overflow test and CC by int compares |
+| `interpreter/hlasm/opcodes/packed_compare_test.py` | The packed-decimal compare and test unit |
+| `interpreter/hlasm/packed_decimal.py`, `packed_value.py`, `packed_field.py`, `packed_digit_reader.py`, `packed_byte_sink.py` | A signed-packed field (address, run-time length) read into a magnitude, a negative bit, a bad-digit bit and a bad-sign bit; stored right to left with sign C or D; the overflow test and CC by int compares |
+| `interpreter/hlasm/packed_operands.py` | The packed operands as fields with L1 (and SS-b's L2) from byte 1, read and checked together |
 | `interpreter/hlasm/decimal_exceptions.py` | `S0C7` and `S0CB` before any store; `S0CA` after the store when program-mask bit `0100` is on |
 | `interpreter/hlasm/range_dispatch.py`, `bit_fields.py` | Branch on ascending bounds; masked, shifted and ORed bit fields |
 
@@ -764,9 +766,21 @@ its own module.
 - z390 rounds a negative SRP toward zero, ignores an invalid I3, loses negative zeros (MP
   products, DP quotients and remainders) and shows CC 0 at an `S0CA`. The z390 test pins each.
 
+**Packed-decimal compare and test (red-dragon-6uyp.47).** CP, TP. Rulings R29, R31, R34, R39.
+
+- CP reads and checks both operands (1-16 bytes each), abending `S0C7` with the CC unchanged
+  on any invalid digit or sign. It then compares the signed values as ints: CC 0 equal, 1
+  first low, 2 first high. -0 equals +0, and alternate signs equal preferred ones.
+- TP (RSL-a) never abends for its data. CC 0 all valid, 1 only the sign invalid, 2 only a
+  digit invalid, 3 both.
+- Neither stores and neither has a specification exception. EX (ruling R31) lowers each
+  once: CP's L1 and L2 and TP's L1 (`LENGTH_HIGH_NIBBLE`) are byte 1; TP's bits 12-15 are
+  unassigned and ignored.
+- z390 agrees on every case.
+
 ## Known Gaps
 
-- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, miscellaneous and packed-decimal arithmetic units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
+- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, miscellaneous, packed-decimal arithmetic and packed-decimal compare and test units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
 - DC types beyond C, X, B, F, H, P, Z, A, Y and V, and any type extension, raise `UnsupportedDataType` (red-dragon-6uyp.63; floating point E, D, L: red-dragon-6uyp.21).
 - Falling through into DC/DS data or past a CSECT's end skips the data instead of executing it, and a branch into data abends `S0C1` (red-dragon-6uyp.64).
 - Every branch, even to a static relative target, walks the dispatch chain (red-dragon-6uyp.80).
@@ -816,6 +830,7 @@ its own module.
 | Test file | Covers |
 |---|---|
 | `tests/unit/hlasm/lowering_helpers.py` | Operand and statement builders and the IR describer the lowering unit tests share |
+| `tests/unit/hlasm/storage_events.py` | A lowering's storage reads and writes, abends and CC stores in order, for the decimal lowering tests |
 | `tests/unit/hlasm/test_program_model.py` | Bridge JSON models |
 | `tests/unit/hlasm/test_bridge_exit_codes.py` | Parser exit-code handling |
 | `tests/unit/hlasm/test_operands.py` | Typed operand access and its failures |
@@ -907,4 +922,7 @@ its own module.
 | `tests/unit/hlasm/test_packed_arithmetic_lowering.py` | Packed-decimal IR: `S0C6`, reads and `S0C7` (and DP's `S0CB`) before the first store, CC then `S0CA` after it; EX layouts; no SYMBOLIC |
 | `tests/integration/hlasm/test_packed_arithmetic.py` | Every packed-decimal mnemonic on the VM: results, signs of zeros, CCs, overlap, SRP shifts and rounding, EX lengths; `S0C6`, `S0C7`, `S0CA`, `S0CB`; the stored overflow result and the untouched operand after an abend |
 | `tests/z390/test_packed_arithmetic_differential.py` | Every packed-decimal case against z390; SRP negative rounding and I3 check, negative zeros, CC at `S0CA` pinned (`-m z390`) |
+| `tests/unit/hlasm/test_packed_compare_test_lowering.py` | CP and TP IR: CP's reads and `S0C7` before its CC, TP's read then CC, no store; EX layouts; no SYMBOLIC |
+| `tests/integration/hlasm/test_packed_compare_test.py` | CP and TP on the VM: CP at unequal lengths, -0 against +0, alternate signs, 31 digits, `S0C7` with the CC kept; TP CC 0-3 at 1, 2, 3 and 16 bytes; EX lengths |
+| `tests/z390/test_packed_compare_test_differential.py` | Every CP and TP case against z390 (`-m z390`) |
 | `tests/z390/test_conditional_select_count_differential.py` | Every conditional, select and count case against z390; the instructions z390 does not execute and its whole-register SELFHR pinned (`-m z390`) |
