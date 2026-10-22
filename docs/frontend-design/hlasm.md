@@ -69,7 +69,7 @@ addresses.
 | `interpreter/hlasm/opcodes/branch_on_condition.py` | The branch on condition unit |
 | `interpreter/hlasm/opcodes/branch_and_link.py` | The branch and link unit and the addressing-mode instructions |
 | `interpreter/hlasm/opcodes/loop_branch.py` | The branch on count and branch on index unit |
-| `interpreter/hlasm/opcodes/operand_sources.py` | Named second-operand sources shared by the arithmetic and compare units |
+| `interpreter/hlasm/opcodes/operand_sources.py` | Named second-operand sources shared by the arithmetic, compare and load-sign units |
 | `interpreter/hlasm/opcodes/result_and_cc.py` | Splices a (result, CC) builder over register, storage or immediate operands and stores both; its storage-immediate read-modify-write |
 | `interpreter/hlasm/data_movement.py` | `move(source, transforms, sink)`: storage, relative-long, address, immediate and register sources and sinks, addressed by operand index; sign extension, `MOD 2^n` wrap, masks, shifts, byte reversal, bit fields (`field_of`, `into_field`); the even-odd pair's low words as one 64-bit value, or both registers as one 128-bit value; R1+1 as a source; the storage-immediate read-modify-write |
 | `interpreter/hlasm/effective_address.py` | `effective_address` (D(X,B), AMODE 31), `length_operand_address` (D(L,B)), `indexed_address` (index scaled by the element size), `relative_address` (RELOC_IMM) |

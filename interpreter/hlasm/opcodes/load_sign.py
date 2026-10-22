@@ -1,9 +1,8 @@
 # pyright: standard
 """Load and test, load complement, load positive and load negative opcodes: the loaded value's sign CC, with fixed-point overflow at the maximum negative number."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 
-from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.hlasm.data_movement import (
     Sink,
     Source,
@@ -20,18 +19,14 @@ from interpreter.hlasm.fixed_width_ir import (
     build_negative_absolute_cc_ir,
 )
 from interpreter.hlasm.hlasm_constants import DOUBLEWORD_BITS, PARAM_VALUE, WORD_BITS
-from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.opcodes.operand_sources import (
     DOUBLEWORD_STORAGE,
     SIGNED_LOW_WORD,
     SIGNED_WORD_STORAGE,
     WORD_STORAGE,
 )
-from interpreter.hlasm.opcodes.result_and_cc import apply_result_and_cc, result_and_cc
+from interpreter.hlasm.opcodes.result_and_cc import Operation, result_and_cc
 from interpreter.hlasm.statement_lowering import StatementLowering
-from interpreter.instructions import InstructionBase
-
-type Operation = Sequence[InstructionBase]
 
 LOAD_TEST_32 = build_load_test_cc_ir("hlasm.lt32", WORD_BITS)
 LOAD_TEST_64 = build_load_test_cc_ir("hlasm.lt64", DOUBLEWORD_BITS)
@@ -48,16 +43,9 @@ def _unary(operation: Operation, source: Source, sink: Sink) -> StatementLowerin
 
 
 def _checked(operation: Operation, source: Source, sink: Sink) -> StatementLowering:
-    def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
-        cc = apply_result_and_cc(
-            emitter,
-            operation,
-            {PARAM_VALUE: source(emitter, statement)},
-            lambda value: sink(emitter, statement, value),
-        )
-        emit_fixed_point_overflow_check(emitter, cc)
-
-    return lower
+    return result_and_cc(
+        operation, [(PARAM_VALUE, source)], sink, (emit_fixed_point_overflow_check,)
+    )
 
 
 LOAD_TESTS: Mapping[str, StatementLowering] = {

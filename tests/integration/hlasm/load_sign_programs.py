@@ -23,6 +23,36 @@ CASES: Mapping[str, Case] = {
         {2: HIGH_FILL | 0x80000001},
         CC_NEGATIVE,
     ),
+    "LT indexed": (
+        "         LA    5,4\n" "         LT    2,NEG(5)\n",
+        {2: HIGH_FILL | 0x7FFF7FFE},
+        CC_POSITIVE,
+    ),
+    "LTG indexed": (
+        "         LA    5,8\n" "         LTG   2,DNEG(5)\n",
+        {2: 0x7FFFFFFF_FFFFFF7E},
+        CC_POSITIVE,
+    ),
+    "LTGF positive": (
+        "         LTGF  2,POS\n",
+        {2: 0x00000000_7FFF7FFE},
+        CC_POSITIVE,
+    ),
+    "LPGFR minimum": (
+        MINIMUM_WORD_IN_3 + "         LPGFR 4,3\n",
+        {3: MINIMUM_WORD, 4: 0x00000000_80000000},
+        CC_POSITIVE,
+    ),
+    "LNGR minimum": (
+        MINIMUM_DOUBLEWORD_IN_3 + "         LNGR  4,3\n",
+        {3: MINIMUM_DOUBLEWORD, 4: MINIMUM_DOUBLEWORD},
+        CC_NEGATIVE,
+    ),
+    "LNGFR minimum": (
+        MINIMUM_WORD_IN_3 + "         LNGFR 4,3\n",
+        {3: MINIMUM_WORD, 4: 0xFFFFFFFF_80000000},
+        CC_NEGATIVE,
+    ),
     "LTR": (
         "         L     3,POS\n" "         LTR   4,3\n",
         {3: HIGH_FILL | 0x7FFF7FFE, 4: HIGH_FILL | 0x7FFF7FFE},
