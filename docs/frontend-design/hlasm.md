@@ -66,7 +66,12 @@ addresses.
 | `interpreter/hlasm/opcodes/multiply_divide.py` | The multiply and divide unit |
 | `interpreter/hlasm/opcodes/load_sign.py` | The load and test, complement, positive and negative unit |
 | `interpreter/hlasm/opcodes/under_mask.py` | The test under mask unit |
-| `interpreter/hlasm/opcodes/even_odd.py` | An odd R1 of an even-odd pair form abends `S0C6` before any register is read |
+| `interpreter/hlasm/opcodes/even_odd.py` | An odd register of an even-odd pair form abends `S0C6` before any register is read; R1 by default, or the operands named |
+| `interpreter/hlasm/opcodes/ss_move.py` | The storage-to-storage and storage-immediate move unit |
+| `interpreter/hlasm/long_move.py` | MVCL, MVCLE, MVCLU: move, then pad, in one execution |
+| `interpreter/hlasm/long_operands.py` | `LongOperands`: a long move's addresses and lengths, read before any store |
+| `interpreter/hlasm/move_string.py` | MVST |
+| `interpreter/hlasm/specification_check.py` | A runtime condition abends `S0C6` |
 | `interpreter/hlasm/opcodes/branch_on_condition.py` | The branch on condition unit |
 | `interpreter/hlasm/opcodes/branch_and_link.py` | The branch and link unit and the addressing-mode instructions |
 | `interpreter/hlasm/opcodes/loop_branch.py` | The branch on count and branch on index unit |
@@ -78,7 +83,7 @@ addresses.
 | `interpreter/hlasm/fixed_point_overflow.py` | CC 3 with program-mask bit `1000` on abends `S0C8` |
 | `interpreter/hlasm/fixed_point_divide.py` | A raised divide condition abends `S0C9`; no mask applies |
 | `interpreter/hlasm/write_to_operator.py` | SVC 35 in IR |
-| `interpreter/hlasm/byte_loop.py` | An IR loop over the byte offsets of a compile-time length, the offset in `__hlasm_ss_at`, the bound and step constants set before the loop |
+| `interpreter/hlasm/byte_loop.py` | An IR loop over offsets from a start to a bound by a fixed step, the offset in `__hlasm_ss_at`, its constants set before the loop; `emit_byte_loop` for a compile-time length; `copy_byte` |
 | `interpreter/hlasm/register_span.py` | `RegisterSpan`: the bit positions a RISBG-family field selects within (whole register, high word, low word) and the wrapping range mask |
 | `interpreter/hlasm/boolean_connective.py` | A bitwise connective: the binop and whether the right operand or the result is complemented; the eight connectives |
 | `interpreter/hlasm/abend_completion.py` | SVC 13 in IR |
@@ -167,7 +172,8 @@ and HFP exponent underflow on), as z390's initial PSW `07850600` does.
 ## Opcode Units
 
 Storage is the VM's flat byte memory: `HlasmEmitter.load_storage` and
-`store_storage` read and write a compile-time width at an address. A 32-bit
+`store_storage` read and write a compile-time width at an address as an integer;
+`load_bytes` and `write_bytes` move the raw bytes at a register offset. A 32-bit
 result writes only the GPR's low word.
 
 **Load and store (red-dragon-6uyp.23).** L, LY, LG, LGF, LH, LHY, LGH, LB, LGB,
@@ -373,9 +379,37 @@ BRXLG (JXLEG). None changes the CC. BRCTH belongs to the high-word unit.
 - z390 reads BCTR's and BCTGR's R2, and every index form's compare value, after writing R1.
   The z390 test pins BCTR 5,5, BXH 7,6 and BXHG 7,6.
 
+**Storage moves (red-dragon-6uyp.35).** MVC, MVCIN, MVN, MVZ, MVCRL, MVO; MVI, MVIY, MVHHI,
+MVHI, MVGHI; MVCL, MVCLE, MVCLU; MVST. Only MVCL, MVCLE, MVCLU and MVST set the CC.
+
+- MVI and MVIY store the immediate byte. MVHHI, MVHI and MVGHI sign-extend the 16-bit
+  immediate into 2, 4 or 8 bytes.
+- MVC moves L bytes left to right. When the destination starts inside the source, a byte
+  loop gives the one-byte-at-a-time result (`MVC A+1(n),A` propagates); otherwise one
+  region read and one write move the block. MVN and MVZ always loop, keeping one nibble of
+  each destination byte. MVCIN's second address is its rightmost byte.
+- MVCRL moves GR0 bits 56-63 plus one bytes, right to left.
+- MVO is unrolled (at most 16 bytes): right to left, each source byte fetched once after
+  the bytes to its right are stored, the source zero-extended or truncated on the left.
+- MVCL: 24-bit lengths, pad in R2+1 bits 32-39. CC 0, 1 or 2 compares the lengths. When the
+  destination starts inside the participating source bytes, nothing moves, CC 3. Then R1
+  and R2 advance, R1+1 counts to 0 and R2+1 to the unmoved length; bits 32-39 of R1+1 and
+  R2+1 and all high words are kept.
+- MVCLE and MVCLU: 32-bit lengths; the pad is the D2(B2) address's low byte (MVCLE) or low
+  two bytes, even byte first (MVCLU). No overlap test. MVCLU abends `S0C6` on an odd length.
+- MVST copies through the GR0 bits 56-63 character, puts its destination address in R1 and
+  sets CC 1; GR0 bits 32-55 nonzero abend `S0C6`.
+- Odd pair registers in MVCL, MVCLE and MVCLU abend `S0C6`; che4z and z390 refuse to
+  assemble them, so only the unit test reaches it.
+- Loop cost: about 8 to 9 VM steps per byte for MVC with overlap and the long-move copy and
+  pad, 15 for MVN and MVZ, 4 for the MVCLU pad.
+- z390 runs MVZ in 8-, 4-, 2- and 1-byte pieces, so overlap does not propagate; abends
+  `S0C1` on MVCLU; and ignores GR0 bits 32-55 in MVST. The z390 test pins all three. z390
+  lacks MVCRL.
+
 ## Known Gaps
 
-- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, branch on condition, branch and link, and branch on count and index units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
+- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, branch on condition, branch and link, and branch on count and index units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
 - DC types beyond C, X, B, F, H, P, Z, A, Y and V, and any type extension, raise `UnsupportedDataType` (red-dragon-6uyp.63; floating point E, D, L: red-dragon-6uyp.21).
 - Falling through into DC/DS data or past a CSECT's end skips the data instead of executing it, and a branch into data abends `S0C1` (red-dragon-6uyp.64).
 - Emission is O(n²) in the number of IR instructions, and every branch, even to a static relative target, walks the dispatch chain (red-dragon-6uyp.62).
@@ -387,7 +421,11 @@ BRXLG (JXLEG). None changes the CC. BRCTH belongs to the high-word unit.
   abend `S0C1` (red-dragon-6uyp.75). A BASSM or BSM to the return address returns
   whatever mode it selects.
 - Access registers are not modelled: LAE and LAEY set only the general register.
-- In AMODE 31, LM, STM, LMD, NC, OC and XC do not wrap EA + offset at 2 GiB.
+- In AMODE 31, LM, STM, LMD, NC, OC, XC and the storage moves do not wrap EA + offset at
+  2 GiB; MVCL's overlap test ignores operands that wrap.
+- MVCLE, MVCLU and MVST finish in one execution, since the CPU-determined amount may be the
+  whole operand: they never set CC 3. MVCLU abends `S0C6` on an odd length, which the
+  Principles of Operation leave to the model.
 - ICM and CLM with mask 0 raise no access exception for their operand.
 - Section bases are doubleword aligned only by allocation order. The VM's bump allocator
   starts at 4096 and does not align, so the GPR region (128 bytes) comes first and each
@@ -434,6 +472,8 @@ BRXLG (JXLEG). None changes the CC. BRCTH belongs to the high-word unit.
 | `tests/integration/hlasm/test_branch_and_link.py` | Every branch and link mnemonic, JAS and JASL on the VM: link relative to the next instruction, path, CC; BSM 0,14 and BASSM 14,14 return to the caller; SAM24, SAM64 and switches into AMODE 24 or 64 abend `S0C1`, entering those modes xfailed (red-dragon-6uyp.75) |
 | `tests/unit/hlasm/test_loop_branch_lowering.py` | Branch on count and index IR: target first, operands read before R1 is written, wrap, nonzero or signed test |
 | `tests/integration/hlasm/test_loop_branch.py` | Every branch on count and index mnemonic, JCT, JCTG and the JX spellings on the VM: counting loops, register overlaps, signed wrap, CC unchanged |
+| `tests/unit/hlasm/test_ss_move_lowering.py` | Storage move IR: immediate store widths, the MVC block move beside its byte loop, the nibble loops, odd long-move registers abend `S0C6` |
+| `tests/integration/hlasm/test_ss_move.py` | Every storage move mnemonic on the VM: storage, registers, CC; MVC and MVZ overlap, MVCRL's hole, MVO truncation, MVCL CC 0-3 and pad, MVCLE and MVCLU pads; MVCLU odd length and MVST's GR0 abend `S0C6` |
 | `tests/integration/hlasm/test_bridge_parser.py` | The real bridge: macro origins, refused assemblies |
 | `tests/integration/hlasm/test_storage_layout.py` | Section regions and address constants |
 | `tests/integration/hlasm/test_svc.py` | `WTO`, `ABEND` user and system codes, unlowered SVCs, `run()` with our maclib then `copybook_dirs`, call-site spans |
@@ -449,6 +489,7 @@ BRXLG (JXLEG). None changes the CC. BRCTH belongs to the high-word unit.
 | `tests/z390/test_shift_rotate_differential.py` | Every shift and rotate case against z390; z390's 32-bit shifts mod 32, RISBGN `S0C1` and refused shift-logical-high spellings pinned (`-m z390`) |
 | `tests/z390/test_load_sign_differential.py` | Every load and test, complement, positive and negative case against z390; LTGR's missing R1 write pinned (`-m z390`) |
 | `tests/z390/test_multiply_divide_differential.py` | Every multiply and divide case and divide exception against z390; z390's missing quotient-overflow exceptions pinned (`-m z390`) |
+| `tests/z390/test_ss_move_differential.py` | Every storage move case and specification exception against z390, bar MVCRL; z390's MVZ overlap, MVCLU `S0C1` and MVST GR0 differences pinned (`-m z390`) |
 | `tests/z390/test_test_under_mask_differential.py` | Every test under mask case against z390; no differences (`-m z390`) |
 | `tests/z390/test_compare_differential.py` | Every compare mnemonic against z390; the relative-long alignment difference pinned (`-m z390`) |
 | `tests/z390/test_branch_on_condition_differential.py` | Every branch on condition case against z390; the BIC, BPP and BPRP differences and branches into data pinned (`-m z390`) |

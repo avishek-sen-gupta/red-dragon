@@ -1,5 +1,5 @@
 # pyright: standard
-"""Operand addresses: the AMODE 31 effective address of D(X,B) and D(L,B), its element-scaled form, and a relative-immediate target."""
+"""Operand addresses: the AMODE 31 effective address of D(X,B) and D(L,B), its element-scaled form, a relative-immediate target, and an address held in a register."""
 
 from hlasm_asg.program.reloc_imm_operand import RelocImmOperand
 from hlasm_asg.program.storage_length_operand import StorageLengthOperand
@@ -53,3 +53,9 @@ def length_operand_address(
 def relative_address(emitter: HlasmEmitter, operand: RelocImmOperand) -> Register:
     base = emitter.load_var(section_var(operand.section))
     return emitter.binop(BinopKind.ADD, base, emitter.int_(operand.offset))
+
+
+def register_address(emitter: HlasmEmitter, r: int) -> Register:
+    return emitter.binop(
+        BinopKind.BIT_AND, emitter.load_gr32(r), emitter.int_(ADDRESS_MASK_31)
+    )

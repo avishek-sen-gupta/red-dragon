@@ -21,25 +21,14 @@ from interpreter.instructions import (
     BranchIf,
     Const,
     Label_,
-    LoadRegion,
     StoreVar,
 )
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
 
 
-def _load(
-    emitter: HlasmEmitter, at: Register, offset: Register, width: int
-) -> Register:
-    image = emitter.fresh_reg()
-    emitter.emit_inst(
-        LoadRegion(result_reg=image, region_reg=at, offset_reg=offset, length=width)
-    )
-    return image
-
-
 def _text_length(emitter: HlasmEmitter, wto_list: Register) -> Register:
-    header = _load(emitter, wto_list, emitter.int_(0), WTO_LENGTH_BYTES)
+    header = emitter.load_bytes(wto_list, emitter.int_(0), WTO_LENGTH_BYTES)
     unsigned = emitter.fresh_reg()
     emitter.emit_inst(Const.bool_(unsigned, False))
     total = emitter.call(BINARY_BYTES_TO_INT, (header, unsigned))
@@ -48,7 +37,7 @@ def _text_length(emitter: HlasmEmitter, wto_list: Register) -> Register:
 
 def _append_byte(emitter: HlasmEmitter, wto_list: Register, at: Register) -> None:
     offset = emitter.binop(BinopKind.ADD, at, emitter.int_(WTO_HEADER_BYTES))
-    byte = _load(emitter, wto_list, offset, 1)
+    byte = emitter.load_bytes(wto_list, offset, 1)
     text = emitter.call(LIST_CONCAT, (emitter.load_var(WTO_TEXT_VAR), byte))
     emitter.emit_inst(StoreVar(name=WTO_TEXT_VAR, value_reg=text))
     after = emitter.binop(BinopKind.ADD, at, emitter.int_(1))

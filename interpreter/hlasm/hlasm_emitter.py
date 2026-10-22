@@ -120,15 +120,7 @@ class HlasmEmitter:
         self.store_storage(self._gprs(), offset, width, value)
 
     def load_storage(self, region: Register, offset: int, width: int) -> Register:
-        image = self.fresh_reg()
-        self.emit_inst(
-            LoadRegion(
-                result_reg=image,
-                region_reg=region,
-                offset_reg=self.int_(offset),
-                length=width,
-            )
-        )
+        image = self.load_bytes(region, self.int_(offset), width)
         return self.call(BINARY_BYTES_TO_INT, (image, self._unsigned()))
 
     def store_storage(
@@ -139,14 +131,27 @@ class HlasmEmitter:
         self.emit_inst(
             Binop(result_reg=wrapped, operator=BinopKind.MOD, left=value, right=modulus)
         )
-        image = self.call(
-            INT_TO_BINARY_BYTES, (wrapped, self.int_(width), self._unsigned())
+        self.write_bytes(region, self.int_(offset), width, self.image(wrapped, width))
+
+    def image(self, value: Register, width: int) -> Register:
+        return self.call(
+            INT_TO_BINARY_BYTES, (value, self.int_(width), self._unsigned())
         )
+
+    def load_bytes(self, region: Register, offset: Register, width: int) -> Register:
+        image = self.fresh_reg()
+        self.emit_inst(
+            LoadRegion(
+                result_reg=image, region_reg=region, offset_reg=offset, length=width
+            )
+        )
+        return image
+
+    def write_bytes(
+        self, region: Register, offset: Register, width: int, image: Register
+    ) -> None:
         self.emit_inst(
             WriteRegion(
-                region_reg=region,
-                offset_reg=self.int_(offset),
-                length=width,
-                value_reg=image,
+                region_reg=region, offset_reg=offset, length=width, value_reg=image
             )
         )
