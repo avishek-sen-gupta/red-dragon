@@ -307,6 +307,13 @@ STORAGE_TO_STORAGE_LENGTHS: Mapping[str, Case] = {
         {7: 0, 8: 0xFEDCBA98_76543210},
         CC_ZERO,
     ),
+    "XC after a nonzero NC": (
+        "         NC    OUT(8),SRCP\n"
+        "         XC    OUT(8),OUT\n"
+        "         LG    7,OUT\n",
+        {7: 0},
+        CC_ZERO,
+    ),
     "XC length 0": (
         "         XC    OUT(0),OUT\n" "         LG    7,OUT\n",
         {7: 0x00FFFFFF_FFFFFFFF},

@@ -343,6 +343,14 @@ DIVIDE_EXCEPTIONS: Mapping[str, Case] = {
         {2: HIGH_FILL | 0x00000003, 3: HIGH_FILL},
         CC_KEPT,
     ),
+    "DLG quotient beyond a doubleword": (
+        SET_CC_ONE
+        + "         LG    4,SRCP\n"
+        + "         LG    5,SRC\n"
+        + "         DLG   4,SRC\n",
+        {4: 0xFEDCBA98_76543210, 5: 0x01234567_89ABCDEF},
+        CC_KEPT,
+    ),
     "DLGR by zero": (
         SET_CC_ONE
         + "         LGHI  4,0\n"

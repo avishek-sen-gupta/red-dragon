@@ -36,6 +36,7 @@ TARGETS = (
     "CALLR    BRAS  5,SUB\n"
     "LOADI    LHI   0,5\n"
     "INNER    EX    0,MOVE\n"
+    "COMPAREJ CIJ   3,7,0,SUB\n"
     "INNERRL  EXRL  0,MOVE\n"
     "COMPAREC CLC   0(0,7),SAME\n"
     "EXCLUDE  XC    0(0,6),0(7)\n"
@@ -237,6 +238,18 @@ CASES: Mapping[str, ExecuteCase] = {
     ),
     "EXRL branch mask unchanged": (
         _line("EXRL", "0,JUMPNOP"),
+        ABENDED,
+        PRESET_CC,
+        {PATH_REGISTER: FELL_THROUGH},
+    ),
+    "EXRL of CIJ, mask from a register": (
+        _line("LHI", "3,7") + _line("LHI", "2,X'08'") + _line("EXRL", "2,COMPAREJ"),
+        ABENDED,
+        PRESET_CC,
+        {PATH_REGISTER: BRANCHED},
+    ),
+    "EXRL of CIJ, mask unchanged": (
+        _line("LHI", "3,7") + _line("EXRL", "0,COMPAREJ"),
         ABENDED,
         PRESET_CC,
         {PATH_REGISTER: FELL_THROUGH},

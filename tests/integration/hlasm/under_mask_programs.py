@@ -56,8 +56,25 @@ LAST_STORAGE_BYTE = (
     CC_MIXED_LEFT_ZERO,
 )
 
+NEGATIVE_DISPLACEMENT = (
+    "         LA    5,NEG+3\n         TMY   -3(5),X'80'\n         L     2,NEG\n",
+    {2: HIGH_FILL | 0x80000001},
+    CC_ONES,
+)
+
+LONG_DISPLACEMENT = (
+    "         LA    5,NEG\n"
+    "         AHI   5,-5000\n"
+    "         TMY   5000(5),X'80'\n"
+    "         L     2,NEG\n",
+    {2: HIGH_FILL | 0x80000001},
+    CC_ONES,
+)
+
 CASES: Mapping[str, Case] = {
     "TM last byte": LAST_STORAGE_BYTE,
+    "TMY negative displacement": NEGATIVE_DISPLACEMENT,
+    "TMY displacement beyond 4095": LONG_DISPLACEMENT,
     **dict(
         _register_case(mnemonic, mask, cc)
         for mnemonic, cases in HALFWORD_CASES.items()
