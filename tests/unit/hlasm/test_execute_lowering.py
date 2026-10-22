@@ -226,14 +226,14 @@ def test_r1_zero_or_an_unlowered_target_lowers_one_copy_at_the_execute():
         RelocImmOperand(kind="RELOC_IMM", section=SECTION, offset=TARGET_OFFSET),
         "EXRL",
     )
-    spm = _statement("SPM", "RR", (reg_operand(3),), length=2)
+    unlowered_target = _statement("PR", "E", (), length=2)
     emitter = HlasmEmitter()
     lower_execute(emitter, ex, MachineStatements((ex, AR)), OPCODE_LOWERINGS["AR"])
     direct = HlasmEmitter()
     OPCODE_LOWERINGS["AR"](
         direct, AR.model_copy(update={"offset": EX_OFFSET, "length": 4})
     )
-    unlowered = _executed(_ex(2, _at(TARGET_OFFSET)), (spm,))
+    unlowered = _executed(_ex(2, _at(TARGET_OFFSET)), (unlowered_target,))
 
     assert (
         emitter.instructions(),
@@ -245,7 +245,7 @@ def test_r1_zero_or_an_unlowered_target_lowers_one_copy_at_the_execute():
         direct.instructions(),
         [MVC.model_copy(update={"offset": EX_OFFSET, "length": 4})],
         [AR.model_copy(update={"offset": EX_OFFSET, "length": 6})],
-        [spm.model_copy(update={"offset": EX_OFFSET, "length": 4})],
+        [unlowered_target.model_copy(update={"offset": EX_OFFSET, "length": 4})],
         False,
     )
 

@@ -5,6 +5,7 @@ from collections.abc import Mapping, Sequence
 
 from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.hlasm.data_movement import (
+    Source,
     from_aligned_storage,
     from_gr32,
     from_gr64,
@@ -16,6 +17,7 @@ from interpreter.hlasm.data_movement import (
     move,
     reversed_bytes,
     signed,
+    storage_address_at,
     to_gr32,
     to_gr64,
     to_relative,
@@ -153,11 +155,16 @@ def _operand_address(
     return effective_address(emitter, storage_operand(statement, index))
 
 
-def load_multiple(part: RegisterPart) -> StatementLowering:
+MULTIPLE_ADDRESS = storage_address_at(2)
+
+
+def load_multiple(
+    part: RegisterPart, address_of: Source = MULTIPLE_ADDRESS
+) -> StatementLowering:
     width = part.bytes()
 
     def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
-        address = _operand_address(emitter, statement, 2)
+        address = address_of(emitter, statement)
         _ = [
             part.store(emitter, r, emitter.load_storage(address, width * at, width))
             for at, r in enumerate(_register_range(statement))
@@ -166,11 +173,13 @@ def load_multiple(part: RegisterPart) -> StatementLowering:
     return lower
 
 
-def store_multiple(part: RegisterPart) -> StatementLowering:
+def store_multiple(
+    part: RegisterPart, address_of: Source = MULTIPLE_ADDRESS
+) -> StatementLowering:
     width = part.bytes()
 
     def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
-        address = _operand_address(emitter, statement, 2)
+        address = address_of(emitter, statement)
         _ = [
             emitter.store_storage(address, width * at, width, part.load(emitter, r))
             for at, r in enumerate(_register_range(statement))

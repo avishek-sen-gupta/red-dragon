@@ -9,9 +9,12 @@ from interpreter.var_name import VarName
 GPRS_VAR = VarName("__hlasm_gprs")
 CC_VAR = VarName("__hlasm_cc")
 PROGRAM_MASK_VAR = VarName("__hlasm_pm")
+ACCESS_REGISTERS_VAR = VarName("__hlasm_ars")
+TOD_LAST_VAR = VarName("__hlasm_tod_last")
 
 GPR_COUNT = 16
 GPR_BYTES = 8
+ACCESS_REGISTER_BYTES = 4
 ONE_BYTE = 1
 DOUBLEWORD_BYTES = 8
 WORD_BYTES = 4
@@ -42,6 +45,8 @@ STRING_CONCAT_PAIR = FuncName("__string_concat_pair")
 TO_STRING = FuncName("str")
 PRINTLN = FuncName("println")
 EBCDIC = "ebcdic"
+TOD_CLOCK_BUILTIN = FuncName("__hlasm_tod_clock")
+CPU_TIMER_BUILTIN = FuncName("__hlasm_cpu_timer")
 
 PARAM_VALUE = Register("%p_value")
 PARAM_LEFT = Register("%p_left")
@@ -60,6 +65,7 @@ DATA_EXCEPTION_ABEND = "S0C7"
 FIXED_POINT_OVERFLOW_ABEND = "S0C8"
 FIXED_POINT_OVERFLOW_MASK = 0b1000
 FIXED_POINT_DIVIDE_ABEND = "S0C9"
+SPECIAL_OPERATION_ABEND = "S0D3"
 OVERFLOW_CC = 3
 USER_ABEND_PREFIX = "U"
 SYSTEM_ABEND_PREFIX = "S"
@@ -90,6 +96,8 @@ CONVERT_SOURCE_AT_VAR = VarName("__hlasm_cu_source_at")
 CONVERT_TARGET_AT_VAR = VarName("__hlasm_cu_target_at")
 CONVERT_NEXT_SOURCE_VAR = VarName("__hlasm_cu_next_source")
 CODE_POINT_VAR = VarName("__hlasm_cu_code_point")
+CHECKSUM_VAR = VarName("__hlasm_cksm_sum")
+CHECKSUM_TAIL_VAR = VarName("__hlasm_cksm_tail")
 
 RETURN_SENTINEL = 0x00000FF0
 ADDRESS_MASK_31 = 0x7FFFFFFF
