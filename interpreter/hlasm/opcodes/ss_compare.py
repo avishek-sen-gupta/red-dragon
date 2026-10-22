@@ -5,6 +5,11 @@ from collections.abc import Mapping
 
 from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.hlasm.byte_one_layouts import LENGTH_BYTE
+from interpreter.hlasm.compare_cc import (
+    EQUAL_CC,
+    emit_cc_constant,
+    emit_unequal_order,
+)
 from interpreter.hlasm.compare_string import compare_string
 from interpreter.hlasm.compare_substring import COMPARE_UNTIL_SUBSTRING_EQUAL
 from interpreter.hlasm.data_field import DataField
@@ -14,15 +19,7 @@ from interpreter.hlasm.effective_address import (
     length_operand_address,
 )
 from interpreter.hlasm.field_lowering import FieldLowering, written_lowerings
-from interpreter.hlasm.fixed_width_ir import build_compare_logical_cc_ir
-from interpreter.hlasm.hlasm_constants import (
-    BITS_PER_BYTE,
-    MAX_FIELD_BYTES,
-    PARAM_LEFT,
-    PARAM_RIGHT,
-)
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
-from interpreter.hlasm.inline_ir import inline_ir
 from interpreter.hlasm.long_compare import (
     COMPARE_LONG,
     COMPARE_LONG_EXTENDED,
@@ -30,9 +27,9 @@ from interpreter.hlasm.long_compare import (
 )
 from interpreter.hlasm.operands import storage_length_operand, storage_operand
 from interpreter.hlasm.statement_lowering import StatementLowering
-
-FIELD_BITS = BITS_PER_BYTE * MAX_FIELD_BYTES
-FIELD_COMPARISON = build_compare_logical_cc_ir(f"hlasm.cmpl{FIELD_BITS}", FIELD_BITS)
+from interpreter.instructions import BranchIf, Label_
+from interpreter.operator_kind import BinopKind
+from interpreter.register import Register
 
 
 def _compare_characters(
@@ -45,11 +42,24 @@ def _compare_characters(
         emitter, storage_operand(statement, SECOND_OPERAND)
     )
     length = field.length(emitter)
-    values = {
-        PARAM_LEFT: length.loaded(emitter, first_address),
-        PARAM_RIGHT: length.loaded(emitter, second_address),
-    }
-    emitter.set_cc(inline_ir(emitter, FIELD_COMPARISON, values))
+    values = (
+        length.loaded(emitter, first_address),
+        length.loaded(emitter, second_address),
+    )
+    _set_order_cc(emitter, values)
+
+
+def _set_order_cc(emitter: HlasmEmitter, values: tuple[Register, Register]) -> None:
+    equal, unequal, done = (
+        emitter.fresh_label(prefix)
+        for prefix in ("hl_clc_equal", "hl_clc_unequal", "hl_clc_done")
+    )
+    same = emitter.binop(BinopKind.EQ, *values)
+    emitter.emit_inst(BranchIf(cond_reg=same, branch_targets=(equal, unequal)))
+    emit_cc_constant(emitter, EQUAL_CC, equal, done)
+    emitter.emit_inst(Label_(label=unequal))
+    emit_unequal_order(emitter, values, done)
+    emitter.emit_inst(Label_(label=done))
 
 
 SS_COMPARE_FIELD_LOWERINGS: Mapping[str, FieldLowering] = {

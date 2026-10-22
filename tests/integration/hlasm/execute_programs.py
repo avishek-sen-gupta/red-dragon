@@ -50,6 +50,16 @@ TARGETS = (
     "ANDI     NI    0(6),X'00'\n"
     "ORI      OI    0(6),X'00'\n"
     "XORI     XI    0(6),X'00'\n"
+    "ADDI     ASI   OUT,0\n"
+    "ADDLI    ALSI  OUT,0\n"
+    "ADDGI    AGSI  OUT,0\n"
+    "COMPAREY CLIY  SRC+1,X'00'\n"
+    "STOREY   MVIY  OUT,X'00'\n"
+    "ANDY     NIY   OUT,X'00'\n"
+    "ANDC     NC    0(0,6),0(7)\n"
+    "ORC      OC    0(0,6),0(7)\n"
+    "SCANR    TRTR  3(0,6),FUNCS\n"
+    "SPREAD   MVC   1(0,6),0(6)\n"
     "BRANCH   BC    0,SUB-4\n"
     "SUB      LHI   8,1\n"
     "         ABEND 1\n"
@@ -317,6 +327,66 @@ CASES: Mapping[str, ExecuteCase] = {
         ABENDED,
         1,
         {MOVED_REGISTER: 0xF0FFFFFFFFFFFFFF, PATH_REGISTER: FELL_THROUGH},
+    ),
+    "ASI negative immediate from a register": (
+        _moved("X'FE'", "ADDI"),
+        ABENDED,
+        1,
+        {MOVED_REGISTER: 0xFFFFFFFDFFFFFFFF, PATH_REGISTER: FELL_THROUGH},
+    ),
+    "ALSI negative immediate from a register": (
+        _moved("X'80'", "ADDLI"),
+        ABENDED,
+        3,
+        {MOVED_REGISTER: 0xFFFFFF7FFFFFFFFF, PATH_REGISTER: FELL_THROUGH},
+    ),
+    "AGSI negative immediate from a register": (
+        _moved("X'80'", "ADDGI"),
+        ABENDED,
+        1,
+        {MOVED_REGISTER: 0xFFFFFFFFFFFFFF7F, PATH_REGISTER: FELL_THROUGH},
+    ),
+    "CLIY immediate from a register": (
+        _executed("X'23'", "COMPAREY"),
+        ABENDED,
+        0,
+        {PATH_REGISTER: FELL_THROUGH},
+    ),
+    "MVIY immediate from a register": (
+        _moved("X'5A'", "STOREY"),
+        ABENDED,
+        PRESET_CC,
+        {MOVED_REGISTER: 0x5AFFFFFFFFFFFFFF, PATH_REGISTER: FELL_THROUGH},
+    ),
+    "NIY immediate from a register": (
+        _moved("X'0F'", "ANDY"),
+        ABENDED,
+        1,
+        {MOVED_REGISTER: 0x0FFFFFFFFFFFFFFF, PATH_REGISTER: FELL_THROUGH},
+    ),
+    "NC length from a register": (
+        _moved("1", "ANDC"),
+        ABENDED,
+        1,
+        {MOVED_REGISTER: 0x0123FFFFFFFFFFFF, PATH_REGISTER: FELL_THROUGH},
+    ),
+    "OC length from a register": (
+        _line("XC", "OUT(8),OUT") + _moved("2", "ORC"),
+        ABENDED,
+        1,
+        {MOVED_REGISTER: 0x0123450000000000, PATH_REGISTER: FELL_THROUGH},
+    ),
+    "TRTR length from a register": (
+        _on_codes("3", "SCANR"),
+        ABENDED,
+        1,
+        {2: HIGH_FILL | 0xC1, PATH_REGISTER: FELL_THROUGH},
+    ),
+    "MVC destructive overlap, length from a register": (
+        _on_codes("6", "SPREAD"),
+        ABENDED,
+        PRESET_CC,
+        {MOVED_REGISTER: 0x0707070707070707, PATH_REGISTER: FELL_THROUGH},
     ),
     "EX of EX": (_line("EX", "0,INNER"), EXECUTE, PRESET_CC, {}),
     "EX of EXRL": (_line("EX", "0,INNERRL"), EXECUTE, PRESET_CC, {}),

@@ -4,7 +4,12 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from interpreter.hlasm.data_field import DataField, FieldCase, FieldFallback
+from interpreter.hlasm.data_field import (
+    DataField,
+    FieldCase,
+    FieldFallback,
+    FieldPart,
+)
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.register import Register
 
@@ -16,11 +21,19 @@ class WrittenField(DataField):
     def value(self, emitter: HlasmEmitter) -> Register:
         return emitter.int_(self.written)
 
+    def _bits(self, shift: int, width: int) -> int:
+        return (self.written >> shift) & ((1 << width) - 1)
+
     def part(self, emitter: HlasmEmitter, shift: int, width: int) -> DataField:
-        return WrittenField((self.written >> shift) & ((1 << width) - 1))
+        return WrittenField(self._bits(shift, width))
 
     def length(self, emitter: HlasmEmitter) -> DataField:
         return WrittenField(self.written + 1)
+
+    def shorter(
+        self, emitter: HlasmEmitter, parts: tuple[FieldPart, FieldPart]
+    ) -> DataField:
+        return WrittenField(min(self._bits(*part) for part in parts) + 1)
 
     def loaded(self, emitter: HlasmEmitter, address: Register) -> Register:
         return emitter.load_storage(address, 0, self.written)

@@ -10,6 +10,7 @@ from interpreter.register import Register
 
 type FieldCase = Callable[[HlasmEmitter], None]
 type FieldFallback = Callable[[HlasmEmitter, str], None]
+type FieldPart = tuple[int, int]
 type LowerWithField = Callable[[HlasmEmitter, MachineStatement, "DataField"], None]
 
 
@@ -19,6 +20,10 @@ class DataField(Protocol):
     def part(self, emitter: HlasmEmitter, shift: int, width: int) -> "DataField": ...
 
     def length(self, emitter: HlasmEmitter) -> "DataField": ...
+
+    def shorter(
+        self, emitter: HlasmEmitter, parts: tuple[FieldPart, FieldPart]
+    ) -> "DataField": ...
 
     def loaded(self, emitter: HlasmEmitter, address: Register) -> Register: ...
 

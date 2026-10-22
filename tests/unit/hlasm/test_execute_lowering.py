@@ -327,7 +327,7 @@ def test_a_data_field_target_lowers_once_with_byte_one_from_r1():
     assert {
         name: (
             _variants(ir),
-            _ored_constants(ir)[:1],
+            _ored_constants(ir),
             _constant_tests(ir, BinopKind.LT),
             _constant_tests(ir, BinopKind.EQ),
             _region_widths(ir),

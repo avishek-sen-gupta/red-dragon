@@ -13,7 +13,6 @@ PROGRAM_MASK_VAR = VarName("__hlasm_pm")
 GPR_COUNT = 16
 GPR_BYTES = 8
 ONE_BYTE = 1
-MAX_FIELD_BYTES = 256
 DOUBLEWORD_BYTES = 8
 WORD_BYTES = 4
 HALFWORD_BYTES = 2
@@ -81,7 +80,6 @@ BYTES_COMBINED_VAR = VarName("__hlasm_ss_any")
 SUBSTRING_START_VAR = VarName("__hlasm_cuse_start")
 SPAN_VALUE_VAR = VarName("__hlasm_ss_value")
 OFFSET_CARRY_VAR = VarName("__hlasm_mvo_carry")
-OFFSET_FETCHED_VAR = VarName("__hlasm_mvo_fetched")
 
 RETURN_SENTINEL = 0x00000FF0
 ADDRESS_MASK_31 = 0x7FFFFFFF
