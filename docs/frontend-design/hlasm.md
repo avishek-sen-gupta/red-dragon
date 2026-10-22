@@ -374,7 +374,7 @@ multiply R3 by R2.
 - z390 checks only the zero divisor in D, DR, DL, DLR, DSG, DSGR, DSGF and DSGFR: an
   oversized quotient is truncated and stored. In DLG and DLGR it raises fixed-point
   overflow (`S0C8`, masked by the initial program mask, so the run goes on) instead of
-  `S0C9`. The z390 test pins one case per mnemonic, DLGR for the 128-bit pair.
+  `S0C9`. The z390 test pins one case per mnemonic, DLG and DLGR for the 128-bit pair.
 
 **Branch on condition (red-dragon-6uyp.32).** BC, BCR, BIC, BRC, BRCL, BPP, BPRP. The
 bridge hands every extended mnemonic (B, BE, BNER, BIL, J, JLNOP, BRUL, ...) over as its
@@ -478,10 +478,9 @@ right: CC 0 equal, 1 first low, 2 first high. Storage is never written.
   character; the pad and ending character stay ints.
 - Loop cost: about 12 VM steps per unit for CLCL, CLCLE, CLCLU and CLST, 10 against the pad, 17
   for CUSE.
-- z390 compares the second operand's tail with the pad without swapping the CC (CLCL with the
-  first operand shorter); abends `S0C1` on CLCLU; ends CLST with CC 0 and the registers untouched when either operand ends,
-  and ignores GR0 bits 32-55; takes CUSE's substring length from all of GR0, misses length 0,
-  and sets other lengths and CCs. The z390 test pins each difference.
+- z390 differs: it does not swap the CC when CLCL's first operand is shorter, abends `S0C1` on
+  CLCLU, ends CLST with CC 0 and the registers untouched when either operand ends, ignores GR0
+  bits 32-55, and reads CUSE's substring length from all of GR0. The z390 test pins each.
 
 **Translate (red-dragon-6uyp.37).** TR, TRT, TRTR, TRE, TROO, TROT, TRTO, TRTT, TRTE, TRTRE.
 Tables are read at the table address plus the argument (times two for two-byte functions).
@@ -593,6 +592,7 @@ variant expansion (ruling R30).
 
 | Test file | Covers |
 |---|---|
+| `tests/unit/hlasm/lowering_helpers.py` | Operand and statement builders and the IR describer the lowering unit tests share |
 | `tests/unit/hlasm/test_program_model.py` | Bridge JSON models |
 | `tests/unit/hlasm/test_bridge_exit_codes.py` | Parser exit-code handling |
 | `tests/unit/hlasm/test_operands.py` | Typed operand access and its failures |
@@ -612,15 +612,15 @@ variant expansion (ruling R30).
 | `tests/unit/hlasm/test_compare_lowering.py` | Compare IR: operand widths read, nothing written, only the CC set, relative-long alignment |
 | `tests/integration/hlasm/test_compare.py` | Every compare mnemonic on the VM: CC, operands unchanged, alignment abends |
 | `tests/unit/hlasm/test_compare_branch_trap_lowering.py` | Compare-and-branch and trap IR: the M3 bit tested on the unstored comparison, branch or `S0C7`, masks 0 and 14, load written before the zero test |
-| `tests/integration/hlasm/test_compare_branch_trap.py` | Every compare-and-branch, compare-and-trap and load-and-trap mnemonic and a spread of extended ones on the VM: path, trap, loaded register, CC unchanged, immediate widths |
+| `tests/integration/hlasm/test_compare_branch_trap.py` | Every compare-and-branch, compare-and-trap and load-and-trap mnemonic and a spread of extended ones on the VM: path, trap, loaded register, CC unchanged, immediate widths, masks 0, 1, 14 and 15 |
 | `tests/unit/hlasm/test_boolean_lowering.py` | Boolean IR: operand widths, the field read and replaced, the CC; NC/OC/XC as one byte loop of fixed size |
-| `tests/integration/hlasm/test_boolean.py` | Every boolean mnemonic, NOTR and NOTGR on the VM: result, CC 0 and 1, field CCs, overlapping storage operands, implicit and explicit-0 lengths |
+| `tests/integration/hlasm/test_boolean.py` | Every boolean mnemonic, NOTR and NOTGR on the VM: result, CC 0 and 1, field CCs, overlapping storage operands, implicit and explicit-0 lengths, `__hlasm_ss_any` reset between statements |
 | `tests/unit/hlasm/test_shift_rotate_lowering.py` | Shift and rotate IR: registers only, CC only for the signed and selected-bits forms, the `S0C8` trap, an odd pair abends `S0C6`, register-span masks |
 | `tests/integration/hlasm/test_shift_rotate.py` | Every shift and rotate mnemonic and every RISBG-family extended mnemonic on the VM: result, CC 0-3 or unchanged, amounts 33 and 65 |
 | `tests/unit/hlasm/test_load_sign_lowering.py` | Load and test, complement, positive and negative IR: operand widths, the `S0C8` trap only for LCR, LCGR, LPR, LPGR and only with the mask bit on |
 | `tests/integration/hlasm/test_load_sign.py` | Every load and test, complement, positive and negative mnemonic on the VM, the maximum negative number included |
 | `tests/unit/hlasm/test_test_under_mask_lowering.py` | Test under mask IR: the byte or register read, the halfword shift, nothing written, only the CC set |
-| `tests/integration/hlasm/test_test_under_mask.py` | Every test under mask mnemonic on the VM: CC 0-3 for every halfword, registers and storage unchanged |
+| `tests/integration/hlasm/test_test_under_mask.py` | Every test under mask mnemonic on the VM: CC 0-3 for every halfword, TMY with a negative and a beyond-4095 displacement, registers and storage unchanged |
 | `tests/unit/hlasm/test_multiply_divide_lowering.py` | Multiply and divide IR: operand widths, CC and the `S0C8` trap only for the checked forms, the two `S0C9` checks before the pair is written, an odd pair abends `S0C6` |
 | `tests/integration/hlasm/test_multiply_divide.py` | Every multiply and divide mnemonic on the VM: products, quotients, remainders, CC; zero divisors and oversized quotients abend `S0C9` with the registers kept |
 | `tests/integration/hlasm/test_shift_rotate_mnemonics.py` | RISBG-family extended spellings reach their base mnemonic and immediates through the bridge |
@@ -638,7 +638,7 @@ variant expansion (ruling R30).
 | `tests/unit/hlasm/test_translate_lowering.py` | Translate IR: one unit and one function per iteration at each form's widths, stores only where the form translates, no comparison on a byte image, M3 bit 3 drops the test, odd pairs abend `S0C6` |
 | `tests/integration/hlasm/test_translate.py` | Every translate mnemonic on the VM: storage, registers, CC; TR overlap and lengths, TRT and TRTR CC 0-2 and bit 32, TRE found, ended and length 0, the test character and its control, ignored table bits, each TRTE and TRTRE control; odd lengths abend `S0C6` |
 | `tests/unit/hlasm/test_execute_lowering.py` | Execute IR: byte 1 decoded per format, R1 = 0 or an unlowered target lowers one copy at the EX, a register field one copy per reachable value under a tree, a data field (MVC, CLI, SVC) one lowering with byte 1 from R1 and one-byte region accesses, the opcode-bit guard, `S0C3` and `S0C6` before any copy, unresolved targets abend `S0C1` with a warning |
-| `tests/integration/hlasm/test_execute.py` | EX and EXRL on the VM: MVC length codes 0, 4, 7 and 255 and a destructive MVC, CLC, NC, OC, XC, TR, TRT, TRTR, MVN, MVZ, MVCIN and MVO lengths, CLI, CLIY, MVI, MVIY, TM, NI, NIY, OI, XI, ASI, AGSI and ALSI immediates (negative ones sign-extended after the OR), an SVC number, BAL, BRAS, AR and LHI fields, a BC mask and index, and a branch mask from R1; links after the execute instruction; CC kept; `S0C3`, `S0C6`; indexed targets and opcode modification xfailed (red-dragon-6uyp.77, red-dragon-6uyp.78) |
+| `tests/integration/hlasm/test_execute.py` | EX and EXRL on the VM: MVC length codes 0, 4, 7 and 255 and a destructive MVC, CLC, NC, OC, XC, TR, TRT, TRTR, MVN, MVZ, MVCIN and MVO lengths, CLI, CLIY, MVI, MVIY, TM, NI, NIY, OI, XI, ASI, AGSI and ALSI immediates (negative ones sign-extended after the OR), an SVC number, BAL, BRAS, AR and LHI fields, a BC mask and index, a branch mask from R1, and EXRL of CIJ with its M3 from R1; links after the execute instruction; CC kept; `S0C3`, `S0C6`; indexed targets and opcode modification xfailed (red-dragon-6uyp.77, red-dragon-6uyp.78) |
 | `tests/integration/hlasm/test_bridge_parser.py` | The real bridge: macro origins, refused assemblies |
 | `tests/integration/hlasm/test_storage_layout.py` | Section regions and address constants |
 | `tests/integration/hlasm/test_svc.py` | `WTO`, `ABEND` user and system codes, unlowered SVCs, `run()` with our maclib then `copybook_dirs`, call-site spans |

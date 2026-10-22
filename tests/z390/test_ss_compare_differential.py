@@ -35,6 +35,9 @@ Z390_MACHINE: Mapping[str, HlasmMachine] = {
     "CLCLU registers": HlasmMachine(OPERATION, 0, {}),
     "CLCLU pad equal": HlasmMachine(OPERATION, 0, {3: HIGH_FILL | 4, 5: HIGH_FILL | 2}),
     "CLCLU pad high": HlasmMachine(OPERATION, 0, {3: HIGH_FILL | 2, 5: HIGH_FILL | 4}),
+    "CLCLU pad from a base register": HlasmMachine(
+        OPERATION, 0, {3: HIGH_FILL | 2, 5: HIGH_FILL | 4}
+    ),
     "CLCLU odd length": HlasmMachine(
         OPERATION, 0, {3: HIGH_FILL | 5, 5: HIGH_FILL | 6}
     ),

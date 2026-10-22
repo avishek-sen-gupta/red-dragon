@@ -197,6 +197,14 @@ LONG_COMPARES: Mapping[str, Case] = {
         {3: HIGH_FILL, 5: HIGH_FILL | 2},
         CC_HIGH,
     ),
+    "CLCLU pad from a base register": (
+        _pairs("CMPA", "PADDED") + "         LHI   3,2\n"
+        "         LHI   5,4\n"
+        "         LA    9,1\n"
+        "         CLCLU 2,4,X'4040'(9)\n",
+        {3: HIGH_FILL, 5: HIGH_FILL | 2},
+        CC_HIGH,
+    ),
 }
 
 STRING_COMPARES: Mapping[str, Case] = {

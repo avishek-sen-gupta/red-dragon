@@ -1,5 +1,5 @@
 # pyright: standard
-"""Multiply and divide programs leave the same declared registers and CC in RedDragon and in z390, bar quotient overflow: z390 stores the truncated quotient, or for DLGR raises a masked fixed-point overflow, where the PoO abends S0C9."""
+"""Multiply and divide programs leave the same declared registers and CC in RedDragon and in z390, bar quotient overflow: z390 stores the truncated quotient, leaves the pair for DLG, or for DLGR raises a masked fixed-point overflow, where the PoO abends S0C9."""
 
 from collections.abc import Mapping
 from pathlib import Path
@@ -35,6 +35,11 @@ Z390_MACHINE: Mapping[str, HlasmMachine] = {
     ),
     "DL quotient beyond an unsigned word": WORD_PAIR_CLEARED,
     "DLR quotient beyond an unsigned word": WORD_PAIR_CLEARED,
+    "DLG quotient beyond a doubleword": HlasmMachine(
+        ABENDED,
+        programs.CC_KEPT,
+        {4: 0xFEDCBA98_76543210, 5: 0x01234567_89ABCDEF},
+    ),
     "DLGR quotient beyond a doubleword": HlasmMachine(
         ABENDED, programs.CC_KEPT, {4: 1, 5: 0}
     ),

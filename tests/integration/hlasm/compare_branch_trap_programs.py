@@ -48,6 +48,8 @@ COMPARE_AND_BRANCH_RELATIVE: Mapping[str, Case] = {
     "CRJ": taken(1, NEG_POS + _line("CRJ", "3,4,4,TAKEN")),
     "CRJ not selected": fell(1, NEG_POS + _line("CRJ", "3,4,10,TAKEN")),
     "CRJ mask 0": fell(2, SEVENS + _line("CRJ", "3,4,0,TAKEN")),
+    "CRJ mask 1": fell(0, NEG_POS + _line("CRJ", "3,4,1,TAKEN")),
+    "CRJ mask 15": taken(3, NEG_POS + _line("CRJ", "3,4,15,TAKEN")),
     "CRJ mask 14": taken(0, NEG_POS + _line("CRJ", "3,4,14,TAKEN")),
     "CRJE": taken(2, SEVENS + _line("CRJE", "3,4,TAKEN")),
     "CRJE high word ignored": taken(

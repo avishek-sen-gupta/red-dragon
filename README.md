@@ -14,7 +14,7 @@
 
 With complete source and all dependencies present, parse → lower → execute makes **0 LLM calls**. LLMs are used only where information is missing.
 
-**Scale:** 15 tree-sitter frontends + COBOL (139 enumerated features) + HLASM (18 opcode units) + LLM frontends · 16,147 tests in the default run (`external`, `nist` and `z390` markers excluded)
+**Scale:** 15 tree-sitter frontends + COBOL (139 enumerated features) + HLASM (18 opcode units) + LLM frontends · 16,725 tests in the default run (`external`, `nist` and `z390` markers excluded)
 
 **COBOL conformance:** measured against the NIST COBOL-85 test suite (CCVS) — see [NIST CCVS conformance](docs/nist/README.md) for the method and dated full-run snapshots, the latest being [2026-10-19](docs/nist/2026-10-19-closing-conformance-report.md).
 
@@ -487,7 +487,7 @@ uv run pytest -m nist            # NIST-85 COBOL conformance suite
 
 Tests run in parallel via pytest-xdist. `tests/unit/` holds pure logic with no I/O; `tests/integration/` compiles and runs programs through the VM. LLMs are injected as fakes outside the `external` marker.
 
-The default run collects **16,147 tests**. It excludes 749 more marked `external` (live LLM APIs), `nist` (NIST-85 COBOL suite) or `z390` (differential tests against z390).
+The default run collects **16,725 tests**. It excludes 1,280 more marked `external` (live LLM APIs), `nist` (NIST-85 COBOL suite) or `z390` (differential tests against z390).
 
 **Coverage areas:**
 
