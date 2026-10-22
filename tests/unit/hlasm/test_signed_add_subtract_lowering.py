@@ -3,13 +3,7 @@
 
 from collections.abc import Sequence
 
-from hlasm_asg.program.abs_address import AbsAddress
-from hlasm_asg.program.imm_operand import ImmOperand
 from hlasm_asg.program.machine_statement import MachineStatement
-from hlasm_asg.program.open_code_origin import OpenCodeOrigin
-from hlasm_asg.program.operand import Operand
-from hlasm_asg.program.reg_operand import RegOperand
-from hlasm_asg.program.storage_operand import StorageOperand
 from interpreter.hlasm.hlasm_constants import PROGRAM_MASK_VAR
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.machine import machine_allocation
@@ -28,6 +22,12 @@ from interpreter.instructions import (
 from interpreter.var_name import VarName
 from interpreter.vm.vm_types import SymbolicValue
 from tests.covers import NotLanguageFeature, covers
+from tests.unit.hlasm.lowering_helpers import (
+    imm_operand,
+    machine_statement,
+    reg_operand,
+    storage_operand,
+)
 from tests.unit.hlasm.straight_line_vm import register_value, run_straight_line
 
 BASE = 12
@@ -40,39 +40,6 @@ OVERFLOW_TRAP = [
 ]
 OVERFLOW_UNMASKED = 0b1110
 OVERFLOW_MASKED = 0b0110
-
-
-def _statement(mnemonic: str, operands: Sequence[Operand]) -> MachineStatement:
-    return MachineStatement(
-        kind="MACHINE",
-        section="T",
-        offset=2,
-        label="",
-        mnemonic=mnemonic,
-        base_mnemonic=mnemonic,
-        format="",
-        length=6,
-        operands=tuple(operands),
-        origin=OpenCodeOrigin(kind="OPEN_CODE", file="t.asm", line=1),
-    )
-
-
-def _reg(value: int) -> RegOperand:
-    return RegOperand(kind="REG", value=value)
-
-
-def _imm(value: int) -> ImmOperand:
-    return ImmOperand(kind="IMM", value=value)
-
-
-def _storage(displacement: int) -> StorageOperand:
-    return StorageOperand(
-        kind="STORAGE",
-        displacement=displacement,
-        index=0,
-        base=BASE,
-        written=AbsAddress(kind="ABS", value=displacement),
-    )
 
 
 def _lowered(statement: MachineStatement) -> tuple[InstructionBase, ...]:
@@ -117,12 +84,22 @@ def _gpr(r: int, width: int) -> tuple[str, int, int]:
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_each_form_reads_and_writes_its_operand_widths_then_sets_cc_and_traps():
     lowered = {
-        "AGF": _lowered(_statement("AGF", (_reg(2), _storage(8)))),
-        "AH": _lowered(_statement("AH", (_reg(2), _storage(8)))),
-        "ARK": _lowered(_statement("ARK", (_reg(5), _reg(3), _reg(4)))),
-        "AGHIK": _lowered(_statement("AGHIK", (_reg(5), _reg(3), _imm(-1)))),
-        "ASI": _lowered(_statement("ASI", (_storage(8), _imm(-5)))),
-        "AGSI": _lowered(_statement("AGSI", (_storage(8), _imm(255)))),
+        "AGF": _lowered(machine_statement("AGF", (reg_operand(2), storage_operand(8)))),
+        "AH": _lowered(machine_statement("AH", (reg_operand(2), storage_operand(8)))),
+        "ARK": _lowered(
+            machine_statement("ARK", (reg_operand(5), reg_operand(3), reg_operand(4)))
+        ),
+        "AGHIK": _lowered(
+            machine_statement(
+                "AGHIK", (reg_operand(5), reg_operand(3), imm_operand(-1))
+            )
+        ),
+        "ASI": _lowered(
+            machine_statement("ASI", (storage_operand(8), imm_operand(-5)))
+        ),
+        "AGSI": _lowered(
+            machine_statement("AGSI", (storage_operand(8), imm_operand(255)))
+        ),
     }
 
     assert {m: _accesses(ir) for m, ir in lowered.items()} == {
@@ -175,7 +152,9 @@ def _trap_taken(
     emitter.emit_inst(StoreVar(name=PROGRAM_MASK_VAR, value_reg=mask))
     emitter.store_gr32(2, emitter.int_(left))
     emitter.store_gr32(3, emitter.int_(right))
-    OPCODE_LOWERINGS["AR"](emitter, _statement("AR", (_reg(2), _reg(3))))
+    OPCODE_LOWERINGS["AR"](
+        emitter, machine_statement("AR", (reg_operand(2), reg_operand(3)))
+    )
     ir = emitter.instructions()
     branch = next(i for i in ir if isinstance(i, BranchIf))
     vm = run_straight_line((*machine_allocation(), *ir[: ir.index(branch)]), {})

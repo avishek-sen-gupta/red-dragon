@@ -3,14 +3,8 @@
 
 from collections.abc import Sequence
 
-from hlasm_asg.program.abs_address import AbsAddress
-from hlasm_asg.program.machine_statement import MachineStatement
-from hlasm_asg.program.mask_operand import MaskOperand
-from hlasm_asg.program.open_code_origin import OpenCodeOrigin
 from hlasm_asg.program.operand import Operand
-from hlasm_asg.program.reg_operand import RegOperand
 from hlasm_asg.program.storage_length_operand import StorageLengthOperand
-from hlasm_asg.program.storage_operand import StorageOperand
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.opcodes import OPCODE_LOWERINGS
 from interpreter.instructions import (
@@ -31,6 +25,12 @@ from interpreter.instructions import (
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
 from tests.covers import NotLanguageFeature, covers
+from tests.unit.hlasm.lowering_helpers import (
+    machine_statement,
+    mask_operand,
+    reg_operand,
+    storage_operand,
+)
 
 BASE = 12
 GPRS = "__hlasm_gprs"
@@ -40,48 +40,15 @@ IMAGE_BUILTIN = "__int_to_binary_bytes"
 COMPARISONS = frozenset((BinopKind.EQ, BinopKind.NE, BinopKind.LT, BinopKind.GT))
 
 
-def _statement(mnemonic: str, operands: Sequence[Operand]) -> MachineStatement:
-    return MachineStatement(
-        kind="MACHINE",
-        section="T",
-        offset=2,
-        label="",
-        mnemonic=mnemonic,
-        base_mnemonic=mnemonic,
-        format="",
-        length=6,
-        operands=tuple(operands),
-        origin=OpenCodeOrigin(kind="OPEN_CODE", file="t.asm", line=1),
-    )
-
-
-def _reg(value: int) -> RegOperand:
-    return RegOperand(kind="REG", value=value)
-
-
-def _mask(value: int) -> MaskOperand:
-    return MaskOperand(kind="MASK", value=value)
-
-
 def _with_length(displacement: int, length: int) -> StorageLengthOperand:
     return StorageLengthOperand(
         kind="STORAGE_LENGTH", displacement=displacement, length=length, base=BASE
     )
 
 
-def _storage(displacement: int) -> StorageOperand:
-    return StorageOperand(
-        kind="STORAGE",
-        displacement=displacement,
-        index=0,
-        base=BASE,
-        written=AbsAddress(kind="ABS", value=displacement),
-    )
-
-
 def _lowered(mnemonic: str, operands: Sequence[Operand]) -> tuple[InstructionBase, ...]:
     emitter = HlasmEmitter()
-    OPCODE_LOWERINGS[mnemonic](emitter, _statement(mnemonic, operands))
+    OPCODE_LOWERINGS[mnemonic](emitter, machine_statement(mnemonic, operands))
     return emitter.instructions()
 
 
@@ -145,7 +112,7 @@ def _symbolic(lowered: Sequence[Sequence[InstructionBase]]) -> list[InstructionB
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_tr_translates_one_byte_per_iteration_and_leaves_the_cc_and_registers():
-    ir = _lowered("TR", (_with_length(8, 256), _storage(300)))
+    ir = _lowered("TR", (_with_length(8, 256), storage_operand(300)))
     consts = [i.value for i in ir if isinstance(i, Const)]
 
     assert (
@@ -173,16 +140,18 @@ def test_tr_translates_one_byte_per_iteration_and_leaves_the_cc_and_registers():
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_translate_loops_read_each_forms_unit_widths_and_compare_ints():
     lowered = {
-        "TRT": _lowered("TRT", (_with_length(8, 4), _storage(300))),
-        "TRTR": _lowered("TRTR", (_with_length(8, 4), _storage(300))),
-        "TRE": _lowered("TRE", (_reg(2), _reg(4))),
-        "TROO": _lowered("TROO", (_reg(2), _reg(4))),
-        "TROT": _lowered("TROT", (_reg(2), _reg(4))),
-        "TRTO": _lowered("TRTO", (_reg(2), _reg(4))),
-        "TRTT": _lowered("TRTT", (_reg(2), _reg(4), _mask(0))),
-        "TRTE": _lowered("TRTE", (_reg(2), _reg(4))),
-        "TRTE A F": _lowered("TRTE", (_reg(2), _reg(4), _mask(12))),
-        "TRTRE F": _lowered("TRTRE", (_reg(2), _reg(4), _mask(4))),
+        "TRT": _lowered("TRT", (_with_length(8, 4), storage_operand(300))),
+        "TRTR": _lowered("TRTR", (_with_length(8, 4), storage_operand(300))),
+        "TRE": _lowered("TRE", (reg_operand(2), reg_operand(4))),
+        "TROO": _lowered("TROO", (reg_operand(2), reg_operand(4))),
+        "TROT": _lowered("TROT", (reg_operand(2), reg_operand(4))),
+        "TRTO": _lowered("TRTO", (reg_operand(2), reg_operand(4))),
+        "TRTT": _lowered("TRTT", (reg_operand(2), reg_operand(4), mask_operand(0))),
+        "TRTE": _lowered("TRTE", (reg_operand(2), reg_operand(4))),
+        "TRTE A F": _lowered(
+            "TRTE", (reg_operand(2), reg_operand(4), mask_operand(12))
+        ),
+        "TRTRE F": _lowered("TRTRE", (reg_operand(2), reg_operand(4), mask_operand(4))),
     }
 
     assert {m: _storage_accesses(ir) for m, ir in lowered.items()} == {
@@ -205,8 +174,8 @@ def test_translate_loops_read_each_forms_unit_widths_and_compare_ints():
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_test_character_control_drops_the_comparison():
-    compared = _lowered("TROO", (_reg(2), _reg(4)))
-    uncompared = _lowered("TROO", (_reg(2), _reg(4), _mask(1)))
+    compared = _lowered("TROO", (reg_operand(2), reg_operand(4)))
+    uncompared = _lowered("TROO", (reg_operand(2), reg_operand(4), mask_operand(1)))
 
     assert (_equal_tests(compared), _equal_tests(uncompared)) == (1, 0)
 
@@ -214,11 +183,11 @@ def test_test_character_control_drops_the_comparison():
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_pair_translates_on_an_odd_register_abend_before_reading_any_register():
     lowered = [
-        _lowered("TRE", (_reg(3), _reg(4))),
-        _lowered("TROO", (_reg(3), _reg(4))),
-        _lowered("TRTT", (_reg(5), _reg(2), _mask(1))),
-        _lowered("TRTE", (_reg(5), _reg(4))),
-        _lowered("TRTRE", (_reg(3), _reg(2), _mask(12))),
+        _lowered("TRE", (reg_operand(3), reg_operand(4))),
+        _lowered("TROO", (reg_operand(3), reg_operand(4))),
+        _lowered("TRTT", (reg_operand(5), reg_operand(2), mask_operand(1))),
+        _lowered("TRTE", (reg_operand(5), reg_operand(4))),
+        _lowered("TRTRE", (reg_operand(3), reg_operand(2), mask_operand(12))),
     ]
 
     assert [

@@ -1,18 +1,10 @@
 # pyright: standard
 """Compare-and-branch, compare-and-trap and load-and-trap lowerings: the comparison's CC tested against M3 and never stored, the branch or S0C7 trap, and the load written before its zero test."""
 
-from collections.abc import Mapping, Sequence
-from functools import singledispatch
+from collections.abc import Sequence
 
-from hlasm_asg.program.abs_address import AbsAddress
-from hlasm_asg.program.imm_operand import ImmOperand
-from hlasm_asg.program.machine_statement import MachineStatement
-from hlasm_asg.program.mask_operand import MaskOperand
-from hlasm_asg.program.open_code_origin import OpenCodeOrigin
 from hlasm_asg.program.operand import Operand
-from hlasm_asg.program.reg_operand import RegOperand
 from hlasm_asg.program.reloc_imm_operand import RelocImmOperand
-from hlasm_asg.program.storage_operand import StorageOperand
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.opcodes import OPCODE_LOWERINGS
 from interpreter.instructions import (
@@ -28,47 +20,17 @@ from interpreter.instructions import (
     Symbolic,
     WriteRegion,
 )
-from interpreter.register import Register
 from tests.covers import NotLanguageFeature, covers
+from tests.unit.hlasm.lowering_helpers import (
+    describe,
+    imm_operand,
+    machine_statement,
+    mask_operand,
+    reg_operand,
+    storage_operand,
+)
 
 BASE = 12
-
-
-def _statement(mnemonic: str, operands: Sequence[Operand]) -> MachineStatement:
-    return MachineStatement(
-        kind="MACHINE",
-        section="T",
-        offset=2,
-        label="",
-        mnemonic=mnemonic,
-        base_mnemonic=mnemonic,
-        format="",
-        length=6,
-        operands=tuple(operands),
-        origin=OpenCodeOrigin(kind="OPEN_CODE", file="t.asm", line=1),
-    )
-
-
-def _reg(value: int) -> RegOperand:
-    return RegOperand(kind="REG", value=value)
-
-
-def _imm(value: int) -> ImmOperand:
-    return ImmOperand(kind="IMM", value=value)
-
-
-def _mask(value: int) -> MaskOperand:
-    return MaskOperand(kind="MASK", value=value)
-
-
-def _storage(displacement: int) -> StorageOperand:
-    return StorageOperand(
-        kind="STORAGE",
-        displacement=displacement,
-        index=0,
-        base=BASE,
-        written=AbsAddress(kind="ABS", value=displacement),
-    )
 
 
 def _relative(offset: int) -> RelocImmOperand:
@@ -77,14 +39,14 @@ def _relative(offset: int) -> RelocImmOperand:
 
 def _lowered(mnemonic: str, operands: Sequence[Operand]) -> tuple[InstructionBase, ...]:
     emitter = HlasmEmitter()
-    OPCODE_LOWERINGS[mnemonic](emitter, _statement(mnemonic, operands))
+    OPCODE_LOWERINGS[mnemonic](emitter, machine_statement(mnemonic, operands))
     return emitter.instructions()
 
 
 def _shape(ir: Sequence[InstructionBase]) -> list[str]:
     consts = {i.result_reg: i.value for i in ir if isinstance(i, Const)}
     return [
-        _describe(i, consts)
+        describe(i, consts)
         for i in ir
         if isinstance(
             i,
@@ -101,41 +63,6 @@ def _shape(ir: Sequence[InstructionBase]) -> list[str]:
             ),
         )
     ]
-
-
-@singledispatch
-def _describe(i: InstructionBase, consts: Mapping[Register, int | str]) -> str:
-    return type(i).__name__
-
-
-@_describe.register
-def _describe_load_var(i: LoadVar, consts: Mapping[Register, int | str]) -> str:
-    return f"LoadVar {i.name}"
-
-
-@_describe.register
-def _describe_store_var(i: StoreVar, consts: Mapping[Register, int | str]) -> str:
-    return f"StoreVar {i.name} {consts.get(i.value_reg, 'reg')}"
-
-
-@_describe.register
-def _describe_load_region(i: LoadRegion, consts: Mapping[Register, int | str]) -> str:
-    return f"LoadRegion {consts[i.offset_reg]}+{i.length}"
-
-
-@_describe.register
-def _describe_write_region(i: WriteRegion, consts: Mapping[Register, int | str]) -> str:
-    return f"WriteRegion {consts[i.offset_reg]}+{i.length}"
-
-
-@_describe.register
-def _describe_binop(i: Binop, consts: Mapping[Register, int | str]) -> str:
-    return f"{i.operator.value} {consts.get(i.right, 'reg')}"
-
-
-@_describe.register
-def _describe_branch(i: Branch, consts: Mapping[Register, int | str]) -> str:
-    return f"Branch {i.label}"
 
 
 def _gpr(r: int, width: int) -> list[str]:
@@ -169,13 +96,23 @@ def _sets_cc_or_symbolic(ir: Sequence[InstructionBase]) -> list[InstructionBase]
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_a_conditional_compare_tests_its_m3_bit_then_branches_or_traps():
     lowered = {
-        "CRJ": _lowered("CRJ", (_reg(3), _reg(5), _mask(4), _relative(40))),
-        "CGRB": _lowered("CGRB", (_reg(3), _reg(5), _mask(10), _storage(16))),
-        "CLIJ": _lowered("CLIJ", (_reg(3), _imm(200), _mask(8), _relative(40))),
-        "CGIB": _lowered("CGIB", (_reg(3), _imm(-3), _mask(2), _storage(16))),
-        "CRT": _lowered("CRT", (_reg(3), _reg(5), _mask(6))),
-        "CLGIT": _lowered("CLGIT", (_reg(3), _imm(9), _mask(12))),
-        "CLT": _lowered("CLT", (_reg(3), _mask(8), _storage(16))),
+        "CRJ": _lowered(
+            "CRJ", (reg_operand(3), reg_operand(5), mask_operand(4), _relative(40))
+        ),
+        "CGRB": _lowered(
+            "CGRB",
+            (reg_operand(3), reg_operand(5), mask_operand(10), storage_operand(16)),
+        ),
+        "CLIJ": _lowered(
+            "CLIJ", (reg_operand(3), imm_operand(200), mask_operand(8), _relative(40))
+        ),
+        "CGIB": _lowered(
+            "CGIB",
+            (reg_operand(3), imm_operand(-3), mask_operand(2), storage_operand(16)),
+        ),
+        "CRT": _lowered("CRT", (reg_operand(3), reg_operand(5), mask_operand(6))),
+        "CLGIT": _lowered("CLGIT", (reg_operand(3), imm_operand(9), mask_operand(12))),
+        "CLT": _lowered("CLT", (reg_operand(3), mask_operand(8), storage_operand(16))),
     }
     shapes = {name: _shape(ir) for name, ir in lowered.items()}
 
@@ -203,17 +140,27 @@ def test_a_conditional_compare_tests_its_m3_bit_then_branches_or_traps():
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_mask_zero_lowers_to_nothing_and_mask_fourteen_acts_without_comparing():
     nothing = [
-        _lowered("CRJ", (_reg(3), _reg(5), _mask(0), _relative(40))),
-        _lowered("CLIB", (_reg(3), _imm(7), _mask(0), _storage(16))),
-        _lowered("CGRT", (_reg(3), _reg(5), _mask(0))),
-        _lowered("CLGT", (_reg(3), _mask(0), _storage(16))),
-        _lowered("CIT", (_reg(3), _imm(1), _mask(1))),
+        _lowered(
+            "CRJ", (reg_operand(3), reg_operand(5), mask_operand(0), _relative(40))
+        ),
+        _lowered(
+            "CLIB",
+            (reg_operand(3), imm_operand(7), mask_operand(0), storage_operand(16)),
+        ),
+        _lowered("CGRT", (reg_operand(3), reg_operand(5), mask_operand(0))),
+        _lowered("CLGT", (reg_operand(3), mask_operand(0), storage_operand(16))),
+        _lowered("CIT", (reg_operand(3), imm_operand(1), mask_operand(1))),
     ]
     always = {
-        "CRJ": _lowered("CRJ", (_reg(3), _reg(5), _mask(14), _relative(40))),
-        "CIB": _lowered("CIB", (_reg(3), _imm(7), _mask(15), _storage(16))),
-        "CLRT": _lowered("CLRT", (_reg(3), _reg(5), _mask(14))),
-        "CLT": _lowered("CLT", (_reg(3), _mask(14), _storage(16))),
+        "CRJ": _lowered(
+            "CRJ", (reg_operand(3), reg_operand(5), mask_operand(14), _relative(40))
+        ),
+        "CIB": _lowered(
+            "CIB",
+            (reg_operand(3), imm_operand(7), mask_operand(15), storage_operand(16)),
+        ),
+        "CLRT": _lowered("CLRT", (reg_operand(3), reg_operand(5), mask_operand(14))),
+        "CLT": _lowered("CLT", (reg_operand(3), mask_operand(14), storage_operand(16))),
     }
 
     assert nothing == [()] * len(nothing)
@@ -228,7 +175,7 @@ def test_mask_zero_lowers_to_nothing_and_mask_fourteen_acts_without_comparing():
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_load_and_trap_writes_the_register_then_traps_on_zero():
     shapes = {
-        name: _shape(_lowered(name, (_reg(3), _storage(16))))
+        name: _shape(_lowered(name, (reg_operand(3), storage_operand(16))))
         for name in ("LAT", "LGAT", "LLGFAT", "LLGTAT")
     }
     stored_64 = ["LoadVar __hlasm_gprs", WRAP_64, "WriteRegion 24+8"]

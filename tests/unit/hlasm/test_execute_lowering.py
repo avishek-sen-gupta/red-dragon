@@ -7,12 +7,9 @@ from collections.abc import Sequence
 import pytest
 
 from hlasm_asg.program.abs_address import AbsAddress
-from hlasm_asg.program.imm_operand import ImmOperand
 from hlasm_asg.program.machine_statement import MachineStatement
-from hlasm_asg.program.mask_operand import MaskOperand
 from hlasm_asg.program.open_code_origin import OpenCodeOrigin
 from hlasm_asg.program.operand import Operand
-from hlasm_asg.program.reg_operand import RegOperand
 from hlasm_asg.program.reloc_address import RelocAddress
 from hlasm_asg.program.reloc_imm_operand import RelocImmOperand
 from hlasm_asg.program.storage_length_operand import StorageLengthOperand
@@ -37,6 +34,11 @@ from interpreter.instructions import (
 from interpreter.operator_kind import BinopKind
 from interpreter.var_name import VarName
 from tests.covers import NotLanguageFeature, covers
+from tests.unit.hlasm.lowering_helpers import (
+    imm_operand,
+    mask_operand,
+    reg_operand,
+)
 
 SECTION = "T"
 EX_OFFSET = 2
@@ -62,18 +64,6 @@ def _statement(
         operands=tuple(operands),
         origin=OpenCodeOrigin(kind="OPEN_CODE", file="t.asm", line=1),
     )
-
-
-def _reg(value: int) -> RegOperand:
-    return RegOperand(kind="REG", value=value)
-
-
-def _mask(value: int) -> MaskOperand:
-    return MaskOperand(kind="MASK", value=value)
-
-
-def _imm(value: int) -> ImmOperand:
-    return ImmOperand(kind="IMM", value=value)
 
 
 def _storage(displacement: int, index: int = 0) -> StorageOperand:
@@ -106,7 +96,7 @@ def _ex(r1: int, operand: Operand, mnemonic: str = "EX") -> MachineStatement:
     return _statement(
         mnemonic,
         "RX-a" if mnemonic == "EX" else "RIL-b",
-        (_reg(r1), operand),
+        (reg_operand(r1), operand),
         EX_OFFSET,
         4 if mnemonic == "EX" else 6,
     )
@@ -114,9 +104,9 @@ def _ex(r1: int, operand: Operand, mnemonic: str = "EX") -> MachineStatement:
 
 VARIANT_VAR = VarName("__test_variant")
 MVC = _statement("MVC", "SS-a", (_with_length(0), _storage(0)), length=6)
-CLI = _statement("CLI", "SI", (_storage(4), _imm(0x40)))
-LHI = _statement("LHI", "RI-a", (_reg(3), _imm(5)))
-AR = _statement("AR", "RR", (_reg(2), _reg(3)), length=2)
+CLI = _statement("CLI", "SI", (_storage(4), imm_operand(0x40)))
+LHI = _statement("LHI", "RI-a", (reg_operand(3), imm_operand(5)))
+AR = _statement("AR", "RR", (reg_operand(2), reg_operand(3)), length=2)
 
 
 def _marker(emitter: HlasmEmitter, statement: MachineStatement) -> None:
@@ -168,21 +158,21 @@ def _compared(ir: Sequence[InstructionBase]) -> list[int]:
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_byte_one_layouts_decode_each_formats_fields():
     pack = _statement("PACK", "SS-b", (_with_length(3), _with_length(1)), length=6)
-    sll = _statement("SLL", "RS-a", (_reg(4), _storage(3)))
+    sll = _statement("SLL", "RS-a", (reg_operand(4), _storage(3)))
     cij = _statement(
         "CIJ",
         "RIE-c",
         (
-            _reg(1),
-            _imm(-2),
-            _mask(8),
+            reg_operand(1),
+            imm_operand(-2),
+            mask_operand(8),
             RelocImmOperand(kind="RELOC_IMM", section=SECTION, offset=0),
         ),
         length=6,
     )
-    lgr = _statement("LGR", "RRE", (_reg(1), _reg(2)))
-    svc = _statement("SVC", "I", (_imm(13),), length=2)
-    load = _statement("L", "RX-a", (_reg(1), _storage(8, 5)))
+    lgr = _statement("LGR", "RRE", (reg_operand(1), reg_operand(2)))
+    svc = _statement("SVC", "I", (imm_operand(13),), length=2)
+    load = _statement("L", "RX-a", (reg_operand(1), _storage(8, 5)))
     ts = _statement("TS", "SI", (_storage(4),))
     cases = {
         "MVC": (MVC, 0x2C),
@@ -211,19 +201,19 @@ def test_byte_one_layouts_decode_each_formats_fields():
     assert decoded == {
         "MVC": (0x00, 0xFF, 0x00, (_with_length(0x2D), _storage(0))),
         "PACK": (0x20, 0xFF, 0x00, (_with_length(8), _with_length(6))),
-        "SLL": (0x40, 0xF0, 0x00, (_reg(9), _storage(3))),
+        "SLL": (0x40, 0xF0, 0x00, (reg_operand(9), _storage(3))),
         "CIJ": (
             0x18,
             0xFF,
             0x00,
-            (_reg(3), _imm(-2), _mask(4), cij.operands[3]),
+            (reg_operand(3), imm_operand(-2), mask_operand(4), cij.operands[3]),
         ),
         "LGR": (0x00, 0x00, 0xFF, lgr.operands),
-        "SVC": (0x0D, 0xFF, 0x00, (_imm(0x23),)),
-        "L": (0x15, 0xFF, 0x00, (_reg(9), _storage(8, 10))),
-        "CLI": (0x40, 0xFF, 0x00, (_storage(4), _imm(0xC3))),
-        "LHI": (0x30, 0xF0, 0x0F, (_reg(7), _imm(5))),
-        "AR": (0x23, 0xFF, 0x00, (_reg(9), _reg(14))),
+        "SVC": (0x0D, 0xFF, 0x00, (imm_operand(0x23),)),
+        "L": (0x15, 0xFF, 0x00, (reg_operand(9), _storage(8, 10))),
+        "CLI": (0x40, 0xFF, 0x00, (_storage(4), imm_operand(0xC3))),
+        "LHI": (0x30, 0xF0, 0x0F, (reg_operand(7), imm_operand(5))),
+        "AR": (0x23, 0xFF, 0x00, (reg_operand(9), reg_operand(14))),
         "TS": (0x00, 0x00, 0x00, ts.operands),
     }
 
@@ -236,7 +226,7 @@ def test_r1_zero_or_an_unlowered_target_lowers_one_copy_at_the_execute():
         RelocImmOperand(kind="RELOC_IMM", section=SECTION, offset=TARGET_OFFSET),
         "EXRL",
     )
-    spm = _statement("SPM", "RR", (_reg(3),), length=2)
+    spm = _statement("SPM", "RR", (reg_operand(3),), length=2)
     emitter = HlasmEmitter()
     lower_execute(emitter, ex, MachineStatements((ex, AR)), OPCODE_LOWERINGS["AR"])
     direct = HlasmEmitter()
@@ -276,7 +266,7 @@ def test_r1_register_fields_select_one_inline_copy_per_reachable_value():
         _compared(ar)[0],
         any(isinstance(i, Symbolic) for i in (*lhi, *ar)),
     ) == (
-        [(_reg(r), _imm(5)) for r in (3, 7, 11, 15)],
+        [(reg_operand(r), imm_operand(5)) for r in (3, 7, 11, 15)],
         ["S0C1"],
         32,
         31,
@@ -318,7 +308,7 @@ def _constant_tests(ir: Sequence[InstructionBase], operator: BinopKind) -> list[
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_a_data_field_target_lowers_once_with_byte_one_from_r1():
-    svc = _statement("SVC", "I", (_imm(0),), length=2)
+    svc = _statement("SVC", "I", (imm_operand(0),), length=2)
     lowered = {
         name: _executed(_ex(2, _at(TARGET_OFFSET)), (target,))
         for name, target in {"MVC": MVC, "CLI": CLI, "SVC": svc}.items()
@@ -385,9 +375,9 @@ def test_execute_and_specification_exceptions_abend_before_any_copy():
     inner_rl = _statement(
         "EXRL",
         "RIL-b",
-        (_reg(0), RelocImmOperand(kind="RELOC_IMM", section=SECTION, offset=0)),
+        (reg_operand(0), RelocImmOperand(kind="RELOC_IMM", section=SECTION, offset=0)),
     )
-    tbegin = _statement("TBEGIN", "SIL", (_storage(0), _imm(0)), length=6)
+    tbegin = _statement("TBEGIN", "SIL", (_storage(0), imm_operand(0)), length=6)
     abends = {
         name: _executed(_ex(2, _at(at)), targets)
         for name, (at, targets) in {
@@ -418,7 +408,7 @@ def test_unresolved_targets_abend_with_a_warning(caplog: pytest.LogCaptureFixtur
         "explicit base": _ex(2, _storage(TARGET_OFFSET)),
         "indexed": _ex(2, _at(TARGET_OFFSET, 4)),
         "no statement": _ex(2, _at(TARGET_OFFSET + 8)),
-        "absolute EXRL": _ex(2, _imm(TARGET_OFFSET), "EXRL"),
+        "absolute EXRL": _ex(2, imm_operand(TARGET_OFFSET), "EXRL"),
     }
     with caplog.at_level(logging.WARNING, logger="interpreter.hlasm.execute"):
         lowered = {name: _executed(ex, (MVC,)) for name, ex in unresolved.items()}

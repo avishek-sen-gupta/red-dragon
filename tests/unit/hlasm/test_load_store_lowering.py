@@ -3,14 +3,9 @@
 
 from collections.abc import Sequence
 
-from hlasm_asg.program.abs_address import AbsAddress
 from hlasm_asg.program.machine_statement import MachineStatement
 from hlasm_asg.program.mask_operand import MaskOperand
-from hlasm_asg.program.open_code_origin import OpenCodeOrigin
-from hlasm_asg.program.operand import Operand
-from hlasm_asg.program.reg_operand import RegOperand
 from hlasm_asg.program.reloc_imm_operand import RelocImmOperand
-from hlasm_asg.program.storage_operand import StorageOperand
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.opcodes import OPCODE_LOWERINGS
 from interpreter.instructions import (
@@ -26,38 +21,14 @@ from interpreter.instructions import (
 )
 from interpreter.register import Register
 from tests.covers import NotLanguageFeature, covers
+from tests.unit.hlasm.lowering_helpers import (
+    machine_statement,
+    reg_operand,
+    storage_operand,
+)
 
 BASE = 12
 GPRS = "__hlasm_gprs"
-
-
-def _statement(mnemonic: str, operands: Sequence[Operand]) -> MachineStatement:
-    return MachineStatement(
-        kind="MACHINE",
-        section="T",
-        offset=2,
-        label="",
-        mnemonic=mnemonic,
-        base_mnemonic=mnemonic,
-        format="",
-        length=4,
-        operands=tuple(operands),
-        origin=OpenCodeOrigin(kind="OPEN_CODE", file="t.asm", line=1),
-    )
-
-
-def _reg(value: int) -> RegOperand:
-    return RegOperand(kind="REG", value=value)
-
-
-def _storage(displacement: int) -> StorageOperand:
-    return StorageOperand(
-        kind="STORAGE",
-        displacement=displacement,
-        index=0,
-        base=BASE,
-        written=AbsAddress(kind="ABS", value=displacement),
-    )
 
 
 def _lowered(statement: MachineStatement) -> tuple[InstructionBase, ...]:
@@ -97,7 +68,7 @@ def _control(ir: Sequence[InstructionBase]) -> list[str]:
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_load_reads_the_base_then_a_storage_word_into_the_low_word():
-    ir = _lowered(_statement("L", (_reg(2), _storage(8))))
+    ir = _lowered(machine_statement("L", (reg_operand(2), storage_operand(8))))
 
     assert _accesses(ir) == [
         ("LoadRegion", "gpr", 4, 8 * BASE + 4),
@@ -110,8 +81,8 @@ def test_load_reads_the_base_then_a_storage_word_into_the_low_word():
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_relative_long_loads_check_alignment_only_for_words_and_doublewords():
     target = RelocImmOperand(kind="RELOC_IMM", section="T", offset=16)
-    ir = _lowered(_statement("LGRL", (_reg(3), target)))
-    halfword = _lowered(_statement("LHRL", (_reg(3), target)))
+    ir = _lowered(machine_statement("LGRL", (reg_operand(3), target)))
+    halfword = _lowered(machine_statement("LHRL", (reg_operand(3), target)))
 
     assert _accesses(ir) == [
         ("LoadRegion", "storage", 8, 0),
@@ -128,8 +99,13 @@ def test_relative_long_loads_check_alignment_only_for_words_and_doublewords():
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_insert_under_mask_reads_its_bytes_merges_the_low_word_and_sets_cc():
     ir = _lowered(
-        _statement(
-            "ICM", (_reg(2), MaskOperand(kind="MASK", value=0b1010), _storage(8))
+        machine_statement(
+            "ICM",
+            (
+                reg_operand(2),
+                MaskOperand(kind="MASK", value=0b1010),
+                storage_operand(8),
+            ),
         )
     )
 
@@ -144,7 +120,9 @@ def test_insert_under_mask_reads_its_bytes_merges_the_low_word_and_sets_cc():
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_store_multiple_wraps_and_writes_one_word_per_register():
-    ir = _lowered(_statement("STM", (_reg(14), _reg(1), _storage(8))))
+    ir = _lowered(
+        machine_statement("STM", (reg_operand(14), reg_operand(1), storage_operand(8)))
+    )
 
     assert _accesses(ir) == [
         ("LoadRegion", "gpr", 4, 8 * BASE + 4),

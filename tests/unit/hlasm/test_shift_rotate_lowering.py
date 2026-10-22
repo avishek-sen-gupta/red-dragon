@@ -4,11 +4,7 @@
 from collections.abc import Sequence
 
 from hlasm_asg.program.abs_address import AbsAddress
-from hlasm_asg.program.imm_operand import ImmOperand
 from hlasm_asg.program.machine_statement import MachineStatement
-from hlasm_asg.program.open_code_origin import OpenCodeOrigin
-from hlasm_asg.program.operand import Operand
-from hlasm_asg.program.reg_operand import RegOperand
 from hlasm_asg.program.storage_operand import StorageOperand
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.opcodes import OPCODE_LOWERINGS
@@ -26,34 +22,16 @@ from interpreter.instructions import (
     WriteRegion,
 )
 from tests.covers import NotLanguageFeature, covers
+from tests.unit.hlasm.lowering_helpers import (
+    imm_operand,
+    machine_statement,
+    reg_operand,
+)
 
 BASE = 12
 GPRS = "__hlasm_gprs"
 CC = "StoreVar:__hlasm_cc"
 OVERFLOW_TRAP = [CC, "BranchIf", "StoreVar:__hlasm_abend", "Halt_"]
-
-
-def _statement(mnemonic: str, operands: Sequence[Operand]) -> MachineStatement:
-    return MachineStatement(
-        kind="MACHINE",
-        section="T",
-        offset=2,
-        label="",
-        mnemonic=mnemonic,
-        base_mnemonic=mnemonic,
-        format="",
-        length=6,
-        operands=tuple(operands),
-        origin=OpenCodeOrigin(kind="OPEN_CODE", file="t.asm", line=1),
-    )
-
-
-def _reg(value: int) -> RegOperand:
-    return RegOperand(kind="REG", value=value)
-
-
-def _imm(value: int) -> ImmOperand:
-    return ImmOperand(kind="IMM", value=value)
 
 
 def _amount(displacement: int, base: int) -> StorageOperand:
@@ -108,13 +86,21 @@ def _gpr(r: int, width: int) -> tuple[str, int, int]:
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_shifts_read_and_write_registers_only_and_set_cc_only_when_signed():
     lowered = {
-        "SLL": _lowered(_statement("SLL", (_reg(2), _amount(5, 0)))),
-        "SLLG": _lowered(_statement("SLLG", (_reg(5), _reg(3), _amount(7, BASE)))),
-        "RLL": _lowered(_statement("RLL", (_reg(5), _reg(3), _amount(1, 0)))),
-        "SRAK": _lowered(_statement("SRAK", (_reg(5), _reg(3), _amount(4, 0)))),
-        "SLDL": _lowered(_statement("SLDL", (_reg(2), _amount(4, 0)))),
-        "SLA": _lowered(_statement("SLA", (_reg(2), _amount(1, 0)))),
-        "SLDA": _lowered(_statement("SLDA", (_reg(4), _amount(1, 0)))),
+        "SLL": _lowered(machine_statement("SLL", (reg_operand(2), _amount(5, 0)))),
+        "SLLG": _lowered(
+            machine_statement(
+                "SLLG", (reg_operand(5), reg_operand(3), _amount(7, BASE))
+            )
+        ),
+        "RLL": _lowered(
+            machine_statement("RLL", (reg_operand(5), reg_operand(3), _amount(1, 0)))
+        ),
+        "SRAK": _lowered(
+            machine_statement("SRAK", (reg_operand(5), reg_operand(3), _amount(4, 0)))
+        ),
+        "SLDL": _lowered(machine_statement("SLDL", (reg_operand(2), _amount(4, 0)))),
+        "SLA": _lowered(machine_statement("SLA", (reg_operand(2), _amount(1, 0)))),
+        "SLDA": _lowered(machine_statement("SLDA", (reg_operand(4), _amount(1, 0)))),
     }
 
     assert {m: _accesses(ir) for m, ir in lowered.items()} == {
@@ -160,7 +146,7 @@ def test_shifts_read_and_write_registers_only_and_set_cc_only_when_signed():
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_an_odd_first_register_of_a_double_shift_is_a_specification_exception():
     lowered = {
-        m: _lowered(_statement(m, (_reg(3), _amount(1, 0))))
+        m: _lowered(machine_statement(m, (reg_operand(3), _amount(1, 0))))
         for m in ("SLDL", "SRDL", "SLDA", "SRDA")
     }
 
@@ -197,19 +183,62 @@ def test_register_spans_select_a_wrapping_range_of_bit_positions():
 def test_rotate_selected_bits_forms_write_r1_unless_testing_and_set_cc_as_defined():
     lowered = {
         "RISBG": _lowered(
-            _statement("RISBG", (_reg(5), _reg(3), _imm(40), _imm(43), _imm(4)))
+            machine_statement(
+                "RISBG",
+                (
+                    reg_operand(5),
+                    reg_operand(3),
+                    imm_operand(40),
+                    imm_operand(43),
+                    imm_operand(4),
+                ),
+            )
         ),
         "RISBGN": _lowered(
-            _statement("RISBGN", (_reg(5), _reg(3), _imm(40), _imm(CONTROL_BIT | 43)))
+            machine_statement(
+                "RISBGN",
+                (
+                    reg_operand(5),
+                    reg_operand(3),
+                    imm_operand(40),
+                    imm_operand(CONTROL_BIT | 43),
+                ),
+            )
         ),
         "RISBHG": _lowered(
-            _statement("RISBHG", (_reg(5), _reg(3), _imm(0), _imm(31), _imm(32)))
+            machine_statement(
+                "RISBHG",
+                (
+                    reg_operand(5),
+                    reg_operand(3),
+                    imm_operand(0),
+                    imm_operand(31),
+                    imm_operand(32),
+                ),
+            )
         ),
         "RNSBG test": _lowered(
-            _statement("RNSBG", (_reg(5), _reg(3), _imm(CONTROL_BIT | 40), _imm(43)))
+            machine_statement(
+                "RNSBG",
+                (
+                    reg_operand(5),
+                    reg_operand(3),
+                    imm_operand(CONTROL_BIT | 40),
+                    imm_operand(43),
+                ),
+            )
         ),
         "ROSBG": _lowered(
-            _statement("ROSBG", (_reg(5), _reg(3), _imm(62), _imm(1), _imm(-4)))
+            machine_statement(
+                "ROSBG",
+                (
+                    reg_operand(5),
+                    reg_operand(3),
+                    imm_operand(62),
+                    imm_operand(1),
+                    imm_operand(-4),
+                ),
+            )
         ),
     }
 

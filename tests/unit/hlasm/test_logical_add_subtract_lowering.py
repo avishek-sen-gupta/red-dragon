@@ -3,13 +3,7 @@
 
 from collections.abc import Sequence
 
-from hlasm_asg.program.abs_address import AbsAddress
-from hlasm_asg.program.imm_operand import ImmOperand
 from hlasm_asg.program.machine_statement import MachineStatement
-from hlasm_asg.program.open_code_origin import OpenCodeOrigin
-from hlasm_asg.program.operand import Operand
-from hlasm_asg.program.reg_operand import RegOperand
-from hlasm_asg.program.storage_operand import StorageOperand
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.opcodes import OPCODE_LOWERINGS
 from interpreter.instructions import (
@@ -24,43 +18,16 @@ from interpreter.instructions import (
     WriteRegion,
 )
 from tests.covers import NotLanguageFeature, covers
+from tests.unit.hlasm.lowering_helpers import (
+    imm_operand,
+    machine_statement,
+    reg_operand,
+    storage_operand,
+)
 
 BASE = 12
 GPRS = "__hlasm_gprs"
 CC = "__hlasm_cc"
-
-
-def _statement(mnemonic: str, operands: Sequence[Operand]) -> MachineStatement:
-    return MachineStatement(
-        kind="MACHINE",
-        section="T",
-        offset=2,
-        label="",
-        mnemonic=mnemonic,
-        base_mnemonic=mnemonic,
-        format="",
-        length=6,
-        operands=tuple(operands),
-        origin=OpenCodeOrigin(kind="OPEN_CODE", file="t.asm", line=1),
-    )
-
-
-def _reg(value: int) -> RegOperand:
-    return RegOperand(kind="REG", value=value)
-
-
-def _imm(value: int) -> ImmOperand:
-    return ImmOperand(kind="IMM", value=value)
-
-
-def _storage(displacement: int) -> StorageOperand:
-    return StorageOperand(
-        kind="STORAGE",
-        displacement=displacement,
-        index=0,
-        base=BASE,
-        written=AbsAddress(kind="ABS", value=displacement),
-    )
 
 
 def _lowered(statement: MachineStatement) -> tuple[InstructionBase, ...]:
@@ -105,14 +72,28 @@ def _gpr(r: int, width: int) -> tuple[str, int, int]:
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_each_form_reads_and_writes_its_operand_widths_then_sets_cc_without_a_trap():
     lowered = {
-        "ALGF": _lowered(_statement("ALGF", (_reg(2), _storage(8)))),
-        "ALRK": _lowered(_statement("ALRK", (_reg(5), _reg(3), _reg(4)))),
-        "SLGFR": _lowered(_statement("SLGFR", (_reg(2), _reg(3)))),
-        "ALCR": _lowered(_statement("ALCR", (_reg(2), _reg(3)))),
-        "SLBG": _lowered(_statement("SLBG", (_reg(2), _storage(8)))),
-        "ALHSIK": _lowered(_statement("ALHSIK", (_reg(5), _reg(3), _imm(-2)))),
-        "ALSI": _lowered(_statement("ALSI", (_storage(8), _imm(-1)))),
-        "ALGSI": _lowered(_statement("ALGSI", (_storage(8), _imm(255)))),
+        "ALGF": _lowered(
+            machine_statement("ALGF", (reg_operand(2), storage_operand(8)))
+        ),
+        "ALRK": _lowered(
+            machine_statement("ALRK", (reg_operand(5), reg_operand(3), reg_operand(4)))
+        ),
+        "SLGFR": _lowered(machine_statement("SLGFR", (reg_operand(2), reg_operand(3)))),
+        "ALCR": _lowered(machine_statement("ALCR", (reg_operand(2), reg_operand(3)))),
+        "SLBG": _lowered(
+            machine_statement("SLBG", (reg_operand(2), storage_operand(8)))
+        ),
+        "ALHSIK": _lowered(
+            machine_statement(
+                "ALHSIK", (reg_operand(5), reg_operand(3), imm_operand(-2))
+            )
+        ),
+        "ALSI": _lowered(
+            machine_statement("ALSI", (storage_operand(8), imm_operand(-1)))
+        ),
+        "ALGSI": _lowered(
+            machine_statement("ALGSI", (storage_operand(8), imm_operand(255)))
+        ),
     }
 
     assert {m: _accesses(ir) for m, ir in lowered.items()} == {
