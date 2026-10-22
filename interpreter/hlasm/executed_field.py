@@ -1,23 +1,30 @@
 # pyright: standard
-"""A data field EX sets at run time: its arithmetic is IR, a span of its length is a byte loop, and a dispatch on it is a chain of equality tests."""
+"""A data field EX sets at run time: its arithmetic is IR, a span of its length is one block per set bit of the length, 256 bytes down to 1, at increasing offsets, and a dispatch on it is a chain of equality tests."""
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
-from interpreter.hlasm.byte_loop import copy_byte, emit_counted_loop
 from interpreter.hlasm.data_field import (
     DataField,
     FieldCase,
     FieldFallback,
     FieldPart,
 )
-from interpreter.hlasm.hlasm_constants import BITS_PER_BYTE, ONE_BYTE, SPAN_VALUE_VAR
+from interpreter.hlasm.hlasm_constants import (
+    BINARY_BYTES_TO_INT,
+    BITS_PER_BYTE,
+    ONE_BYTE,
+    SPAN_VALUE_VAR,
+)
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
-from interpreter.hlasm.unit_value import unit_reader
 from interpreter.instructions import Branch, BranchIf, Label_, StoreVar
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
+
+LONGEST_SPAN_BITS = 8
+SPAN_OFFSET_BITS = (2 << LONGEST_SPAN_BITS) - 1
+SPAN_BLOCKS = tuple(1 << k for k in range(LONGEST_SPAN_BITS, -1, -1))
 
 
 @dataclass(frozen=True)
@@ -50,32 +57,64 @@ class ExecutedField(DataField):
         )
         return ExecutedField(least).length(emitter)
 
-    def _append(self, emitter: HlasmEmitter, shift: Register, byte: Register) -> None:
-        moved = emitter.binop(BinopKind.LSHIFT, emitter.load_var(SPAN_VALUE_VAR), shift)
-        combined = emitter.binop(BinopKind.BIT_OR, moved, byte)
+    def _block(
+        self, emitter: HlasmEmitter, size: int, move: Callable[[Register, int], None]
+    ) -> None:
+        present, absent = emitter.fresh_label("hl_span_block"), emitter.fresh_label(
+            "hl_span_next"
+        )
+        bit = emitter.binop(BinopKind.BIT_AND, self.register, emitter.int_(size))
+        emitter.emit_inst(BranchIf(cond_reg=bit, branch_targets=(present, absent)))
+        emitter.emit_inst(Label_(label=present))
+        before = emitter.int_(SPAN_OFFSET_BITS & ~(2 * size - 1))
+        move(emitter.binop(BinopKind.BIT_AND, self.register, before), size)
+        emitter.emit_inst(Label_(label=absent))
+
+    def _append(
+        self,
+        emitter: HlasmEmitter,
+        read: tuple[Register, Register],
+        offset: Register,
+        size: int,
+    ) -> None:
+        address, unsigned = read
+        image = emitter.load_bytes(address, offset, size)
+        block = emitter.call(BINARY_BYTES_TO_INT, (image, unsigned))
+        moved = emitter.binop(
+            BinopKind.LSHIFT,
+            emitter.load_var(SPAN_VALUE_VAR),
+            emitter.int_(BITS_PER_BYTE * size),
+        )
+        combined = emitter.binop(BinopKind.BIT_OR, moved, block)
         emitter.emit_inst(StoreVar(name=SPAN_VALUE_VAR, value_reg=combined))
 
     def loaded(self, emitter: HlasmEmitter, address: Register) -> Register:
         emitter.emit_inst(StoreVar(name=SPAN_VALUE_VAR, value_reg=emitter.int_(0)))
-        read = unit_reader(emitter, ONE_BYTE)
-        shift = emitter.int_(BITS_PER_BYTE)
-        emit_counted_loop(
-            emitter,
-            (emitter.int_(0), self.register),
-            ONE_BYTE,
-            lambda at: self._append(emitter, shift, read(address, at)),
-        )
+        read = (address, emitter.unsigned_flag())
+        _ = [
+            self._block(
+                emitter,
+                size,
+                lambda offset, width: self._append(emitter, read, offset, width),
+            )
+            for size in SPAN_BLOCKS
+        ]
         return emitter.load_var(SPAN_VALUE_VAR)
 
     def copied(
         self, emitter: HlasmEmitter, addresses: tuple[Register, Register]
     ) -> None:
-        emit_counted_loop(
-            emitter,
-            (emitter.int_(0), self.register),
-            ONE_BYTE,
-            lambda at: copy_byte(emitter, addresses, at),
-        )
+        target, source = addresses
+        _ = [
+            self._block(
+                emitter,
+                size,
+                lambda offset, width: emitter.write_bytes(
+                    target, offset, width, emitter.load_bytes(source, offset, width)
+                ),
+            )
+            for size in SPAN_BLOCKS
+        ]
 
     def _case(
         self, emitter: HlasmEmitter, case: tuple[int, FieldCase], done: CodeLabel
