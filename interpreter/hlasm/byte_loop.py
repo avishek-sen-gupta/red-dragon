@@ -1,45 +1,63 @@
 # pyright: standard
-"""An IR loop over the byte offsets 0 to length - 1 of a compile-time length, the offset kept in a variable."""
+"""An IR loop over offsets from a start to a bound by a fixed step, the offset kept in a variable; its constants are set before the loop."""
 
 from collections.abc import Callable
 
-from interpreter.hlasm.hlasm_constants import BYTE_LOOP_AT_VAR
+from interpreter.hlasm.hlasm_constants import BYTE_LOOP_AT_VAR, ONE_BYTE
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.instructions import Branch, BranchIf, Label_, StoreVar
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
 
+type LoopBody = Callable[[Register], None]
+
 
 def _test_offset(
-    emitter: HlasmEmitter, length: Register, step: CodeLabel, done: CodeLabel
+    emitter: HlasmEmitter, bound: Register, step: CodeLabel, done: CodeLabel
 ) -> Register:
     at = emitter.load_var(BYTE_LOOP_AT_VAR)
-    more = emitter.binop(BinopKind.LT, at, length)
+    more = emitter.binop(BinopKind.LT, at, bound)
     emitter.emit_inst(BranchIf(cond_reg=more, branch_targets=(step, done)))
     return at
 
 
 def _advance(
-    emitter: HlasmEmitter, at: Register, one: Register, loop: CodeLabel
+    emitter: HlasmEmitter, at: Register, stride: Register, loop: CodeLabel
 ) -> None:
-    after = emitter.binop(BinopKind.ADD, at, one)
+    after = emitter.binop(BinopKind.ADD, at, stride)
     emitter.emit_inst(StoreVar(name=BYTE_LOOP_AT_VAR, value_reg=after))
     emitter.emit_inst(Branch(label=loop))
 
 
-def emit_byte_loop(
-    emitter: HlasmEmitter, length: int, body: Callable[[Register], None]
+def emit_counted_loop(
+    emitter: HlasmEmitter,
+    span: tuple[Register, Register],
+    step: int,
+    body: LoopBody,
 ) -> None:
-    emitter.emit_inst(StoreVar(name=BYTE_LOOP_AT_VAR, value_reg=emitter.int_(0)))
-    bound, one = emitter.int_(length), emitter.int_(1)
-    loop, step, done = (
+    start, bound = span
+    stride = emitter.int_(step)
+    emitter.emit_inst(StoreVar(name=BYTE_LOOP_AT_VAR, value_reg=start))
+    loop, iteration, done = (
         emitter.fresh_label(prefix)
         for prefix in ("hl_bytes_loop", "hl_bytes_step", "hl_bytes_done")
     )
     emitter.emit_inst(Label_(label=loop))
-    at = _test_offset(emitter, bound, step, done)
-    emitter.emit_inst(Label_(label=step))
+    at = _test_offset(emitter, bound, iteration, done)
+    emitter.emit_inst(Label_(label=iteration))
     body(at)
-    _advance(emitter, at, one, loop)
+    _advance(emitter, at, stride, loop)
     emitter.emit_inst(Label_(label=done))
+
+
+def emit_byte_loop(emitter: HlasmEmitter, length: int, body: LoopBody) -> None:
+    span = (emitter.int_(0), emitter.int_(length))
+    emit_counted_loop(emitter, span, ONE_BYTE, body)
+
+
+def copy_byte(
+    emitter: HlasmEmitter, addresses: tuple[Register, Register], at: Register
+) -> None:
+    target, source = addresses
+    emitter.write_bytes(target, at, ONE_BYTE, emitter.load_bytes(source, at, ONE_BYTE))

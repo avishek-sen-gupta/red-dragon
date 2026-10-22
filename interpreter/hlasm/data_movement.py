@@ -120,6 +120,10 @@ def to_storage(width: int) -> Sink:
     return _store_to(storage_address, width)
 
 
+def to_storage_at(index: int, width: int) -> Sink:
+    return _store_to(storage_address_at(index), width)
+
+
 def to_relative(width: int) -> Sink:
     return _store_to(_relative(width), width)
 
