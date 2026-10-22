@@ -48,6 +48,9 @@ in the source format), with its own inexact and incremented conditions.
 | `bfp_load_rounded`, `bfp_load_lengthened` | NaN payloads truncate on the right or extend with zeros |
 | `bfp_round_to_integral` | LOAD FP INTEGER |
 | `bfp_from_integer`, `bfp_to_integer` | Signed and unsigned alike: the caller reads the register. Out of range and NaN give an end of the `IntegerFormat` with INVALID and INEXACT |
+| `bfp_divide_to_integer` | `(a, b, quotient_mode, remainder_mode)`: `BfpDivideToIntegerResult(remainder, quotient, partial, quotient_overflow)`. Final when \|q\| < 2^p or q is an integer; otherwise the quotient is truncated to p bits and the remainder is exact, without TINY. An overflowing quotient is scaled by 2^-192/-1536 |
+| `bfp_test_data_class` | `(a, mask)`: the figure 19-26 bit for the operand's class and sign |
+| `bfp_widened` | Exact retag into a wider format; an SNaN stays signaling (the lengthening multiplies) |
 
 Rules taken from the PoO:
 

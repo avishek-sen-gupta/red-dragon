@@ -115,3 +115,26 @@ def bfp_to_integer(
         FloatKind.FINITE: lambda: _finite_to_integer(a, target, mode),
     }
     return conversions[a.kind]()
+
+
+def _widened_finite(a: BfpValue, target: BfpFormat) -> BfpValue:
+    shift = target.precision - a.significand.bit_length()
+    return BfpValue(
+        target, a.negative, a.kind, a.significand << shift, a.exponent - shift
+    )
+
+
+def bfp_widened(a: BfpValue, target: BfpFormat) -> BfpValue:
+    widenings: Mapping[FloatKind, Callable[[], BfpValue]] = {
+        FloatKind.QNAN: lambda: _resized_nan(a, target).value,
+        FloatKind.SNAN: lambda: BfpValue(
+            target,
+            a.negative,
+            a.kind,
+            a.significand << (target.precision - a.format.precision),
+        ),
+        FloatKind.ZERO: lambda: BfpValue(target, a.negative, a.kind),
+        FloatKind.INFINITY: lambda: BfpValue(target, a.negative, a.kind),
+        FloatKind.FINITE: lambda: _widened_finite(a, target),
+    }
+    return widenings[a.kind]()
