@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import functools
 import logging
 import time
 from collections.abc import Callable, Mapping, Sequence
@@ -10,12 +11,13 @@ from dataclasses import dataclass, replace
 from dataclasses import field as dataclass_field
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Literal, TypeIs, Union
+from typing import Any, Literal, TypeIs
 
 from interpreter import constants
 from interpreter.cfg import CFG, build_cfg
+from interpreter.cfg_types import BasicBlock
 from interpreter.constants import FoundationTypeName, Language, LLMProvider
-from interpreter.frontend import get_frontend, make_cobol_parser
+from interpreter.frontend import Frontend, get_frontend, make_cobol_parser
 from interpreter.frontend_observer import FrontendObserver
 from interpreter.frontends import get_hlasm_parser
 from interpreter.frontends.symbol_table import SymbolTable
@@ -30,7 +32,7 @@ from interpreter.instructions import (
     Throw_,
 )
 from interpreter.ir import NO_LABEL, CodeLabel
-from interpreter.llm.backend import get_backend
+from interpreter.llm.backend import LLMBackend, get_backend
 from interpreter.overload.ambiguity_handler import FallbackFirstWithWarning
 from interpreter.overload.overload_resolver import (
     NullOverloadResolver,
@@ -46,16 +48,14 @@ from interpreter.project.program_not_in_image import ProgramNotInImage
 from interpreter.project.types import LinkedProgram
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import BoundFuncRef, FuncRef
-from interpreter.register import Register
+from interpreter.register import NO_REGISTER, Register
 from interpreter.registry import FunctionRegistry, build_registry
 from interpreter.run_types import (
     ExecutionStats,
     PipelineStats,
     UnresolvedCallStrategy,
     VMConfig,
-)  # noqa: F401 — re-exported for backwards compatibility
-from interpreter.vm.builtin import Builtin
-from interpreter.vm.builtins import core_builtins
+)
 from interpreter.trace_types import ExecutionTrace, TraceStep
 from interpreter.type_name import TypeName
 from interpreter.types.coercion.binop_coercion import (
@@ -81,6 +81,8 @@ from interpreter.types.type_node import TypeNode
 from interpreter.types.type_resolver import TypeResolver
 from interpreter.types.typed_value import TypedValue, typed, unwrap
 from interpreter.var_name import VarName
+from interpreter.vm.builtin import Builtin
+from interpreter.vm.builtins import core_builtins
 from interpreter.vm.executor import HandlerContext, _try_execute_locally
 from interpreter.vm.field_fallback import (
     FieldFallbackStrategy,
@@ -150,6 +152,11 @@ class ExecutionStrategies:
     symbol_table: SymbolTable = dataclass_field(default_factory=SymbolTable.empty)
 
 
+_DEFAULT_VM_CONFIG = VMConfig()
+_DEFAULT_STRATEGIES = ExecutionStrategies()
+_TOP_LEVEL = EntryPoint.top_level()
+
+
 def _create_resolver(config: VMConfig) -> UnresolvedCallResolver:
     """Create the appropriate call resolver based on config."""
     if config.unresolved_call_strategy == UnresolvedCallStrategy.LLM:
@@ -167,6 +174,9 @@ class _StopExecution:
     """Sentinel indicating the interpreter should halt."""
 
     pass
+
+
+_Flow = tuple[CodeLabel, int] | _StopExecution
 
 
 def _field_fallback_for_language(lang: Language) -> FieldFallbackStrategy:
@@ -221,14 +231,13 @@ def _find_entry_point(cfg: CFG, entry_point: str | CodeLabel) -> CodeLabel:
     entry: str | CodeLabel = entry_point or cfg.entry
     if entry in cfg.blocks:
         return entry if isinstance(entry, CodeLabel) else CodeLabel(entry)
-    # Try to find a function label matching the entry point
-    for label in cfg.blocks:
-        if label.contains(str(entry)):
-            return label
-    raise ValueError(
-        f"Entry point '{entry}' not found in CFG. "
-        f"Available: {list(cfg.blocks.keys())}"
-    )
+    matches = [label for label in cfg.blocks if label.contains(str(entry))]
+    if not matches:
+        raise ValueError(
+            f"Entry point '{entry}' not found in CFG. "
+            f"Available: {list(cfg.blocks.keys())}"
+        )
+    return matches[0]
 
 
 def _resolve_entry_function(vm: VMState, entry_point: str, cfg: CFG) -> CodeLabel:
@@ -237,15 +246,43 @@ def _resolve_entry_function(vm: VMState, entry_point: str, cfg: CFG) -> CodeLabe
     Checks vm.current_frame.local_vars for a FuncRef or BoundFuncRef matching
     the entry_point name. Falls back to _find_entry_point label matching.
     """
-    key = VarName(entry_point)
-    if key in vm.current_frame.local_vars:
-        val = vm.current_frame.local_vars[key]
-        raw = val.value if isinstance(val, TypedValue) else val
-        if isinstance(raw, BoundFuncRef):
-            return raw.func_ref.label
-        if isinstance(raw, FuncRef):
-            return raw.label
-    return _find_entry_point(cfg, entry_point)
+    match unwrap(vm.current_frame.local_vars.get(VarName(entry_point))):
+        case BoundFuncRef(func_ref=func_ref):
+            return func_ref.label
+        case FuncRef(label=label):
+            return label
+        case _:
+            return _find_entry_point(cfg, entry_point)
+
+
+def _trace(verbose: bool, message: str) -> None:
+    if verbose:
+        logger.info("%s", message)
+
+
+def _log_step(
+    verbose: bool, step: int, label: CodeLabel, ip: int, instruction: InstructionBase
+) -> None:
+    if verbose:
+        logger.info("[step %d] %s:%d  %s", step, label, ip, instruction)
+
+
+def _update_lines(update: StateUpdate) -> list[str]:
+    return [
+        *(
+            f"    {reg} = {_format_val(val)}"
+            for reg, val in update.register_writes.items()
+        ),
+        *(f"    ${var} = {_format_val(val)}" for var, val in update.var_writes.items()),
+        *(
+            f"    heap[{hw.obj_addr}].{hw.field} = {_format_val(hw.value)}"
+            for hw in update.heap_writes
+        ),
+        *(f"    new {obj.type_hint} @ {obj.addr}" for obj in update.new_objects),
+        *([f"    → {update.next_label}"] if update.next_label else []),
+        *([f"    path: {update.path_condition}"] if update.path_condition else []),
+        "",
+    ]
 
 
 def _log_update(
@@ -255,25 +292,26 @@ def _log_update(
     instruction: InstructionBase,
     update: StateUpdate,
     used_llm: bool,
-):
+) -> None:
     """Log verbose step-by-step execution info."""
     tag = "LLM" if used_llm else "local"
     logger.info("  [%s] %s", tag, update.reasoning)
-    for reg, val in update.register_writes.items():
-        logger.info("    %s = %s", reg, _format_val(val))
-    for var, val in update.var_writes.items():
-        logger.info("    $%s = %s", var, _format_val(val))
-    for hw in update.heap_writes:
-        logger.info(
-            "    heap[%s].%s = %s", hw.obj_addr, hw.field, _format_val(hw.value)
-        )
-    for obj in update.new_objects:
-        logger.info("    new %s @ %s", obj.type_hint, obj.addr)
-    if update.next_label:
-        logger.info("    → %s", update.next_label)
-    if update.path_condition:
-        logger.info("    path: %s", update.path_condition)
-    logger.info("")
+    for line in _update_lines(update):
+        logger.info("%s", line)
+
+
+def _is_void(value: Any) -> bool:
+    return isinstance(value, TypedValue) and value.type == scalar(
+        FoundationTypeName.VOID
+    )
+
+
+def _deliver_return_value(
+    caller: StackFrame, returning: StackFrame, update: StateUpdate
+) -> None:
+    if not returning.result_reg.is_present() or _is_void(update.return_value):
+        return
+    caller.registers[returning.result_reg] = update.return_value
 
 
 def _handle_return_flow(
@@ -283,39 +321,21 @@ def _handle_return_flow(
     update: StateUpdate,
     verbose: bool,
     step: int,
-) -> tuple[CodeLabel, int] | _StopExecution:
+) -> _Flow:
     """Handle RETURN/THROW control flow. Returns new (label, ip) or stop sentinel."""
-    if len(vm.call_stack) < 1:
-        if verbose:
-            logger.info("[step %d] Top-level return/throw. Stopping.", step)
-        return _StopExecution()
-
-    if return_frame.function_name == FuncName(constants.MAIN_FRAME_NAME):
-        if verbose:
-            logger.info("[step %d] Top-level return/throw. Stopping.", step)
-        return _StopExecution()
-
-    # Return to caller — write return value to caller's result register.
-    # result_reg is None when the call site had no assignment (e.g. standalone
-    # call_function with no %reg =), so there is no register to write to.
-    # Skip Void returns (constructors, bare RETURN with no operands).
-    caller_frame = vm.current_frame
-    if return_frame.result_reg.is_present() and not (
-        isinstance(update.return_value, TypedValue)
-        and update.return_value.type == scalar(FoundationTypeName.VOID)
+    if len(vm.call_stack) < 1 or return_frame.function_name == FuncName(
+        constants.MAIN_FRAME_NAME
     ):
-        caller_frame.registers[return_frame.result_reg] = update.return_value
-
+        _trace(verbose, f"[step {step}] Top-level return/throw. Stopping.")
+        return _StopExecution()
+    _deliver_return_value(vm.current_frame, return_frame, update)
     if return_frame.return_label and return_frame.return_label in cfg.blocks:
-        new_ip = return_frame.return_ip if return_frame.return_ip is not None else 0
-        return (return_frame.return_label, new_ip)
-
-    if verbose:
-        logger.info("[step %d] No return label. Stopping.", step)
+        return (return_frame.return_label, return_frame.return_ip or 0)
+    _trace(verbose, f"[step {step}] No return label. Stopping.")
     return _StopExecution()
 
 
-@dataclass
+@dataclass(frozen=True)
 class _LoopResult:
     """Internal outcome of one slice of the step loop."""
 
@@ -323,17 +343,16 @@ class _LoopResult:
     exhausted: bool = False
     steps: int = 0
     llm_calls: int = 0
-    # Suspension cursor (set only when suspended=True):
-    susp_label: CodeLabel | None = None
-    susp_ip: int | None = None
-    susp_reg: Register | None = None
+    susp_label: CodeLabel = NO_LABEL
+    susp_ip: int = 0
+    susp_reg: Register = NO_REGISTER
     susp_value: Any = None
 
 
 def _make_base_ctx(
     cfg: CFG,
     registry: FunctionRegistry,
-    call_resolver: Any,
+    call_resolver: UnresolvedCallResolver,
     strategies: ExecutionStrategies,
     config: VMConfig,
 ) -> HandlerContext:
@@ -358,6 +377,149 @@ def _make_base_ctx(
     )
 
 
+def _lazy_backend(config: VMConfig) -> Callable[[], LLMBackend]:
+    return functools.cache(functools.partial(get_backend, config.backend))
+
+
+def _report_progress(config: VMConfig, step: int, label: CodeLabel) -> None:
+    if config.step_callback and step and step % config.step_callback_interval == 0:
+        config.step_callback(step, str(label))
+
+
+def _fall_through(
+    block: BasicBlock, label: CodeLabel, step: int, verbose: bool
+) -> _Flow:
+    if block.successors:
+        return (block.successors[0], 0)
+    _trace(verbose, f"[step {step}] End of '{label}', no successors. Stopping.")
+    return _StopExecution()
+
+
+def _interpret(
+    instruction: InstructionBase,
+    vm: VMState,
+    ctx: HandlerContext,
+    llm: Callable[[], LLMBackend],
+    conversion_rules: TypeConversionRules,
+) -> tuple[StateUpdate, bool]:
+    result = _try_execute_locally(instruction, vm, ctx)
+    if result.handled:
+        return coerce_local_update(result.update, ctx.type_env, conversion_rules), False
+    raw_update = llm().interpret_instruction(instruction, vm)
+    return materialize_raw_update(raw_update, vm, ctx.type_env, conversion_rules), True
+
+
+def _proceed(ctx: HandlerContext, update: StateUpdate) -> _Flow:
+    target = _branch_target(ctx.cfg, ctx.current_label, update)
+    if target.is_present():
+        return (target, 0)
+    return (ctx.current_label, ctx.ip + 1)
+
+
+def _flow(
+    vm: VMState,
+    ctx: HandlerContext,
+    instruction: InstructionBase,
+    update: StateUpdate,
+    returning: Sequence[StackFrame],
+    step: int,
+    verbose: bool,
+) -> _Flow:
+    if isinstance(instruction, Halt_):
+        _trace(verbose, f"[step {step}] STOP RUN — halting entire run unit.")
+        return _StopExecution()
+    if returning:
+        return _handle_return_flow(vm, ctx.cfg, returning[0], update, verbose, step)
+    return _proceed(ctx, update)
+
+
+def _unwinds(instruction: InstructionBase, update: StateUpdate) -> bool:
+    return isinstance(instruction, Return_) or (
+        isinstance(instruction, Throw_) and update.next_label is None
+    )
+
+
+def _execute(
+    vm: VMState,
+    instruction: InstructionBase,
+    ctx: HandlerContext,
+    step: int,
+    *,
+    llm: Callable[[], LLMBackend],
+    conversion_rules: TypeConversionRules,
+    verbose: bool,
+) -> tuple[_Flow, bool]:
+    update, used_llm = _interpret(instruction, vm, ctx, llm, conversion_rules)
+    if verbose:
+        _log_update(step, ctx.current_label, ctx.ip, instruction, update, used_llm)
+    returning = (vm.current_frame,) if _unwinds(instruction, update) else ()
+    apply_update(vm, update, type_env=ctx.type_env, conversion_rules=conversion_rules)
+    return _flow(vm, ctx, instruction, update, returning, step, verbose), used_llm
+
+
+def _step(
+    vm: VMState,
+    base_ctx: HandlerContext,
+    label: CodeLabel,
+    ip: int,
+    step: int,
+    *,
+    llm: Callable[[], LLMBackend],
+    conversion_rules: TypeConversionRules,
+    verbose: bool,
+) -> tuple[_Flow | Suspend, bool]:
+    block = base_ctx.cfg.blocks[label]
+    if ip >= len(block.instructions):
+        return _fall_through(block, label, step, verbose), False
+    instruction = block.instructions[ip]
+    _log_step(verbose, step, label, ip, instruction)
+    if isinstance(instruction, (Label_, Data, Suspend)):
+        return _skipped(instruction, label, ip), False
+    ctx = replace(base_ctx, current_label=label, ip=ip)
+    return _execute(
+        vm,
+        instruction,
+        ctx,
+        step,
+        llm=llm,
+        conversion_rules=conversion_rules,
+        verbose=verbose,
+    )
+
+
+def _skipped(
+    instruction: Label_ | Data | Suspend, label: CodeLabel, ip: int
+) -> _Flow | Suspend:
+    if isinstance(instruction, Suspend):
+        return instruction
+    return (label, ip + 1)
+
+
+def _suspended_value(vm: VMState, instruction: Suspend) -> Any:
+    if not instruction.operand_reg.is_present():
+        return None
+    return unwrap(vm.current_frame.registers.get(instruction.operand_reg))
+
+
+def _suspension(
+    vm: VMState,
+    instruction: Suspend,
+    label: CodeLabel,
+    ip: int,
+    steps: int,
+    llm_calls: int,
+) -> _LoopResult:
+    return _LoopResult(
+        suspended=True,
+        steps=steps,
+        llm_calls=llm_calls,
+        susp_label=label,
+        susp_ip=ip + 1,
+        susp_reg=instruction.result_reg,
+        susp_value=_suspended_value(vm, instruction),
+    )
+
+
 def _run_loop(
     cfg: CFG,
     vm: VMState,
@@ -366,8 +528,7 @@ def _run_loop(
     *,
     config: VMConfig,
     base_ctx: HandlerContext,
-    type_env: Any,
-    conversion_rules: Any,
+    conversion_rules: TypeConversionRules,
 ) -> _LoopResult:
     """The core fetch-decode-execute loop, shared by ``execute_cfg`` and the
     resumable ``run_resumable``/``resume`` entry points.
@@ -378,107 +539,31 @@ def _run_loop(
     continuation; nothing else (no Python stack) needs preserving because the
     call stack lives in ``vm.call_stack``.
     """
-    llm = None
+    advance = functools.partial(
+        _step,
+        vm,
+        base_ctx,
+        llm=_lazy_backend(config),
+        conversion_rules=conversion_rules,
+        verbose=config.verbose,
+    )
     llm_calls = 0
-    step = 0
     for step in range(config.max_steps):
-        if config.step_callback and step and step % config.step_callback_interval == 0:
-            config.step_callback(step, str(current_label))
-        block = cfg.blocks[current_label]
-
-        if ip >= len(block.instructions):
-            if block.successors:
-                current_label = block.successors[0]
-                ip = 0
-                continue
-            if config.verbose:
-                logger.info(
-                    "[step %d] End of '%s', no successors. Stopping.",
-                    step,
-                    current_label,
-                )
-            break
-
-        instruction = block.instructions[ip]
-
-        if config.verbose:
-            logger.info("[step %d] %s:%d  %s", step, current_label, ip, instruction)
-
-        if isinstance(instruction, (Label_, Data)):
-            ip += 1
-            continue
-
-        if isinstance(instruction, Suspend):
-            tv = (
-                vm.current_frame.registers.get(instruction.operand_reg)
-                if instruction.operand_reg.is_present()
-                else None
-            )
-            return _LoopResult(
-                suspended=True,
-                steps=step + 1,
-                llm_calls=llm_calls,
-                susp_label=current_label,
-                susp_ip=ip + 1,  # resume just after the Suspend
-                susp_reg=instruction.result_reg,
-                susp_value=unwrap(tv) if tv is not None else None,
-            )
-
-        step_ctx = replace(base_ctx, current_label=current_label, ip=ip)
-        result = _try_execute_locally(instruction, vm, step_ctx)
-        used_llm = False
-        if result.handled:
-            update = coerce_local_update(result.update, type_env, conversion_rules)
-        else:
-            if llm is None:
-                llm = get_backend(config.backend)
-            raw_update = llm.interpret_instruction(instruction, vm)
-            update = materialize_raw_update(raw_update, vm, type_env, conversion_rules)
-            used_llm = True
-            llm_calls += 1
-
-        if config.verbose:
-            _log_update(step, current_label, ip, instruction, update, used_llm)
-
-        is_return = isinstance(instruction, Return_)
-        is_throw = isinstance(instruction, Throw_)
-        is_caught_throw = is_throw and update.next_label is not None
-        return_frame = (
-            vm.current_frame
-            if (is_return or (is_throw and not is_caught_throw))
-            else None
-        )
-
-        apply_update(vm, update, type_env=type_env, conversion_rules=conversion_rules)
-
-        if isinstance(instruction, Halt_):
-            if config.verbose:
-                logger.info("[step %d] STOP RUN — halting entire run unit.", step)
-            break
-
-        if is_return or (is_throw and not is_caught_throw):
-            flow = _handle_return_flow(
-                vm, cfg, return_frame, update, config.verbose, step
-            )
-            if isinstance(flow, _StopExecution):
-                break
-            current_label, ip = flow
-
-        elif (target := _branch_target(cfg, current_label, update)).is_present():
-            current_label = target
-            ip = 0
-        else:
-            ip += 1
-    else:
-        _warn_step_budget_exhausted(config.max_steps, current_label, ip)
-        return _LoopResult(
-            suspended=False,
-            exhausted=True,
-            steps=config.max_steps,
-            llm_calls=llm_calls,
-        )
-
-    return _LoopResult(suspended=False, steps=step + 1, llm_calls=llm_calls)
+        _report_progress(config, step, current_label)
+        flow, used_llm = advance(current_label, ip, step)
+        llm_calls += used_llm
+        if isinstance(flow, Suspend):
+            return _suspension(vm, flow, current_label, ip, step + 1, llm_calls)
+        if isinstance(flow, _StopExecution):
+            return _LoopResult(suspended=False, steps=step + 1, llm_calls=llm_calls)
+        current_label, ip = flow
+    _warn_step_budget_exhausted(config.max_steps, current_label, ip)
+    return _LoopResult(
+        suspended=False,
+        exhausted=True,
+        steps=config.max_steps,
+        llm_calls=llm_calls,
+    )
 
 
 def _branch_target(cfg: CFG, source: CodeLabel, update: StateUpdate) -> CodeLabel:
@@ -510,18 +595,36 @@ def initial_vm_state(
     functions used to build internally when the argument was omitted — callers
     that don't need to continue an existing VM should call this to get one.
     """
-    vm = VMState(null_access=null_access)
-    vm.call_stack.append(StackFrame(function_name=FuncName(constants.MAIN_FRAME_NAME)))
-    vm.io_provider = io_provider
-    return vm
+    return VMState(
+        null_access=null_access,
+        call_stack=[StackFrame(function_name=FuncName(constants.MAIN_FRAME_NAME))],
+        io_provider=io_provider,
+    )
+
+
+def _execution_stats(steps: int, llm_calls: int, vm: VMState) -> ExecutionStats:
+    return ExecutionStats(
+        steps=steps,
+        llm_calls=llm_calls,
+        final_heap_objects=vm.heap_count(),
+        final_symbolic_count=vm.symbolic_counter,
+        closures_captured=len(vm.closures),
+    )
+
+
+def _log_execution_done(stats: ExecutionStats, verbose: bool) -> None:
+    logger.debug(
+        "execute_cfg done: %d steps, %d LLM calls", stats.steps, stats.llm_calls
+    )
+    _trace(verbose, f"({stats.steps} steps, {stats.llm_calls} LLM calls)")
 
 
 def execute_cfg(
     cfg: CFG,
     entry_point: str | CodeLabel,
     registry: FunctionRegistry,
-    config: VMConfig = VMConfig(),
-    strategies: ExecutionStrategies = ExecutionStrategies(),
+    config: VMConfig = _DEFAULT_VM_CONFIG,
+    strategies: ExecutionStrategies = _DEFAULT_STRATEGIES,
     *,
     vm: VMState,
 ) -> tuple[VMState, ExecutionStats]:
@@ -555,7 +658,6 @@ def execute_cfg(
         0,
         config=config,
         base_ctx=base_ctx,
-        type_env=strategies.type_env,
         conversion_rules=strategies.conversion_rules,
     )
     if loop.suspended:
@@ -564,27 +666,14 @@ def execute_cfg(
             "for suspendable execution"
         )
 
-    stats = ExecutionStats(
-        steps=loop.steps,
-        llm_calls=loop.llm_calls + call_resolver.llm_call_count,
-        final_heap_objects=vm.heap_count(),
-        final_symbolic_count=vm.symbolic_counter,
-        closures_captured=len(vm.closures),
+    stats = _execution_stats(
+        loop.steps, loop.llm_calls + call_resolver.llm_call_count, vm
     )
-
-    logger.debug(
-        "execute_cfg done: %d steps, %d LLM calls", stats.steps, stats.llm_calls
-    )
-    if config.verbose:
-        logger.info("(%d steps, %d LLM calls)", stats.steps, stats.llm_calls)
-
+    _log_execution_done(stats, config.verbose)
     return (vm, stats)
 
 
-# ── Cooperative suspend / resume ────────────────────────────────────
-
-
-@dataclass
+@dataclass(frozen=True)
 class ExecutionState:
     """A resumable, serializable continuation.
 
@@ -603,15 +692,15 @@ class ExecutionState:
     entered: CodeLabel
 
 
-@dataclass
+@dataclass(frozen=True)
 class Suspended:
     """Outcome: execution paused at a ``Suspend`` instruction."""
 
     state: ExecutionState
-    value: Any  # the payload the program yielded to the driver
+    value: Any
 
 
-@dataclass
+@dataclass(frozen=True)
 class Completed:
     """Outcome: execution ran to termination."""
 
@@ -627,15 +716,16 @@ class BudgetExhausted:
     stats: ExecutionStats
 
 
-RunOutcome = Union[Suspended, Completed, BudgetExhausted]
+RunOutcome = Suspended | Completed | BudgetExhausted
 
 
 def _wrap_outcome(
-    loop: _LoopResult, vm: VMState, call_resolver: Any, entered: CodeLabel
+    loop: _LoopResult,
+    vm: VMState,
+    call_resolver: UnresolvedCallResolver,
+    entered: CodeLabel,
 ) -> RunOutcome:
     if loop.suspended:
-        assert loop.susp_label is not None and loop.susp_ip is not None
-        assert loop.susp_reg is not None
         return Suspended(
             state=ExecutionState(
                 vm=vm,
@@ -646,12 +736,8 @@ def _wrap_outcome(
             ),
             value=loop.susp_value,
         )
-    stats = ExecutionStats(
-        steps=loop.steps,
-        llm_calls=loop.llm_calls + call_resolver.llm_call_count,
-        final_heap_objects=vm.heap_count(),
-        final_symbolic_count=vm.symbolic_counter,
-        closures_captured=len(vm.closures),
+    stats = _execution_stats(
+        loop.steps, loop.llm_calls + call_resolver.llm_call_count, vm
     )
     terminal = BudgetExhausted if loop.exhausted else Completed
     return terminal(vm=vm, stats=stats)
@@ -661,8 +747,8 @@ def run_resumable(
     cfg: CFG,
     entry_point: str | CodeLabel,
     registry: FunctionRegistry,
-    config: VMConfig = VMConfig(),
-    strategies: ExecutionStrategies = ExecutionStrategies(),
+    config: VMConfig = _DEFAULT_VM_CONFIG,
+    strategies: ExecutionStrategies = _DEFAULT_STRATEGIES,
     *,
     vm: VMState,
 ) -> RunOutcome:
@@ -678,7 +764,6 @@ def run_resumable(
         0,
         config=config,
         base_ctx=base_ctx,
-        type_env=strategies.type_env,
         conversion_rules=strategies.conversion_rules,
     )
     return _wrap_outcome(loop, vm, call_resolver, NO_LABEL)
@@ -689,8 +774,8 @@ def resume(
     registry: FunctionRegistry,
     state: ExecutionState,
     value: Any = None,
-    config: VMConfig = VMConfig(),
-    strategies: ExecutionStrategies = ExecutionStrategies(),
+    config: VMConfig = _DEFAULT_VM_CONFIG,
+    strategies: ExecutionStrategies = _DEFAULT_STRATEGIES,
 ) -> RunOutcome:
     """Resume a suspended ``ExecutionState``, injecting ``value`` as the result of
     the ``Suspend`` (written into its result register), and run to the next
@@ -702,7 +787,7 @@ def resume(
     first for multi-shot resumption.
     """
     vm = state.vm
-    if state.resume_reg is not None and state.resume_reg.is_present():
+    if state.resume_reg.is_present():
         vm.current_frame.registers[state.resume_reg] = typed(value, UNKNOWN)
     call_resolver = _create_resolver(config)
     base_ctx = _make_base_ctx(cfg, registry, call_resolver, strategies, config)
@@ -713,18 +798,77 @@ def resume(
         state.ip,
         config=config,
         base_ctx=base_ctx,
-        type_env=strategies.type_env,
         conversion_rules=strategies.conversion_rules,
     )
     return _wrap_outcome(loop, vm, call_resolver, state.entered)
+
+
+def _traced_execute(
+    vm: VMState,
+    instruction: InstructionBase,
+    ctx: HandlerContext,
+    step: int,
+    index: int,
+    *,
+    llm: Callable[[], LLMBackend],
+    conversion_rules: TypeConversionRules,
+    verbose: bool,
+) -> tuple[_Flow, tuple[TraceStep, ...]]:
+    update, used_llm = _interpret(instruction, vm, ctx, llm, conversion_rules)
+    if verbose:
+        _log_update(step, ctx.current_label, ctx.ip, instruction, update, used_llm)
+    unwinds = isinstance(instruction, (Return_, Throw_))
+    returning = (vm.current_frame,) if unwinds else ()
+    apply_update(vm, update, type_env=ctx.type_env, conversion_rules=conversion_rules)
+    recorded = TraceStep(
+        step_index=index,
+        block_label=ctx.current_label,
+        instruction_index=ctx.ip,
+        instruction=instruction,
+        update=update,
+        vm_state=copy.deepcopy(vm),
+        used_llm=used_llm,
+    )
+    return _flow(vm, ctx, instruction, update, returning, step, verbose), (recorded,)
+
+
+def _traced_step(
+    vm: VMState,
+    base_ctx: HandlerContext,
+    label: CodeLabel,
+    ip: int,
+    step: int,
+    index: int,
+    *,
+    llm: Callable[[], LLMBackend],
+    conversion_rules: TypeConversionRules,
+    verbose: bool,
+) -> tuple[_Flow, tuple[TraceStep, ...]]:
+    block = base_ctx.cfg.blocks[label]
+    if ip >= len(block.instructions):
+        return _fall_through(block, label, step, verbose), ()
+    instruction = block.instructions[ip]
+    _log_step(verbose, step, label, ip, instruction)
+    if isinstance(instruction, (Label_, Data)):
+        return (label, ip + 1), ()
+    return _traced_execute(
+        vm,
+        instruction,
+        replace(base_ctx, current_label=label, ip=ip),
+        step,
+        index,
+        llm=llm,
+        conversion_rules=conversion_rules,
+        verbose=verbose,
+    )
 
 
 def execute_cfg_traced(
     cfg: CFG,
     entry_point: CodeLabel,
     registry: FunctionRegistry,
-    config: VMConfig = VMConfig(),
-    strategies: ExecutionStrategies = ExecutionStrategies(),
+    config: VMConfig = _DEFAULT_VM_CONFIG,
+    strategies: ExecutionStrategies = _DEFAULT_STRATEGIES,
     *,
     vm: VMState,
 ) -> tuple[VMState, ExecutionTrace]:
@@ -745,138 +889,35 @@ def execute_cfg_traced(
         Tuple of (final VMState, ExecutionTrace with per-step snapshots).
     """
     entry = _find_entry_point(cfg, entry_point)
-
     initial_state = copy.deepcopy(vm)
-
-    llm = None  # lazy — only created if local executor can't handle an instruction
     call_resolver = _create_resolver(config)
-    current_label = entry
-    ip = 0
-    llm_calls = 0
-    step = 0
+    advance = functools.partial(
+        _traced_step,
+        vm,
+        _make_base_ctx(cfg, registry, call_resolver, strategies, config),
+        llm=_lazy_backend(config),
+        conversion_rules=strategies.conversion_rules,
+        verbose=config.verbose,
+    )
+    current_label, ip, step = entry, 0, 0
     trace_steps: list[TraceStep] = []
 
-    type_env = strategies.type_env
-    conversion_rules = strategies.conversion_rules
-
-    base_ctx = HandlerContext(
-        cfg=cfg,
-        registry=registry,
-        current_label=NO_LABEL,
-        ip=0,
-        call_resolver=call_resolver,
-        overload_resolver=strategies.overload_resolver,
-        type_env=type_env,
-        binop_coercion=strategies.binop_coercion,
-        unop_coercion=strategies.unop_coercion,
-        func_symbol_table=strategies.func_symbol_table,
-        class_symbol_table=strategies.class_symbol_table,
-        field_fallback=strategies.field_fallback,
-        function_scoping=strategies.function_scoping,
-        symbol_table=strategies.symbol_table,
-        permit_unresolved_call_targets=config.permit_unresolved_call_targets,
-        builtins=config.builtins,
-    )
-
     for step in range(config.max_steps):
-        block = cfg.blocks[current_label]
-
-        if ip >= len(block.instructions):
-            if block.successors:
-                current_label = block.successors[0]
-                ip = 0
-                continue
-            if config.verbose:
-                logger.info(
-                    "[step %d] End of '%s', no successors. Stopping.",
-                    step,
-                    current_label,
-                )
+        flow, recorded = advance(current_label, ip, step, len(trace_steps))
+        trace_steps.extend(recorded)
+        if isinstance(flow, _StopExecution):
             break
-
-        instruction = block.instructions[ip]
-
-        if config.verbose:
-            logger.info("[step %d] %s:%d  %s", step, current_label, ip, instruction)
-
-        if isinstance(instruction, (Label_, Data)):
-            ip += 1
-            continue
-
-        step_ctx = replace(base_ctx, current_label=current_label, ip=ip)
-        result = _try_execute_locally(instruction, vm, step_ctx)
-        used_llm = False
-        if result.handled:
-            update = coerce_local_update(result.update, type_env, conversion_rules)
-        else:
-            if llm is None:
-                llm = get_backend(config.backend)
-            raw_update = llm.interpret_instruction(instruction, vm)
-            update = materialize_raw_update(raw_update, vm, type_env, conversion_rules)
-            used_llm = True
-            llm_calls += 1
-
-        if config.verbose:
-            _log_update(step, current_label, ip, instruction, update, used_llm)
-
-        is_return = isinstance(instruction, Return_)
-        is_throw = isinstance(instruction, Throw_)
-        return_frame = vm.current_frame if (is_return or is_throw) else None
-
-        apply_update(vm, update, type_env=type_env, conversion_rules=conversion_rules)
-
-        # Snapshot the VM state after update
-        trace_steps.append(
-            TraceStep(
-                step_index=len(trace_steps),
-                block_label=current_label,
-                instruction_index=ip,
-                instruction=instruction,
-                update=update,
-                vm_state=copy.deepcopy(vm),
-                used_llm=used_llm,
-            )
-        )
-
-        if isinstance(instruction, Halt_):
-            if config.verbose:
-                logger.info("[step %d] STOP RUN — halting entire run unit.", step)
-            break
-
-        if is_return or is_throw:
-            flow = _handle_return_flow(
-                vm, cfg, return_frame, update, config.verbose, step
-            )
-            if isinstance(flow, _StopExecution):
-                break
-            current_label, ip = flow
-
-        elif (target := _branch_target(cfg, current_label, update)).is_present():
-            current_label = target
-            ip = 0
-        else:
-            ip += 1
+        current_label, ip = flow
     else:
         _warn_step_budget_exhausted(config.max_steps, current_label, ip)
 
-    stats = ExecutionStats(
-        steps=step + 1,
-        llm_calls=llm_calls + call_resolver.llm_call_count,
-        final_heap_objects=vm.heap_count(),
-        final_symbolic_count=vm.symbolic_counter,
-        closures_captured=len(vm.closures),
+    llm_calls = sum(1 for traced in trace_steps if traced.used_llm)
+    stats = _execution_stats(step + 1, llm_calls + call_resolver.llm_call_count, vm)
+    _trace(config.verbose, f"({stats.steps} steps, {stats.llm_calls} LLM calls)")
+    return (
+        vm,
+        ExecutionTrace(steps=trace_steps, stats=stats, initial_state=initial_state),
     )
-
-    if config.verbose:
-        logger.info("(%d steps, %d LLM calls)", stats.steps, stats.llm_calls)
-
-    trace = ExecutionTrace(
-        steps=trace_steps,
-        stats=stats,
-        initial_state=initial_state,
-    )
-
-    return (vm, trace)
 
 
 def _build_strategies_from_linked(linked: LinkedProgram) -> ExecutionStrategies:
@@ -912,6 +953,56 @@ def _build_strategies_from_linked(linked: LinkedProgram) -> ExecutionStrategies:
         function_scoping=_function_scoping_for_language(linked.language),
         symbol_table=linked.symbol_table,
     )
+
+
+def _after_preamble(
+    linked: LinkedProgram,
+    dispatch: EntryPoint,
+    vm_config: VMConfig,
+    strategies: ExecutionStrategies,
+    initial_vm: VMState,
+) -> tuple[VMState, CodeLabel, VMConfig]:
+    vm, preamble_stats = execute_cfg(
+        linked.merged_cfg,
+        linked.merged_cfg.entry,
+        linked.merged_registry,
+        vm_config,
+        strategies,
+        vm=initial_vm,
+    )
+    func_ref = dispatch.resolve(list(linked.func_symbol_table.values()))
+    func_label = _resolve_entry_function(vm, str(func_ref.name), linked.merged_cfg)
+    remaining = max(vm_config.max_steps - preamble_stats.steps, 0)
+    return vm, func_label, replace(vm_config, max_steps=remaining)
+
+
+def _run_dispatched(
+    linked: LinkedProgram,
+    dispatch: EntryPoint,
+    vm_config: VMConfig,
+    strategies: ExecutionStrategies,
+    initial_vm: VMState,
+) -> VMState:
+    if dispatch.is_top_level:
+        return execute_cfg(
+            linked.merged_cfg,
+            linked.merged_cfg.entry,
+            linked.merged_registry,
+            vm_config,
+            strategies,
+            vm=initial_vm,
+        )[0]
+    vm, func_label, phase2_config = _after_preamble(
+        linked, dispatch, vm_config, strategies, initial_vm
+    )
+    return execute_cfg(
+        linked.merged_cfg,
+        func_label,
+        linked.merged_registry,
+        phase2_config,
+        strategies,
+        vm=vm,
+    )[0]
 
 
 def run_linked(
@@ -950,8 +1041,6 @@ def run_linked(
             step_callback_interval steps for progress reporting.
         step_callback_interval: How often to invoke step_callback (default 1M steps).
     """
-    strategies = _build_strategies_from_linked(linked)
-
     vm_config = VMConfig(
         backend=backend,
         max_steps=max_steps,
@@ -964,48 +1053,11 @@ def run_linked(
         step_callback=step_callback,
         step_callback_interval=step_callback_interval,
     )
-
     dispatch, entered = _entering(linked, entry_point)
     initial_vm.declarations = _declarations_at(linked, entered)
-
-    if dispatch.is_top_level:
-        vm, _exec_stats = execute_cfg(
-            linked.merged_cfg,
-            linked.merged_cfg.entry,
-            linked.merged_registry,
-            vm_config,
-            strategies,
-            vm=initial_vm,
-        )
-    else:
-        # Phase 1: preamble
-        module_entry = linked.merged_cfg.entry
-        vm, preamble_stats = execute_cfg(
-            linked.merged_cfg,
-            module_entry,
-            linked.merged_registry,
-            vm_config,
-            strategies,
-            vm=initial_vm,
-        )
-
-        # Resolve entry point function via predicate
-        func_ref = dispatch.resolve(list(linked.func_symbol_table.values()))
-        func_label = _resolve_entry_function(vm, str(func_ref.name), linked.merged_cfg)
-
-        # Phase 2: dispatch into target function
-        remaining = max_steps - preamble_stats.steps
-        phase2_config = replace(vm_config, max_steps=max(remaining, 0))
-        vm, _phase2_stats = execute_cfg(
-            linked.merged_cfg,
-            func_label,
-            linked.merged_registry,
-            phase2_config,
-            strategies,
-            vm=vm,
-        )
-
-    return vm
+    return _run_dispatched(
+        linked, dispatch, vm_config, _build_strategies_from_linked(linked), initial_vm
+    )
 
 
 def _entering(
@@ -1049,6 +1101,35 @@ def _carrying(outcome: RunOutcome, entered: CodeLabel) -> RunOutcome:
             return outcome
 
 
+def _resumable_dispatched(
+    linked: LinkedProgram,
+    dispatch: EntryPoint,
+    vm_config: VMConfig,
+    strategies: ExecutionStrategies,
+    initial_vm: VMState,
+) -> RunOutcome:
+    if dispatch.is_top_level:
+        return run_resumable(
+            linked.merged_cfg,
+            linked.merged_cfg.entry,
+            linked.merged_registry,
+            vm_config,
+            strategies,
+            vm=initial_vm,
+        )
+    vm, func_label, phase2_config = _after_preamble(
+        linked, dispatch, vm_config, strategies, initial_vm
+    )
+    return run_resumable(
+        linked.merged_cfg,
+        func_label,
+        linked.merged_registry,
+        phase2_config,
+        strategies,
+        vm=vm,
+    )
+
+
 def run_linked_resumable(
     linked: LinkedProgram,
     entry_point: EntryPoint | ProgramEntry,
@@ -1069,7 +1150,6 @@ def run_linked_resumable(
     non-resumable path — it never suspends — and only the program body (phase 2)
     is run resumably. Continue with ``resume_linked``.
     """
-    strategies = _build_strategies_from_linked(linked)
     vm_config = VMConfig(
         backend=backend,
         max_steps=max_steps,
@@ -1082,38 +1162,9 @@ def run_linked_resumable(
     )
     dispatch, entered = _entering(linked, entry_point)
     initial_vm.declarations = _declarations_at(linked, entered)
-
-    if dispatch.is_top_level:
-        outcome = run_resumable(
-            linked.merged_cfg,
-            linked.merged_cfg.entry,
-            linked.merged_registry,
-            vm_config,
-            strategies,
-            vm=initial_vm,
-        )
-    else:
-        vm, preamble_stats = execute_cfg(
-            linked.merged_cfg,
-            linked.merged_cfg.entry,
-            linked.merged_registry,
-            vm_config,
-            strategies,
-            vm=initial_vm,
-        )
-        func_ref = dispatch.resolve(list(linked.func_symbol_table.values()))
-        func_label = _resolve_entry_function(vm, str(func_ref.name), linked.merged_cfg)
-        phase2_config = replace(
-            vm_config, max_steps=max(max_steps - preamble_stats.steps, 0)
-        )
-        outcome = run_resumable(
-            linked.merged_cfg,
-            func_label,
-            linked.merged_registry,
-            phase2_config,
-            strategies,
-            vm=vm,
-        )
+    outcome = _resumable_dispatched(
+        linked, dispatch, vm_config, _build_strategies_from_linked(linked), initial_vm
+    )
     return _carrying(outcome, entered)
 
 
@@ -1146,7 +1197,7 @@ def resume_linked(
     if io_provider is not None:
         state.vm.io_provider = io_provider
     state.vm.declarations = _declarations_at(linked, state.entered)
-    outcome = resume(
+    return resume(
         linked.merged_cfg,
         linked.merged_registry,
         state,
@@ -1154,7 +1205,60 @@ def resume_linked(
         vm_config,
         strategies,
     )
-    return outcome
+
+
+def _concatenated(
+    preamble_trace: ExecutionTrace, dispatch_trace: ExecutionTrace
+) -> ExecutionTrace:
+    preamble_step_count = len(preamble_trace.steps)
+    renumbered_dispatch_steps = [
+        replace(step, step_index=step.step_index + preamble_step_count)
+        for step in dispatch_trace.steps
+    ]
+    combined_stats = ExecutionStats(
+        steps=preamble_trace.stats.steps + dispatch_trace.stats.steps,
+        llm_calls=preamble_trace.stats.llm_calls + dispatch_trace.stats.llm_calls,
+        final_heap_objects=dispatch_trace.stats.final_heap_objects,
+        final_symbolic_count=dispatch_trace.stats.final_symbolic_count,
+        closures_captured=preamble_trace.stats.closures_captured
+        + dispatch_trace.stats.closures_captured,
+    )
+    return ExecutionTrace(
+        steps=preamble_trace.steps + renumbered_dispatch_steps,
+        stats=combined_stats,
+        initial_state=preamble_trace.initial_state,
+    )
+
+
+def _traced_function_entry(
+    linked: LinkedProgram,
+    dispatch: EntryPoint,
+    vm_config: VMConfig,
+    strategies: ExecutionStrategies,
+    initial_vm: VMState,
+) -> tuple[VMState, ExecutionTrace]:
+    preambled, preamble_trace = execute_cfg_traced(
+        linked.merged_cfg,
+        linked.merged_cfg.entry,
+        linked.merged_registry,
+        vm_config,
+        strategies,
+        vm=initial_vm,
+    )
+    func_ref = dispatch.resolve(list(linked.func_symbol_table.values()))
+    func_label = _resolve_entry_function(
+        preambled, str(func_ref.name), linked.merged_cfg
+    )
+    remaining = max(vm_config.max_steps - preamble_trace.stats.steps, 0)
+    vm, dispatch_trace = execute_cfg_traced(
+        linked.merged_cfg,
+        func_label,
+        linked.merged_registry,
+        replace(vm_config, max_steps=remaining),
+        strategies,
+        vm=preambled,
+    )
+    return vm, _concatenated(preamble_trace, dispatch_trace)
 
 
 def run_linked_traced(
@@ -1189,7 +1293,6 @@ def run_linked_traced(
         Tuple of (final VMState, ExecutionTrace with per-step snapshots).
     """
     strategies = _build_strategies_from_linked(linked)
-
     vm_config = VMConfig(
         backend=backend,
         max_steps=max_steps,
@@ -1202,9 +1305,8 @@ def run_linked_traced(
     initial_vm = initial_vm_state()
     dispatch, entered = _entering(linked, entry_point)
     initial_vm.declarations = _declarations_at(linked, entered)
-
     if dispatch.is_top_level:
-        vm, trace = execute_cfg_traced(
+        return execute_cfg_traced(
             linked.merged_cfg,
             linked.merged_cfg.entry,
             linked.merged_registry,
@@ -1212,65 +1314,148 @@ def run_linked_traced(
             strategies,
             vm=initial_vm,
         )
-    else:
-        # Phase 1: preamble
-        module_entry = linked.merged_cfg.entry
-        vm, preamble_trace = execute_cfg_traced(
-            linked.merged_cfg,
-            module_entry,
-            linked.merged_registry,
-            vm_config,
-            strategies,
-            vm=initial_vm,
-        )
+    return _traced_function_entry(linked, dispatch, vm_config, strategies, initial_vm)
 
-        # Resolve entry point function via predicate
-        func_ref = dispatch.resolve(list(linked.func_symbol_table.values()))
-        func_label = _resolve_entry_function(vm, str(func_ref.name), linked.merged_cfg)
 
-        # Phase 2: dispatch into target function
-        remaining = max_steps - preamble_trace.stats.steps
-        phase2_config = replace(vm_config, max_steps=max(remaining, 0))
-        vm, dispatch_trace = execute_cfg_traced(
-            linked.merged_cfg,
-            func_label,
-            linked.merged_registry,
-            phase2_config,
-            strategies,
-            vm=vm,
-        )
+class _StatsObserver:
+    """Populates PipelineStats timing fields from frontend callbacks."""
 
-        # Concatenate traces: renumber dispatch steps with offset, combine stats
-        preamble_step_count = len(preamble_trace.steps)
-        renumbered_dispatch_steps = [
-            replace(step, step_index=step.step_index + preamble_step_count)
-            for step in dispatch_trace.steps
-        ]
+    def __init__(self, target: PipelineStats):
+        self._target = target
 
-        # Combine stats
-        combined_stats = ExecutionStats(
-            steps=preamble_trace.stats.steps + dispatch_trace.stats.steps,
-            llm_calls=preamble_trace.stats.llm_calls + dispatch_trace.stats.llm_calls,
-            final_heap_objects=dispatch_trace.stats.final_heap_objects,
-            final_symbolic_count=dispatch_trace.stats.final_symbolic_count,
-            closures_captured=preamble_trace.stats.closures_captured
-            + dispatch_trace.stats.closures_captured,
-        )
+    def on_parse(self, duration: float) -> None:
+        self._target.parse_time = duration
 
-        # Build concatenated trace with preamble's initial state
-        trace = ExecutionTrace(
-            steps=preamble_trace.steps + renumbered_dispatch_steps,
-            stats=combined_stats,
-            initial_state=preamble_trace.initial_state,
-        )
+    def on_lower(self, duration: float) -> None:
+        self._target.lower_time = duration
 
-    return vm, trace
+
+def _pipeline_stats(source: str, lang: Language, frontend_type: str) -> PipelineStats:
+    return PipelineStats(
+        source_bytes=len(source.encode("utf-8")),
+        source_lines=source.count("\n")
+        + (1 if source and not source.endswith("\n") else 0),
+        language=lang,
+        frontend_type=frontend_type,
+    )
+
+
+def _image_program(
+    lang: _ImageLanguage,
+    source: str,
+    copybook_dirs: Sequence[Path],
+    observer: FrontendObserver,
+    tolerant: bool,
+    stats: PipelineStats,
+) -> LinkedProgram:
+    linked = _compiled_image(
+        lang, source.encode("utf-8"), copybook_dirs, observer, tolerant
+    )
+    stats.ir_instruction_count = len(linked.merged_ir)
+    stats.cfg_block_count = len(linked.merged_cfg.blocks)
+    stats.registry_functions = len(linked.merged_registry.func_params)
+    stats.registry_classes = len(linked.merged_registry.classes)
+    return linked
+
+
+def _log_ir(verbose: bool, instructions: Sequence[InstructionBase]) -> None:
+    if not verbose:
+        return
+    logger.info("═══ IR ═══")
+    for inst in instructions:
+        logger.info("  %s", inst)
+    logger.info("")
+
+
+def _timed_cfg(
+    instructions: list[InstructionBase], verbose: bool, stats: PipelineStats
+) -> CFG:
+    started = time.perf_counter()
+    cfg = build_cfg(instructions)
+    stats.cfg_time = time.perf_counter() - started
+    stats.cfg_block_count = len(cfg.blocks)
+    if verbose:
+        logger.info("═══ CFG ═══")
+        logger.info("%s", cfg)
+    return cfg
+
+
+def _timed_registry(
+    instructions: list[InstructionBase],
+    cfg: CFG,
+    frontend: Frontend,
+    stats: PipelineStats,
+) -> FunctionRegistry:
+    started = time.perf_counter()
+    registry = build_registry(
+        instructions,
+        cfg,
+        func_symbol_table=frontend.func_symbol_table,
+        class_symbol_table=frontend.class_symbol_table,
+    )
+    stats.registry_time = time.perf_counter() - started
+    stats.registry_functions = len(registry.func_params)
+    stats.registry_classes = len(registry.classes)
+    return registry
+
+
+def _lowered_program(
+    source: str,
+    lang: Language,
+    frontend: Frontend,
+    verbose: bool,
+    stats: PipelineStats,
+) -> LinkedProgram:
+    instructions = frontend.lower(source.encode("utf-8"))
+    stats.ir_instruction_count = len(instructions)
+    logger.debug(
+        "Frontend produced %d IR instructions in %.1fms",
+        stats.ir_instruction_count,
+        (stats.parse_time + stats.lower_time) * 1000,
+    )
+    _log_ir(verbose, instructions)
+    cfg = _timed_cfg(instructions, verbose, stats)
+    return LinkedProgram(
+        modules={},
+        merged_ir=list(instructions),
+        merged_cfg=cfg,
+        merged_registry=_timed_registry(instructions, cfg, frontend, stats),
+        language=lang,
+        import_graph={},
+        type_env_builder=frontend.type_env_builder,
+        symbol_table=frontend.symbol_table,
+        func_symbol_table=frontend.func_symbol_table,
+        class_symbol_table=frontend.class_symbol_table,
+    )
+
+
+def _effective_entry(
+    lang: Language, entry_point: EntryPoint, linked: LinkedProgram
+) -> EntryPoint:
+    if not (_is_image_language(lang) and entry_point.is_top_level):
+        return entry_point
+    label = linked.entry_func_label
+    return EntryPoint.function(lambda ref: ref.label == label)
+
+
+def _record_run_times(
+    stats: PipelineStats, pipeline_start: float, exec_start: float
+) -> None:
+    finished = time.perf_counter()
+    stats.execution_time = finished - exec_start
+    stats.total_time = finished - pipeline_start
+
+
+def _log_report(verbose: bool, stats: PipelineStats) -> None:
+    if verbose:
+        logger.info("")
+        logger.info("%s", stats.report())
 
 
 def run(
     source: str,
     language: str | Language = Language.PYTHON,
-    entry_point: EntryPoint = EntryPoint.top_level(),
+    entry_point: EntryPoint = _TOP_LEVEL,
     backend: str = LLMProvider.CLAUDE,
     max_steps: int = 100,
     verbose: bool = False,
@@ -1302,108 +1487,29 @@ def run(
     """
     lang = Language(language)
     pipeline_start = time.perf_counter()
-    stats = PipelineStats(
-        source_bytes=len(source.encode("utf-8")),
-        source_lines=source.count("\n")
-        + (1 if source and not source.endswith("\n") else 0),
-        language=lang,
-        frontend_type=frontend_type,
-    )
-
-    # 1. Parse + Lower
-    class _StatsObserver:
-        """Populates PipelineStats timing fields from frontend callbacks."""
-
-        def __init__(self, target: PipelineStats):
-            self._target = target
-
-        def on_parse(self, duration: float) -> None:
-            self._target.parse_time = duration
-
-        def on_lower(self, duration: float) -> None:
-            self._target.lower_time = duration
-
-    observer: FrontendObserver = _StatsObserver(stats)
-    if _is_image_language(lang):
-        linked = _compiled_image(
-            lang, source.encode("utf-8"), copybook_dirs, observer, tolerant
-        )
-        stats.ir_instruction_count = len(linked.merged_ir)
-        stats.cfg_block_count = len(linked.merged_cfg.blocks)
-        stats.registry_functions = len(linked.merged_registry.func_params)
-        stats.registry_classes = len(linked.merged_registry.classes)
-    else:
-        resolved_frontend_type = frontend_type
-        frontend = get_frontend(
+    stats = _pipeline_stats(source, lang, frontend_type)
+    observer = _StatsObserver(stats)
+    linked = (
+        _image_program(lang, source, copybook_dirs, observer, tolerant, stats)
+        if _is_image_language(lang)
+        else _lowered_program(
+            source,
             lang,
-            frontend_type=resolved_frontend_type,
-            llm_provider=backend,
-            llm_client=llm_client,
-            observer=observer,
+            get_frontend(
+                lang,
+                frontend_type=frontend_type,
+                llm_provider=backend,
+                llm_client=llm_client,
+                observer=observer,
+            ),
+            verbose,
+            stats,
         )
-        instructions = frontend.lower(source.encode("utf-8"))
-
-        stats.ir_instruction_count = len(instructions)
-        logger.debug(
-            "Frontend produced %d IR instructions in %.1fms",
-            stats.ir_instruction_count,
-            (stats.parse_time + stats.lower_time) * 1000,
-        )
-
-        if verbose:
-            logger.info("═══ IR ═══")
-            for inst in instructions:
-                logger.info("  %s", inst)
-            logger.info("")
-
-        # 2. Build CFG
-        t0 = time.perf_counter()
-        cfg = build_cfg(instructions)
-        stats.cfg_time = time.perf_counter() - t0
-        stats.cfg_block_count = len(cfg.blocks)
-
-        if verbose:
-            logger.info("═══ CFG ═══")
-            logger.info("%s", cfg)
-
-        # 3. Build function registry
-        t0 = time.perf_counter()
-        registry = build_registry(
-            instructions,
-            cfg,
-            func_symbol_table=frontend.func_symbol_table,
-            class_symbol_table=frontend.class_symbol_table,
-        )
-        stats.registry_time = time.perf_counter() - t0
-        stats.registry_functions = len(registry.func_params)
-        stats.registry_classes = len(registry.classes)
-
-        # 4. Build single-module LinkedProgram
-        linked = LinkedProgram(
-            modules={},
-            merged_ir=list(instructions),
-            merged_cfg=cfg,
-            merged_registry=registry,
-            language=lang,
-            import_graph={},
-            type_env_builder=frontend.type_env_builder,
-            symbol_table=frontend.symbol_table,
-            func_symbol_table=frontend.func_symbol_table,
-            class_symbol_table=frontend.class_symbol_table,
-        )
-
-    # For COBOL and HLASM, when using the default top-level entry point, switch to
-    # function-entry mode so run_linked runs every module's init block first
-    # (phase 1) then dispatches into the main program's procedure (phase 2).
-    if _is_image_language(lang) and entry_point.is_top_level:
-        _label = linked.entry_func_label
-        entry_point = EntryPoint.function(lambda ref: ref.label == _label)
-
-    # 5. Execute via run_linked
+    )
     exec_start = time.perf_counter()
     vm = run_linked(
         linked,
-        entry_point=entry_point,
+        entry_point=_effective_entry(lang, entry_point, linked),
         max_steps=max_steps,
         verbose=verbose,
         backend=backend,
@@ -1412,13 +1518,8 @@ def run(
         builtins=core_builtins(),
         initial_vm=initial_vm_state(io_provider=io_provider, null_access=null_access),
     )
-    stats.execution_time = time.perf_counter() - exec_start
-    stats.total_time = time.perf_counter() - pipeline_start
-
-    if verbose:
-        logger.info("")
-        logger.info("%s", stats.report())
-
+    _record_run_times(stats, pipeline_start, exec_start)
+    _log_report(verbose, stats)
     return vm
 
 
@@ -1442,29 +1543,44 @@ def _compiled_image(
             )
 
 
+def _format_symbolic(name: str, constraints: Sequence[str], hint: str) -> str:
+    if constraints:
+        return f"{name} [{', '.join(constraints)}]"
+    return f"{name}" + (f" ({hint})" if hint else "")
+
+
+def _format_dict_symbolic(v: Mapping[str, Any]) -> str:
+    return _format_symbolic(
+        v.get("name", "?"),
+        [str(c) for c in v.get("constraints", [])],
+        v.get("type_hint", ""),
+    )
+
+
+def _format_bound_func(v: BoundFuncRef) -> str:
+    suffix = f"#{v.closure_id}" if v.closure_id else ""
+    return f"<function:{v.func_ref.name}@{v.func_ref.label}{suffix}>"
+
+
+def _format_class(v: ClassRef) -> str:
+    parents = f":{','.join(str(p) for p in v.parents)}" if v.parents else ""
+    return f"<class:{v.name}@{v.label}{parents}>"
+
+
 def _format_val(
     v: Any,
 ) -> str:  # Any: display boundary — formats all runtime value types
     """Format a value for verbose display."""
-    if isinstance(v, TypedValue):
-        return _format_val(v.value)
-    if isinstance(v, SymbolicValue):
-        if v.constraints:
-            return f"{v.name} [{', '.join(v.constraints)}]"
-        return f"{v.name}" + (f" ({v.type_hint})" if v.type_hint else "")
-    if isinstance(v, dict) and v.get("__symbolic__"):
-        name = v.get("name", "?")
-        constraints = v.get("constraints", [])
-        if constraints:
-            return f"{name} [{', '.join(str(c) for c in constraints)}]"
-        hint = v.get("type_hint", "")
-        return f"{name}" + (f" ({hint})" if hint else "")
-    if isinstance(v, BoundFuncRef):
-        if v.closure_id:
-            return f"<function:{v.func_ref.name}@{v.func_ref.label}#{v.closure_id}>"
-        return f"<function:{v.func_ref.name}@{v.func_ref.label}>"
-    if isinstance(v, ClassRef):
-        if v.parents:
-            return f"<class:{v.name}@{v.label}:{','.join(str(p) for p in v.parents)}>"
-        return f"<class:{v.name}@{v.label}>"
-    return repr(v)
+    match v:
+        case TypedValue():
+            return _format_val(v.value)
+        case SymbolicValue():
+            return _format_symbolic(v.name, v.constraints, v.type_hint or "")
+        case dict() if v.get("__symbolic__"):
+            return _format_dict_symbolic(v)
+        case BoundFuncRef():
+            return _format_bound_func(v)
+        case ClassRef():
+            return _format_class(v)
+        case _:
+            return repr(v)
