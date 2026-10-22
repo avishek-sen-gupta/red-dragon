@@ -15,11 +15,15 @@ from hlasm_asg.program.vec_reg_operand import VecRegOperand
 from interpreter.hlasm.hlasm_lowering_error import HlasmLoweringError
 
 
-def _mismatch(statement: MachineStatement, index: int, expected: str) -> Exception:
-    where = (
+def statement_place(statement: MachineStatement) -> str:
+    return (
         f"{statement.base_mnemonic} in {statement.section} at offset {statement.offset}"
-        f" ({statement.origin.file}:{statement.origin.line}) operand {index}"
+        f" ({statement.origin.file}:{statement.origin.line})"
     )
+
+
+def _mismatch(statement: MachineStatement, index: int, expected: str) -> Exception:
+    where = f"{statement_place(statement)} operand {index}"
     found = (
         repr(statement.operands[index])
         if index < len(statement.operands)
@@ -38,6 +42,16 @@ def reg_operand(statement: MachineStatement, index: int) -> int:
             return value
         case _:
             raise _mismatch(statement, index, "a register")
+
+
+def value_operand(
+    statement: MachineStatement, index: int
+) -> RegOperand | MaskOperand | ImmOperand:
+    match _at(statement, index):
+        case [RegOperand() | MaskOperand() | ImmOperand() as operand]:
+            return operand
+        case _:
+            raise _mismatch(statement, index, "a register, mask or immediate")
 
 
 def mask_operand(statement: MachineStatement, index: int) -> int:

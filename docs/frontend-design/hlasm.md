@@ -9,7 +9,7 @@ assembly are the che4z language server's, through a forked bridge executable;
 Python lowers what che4z has already resolved. The machine claims z17 problem
 state and stays in AMODE 31. Lowered so far: SVC and the load and store, load
 address and immediates, signed add and subtract, logical add and subtract, compare,
-boolean, shift and rotate, multiply and divide, storage move, storage compare, translate, branch on condition, branch and link, and branch on count and index units (see
+boolean, shift and rotate, multiply and divide, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, and execute units (see
 Opcode Units).
 Any other opcode abends `S0C1` at run time.
 
@@ -90,6 +90,12 @@ addresses.
 | `interpreter/hlasm/opcodes/branch_on_condition.py` | The branch on condition unit |
 | `interpreter/hlasm/opcodes/branch_and_link.py` | The branch and link unit and the addressing-mode instructions |
 | `interpreter/hlasm/opcodes/loop_branch.py` | The branch on count and branch on index unit |
+| `interpreter/hlasm/lower_statement.py` | Lowers one statement: EX and EXRL through `execute.py`, any other machine instruction through `OPCODE_LOWERINGS` |
+| `interpreter/hlasm/machine_statements.py` | `MachineStatements`: the assembly's machine statements by section and offset |
+| `interpreter/hlasm/execute.py` | EX and EXRL: resolve the target, check it, and select an inline copy per byte-1 value |
+| `interpreter/hlasm/byte_one_layouts.py` | Byte 1 of each instruction format, by format and operand shape (`operand_slot.py`); an unlisted shape is an opcode byte |
+| `interpreter/hlasm/byte_one_layout.py`, `byte_one_field.py` | A format's byte-1 fields, ignored bits and opcode bits; the byte a statement encodes, the values R1 can make of it, the statement a value decodes to |
+| `interpreter/hlasm/byte_one_part.py`, `operand_value_part.py`, `storage_index_part.py`, `length_code_part.py` | What a byte-1 field holds: an R, M or I value, an X2 index, or a length code (written length minus one) |
 | `interpreter/hlasm/opcodes/operand_sources.py` | Named second-operand sources shared by the arithmetic, compare and load-sign units |
 | `interpreter/hlasm/opcodes/result_and_cc.py` | Splices a (result, CC) builder over register, storage or immediate operands and stores both; its storage-immediate read-modify-write |
 | `interpreter/hlasm/data_movement.py` | `move(source, transforms, sink)`: storage, relative-long, address, immediate and register sources and sinks, addressed by operand index; sign extension, `MOD 2^n` wrap, masks, shifts, byte reversal, bit fields (`field_of`, `into_field`); the even-odd pair's low words as one 64-bit value, or both registers as one 128-bit value; R1+1 as a source; the storage-immediate read-modify-write |
@@ -477,14 +483,43 @@ Tables are read at the table address plus the argument (times two for two-byte f
   doubleword, and indexes TRTE's two-byte functions by a two-byte argument's low byte. The z390
   test pins all three.
 
+**Execute (red-dragon-6uyp.39).** EX, EXRL. Lowered by compile-time variant expansion (ruling R30).
+
+- The target is found at assembly: EXRL's from its relative operand, EX's from the storage
+  operand's address as written (RELOC, no index). The target runs as if it sat at the execute
+  instruction, so link information (BAL, BAS, BRAS) points after the EX or EXRL. Relative
+  operands arrive resolved, so they stay relative to the target. The CC is the target's.
+- R1 = 0 lowers one copy of the target. Otherwise v = (GR R1 bits 56-63 OR the target's byte 1),
+  kept to the format's operand fields; a binary tree of `<` tests over the values v can reach
+  (the supersets of the target's byte) selects one inline copy, lowered through
+  `OPCODE_LOWERINGS` with its operands decoded from v. Every copy joins after the tree.
+- Byte 1 maps per format and operand shape: SS-a L, SS-b L1/L2, SS-c L1/I3, SS-f L2, SI and SIY
+  I2, I (SVC) I, RR R1/R2, RX and RXY R1/X2, RXF R3/X2, RS and RSY R1/R3 or R1/M3, RI and RIL
+  R1, the RIE, RIS, RRS, RSI, RSL, SS-e and SSF fields. Unused fields are ignored. Bits that
+  are opcode (RI and RIL low nibble; all of RRE, RRF, RRD, S, SIL, SSE, E, IE) abend `S0C1` when R1 sets
+  any of them.
+- A target that is EX, EXRL, TBEGIN, TBEGINC, TEND or TABORT abends `S0C3`; an odd EX target
+  `S0C6`, before R1 is read.
+- Size: `EX 2,MOVE` with `MOVE MVC 0(0,3),0(4)` lowers to 13,319 IR instructions (256 copies of
+  MVC's 46, 255 tree tests). One execution costs 36 VM steps over the MVC itself; with R1 = 0,
+  none.
+- z390 does not check the odd EX target (it abends `S0C1`) and links an executed BRAS after the
+  BRAS. The z390 test pins both.
+
 ## Known Gaps
 
-- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, and branch on count and index units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
+- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, and execute units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
 - DC types beyond C, X, B, F, H, P, Z, A, Y and V, and any type extension, raise `UnsupportedDataType` (red-dragon-6uyp.63; floating point E, D, L: red-dragon-6uyp.21).
 - Falling through into DC/DS data or past a CSECT's end skips the data instead of executing it, and a branch into data abends `S0C1` (red-dragon-6uyp.64).
 - Emission is O(n²) in the number of IR instructions, and every branch, even to a static relative target, walks the dispatch chain (red-dragon-6uyp.62).
 - `EXTRN`, `ENTRY` and V-type constants are not resolved; V-constants hold zero (red-dragon-6uyp.8, red-dragon-6uyp.15).
-- Machine-instruction bytes are not in section storage (a spec non-goal: self-modifying code), so `EX` targets and `CLC` against code do not see them.
+- Machine-instruction bytes are not in section storage (a spec non-goal: self-modifying code), so `CLC` against code does not see them. EX finds its target at assembly instead.
+- An EX target written with an explicit base or an index, an EXRL to an absolute target, or one
+  where no machine statement starts abends `S0C1` with a logged warning (red-dragon-6uyp.77). EX
+  ignores the base register's run-time value.
+- EX and EXRL do not model R1 bits ORed into opcode bits; che4z exports no opcodes. Any R1 bit in
+  an opcode position abends `S0C1`, even one the opcode already has; byte-1 shapes not in the
+  table (SS-d, the vector formats) count as opcode (red-dragon-6uyp.78).
 - che4z encodes LHHR and LLHFR without the Z bit, where the Principles of Operation (Figure 7-397) define RISBHGZ and RISBLGZ; the range is the whole word, so the result is the same.
 - Bridge gaps: `*` in a later DC operand takes the statement address (red-dragon-6uyp.65); bit-length data reports byte length (red-dragon-6uyp.66); S-type constants are not USING-resolved (red-dragon-6uyp.67); complex-relocatable constants refuse the assembly (red-dragon-6uyp.68).
 - AMODE 24 and 64 are not modelled: SAM24, SAM64 and BASSM or BSM into those modes
@@ -549,6 +584,8 @@ Tables are read at the table address plus the argument (times two for two-byte f
 | `tests/integration/hlasm/test_ss_compare.py` | Every storage compare mnemonic on the VM: CC 0-2 and registers; CLC lengths 0 and 256, inequality against the pad, zero lengths, bit 32 cleared or kept, a pad from a base register, CLST ending first and a high ending character, CUSE found, ended, zero substring and negative lengths; CLCLU odd length and CLST's GR0 abend `S0C6` |
 | `tests/unit/hlasm/test_translate_lowering.py` | Translate IR: one unit and one function per iteration at each form's widths, stores only where the form translates, no comparison on a byte image, M3 bit 3 drops the test, odd pairs abend `S0C6` |
 | `tests/integration/hlasm/test_translate.py` | Every translate mnemonic on the VM: storage, registers, CC; TR overlap and lengths, TRT and TRTR CC 0-2 and bit 32, TRE found, ended and length 0, the test character and its control, ignored table bits, each TRTE and TRTRE control; odd lengths abend `S0C6` |
+| `tests/unit/hlasm/test_execute_lowering.py` | Execute IR: byte 1 decoded per format, R1 = 0 lowers the target unmodified at the EX, one copy per reachable value under a 255-test tree, the opcode-bit guard, `S0C3` and `S0C6` before any copy, unresolved targets abend `S0C1` with a warning |
+| `tests/integration/hlasm/test_execute.py` | EX and EXRL on the VM: MVC lengths, CLI immediates, an SVC number, BAL, BRAS, AR and LHI fields and a branch mask from R1; links after the execute instruction; CC kept; `S0C3`, `S0C6`; indexed targets and opcode modification xfailed (red-dragon-6uyp.77, red-dragon-6uyp.78) |
 | `tests/integration/hlasm/test_bridge_parser.py` | The real bridge: macro origins, refused assemblies |
 | `tests/integration/hlasm/test_storage_layout.py` | Section regions and address constants |
 | `tests/integration/hlasm/test_svc.py` | `WTO`, `ABEND` user and system codes, unlowered SVCs, `run()` with our maclib then `copybook_dirs`, call-site spans |
@@ -568,6 +605,7 @@ Tables are read at the table address plus the argument (times two for two-byte f
 | `tests/z390/test_ss_compare_differential.py` | Every storage compare case against z390; z390's CLCL pad, CLCLU, CLST and CUSE differences pinned (`-m z390`) |
 | `tests/z390/test_translate_differential.py` | Every translate case against z390; z390's TRE length 0, TROO table alignment and TRTE argument truncation pinned (`-m z390`) |
 | `tests/z390/test_test_under_mask_differential.py` | Every test under mask case against z390; no differences (`-m z390`) |
+| `tests/z390/test_execute_differential.py` | Every execute case against z390; z390's missing odd-target check and BRAS link pinned, and the targets RedDragon abends on run there (`-m z390`) |
 | `tests/z390/test_compare_differential.py` | Every compare mnemonic against z390; the relative-long alignment difference pinned (`-m z390`) |
 | `tests/z390/test_branch_on_condition_differential.py` | Every branch on condition case against z390; the BIC, BPP and BPRP differences and branches into data pinned (`-m z390`) |
 | `tests/z390/test_branch_and_link_differential.py` | Every branch and link case and the mode-setting returns against z390; z390's AMODE 24 and 64 switches pinned (`-m z390`) |

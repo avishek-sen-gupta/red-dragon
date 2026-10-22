@@ -16,6 +16,7 @@ from interpreter.hlasm.hlasm_constants import OPERATION_EXCEPTION_ABEND
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.lower_statement import lower_statement
 from interpreter.hlasm.machine import machine_allocation
+from interpreter.hlasm.machine_statements import MachineStatements
 from interpreter.hlasm.statement_location import statement_location
 from interpreter.hlasm.storage_layout import section_allocation
 from interpreter.instructions import Branch, InstructionBase, Label_
@@ -30,6 +31,7 @@ class HlasmFrontend(Frontend):
     def __init__(self, program: HlasmProgram) -> None:
         self._program = program
         self._entry = resolve_entry(program)
+        self._statements = MachineStatements(program.statements)
 
     @property
     def entry_name(self) -> str:
@@ -93,5 +95,5 @@ class HlasmFrontend(Frontend):
                 Label_(label=statement_label(statement.section, statement.offset))
             )
         start = len(emitter.instructions())
-        lower_statement(emitter, statement)
+        lower_statement(emitter, statement, self._statements)
         emitter.locate_from(start, statement_location(statement.origin))

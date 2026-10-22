@@ -8,13 +8,13 @@
 
 **RedDragon** lowers source in 15 tree-sitter languages, COBOL and HLASM to one universal IR, and runs that IR on a VM. It is built for code that is often incomplete: legacy source, decompiled binaries, partial extracts, and codebases with missing dependencies.
 
-- **Frontends.** Tree-sitter frontends (15 languages), a ProLeap bridge (COBOL) and a che4z bridge (HLASM, nine opcode units so far) lower well-formed source deterministically. An optional LLM repair loop fixes malformed fragments and re-parses. For languages with no frontend, an LLM lowers the source to IR directly.
+- **Frontends.** Tree-sitter frontends (15 languages), a ProLeap bridge (COBOL) and a che4z bridge (HLASM, 17 opcode units so far) lower well-formed source deterministically. An optional LLM repair loop fixes malformed fragments and re-parses. For languages with no frontend, an LLM lowers the source to IR directly.
 - **IR.** One flattened three-address code IR with [38 opcodes](docs/ir-reference.md) and source locations. Every frontend emits it.
 - **VM.** Executes the IR deterministically. When a call or import cannot be resolved, it creates a symbolic placeholder, or optionally asks an LLM for a plausible value, and keeps going.
 
 With complete source and all dependencies present, parse → lower → execute makes **0 LLM calls**. LLMs are used only where information is missing.
 
-**Scale:** 15 tree-sitter frontends + COBOL (139 enumerated features) + HLASM (9 opcode units) + LLM frontends · 16,147 tests in the default run (`external`, `nist` and `z390` markers excluded)
+**Scale:** 15 tree-sitter frontends + COBOL (139 enumerated features) + HLASM (17 opcode units) + LLM frontends · 16,147 tests in the default run (`external`, `nist` and `z390` markers excluded)
 
 **COBOL conformance:** measured against the NIST COBOL-85 test suite (CCVS) — see [NIST CCVS conformance](docs/nist/README.md) for the method and dated full-run snapshots, the latest being [2026-10-19](docs/nist/2026-10-19-closing-conformance-report.md).
 
@@ -138,7 +138,7 @@ make setup   # submodules + ProLeap parser + bridge JAR
 make test    # full suite; builds the JAR if missing and the HLASM bridge incrementally
 ```
 
-`make help` lists the other targets (`jar`, `jar-force`, `parser`, `hlasm-bridge`, `fmt`, `lint`). The JAR lands at `proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar`. `make hlasm-bridge` builds the che4z submodule's `hlasm_ast_bridge` at `hlasm-bridge/che4z/build/bin/hlasm_ast_bridge`. It writes the instruction table (`--instruction-table`) or, given a source file and `--syslib` directories, the assembled program as JSON: sections, symbols, literals, and each machine and DC/DS statement with its offset and USING-resolved operands; tests read its path from `HLASM_AST_BRIDGE`, defaulting to that path. `make test` rebuilds it incrementally every run; the first build takes several minutes, a no-op rebuild about a second.
+`make help` lists the other targets (`jar`, `jar-force`, `parser`, `hlasm-bridge`, `fmt`, `lint`). The JAR lands at `proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar`. `make hlasm-bridge` builds the che4z submodule's `hlasm_ast_bridge` at `hlasm-bridge/che4z/build/bin/hlasm_ast_bridge`. It writes the instruction table (`--instruction-table`) or, given a source file and `--syslib` directories, the assembled program as JSON: sections, symbols, literals, and each machine and DC/DS statement with its offset and USING-resolved operands (a storage operand also as written); tests read its path from `HLASM_AST_BRIDGE`, defaulting to that path. `make test` rebuilds it incrementally every run; the first build takes several minutes, a no-op rebuild about a second.
 
 The parser is installed into the local Maven repository, `~/.m2/repository` by default. Set `MAVEN_REPO_LOCAL=<dir>` to use another one: the parser staleness check and every `mvn` call (Makefile and `proleap-bridge/build.sh`) then use it. Give each parallel worktree its own, or their builds overwrite each other's installed parser.
 
