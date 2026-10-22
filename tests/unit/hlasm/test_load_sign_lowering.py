@@ -3,12 +3,7 @@
 
 from collections.abc import Sequence
 
-from hlasm_asg.program.abs_address import AbsAddress
 from hlasm_asg.program.machine_statement import MachineStatement
-from hlasm_asg.program.open_code_origin import OpenCodeOrigin
-from hlasm_asg.program.operand import Operand
-from hlasm_asg.program.reg_operand import RegOperand
-from hlasm_asg.program.storage_operand import StorageOperand
 from interpreter.hlasm.hlasm_constants import PROGRAM_MASK_VAR
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.machine import machine_allocation
@@ -27,6 +22,11 @@ from interpreter.instructions import (
 from interpreter.var_name import VarName
 from interpreter.vm.vm_types import SymbolicValue
 from tests.covers import NotLanguageFeature, covers
+from tests.unit.hlasm.lowering_helpers import (
+    machine_statement,
+    reg_operand,
+    storage_operand,
+)
 from tests.unit.hlasm.straight_line_vm import register_value, run_straight_line
 
 BASE = 12
@@ -39,35 +39,6 @@ OVERFLOW_TRAP = [
 ]
 OVERFLOW_UNMASKED = 0b1110
 OVERFLOW_MASKED = 0b0110
-
-
-def _statement(mnemonic: str, operands: Sequence[Operand]) -> MachineStatement:
-    return MachineStatement(
-        kind="MACHINE",
-        section="T",
-        offset=2,
-        label="",
-        mnemonic=mnemonic,
-        base_mnemonic=mnemonic,
-        format="",
-        length=6,
-        operands=tuple(operands),
-        origin=OpenCodeOrigin(kind="OPEN_CODE", file="t.asm", line=1),
-    )
-
-
-def _reg(value: int) -> RegOperand:
-    return RegOperand(kind="REG", value=value)
-
-
-def _storage(displacement: int) -> StorageOperand:
-    return StorageOperand(
-        kind="STORAGE",
-        displacement=displacement,
-        index=0,
-        base=BASE,
-        written=AbsAddress(kind="ABS", value=displacement),
-    )
 
 
 def _lowered(statement: MachineStatement) -> tuple[InstructionBase, ...]:
@@ -112,19 +83,21 @@ def _gpr(r: int, width: int) -> tuple[str, int, int]:
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_each_form_reads_and_writes_its_operand_widths_and_only_the_overflowing_forms_trap():
     lowered = {
-        "LT": _lowered(_statement("LT", (_reg(2), _storage(8)))),
-        "LTGF": _lowered(_statement("LTGF", (_reg(2), _storage(8)))),
-        "LTR": _lowered(_statement("LTR", (_reg(5), _reg(3)))),
-        "LTGR": _lowered(_statement("LTGR", (_reg(5), _reg(3)))),
-        "LCR": _lowered(_statement("LCR", (_reg(5), _reg(3)))),
-        "LCGR": _lowered(_statement("LCGR", (_reg(5), _reg(3)))),
-        "LCGFR": _lowered(_statement("LCGFR", (_reg(5), _reg(3)))),
-        "LPR": _lowered(_statement("LPR", (_reg(5), _reg(3)))),
-        "LPGR": _lowered(_statement("LPGR", (_reg(5), _reg(3)))),
-        "LPGFR": _lowered(_statement("LPGFR", (_reg(5), _reg(3)))),
-        "LNR": _lowered(_statement("LNR", (_reg(5), _reg(3)))),
-        "LNGR": _lowered(_statement("LNGR", (_reg(5), _reg(3)))),
-        "LNGFR": _lowered(_statement("LNGFR", (_reg(5), _reg(3)))),
+        "LT": _lowered(machine_statement("LT", (reg_operand(2), storage_operand(8)))),
+        "LTGF": _lowered(
+            machine_statement("LTGF", (reg_operand(2), storage_operand(8)))
+        ),
+        "LTR": _lowered(machine_statement("LTR", (reg_operand(5), reg_operand(3)))),
+        "LTGR": _lowered(machine_statement("LTGR", (reg_operand(5), reg_operand(3)))),
+        "LCR": _lowered(machine_statement("LCR", (reg_operand(5), reg_operand(3)))),
+        "LCGR": _lowered(machine_statement("LCGR", (reg_operand(5), reg_operand(3)))),
+        "LCGFR": _lowered(machine_statement("LCGFR", (reg_operand(5), reg_operand(3)))),
+        "LPR": _lowered(machine_statement("LPR", (reg_operand(5), reg_operand(3)))),
+        "LPGR": _lowered(machine_statement("LPGR", (reg_operand(5), reg_operand(3)))),
+        "LPGFR": _lowered(machine_statement("LPGFR", (reg_operand(5), reg_operand(3)))),
+        "LNR": _lowered(machine_statement("LNR", (reg_operand(5), reg_operand(3)))),
+        "LNGR": _lowered(machine_statement("LNGR", (reg_operand(5), reg_operand(3)))),
+        "LNGFR": _lowered(machine_statement("LNGFR", (reg_operand(5), reg_operand(3)))),
     }
     word_from_3_to_5 = [("LoadRegion", *_gpr(3, 4)), ("WriteRegion", *_gpr(5, 4))]
     doubleword_from_3_to_5 = [("LoadRegion", *_gpr(3, 8)), ("WriteRegion", *_gpr(5, 8))]
@@ -170,7 +143,9 @@ def _trap_taken(
     mask = emitter.int_(program_mask)
     emitter.emit_inst(StoreVar(name=PROGRAM_MASK_VAR, value_reg=mask))
     emitter.store_gr32(3, emitter.int_(value))
-    OPCODE_LOWERINGS[mnemonic](emitter, _statement(mnemonic, (_reg(2), _reg(3))))
+    OPCODE_LOWERINGS[mnemonic](
+        emitter, machine_statement(mnemonic, (reg_operand(2), reg_operand(3)))
+    )
     ir = emitter.instructions()
     branch = next(i for i in ir if isinstance(i, BranchIf))
     vm = run_straight_line((*machine_allocation(), *ir[: ir.index(branch)]), {})

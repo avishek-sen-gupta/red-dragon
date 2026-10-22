@@ -4,12 +4,8 @@
 from collections.abc import Sequence
 
 from hlasm_asg.program.abs_address import AbsAddress
-from hlasm_asg.program.imm_operand import ImmOperand
 from hlasm_asg.program.machine_statement import MachineStatement
 from hlasm_asg.program.mask_operand import MaskOperand
-from hlasm_asg.program.open_code_origin import OpenCodeOrigin
-from hlasm_asg.program.operand import Operand
-from hlasm_asg.program.reg_operand import RegOperand
 from hlasm_asg.program.storage_operand import StorageOperand
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.opcodes import OPCODE_LOWERINGS
@@ -26,33 +22,15 @@ from interpreter.instructions import (
 )
 from interpreter.operator_kind import BinopKind
 from tests.covers import NotLanguageFeature, covers
+from tests.unit.hlasm.lowering_helpers import (
+    imm_operand,
+    machine_statement,
+    reg_operand,
+)
 
 INDEX = 3
 BASE = 4
 GPRS = "__hlasm_gprs"
-
-
-def _statement(mnemonic: str, operands: Sequence[Operand]) -> MachineStatement:
-    return MachineStatement(
-        kind="MACHINE",
-        section="T",
-        offset=2,
-        label="",
-        mnemonic=mnemonic,
-        base_mnemonic=mnemonic,
-        format="",
-        length=6,
-        operands=tuple(operands),
-        origin=OpenCodeOrigin(kind="OPEN_CODE", file="t.asm", line=1),
-    )
-
-
-def _reg(value: int) -> RegOperand:
-    return RegOperand(kind="REG", value=value)
-
-
-def _imm(value: int) -> ImmOperand:
-    return ImmOperand(kind="IMM", value=value)
 
 
 def _indexed(displacement: int) -> StorageOperand:
@@ -106,7 +84,7 @@ def _full(r: int) -> tuple[int, int]:
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_load_address_reads_index_and_base_and_writes_only_the_low_word():
-    ir = _lowered(_statement("LAY", (_reg(2), _indexed(-3))))
+    ir = _lowered(machine_statement("LAY", (reg_operand(2), _indexed(-3))))
 
     assert _gpr_accesses(ir) == [
         ("LoadRegion", *_low(INDEX)),
@@ -119,7 +97,9 @@ def test_load_address_reads_index_and_base_and_writes_only_the_low_word():
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_indexed_address_shifts_the_index_sum_before_adding_the_base():
-    ir = _lowered(_statement("LXAG", (MaskOperand(kind="MASK", value=2), _indexed(1))))
+    ir = _lowered(
+        machine_statement("LXAG", (MaskOperand(kind="MASK", value=2), _indexed(1)))
+    )
 
     assert _gpr_accesses(ir) == [
         ("LoadRegion", *_low(INDEX)),
@@ -141,9 +121,11 @@ def test_indexed_address_shifts_the_index_sum_before_adding_the_base():
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_immediates_write_the_register_width_and_inserts_read_it_first():
-    loaded = _lowered(_statement("LLIHF", (_reg(2), _imm(-1))))
-    halfword = _lowered(_statement("LHI", (_reg(2), _imm(-1))))
-    inserted = _lowered(_statement("IIHL", (_reg(2), _imm(0x8002))))
+    loaded = _lowered(machine_statement("LLIHF", (reg_operand(2), imm_operand(-1))))
+    halfword = _lowered(machine_statement("LHI", (reg_operand(2), imm_operand(-1))))
+    inserted = _lowered(
+        machine_statement("IIHL", (reg_operand(2), imm_operand(0x8002)))
+    )
 
     assert _gpr_accesses(loaded) == [("WriteRegion", *_full(2))]
     assert _gpr_accesses(halfword) == [("WriteRegion", *_low(2))]

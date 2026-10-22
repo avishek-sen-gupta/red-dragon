@@ -5,9 +5,6 @@ from collections.abc import Sequence
 
 from hlasm_asg.program.abs_address import AbsAddress
 from hlasm_asg.program.machine_statement import MachineStatement
-from hlasm_asg.program.open_code_origin import OpenCodeOrigin
-from hlasm_asg.program.operand import Operand
-from hlasm_asg.program.reg_operand import RegOperand
 from hlasm_asg.program.storage_operand import StorageOperand
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.opcodes import OPCODE_LOWERINGS
@@ -23,30 +20,15 @@ from interpreter.instructions import (
     WriteRegion,
 )
 from tests.covers import NotLanguageFeature, covers
+from tests.unit.hlasm.lowering_helpers import (
+    machine_statement,
+    reg_operand,
+)
 
 BASE = 12
 GPRS = "__hlasm_gprs"
 CC = "StoreVar:__hlasm_cc"
 OVERFLOW_TRAP = [CC, "BranchIf", "StoreVar:__hlasm_abend", "Halt_"]
-
-
-def _statement(mnemonic: str, operands: Sequence[Operand]) -> MachineStatement:
-    return MachineStatement(
-        kind="MACHINE",
-        section="T",
-        offset=2,
-        label="",
-        mnemonic=mnemonic,
-        base_mnemonic=mnemonic,
-        format="",
-        length=6,
-        operands=tuple(operands),
-        origin=OpenCodeOrigin(kind="OPEN_CODE", file="t.asm", line=1),
-    )
-
-
-def _reg(value: int) -> RegOperand:
-    return RegOperand(kind="REG", value=value)
 
 
 def _storage() -> StorageOperand:
@@ -103,35 +85,41 @@ DIVIDE_CHECKS = ["BranchIf", "StoreVar:__hlasm_abend", "Halt_"] * 2
 PAIR_FORMS = {
     "M": _storage(),
     "MFY": _storage(),
-    "MR": _reg(6),
+    "MR": reg_operand(6),
     "ML": _storage(),
-    "MLR": _reg(6),
+    "MLR": reg_operand(6),
     "MG": _storage(),
     "MLG": _storage(),
-    "MLGR": _reg(6),
+    "MLGR": reg_operand(6),
     "D": _storage(),
-    "DR": _reg(6),
+    "DR": reg_operand(6),
     "DL": _storage(),
-    "DLR": _reg(6),
+    "DLR": reg_operand(6),
     "DLG": _storage(),
-    "DLGR": _reg(6),
+    "DLGR": reg_operand(6),
     "DSG": _storage(),
-    "DSGR": _reg(6),
+    "DSGR": reg_operand(6),
     "DSGF": _storage(),
-    "DSGFR": _reg(6),
+    "DSGFR": reg_operand(6),
 }
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_multiplies_read_and_write_their_widths_and_only_checked_forms_set_cc():
     lowered = {
-        "MS": _lowered(_statement("MS", (_reg(2), _storage()))),
-        "MSGF": _lowered(_statement("MSGF", (_reg(5), _storage()))),
-        "M": _lowered(_statement("M", (_reg(2), _storage()))),
-        "MLGR": _lowered(_statement("MLGR", (_reg(4), _reg(7)))),
-        "MGRK": _lowered(_statement("MGRK", (_reg(4), _reg(7), _reg(9)))),
-        "MSC": _lowered(_statement("MSC", (_reg(2), _storage()))),
-        "MSGRKC": _lowered(_statement("MSGRKC", (_reg(5), _reg(3), _reg(4)))),
+        "MS": _lowered(machine_statement("MS", (reg_operand(2), _storage()))),
+        "MSGF": _lowered(machine_statement("MSGF", (reg_operand(5), _storage()))),
+        "M": _lowered(machine_statement("M", (reg_operand(2), _storage()))),
+        "MLGR": _lowered(machine_statement("MLGR", (reg_operand(4), reg_operand(7)))),
+        "MGRK": _lowered(
+            machine_statement("MGRK", (reg_operand(4), reg_operand(7), reg_operand(9)))
+        ),
+        "MSC": _lowered(machine_statement("MSC", (reg_operand(2), _storage()))),
+        "MSGRKC": _lowered(
+            machine_statement(
+                "MSGRKC", (reg_operand(5), reg_operand(3), reg_operand(4))
+            )
+        ),
     }
 
     assert {m: _accesses(ir) for m, ir in lowered.items()} == {
@@ -194,10 +182,10 @@ def test_multiplies_read_and_write_their_widths_and_only_checked_forms_set_cc():
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_divides_check_the_divisor_and_quotient_before_writing_the_pair():
     lowered = {
-        "D": _lowered(_statement("D", (_reg(2), _storage()))),
-        "DLR": _lowered(_statement("DLR", (_reg(2), _reg(7)))),
-        "DLG": _lowered(_statement("DLG", (_reg(4), _storage()))),
-        "DSGFR": _lowered(_statement("DSGFR", (_reg(4), _reg(7)))),
+        "D": _lowered(machine_statement("D", (reg_operand(2), _storage()))),
+        "DLR": _lowered(machine_statement("DLR", (reg_operand(2), reg_operand(7)))),
+        "DLG": _lowered(machine_statement("DLG", (reg_operand(4), _storage()))),
+        "DSGFR": _lowered(machine_statement("DSGFR", (reg_operand(4), reg_operand(7)))),
     }
 
     assert {m: _accesses(ir) for m, ir in lowered.items()} == {
@@ -241,10 +229,12 @@ def test_divides_check_the_divisor_and_quotient_before_writing_the_pair():
 def test_an_odd_first_register_of_a_pair_form_is_a_specification_exception():
     lowered = {
         **{
-            m: _lowered(_statement(m, (_reg(3), second)))
+            m: _lowered(machine_statement(m, (reg_operand(3), second)))
             for m, second in PAIR_FORMS.items()
         },
-        "MGRK": _lowered(_statement("MGRK", (_reg(3), _reg(6), _reg(8)))),
+        "MGRK": _lowered(
+            machine_statement("MGRK", (reg_operand(3), reg_operand(6), reg_operand(8)))
+        ),
     }
 
     assert {

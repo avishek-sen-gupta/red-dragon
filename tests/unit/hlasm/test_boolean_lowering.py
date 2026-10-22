@@ -3,14 +3,8 @@
 
 from collections.abc import Sequence
 
-from hlasm_asg.program.abs_address import AbsAddress
-from hlasm_asg.program.imm_operand import ImmOperand
 from hlasm_asg.program.machine_statement import MachineStatement
-from hlasm_asg.program.open_code_origin import OpenCodeOrigin
-from hlasm_asg.program.operand import Operand
-from hlasm_asg.program.reg_operand import RegOperand
 from hlasm_asg.program.storage_length_operand import StorageLengthOperand
-from hlasm_asg.program.storage_operand import StorageOperand
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.opcodes import OPCODE_LOWERINGS
 from interpreter.instructions import (
@@ -29,6 +23,12 @@ from interpreter.instructions import (
 )
 from interpreter.operator_kind import BinopKind
 from tests.covers import NotLanguageFeature, covers
+from tests.unit.hlasm.lowering_helpers import (
+    imm_operand,
+    machine_statement,
+    reg_operand,
+    storage_operand,
+)
 
 BASE = 12
 GPRS = "__hlasm_gprs"
@@ -37,42 +37,9 @@ AT = "__hlasm_ss_at"
 ANY = "__hlasm_ss_any"
 
 
-def _statement(mnemonic: str, operands: Sequence[Operand]) -> MachineStatement:
-    return MachineStatement(
-        kind="MACHINE",
-        section="T",
-        offset=2,
-        label="",
-        mnemonic=mnemonic,
-        base_mnemonic=mnemonic,
-        format="",
-        length=6,
-        operands=tuple(operands),
-        origin=OpenCodeOrigin(kind="OPEN_CODE", file="t.asm", line=1),
-    )
-
-
-def _reg(value: int) -> RegOperand:
-    return RegOperand(kind="REG", value=value)
-
-
-def _imm(value: int) -> ImmOperand:
-    return ImmOperand(kind="IMM", value=value)
-
-
 def _with_length(displacement: int, length: int) -> StorageLengthOperand:
     return StorageLengthOperand(
         kind="STORAGE_LENGTH", displacement=displacement, length=length, base=BASE
-    )
-
-
-def _storage(displacement: int) -> StorageOperand:
-    return StorageOperand(
-        kind="STORAGE",
-        displacement=displacement,
-        index=0,
-        base=BASE,
-        written=AbsAddress(kind="ABS", value=displacement),
     )
 
 
@@ -123,12 +90,20 @@ def _gpr(r: int, width: int) -> tuple[str, int, int]:
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_each_form_reads_and_writes_its_operand_widths_then_sets_cc():
     lowered = {
-        "NRK": _lowered(_statement("NRK", (_reg(5), _reg(3), _reg(4)))),
-        "NG": _lowered(_statement("NG", (_reg(2), _storage(8)))),
-        "NNGRK": _lowered(_statement("NNGRK", (_reg(5), _reg(3), _reg(4)))),
-        "XI": _lowered(_statement("XI", (_storage(8), _imm(0x0F)))),
-        "NIHH": _lowered(_statement("NIHH", (_reg(2), _imm(0xFEDC)))),
-        "XILF": _lowered(_statement("XILF", (_reg(2), _imm(-1)))),
+        "NRK": _lowered(
+            machine_statement("NRK", (reg_operand(5), reg_operand(3), reg_operand(4)))
+        ),
+        "NG": _lowered(machine_statement("NG", (reg_operand(2), storage_operand(8)))),
+        "NNGRK": _lowered(
+            machine_statement("NNGRK", (reg_operand(5), reg_operand(3), reg_operand(4)))
+        ),
+        "XI": _lowered(
+            machine_statement("XI", (storage_operand(8), imm_operand(0x0F)))
+        ),
+        "NIHH": _lowered(
+            machine_statement("NIHH", (reg_operand(2), imm_operand(0xFEDC)))
+        ),
+        "XILF": _lowered(machine_statement("XILF", (reg_operand(2), imm_operand(-1)))),
     }
 
     assert {m: _accesses(ir) for m, ir in lowered.items()} == {
@@ -172,9 +147,13 @@ def test_each_form_reads_and_writes_its_operand_widths_then_sets_cc():
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_storage_to_storage_forms_are_one_byte_loop_of_at_least_one_byte():
-    short = _lowered(_statement("NC", (_with_length(8, 1), _storage(40))))
-    explicit_zero = _lowered(_statement("OC", (_with_length(8, 0), _storage(40))))
-    longest = _lowered(_statement("XC", (_with_length(8, 256), _storage(40))))
+    short = _lowered(machine_statement("NC", (_with_length(8, 1), storage_operand(40))))
+    explicit_zero = _lowered(
+        machine_statement("OC", (_with_length(8, 0), storage_operand(40)))
+    )
+    longest = _lowered(
+        machine_statement("XC", (_with_length(8, 256), storage_operand(40)))
+    )
 
     assert (len(short), _accesses(longest), _control(longest)) == (
         len(longest),

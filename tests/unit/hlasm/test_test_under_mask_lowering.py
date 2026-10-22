@@ -5,8 +5,6 @@ from collections.abc import Sequence
 
 from hlasm_asg.program.abs_address import AbsAddress
 from hlasm_asg.program.imm_operand import ImmOperand
-from hlasm_asg.program.machine_statement import MachineStatement
-from hlasm_asg.program.open_code_origin import OpenCodeOrigin
 from hlasm_asg.program.operand import Operand
 from hlasm_asg.program.reg_operand import RegOperand
 from hlasm_asg.program.storage_operand import StorageOperand
@@ -24,6 +22,9 @@ from interpreter.instructions import (
 )
 from interpreter.operator_kind import BinopKind
 from tests.covers import NotLanguageFeature, covers
+from tests.unit.hlasm.lowering_helpers import (
+    machine_statement,
+)
 
 BASE = 12
 GPRS = "__hlasm_gprs"
@@ -32,24 +33,9 @@ TEST_UNDER_MASK = ("TM", "TMY", "TMH", "TML", "TMHH", "TMHL", "TMLH", "TMLL")
 HALFWORD_SHIFTS = {"TMHH": 48, "TMHL": 32, "TMLH": 16, "TMLL": 0}
 
 
-def _statement(mnemonic: str, operands: Sequence[Operand]) -> MachineStatement:
-    return MachineStatement(
-        kind="MACHINE",
-        section="T",
-        offset=2,
-        label="",
-        mnemonic=mnemonic,
-        base_mnemonic=mnemonic,
-        format="",
-        length=4,
-        operands=tuple(operands),
-        origin=OpenCodeOrigin(kind="OPEN_CODE", file="t.asm", line=1),
-    )
-
-
 def _lowered(mnemonic: str, first: Operand) -> tuple[InstructionBase, ...]:
     emitter = HlasmEmitter()
-    statement = _statement(mnemonic, (first, MASK))
+    statement = machine_statement(mnemonic, (first, MASK))
     OPCODE_LOWERINGS[mnemonic](emitter, statement)
     return emitter.instructions()
 

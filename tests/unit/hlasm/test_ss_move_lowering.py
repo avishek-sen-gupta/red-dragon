@@ -3,14 +3,8 @@
 
 from collections.abc import Sequence
 
-from hlasm_asg.program.abs_address import AbsAddress
-from hlasm_asg.program.imm_operand import ImmOperand
 from hlasm_asg.program.machine_statement import MachineStatement
-from hlasm_asg.program.open_code_origin import OpenCodeOrigin
-from hlasm_asg.program.operand import Operand
-from hlasm_asg.program.reg_operand import RegOperand
 from hlasm_asg.program.storage_length_operand import StorageLengthOperand
-from hlasm_asg.program.storage_operand import StorageOperand
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.opcodes import OPCODE_LOWERINGS
 from interpreter.instructions import (
@@ -29,6 +23,12 @@ from interpreter.instructions import (
 )
 from interpreter.operator_kind import BinopKind
 from tests.covers import NotLanguageFeature, covers
+from tests.unit.hlasm.lowering_helpers import (
+    imm_operand,
+    machine_statement,
+    reg_operand,
+    storage_operand,
+)
 
 BASE = 12
 GPRS = "__hlasm_gprs"
@@ -36,42 +36,9 @@ AT = "__hlasm_ss_at"
 ABEND = "__hlasm_abend"
 
 
-def _statement(mnemonic: str, operands: Sequence[Operand]) -> MachineStatement:
-    return MachineStatement(
-        kind="MACHINE",
-        section="T",
-        offset=2,
-        label="",
-        mnemonic=mnemonic,
-        base_mnemonic=mnemonic,
-        format="",
-        length=6,
-        operands=tuple(operands),
-        origin=OpenCodeOrigin(kind="OPEN_CODE", file="t.asm", line=1),
-    )
-
-
-def _reg(value: int) -> RegOperand:
-    return RegOperand(kind="REG", value=value)
-
-
-def _imm(value: int) -> ImmOperand:
-    return ImmOperand(kind="IMM", value=value)
-
-
 def _with_length(displacement: int, length: int) -> StorageLengthOperand:
     return StorageLengthOperand(
         kind="STORAGE_LENGTH", displacement=displacement, length=length, base=BASE
-    )
-
-
-def _storage(displacement: int) -> StorageOperand:
-    return StorageOperand(
-        kind="STORAGE",
-        displacement=displacement,
-        index=0,
-        base=BASE,
-        written=AbsAddress(kind="ABS", value=displacement),
     )
 
 
@@ -122,7 +89,10 @@ def _symbolic(lowered: Sequence[Sequence[InstructionBase]]) -> list[InstructionB
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_immediate_moves_store_their_width_and_leave_the_cc():
     widths = {"MVI": 1, "MVIY": 1, "MVHHI": 2, "MVHI": 4, "MVGHI": 8}
-    lowered = {m: _lowered(_statement(m, (_storage(8), _imm(-2)))) for m in widths}
+    lowered = {
+        m: _lowered(machine_statement(m, (storage_operand(8), imm_operand(-2))))
+        for m in widths
+    }
 
     assert {m: (_accesses(ir), _control(ir)) for m, ir in lowered.items()} == {
         m: (
@@ -136,8 +106,10 @@ def test_immediate_moves_store_their_width_and_leave_the_cc():
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_mvc_is_a_block_move_unless_the_destination_starts_inside_the_source():
-    ir = _lowered(_statement("MVC", (_with_length(8, 256), _storage(9))))
-    explicit_zero = _lowered(_statement("MVC", (_with_length(8, 0), _storage(9))))
+    ir = _lowered(machine_statement("MVC", (_with_length(8, 256), storage_operand(9))))
+    explicit_zero = _lowered(
+        machine_statement("MVC", (_with_length(8, 0), storage_operand(9)))
+    )
 
     assert (_accesses(ir), _control(ir), _bounds(ir), _bounds(explicit_zero)) == (
         [
@@ -171,7 +143,7 @@ def test_mvc_is_a_block_move_unless_the_destination_starts_inside_the_source():
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_nibble_moves_read_both_bytes_and_write_one_per_iteration():
     lowered = {
-        m: _lowered(_statement(m, (_with_length(8, 3), _storage(40))))
+        m: _lowered(machine_statement(m, (_with_length(8, 3), storage_operand(40))))
         for m in ("MVN", "MVZ")
     }
 
@@ -194,10 +166,18 @@ def test_nibble_moves_read_both_bytes_and_write_one_per_iteration():
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_long_moves_on_an_odd_register_abend_before_reading_any_register():
     lowered = [
-        _lowered(_statement("MVCL", (_reg(3), _reg(4)))),
-        _lowered(_statement("MVCL", (_reg(2), _reg(5)))),
-        _lowered(_statement("MVCLE", (_reg(2), _reg(5), _storage(0)))),
-        _lowered(_statement("MVCLU", (_reg(3), _reg(4), _storage(0)))),
+        _lowered(machine_statement("MVCL", (reg_operand(3), reg_operand(4)))),
+        _lowered(machine_statement("MVCL", (reg_operand(2), reg_operand(5)))),
+        _lowered(
+            machine_statement(
+                "MVCLE", (reg_operand(2), reg_operand(5), storage_operand(0))
+            )
+        ),
+        _lowered(
+            machine_statement(
+                "MVCLU", (reg_operand(3), reg_operand(4), storage_operand(0))
+            )
+        ),
     ]
 
     assert [(_accesses(ir), _control(ir)) for ir in lowered] == [

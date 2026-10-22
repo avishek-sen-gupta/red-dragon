@@ -3,15 +3,8 @@
 
 from collections.abc import Sequence
 
-from hlasm_asg.program.abs_address import AbsAddress
-from hlasm_asg.program.imm_operand import ImmOperand
 from hlasm_asg.program.machine_statement import MachineStatement
-from hlasm_asg.program.mask_operand import MaskOperand
-from hlasm_asg.program.open_code_origin import OpenCodeOrigin
-from hlasm_asg.program.operand import Operand
-from hlasm_asg.program.reg_operand import RegOperand
 from hlasm_asg.program.reloc_imm_operand import RelocImmOperand
-from hlasm_asg.program.storage_operand import StorageOperand
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.opcodes import OPCODE_LOWERINGS
 from interpreter.instructions import (
@@ -26,47 +19,17 @@ from interpreter.instructions import (
     WriteRegion,
 )
 from tests.covers import NotLanguageFeature, covers
+from tests.unit.hlasm.lowering_helpers import (
+    imm_operand,
+    machine_statement,
+    mask_operand,
+    reg_operand,
+    storage_operand,
+)
 
 BASE = 12
 GPRS = "__hlasm_gprs"
 CC = "__hlasm_cc"
-
-
-def _statement(mnemonic: str, operands: Sequence[Operand]) -> MachineStatement:
-    return MachineStatement(
-        kind="MACHINE",
-        section="T",
-        offset=2,
-        label="",
-        mnemonic=mnemonic,
-        base_mnemonic=mnemonic,
-        format="",
-        length=6,
-        operands=tuple(operands),
-        origin=OpenCodeOrigin(kind="OPEN_CODE", file="t.asm", line=1),
-    )
-
-
-def _reg(value: int) -> RegOperand:
-    return RegOperand(kind="REG", value=value)
-
-
-def _imm(value: int) -> ImmOperand:
-    return ImmOperand(kind="IMM", value=value)
-
-
-def _mask(value: int) -> MaskOperand:
-    return MaskOperand(kind="MASK", value=value)
-
-
-def _storage(displacement: int) -> StorageOperand:
-    return StorageOperand(
-        kind="STORAGE",
-        displacement=displacement,
-        index=0,
-        base=BASE,
-        written=AbsAddress(kind="ABS", value=displacement),
-    )
 
 
 def _relative(offset: int) -> RelocImmOperand:
@@ -111,15 +74,29 @@ def _gpr(r: int, width: int) -> tuple[str, int, int]:
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_each_form_reads_its_operand_widths_and_sets_only_the_cc():
     lowered = {
-        "CGF": _lowered(_statement("CGF", (_reg(2), _storage(8)))),
-        "CR": _lowered(_statement("CR", (_reg(2), _reg(3)))),
-        "CLGFR": _lowered(_statement("CLGFR", (_reg(2), _reg(3)))),
-        "CHHSI": _lowered(_statement("CHHSI", (_storage(8), _imm(-2)))),
-        "CLI": _lowered(_statement("CLI", (_storage(8), _imm(0x80)))),
-        "CLGHSI": _lowered(_statement("CLGHSI", (_storage(8), _imm(0xFFFF)))),
-        "CHRL": _lowered(_statement("CHRL", (_reg(2), _relative(6)))),
-        "CLM": _lowered(_statement("CLM", (_reg(2), _mask(0b1010), _storage(8)))),
-        "CLMY": _lowered(_statement("CLMY", (_reg(2), _mask(0), _storage(8)))),
+        "CGF": _lowered(machine_statement("CGF", (reg_operand(2), storage_operand(8)))),
+        "CR": _lowered(machine_statement("CR", (reg_operand(2), reg_operand(3)))),
+        "CLGFR": _lowered(machine_statement("CLGFR", (reg_operand(2), reg_operand(3)))),
+        "CHHSI": _lowered(
+            machine_statement("CHHSI", (storage_operand(8), imm_operand(-2)))
+        ),
+        "CLI": _lowered(
+            machine_statement("CLI", (storage_operand(8), imm_operand(0x80)))
+        ),
+        "CLGHSI": _lowered(
+            machine_statement("CLGHSI", (storage_operand(8), imm_operand(0xFFFF)))
+        ),
+        "CHRL": _lowered(machine_statement("CHRL", (reg_operand(2), _relative(6)))),
+        "CLM": _lowered(
+            machine_statement(
+                "CLM", (reg_operand(2), mask_operand(0b1010), storage_operand(8))
+            )
+        ),
+        "CLMY": _lowered(
+            machine_statement(
+                "CLMY", (reg_operand(2), mask_operand(0), storage_operand(8))
+            )
+        ),
     }
 
     assert {m: _accesses(ir) for m, ir in lowered.items()} == {
@@ -150,7 +127,7 @@ def test_each_form_reads_its_operand_widths_and_sets_only_the_cc():
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_word_and_doubleword_relative_forms_check_alignment_and_halfword_forms_do_not():
     lowered = {
-        m: _lowered(_statement(m, (_reg(2), _relative(6))))
+        m: _lowered(machine_statement(m, (reg_operand(2), _relative(6))))
         for m in ("CRL", "CGRL", "CGFRL", "CLRL", "CLGRL", "CLGFRL", "CHRL", "CLGHRL")
     }
     branches = {

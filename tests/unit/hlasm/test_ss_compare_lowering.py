@@ -3,13 +3,8 @@
 
 from collections.abc import Sequence
 
-from hlasm_asg.program.abs_address import AbsAddress
 from hlasm_asg.program.machine_statement import MachineStatement
-from hlasm_asg.program.open_code_origin import OpenCodeOrigin
-from hlasm_asg.program.operand import Operand
-from hlasm_asg.program.reg_operand import RegOperand
 from hlasm_asg.program.storage_length_operand import StorageLengthOperand
-from hlasm_asg.program.storage_operand import StorageOperand
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.opcodes import OPCODE_LOWERINGS
 from interpreter.instructions import (
@@ -29,6 +24,11 @@ from interpreter.instructions import (
 )
 from interpreter.operator_kind import BinopKind
 from tests.covers import NotLanguageFeature, covers
+from tests.unit.hlasm.lowering_helpers import (
+    machine_statement,
+    reg_operand,
+    storage_operand,
+)
 
 BASE = 12
 GPRS = "__hlasm_gprs"
@@ -36,35 +36,6 @@ ABEND = "__hlasm_abend"
 CC = "__hlasm_cc"
 IMAGE_BUILTIN = "__int_to_binary_bytes"
 COMPARISONS = frozenset((BinopKind.EQ, BinopKind.NE, BinopKind.LT, BinopKind.GT))
-
-
-def _statement(mnemonic: str, operands: Sequence[Operand]) -> MachineStatement:
-    return MachineStatement(
-        kind="MACHINE",
-        section="T",
-        offset=2,
-        label="",
-        mnemonic=mnemonic,
-        base_mnemonic=mnemonic,
-        format="",
-        length=6,
-        operands=tuple(operands),
-        origin=OpenCodeOrigin(kind="OPEN_CODE", file="t.asm", line=1),
-    )
-
-
-def _reg(value: int) -> RegOperand:
-    return RegOperand(kind="REG", value=value)
-
-
-def _storage(displacement: int) -> StorageOperand:
-    return StorageOperand(
-        kind="STORAGE",
-        displacement=displacement,
-        index=0,
-        base=BASE,
-        written=AbsAddress(kind="ABS", value=displacement),
-    )
 
 
 def _with_length(displacement: int, length: int) -> StorageLengthOperand:
@@ -136,8 +107,12 @@ def _symbolic(lowered: Sequence[Sequence[InstructionBase]]) -> list[InstructionB
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_clc_compares_both_blocks_once_and_only_sets_the_cc():
-    ir = _lowered(_statement("CLC", (_with_length(8, 256), _storage(300))))
-    explicit_zero = _lowered(_statement("CLC", (_with_length(8, 0), _storage(300))))
+    ir = _lowered(
+        machine_statement("CLC", (_with_length(8, 256), storage_operand(300)))
+    )
+    explicit_zero = _lowered(
+        machine_statement("CLC", (_with_length(8, 0), storage_operand(300)))
+    )
 
     assert (
         _accesses(ir),
@@ -173,11 +148,19 @@ def test_clc_compares_both_blocks_once_and_only_sets_the_cc():
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_long_compares_read_one_unit_of_each_operand_per_iteration_and_compare_ints():
     lowered = {
-        "CLCL": _lowered(_statement("CLCL", (_reg(2), _reg(4)))),
-        "CLCLE": _lowered(_statement("CLCLE", (_reg(2), _reg(4), _storage(0)))),
-        "CLCLU": _lowered(_statement("CLCLU", (_reg(2), _reg(4), _storage(0)))),
-        "CUSE": _lowered(_statement("CUSE", (_reg(2), _reg(4)))),
-        "CLST": _lowered(_statement("CLST", (_reg(2), _reg(4)))),
+        "CLCL": _lowered(machine_statement("CLCL", (reg_operand(2), reg_operand(4)))),
+        "CLCLE": _lowered(
+            machine_statement(
+                "CLCLE", (reg_operand(2), reg_operand(4), storage_operand(0))
+            )
+        ),
+        "CLCLU": _lowered(
+            machine_statement(
+                "CLCLU", (reg_operand(2), reg_operand(4), storage_operand(0))
+            )
+        ),
+        "CUSE": _lowered(machine_statement("CUSE", (reg_operand(2), reg_operand(4)))),
+        "CLST": _lowered(machine_statement("CLST", (reg_operand(2), reg_operand(4)))),
     }
 
     assert {m: _storage_accesses(ir) for m, ir in lowered.items()} == {
@@ -196,11 +179,19 @@ def test_long_compares_read_one_unit_of_each_operand_per_iteration_and_compare_i
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_pair_compares_on_an_odd_register_abend_before_reading_any_register():
     lowered = [
-        _lowered(_statement("CLCL", (_reg(3), _reg(4)))),
-        _lowered(_statement("CLCL", (_reg(2), _reg(5)))),
-        _lowered(_statement("CLCLE", (_reg(2), _reg(5), _storage(0)))),
-        _lowered(_statement("CLCLU", (_reg(3), _reg(4), _storage(0)))),
-        _lowered(_statement("CUSE", (_reg(2), _reg(7)))),
+        _lowered(machine_statement("CLCL", (reg_operand(3), reg_operand(4)))),
+        _lowered(machine_statement("CLCL", (reg_operand(2), reg_operand(5)))),
+        _lowered(
+            machine_statement(
+                "CLCLE", (reg_operand(2), reg_operand(5), storage_operand(0))
+            )
+        ),
+        _lowered(
+            machine_statement(
+                "CLCLU", (reg_operand(3), reg_operand(4), storage_operand(0))
+            )
+        ),
+        _lowered(machine_statement("CUSE", (reg_operand(2), reg_operand(7)))),
     ]
 
     assert [(_accesses(ir), _control(ir)) for ir in lowered] == [
