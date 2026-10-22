@@ -81,6 +81,9 @@ BYTES_COMBINED_VAR = VarName("__hlasm_ss_any")
 SUBSTRING_START_VAR = VarName("__hlasm_cuse_start")
 SPAN_VALUE_VAR = VarName("__hlasm_ss_value")
 OFFSET_CARRY_VAR = VarName("__hlasm_mvo_carry")
+MASK_LOOP_REST_VAR = VarName("__hlasm_bits_rest")
+MASK_LOOP_RESULT_VAR = VarName("__hlasm_bits_result")
+MASK_LOOP_CURSOR_VAR = VarName("__hlasm_bits_cursor")
 
 RETURN_SENTINEL = 0x00000FF0
 ADDRESS_MASK_31 = 0x7FFFFFFF

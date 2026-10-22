@@ -84,6 +84,9 @@ class HlasmEmitter:
     def store_gr64(self, r: int, value: Register) -> None:
         self._store(GPR_BYTES * r, GPR_BYTES, value)
 
+    def load_gr_high32(self, r: int) -> Register:
+        return self._load(GPR_BYTES * r, WORD_BYTES)
+
     def store_gr_high32(self, r: int, value: Register) -> None:
         self._store(GPR_BYTES * r, WORD_BYTES, value)
 
