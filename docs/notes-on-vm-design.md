@@ -62,8 +62,8 @@ All in `interpreter/run.py`.
 
 | Function | Does |
 |---|---|
-| `run(source, language, …, null_access=)` | Lower, build a single-module `LinkedProgram` (COBOL goes through `compile_cobol`), then call `run_linked`. Returns the final `VMState`. |
-| `run_linked(linked, entry_point, …, builtins=, initial_vm=)` | Run a linked program with the builtins table it is given (`run_linked_resumable`, `resume_linked` and `run_linked_traced` take it too; `run` passes `core_builtins()`). A top-level entry runs `merged_cfg.entry`. A function entry runs in two phases: the module preamble, then the chosen function, sharing the step budget. `ProgramEntry(name)` is a function entry at the image's program of that name; `ProgramNotInImage` if it has none. |
+| `run(source, language, …, null_access=, builtins=)` | Lower, build a single-module `LinkedProgram` (COBOL goes through `compile_cobol`), then call `run_linked` with `builtins` (default `DEFAULT_BUILTINS`, the core table, from `interpreter/default_builtins.py`). Returns the final `VMState`. |
+| `run_linked(linked, entry_point, …, builtins=, initial_vm=)` | Run a linked program with the builtins table it is given (`run_linked_resumable`, `resume_linked` and `run_linked_traced` take it too, and `run` forwards its own `builtins`). A top-level entry runs `merged_cfg.entry`. A function entry runs in two phases: the module preamble, then the chosen function, sharing the step budget. `ProgramEntry(name)` is a function entry at the image's program of that name; `ProgramNotInImage` if it has none. |
 | `execute_cfg(cfg, entry, registry, config, strategies, vm=)` | Run one CFG against a caller-supplied `VMState`. Raises if it reaches `SUSPEND`. |
 | `run_resumable` / `resume` | As `execute_cfg`, but return `Suspended`, `Completed` or `BudgetExhausted` (see [6.5](#65-suspend-and-resume)). |
 | `run_linked_resumable` / `resume_linked` | The `LinkedProgram` versions. The preamble runs non-resumably. A suspension's `ExecutionState.entered` names the program whose declarations the run holds; `resume_linked` restores them from it. |
@@ -539,6 +539,7 @@ interpreter/
 ├── registry.py           FunctionRegistry, build_registry
 ├── refs/                 FuncRef, BoundFuncRef, ClassRef
 ├── run.py                entry points, _run_loop, execute_cfg_traced, ExecutionStrategies
+├── default_builtins.py   DEFAULT_BUILTINS, the table run() uses unless given one
 ├── run_types.py          VMConfig, ExecutionStats, PipelineStats
 ├── trace_types.py        TraceStep, ExecutionTrace
 ├── vm/
