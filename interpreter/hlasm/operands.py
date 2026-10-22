@@ -48,6 +48,16 @@ def mask_operand(statement: MachineStatement, index: int) -> int:
             raise _mismatch(statement, index, "a mask")
 
 
+def optional_mask_operand(statement: MachineStatement, index: int, absent: int) -> int:
+    match _at(statement, index):
+        case [MaskOperand(value=value)]:
+            return value
+        case []:
+            return absent
+        case _:
+            raise _mismatch(statement, index, "a mask or no operand")
+
+
 def imm_operand(statement: MachineStatement, index: int) -> int:
     match _at(statement, index):
         case [ImmOperand(value=value)]:

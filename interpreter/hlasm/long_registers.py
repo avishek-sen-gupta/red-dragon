@@ -1,5 +1,5 @@
 # pyright: standard
-"""The register pairs of the long moves and compares: their addresses, lengths and pads read before anything is stored, and the addresses advanced and lengths counted down at completion."""
+"""The register pairs of the long moves, compares and translates: their addresses, lengths and pads read before anything is stored, the even-length checks, and the addresses stored or advanced and lengths counted down at completion."""
 
 from collections.abc import Callable
 
@@ -63,13 +63,23 @@ def long_operands(
     )
 
 
+def store_address(emitter: HlasmEmitter, r: int, address: Register) -> None:
+    emitter.store_gr32(
+        r, emitter.binop(BinopKind.BIT_AND, address, emitter.int_(ADDRESS_MASK_31))
+    )
+
+
+def store_progress(
+    emitter: HlasmEmitter, r: int, address: Register, remaining: Register
+) -> None:
+    store_address(emitter, r, address)
+    emitter.store_gr32(r + 1, remaining)
+
+
 def advance_address(
     emitter: HlasmEmitter, r: int, address: Register, count: Register
 ) -> None:
-    after = emitter.binop(BinopKind.ADD, address, count)
-    emitter.store_gr32(
-        r, emitter.binop(BinopKind.BIT_AND, after, emitter.int_(ADDRESS_MASK_31))
-    )
+    store_address(emitter, r, emitter.binop(BinopKind.ADD, address, count))
 
 
 def count_down(
@@ -143,9 +153,20 @@ def no_length_check(emitter: HlasmEmitter, operands: LongOperands) -> None:
     return
 
 
-def even_lengths(emitter: HlasmEmitter, operands: LongOperands) -> None:
-    either = emitter.binop(
-        BinopKind.BIT_OR, operands.first_length, operands.second_length
-    )
-    odd = emitter.binop(BinopKind.BIT_AND, either, emitter.int_(ODD_LENGTH))
+def even_length(emitter: HlasmEmitter, length: Register) -> None:
+    odd = emitter.binop(BinopKind.BIT_AND, length, emitter.int_(ODD_LENGTH))
     emit_specification_check(emitter, emitter.binop(BinopKind.NE, odd, emitter.int_(0)))
+
+
+def unit_length(emitter: HlasmEmitter, r: int, width: int) -> Register:
+    length = emitter.load_gr32(r + 1)
+    if width > ONE_BYTE:
+        even_length(emitter, length)
+    return length
+
+
+def even_lengths(emitter: HlasmEmitter, operands: LongOperands) -> None:
+    even_length(
+        emitter,
+        emitter.binop(BinopKind.BIT_OR, operands.first_length, operands.second_length),
+    )

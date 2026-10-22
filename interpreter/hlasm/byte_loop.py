@@ -1,5 +1,5 @@
 # pyright: standard
-"""An IR loop over offsets from a start to a bound by a fixed step, the offset kept in a variable; its constants are set before the loop."""
+"""An IR loop over offsets from a start to a bound by a fixed step, the offset kept in a variable; its constants are set before the loop, and a scan's body may branch out of it."""
 
 from collections.abc import Callable
 
@@ -30,12 +30,12 @@ def advance(
     emitter.emit_inst(Branch(label=loop))
 
 
-def emit_counted_loop(
+def emit_scan_loop[T](
     emitter: HlasmEmitter,
     span: tuple[Register, Register],
     step: int,
-    body: LoopBody,
-) -> None:
+    body: Callable[[Register], T],
+) -> tuple[Register, T]:
     start, bound = span
     stride = emitter.int_(step)
     emitter.emit_inst(StoreVar(name=BYTE_LOOP_AT_VAR, value_reg=start))
@@ -46,9 +46,19 @@ def emit_counted_loop(
     emitter.emit_inst(Label_(label=loop))
     at = _test_offset(emitter, bound, iteration, done)
     emitter.emit_inst(Label_(label=iteration))
-    body(at)
+    result = body(at)
     advance(emitter, at, stride, loop)
     emitter.emit_inst(Label_(label=done))
+    return at, result
+
+
+def emit_counted_loop(
+    emitter: HlasmEmitter,
+    span: tuple[Register, Register],
+    step: int,
+    body: LoopBody,
+) -> None:
+    emit_scan_loop(emitter, span, step, body)
 
 
 def emit_byte_loop(emitter: HlasmEmitter, length: int, body: LoopBody) -> None:
