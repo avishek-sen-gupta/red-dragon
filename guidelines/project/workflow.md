@@ -12,7 +12,7 @@ allowed to stand.
 **Blocking:**
 
 - **Black** — formats and re-stages only the files pre-commit hands it
-- **python-fp-lint** (the upstream `python-fp-lint` hook) — lints **staged blobs**
+- **python-fp-lint** (the upstream `python-fp-lint` hook) — the whole-repo total may not rise (see the ratchet below)
 - **import-linter** — the `.importlinter` contracts
 - **Full test suite** — `make test PYTEST_ARGS="-x -q"`, which builds the ProLeap
   bridge JAR first if it is missing. Several minutes; treat it as slow, not hung.
@@ -47,10 +47,10 @@ count against what you started with.
 
 ### python-fp-lint: the ratchet
 
-`fp-baseline.json` holds a single total. The gate lints the staged blob, and **every**
-violation in a staged file blocks the commit, including violations that predate your
-change — touching a file adopts it. When the total falls the baseline tightens
-automatically and stages itself; it never loosens.
+`fp-baseline.json` holds a single whole-repo total. With a baseline configured, the
+ratchet replaces the staged-file check: the gate lints the index and blocks the commit
+only if the total rises. Old violations in a file you touch do not block. When the
+total falls the baseline tightens automatically and stages itself; it never loosens.
 
 A high baseline is fine. Suppressions are not: **no exclusions — `fp.json` entries,
 `# noqa`, per-file ignores, or anything else — without explicit review and approval.**
