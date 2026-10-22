@@ -46,6 +46,10 @@ from interpreter.hlasm.opcodes.packed_arithmetic import (
     PACKED_ARITHMETIC_FIELD_LOWERINGS,
     PACKED_ARITHMETIC_LOWERINGS,
 )
+from interpreter.hlasm.opcodes.packed_compare_test import (
+    PACKED_COMPARE_TEST_FIELD_LOWERINGS,
+    PACKED_COMPARE_TEST_LOWERINGS,
+)
 from interpreter.hlasm.opcodes.shift_rotate import SHIFT_ROTATE_LOWERINGS
 from interpreter.hlasm.opcodes.signed_add_subtract import (
     SIGNED_ADD_SUBTRACT_FIELD_LOWERINGS,
@@ -98,6 +102,7 @@ OPCODE_LOWERINGS: Mapping[str, StatementLowering] = {
     **HIGH_WORD_LOWERINGS,
     **MISCELLANEOUS_LOWERINGS,
     **PACKED_ARITHMETIC_LOWERINGS,
+    **PACKED_COMPARE_TEST_LOWERINGS,
 }
 
 DATA_FIELD_LOWERINGS: Mapping[str, FieldLowering] = {
@@ -113,4 +118,5 @@ DATA_FIELD_LOWERINGS: Mapping[str, FieldLowering] = {
     **INTERLOCKED_FIELD_LOWERINGS,
     **MISCELLANEOUS_FIELD_LOWERINGS,
     **PACKED_ARITHMETIC_FIELD_LOWERINGS,
+    **PACKED_COMPARE_TEST_FIELD_LOWERINGS,
 }

@@ -1,8 +1,6 @@
 # pyright: standard
 """Packed-decimal lowerings: every check precedes the first store, the CC and the overflow abend follow it, and EX sees byte 1 as one data field."""
 
-from collections.abc import Mapping, Sequence
-
 from hlasm_asg.program.machine_statement import MachineStatement
 from hlasm_asg.program.operand import Operand
 from hlasm_asg.program.storage_length_operand import StorageLengthOperand
@@ -13,31 +11,17 @@ from interpreter.hlasm.byte_one_layouts import (
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.opcodes import DATA_FIELD_LOWERINGS, OPCODE_LOWERINGS
-from interpreter.instructions import (
-    Const,
-    InstructionBase,
-    LoadRegion,
-    LoadVar,
-    StoreVar,
-    Symbolic,
-    WriteRegion,
-)
+from interpreter.instructions import InstructionBase, Symbolic
 from tests.covers import NotLanguageFeature, covers
 from tests.unit.hlasm.lowering_helpers import (
     imm_operand,
     machine_statement,
     storage_operand,
 )
+from tests.unit.hlasm.storage_events import storage_events
 
 BASE = 12
-GPRS = "__hlasm_gprs"
-ABEND = "__hlasm_abend"
-CC = "__hlasm_cc"
 PACKED = ("AP", "SP", "ZAP", "MP", "DP", "SRP")
-STORAGE_ACCESSES: Mapping[type[InstructionBase], str] = {
-    LoadRegion: "read",
-    WriteRegion: "write",
-}
 CHECKED_THEN_STORED = ["read", "S0C7", "write", "cc", "S0CA"]
 
 
@@ -62,37 +46,11 @@ def _lowered(statement: MachineStatement) -> tuple[InstructionBase, ...]:
     return emitter.instructions()
 
 
-def _abend_or_cc(i: StoreVar, consts: Mapping[str, int | str]) -> str:
-    return {ABEND: str(consts.get(str(i.value_reg), "")), CC: "cc"}.get(str(i.name), "")
-
-
-def _access(i: InstructionBase, gprs: frozenset[str]) -> str:
-    in_gprs = isinstance(i, LoadRegion) and str(i.region_reg) in gprs
-    return "" if in_gprs else STORAGE_ACCESSES.get(type(i), "")
-
-
-def _event(
-    i: InstructionBase, gprs: frozenset[str], consts: Mapping[str, int | str]
-) -> str:
-    if isinstance(i, StoreVar):
-        return _abend_or_cc(i, consts)
-    return _access(i, gprs)
-
-
-def _events(ir: Sequence[InstructionBase]) -> list[str]:
-    gprs = frozenset(
-        str(i.result_reg) for i in ir if isinstance(i, LoadVar) and str(i.name) == GPRS
-    )
-    consts = {str(i.result_reg): i.value for i in ir if isinstance(i, Const)}
-    named = [e for e in (_event(i, gprs, consts) for i in ir) if e]
-    return [e for k, e in enumerate(named) if k == 0 or named[k - 1] != e]
-
-
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_every_check_precedes_the_first_store_and_the_cc_precedes_the_overflow_abend():
     lowered = {m: _lowered(_statement(m)) for m in PACKED}
 
-    assert {m: _events(ir) for m, ir in lowered.items()} == {
+    assert {m: storage_events(ir) for m, ir in lowered.items()} == {
         "AP": CHECKED_THEN_STORED,
         "SP": CHECKED_THEN_STORED,
         "ZAP": CHECKED_THEN_STORED,

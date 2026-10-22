@@ -6,19 +6,15 @@ from collections.abc import Mapping
 from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.hlasm.byte_one_layouts import LENGTH_AND_IMMEDIATE, LENGTH_NIBBLES
 from interpreter.hlasm.data_field import DataField, LowerWithField
-from interpreter.hlasm.data_movement import FIRST_OPERAND, SECOND_OPERAND
+from interpreter.hlasm.data_movement import SECOND_OPERAND
 from interpreter.hlasm.decimal_exceptions import (
     emit_data_check,
     emit_decimal_divide_check,
 )
-from interpreter.hlasm.effective_address import (
-    effective_address,
-    length_operand_address,
-)
+from interpreter.hlasm.effective_address import effective_address
 from interpreter.hlasm.field_lowering import FieldLowering, written_lowerings
-from interpreter.hlasm.hlasm_constants import NIBBLE_BITS
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
-from interpreter.hlasm.operands import storage_length_operand, storage_operand
+from interpreter.hlasm.operands import storage_operand
 from interpreter.hlasm.packed_decimal import (
     DECIMAL_BASE,
     NOT_DIGITS,
@@ -34,66 +30,33 @@ from interpreter.hlasm.packed_decimal import (
     table_bit,
 )
 from interpreter.hlasm.packed_field import PackedField
-from interpreter.hlasm.packed_value import PackedValue
+from interpreter.hlasm.packed_operands import (
+    SECOND_FIELD,
+    PackedFields,
+    PackedValues,
+    either_invalid,
+    first_field,
+    packed_fields,
+    read_both,
+)
 from interpreter.hlasm.specification_check import emit_specification_check
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
 
-FIRST_FIELD = (NIBBLE_BITS, NIBBLE_BITS)
-SECOND_FIELD = (0, NIBBLE_BITS)
 LONGEST_FACTOR = 8
 SHIFT_BITS = 0x3F
 RIGHT_SHIFT_BIT = 5
 SHIFT_SPAN = 64
-
-type Fields = tuple[PackedField, PackedField]
-
-
-def _length(emitter: HlasmEmitter, field: DataField, part: tuple[int, int]) -> Register:
-    return field.part(emitter, *part).length(emitter).value(emitter)
-
-
-def _first_field(
-    emitter: HlasmEmitter, statement: MachineStatement, field: DataField
-) -> PackedField:
-    first = storage_length_operand(statement, FIRST_OPERAND)
-    return PackedField(
-        length_operand_address(emitter, first), _length(emitter, field, FIRST_FIELD)
-    )
-
-
-def _fields(
-    emitter: HlasmEmitter, statement: MachineStatement, field: DataField
-) -> Fields:
-    second = storage_length_operand(statement, SECOND_OPERAND)
-    return _first_field(emitter, statement, field), PackedField(
-        length_operand_address(emitter, second),
-        _length(emitter, field, SECOND_FIELD),
-    )
-
-
-def _read_both(
-    emitter: HlasmEmitter, fields: Fields
-) -> tuple[PackedValue, PackedValue]:
-    first, second = (read_packed(emitter, f) for f in fields)
-    return first, second
-
-
-def _either_invalid(
-    emitter: HlasmEmitter, values: tuple[PackedValue, PackedValue]
-) -> Register:
-    first, second = values
-    return emitter.binop(BinopKind.BIT_OR, first.invalid, second.invalid)
 
 
 def _add(sign_of_second: int) -> LowerWithField:
     def lower(
         emitter: HlasmEmitter, statement: MachineStatement, field: DataField
     ) -> None:
-        fields = _fields(emitter, statement, field)
-        values = _read_both(emitter, fields)
-        emit_data_check(emitter, _either_invalid(emitter, values))
+        fields = packed_fields(emitter, statement, field)
+        values = read_both(emitter, fields)
+        emit_data_check(emitter, either_invalid(emitter, values))
         first, second = (signed_value(emitter, v) for v in values)
         signed_second = emitter.binop(
             BinopKind.MUL, second, emitter.int_(sign_of_second)
@@ -108,13 +71,13 @@ def _add(sign_of_second: int) -> LowerWithField:
 def _zero_and_add(
     emitter: HlasmEmitter, statement: MachineStatement, field: DataField
 ) -> None:
-    first, second = _fields(emitter, statement, field)
+    first, second = packed_fields(emitter, statement, field)
     value = read_packed(emitter, second)
-    emit_data_check(emitter, value.invalid)
+    emit_data_check(emitter, value.invalid(emitter))
     store_signed(emitter, first, signed_value(emitter, value))
 
 
-def _check_factor_lengths(emitter: HlasmEmitter, fields: Fields) -> Register:
+def _check_factor_lengths(emitter: HlasmEmitter, fields: PackedFields) -> Register:
     first, second = (f.length for f in fields)
     too_long = emitter.binop(BinopKind.GT, second, emitter.int_(LONGEST_FACTOR))
     not_shorter = emitter.binop(BinopKind.GE, second, first)
@@ -124,9 +87,7 @@ def _check_factor_lengths(emitter: HlasmEmitter, fields: Fields) -> Register:
     return emitter.binop(BinopKind.SUB, first, second)
 
 
-def _either_sign(
-    emitter: HlasmEmitter, values: tuple[PackedValue, PackedValue]
-) -> Register:
+def _either_sign(emitter: HlasmEmitter, values: PackedValues) -> Register:
     first, second = values
     return emitter.binop(BinopKind.BIT_XOR, first.negative, second.negative)
 
@@ -134,12 +95,12 @@ def _either_sign(
 def _multiply(
     emitter: HlasmEmitter, statement: MachineStatement, field: DataField
 ) -> None:
-    fields = _fields(emitter, statement, field)
+    fields = packed_fields(emitter, statement, field)
     spare = _check_factor_lengths(emitter, fields)
-    values = _read_both(emitter, fields)
+    values = read_both(emitter, fields)
     multiplicand, multiplier = values
     crowded = at_least(emitter, multiplicand.magnitude, digit_limit(emitter, spare))
-    invalid = emitter.binop(BinopKind.BIT_OR, _either_invalid(emitter, values), crowded)
+    invalid = emitter.binop(BinopKind.BIT_OR, either_invalid(emitter, values), crowded)
     emit_data_check(emitter, invalid)
     product = emitter.binop(BinopKind.MUL, multiplicand.magnitude, multiplier.magnitude)
     multiplicand_field, _ = fields
@@ -148,7 +109,7 @@ def _multiply(
 
 def _check_quotient(
     emitter: HlasmEmitter,
-    values: tuple[PackedValue, PackedValue],
+    values: PackedValues,
     quotient_length: Register,
 ) -> None:
     dividend, divisor = values
@@ -162,8 +123,8 @@ def _check_quotient(
 
 def _store_quotient_and_remainder(
     emitter: HlasmEmitter,
-    fields: Fields,
-    values: tuple[PackedValue, PackedValue],
+    fields: PackedFields,
+    values: PackedValues,
     quotient_length: Register,
 ) -> None:
     dividend, divisor = values
@@ -190,10 +151,10 @@ def _store_quotient_and_remainder(
 def _divide(
     emitter: HlasmEmitter, statement: MachineStatement, field: DataField
 ) -> None:
-    fields = _fields(emitter, statement, field)
+    fields = packed_fields(emitter, statement, field)
     quotient_length = _check_factor_lengths(emitter, fields)
-    values = _read_both(emitter, fields)
-    emit_data_check(emitter, _either_invalid(emitter, values))
+    values = read_both(emitter, fields)
+    emit_data_check(emitter, either_invalid(emitter, values))
     _check_quotient(emitter, values, quotient_length)
     _store_quotient_and_remainder(emitter, fields, values, quotient_length)
 
@@ -246,12 +207,12 @@ def _shifted(
 def _shift_and_round(
     emitter: HlasmEmitter, statement: MachineStatement, field: DataField
 ) -> None:
-    first = _first_field(emitter, statement, field)
+    first = first_field(emitter, statement, field)
     rounding = field.part(emitter, *SECOND_FIELD).value(emitter)
     value = read_packed(emitter, first)
     bad_rounding = table_bit(emitter, emitter.int_(NOT_DIGITS), rounding)
     emit_data_check(
-        emitter, emitter.binop(BinopKind.BIT_OR, value.invalid, bad_rounding)
+        emitter, emitter.binop(BinopKind.BIT_OR, value.invalid(emitter), bad_rounding)
     )
     amounts = _shift_amounts(emitter, statement)
     magnitude = _shifted(emitter, value.magnitude, amounts, rounding)

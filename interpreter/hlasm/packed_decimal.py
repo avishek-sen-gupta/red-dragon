@@ -1,5 +1,5 @@
 # pyright: standard
-"""Signed-packed-decimal fields in IR at a run-time length: read into a magnitude, a negative bit and an invalid bit; stored right to left with a preferred sign; signs and bounds are int compares."""
+"""Signed-packed-decimal fields in IR at a run-time length: read into a magnitude, a negative bit and bad-digit and bad-sign bits; stored right to left with a preferred sign; signs and bounds are int compares."""
 
 from interpreter.hlasm.byte_loop import emit_byte_loop
 from interpreter.hlasm.decimal_exceptions import emit_decimal_overflow_check
@@ -80,10 +80,9 @@ def _nibbles(emitter: HlasmEmitter, byte: Register) -> tuple[Register, Register]
     return high, _bin(emitter, BinopKind.BIT_AND, byte, NIBBLE_MASK)
 
 
-def _flag(emitter: HlasmEmitter, bits: tuple[Register, Register]) -> None:
-    either = emitter.binop(BinopKind.BIT_OR, *bits)
+def _flag(emitter: HlasmEmitter, bit: Register) -> None:
     invalid = emitter.binop(
-        BinopKind.BIT_OR, emitter.load_var(DECIMAL_INVALID_VAR), either
+        BinopKind.BIT_OR, emitter.load_var(DECIMAL_INVALID_VAR), bit
     )
     emitter.emit_inst(StoreVar(name=DECIMAL_INVALID_VAR, value_reg=invalid))
 
@@ -108,7 +107,8 @@ def _digit_pair(
     )
     _flag(
         emitter,
-        (
+        emitter.binop(
+            BinopKind.BIT_OR,
             table_bit(emitter, site.not_digits, high),
             table_bit(emitter, site.not_digits, low),
         ),
@@ -122,17 +122,12 @@ def _sign_byte(
     shifted = _bin(
         emitter, BinopKind.MUL, emitter.load_var(DECIMAL_VALUE_VAR), DECIMAL_BASE
     )
-    _flag(
-        emitter,
-        (
-            table_bit(emitter, site.not_digits, high),
-            table_bit(emitter, emitter.int_(NOT_SIGNS), sign),
-        ),
-    )
+    _flag(emitter, table_bit(emitter, site.not_digits, high))
     return PackedValue(
         emitter.binop(BinopKind.ADD, shifted, high),
         table_bit(emitter, emitter.int_(MINUS_SIGNS), sign),
         emitter.load_var(DECIMAL_INVALID_VAR),
+        table_bit(emitter, emitter.int_(NOT_SIGNS), sign),
     )
 
 
