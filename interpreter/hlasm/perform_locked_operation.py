@@ -1,6 +1,7 @@
 # pyright: standard
 """PLO: GR0's test bit and function code select a row of the function-code table at run time; the row's compares and stores run in the Principles of Operation order."""
 
+import logging
 from collections.abc import Mapping
 from dataclasses import replace
 from functools import partial
@@ -16,6 +17,7 @@ from interpreter.hlasm.hlasm_constants import BYTE_MASK, NIBBLE_BITS
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.locked_operation import LockedOperation, Spot
 from interpreter.hlasm.locked_operations import LOCKED_OPERATIONS
+from interpreter.hlasm.operands import statement_place
 from interpreter.hlasm.places import held_address
 from interpreter.hlasm.plo_frame import PloFrame
 from interpreter.hlasm.specification_check import emit_specification_check
@@ -34,6 +36,9 @@ TEST_BIT_SHIFT = 8
 VALID_CC = 0
 INVALID_CC = 3
 HIGHEST_FUNCTION_CODE = max(LOCKED_OPERATIONS)
+SIZE_BEAD = "red-dragon-6uyp.83"
+
+logger = logging.getLogger(__name__)
 
 
 def _stored(frame: PloFrame, row: LockedOperation) -> None:
@@ -141,6 +146,19 @@ def _register_numbers(
 
 
 def lower_perform_locked_operation(
+    emitter: HlasmEmitter, statement: MachineStatement, field: DataField
+) -> None:
+    start = emitter.emitted_count()
+    _lower_every_function_code(emitter, statement, field)
+    logger.warning(
+        "%s: lowered to %d IR instructions, a block per function code (%s)",
+        statement_place(statement),
+        emitter.emitted_count() - start,
+        SIZE_BEAD,
+    )
+
+
+def _lower_every_function_code(
     emitter: HlasmEmitter, statement: MachineStatement, field: DataField
 ) -> None:
     registers = _register_numbers(emitter, field)
