@@ -5,6 +5,8 @@ import dataclasses
 from itertools import count
 
 from interpreter.func_name import FuncName
+from interpreter.hlasm.chain_link import Chain, extended, flattened
+from interpreter.hlasm.empty_chain import EmptyChain
 from interpreter.hlasm.hlasm_constants import (
     BINARY_BYTES_TO_INT,
     BITS_PER_BYTE,
@@ -15,6 +17,7 @@ from interpreter.hlasm.hlasm_constants import (
     LOW_WORD_OFFSET,
     WORD_BYTES,
 )
+from interpreter.hlasm.located_span import LocatedSpan
 from interpreter.instructions import (
     Binop,
     CallFunction,
@@ -38,10 +41,26 @@ class HlasmEmitter:
         self._register_prefix = register_prefix
         self._registers = count()
         self._labels = count()
-        self._instructions: tuple[InstructionBase, ...] = ()
+        self._instructions: Chain[InstructionBase] = EmptyChain()
+        self._spans: Chain[LocatedSpan] = EmptyChain()
 
     def instructions(self) -> tuple[InstructionBase, ...]:
-        return self._instructions
+        located = {
+            index: span.location
+            for span in flattened(self._spans)
+            for index in span.indices()
+        }
+        return tuple(
+            (
+                dataclasses.replace(inst, source_location=located[index])
+                if index in located
+                else inst
+            )
+            for index, inst in enumerate(flattened(self._instructions))
+        )
+
+    def emitted_count(self) -> int:
+        return self._instructions.length
 
     def fresh_reg(self) -> Register:
         return Register(f"%{self._register_prefix}{next(self._registers)}")
@@ -50,7 +69,7 @@ class HlasmEmitter:
         return CodeLabel(f"{prefix}_{next(self._labels)}")
 
     def emit_inst(self, inst: InstructionBase) -> InstructionBase:
-        self._instructions = (*self._instructions, inst)
+        self._instructions = extended(self._instructions, inst)
         return inst
 
     def load_gr32(self, r: int) -> Register:
@@ -82,12 +101,8 @@ class HlasmEmitter:
         return reg
 
     def locate_from(self, start: int, location: SourceLocation) -> None:
-        self._instructions = (
-            *self._instructions[:start],
-            *(
-                dataclasses.replace(inst, source_location=location)
-                for inst in self._instructions[start:]
-            ),
+        self._spans = extended(
+            self._spans, LocatedSpan(start, self._instructions.length, location)
         )
 
     def unsigned_flag(self) -> Register:

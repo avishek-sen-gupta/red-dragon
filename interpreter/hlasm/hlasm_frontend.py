@@ -94,6 +94,6 @@ class HlasmFrontend(Frontend):
             emitter.emit_inst(
                 Label_(label=statement_label(statement.section, statement.offset))
             )
-        start = len(emitter.instructions())
+        start = emitter.emitted_count()
         lower_statement(emitter, statement, self._statements)
         emitter.locate_from(start, statement_location(statement.origin))
