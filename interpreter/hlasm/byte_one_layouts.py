@@ -22,6 +22,7 @@ BYTE = 8
 HIGH = 4
 LOW = 0
 LOW_NIBBLE_BITS = 0x0F
+BYTE_BITS = 0xFF
 NO_BITS = 0
 
 type Shape = tuple[str, tuple[OperandSlot, ...]]
@@ -60,6 +61,7 @@ R1_IGNORED = _low_ignored(_high(0))
 BYTE_ONE_LAYOUTS: Mapping[Shape, ByteOneLayout] = {
     ("I", (V,)): _layout(_byte(0)),
     ("SI", (S, V)): _layout(_byte(1)),
+    ("SI", (S,)): ByteOneLayout((), BYTE_BITS),
     ("SIY", (S, V)): _layout(_byte(1)),
     ("SS-a", (S, S)): _layout(ByteOneField(LOW, BYTE, 0, _LENGTH)),
     ("SS-b", (S, S)): _layout(
@@ -84,7 +86,6 @@ BYTE_ONE_LAYOUTS: Mapping[Shape, ByteOneLayout] = {
     ("RS-a", (V, V, S)): R1_R2,
     ("RS-a", (V, S)): R1_IGNORED,
     ("RSY-a", (V, V, S)): R1_R2,
-    ("RSY-a", (V, S)): R1_IGNORED,
     ("RS-b", (V, V, S)): R1_R2,
     ("RSY-b", (V, V, S)): R1_R2,
     ("RSY-b", (V, S, V)): _layout(_high(0), _low(2)),
