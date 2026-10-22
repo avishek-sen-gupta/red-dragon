@@ -86,6 +86,10 @@ OFFSET_CARRY_VAR = VarName("__hlasm_mvo_carry")
 MASK_LOOP_REST_VAR = VarName("__hlasm_bits_rest")
 MASK_LOOP_RESULT_VAR = VarName("__hlasm_bits_result")
 MASK_LOOP_CURSOR_VAR = VarName("__hlasm_bits_cursor")
+CONVERT_SOURCE_AT_VAR = VarName("__hlasm_cu_source_at")
+CONVERT_TARGET_AT_VAR = VarName("__hlasm_cu_target_at")
+CONVERT_NEXT_SOURCE_VAR = VarName("__hlasm_cu_next_source")
+CODE_POINT_VAR = VarName("__hlasm_cu_code_point")
 
 RETURN_SENTINEL = 0x00000FF0
 ADDRESS_MASK_31 = 0x7FFFFFFF
