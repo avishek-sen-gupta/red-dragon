@@ -9,7 +9,7 @@ assembly are the che4z language server's, through a forked bridge executable;
 Python lowers what che4z has already resolved. The machine claims z17 problem
 state and stays in AMODE 31. Lowered so far: SVC and the load and store, load
 address and immediates, signed add and subtract, logical add and subtract, compare,
-boolean, shift and rotate, multiply and divide, branch on condition, branch and link, and branch on count and index units (see
+boolean, shift and rotate, multiply and divide, storage move, storage compare, branch on condition, branch and link, and branch on count and index units (see
 Opcode Units).
 Any other opcode abends `S0C1` at run time.
 
@@ -69,8 +69,16 @@ addresses.
 | `interpreter/hlasm/opcodes/even_odd.py` | An odd register of an even-odd pair form abends `S0C6` before any register is read; R1 by default, or the operands named |
 | `interpreter/hlasm/opcodes/ss_move.py` | The storage-to-storage and storage-immediate move unit |
 | `interpreter/hlasm/long_move.py` | MVCL, MVCLE, MVCLU: move, then pad, in one execution |
-| `interpreter/hlasm/long_operands.py` | `LongOperands`: a long move's addresses, lengths and moved count, read before any store |
+| `interpreter/hlasm/long_operands.py` | `LongOperands`: a long move's or compare's addresses, lengths and shorter length, read before any store |
+| `interpreter/hlasm/long_registers.py` | The long forms' register pairs: lengths, both pads, the even-length check, the address advance and length count-down |
 | `interpreter/hlasm/move_string.py` | MVST |
+| `interpreter/hlasm/opcodes/ss_compare.py` | The storage compare unit; CLC |
+| `interpreter/hlasm/long_compare.py` | CLCL, CLCLE, CLCLU |
+| `interpreter/hlasm/long_spans.py` | Walks two long operands a unit at a time: the common units, then the longer tail against the pad |
+| `interpreter/hlasm/compare_string.py` | CLST |
+| `interpreter/hlasm/compare_substring.py` | CUSE |
+| `interpreter/hlasm/ending_character.py` | MVST's and CLST's GR0 ending character and its `S0C6` check |
+| `interpreter/hlasm/unequal_order.py` | CC 1 or 2 from two unequal byte images |
 | `interpreter/hlasm/specification_check.py` | A runtime condition abends `S0C6` |
 | `interpreter/hlasm/operand_overlap.py` | Whether a destination starts inside the participating source bytes: MVC's byte-loop test and MVCL's destructive overlap |
 | `interpreter/hlasm/opcodes/branch_on_condition.py` | The branch on condition unit |
@@ -409,9 +417,31 @@ MVHI, MVGHI; MVCL, MVCLE, MVCLU; MVST. Only MVCL, MVCLE, MVCLU and MVST set the 
   `S0C1` on MVCLU; and ignores GR0 bits 32-55 in MVST. The z390 test pins all three. z390
   lacks MVCRL.
 
+**Storage compares (red-dragon-6uyp.36).** CLC, CLCL, CLCLE, CLCLU, CLST, CUSE. Unsigned, left to
+right: CC 0 equal, 1 first low, 2 first high. Storage is never written.
+
+- CLC compares the two L-byte values in one block compare; registers unchanged.
+- CLCL: 24-bit lengths, pad in R2+1 bits 32-39. CLCLE and CLCLU: 32-bit lengths, pad from the
+  D2(B2) address (one byte; two for CLCLU, which compares 2-byte characters and abends `S0C6` on
+  an odd length). The shorter operand is extended with the pad. With k the offset of the first
+  unequal unit, or the longer length when equal, each operand advances by min(k, its length)
+  and its length drops by as much. R1 and R2 lose bit 32; CLCL keeps R1+1 and R2+1 bits 32-39.
+- CLST: the ending character is GR0 bits 56-63; bits 32-55 nonzero abend `S0C6`. Both ending
+  together is CC 0 with R1 and R2 unchanged. An operand that ends first is low. Otherwise R1 and
+  R2 point at the last bytes processed.
+- CUSE: signed lengths in R1+1 and R2+1 (negative counts as 0 and is kept), substring length
+  GR0 bits 56-63, pad GR1 bits 56-63. CC 0 when an equal run reaches the substring length
+  (length 0 at once); at the end of the longer operand CC 1 if the last bytes were equal, else 2.
+  Each operand advances to the start of the last equal run, at most its own length.
+- Loop cost: about 10 VM steps per byte for CLCL, CLCLE and CLST, 9 against the pad, 15 for CUSE.
+- z390 compares the second operand's tail with the pad without swapping the CC (CLCL with the
+  first operand shorter); abends `S0C1` on CLCLU; ends CLST with CC 0 when either operand ends,
+  and ignores GR0 bits 32-55; takes CUSE's substring length from all of GR0, misses length 0,
+  and sets other lengths and CCs. The z390 test pins each difference.
+
 ## Known Gaps
 
-- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, branch on condition, branch and link, and branch on count and index units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
+- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, branch on condition, branch and link, and branch on count and index units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
 - DC types beyond C, X, B, F, H, P, Z, A, Y and V, and any type extension, raise `UnsupportedDataType` (red-dragon-6uyp.63; floating point E, D, L: red-dragon-6uyp.21).
 - Falling through into DC/DS data or past a CSECT's end skips the data instead of executing it, and a branch into data abends `S0C1` (red-dragon-6uyp.64).
 - Emission is O(n²) in the number of IR instructions, and every branch, even to a static relative target, walks the dispatch chain (red-dragon-6uyp.62).
@@ -423,10 +453,10 @@ MVHI, MVGHI; MVCL, MVCLE, MVCLU; MVST. Only MVCL, MVCLE, MVCLU and MVST set the 
   abend `S0C1` (red-dragon-6uyp.75). A BASSM or BSM to the return address returns
   whatever mode it selects.
 - Access registers are not modelled: LAE and LAEY set only the general register.
-- In AMODE 31, LM, STM, LMD, NC, OC, XC and the storage moves do not wrap EA + offset at
+- In AMODE 31, LM, STM, LMD, NC, OC, XC and the storage moves and compares do not wrap EA + offset at
   2 GiB; MVCL's overlap test ignores operands that wrap.
-- MVCLE, MVCLU and MVST finish in one execution, since the CPU-determined amount may be the
-  whole operand: they never set CC 3. MVCLU abends `S0C6` on an odd length, which the
+- MVCLE, MVCLU, MVST, CLCLE, CLCLU, CLST and CUSE finish in one execution, since the
+  CPU-determined amount may be the whole operand: they never set CC 3. MVCLU abends `S0C6` on an odd length, which the
   Principles of Operation leave to the model.
 - ICM and CLM with mask 0 raise no access exception for their operand.
 - Section bases are doubleword aligned only by allocation order. The VM's bump allocator
@@ -476,6 +506,8 @@ MVHI, MVGHI; MVCL, MVCLE, MVCLU; MVST. Only MVCL, MVCLE, MVCLU and MVST set the 
 | `tests/integration/hlasm/test_loop_branch.py` | Every branch on count and index mnemonic, JCT, JCTG and the JX spellings on the VM: counting loops, register overlaps, signed wrap, CC unchanged |
 | `tests/unit/hlasm/test_ss_move_lowering.py` | Storage move IR: immediate store widths, the MVC block move beside its byte loop, the nibble loops, odd long-move registers abend `S0C6` |
 | `tests/integration/hlasm/test_ss_move.py` | Every storage move mnemonic on the VM: storage, registers, CC; MVC, MVN, MVZ, MVCIN and MVO overlap, MVCRL's hole, MVO truncation, MVCL CC 0-3, zero first lengths and pad, MVCLE and MVCLU pads; MVCLU odd length and MVST's GR0 abend `S0C6`; the bridge passes MVO lengths as written |
+| `tests/unit/hlasm/test_ss_compare_lowering.py` | Storage compare IR: CLC's one block compare, one unit of each operand per loop iteration, no storage writes, odd pair registers abend `S0C6` |
+| `tests/integration/hlasm/test_ss_compare.py` | Every storage compare mnemonic on the VM: CC 0-2 and registers; CLC lengths 0 and 256, inequality against the pad, zero lengths, CLST ending first and a high ending character, CUSE found, ended, zero substring and negative lengths; CLCLU odd length and CLST's GR0 abend `S0C6` |
 | `tests/integration/hlasm/test_bridge_parser.py` | The real bridge: macro origins, refused assemblies |
 | `tests/integration/hlasm/test_storage_layout.py` | Section regions and address constants |
 | `tests/integration/hlasm/test_svc.py` | `WTO`, `ABEND` user and system codes, unlowered SVCs, `run()` with our maclib then `copybook_dirs`, call-site spans |
@@ -492,6 +524,7 @@ MVHI, MVGHI; MVCL, MVCLE, MVCLU; MVST. Only MVCL, MVCLE, MVCLU and MVST set the 
 | `tests/z390/test_load_sign_differential.py` | Every load and test, complement, positive and negative case against z390; LTGR's missing R1 write pinned (`-m z390`) |
 | `tests/z390/test_multiply_divide_differential.py` | Every multiply and divide case and divide exception against z390; z390's missing quotient-overflow exceptions pinned (`-m z390`) |
 | `tests/z390/test_ss_move_differential.py` | Every storage move case and specification exception against z390, bar MVCRL; z390's MVN and MVZ overlap, MVCLU `S0C1` and MVST GR0 differences pinned (`-m z390`) |
+| `tests/z390/test_ss_compare_differential.py` | Every storage compare case against z390; z390's CLCL pad, CLCLU, CLST and CUSE differences pinned (`-m z390`) |
 | `tests/z390/test_test_under_mask_differential.py` | Every test under mask case against z390; no differences (`-m z390`) |
 | `tests/z390/test_compare_differential.py` | Every compare mnemonic against z390; the relative-long alignment difference pinned (`-m z390`) |
 | `tests/z390/test_branch_on_condition_differential.py` | Every branch on condition case against z390; the BIC, BPP and BPRP differences and branches into data pinned (`-m z390`) |
