@@ -23,6 +23,8 @@ MOVE_DATA = (
     "MVOA     DC    X'7788990C'\n"
     "MVOB     DC    X'123456'\n"
     "MVOC     DC    X'990C'\n"
+    "MVOX     DC    X'12345C00'\n"
+    "MVOY     DC    X'123456789C00'\n"
     "STR      DC    X'C1C2C300C4'\n"
     "BIG      DC    264X'00'\n"
 )
@@ -114,6 +116,30 @@ CHARACTER_MOVES: Mapping[str, Case] = {
         {7: 0x0F2F4F6F_8FAFCFEF},
         CC_SET_BY_LTR,
     ),
+    "MVN propagates": (
+        "         MVI   OUT,X'35'\n"
+        "         MVN   OUT+1(7),OUT\n"
+        "         LG    7,OUT\n",
+        {7: 0x35F5F5F5_F5F5F5F5},
+        CC_ZERO,
+    ),
+    "MVCIN overlaps one byte": (
+        "         MVC   OUT(8),SRC\n"
+        "         MVCIN OUT+3(4),OUT+3\n"
+        "         LG    7,OUT\n",
+        {7: 0x01234567_452301EF},
+        CC_ZERO,
+    ),
+    "MVO onto itself": (
+        "         MVO   MVOX(3),MVOX(3)\n" "         L     7,MVOX\n",
+        {7: HIGH_FILL | 0x2345CC00},
+        CC_ZERO,
+    ),
+    "MVO overlapping right": (
+        "         MVO   MVOY(3),MVOY+1(3)\n" "         L     7,MVOY\n",
+        {7: HIGH_FILL | 0x78678678},
+        CC_ZERO,
+    ),
     "MVZ propagates": (
         "         MVI   OUT,X'3C'\n"
         "         MVZ   OUT+1(7),OUT\n"
@@ -195,6 +221,16 @@ LONG_MOVES: Mapping[str, Case] = {
         {3: HIGH_FILL, 5: HIGH_FILL | 4, 7: 0x01234567_FFFFFFFF},
         CC_LOW,
     ),
+    "MVCL first length zero": (
+        "         LA    2,OUT\n"
+        "         LHI   3,0\n"
+        "         LA    4,SRC\n"
+        "         LHI   5,8\n"
+        "         MVCL  2,4\n"
+        "         LG    7,OUT\n",
+        {3: HIGH_FILL, 5: HIGH_FILL | 8, 7: 0xFFFFFFFF_FFFFFFFF},
+        CC_LOW,
+    ),
     "MVCL destructive overlap": (
         "         MVC   OUT(8),SRC\n"
         "         LA    2,OUT+1\n"
@@ -249,6 +285,16 @@ LONG_MOVES: Mapping[str, Case] = {
         "         LG    7,OUT\n",
         {3: HIGH_FILL, 5: HIGH_FILL | 6, 7: 0x0123FFFF_FFFFFFFF},
         CC_LOW,
+    ),
+    "MVCLE lengths zero": (
+        "         LA    2,OUT\n"
+        "         LHI   3,0\n"
+        "         LA    4,SRC\n"
+        "         LHI   5,0\n"
+        "         MVCLE 2,4,0\n"
+        "         LG    7,OUT\n",
+        {3: HIGH_FILL, 5: HIGH_FILL, 7: 0xFFFFFFFF_FFFFFFFF},
+        CC_ZERO,
     ),
     "MVCLU": (
         "         LA    2,OUT\n"

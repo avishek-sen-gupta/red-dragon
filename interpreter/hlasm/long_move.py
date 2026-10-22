@@ -26,6 +26,7 @@ from interpreter.hlasm.inline_ir import inline_ir
 from interpreter.hlasm.long_operands import LongOperands
 from interpreter.hlasm.opcodes.compare import LOGICAL_32
 from interpreter.hlasm.opcodes.even_odd import even_odd_pairs
+from interpreter.hlasm.operand_overlap import starts_inside_source
 from interpreter.hlasm.operands import reg_operand, storage_operand
 from interpreter.hlasm.specification_check import emit_specification_check
 from interpreter.hlasm.statement_lowering import StatementLowering
@@ -51,16 +52,6 @@ def _length(emitter: HlasmEmitter, r: int, length_mask: int) -> Register:
     )
 
 
-def _operands(emitter: HlasmEmitter, pairs: Pairs, length_mask: int) -> LongOperands:
-    target, source = pairs
-    return LongOperands(
-        register_address(emitter, target),
-        _length(emitter, target, length_mask),
-        register_address(emitter, source),
-        _length(emitter, source, length_mask),
-    )
-
-
 def _pairs(statement: MachineStatement) -> Pairs:
     return reg_operand(statement, FIRST_OPERAND), reg_operand(statement, SECOND_OPERAND)
 
@@ -72,9 +63,21 @@ def _smaller(emitter: HlasmEmitter, left: Register, right: Register) -> Register
     return emitter.binop(BinopKind.ADD, right, shortfall)
 
 
-def _move_then_pad(
-    emitter: HlasmEmitter, operands: LongOperands, moved: Register, pad: Pad
-) -> None:
+def _operands(emitter: HlasmEmitter, pairs: Pairs, length_mask: int) -> LongOperands:
+    target, source = pairs
+    target_length = _length(emitter, target, length_mask)
+    source_length = _length(emitter, source, length_mask)
+    return LongOperands(
+        register_address(emitter, target),
+        target_length,
+        register_address(emitter, source),
+        source_length,
+        _smaller(emitter, target_length, source_length),
+    )
+
+
+def _move_then_pad(emitter: HlasmEmitter, operands: LongOperands, pad: Pad) -> None:
+    moved = operands.moved
     addresses = (operands.target, operands.source)
     emit_counted_loop(
         emitter,
@@ -113,10 +116,10 @@ def _update_registers(
     emitter: HlasmEmitter,
     pairs: Pairs,
     operands: LongOperands,
-    moved: Register,
     length_mask: int,
 ) -> None:
     target, source = pairs
+    moved = operands.moved
     zero = emitter.int_(0)
     unmoved = emitter.binop(BinopKind.SUB, operands.source_length, moved)
     _advance(emitter, target, operands.target, operands.target_length)
@@ -134,20 +137,9 @@ def _complete(
 ) -> None:
     lengths = {PARAM_LEFT: operands.target_length, PARAM_RIGHT: operands.source_length}
     cc = inline_ir(emitter, LOGICAL_32, lengths)
-    moved = _smaller(emitter, operands.target_length, operands.source_length)
-    _move_then_pad(emitter, operands, moved, pad)
-    _update_registers(emitter, pairs, operands, moved, length_mask)
+    _move_then_pad(emitter, operands, pad)
+    _update_registers(emitter, pairs, operands, length_mask)
     emitter.set_cc(cc)
-
-
-def _destructive(emitter: HlasmEmitter, operands: LongOperands) -> Register:
-    moved = _smaller(emitter, operands.target_length, operands.source_length)
-    source_end = emitter.binop(BinopKind.ADD, operands.source, moved)
-    return emitter.binop(
-        BinopKind.AND,
-        emitter.binop(BinopKind.LT, operands.source, operands.target),
-        emitter.binop(BinopKind.LT, operands.target, source_end),
-    )
 
 
 def _refuse_destructive_overlap(
@@ -156,7 +148,9 @@ def _refuse_destructive_overlap(
     overlap, move = emitter.fresh_label("hl_mvcl_overlap"), emitter.fresh_label(
         "hl_mvcl_move"
     )
-    destructive = _destructive(emitter, operands)
+    destructive = starts_inside_source(
+        emitter, (operands.target, operands.source), operands.moved
+    )
     emitter.emit_inst(BranchIf(cond_reg=destructive, branch_targets=(overlap, move)))
     emitter.emit_inst(Label_(label=overlap))
     target, source = pairs

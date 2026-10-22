@@ -1,5 +1,5 @@
 # pyright: standard
-"""Storage move programs leave the same declared registers, storage and CC in RedDragon and in z390, bar z390's known MVZ, MVCLU and MVST errors; z390 lacks MVCRL, whose values come from the Principles of Operation in the VM test."""
+"""Storage move programs leave the same declared registers, storage and CC in RedDragon and in z390, bar z390's known MVN, MVZ, MVCLU and MVST errors; z390 lacks MVCRL, whose values come from the Principles of Operation in the VM test."""
 
 from collections.abc import Mapping
 from pathlib import Path
@@ -29,6 +29,7 @@ ALL_CASES: Mapping[str, tuple[programs.Case, HlasmRun]] = {
 }
 
 Z390_MACHINE: Mapping[str, HlasmMachine] = {
+    "MVN propagates": HlasmMachine(ABENDED, 0, {7: 0x35F5FFFF_FFFFFFFF}),
     "MVZ propagates": HlasmMachine(ABENDED, 0, {7: 0x3C3FFFFF_FFFFFFFF}),
     "MVCLU": HlasmMachine(OPERATION, 0, {3: HIGH_FILL | 8, 5: HIGH_FILL | 2, 7: FILL}),
     "MVCLU registers": HlasmMachine(OPERATION, 0, {}),
