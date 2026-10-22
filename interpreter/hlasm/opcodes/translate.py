@@ -5,11 +5,17 @@ from collections.abc import Callable, Mapping
 
 from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.hlasm.byte_loop import emit_byte_loop, emit_scan_loop
+from interpreter.hlasm.byte_one_layouts import LENGTH_BYTE
 from interpreter.hlasm.compare_cc import emit_cc_constant
+from interpreter.hlasm.data_field import DataField, LowerWithField
 from interpreter.hlasm.data_movement import FIRST_OPERAND, SECOND_OPERAND
 from interpreter.hlasm.effective_address import (
     effective_address,
     length_operand_address,
+)
+from interpreter.hlasm.field_lowering import (
+    FieldLowering,
+    written_lowerings,
 )
 from interpreter.hlasm.hlasm_constants import (
     AMODE_31_LINK_BIT,
@@ -49,20 +55,22 @@ LAST_CC = 2
 
 
 def _field(
-    emitter: HlasmEmitter, statement: MachineStatement
-) -> tuple[tuple[Register, Register], int]:
+    emitter: HlasmEmitter, statement: MachineStatement, field: DataField
+) -> tuple[tuple[Register, Register], DataField]:
     first = storage_length_operand(statement, FIRST_OPERAND)
     start = length_operand_address(emitter, first)
     table = effective_address(emitter, storage_operand(statement, SECOND_OPERAND))
-    return (start, table), max(first.length, ONE_BYTE)
+    return (start, table), field.length(emitter)
 
 
-def _translate(emitter: HlasmEmitter, statement: MachineStatement) -> None:
-    addresses, length = _field(emitter, statement)
+def _translate(
+    emitter: HlasmEmitter, statement: MachineStatement, field: DataField
+) -> None:
+    addresses, length = _field(emitter, statement, field)
     read = unit_reader(emitter, ONE_BYTE)
     emit_byte_loop(
         emitter,
-        length,
+        length.value(emitter),
         lambda at: translate_byte(emitter, addresses, read(addresses[0], at), at),
     )
 
@@ -104,11 +112,13 @@ def _insert_function_byte(emitter: HlasmEmitter, function: Register) -> None:
     )
 
 
-def _found_cc(emitter: HlasmEmitter, at: Register, last: int, done: CodeLabel) -> None:
+def _found_cc(
+    emitter: HlasmEmitter, at: Register, last: Register, done: CodeLabel
+) -> None:
     remaining, exhausted = emitter.fresh_label("hl_trt_remaining"), emitter.fresh_label(
         "hl_trt_last"
     )
-    is_last = emitter.binop(BinopKind.EQ, at, emitter.int_(last))
+    is_last = emitter.binop(BinopKind.EQ, at, last)
     emitter.emit_inst(BranchIf(cond_reg=is_last, branch_targets=(exhausted, remaining)))
     emit_cc_constant(emitter, FOUND_CC, remaining, done)
     emit_cc_constant(emitter, LAST_CC, exhausted, done)
@@ -123,31 +133,41 @@ def _none_found(emitter: HlasmEmitter, found: CodeLabel, done: CodeLabel) -> Non
 
 def _translate_and_test(
     direction: BinopKind, store_argument: ArgumentStore
-) -> StatementLowering:
-    def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
-        addresses, length = _field(emitter, statement)
+) -> LowerWithField:
+    def lower(
+        emitter: HlasmEmitter, statement: MachineStatement, field: DataField
+    ) -> None:
+        addresses, length = _field(emitter, statement, field)
         scan = (unit_reader(emitter, ONE_BYTE), direction, emitter.int_(0))
         found, done = emitter.fresh_label("hl_trt_found"), emitter.fresh_label(
             "hl_trt_done"
         )
         at, (address, function) = emit_scan_loop(
             emitter,
-            (scan[2], emitter.int_(length)),
+            (scan[2], length.value(emitter)),
             ONE_BYTE,
             lambda at: _function_byte(emitter, addresses, scan, at, found),
         )
         _none_found(emitter, found, done)
         store_argument(emitter, ARGUMENT_REGISTER, address)
         _insert_function_byte(emitter, function)
-        _found_cc(emitter, at, length - 1, done)
+        _found_cc(emitter, at, field.value(emitter), done)
 
     return lower
 
 
+TRANSLATE_FIELD_LOWERINGS: Mapping[str, FieldLowering] = {
+    "TR": FieldLowering(LENGTH_BYTE, _translate),
+    "TRT": FieldLowering(
+        LENGTH_BYTE, _translate_and_test(BinopKind.ADD, store_address)
+    ),
+    "TRTR": FieldLowering(
+        LENGTH_BYTE, _translate_and_test(BinopKind.SUB, _keep_bit_32)
+    ),
+}
+
 TRANSLATE_LOWERINGS: Mapping[str, StatementLowering] = {
-    "TR": _translate,
-    "TRT": _translate_and_test(BinopKind.ADD, store_address),
-    "TRTR": _translate_and_test(BinopKind.SUB, _keep_bit_32),
+    **written_lowerings(TRANSLATE_FIELD_LOWERINGS),
     "TRE": TRANSLATE_EXTENDED,
     "TROO": TRANSLATE_ONE_TO_ONE,
     "TROT": TRANSLATE_ONE_TO_TWO,

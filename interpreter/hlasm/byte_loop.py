@@ -61,8 +61,8 @@ def emit_counted_loop(
     emit_scan_loop(emitter, span, step, body)
 
 
-def emit_byte_loop(emitter: HlasmEmitter, length: int, body: LoopBody) -> None:
-    span = (emitter.int_(0), emitter.int_(length))
+def emit_byte_loop(emitter: HlasmEmitter, length: Register, body: LoopBody) -> None:
+    span = (emitter.int_(0), length)
     emit_counted_loop(emitter, span, ONE_BYTE, body)
 
 

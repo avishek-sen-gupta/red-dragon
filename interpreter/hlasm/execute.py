@@ -1,5 +1,5 @@
 # pyright: standard
-"""EX and EXRL: the target statement, found at assembly, runs in place of the execute instruction, one inline copy per byte-1 value R1 can make."""
+"""EX and EXRL: the target statement, found at assembly, runs in place of the execute instruction; a byte-1 data field is computed at run time, register and mask fields select one inline copy per value R1 can make."""
 
 import logging
 from collections.abc import Callable, Mapping, Sequence
@@ -11,6 +11,8 @@ from hlasm_asg.program.storage_operand import StorageOperand
 from interpreter.hlasm.abend import emit_abend
 from interpreter.hlasm.byte_one_layout import ByteOneLayout
 from interpreter.hlasm.byte_one_layouts import byte_one_layout
+from interpreter.hlasm.executed_field import ExecutedField
+from interpreter.hlasm.field_lowering import FieldLowering
 from interpreter.hlasm.hlasm_constants import (
     BYTE_MASK,
     EXECUTE_EXCEPTION_ABEND,
@@ -19,7 +21,7 @@ from interpreter.hlasm.hlasm_constants import (
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.machine_statements import MachineStatements
-from interpreter.hlasm.opcodes import OPCODE_LOWERINGS
+from interpreter.hlasm.opcodes import DATA_FIELD_LOWERINGS, OPCODE_LOWERINGS
 from interpreter.hlasm.operands import (
     reg_operand,
     statement_place,
@@ -116,6 +118,30 @@ def _expand(
     emitter.emit_inst(Label_(label=join))
 
 
+def _with_runtime_field(
+    emitter: HlasmEmitter, r1: int, target: MachineStatement, lowering: FieldLowering
+) -> None:
+    byte = _modified_byte(emitter, r1, target, lowering.layout)
+    lowering.lower(emitter, target, ExecutedField(byte))
+
+
+def _modified(
+    emitter: HlasmEmitter,
+    r1: int,
+    target: MachineStatement,
+    lower_machine: StatementLowering,
+) -> None:
+    if r1 == NO_REGISTER or target.base_mnemonic not in OPCODE_LOWERINGS:
+        lower_machine(emitter, target)
+        return
+    if target.base_mnemonic in DATA_FIELD_LOWERINGS:
+        _with_runtime_field(
+            emitter, r1, target, DATA_FIELD_LOWERINGS[target.base_mnemonic]
+        )
+        return
+    _expand(emitter, r1, target, lower_machine)
+
+
 def _execute(
     emitter: HlasmEmitter,
     statement: MachineStatement,
@@ -132,11 +158,7 @@ def _execute(
             "length": statement.length,
         }
     )
-    r1 = reg_operand(statement, R1_OPERAND)
-    if r1 == NO_REGISTER or target.base_mnemonic not in OPCODE_LOWERINGS:
-        lower_machine(emitter, placed)
-        return
-    _expand(emitter, r1, placed, lower_machine)
+    _modified(emitter, reg_operand(statement, R1_OPERAND), placed, lower_machine)
 
 
 def _execute_at(

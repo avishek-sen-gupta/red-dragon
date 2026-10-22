@@ -1,5 +1,5 @@
 # pyright: standard
-"""SVC: the supervisor calls lowered in IR, by number; any other number abends S0C1."""
+"""SVC: the supervisor calls lowered in IR, by number, the number written or set by EX; any other number abends S0C1."""
 
 import logging
 from collections.abc import Callable, Mapping
@@ -7,13 +7,15 @@ from collections.abc import Callable, Mapping
 from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.hlasm.abend import emit_abend
 from interpreter.hlasm.abend_completion import emit_abend_completion
+from interpreter.hlasm.byte_one_layouts import NUMBER_BYTE
+from interpreter.hlasm.data_field import DataField
+from interpreter.hlasm.field_lowering import FieldLowering, written_lowerings
 from interpreter.hlasm.hlasm_constants import (
     ABEND_SVC,
     OPERATION_EXCEPTION_ABEND,
     WTO_SVC,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
-from interpreter.hlasm.operands import imm_operand
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.hlasm.write_to_operator import emit_write_to_operator
 
@@ -25,15 +27,20 @@ _SERVICES: Mapping[int, Callable[[HlasmEmitter], None]] = {
 }
 
 
-def lower_svc(emitter: HlasmEmitter, statement: MachineStatement) -> None:
-    number = imm_operand(statement, 0)
-    if number in _SERVICES:
-        _SERVICES[number](emitter)
-        return
+def _no_service(emitter: HlasmEmitter, number: str) -> None:
     logger.warning(
-        "SVC %d has no lowering; it abends %s", number, OPERATION_EXCEPTION_ABEND
+        "SVC %s has no lowering; it abends %s", number, OPERATION_EXCEPTION_ABEND
     )
     emit_abend(emitter, OPERATION_EXCEPTION_ABEND)
 
 
-SVC_LOWERINGS: Mapping[str, StatementLowering] = {"SVC": lower_svc}
+def lower_svc(
+    emitter: HlasmEmitter, statement: MachineStatement, number: DataField
+) -> None:
+    number.select(emitter, _SERVICES, _no_service)
+
+
+SVC_FIELD_LOWERINGS: Mapping[str, FieldLowering] = {
+    "SVC": FieldLowering(NUMBER_BYTE, lower_svc)
+}
+SVC_LOWERINGS: Mapping[str, StatementLowering] = written_lowerings(SVC_FIELD_LOWERINGS)

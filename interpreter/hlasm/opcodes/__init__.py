@@ -1,33 +1,54 @@
 # pyright: standard
-"""Machine-instruction lowerings, indexed by base mnemonic."""
+"""Machine-instruction lowerings, indexed by base mnemonic; those whose byte 1 is a data field also by that field, for EX."""
 
 from collections.abc import Mapping
 
-from interpreter.hlasm.opcodes.boolean import BOOLEAN_LOWERINGS
+from interpreter.hlasm.field_lowering import FieldLowering
+from interpreter.hlasm.opcodes.boolean import (
+    BOOLEAN_FIELD_LOWERINGS,
+    BOOLEAN_LOWERINGS,
+)
 from interpreter.hlasm.opcodes.branch_and_link import BRANCH_AND_LINK_LOWERINGS
 from interpreter.hlasm.opcodes.branch_on_condition import (
     BRANCH_ON_CONDITION_LOWERINGS,
 )
-from interpreter.hlasm.opcodes.compare import COMPARE_LOWERINGS
+from interpreter.hlasm.opcodes.compare import (
+    COMPARE_FIELD_LOWERINGS,
+    COMPARE_LOWERINGS,
+)
 from interpreter.hlasm.opcodes.load_address_immediate import (
     LOAD_ADDRESS_IMMEDIATE_LOWERINGS,
 )
 from interpreter.hlasm.opcodes.load_sign import LOAD_SIGN_LOWERINGS
 from interpreter.hlasm.opcodes.load_store import LOAD_STORE_LOWERINGS
 from interpreter.hlasm.opcodes.logical_add_subtract import (
+    LOGICAL_ADD_SUBTRACT_FIELD_LOWERINGS,
     LOGICAL_ADD_SUBTRACT_LOWERINGS,
 )
 from interpreter.hlasm.opcodes.loop_branch import LOOP_BRANCH_LOWERINGS
 from interpreter.hlasm.opcodes.multiply_divide import MULTIPLY_DIVIDE_LOWERINGS
 from interpreter.hlasm.opcodes.shift_rotate import SHIFT_ROTATE_LOWERINGS
 from interpreter.hlasm.opcodes.signed_add_subtract import (
+    SIGNED_ADD_SUBTRACT_FIELD_LOWERINGS,
     SIGNED_ADD_SUBTRACT_LOWERINGS,
 )
-from interpreter.hlasm.opcodes.ss_compare import SS_COMPARE_LOWERINGS
-from interpreter.hlasm.opcodes.ss_move import SS_MOVE_LOWERINGS
-from interpreter.hlasm.opcodes.svc import SVC_LOWERINGS
-from interpreter.hlasm.opcodes.translate import TRANSLATE_LOWERINGS
-from interpreter.hlasm.opcodes.under_mask import TEST_UNDER_MASK_LOWERINGS
+from interpreter.hlasm.opcodes.ss_compare import (
+    SS_COMPARE_FIELD_LOWERINGS,
+    SS_COMPARE_LOWERINGS,
+)
+from interpreter.hlasm.opcodes.ss_move import (
+    SS_MOVE_FIELD_LOWERINGS,
+    SS_MOVE_LOWERINGS,
+)
+from interpreter.hlasm.opcodes.svc import SVC_FIELD_LOWERINGS, SVC_LOWERINGS
+from interpreter.hlasm.opcodes.translate import (
+    TRANSLATE_FIELD_LOWERINGS,
+    TRANSLATE_LOWERINGS,
+)
+from interpreter.hlasm.opcodes.under_mask import (
+    TEST_UNDER_MASK_FIELD_LOWERINGS,
+    TEST_UNDER_MASK_LOWERINGS,
+)
 from interpreter.hlasm.statement_lowering import StatementLowering
 
 OPCODE_LOWERINGS: Mapping[str, StatementLowering] = {
@@ -48,4 +69,16 @@ OPCODE_LOWERINGS: Mapping[str, StatementLowering] = {
     **SS_MOVE_LOWERINGS,
     **SS_COMPARE_LOWERINGS,
     **TRANSLATE_LOWERINGS,
+}
+
+DATA_FIELD_LOWERINGS: Mapping[str, FieldLowering] = {
+    **SIGNED_ADD_SUBTRACT_FIELD_LOWERINGS,
+    **LOGICAL_ADD_SUBTRACT_FIELD_LOWERINGS,
+    **COMPARE_FIELD_LOWERINGS,
+    **BOOLEAN_FIELD_LOWERINGS,
+    **SVC_FIELD_LOWERINGS,
+    **TEST_UNDER_MASK_FIELD_LOWERINGS,
+    **SS_MOVE_FIELD_LOWERINGS,
+    **SS_COMPARE_FIELD_LOWERINGS,
+    **TRANSLATE_FIELD_LOWERINGS,
 }

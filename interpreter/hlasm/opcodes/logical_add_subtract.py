@@ -4,6 +4,7 @@
 from collections.abc import Callable, Mapping
 
 from hlasm_asg.program.machine_statement import MachineStatement
+from interpreter.hlasm.byte_one_layouts import IMMEDIATE_BYTE
 from interpreter.hlasm.data_movement import (
     Sink,
     Source,
@@ -12,6 +13,7 @@ from interpreter.hlasm.data_movement import (
     to_gr32,
     to_gr64,
 )
+from interpreter.hlasm.field_lowering import FieldLowering, written_lowerings
 from interpreter.hlasm.fixed_width_ir import (
     build_add_logical_carry_cc_ir,
     build_add_logical_cc_ir,
@@ -98,7 +100,6 @@ ADDS: Mapping[str, StatementLowering] = {
     "ALRK": ADD_WORD(from_gr32(1), from_gr32(2)),
     "ALFI": ADD_WORD(from_gr32(0), LOGICAL_WORD_IMMEDIATE),
     "ALHSIK": ADD_WORD(from_gr32(1), THIRD_HALFWORD_IMMEDIATE),
-    "ALSI": storage_immediate_result_and_cc(ADD_32, WORD_BYTES),
     "ALG": ADD_DOUBLEWORD(from_gr64(0), DOUBLEWORD_STORAGE),
     "ALGR": ADD_DOUBLEWORD(from_gr64(0), from_gr64(1)),
     "ALGRK": ADD_DOUBLEWORD(from_gr64(1), from_gr64(2)),
@@ -106,7 +107,6 @@ ADDS: Mapping[str, StatementLowering] = {
     "ALGFR": ADD_DOUBLEWORD(from_gr64(0), from_gr32(1)),
     "ALGFI": ADD_DOUBLEWORD(from_gr64(0), LOGICAL_WORD_IMMEDIATE),
     "ALGHSIK": ADD_DOUBLEWORD(from_gr64(1), THIRD_HALFWORD_IMMEDIATE),
-    "ALGSI": storage_immediate_result_and_cc(ADD_64, DOUBLEWORD_BYTES),
     "ALC": ADD_CARRY_WORD(from_gr32(0), WORD_STORAGE),
     "ALCR": ADD_CARRY_WORD(from_gr32(0), from_gr32(1)),
     "ALCG": ADD_CARRY_DOUBLEWORD(from_gr64(0), DOUBLEWORD_STORAGE),
@@ -131,7 +131,17 @@ SUBTRACTS: Mapping[str, StatementLowering] = {
     "SLBGR": SUB_BORROW_DOUBLEWORD(from_gr64(0), from_gr64(1)),
 }
 
+LOGICAL_ADD_SUBTRACT_FIELD_LOWERINGS: Mapping[str, FieldLowering] = {
+    "ALSI": FieldLowering(
+        IMMEDIATE_BYTE, storage_immediate_result_and_cc(ADD_32, WORD_BYTES)
+    ),
+    "ALGSI": FieldLowering(
+        IMMEDIATE_BYTE, storage_immediate_result_and_cc(ADD_64, DOUBLEWORD_BYTES)
+    ),
+}
+
 LOGICAL_ADD_SUBTRACT_LOWERINGS: Mapping[str, StatementLowering] = {
     **ADDS,
     **SUBTRACTS,
+    **written_lowerings(LOGICAL_ADD_SUBTRACT_FIELD_LOWERINGS),
 }

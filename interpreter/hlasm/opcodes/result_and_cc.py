@@ -4,6 +4,7 @@
 from collections.abc import Callable, Mapping, Sequence
 
 from hlasm_asg.program.machine_statement import MachineStatement
+from interpreter.hlasm.data_field import LowerWithField
 from interpreter.hlasm.data_movement import Sink, Source, storage_immediate
 from interpreter.hlasm.hlasm_constants import PARAM_LEFT, PARAM_RIGHT
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
@@ -46,9 +47,7 @@ def result_and_cc(
     return lower
 
 
-def storage_immediate_result_and_cc(
-    operation: Operation, width: int
-) -> StatementLowering:
+def storage_immediate_result_and_cc(operation: Operation, width: int) -> LowerWithField:
     def apply(
         emitter: HlasmEmitter,
         operands: tuple[Register, Register],

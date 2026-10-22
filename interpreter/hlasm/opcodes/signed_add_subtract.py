@@ -4,6 +4,7 @@
 from collections.abc import Callable, Mapping, Sequence
 
 from hlasm_asg.program.machine_statement import MachineStatement
+from interpreter.hlasm.byte_one_layouts import IMMEDIATE_BYTE
 from interpreter.hlasm.data_movement import (
     Sink,
     Source,
@@ -13,6 +14,7 @@ from interpreter.hlasm.data_movement import (
     to_gr32,
     to_gr64,
 )
+from interpreter.hlasm.field_lowering import FieldLowering, written_lowerings
 from interpreter.hlasm.fixed_point_overflow import emit_fixed_point_overflow_check
 from interpreter.hlasm.fixed_width_ir import (
     build_add_signed_cc_ir,
@@ -78,10 +80,15 @@ def signed_arithmetic(
     return lower
 
 
-def to_storage_immediate(operation: Operation, width: int) -> StatementLowering:
-    return storage_immediate(
-        width,
-        lambda emitter, operands, store: _apply(emitter, operation, operands, store),
+def to_storage_immediate(operation: Operation, width: int) -> FieldLowering:
+    return FieldLowering(
+        IMMEDIATE_BYTE,
+        storage_immediate(
+            width,
+            lambda emitter, operands, store: _apply(
+                emitter, operation, operands, store
+            ),
+        ),
     )
 
 
@@ -103,7 +110,6 @@ ADDS: Mapping[str, StatementLowering] = {
     "AHI": _word(ADD_32, from_gr32(0), HALFWORD_IMMEDIATE),
     "AFI": _word(ADD_32, from_gr32(0), WORD_IMMEDIATE),
     "AHIK": _word(ADD_32, from_gr32(1), THIRD_HALFWORD_IMMEDIATE),
-    "ASI": to_storage_immediate(ADD_32, WORD_BYTES),
     "AG": _doubleword(ADD_64, from_gr64(0), DOUBLEWORD_STORAGE),
     "AGR": _doubleword(ADD_64, from_gr64(0), from_gr64(1)),
     "AGRK": _doubleword(ADD_64, from_gr64(1), from_gr64(2)),
@@ -113,7 +119,6 @@ ADDS: Mapping[str, StatementLowering] = {
     "AGHI": _doubleword(ADD_64, from_gr64(0), HALFWORD_IMMEDIATE),
     "AGFI": _doubleword(ADD_64, from_gr64(0), WORD_IMMEDIATE),
     "AGHIK": _doubleword(ADD_64, from_gr64(1), THIRD_HALFWORD_IMMEDIATE),
-    "AGSI": to_storage_immediate(ADD_64, DOUBLEWORD_BYTES),
 }
 
 SUBTRACTS: Mapping[str, StatementLowering] = {
@@ -131,7 +136,13 @@ SUBTRACTS: Mapping[str, StatementLowering] = {
     "SGH": _doubleword(SUB_64, from_gr64(0), SIGNED_HALFWORD_STORAGE),
 }
 
+SIGNED_ADD_SUBTRACT_FIELD_LOWERINGS: Mapping[str, FieldLowering] = {
+    "ASI": to_storage_immediate(ADD_32, WORD_BYTES),
+    "AGSI": to_storage_immediate(ADD_64, DOUBLEWORD_BYTES),
+}
+
 SIGNED_ADD_SUBTRACT_LOWERINGS: Mapping[str, StatementLowering] = {
     **ADDS,
     **SUBTRACTS,
+    **written_lowerings(SIGNED_ADD_SUBTRACT_FIELD_LOWERINGS),
 }
