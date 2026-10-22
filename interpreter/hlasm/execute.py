@@ -2,7 +2,7 @@
 """EX and EXRL: the target statement, found at assembly, runs in place of the execute instruction; a byte-1 data field is computed at run time, register and mask fields select one inline copy per value R1 can make."""
 
 import logging
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping
 
 from hlasm_asg.program.machine_statement import MachineStatement
 from hlasm_asg.program.reloc_address import RelocAddress
@@ -28,7 +28,8 @@ from interpreter.hlasm.operands import (
     storage_operand,
 )
 from interpreter.hlasm.statement_lowering import StatementLowering
-from interpreter.instructions import Branch, BranchIf, Label_
+from interpreter.hlasm.value_tree import emit_value_switch
+from interpreter.instructions import BranchIf, Label_
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
 
@@ -43,7 +44,6 @@ NO_REGISTER = 0
 HALFWORD_ALIGNMENT = 2
 UNWRITTEN = "target not written as a relocatable address"
 
-type Leaf = Callable[[int], None]
 type ExecuteLowering = Callable[
     [HlasmEmitter, MachineStatement, MachineStatements, StatementLowering], None
 ]
@@ -71,22 +71,6 @@ def _guard_opcode(emitter: HlasmEmitter, ored: Register, opcode_bits: int) -> No
     emitter.emit_inst(Label_(label=kept))
 
 
-def _tree(
-    emitter: HlasmEmitter, byte: Register, values: Sequence[int], leaf: Leaf
-) -> None:
-    if len(values) == 1:
-        leaf(values[0])
-        return
-    middle = len(values) // 2
-    low, high = emitter.fresh_label("hl_ex_low"), emitter.fresh_label("hl_ex_high")
-    below = emitter.binop(BinopKind.LT, byte, emitter.int_(values[middle]))
-    emitter.emit_inst(BranchIf(cond_reg=below, branch_targets=(low, high)))
-    emitter.emit_inst(Label_(label=low))
-    _tree(emitter, byte, values[:middle], leaf)
-    emitter.emit_inst(Label_(label=high))
-    _tree(emitter, byte, values[middle:], leaf)
-
-
 def _modified_byte(
     emitter: HlasmEmitter, r1: int, target: MachineStatement, layout: ByteOneLayout
 ) -> Register:
@@ -108,14 +92,12 @@ def _expand(
 ) -> None:
     layout = byte_one_layout(target)
     byte = _modified_byte(emitter, r1, target, layout)
-    join = emitter.fresh_label("hl_executed")
-
-    def leaf(value: int) -> None:
-        lower_machine(emitter, layout.variant(target, value))
-        emitter.emit_inst(Branch(label=join))
-
-    _tree(emitter, byte, layout.reachable(target), leaf)
-    emitter.emit_inst(Label_(label=join))
+    emit_value_switch(
+        emitter,
+        byte,
+        layout.reachable(target),
+        lambda value: lower_machine(emitter, layout.variant(target, value)),
+    )
 
 
 def _with_runtime_field(

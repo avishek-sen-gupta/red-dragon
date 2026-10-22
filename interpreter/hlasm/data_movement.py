@@ -107,6 +107,14 @@ def from_aligned_storage(width: int) -> Source:
     return _load_from(_aligned(storage_address, width), width)
 
 
+def aligned_storage_address_at(index: int, width: int) -> Source:
+    return _aligned(storage_address_at(index), width)
+
+
+def to_aligned_storage(width: int) -> Sink:
+    return _store_to(_aligned(storage_address, width), width)
+
+
 def _relative(width: int) -> Callable[[HlasmEmitter, MachineStatement], Register]:
     if width in ALIGNED_RELATIVE_WIDTHS:
         return _aligned(relative_target, width)
