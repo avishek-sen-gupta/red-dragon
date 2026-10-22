@@ -63,10 +63,12 @@ def long_operands(
     )
 
 
+def address_bits(emitter: HlasmEmitter, address: Register) -> Register:
+    return emitter.binop(BinopKind.BIT_AND, address, emitter.int_(ADDRESS_MASK_31))
+
+
 def store_address(emitter: HlasmEmitter, r: int, address: Register) -> None:
-    emitter.store_gr32(
-        r, emitter.binop(BinopKind.BIT_AND, address, emitter.int_(ADDRESS_MASK_31))
-    )
+    emitter.store_gr32(r, address_bits(emitter, address))
 
 
 def store_progress(

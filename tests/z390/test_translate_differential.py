@@ -1,5 +1,5 @@
 # pyright: standard
-"""Translate programs leave the same declared storage, registers and CC in RedDragon and in z390, bar z390's TRE length 0 and its alignment check on the TROO table."""
+"""Translate programs leave the same declared storage, registers and CC in RedDragon and in z390, bar z390's TRE length 0, its alignment check on the TROO table and its TRTE two-byte argument truncated to its low byte."""
 
 from collections.abc import Mapping
 from pathlib import Path
@@ -30,6 +30,9 @@ ALL_CASES: Mapping[str, tuple[programs.Case, HlasmRun]] = {
 Z390_MACHINE: Mapping[str, HlasmMachine] = {
     "TRE length 0": HlasmMachine(
         ABENDED, 0, {3: HIGH_FILL | 0xFFFFFFFF, 6: HIGH_FILL | 0x01010240}
+    ),
+    "TRTE two-byte arguments and functions over 255": HlasmMachine(
+        ABENDED, 1, {3: HIGH_FILL | 2, 4: HIGH_FILL | 0x4321}
     ),
     "TROO table bits 61-63 ignored": HlasmMachine(
         SPECIFICATION, 0, {3: HIGH_FILL | 4, 6: FILL}
