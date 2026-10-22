@@ -56,6 +56,7 @@ OPCODE_BYTE = _layout()
 R1_R2 = _layout(_high(0), _low(1))
 R1_X2 = _layout(_high(0), ByteOneField(LOW, NIBBLE, 1, _INDEX))
 R1_OPCODE = _layout(_high(0))
+R1_R3 = _layout(_high(0), _low(2))
 R1_IGNORED = _low_ignored(_high(0))
 LENGTH_BYTE = _layout(ByteOneField(LOW, BYTE, 0, _LENGTH))
 LENGTH_NIBBLES = _layout(
@@ -73,7 +74,7 @@ BYTE_ONE_LAYOUTS: Mapping[Shape, ByteOneLayout] = {
     ("SS-b", (S, S)): LENGTH_NIBBLES,
     ("SS-c", (S, S, V)): _layout(ByteOneField(HIGH, NIBBLE, 0, _LENGTH), _low(2)),
     ("SS-e", (V, V, S, S)): R1_R2,
-    ("SS-e", (V, S, V, S)): _layout(_high(0), _low(2)),
+    ("SS-e", (V, S, V, S)): R1_R3,
     ("SS-f", (S, S)): _layout(ByteOneField(LOW, BYTE, 1, _LENGTH)),
     ("RSL-a", (S,)): _low_ignored(ByteOneField(HIGH, NIBBLE, 0, _LENGTH)),
     ("RSL-b", (V, S, V)): _layout(ByteOneField(LOW, BYTE, 1, _LENGTH)),

@@ -7,7 +7,8 @@ from functools import reduce
 from tests.integration.hlasm.load_store_programs import ABEND, FILL, HIGH_FILL
 from tests.integration.hlasm.plo_function import Location, PloFunction
 
-type Case = tuple[str, Mapping[int, int], int]
+type Storage = tuple[tuple[int, bytes], ...]
+type Case = tuple[str, Mapping[int, int], int, Storage]
 type Memory = Mapping[str, bytes]
 type Setup = tuple[Memory, tuple[str, ...]]
 
@@ -28,7 +29,10 @@ ANY_UNEQUAL_CC = 2
 NO_COMPARE_CC = 2
 MULTIPLE_OPERANDS = 30
 LIST_POINTERS: Mapping[str, int] = {"OP4": 72, "OP3": 104, "OP1": 136}
-READBACK_REGISTERS = (8, 9, 10, 11, 2, 3, 13, 14, 15)
+OPERANDS_AT = 0x480
+PL_AT = 0x600
+PL_BYTES = 320
+DATA_SPAN = (OPERANDS_AT, PL_AT + PL_BYTES)
 
 
 def pl(offset: int) -> Location:
@@ -331,32 +335,6 @@ def performed(function: PloFunction, memory: Memory) -> tuple[Memory, int]:
     return _stored(function, memory)
 
 
-def _reads(location: Location, width: int) -> tuple[Location, ...]:
-    area, offset = location
-    if area in REGISTERS:
-        return ()
-    if width <= DW:
-        return (location,)
-    return (location, (area, offset + width - DW))
-
-
-def _read_back(function: PloFunction, missed_at: int) -> tuple[Location, ...]:
-    w = function.width
-    stored = tuple(
-        place for _, target in function.stores for place in _reads(target, w)
-    )
-    if missed_at < len(function.compares):
-        value = function.compares[missed_at][0]
-        marks = (UNEQUAL_RESULTS,) if function.recorded else ()
-        return (*_reads(value, w), *marks, *stored[:2])
-    return stored
-
-
-def _symbol(location: Location) -> str:
-    area, offset = location
-    return f"{area}+{offset}" if offset else area
-
-
 def _pl_word(image: bytes, at: int, pointed: Mapping[int, str]) -> str:
     if at in pointed:
         return "F'0'"
@@ -409,36 +387,37 @@ def _reported(function: PloFunction, memory: Memory) -> Mapping[int, int]:
     }
 
 
-def _readback_lines(places: Sequence[Location]) -> tuple[str, ...]:
+def _pl_segments(pointed: Mapping[int, str]) -> tuple[tuple[int, int], ...]:
+    starts = (0, *(at + REGISTER_BYTES for at in sorted(pointed)))
+    ends = (*sorted(pointed), PL_BYTES)
     return tuple(
-        f"LG    {r},{_symbol(place)}"
-        for r, place in zip(READBACK_REGISTERS, places, strict=False)
+        (start, end) for start, end in zip(starts, ends, strict=True) if end > start
     )
 
 
-def _readback_values(places: Sequence[Location], memory: Memory) -> Mapping[int, int]:
-    return {
-        r: read(memory, place, REGISTER_BYTES)
-        for r, place in zip(READBACK_REGISTERS, places, strict=False)
-    }
+def storage_of(memory: Memory, pointed: Mapping[int, str]) -> Storage:
+    operands = b"".join(memory[f"OP{k}"] for k in range(1, 5))
+    listed = tuple(
+        (PL_AT + start, memory["PL"][start:end]) for start, end in _pl_segments(pointed)
+    )
+    return ((OPERANDS_AT, operands), *listed)
+
+
+def _function_program(code: int, missed_at: int) -> tuple[str, Memory]:
+    function = FUNCTIONS[code]
+    memory, setup = prepared(function, missed_at)
+    preset = () if function.compares else ("LTR   0,0",)
+    body = _lines(f"LA    0,{code}", *setup, *preset, _statement(function, 4))
+    listed = parameter_list(memory["PL"], pointers(code, function))
+    return plo_program(body, listed), memory
 
 
 def function_case(code: int, missed_at: int) -> Case:
     function = FUNCTIONS[code]
-    memory, setup = prepared(function, missed_at)
+    program, memory = _function_program(code, missed_at)
     after, cc = performed(function, memory)
-    places = _read_back(function, missed_at)
-    preset = () if function.compares else ("LTR   0,0",)
-    body = _lines(
-        f"LA    0,{code}",
-        *setup,
-        *preset,
-        _statement(function, 4),
-        *_readback_lines(places),
-    )
-    results = {**_reported(function, after), **_readback_values(places, after)}
-    program = plo_program(body, parameter_list(memory["PL"], pointers(code, function)))
-    return (program, results, cc)
+    storage = storage_of(after, pointers(code, function))
+    return (program, _reported(function, after), cc, storage)
 
 
 def _outcomes(code: int) -> tuple[int, ...]:
@@ -460,20 +439,23 @@ FUNCTION_CASES: Mapping[str, Case] = {
 
 
 def _special(body: str, results: Mapping[int, int], cc: int) -> Case:
-    return (plo_program(body, parameter_list(INITIAL["PL"], {})), results, cc)
+    program = plo_program(body, parameter_list(INITIAL["PL"], {}))
+    return (program, results, cc, storage_of(INITIAL, {}))
 
 
-def _misaligned_listed_operand(missed_at: int) -> str:
-    return function_case(31, missed_at)[0].replace("A(OP2)", "A(OP2+4)")
+def _misaligned_listed_operand(code: int, missed_at: int, operand: str) -> Case:
+    function = FUNCTIONS[code]
+    program, memory = _function_program(code, missed_at)
+    misaligned = program.replace(f"A({operand})", f"A({operand}+2)")
+    storage = storage_of(memory, pointers(code, function))
+    cc = 0 if function.compares else NO_COMPARE_CC
+    return (misaligned, _reported(function, memory), cc, storage)
 
-
-OP2_FIRST = int.from_bytes(_operand_words(2)[:REGISTER_BYTES], "big")
 
 SPECIAL_CASES: Mapping[str, Case] = {
     "PLO test bit leaves the operation undone": _special(
-        _lines("LA    0,X'104'", "L     4,OP2", "LHI   5,555", "PLO   4,OP2,6,OP4")
-        + _lines("LG    8,OP2"),
-        {4: HIGH_FILL | 201, 8: OP2_FIRST},
+        _lines("LA    0,X'104'", "L     4,OP2", "LHI   5,555", "PLO   4,OP2,6,OP4"),
+        {4: HIGH_FILL | 201, 5: HIGH_FILL | 555},
         0,
     ),
     "PLO test bit, code 61": _special(
@@ -516,19 +498,35 @@ SPECIAL_CASES: Mapping[str, Case] = {
     "PLO parameter list off a doubleword": _special(
         _lines("LA    0,5", "PLO   4,OP2,6,PL+4"), {4: FILL}, 0
     ),
-    "PLO listed operand off its boundary": (
-        _misaligned_listed_operand(3),
-        {8: FILL, 9: FILL, 10: FILL},
-        0,
+    "PLO 31 listed operand off its boundary": _misaligned_listed_operand(31, 3, "OP2"),
+    "PLO 31 listed operand off its boundary, first compare missed": (
+        _misaligned_listed_operand(31, 0, "OP2")
     ),
-    "PLO listed operand off its boundary, not reached": (
-        _misaligned_listed_operand(0),
-        FUNCTION_CASES["PLO 31 unequal at compare 1"][1],
-        2,
+    "PLO 50 second store operand off its boundary": _misaligned_listed_operand(
+        50, 0, "OP2"
+    ),
+    "PLO 16 second store operand off its boundary": _misaligned_listed_operand(
+        16, 1, "OP3"
     ),
 }
 
-CASES: Mapping[str, Case] = {**FUNCTION_CASES, **SPECIAL_CASES}
+EXECUTED = (
+    _lines("LA    0,4", "L     4,OP2", "LHI   5,555", "LHI   2,X'46'", "EX    2,PLOT")
+    + _lines("J     EXECUTED")
+    + "PLOT     PLO   0,OP2,0,OP4\n"
+    + "EXECUTED DS    0H\n"
+)
+
+EXECUTE_CASES: Mapping[str, Case] = {
+    "EX of PLO takes R1 and R3 from the EX register": (
+        plo_program(EXECUTED, parameter_list(INITIAL["PL"], {})),
+        {2: HIGH_FILL | 0x46, 4: HIGH_FILL | 201, 5: HIGH_FILL | 555},
+        0,
+        storage_of(write(INITIAL, SECOND, WORD, 555), {}),
+    ),
+}
+
+CASES: Mapping[str, Case] = {**FUNCTION_CASES, **SPECIAL_CASES, **EXECUTE_CASES}
 
 ABENDS: frozenset[str] = frozenset(
     {
@@ -540,6 +538,9 @@ ABENDS: frozenset[str] = frozenset(
         "PLO second operand off its boundary",
         "PLO fourth operand off its boundary",
         "PLO parameter list off a doubleword",
-        "PLO listed operand off its boundary",
+        "PLO 31 listed operand off its boundary",
+        "PLO 31 listed operand off its boundary, first compare missed",
+        "PLO 50 second store operand off its boundary",
+        "PLO 16 second store operand off its boundary",
     }
 )

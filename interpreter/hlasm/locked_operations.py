@@ -4,21 +4,23 @@
 from collections.abc import Mapping
 
 from interpreter.hlasm.compare_chain import emit_cc
-from interpreter.hlasm.hlasm_constants import DOUBLEWORD_BYTES, ONE_BYTE, WORD_BYTES
+from interpreter.hlasm.hlasm_constants import (
+    DOUBLEWORD_BYTES,
+    OCTOWORD_BYTES,
+    ONE_BYTE,
+    QUADWORD_BYTES,
+    WORD_BYTES,
+)
 from interpreter.hlasm.locked_operation import Address, LockedOperation, Spot
-from interpreter.hlasm.operands import reg_operand
 from interpreter.hlasm.places import (
     at_offset,
     in_storage,
-    low_word,
-    pointed_to,
-    whole_register,
+    numbered_register,
 )
 from interpreter.hlasm.plo_frame import PloFrame
+from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
 
-QUADWORD_BYTES = 16
-OCTOWORD_BYTES = 32
 FIRST_REGISTER = 0
 THIRD_REGISTER = 2
 UNEQUAL_RESULTS_OFFSET = 48
@@ -42,10 +44,16 @@ def _fourth_address(frame: PloFrame) -> Register:
     return frame.fourth
 
 
+def _numbered(frame: PloFrame, index: int, offset: int) -> Register:
+    r = frame.registers[index]
+    if offset == 0:
+        return r
+    return frame.emitter.binop(BinopKind.ADD, r, frame.emitter.int_(offset))
+
+
 def _register(index: int, offset: int, width: int) -> Spot:
-    place = low_word if width == WORD_BYTES else whole_register
-    return lambda frame: place(
-        frame.emitter, reg_operand(frame.statement, index) + offset
+    return lambda frame: numbered_register(
+        frame.emitter, _numbered(frame, index, offset), width
     )
 
 
@@ -62,7 +70,7 @@ def _field(offset: int, width: int) -> Spot:
 
 
 def _pointed(offset: int, width: int) -> Spot:
-    return lambda frame: pointed_to(frame.emitter, frame.fourth, offset, width)
+    return lambda frame: in_storage(frame.emitter, frame.listed[offset], width)
 
 
 def _numbered_cc(frame: PloFrame, compare: int) -> None:
@@ -77,32 +85,32 @@ def _recorded(frame: PloFrame, compare: int) -> None:
     )
 
 
-def _checks(*checks: tuple[Address, int]) -> tuple[tuple[Address, int], ...]:
-    return checks
-
-
 def _row(
     width: int,
     shape: tuple[Comparisons, Stores],
     checks: tuple[tuple[Address, int], ...],
-    even_registers: tuple[int, ...],
+    registers: tuple[tuple[int, ...], tuple[int, ...]],
 ) -> LockedOperation:
     compares, stores = shape
+    even_registers, listed = registers
     return LockedOperation(
-        width, compares, stores, checks, even_registers, _numbered_cc
+        width, compares, stores, checks, even_registers, listed, _numbered_cc
     )
 
 
 def _in_registers(
-    width: int, shape: tuple[Comparisons, Stores], fourth_boundary: int
+    width: int, shape: tuple[Comparisons, Stores], fourth: tuple[int, int]
 ) -> LockedOperation:
-    checks = _checks((_second_address, width), (_fourth_address, fourth_boundary))
-    return _row(width, shape, checks, (FIRST_REGISTER,))
+    fourth_boundary, listed = fourth
+    checks = ((_second_address, width), (_fourth_address, fourth_boundary))
+    return _row(width, shape, checks, ((FIRST_REGISTER,), _store_addresses(listed)))
 
 
-def _in_list(width: int, shape: tuple[Comparisons, Stores]) -> LockedOperation:
-    checks = _checks((_second_address, width), (_fourth_address, DOUBLEWORD_BYTES))
-    return _row(width, shape, checks, ())
+def _in_list(
+    width: int, shape: tuple[Comparisons, Stores], listed: int
+) -> LockedOperation:
+    checks = ((_second_address, width), (_fourth_address, DOUBLEWORD_BYTES))
+    return _row(width, shape, checks, ((), _store_addresses(listed)))
 
 
 def _r1(width: int) -> Spot:
@@ -125,6 +133,10 @@ def _store_address(store: int) -> int:
     return FIRST_STORE_ADDRESS + STORE_ADDRESS_STRIDE * store
 
 
+def _store_addresses(stores: int) -> tuple[int, ...]:
+    return tuple(_store_address(k) for k in range(stores))
+
+
 def _list_stores(width: int, operands: tuple[int, ...]) -> Stores:
     return tuple(
         (_field(at, width), _pointed(_store_address(k), width))
@@ -134,21 +146,21 @@ def _list_stores(width: int, operands: tuple[int, ...]) -> Stores:
 
 def compare_and_load_in_registers(width: int) -> LockedOperation:
     shape = (((_r1(width), _second(width)),), ((_fourth(width), _r3(width)),))
-    checks = _checks((_second_address, width), (_fourth_address, width))
-    return _row(width, shape, checks, ())
+    checks = ((_second_address, width), (_fourth_address, width))
+    return _row(width, shape, checks, ((), ()))
 
 
 def compare_and_load_in_list(width: int, value: int, loaded: int) -> LockedOperation:
     compares = ((_field(value, width), _second(width)),)
     stores = ((_pointed(FIRST_STORE_ADDRESS, width), _field(loaded, width)),)
-    return _in_list(width, (compares, stores))
+    return _in_list(width, (compares, stores), 1)
 
 
 def compare_and_swap_in_registers(width: int) -> LockedOperation:
     compares = ((_r1(width), _second(width)),)
     stores = ((_r1_replacement(width), _second(width)),)
-    checks = _checks((_second_address, width))
-    return _row(width, (compares, stores), checks, (FIRST_REGISTER,))
+    checks = ((_second_address, width),)
+    return _row(width, (compares, stores), checks, ((FIRST_REGISTER,), ()))
 
 
 def compare_and_swap_in_list(
@@ -156,7 +168,7 @@ def compare_and_swap_in_list(
 ) -> LockedOperation:
     compares = ((_field(value, width), _second(width)),)
     stores = ((_field(replacement, width), _second(width)),)
-    return _in_list(width, (compares, stores))
+    return _in_list(width, (compares, stores), 0)
 
 
 def double_compare_and_swap_in_registers(width: int) -> LockedOperation:
@@ -165,8 +177,9 @@ def double_compare_and_swap_in_registers(width: int) -> LockedOperation:
         (_r3_replacement(width), _fourth(width)),
         (_r1_replacement(width), _second(width)),
     )
-    checks = _checks((_second_address, width), (_fourth_address, width))
-    return _row(width, (compares, stores), checks, (FIRST_REGISTER, THIRD_REGISTER))
+    checks = ((_second_address, width), (_fourth_address, width))
+    even = (FIRST_REGISTER, THIRD_REGISTER)
+    return _row(width, (compares, stores), checks, (even, ()))
 
 
 def double_compare_and_swap_in_list(
@@ -182,7 +195,7 @@ def double_compare_and_swap_in_list(
         (_field(third_replacement, width), third),
         (_field(replacement, width), _second(width)),
     )
-    return _in_list(width, (compares, stores))
+    return _in_list(width, (compares, stores), 1)
 
 
 def compare_and_swap_and_store_in_registers(width: int) -> LockedOperation:
@@ -191,7 +204,7 @@ def compare_and_swap_and_store_in_registers(width: int) -> LockedOperation:
         (_r3(width), _fourth(width)),
         (_r1_replacement(width), _second(width)),
     )
-    return _in_registers(width, (compares, stores), width)
+    return _in_registers(width, (compares, stores), (width, 0))
 
 
 def compare_and_swap_and_stores_in_registers(
@@ -202,7 +215,7 @@ def compare_and_swap_and_stores_in_registers(
         *_list_stores(width, operands),
         (_r1_replacement(width), _second(width)),
     )
-    return _in_registers(width, (compares, stores), DOUBLEWORD_BYTES)
+    return _in_registers(width, (compares, stores), (DOUBLEWORD_BYTES, len(operands)))
 
 
 def compare_and_swap_and_stores_in_list(
@@ -214,7 +227,7 @@ def compare_and_swap_and_stores_in_list(
         *_list_stores(width, operands),
         (_field(replacement, width), _second(width)),
     )
-    return _in_list(width, (compares, stores))
+    return _in_list(width, (compares, stores), len(operands))
 
 
 def _stride(width: int) -> int:
@@ -229,26 +242,33 @@ def _operand(width: int, k: int) -> Spot:
     return _pointed(OPERAND_ADDRESS_BYTES * k, width)
 
 
+def _operand_addresses(operands: int) -> tuple[int, ...]:
+    return tuple(OPERAND_ADDRESS_BYTES * k for k in range(operands))
+
+
 def multiple_compare_and_swap(operands: int, width: int) -> LockedOperation:
     compares = tuple(
         (_list_data(width, k), _operand(width, k)) for k in range(operands)
     )
     order = (*range(1, operands), 0)
     stores = tuple((_list_data(width, operands + k), _operand(width, k)) for k in order)
-    checks = _checks((_fourth_address, DOUBLEWORD_BYTES))
-    return LockedOperation(width, compares, stores, checks, (), _recorded)
+    checks = ((_fourth_address, DOUBLEWORD_BYTES),)
+    listed = _operand_addresses(operands)
+    return LockedOperation(width, compares, stores, checks, (), listed, _recorded)
 
 
 def multiple_load(operands: int, width: int) -> LockedOperation:
     stores = tuple((_operand(width, k), _list_data(width, k)) for k in range(operands))
-    checks = _checks((_fourth_address, DOUBLEWORD_BYTES))
-    return LockedOperation(width, (), stores, checks, (), _numbered_cc)
+    checks = ((_fourth_address, DOUBLEWORD_BYTES),)
+    listed = _operand_addresses(operands)
+    return LockedOperation(width, (), stores, checks, (), listed, _numbered_cc)
 
 
 def multiple_store(operands: int, width: int) -> LockedOperation:
     stores = tuple((_list_data(width, k), _operand(width, k)) for k in range(operands))
-    checks = _checks((_fourth_address, DOUBLEWORD_BYTES))
-    return LockedOperation(width, (), stores, checks, (), _numbered_cc)
+    checks = ((_fourth_address, DOUBLEWORD_BYTES),)
+    listed = _operand_addresses(operands)
+    return LockedOperation(width, (), stores, checks, (), listed, _numbered_cc)
 
 
 FW, DW, QW, OW = WORD_BYTES, DOUBLEWORD_BYTES, QUADWORD_BYTES, OCTOWORD_BYTES

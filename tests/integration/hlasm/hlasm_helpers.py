@@ -64,13 +64,26 @@ def run_hlasm(source: str) -> HlasmRun:
     return hlasm_run_of(*_run_vm(source))
 
 
-def run_hlasm_machine(source: str) -> HlasmMachine:
-    vm, stdout = _run_vm(source)
+def _machine(vm: VMState, stdout: str) -> HlasmMachine:
     return HlasmMachine(
         hlasm_run_of(vm, stdout),
         int(_var(vm, "__hlasm_cc")),
         {r: _gpr_bytes(vm, GPR_BYTES * r, GPR_BYTES) for r in range(GPR_COUNT)},
     )
+
+
+def run_hlasm_machine(source: str) -> HlasmMachine:
+    return _machine(*_run_vm(source))
+
+
+def run_hlasm_storage(
+    source: str, section: str, span: tuple[int, int]
+) -> tuple[HlasmMachine, bytes]:
+    vm, stdout = _run_vm(source)
+    start, end = span
+    loaded = vm.load(int(_var(vm, f"__hlasm_sect_{section}")) + start, end - start)
+    assert isinstance(loaded, list)
+    return _machine(vm, stdout), bytes(loaded)
 
 
 def hlasm_run_of(vm: VMState, stdout: str) -> HlasmRun:

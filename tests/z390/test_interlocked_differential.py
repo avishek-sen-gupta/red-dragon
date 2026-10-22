@@ -143,7 +143,9 @@ Z390_DIFFERS: Mapping[str, HlasmMachine] = {
     "LPQ off a quadword": _z390(
         "U0001", 0, {4: 0xFEDCBA9876543210, 5: 0x7FFFFFFFFFFFFFFF}
     ),
-    "STPQ off a quadword": _z390("U0001", 0, {8: 0xA5A5A5A5A5A5A5A5}),
+    "STPQ off a quadword": _z390(
+        "U0001", 0, {4: 0xA5A5A5A5A5A5A5A5, 5: 0xA5A5A5A5A5A5A5A5}
+    ),
     "LAAL carry": _z390("U0001", 3, {4: 0xA5A5A5A5FFFFFFFF, 6: 0xA5A5A5A500000000}),
 }
 AGREED = [case for case in programs.CASES if case not in Z390_DIFFERS]
