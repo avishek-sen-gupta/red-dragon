@@ -81,14 +81,24 @@ def _reloc(name: str, section: str, offset: int, length: int, type: str) -> Relo
     )
 
 
-def _storage(displacement: int, base: int) -> StorageOperand:
+def _storage(
+    displacement: int, base: int, written: AbsAddress | RelocAddress
+) -> StorageOperand:
     return StorageOperand(
         kind="STORAGE",
         displacement=displacement,
         index=0,
         base=base,
-        written=AbsAddress(kind="ABS", value=displacement),
+        written=written,
     )
+
+
+def _absolute(value: int) -> AbsAddress:
+    return AbsAddress(kind="ABS", value=value)
+
+
+def _in_hello(offset: int) -> RelocAddress:
+    return RelocAddress(kind="RELOC", section="HELLO", offset=offset)
 
 
 EXPECTED = HlasmProgram(
@@ -109,7 +119,7 @@ EXPECTED = HlasmProgram(
             "LA",
             "RX-a",
             4,
-            (RegOperand(kind="REG", value=1), _storage(5, 0)),
+            (RegOperand(kind="REG", value=1), _storage(5, 0, _absolute(5))),
             _open(3),
         ),
         _machine(
@@ -118,7 +128,7 @@ EXPECTED = HlasmProgram(
             "LA",
             "RX-a",
             4,
-            (RegOperand(kind="REG", value=3), _storage(1, 0)),
+            (RegOperand(kind="REG", value=3), _storage(1, 0, _absolute(1))),
             MacroOrigin(kind="MACRO", file=SOURCE, line=4, macro="MYM", depth=1),
         ),
         _machine(
@@ -127,7 +137,7 @@ EXPECTED = HlasmProgram(
             "L",
             "RX-a",
             4,
-            (RegOperand(kind="REG", value=2), _storage(48, 15)),
+            (RegOperand(kind="REG", value=2), _storage(48, 15, _in_hello(48))),
             _open(5),
         ),
         _machine(
@@ -140,7 +150,7 @@ EXPECTED = HlasmProgram(
                 StorageLengthOperand(
                     kind="STORAGE_LENGTH", displacement=25, length=5, base=15
                 ),
-                _storage(20, 15),
+                _storage(20, 15, _in_hello(20)),
             ),
             _open(6),
         ),
