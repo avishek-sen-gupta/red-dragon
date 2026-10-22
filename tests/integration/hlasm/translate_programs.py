@@ -51,6 +51,8 @@ TRANSLATE_DATA = (
     "         DS    0D\n"
     "ZTL      DC    258X'00',X'0900'\n"
     "         DS    0D\n"
+    "ZTW      DC    X'00004321',510X'00',X'5678'\n"
+    "         DS    0D\n"
     "BIT32    DC    X'80000000'\n"
     "         DS    0D\n"
     "OUTT     DC    8X'FF'\n"
@@ -63,6 +65,8 @@ TRANSLATE_DATA = (
     "ARGB     DC    X'000102'\n"
     "ARGH     DC    X'0000000100020003'\n"
     "ARGL     DC    X'01020002'\n"
+    "ARGR     DC    X'020100'\n"
+    "ARGW     DC    X'0101'\n"
 )
 
 
@@ -308,6 +312,14 @@ TRANSLATE_CHARACTERS: Mapping[str, Case] = {
         {3: HIGH_FILL | 8, 6: 0xFFFFFFFF_FFFFFFFF},
         CC_FOUND,
     ),
+    "TRTT exhausted registers": (
+        _characters("T12", 0xFF, 8, "SRC2")
+        + "         TRTT  2,4\n"
+        + _offset(2, "OUTT+8")
+        + _offset(4, "SRC2+8"),
+        {2: HIGH_FILL, 4: HIGH_FILL},
+        SLR_EQUAL_CC,
+    ),
     "TRTT found registers": (
         _characters("T12", 0xC3, 8, "SRC2")
         + "         TRTT  2,4\n"
@@ -379,6 +391,21 @@ TRANSLATE_AND_TEST_EXTENDED: Mapping[str, Case] = {
         _extended("FTAB", "TXT+1", 2) + "         TRTRE 2,4\n" + _offset(2, "TXT-1"),
         {2: HIGH_FILL, 3: HIGH_FILL, 4: HIGH_FILL},
         SLR_EQUAL_CC,
+    ),
+    "TRTRE two-byte functions": (
+        _extended("ZT2", "ARGR+2", 3) + "         TRTRE 2,4,4\n",
+        {3: HIGH_FILL | 1, 4: HIGH_FILL | 0x1234},
+        CC_FOUND,
+    ),
+    "TRTRE two-byte functions registers": (
+        _extended("ZT2", "ARGR+2", 3) + "         TRTRE 2,4,4\n" + _offset(2, "ARGR"),
+        {2: HIGH_FILL},
+        SLR_EQUAL_CC,
+    ),
+    "TRTE two-byte arguments and functions over 255": (
+        _extended("ZTW", "ARGW", 2) + "         TRTE  2,4,12\n",
+        {3: HIGH_FILL | 2, 4: HIGH_FILL | 0x5678},
+        CC_FOUND,
     ),
     "TRTRE two-byte arguments and functions": (
         _extended("ZT2", "ARGH+6", 8) + "         TRTRE 2,4,12\n",

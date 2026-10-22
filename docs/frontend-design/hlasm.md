@@ -468,12 +468,14 @@ Tables are read at the table address plus the argument (times two for two-byte f
   the rightmost argument. Found: R2's low word is the function, R1 its argument's address, R1+1
   the length less the bytes before it, CC 1. End: R2's low word 0, R1 moved by the length, R1+1
   0, CC 0.
-- R1 and R2 lose bit 32 when updated. Odd R1 in TRE, TROO, TROT, TRTO, TRTT, TRTE and TRTRE
+- TRE, TROO, TROT, TRTO, TRTT, TRTE and TRTRE clear bit 32 of the R1 and R2 addresses they
+  update. Odd R1 in TRE, TROO, TROT, TRTO, TRTT, TRTE and TRTRE
   abends `S0C6`.
 - Loop cost: about 10 VM steps per unit for TR, 12 for TRT, TRTR, TRE and TRTE, 13 for TROO, up
   to 15 for the two-byte forms.
-- z390 translates one byte in TRE with length 0, and abends `S0C6` on a TROO table address off a
-  doubleword. The z390 test pins both.
+- z390 translates one byte in TRE with length 0, abends `S0C6` on a TROO table address off a
+  doubleword, and indexes TRTE's two-byte functions by a two-byte argument's low byte. The z390
+  test pins all three.
 
 ## Known Gaps
 
@@ -564,7 +566,7 @@ Tables are read at the table address plus the argument (times two for two-byte f
 | `tests/z390/test_multiply_divide_differential.py` | Every multiply and divide case and divide exception against z390; z390's missing quotient-overflow exceptions pinned (`-m z390`) |
 | `tests/z390/test_ss_move_differential.py` | Every storage move case and specification exception against z390, bar MVCRL; z390's MVN and MVZ overlap, MVCLU `S0C1` and MVST GR0 differences pinned (`-m z390`) |
 | `tests/z390/test_ss_compare_differential.py` | Every storage compare case against z390; z390's CLCL pad, CLCLU, CLST and CUSE differences pinned (`-m z390`) |
-| `tests/z390/test_translate_differential.py` | Every translate case against z390; z390's TRE length 0 and TROO table alignment pinned (`-m z390`) |
+| `tests/z390/test_translate_differential.py` | Every translate case against z390; z390's TRE length 0, TROO table alignment and TRTE argument truncation pinned (`-m z390`) |
 | `tests/z390/test_test_under_mask_differential.py` | Every test under mask case against z390; no differences (`-m z390`) |
 | `tests/z390/test_compare_differential.py` | Every compare mnemonic against z390; the relative-long alignment difference pinned (`-m z390`) |
 | `tests/z390/test_branch_on_condition_differential.py` | Every branch on condition case against z390; the BIC, BPP and BPRP differences and branches into data pinned (`-m z390`) |

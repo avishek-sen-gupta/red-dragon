@@ -28,6 +28,7 @@ from interpreter.instructions import (
     WriteRegion,
 )
 from interpreter.operator_kind import BinopKind
+from interpreter.register import Register
 from tests.covers import NotLanguageFeature, covers
 
 BASE = 12
@@ -77,7 +78,7 @@ def _lowered(mnemonic: str, operands: Sequence[Operand]) -> tuple[InstructionBas
     return emitter.instructions()
 
 
-def _gprs(ir: Sequence[InstructionBase]) -> frozenset[object]:
+def _gprs(ir: Sequence[InstructionBase]) -> frozenset[Register]:
     return frozenset(
         i.result_reg for i in ir if isinstance(i, LoadVar) and str(i.name) == GPRS
     )

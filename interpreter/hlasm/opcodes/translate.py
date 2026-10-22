@@ -12,14 +12,13 @@ from interpreter.hlasm.effective_address import (
     length_operand_address,
 )
 from interpreter.hlasm.hlasm_constants import (
-    ADDRESS_MASK_31,
     AMODE_31_LINK_BIT,
     BYTE_MASK,
     LOW_WORD_MASK,
     ONE_BYTE,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
-from interpreter.hlasm.long_registers import store_address
+from interpreter.hlasm.long_registers import address_bits, store_address
 from interpreter.hlasm.operands import storage_length_operand, storage_operand
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.hlasm.translate_and_test_extended import (
@@ -89,8 +88,9 @@ def _keep_bit_32(emitter: HlasmEmitter, r: int, address: Register) -> None:
     kept = emitter.binop(
         BinopKind.BIT_AND, emitter.load_gr32(r), emitter.int_(AMODE_31_LINK_BIT)
     )
-    masked = emitter.binop(BinopKind.BIT_AND, address, emitter.int_(ADDRESS_MASK_31))
-    emitter.store_gr32(r, emitter.binop(BinopKind.BIT_OR, kept, masked))
+    emitter.store_gr32(
+        r, emitter.binop(BinopKind.BIT_OR, kept, address_bits(emitter, address))
+    )
 
 
 def _insert_function_byte(emitter: HlasmEmitter, function: Register) -> None:
