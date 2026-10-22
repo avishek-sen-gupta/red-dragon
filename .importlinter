@@ -5,6 +5,7 @@ root_packages =
     cobol_memory
     cobol_numeric
     hlasm_asg
+    zarch_float
 
 # The reason cobol_asg is a sibling of interpreter rather than a subpackage of
 # it: an import of interpreter.anything runs interpreter/__init__.py, which
@@ -43,6 +44,14 @@ name = The COBOL numeric boundary must not import the interpreter
 type = forbidden
 source_modules =
     cobol_numeric
+forbidden_modules =
+    interpreter
+
+[importlinter:contract:zarch-float-is-a-leaf]
+name = The z/Architecture floating-point arithmetic must not import the interpreter
+type = forbidden
+source_modules =
+    zarch_float
 forbidden_modules =
     interpreter
 

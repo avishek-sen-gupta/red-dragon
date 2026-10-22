@@ -831,6 +831,7 @@ UNPK, UNPKA, UNPKU. Rulings R1, R29, R31, R34, R39.
 ## Known Gaps
 
 - Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, miscellaneous, packed-decimal arithmetic, packed-decimal compare and test, decimal conversion and edit units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
+- Floating-point instructions are not lowered. Their arithmetic is the leaf `zarch_float` ([zarch-float.md](zarch-float.md)); builtins over it land with red-dragon-6uyp.50 onward.
 - DC types beyond C, X, B, F, H, P, Z, A, Y and V, and any type extension, raise `UnsupportedDataType` (red-dragon-6uyp.63; floating point E, D, L: red-dragon-6uyp.21).
 - Falling through into DC/DS data or past a CSECT's end skips the data instead of executing it, and a branch into data abends `S0C1` (red-dragon-6uyp.64).
 - Every branch, even to a static relative target, walks the dispatch chain (red-dragon-6uyp.80).
