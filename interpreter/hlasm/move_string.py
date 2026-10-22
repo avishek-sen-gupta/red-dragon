@@ -5,32 +5,20 @@ from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.hlasm.byte_loop import advance, copied_byte
 from interpreter.hlasm.data_movement import FIRST_OPERAND, SECOND_OPERAND
 from interpreter.hlasm.effective_address import register_address
+from interpreter.hlasm.ending_character import ending_character
 from interpreter.hlasm.hlasm_constants import (
     ADDRESS_MASK_31,
     BYTE_LOOP_AT_VAR,
-    BYTE_MASK,
     ONE_BYTE,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.operands import reg_operand
-from interpreter.hlasm.specification_check import emit_specification_check
 from interpreter.instructions import BranchIf, Label_, LoadIndex, StoreVar
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
 
-ENDING_CHARACTER_REGISTER = 0
-RESERVED_BITS = 0xFFFFFF00
 ENDING_CHARACTER_MOVED_CC = 1
-
-
-def _ending_character(emitter: HlasmEmitter) -> Register:
-    gr0 = emitter.load_gr32(ENDING_CHARACTER_REGISTER)
-    reserved = emitter.binop(BinopKind.BIT_AND, gr0, emitter.int_(RESERVED_BITS))
-    emit_specification_check(
-        emitter, emitter.binop(BinopKind.NE, reserved, emitter.int_(0))
-    )
-    return emitter.binop(BinopKind.BIT_AND, gr0, emitter.int_(BYTE_MASK))
 
 
 def _stop_at_ending(
@@ -67,7 +55,7 @@ def _copy_through(
 
 def move_string(emitter: HlasmEmitter, statement: MachineStatement) -> None:
     target_register = reg_operand(statement, FIRST_OPERAND)
-    ending = _ending_character(emitter)
+    ending = ending_character(emitter)
     target = register_address(emitter, target_register)
     source = register_address(emitter, reg_operand(statement, SECOND_OPERAND))
     at = _copy_through(emitter, (target, source), ending)

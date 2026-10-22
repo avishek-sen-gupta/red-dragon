@@ -23,6 +23,7 @@ from interpreter.hlasm.opcodes.shift_rotate import SHIFT_ROTATE_LOWERINGS
 from interpreter.hlasm.opcodes.signed_add_subtract import (
     SIGNED_ADD_SUBTRACT_LOWERINGS,
 )
+from interpreter.hlasm.opcodes.ss_compare import SS_COMPARE_LOWERINGS
 from interpreter.hlasm.opcodes.ss_move import SS_MOVE_LOWERINGS
 from interpreter.hlasm.opcodes.svc import SVC_LOWERINGS
 from interpreter.hlasm.opcodes.under_mask import TEST_UNDER_MASK_LOWERINGS
@@ -44,4 +45,5 @@ OPCODE_LOWERINGS: Mapping[str, StatementLowering] = {
     **SVC_LOWERINGS,
     **TEST_UNDER_MASK_LOWERINGS,
     **SS_MOVE_LOWERINGS,
+    **SS_COMPARE_LOWERINGS,
 }
