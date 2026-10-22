@@ -18,6 +18,13 @@ class BfpOperation(Enum):
     MULTIPLY_SUBTRACT = "multiply_subtract"
     ROUND_TO_INTEGRAL = "round_to_integral"
     DIVIDE_TO_INTEGER = "divide_to_integer"
+    TO_FIXED_32 = "to_fixed_32"
+    TO_FIXED_64 = "to_fixed_64"
+    TO_LOGICAL_32 = "to_logical_32"
+    TO_LOGICAL_64 = "to_logical_64"
+    FROM_FIXED = "from_fixed"
+    ROUNDED_TO_SHORT = "rounded_to_short"
+    ROUNDED_TO_LONG = "rounded_to_long"
 
 
 def bfp_builtin_name(operation: BfpOperation, layout: BfpLayout) -> FuncName:
