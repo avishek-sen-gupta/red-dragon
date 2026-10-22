@@ -8,8 +8,8 @@ from interpreter.hlasm.hlasm_lowering_error import HlasmLoweringError
 from interpreter.instructions import InstructionBase, LoadIndex, Return_
 from interpreter.register import Register
 
-RESULT = 0
-CONDITION_CODE = 1
+FIRST = 0
+SECOND = 1
 
 
 def _returned_register(body: Sequence[InstructionBase]) -> Register:
@@ -54,10 +54,18 @@ def _element(emitter: HlasmEmitter, pair: Register, at: int) -> Register:
     return reg
 
 
-def inline_result_and_cc(
+def inline_pair(
     emitter: HlasmEmitter,
     body: Sequence[InstructionBase],
     arguments: Mapping[Register, Register],
 ) -> tuple[Register, Register]:
     pair = inline_ir(emitter, body, arguments)
-    return _element(emitter, pair, RESULT), _element(emitter, pair, CONDITION_CODE)
+    return _element(emitter, pair, FIRST), _element(emitter, pair, SECOND)
+
+
+def inline_result_and_cc(
+    emitter: HlasmEmitter,
+    body: Sequence[InstructionBase],
+    arguments: Mapping[Register, Register],
+) -> tuple[Register, Register]:
+    return inline_pair(emitter, body, arguments)

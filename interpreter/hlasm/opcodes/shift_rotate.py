@@ -4,7 +4,6 @@
 from collections.abc import Callable, Mapping, Sequence
 
 from hlasm_asg.program.machine_statement import MachineStatement
-from interpreter.hlasm.abend import emit_abend
 from interpreter.hlasm.data_movement import (
     REGISTER_OPERAND,
     Sink,
@@ -34,11 +33,11 @@ from interpreter.hlasm.hlasm_constants import (
     PARAM_RIGHT,
     PARAM_VALUE,
     REGISTER_MASK,
-    SPECIFICATION_EXCEPTION_ABEND,
     WORD_BITS,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.inline_ir import inline_ir
+from interpreter.hlasm.opcodes.even_odd import even_odd
 from interpreter.hlasm.opcodes.result_and_cc import result_and_cc
 from interpreter.hlasm.operands import (
     imm_operand,
@@ -106,16 +105,6 @@ def _overflowing(lowering: StatementLowering) -> StatementLowering:
     def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
         lowering(emitter, statement)
         emit_fixed_point_overflow_check(emitter, emitter.load_var(CC_VAR))
-
-    return lower
-
-
-def _even_odd(lowering: StatementLowering) -> StatementLowering:
-    def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
-        if reg_operand(statement, REGISTER_OPERAND) % 2:
-            emit_abend(emitter, SPECIFICATION_EXCEPTION_ABEND)
-            return
-        lowering(emitter, statement)
 
     return lower
 
@@ -227,18 +216,18 @@ SINGLE_SHIFTS: Mapping[str, StatementLowering] = {
 }
 
 DOUBLE_SHIFTS: Mapping[str, StatementLowering] = {
-    "SLDL": _even_odd(
+    "SLDL": even_odd(
         _logical(SLL_64, from_even_odd_pair, AMOUNT_SECOND, to_even_odd_pair)
     ),
-    "SRDL": _even_odd(
+    "SRDL": even_odd(
         _logical(SRL_64, from_even_odd_pair, AMOUNT_SECOND, to_even_odd_pair)
     ),
-    "SLDA": _even_odd(
+    "SLDA": even_odd(
         _overflowing(
             _signed(SLA_64, from_even_odd_pair, AMOUNT_SECOND, to_even_odd_pair)
         )
     ),
-    "SRDA": _even_odd(
+    "SRDA": even_odd(
         _signed(SRA_64, from_even_odd_pair, AMOUNT_SECOND, to_even_odd_pair)
     ),
 }

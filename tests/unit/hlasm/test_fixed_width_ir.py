@@ -20,6 +20,8 @@ from interpreter.hlasm.fixed_width_ir import (
     build_boolean_cc_ir,
     build_compare_logical_cc_ir,
     build_compare_signed_cc_ir,
+    build_divide_truncating_ir,
+    build_multiply_signed_cc_ir,
     build_rotate_left_ir,
     build_shift_left_logical_ir,
     build_shift_left_signed_cc_ir,
@@ -271,3 +273,53 @@ def test_signed_shifts_keep_the_sign_and_set_cc_with_overflow_on_the_left():
         _pair_of(build_shift_left_signed_cc_ir("sla64", 64), 0xFFFFFFFF, 1),
         _pair_of(build_shift_right_signed_cc_ir("sra64", 64), 1 << 63, 63),
     ] == [[0x80000000_00000102, 3], [0x1_FFFFFFFE, 2], [(1 << 64) - 1, 1]]
+
+
+def test_multiply_signed_keeps_the_low_bits_and_sets_cc_3_when_the_product_does_not_fit():
+    mul_32 = build_multiply_signed_cc_ir("mul32", 32)
+    mul_64 = build_multiply_signed_cc_ir("mul64", 64)
+    assert [
+        _pair_of(mul_32, left, right)
+        for left, right in (
+            (3, 0xFFFFFFFC),
+            (0, -7),
+            (6, 7),
+            (0x10000, 0x10000),
+            (0x40000, 0x10000),
+            (0x80000000, 0xFFFFFFFF),
+            (0x7FFFFFFF, 0x7FFFFFFF),
+        )
+    ] == [[-12, 1], [0, 0], [42, 2], [0, 3], [0, 3], [-0x80000000, 3], [1, 3]]
+    assert [
+        _pair_of(mul_64, left, right)
+        for left, right in (
+            (-(1 << 63), -1),
+            (1 << 32, 1 << 31),
+            (1 << 32, 1 << 30),
+            ((1 << 63) - 1, (1 << 63) - 1),
+        )
+    ] == [[-(1 << 63), 3], [-(1 << 63), 3], [1 << 62, 2], [1, 3]]
+
+
+def test_truncating_divide_rounds_toward_zero_and_gives_the_remainder_the_dividend_sign():
+    divide = build_divide_truncating_ir("divide")
+    assert [
+        _pair_of(divide, left, right)
+        for left, right in (
+            (7, 2),
+            (-7, 2),
+            (7, -2),
+            (-7, -2),
+            (0, -5),
+            (-(1 << 63), -1),
+            ((1 << 127) + 5, (1 << 64) - 1),
+        )
+    ] == [
+        [3, 1],
+        [-3, -1],
+        [-3, 1],
+        [3, -1],
+        [0, 0],
+        [1 << 63, 0],
+        [1 << 63, (1 << 63) + 5],
+    ]

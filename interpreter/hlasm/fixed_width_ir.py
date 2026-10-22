@@ -1,5 +1,5 @@
 # pyright: standard
-"""IR builders for fixed-width two's-complement arithmetic, bitwise connectives, shifts and rotates, and their condition codes."""
+"""IR builders for fixed-width two's-complement arithmetic, truncating division, bitwise connectives, shifts and rotates, and their condition codes."""
 
 from interpreter.hlasm.boolean_connective import BooleanConnective
 from interpreter.hlasm.hlasm_constants import (
@@ -23,6 +23,7 @@ from interpreter.register import Register
 type Fragment = tuple[Register, tuple[InstructionBase, ...]]
 
 MAXIMUM_SHIFT_BITS = 64
+MAXIMUM_DIVIDEND_BITS = 128
 
 
 def _reg(prefix: str, role: str) -> Register:
@@ -143,7 +144,7 @@ def _signed_arithmetic_cc_ir(
     exact, exact_ir = _binop(func_name, "exact", operator, left, right)
     result, result_ir = _to_signed(f"{func_name}.s", exact, bits)
     lost, lost_ir = _binop(func_name, "lost", BinopKind.SUB, exact, result)
-    overflow, overflow_ir = _nonzero_bit(f"{func_name}.o", lost, bits)
+    overflow, overflow_ir = _nonzero_bit(f"{func_name}.o", lost, 2 * bits)
     cc, cc_ir = _signed_cc(func_name, result, overflow, bits)
     pair, pair_ir = _pair(func_name, result, cc)
     return [
@@ -165,6 +166,56 @@ def build_add_signed_cc_ir(func_name: str, bits: int) -> list[InstructionBase]:
 
 def build_sub_signed_cc_ir(func_name: str, bits: int) -> list[InstructionBase]:
     return _signed_arithmetic_cc_ir(func_name, bits, BinopKind.SUB)
+
+
+def build_multiply_signed_cc_ir(func_name: str, bits: int) -> list[InstructionBase]:
+    return _signed_arithmetic_cc_ir(func_name, bits, BinopKind.MUL)
+
+
+def _sign_factor(prefix: str, value: Register) -> Fragment:
+    negative, negative_ir = _sign_bit(prefix, value, MAXIMUM_DIVIDEND_BITS + 1)
+    doubled, doubled_ir = _binop_const(prefix, "negative2", BinopKind.MUL, negative, 2)
+    one, one_ir = _const(prefix, "one", 1)
+    factor, factor_ir = _binop(prefix, "factor", BinopKind.SUB, one, doubled)
+    return factor, (*negative_ir, *doubled_ir, *one_ir, *factor_ir)
+
+
+def build_divide_truncating_ir(func_name: str) -> list[InstructionBase]:
+    left_sign, left_sign_ir = _sign_factor(f"{func_name}.l", PARAM_LEFT)
+    right_sign, right_sign_ir = _sign_factor(f"{func_name}.r", PARAM_RIGHT)
+    dividend, dividend_ir = _binop(
+        func_name, "dividend", BinopKind.MUL, PARAM_LEFT, left_sign
+    )
+    divisor, divisor_ir = _binop(
+        func_name, "divisor", BinopKind.MUL, PARAM_RIGHT, right_sign
+    )
+    magnitude, magnitude_ir = _binop(
+        func_name, "magnitude", BinopKind.FLOOR_DIV, dividend, divisor
+    )
+    left_over, left_over_ir = _binop(
+        func_name, "left_over", BinopKind.MOD, dividend, divisor
+    )
+    sign, sign_ir = _binop(func_name, "sign", BinopKind.MUL, left_sign, right_sign)
+    quotient, quotient_ir = _binop(
+        func_name, "quotient", BinopKind.MUL, magnitude, sign
+    )
+    remainder, remainder_ir = _binop(
+        func_name, "remainder", BinopKind.MUL, left_over, left_sign
+    )
+    pair, pair_ir = _pair(func_name, quotient, remainder)
+    return [
+        *left_sign_ir,
+        *right_sign_ir,
+        *dividend_ir,
+        *divisor_ir,
+        *magnitude_ir,
+        *left_over_ir,
+        *sign_ir,
+        *quotient_ir,
+        *remainder_ir,
+        *pair_ir,
+        Return_(value_reg=pair),
+    ]
 
 
 def _logical_cc_ir(func_name: str, bits: int, exact: Fragment) -> list[InstructionBase]:
