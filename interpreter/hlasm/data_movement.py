@@ -10,6 +10,7 @@ from interpreter.hlasm.effective_address import effective_address, relative_addr
 from interpreter.hlasm.hlasm_constants import (
     BITS_PER_BYTE,
     BYTE_MASK,
+    DOUBLEWORD_BITS,
     LOW_WORD_MASK,
     REGISTER_MASK,
     WORD_BITS,
@@ -176,6 +177,34 @@ def to_even_odd_pair(
         r, emitter.binop(BinopKind.RSHIFT, value, emitter.int_(WORD_BITS))
     )
     emitter.store_gr32(r + 1, value)
+
+
+def from_doubleword_pair(
+    emitter: HlasmEmitter, statement: MachineStatement
+) -> Register:
+    r = reg_operand(statement, REGISTER_OPERAND)
+    high = emitter.binop(
+        BinopKind.LSHIFT, emitter.load_gr64(r), emitter.int_(DOUBLEWORD_BITS)
+    )
+    return emitter.binop(BinopKind.BIT_OR, high, emitter.load_gr64(r + 1))
+
+
+def to_doubleword_pair(
+    emitter: HlasmEmitter, statement: MachineStatement, value: Register
+) -> None:
+    r = reg_operand(statement, REGISTER_OPERAND)
+    emitter.store_gr64(
+        r, emitter.binop(BinopKind.RSHIFT, value, emitter.int_(DOUBLEWORD_BITS))
+    )
+    emitter.store_gr64(r + 1, value)
+
+
+def from_odd_gr32(emitter: HlasmEmitter, statement: MachineStatement) -> Register:
+    return emitter.load_gr32(reg_operand(statement, REGISTER_OPERAND) + 1)
+
+
+def from_odd_gr64(emitter: HlasmEmitter, statement: MachineStatement) -> Register:
+    return emitter.load_gr64(reg_operand(statement, REGISTER_OPERAND) + 1)
 
 
 def merge_low_word(
