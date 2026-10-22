@@ -100,6 +100,7 @@ addresses.
 | `interpreter/hlasm/opcodes/miscellaneous.py` | The miscellaneous unit: access registers, LCBB, MC, hints, traps |
 | `interpreter/hlasm/opcodes/floating_point_support.py` | The floating-point-support unit: FPR moves, sign forms, the FPC, its checks and the simulated-IEEE trap |
 | `interpreter/hlasm/opcodes/bfp_arithmetic.py` | The BFP arithmetic unit's builtin forms: add, subtract, multiply, divide, square root, fused, compare, load FP integer, divide to integer, test data class |
+| `interpreter/hlasm/opcodes/bfp_sign.py` | BFP LOAD AND TEST and the sign forms, in IR |
 | `interpreter/hlasm/opcodes/bfp_ir.py`, `interpreter/hlasm/ieee_outcome.py` | BFP image IR: field lists, encoding, FPR access by format, an image's CC, and the IEEE trap ladder over an `IeeeOutcome` |
 | `interpreter/hlasm/program_status.py` | SPM, IPM, EPSW |
 | `interpreter/hlasm/checksum.py` | CKSM |
@@ -855,7 +856,8 @@ SRNMT, STD, STDY, STE, STEY, STFPC. PFPO is in .56 (ruling R42). Rulings R34, R3
 
 **BFP arithmetic (red-dragon-6uyp.51).** ADB, ADBR, AEB, AEBR, AXBR, CDB, CDBR, CEB, CEBR,
 CXBR, DDB, DDBR, DEB, DEBR, DIDBR, DIEBR, DXBR, FIDBR, FIDBRA, FIEBR, FIEBRA, FIXBR, FIXBRA,
-KDB, KDBR, KEB, KEBR, KXBR, MADB, MADBR, MAEB, MAEBR, MDB, MDBR, MDEB, MDEBR, MEEB, MEEBR, MSDB,
+KDB, KDBR, KEB, KEBR, KXBR, LCDBR, LCEBR, LCXBR, LNDBR, LNEBR, LNXBR, LPDBR, LPEBR, LPXBR,
+LTDBR, LTEBR, LTXBR, MADB, MADBR, MAEB, MAEBR, MDB, MDBR, MDEB, MDEBR, MEEB, MEEBR, MSDB,
 MSDBR, MSEB, MSEBR, MXBR, MXDB, MXDBR, SDB, SDBR, SEB, SEBR, SQDB, SQDBR, SQEB, SQEBR,
 SQXBR, SXBR, TCDB, TCEB, TCXB. Rulings R34, R41, R43.
 
@@ -866,15 +868,17 @@ SQXBR, SXBR, TCDB, TCEB, TCXB. Rulings R34, R41, R43.
   `S0C7` with nothing stored. An enabled overflow or underflow (tininess) stores the scaled
   result, sets DXC 2x or 1x, and abends. Otherwise the result is stored, the unenabled flags
   are ORed into FPC byte 1, and an enabled inexact sets DXC 08 or 0C and abends.
-- CC: add and subtract from the stored image; compares from the comparison;
+- CC: add, subtract and the sign forms from the stored image; compares from the comparison;
   DIxBR per Figure 19-22; TCxB 0 or 1. The rest leave it.
 - Short results replace FPR bits 0-31 only. Extended operands use pairs (r, r+2). An invalid
   pair, an M3 or M4 of 2 or 8-15, or DIxBR registers that are not distinct abend `S0C6` at
   compile time. FIxBRA M4 bit 1 suppresses inexact.
+- LCxBR, LNxBR and LPxBR change the sign bit in IR and never signal. LTxBR quiets an SNaN
+  and raises invalid through the same ladder.
 - z390 writes X'F4F4F4F4' into bits 32-63 of some short results, rounds the fused product,
-  gives CC 1 for unordered compares, ignores the round-toward-minus sign
+  gives CC 1 for unordered compares and NaN sign forms, ignores the round-toward-minus sign
   of an exact zero sum, multiplies extended inexactly, rejects AXBR R1 = 1 and any FIxBRA or
-  DIxBR modifier, picks other fused NaNs, and takes no invalid
+  DIxBR modifier, does not quiet LTDBR's SNaN, picks other fused NaNs, and takes no invalid
   or inexact trap. The z390 test pins each (red-dragon-6uyp.74).
 
 ## Known Gaps
@@ -1037,7 +1041,7 @@ SQXBR, SXBR, TCDB, TCEB, TCXB. Rulings R34, R41, R43.
 | `tests/integration/hlasm/test_floating_point_support.py` | Every floating-point-support mnemonic on the VM through GRs: moves, low word kept, sign forms, FPC loads and rounding modes, `S0C6` with the FPC unchanged, each Figure 9-21 DXC with `S0C7`; EX of LER |
 | `tests/z390/test_floating_point_support_differential.py` | Every floating-point-support case against z390; its initial FPC, short loads, HFP sign forms, missing checks and signaling pinned (`-m z390`) |
 | `tests/unit/hlasm/test_bfp_builtins.py` | BFP builtins: fields to values and back for every class; each builtin's value, scaled value, trap, flags, DXCs and CC |
-| `tests/unit/hlasm/test_bfp_arithmetic_lowering.py` | BFP IR: operands in argument order, one builtin call, then the trap ladder; static `S0C6` before any access; no SYMBOLIC |
+| `tests/unit/hlasm/test_bfp_arithmetic_lowering.py` | BFP IR: operands in argument order, one builtin call, then the trap ladder; static `S0C6` before any access; sign forms without a builtin; no SYMBOLIC in all 70 |
 | `tests/integration/hlasm/test_bfp_arithmetic.py` | Every BFP arithmetic mnemonic on the VM: result images, CC and FPC flags; each trap's delivered value, DXC and `S0C7`; fused NaN order and 0 x inf with an SNaN addend |
 | `tests/z390/test_bfp_arithmetic_differential.py` | Every BFP arithmetic case against z390; its faults pinned (`-m z390`) |
 | `tests/z390/test_conditional_select_count_differential.py` | Every conditional, select and count case against z390; the instructions z390 does not execute and its whole-register SELFHR pinned (`-m z390`) |

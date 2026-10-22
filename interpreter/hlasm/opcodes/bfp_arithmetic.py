@@ -169,12 +169,6 @@ def _shared_registers(statement: MachineStatement) -> bool:
     return len(set(registers)) < len(registers)
 
 
-def _extended(
-    operands: Sequence[int], lowering: StatementLowering
-) -> StatementLowering:
-    return pairs(operands, lowering)
-
-
 def _register_form(
     operation: BfpOperation, layout: BfpLayout, after: AfterStore
 ) -> StatementLowering:
@@ -208,7 +202,7 @@ def _binary(
     return {
         short: _register_form(operation, SHORT_LAYOUT, after_of(SHORT_LAYOUT)),
         long: _register_form(operation, LONG_LAYOUT, after_of(LONG_LAYOUT)),
-        extended: _extended(
+        extended: pairs(
             (FIRST, SECOND),
             _register_form(operation, EXTENDED_LAYOUT, after_of(EXTENDED_LAYOUT)),
         ),
@@ -279,7 +273,7 @@ def _compare_forms(
     return {
         short: _compare(operation, SHORT_LAYOUT, _fpr(SECOND, SHORT_LAYOUT)),
         long: _compare(operation, LONG_LAYOUT, _fpr(SECOND, LONG_LAYOUT)),
-        extended: _extended(
+        extended: pairs(
             (FIRST, SECOND),
             _compare(operation, EXTENDED_LAYOUT, _fpr(SECOND, EXTENDED_LAYOUT)),
         ),
@@ -345,10 +339,10 @@ MULTIPLY_DIVIDE: Mapping[str, StatementLowering] = {
     **_binary(BfpOperation.DIVIDE, ("DEBR", "DDBR", "DXBR", "DEB", "DDB"), _without_cc),
     "MDEBR": _lengthened(SHORT_LAYOUT, LONG_LAYOUT, _fpr(SECOND, SHORT_LAYOUT)),
     "MDEB": _lengthened(SHORT_LAYOUT, LONG_LAYOUT, _storage(SECOND, SHORT_LAYOUT)),
-    "MXDBR": _extended(
+    "MXDBR": pairs(
         (FIRST,), _lengthened(LONG_LAYOUT, EXTENDED_LAYOUT, _fpr(SECOND, LONG_LAYOUT))
     ),
-    "MXDB": _extended(
+    "MXDB": pairs(
         (FIRST,),
         _lengthened(LONG_LAYOUT, EXTENDED_LAYOUT, _storage(SECOND, LONG_LAYOUT)),
     ),
@@ -357,7 +351,7 @@ MULTIPLY_DIVIDE: Mapping[str, StatementLowering] = {
 SQUARE_ROOT_FUSED: Mapping[str, StatementLowering] = {
     "SQEBR": _square_root(SHORT_LAYOUT, _fpr(SECOND, SHORT_LAYOUT)),
     "SQDBR": _square_root(LONG_LAYOUT, _fpr(SECOND, LONG_LAYOUT)),
-    "SQXBR": _extended(
+    "SQXBR": pairs(
         (FIRST, SECOND), _square_root(EXTENDED_LAYOUT, _fpr(SECOND, EXTENDED_LAYOUT))
     ),
     "SQEB": _square_root(SHORT_LAYOUT, _storage(SECOND, SHORT_LAYOUT)),
@@ -373,15 +367,15 @@ COMPARE_INTEGRAL: Mapping[str, StatementLowering] = {
     ),
     "FIEBR": _integral(SHORT_LAYOUT, _signals_all),
     "FIDBR": _integral(LONG_LAYOUT, _signals_all),
-    "FIXBR": _extended((FIRST, THIRD), _integral(EXTENDED_LAYOUT, _signals_all)),
+    "FIXBR": pairs((FIRST, THIRD), _integral(EXTENDED_LAYOUT, _signals_all)),
     "FIEBRA": _integral(SHORT_LAYOUT, _inexact_control),
     "FIDBRA": _integral(LONG_LAYOUT, _inexact_control),
-    "FIXBRA": _extended((FIRST, THIRD), _integral(EXTENDED_LAYOUT, _inexact_control)),
+    "FIXBRA": pairs((FIRST, THIRD), _integral(EXTENDED_LAYOUT, _inexact_control)),
     "DIEBR": _divide_to_integer(SHORT_LAYOUT),
     "DIDBR": _divide_to_integer(LONG_LAYOUT),
     "TCEB": _test_data_class(SHORT_LAYOUT),
     "TCDB": _test_data_class(LONG_LAYOUT),
-    "TCXB": _extended((FIRST,), _test_data_class(EXTENDED_LAYOUT)),
+    "TCXB": pairs((FIRST,), _test_data_class(EXTENDED_LAYOUT)),
 }
 
 BFP_ARITHMETIC_LOWERINGS: Mapping[str, StatementLowering] = {

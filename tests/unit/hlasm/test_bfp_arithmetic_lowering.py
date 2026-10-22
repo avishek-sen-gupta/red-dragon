@@ -1,5 +1,5 @@
 # pyright: standard
-"""BFP arithmetic lowerings: operands read in builtin-argument order, one builtin call, then the trap ladder (suppress, deliver scaled, deliver and flag, inexact trap); static checks abend before any access."""
+"""BFP arithmetic lowerings: operands read in builtin-argument order, one builtin call, then the trap ladder (suppress, deliver scaled, deliver and flag, inexact trap); static checks abend before any access; sign forms are IR alone."""
 
 from collections.abc import Mapping, Sequence
 from functools import singledispatch
@@ -226,6 +226,29 @@ def test_ieee_forms_read_operands_in_argument_order_then_call_then_trap():
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_sign_forms_are_ir_and_load_and_test_traps_an_snan():
+    traces = {
+        "LCDBR": _trace("LCDBR", _registers(1, 2)),
+        "LNEBR": _trace("LNEBR", _registers(1, 2)),
+        "LPXBR": _trace("LPXBR", _registers(0, 4)),
+        "LTDBR": _trace("LTDBR", _registers(1, 2)),
+    }
+
+    assert traces == {
+        "LCDBR": ["read fpr 16+8", "write fpr 8+8", CC],
+        "LNEBR": ["read fpr 16+4", "write fpr 8+4", CC],
+        "LPXBR": [
+            "read fpr 32+8",
+            "read fpr 48+8",
+            "write fpr 0+8",
+            "write fpr 16+8",
+            CC,
+        ],
+        "LTDBR": ["read fpr 16+8", *_ladder("write fpr 8+8", CC)],
+    }
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_invalid_pairs_modifiers_and_registers_abend_before_any_access():
     traces = [
         _trace("AXBR", _registers(2, 4)),
@@ -233,6 +256,7 @@ def test_invalid_pairs_modifiers_and_registers_abend_before_any_access():
         _trace("MXDBR", _registers(2, 4)),
         _trace("MXDB", (reg_operand(6), D8)),
         _trace("TCXB", (reg_operand(2), D8)),
+        _trace("LTXBR", _registers(7, 0)),
         _trace("FIEBR", (reg_operand(1), mask_operand(2), reg_operand(2))),
         _trace(
             "FIXBRA",
@@ -248,7 +272,7 @@ def test_invalid_pairs_modifiers_and_registers_abend_before_any_access():
         _trace("DIDBR", (*_registers(2, 3, 2), mask_operand(0))),
     ]
 
-    assert traces == [[SPECIFICATION]] * 12
+    assert traces == [[SPECIFICATION]] * 13
 
 
 RR = _registers(0, 4)
@@ -258,6 +282,7 @@ FAMILIES: Mapping[str, tuple[Operand, ...]] = {
     "AEB ADB SEB SDB MEEB MDB MDEB MXDB DEB DDB SQEB SQDB TCEB TCDB TCXB": RX,
     "SQEBR SQDBR SQXBR CEBR CDBR CXBR KEBR KDBR KXBR": RR,
     "CEB CDB KEB KDB": RX,
+    "LTEBR LTDBR LTXBR LCEBR LCDBR LCXBR LNEBR LNDBR LNXBR LPEBR LPDBR LPXBR": RR,
     "MAEBR MADBR MSEBR MSDBR": _registers(1, 3, 2),
     "MAEB MADB MSEB MSDB": (reg_operand(1), reg_operand(3), D8),
     "FIEBR FIDBR FIXBR": (reg_operand(0), mask_operand(0), reg_operand(4)),
@@ -279,7 +304,7 @@ def test_every_mnemonic_lowers_without_symbolic():
         for m in names.split()
     }
 
-    assert len(lowered) == 58
+    assert len(lowered) == 70
     assert [
         m for m, ir in lowered.items() if any(isinstance(i, Symbolic) for i in ir)
     ] == []

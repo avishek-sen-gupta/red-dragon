@@ -371,6 +371,71 @@ INTEGRAL: Mapping[str, Case] = {
     ),
 }
 
+SIGN_FORMS: Mapping[str, Case] = {
+    "LTEBR LTDBR LTXBR": _case(
+        _short(2)
+        + _lines("LE 2,SM1P5", "LTEBR 1,2")
+        + _cc(8)
+        + _lines("LD 4,DSNAN", "LTDBR 3,4", "LGDR 2,3")
+        + _cc(9)
+        + _lines("LZXR 12", "LTXBR 8,12", "LGDR 3,8", "LGDR 4,10"),
+        {8: _cc_word(1), 2: 0x7FF80000_00000009, 9: _cc_word(3), 3: 0, 4: 0},
+        0,
+        INVALID_FLAG,
+    ),
+    "LCEBR LCDBR LCXBR": _case(
+        _short(1, 2)
+        + _lines("LE 2,S1", "LCEBR 1,2", "LGDR 2,1")
+        + _cc(8)
+        + _lines("LD 4,DSNAN", "LCDBR 3,4", "LGDR 3,3")
+        + _cc(9)
+        + _extended(12, "X2")
+        + _lines("LCXBR 8,12", "LGDR 4,8", "LGDR 5,10"),
+        {
+            2: _high(0xBF800000),
+            8: _cc_word(1),
+            3: 0xFFF00000_00000009,
+            9: _cc_word(3),
+            4: 0xC0000000_00000000,
+            5: 0,
+        },
+        1,
+    ),
+    "LNEBR LNDBR LNXBR": _case(
+        _short(1, 2)
+        + _lines("LE 2,S1", "LNEBR 1,2", "LGDR 2,1")
+        + _cc(8)
+        + _lines("LD 4,D0", "LNDBR 3,4", "LGDR 3,3")
+        + _cc(9)
+        + _extended(12, "X2")
+        + _lines("LCXBR 12,12", "LNXBR 8,12", "LGDR 4,8"),
+        {
+            2: _high(0xBF800000),
+            8: _cc_word(1),
+            3: 0x80000000_00000000,
+            9: _cc_word(0),
+            4: 0xC0000000_00000000,
+        },
+        1,
+    ),
+    "LPEBR LPDBR LPXBR": _case(
+        _short(1, 2)
+        + _lines("LE 2,SM1P5", "LPEBR 1,2", "LGDR 2,1")
+        + _cc(8)
+        + _lines("LD 4,DMINF", "LPDBR 3,4", "LGDR 3,3")
+        + _cc(9)
+        + _lines("LZXR 12", "LCXBR 12,12", "LPXBR 8,12", "LGDR 4,8"),
+        {
+            2: _high(0x3FC00000),
+            8: _cc_word(2),
+            3: 0x7FF00000_00000000,
+            9: _cc_word(2),
+            4: 0,
+        },
+        0,
+    ),
+}
+
 CASES: Mapping[str, Case] = {
     "FIDBRA inexact control under an enabled mask": _case(
         _fpc(0x08000000) + _lines("LD 2,D2P5", "FIDBRA 1,4,2,4", "LGDR 2,1"),
@@ -383,6 +448,7 @@ CASES: Mapping[str, Case] = {
     **ROOTS_FUSED,
     **COMPARES,
     **INTEGRAL,
+    **SIGN_FORMS,
 }
 
 
@@ -420,6 +486,11 @@ TRAPS: Mapping[str, Trap] = {
     "compare and signal traps on a QNaN": _trap(
         _lines("LD 1,D1", "LD 2,DQNAN", "KDBR 1,2"),
         {1: 0x3FF00000_00000000},
+        0x80008000,
+    ),
+    "load and test traps on an SNaN": _trap(
+        _lines("LD 1,D7", "LD 2,DSNAN", "LTDBR 1,2"),
+        {1: 0x401C0000_00000000},
         0x80008000,
     ),
     "load FP integer traps inexact": _trap(
