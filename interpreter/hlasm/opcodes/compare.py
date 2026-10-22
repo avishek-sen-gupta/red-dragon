@@ -4,6 +4,7 @@
 from collections.abc import Mapping, Sequence
 
 from hlasm_asg.program.machine_statement import MachineStatement
+from interpreter.hlasm.byte_one_layouts import IMMEDIATE_BYTE
 from interpreter.hlasm.data_movement import (
     Source,
     from_gr32,
@@ -13,6 +14,11 @@ from interpreter.hlasm.data_movement import (
     immediate,
     sign_extended,
     storage_address_at,
+)
+from interpreter.hlasm.field_lowering import (
+    FieldLowering,
+    with_field_source,
+    written_lowerings,
 )
 from interpreter.hlasm.fixed_width_ir import (
     build_compare_logical_cc_ir,
@@ -100,7 +106,12 @@ def lower_compare_under_mask(
 
 SIGNED_HALFWORD_RELATIVE = sign_extended(from_relative(HALFWORD_BYTES), HALFWORD_BITS)
 SIGNED_WORD_RELATIVE = sign_extended(from_relative(WORD_BYTES), WORD_BITS)
-LOGICAL_BYTE_IMMEDIATE = immediate(BITS_PER_BYTE)
+COMPARE_IMMEDIATE_BYTE = FieldLowering(
+    IMMEDIATE_BYTE,
+    with_field_source(
+        lambda immediate: compare(LOGICAL_8, from_first_storage(ONE_BYTE), immediate)
+    ),
+)
 LOGICAL_HALFWORD_IMMEDIATE = immediate(HALFWORD_BITS)
 
 SIGNED_COMPARES: Mapping[str, StatementLowering] = {
@@ -143,8 +154,6 @@ LOGICAL_COMPARES: Mapping[str, StatementLowering] = {
     "CLHHSI": compare(
         LOGICAL_16, from_first_storage(HALFWORD_BYTES), LOGICAL_HALFWORD_IMMEDIATE
     ),
-    "CLI": compare(LOGICAL_8, from_first_storage(ONE_BYTE), LOGICAL_BYTE_IMMEDIATE),
-    "CLIY": compare(LOGICAL_8, from_first_storage(ONE_BYTE), LOGICAL_BYTE_IMMEDIATE),
     "CLG": compare(LOGICAL_64, from_gr64(0), DOUBLEWORD_STORAGE),
     "CLGR": compare(LOGICAL_64, from_gr64(0), from_gr64(1)),
     "CLGRL": compare(LOGICAL_64, from_gr64(0), from_relative(DOUBLEWORD_BYTES)),
@@ -160,7 +169,13 @@ LOGICAL_COMPARES: Mapping[str, StatementLowering] = {
     "CLMY": lower_compare_under_mask,
 }
 
+COMPARE_FIELD_LOWERINGS: Mapping[str, FieldLowering] = {
+    "CLI": COMPARE_IMMEDIATE_BYTE,
+    "CLIY": COMPARE_IMMEDIATE_BYTE,
+}
+
 COMPARE_LOWERINGS: Mapping[str, StatementLowering] = {
     **SIGNED_COMPARES,
     **LOGICAL_COMPARES,
+    **written_lowerings(COMPARE_FIELD_LOWERINGS),
 }

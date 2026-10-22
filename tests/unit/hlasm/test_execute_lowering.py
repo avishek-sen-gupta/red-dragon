@@ -1,5 +1,5 @@
 # pyright: standard
-"""EX and EXRL lowerings: the target resolved at compile time, byte 1 decoded per format, one inline copy per reachable byte under a decision tree, and the abends that stop before any copy."""
+"""EX and EXRL lowerings: the target resolved at compile time, byte 1 decoded per format, one inline copy per reachable byte under a decision tree where byte 1 selects registers, one lowering with byte 1 in a register where it is a data field, and the abends that stop before any copy."""
 
 import logging
 from collections.abc import Sequence
@@ -23,7 +23,6 @@ from interpreter.hlasm.hlasm_constants import ABEND_VAR
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.machine_statements import MachineStatements
 from interpreter.hlasm.opcodes import OPCODE_LOWERINGS
-from interpreter.hlasm.operands import imm_operand, storage_length_operand
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -33,7 +32,9 @@ from interpreter.instructions import (
     LoadRegion,
     StoreVar,
     Symbolic,
+    WriteRegion,
 )
+from interpreter.operator_kind import BinopKind
 from interpreter.var_name import VarName
 from tests.covers import NotLanguageFeature, covers
 
@@ -260,36 +261,119 @@ def test_r1_zero_or_an_unlowered_target_lowers_one_copy_at_the_execute():
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_r1_byte_selects_one_inline_copy_per_reachable_value():
-    mvc = _executed(_ex(2, _at(TARGET_OFFSET)), (MVC,))
-    cli = _executed(_ex(2, _at(TARGET_OFFSET)), (CLI,))
+def test_r1_register_fields_select_one_inline_copy_per_reachable_value():
     lhi = _executed(_ex(2, _at(TARGET_OFFSET)), (LHI,))
+    ar = _executed(_ex(2, _at(TARGET_OFFSET)), (AR,))
 
     assert (
-        [storage_length_operand(v, 0).length for v in _variants(mvc)],
-        len(_compared(mvc)),
-        sum(1 for i in mvc if isinstance(i, BranchIf)),
-        len({i.label for i in mvc if isinstance(i, Branch)}),
-        sum(1 for i in mvc if isinstance(i, Branch)),
-        [i.length for i in mvc if isinstance(i, LoadRegion)],
-        [imm_operand(v, 1) for v in _variants(cli)],
-        _compared(cli)[0],
         [v.operands for v in _variants(lhi)],
         _abends(lhi),
-        any(isinstance(i, Symbolic) for i in (*mvc, *cli, *lhi)),
+        len(_variants(ar)),
+        len(_compared(ar)),
+        sum(1 for i in ar if isinstance(i, BranchIf)),
+        len({i.label for i in ar if isinstance(i, Branch)}),
+        sum(1 for i in ar if isinstance(i, Branch)),
+        _compared(ar)[0],
+        any(isinstance(i, Symbolic) for i in (*lhi, *ar)),
     ) == (
-        list(range(1, 257)),
-        255,
-        255,
-        1,
-        256,
-        [4],
-        [v for v in range(256) if v & 0x40],
-        0xC0,
         [(_reg(r), _imm(5)) for r in (3, 7, 11, 15)],
         ["S0C1"],
+        32,
+        31,
+        31,
+        1,
+        32,
+        0xA3,
         False,
     )
+
+
+def _region_widths(ir: Sequence[InstructionBase]) -> list[tuple[str, int]]:
+    return [
+        (type(i).__name__, i.length)
+        for i in ir
+        if isinstance(i, (LoadRegion, WriteRegion))
+    ]
+
+
+def _ored_constants(ir: Sequence[InstructionBase]) -> list[int]:
+    consts = _constants(ir)
+    return [
+        int(consts[str(i.right)])
+        for i in ir
+        if isinstance(i, Binop)
+        and i.operator == BinopKind.BIT_OR
+        and str(i.right) in consts
+    ]
+
+
+def _constant_tests(ir: Sequence[InstructionBase], operator: BinopKind) -> list[int]:
+    consts = _constants(ir)
+    return [
+        int(consts[str(i.right)])
+        for i in ir
+        if isinstance(i, Binop) and i.operator == operator and str(i.right) in consts
+    ]
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_a_data_field_target_lowers_once_with_byte_one_from_r1():
+    svc = _statement("SVC", "I", (_imm(0),), length=2)
+    lowered = {
+        name: _executed(_ex(2, _at(TARGET_OFFSET)), (target,))
+        for name, target in {"MVC": MVC, "CLI": CLI, "SVC": svc}.items()
+    }
+
+    assert {
+        name: (
+            _variants(ir),
+            _ored_constants(ir)[:1],
+            _constant_tests(ir, BinopKind.LT),
+            _constant_tests(ir, BinopKind.EQ),
+            _region_widths(ir),
+            any(isinstance(i, Symbolic) for i in ir),
+        )
+        for name, ir in lowered.items()
+    } == {
+        "MVC": (
+            [],
+            [0x00],
+            [],
+            [],
+            [
+                ("LoadRegion", 4),
+                ("LoadRegion", 4),
+                ("LoadRegion", 4),
+                ("LoadRegion", 1),
+                ("WriteRegion", 1),
+                ("LoadRegion", 1),
+                ("WriteRegion", 1),
+            ],
+            False,
+        ),
+        "CLI": (
+            [],
+            [0x40],
+            [],
+            [],
+            [("LoadRegion", 4), ("LoadRegion", 4), ("LoadRegion", 1)],
+            False,
+        ),
+        "SVC": (
+            [],
+            [0x00],
+            [],
+            [35, 13],
+            [
+                ("LoadRegion", 4),
+                ("LoadRegion", 4),
+                ("LoadRegion", 2),
+                ("LoadRegion", 1),
+                ("LoadRegion", 4),
+            ],
+            False,
+        ),
+    }
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

@@ -4,7 +4,13 @@
 from collections.abc import Mapping, Sequence
 
 from hlasm_asg.program.machine_statement import MachineStatement
+from interpreter.hlasm.byte_one_layouts import IMMEDIATE_BYTE
 from interpreter.hlasm.data_movement import Source, field_of, immediate
+from interpreter.hlasm.field_lowering import (
+    FieldLowering,
+    with_field_source,
+    written_lowerings,
+)
 from interpreter.hlasm.fixed_width_ir import (
     build_test_under_mask_cc_ir,
     build_test_under_mask_ranked_cc_ir,
@@ -44,8 +50,12 @@ def _test(
     return lower
 
 
-def _byte() -> StatementLowering:
-    return _test(BYTE_TEST, from_first_storage(ONE_BYTE), immediate(BITS_PER_BYTE))
+TEST_BYTE = FieldLowering(
+    IMMEDIATE_BYTE,
+    with_field_source(
+        lambda mask: _test(BYTE_TEST, from_first_storage(ONE_BYTE), mask)
+    ),
+)
 
 
 def _halfword(shift: int) -> StatementLowering:
@@ -54,9 +64,13 @@ def _halfword(shift: int) -> StatementLowering:
     )
 
 
+TEST_UNDER_MASK_FIELD_LOWERINGS: Mapping[str, FieldLowering] = {
+    "TM": TEST_BYTE,
+    "TMY": TEST_BYTE,
+}
+
 TEST_UNDER_MASK_LOWERINGS: Mapping[str, StatementLowering] = {
-    "TM": _byte(),
-    "TMY": _byte(),
+    **written_lowerings(TEST_UNDER_MASK_FIELD_LOWERINGS),
     "TMHH": _halfword(HIGH_HIGH_SHIFT),
     "TMHL": _halfword(HIGH_LOW_SHIFT),
     "TMLH": _halfword(LOW_HIGH_SHIFT),

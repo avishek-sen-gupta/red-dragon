@@ -6,6 +6,7 @@ from functools import reduce
 
 from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.hlasm.alignment_check import emit_alignment_check
+from interpreter.hlasm.data_field import DataField, LowerWithField
 from interpreter.hlasm.effective_address import effective_address, relative_address
 from interpreter.hlasm.hlasm_constants import (
     BITS_PER_BYTE,
@@ -342,17 +343,19 @@ def move(
     return lower
 
 
-def storage_immediate(width: int, apply: Apply) -> StatementLowering:
+def storage_immediate(width: int, apply: Apply) -> LowerWithField:
     address_of = storage_address_at(FIRST_OPERAND)
-    byte_immediate = signed_immediate(SECOND_OPERAND, BITS_PER_BYTE)
+    extend = signed(BITS_PER_BYTE)
 
-    def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
+    def lower(
+        emitter: HlasmEmitter, statement: MachineStatement, field: DataField
+    ) -> None:
         address = address_of(emitter, statement)
         apply(
             emitter,
             (
                 emitter.load_storage(address, 0, width),
-                byte_immediate(emitter, statement),
+                extend(emitter, field.value(emitter)),
             ),
             lambda value: emitter.store_storage(address, 0, width, value),
         )

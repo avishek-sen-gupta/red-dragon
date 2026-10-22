@@ -55,7 +55,7 @@ addresses.
 | `interpreter/hlasm/branch_dispatch.py` | `hl_dispatch`: maps a branch address to a statement label; a miss abends `S0C1` |
 | `interpreter/hlasm/operands.py` | `reg_operand`, `mask_operand`, `optional_mask_operand`, `imm_operand`, `value_operand` (R, M or I), `storage_operand`, `reloc_operand`, `storage_length_operand`, `vec_reg_operand`, `optional_imm_operand`: typed operand access; a mismatch raises `HlasmLoweringError`. `statement_place` names a statement in messages |
 | `interpreter/hlasm/hlasm_lowering_error.py` | `HlasmLoweringError`: names the statement (mnemonic, section, offset, operand) and what was found |
-| `interpreter/hlasm/opcodes/svc.py` | SVC, by number |
+| `interpreter/hlasm/opcodes/svc.py` | SVC, by number, written or set by EX |
 | `interpreter/hlasm/opcodes/load_store.py` | The load and store unit |
 | `interpreter/hlasm/opcodes/load_address_immediate.py` | The load address and immediates unit |
 | `interpreter/hlasm/opcodes/signed_add_subtract.py` | The signed add and subtract unit |
@@ -92,8 +92,10 @@ addresses.
 | `interpreter/hlasm/opcodes/loop_branch.py` | The branch on count and branch on index unit |
 | `interpreter/hlasm/lower_statement.py` | Lowers one statement: EX and EXRL through `execute.py`, any other machine instruction through `OPCODE_LOWERINGS` |
 | `interpreter/hlasm/machine_statements.py` | `MachineStatements`: the assembly's machine statements by section and offset |
-| `interpreter/hlasm/execute.py` | EX and EXRL: resolve the target, check it, and select an inline copy per byte-1 value |
-| `interpreter/hlasm/byte_one_layouts.py` | Byte 1 of each instruction format, by format and operand shape (`operand_slot.py`); an unlisted shape is an opcode byte |
+| `interpreter/hlasm/execute.py` | EX and EXRL: resolve the target, check it; lower a data-field target once with byte 1 computed in IR, any other target as one inline copy per byte-1 value |
+| `interpreter/hlasm/data_field.py`, `written_field.py`, `executed_field.py` | `DataField`: a byte-1 data field (SS length code, SI immediate, SVC number) as a lowering sees it. `WrittenField` is the assembled byte: block region reads and writes, a compile-time dispatch. `ExecutedField` is EX's register: byte loops, a chain of equality tests |
+| `interpreter/hlasm/field_lowering.py` | `FieldLowering(layout, lower)`: a lowering given its data field; `written_lowerings` adapts them for `OPCODE_LOWERINGS` with `WrittenField`; `with_field_source` turns the field into a `Source` |
+| `interpreter/hlasm/byte_one_layouts.py` | Byte 1 of each instruction format, by format and operand shape (`operand_slot.py`); an unlisted shape is an opcode byte. Names the data-field layouts: `LENGTH_BYTE`, `LENGTH_NIBBLES`, `IMMEDIATE_BYTE`, `NUMBER_BYTE` |
 | `interpreter/hlasm/byte_one_layout.py`, `byte_one_field.py` | A format's byte-1 fields, ignored bits and opcode bits; the byte a statement encodes, the values R1 can make of it, the statement a value decodes to |
 | `interpreter/hlasm/byte_one_part.py`, `operand_value_part.py`, `storage_index_part.py`, `length_code_part.py` | What a byte-1 field holds: an R, M or I value, an X2 index, or a length code (written length minus one) |
 | `interpreter/hlasm/opcodes/operand_sources.py` | Named second-operand sources shared by the arithmetic, compare and load-sign units |
@@ -104,7 +106,7 @@ addresses.
 | `interpreter/hlasm/fixed_point_overflow.py` | CC 3 with program-mask bit `1000` on abends `S0C8` |
 | `interpreter/hlasm/fixed_point_divide.py` | A raised divide condition abends `S0C9`; no mask applies |
 | `interpreter/hlasm/write_to_operator.py` | SVC 35 in IR |
-| `interpreter/hlasm/byte_loop.py` | An IR loop over offsets from a start to a bound by a fixed step, the offset in `__hlasm_ss_at`, its constants set before the loop; `emit_scan_loop`, whose body may branch out and returns its registers; `emit_byte_loop` for a compile-time length; `copy_byte`, `copied_byte`, `advance` |
+| `interpreter/hlasm/byte_loop.py` | An IR loop over offsets from a start to a bound by a fixed step, the offset in `__hlasm_ss_at`, its constants set before the loop; `emit_scan_loop`, whose body may branch out and returns its registers; `emit_byte_loop` from 0 to a length register; `copy_byte`, `copied_byte`, `advance` |
 | `interpreter/hlasm/register_span.py` | `RegisterSpan`: the bit positions a RISBG-family field selects within (whole register, high word, low word) and the wrapping range mask |
 | `interpreter/hlasm/boolean_connective.py` | A bitwise connective: the binop and whether the right operand or the result is complemented; the eight connectives |
 | `interpreter/hlasm/abend_completion.py` | SVC 13 in IR |
@@ -411,8 +413,8 @@ MVHI, MVGHI; MVCL, MVCLE, MVCLU; MVST. Only MVCL, MVCLE, MVCLU and MVST set the 
   region read and one write move the block. MVN and MVZ always loop, keeping one nibble of
   each destination byte. MVCIN's second address is its rightmost byte.
 - MVCRL moves GR0 bits 56-63 plus one bytes, right to left.
-- MVO is unrolled (at most 16 bytes): right to left, each source byte fetched once after
-  the bytes to its right are stored, the source zero-extended or truncated on the left.
+- MVO is a byte loop, right to left: each source byte fetched once after the bytes to its
+  right are stored, the source zero-extended or truncated on the left.
 - MVCL: 24-bit lengths, pad in R2+1 bits 32-39. If the destination starts inside the
   participating source bytes, nothing moves, the lengths are kept and CC is 3; R1 and R2
   only lose bit 32. Otherwise the move completes with CC 0, 1 or 2 from comparing the
@@ -433,7 +435,7 @@ MVHI, MVGHI; MVCL, MVCLE, MVCLU; MVST. Only MVCL, MVCLE, MVCLU and MVST set the 
 **Storage compares (red-dragon-6uyp.36).** CLC, CLCL, CLCLE, CLCLU, CLST, CUSE. Unsigned, left to
 right: CC 0 equal, 1 first low, 2 first high. Storage is never written.
 
-- CLC compares the two L-byte values in one block compare; registers unchanged.
+- CLC compares the two L-byte values as unsigned ints, each read in one block (a byte loop under EX); registers unchanged.
 - CLCL: 24-bit lengths, pad in R2+1 bits 32-39. CLCLE and CLCLU: 32-bit lengths, pad from the
   D2(B2) address (one byte; two for CLCLU, which compares 2-byte characters and abends `S0C6` on
   an odd length). The shorter operand is extended with the pad. With k the offset of the first
@@ -484,16 +486,28 @@ Tables are read at the table address plus the argument (times two for two-byte f
   doubleword, and indexes TRTE's two-byte functions by a two-byte argument's low byte. The z390
   test pins all three.
 
-**Execute (red-dragon-6uyp.39).** EX, EXRL. Lowered by compile-time variant expansion (ruling R30).
+**Execute (red-dragon-6uyp.39, red-dragon-6uyp.79).** EX, EXRL. Ruling R31: a target whose byte 1 is a
+data field is lowered once with that field computed in IR; any other target by compile-time
+variant expansion (ruling R30).
 
 - The target is found at assembly: EXRL's from its relative operand, EX's from the storage
   operand's address as written (RELOC, no index). The target runs as if it sat at the execute
   instruction, so link information (BAL, BAS, BRAS) points after the EX or EXRL. Relative
   operands arrive resolved, so they stay relative to the target. The CC is the target's.
-- R1 = 0, or a target with no lowering, lowers one copy of the target. Otherwise v = (GR R1 bits 56-63 OR the target's byte 1),
-  kept to the format's operand fields; a binary tree of `<` tests over the values v can reach
-  (the supersets of the target's byte) selects one inline copy, lowered through
-  `OPCODE_LOWERINGS` with its operands decoded from v. Every copy joins after the tree.
+- R1 = 0, or a target with no lowering, lowers one copy of the target. Otherwise v = (GR R1
+  bits 56-63 OR the target's byte 1), kept to the format's operand fields.
+- Data fields (R31): an SS-a length code (MVC, MVCIN, MVN, MVZ, CLC, NC, OC, XC, TR, TRT,
+  TRTR), SS-b L1/L2 (MVO), an SI or SIY immediate (MVI, MVIY, CLI, CLIY, TM, TMY, NI, NIY, OI,
+  OIY, XI, XIY, ASI, AGSI, ALSI, ALGSI) and the SVC number. The target's one lowering takes the
+  field as a `DataField`: `WrittenField` for a plain statement, `ExecutedField(v)` under EX.
+  The lowering is the same code either way. Only three operations differ by kind, all in the
+  field: a span read and a span copy (one block LOAD_REGION/WRITE_REGION for a written length;
+  a byte loop for v, since region lengths are compile-time) and a dispatch (a compile-time pick
+  for a written SVC number; equality tests on v). Overlap handling is the lowering's, so MVC,
+  MVN, MVZ and TR stay byte at a time when destructive.
+- Other fields (R30): a binary tree of `<` tests over the values v can reach (the supersets of
+  the target's byte) selects one inline copy, lowered through `OPCODE_LOWERINGS` with its
+  operands decoded from v. Every copy joins after the tree.
 - Byte 1 maps per format and operand shape: SS-a L, SS-b L1/L2, SS-c L1/I3, SS-f L2, SI and SIY
   I2, I (SVC) I, RR R1/R2, RX and RXY R1/X2, RXF R3/X2, RS and RSY R1/R3 or R1/M3, RI and RIL
   R1, the RIE, RIS, RRS, RSI, RSL, SS-e and SSF fields. Unused fields (TS's whole byte) are ignored. Bits that
@@ -501,9 +515,11 @@ Tables are read at the table address plus the argument (times two for two-byte f
   any of them.
 - A target that is EX, EXRL, TBEGIN, TBEGINC, TEND or TABORT abends `S0C3`; an odd EX target
   `S0C6`, before R1 is read.
-- Size: `EX 2,MOVE` with `MOVE MVC 0(0,3),0(4)` lowers to 13,319 IR instructions (256 copies of
-  MVC's 46, 255 tree tests). One execution costs 36 VM steps over the MVC itself; with R1 = 0,
-  none.
+- Size and cost: `EX 2,MOVE` with `MOVE MVC 0(0,3),0(4)` lowers to 73 IR instructions (13,324
+  under R30); 16 such sites compile in 0.26 s (40 s under R30). An 80-byte move under EX costs
+  685 VM steps (65 under R30, which moved a block); a plain `MVC` of 80 bytes stays at 29.
+  An 80-byte CLC under EX costs 1,996 steps (83 under R30). A plain SVC keeps its one service:
+  39 IR instructions against 107 for the chain.
 - z390 does not check the odd EX target (it abends `S0C1`) and links an executed BRAS after the
   BRAS. The z390 test pins both.
 
@@ -514,8 +530,10 @@ Tables are read at the table address plus the argument (times two for two-byte f
 - Falling through into DC/DS data or past a CSECT's end skips the data instead of executing it, and a branch into data abends `S0C1` (red-dragon-6uyp.64).
 - Every branch, even to a static relative target, walks the dispatch chain (red-dragon-6uyp.80).
 - Compile time is linear in IR size but about 0.17 ms per IR instruction, nearly all in the linker
-  and the unit codec (red-dragon-fu6c). EX of an MVC lowers to about 13,300 instructions, so each
-  such site adds about 2.2 s (red-dragon-6uyp.79).
+  and the unit codec (red-dragon-fu6c). EX of a register-field target (RR, RX, RS, RI, RIL and
+  the like) still expands up to 256 copies.
+- EX of an SS data-field target reads and copies its runtime-length span a byte at a time,
+  about 8 to 12 VM steps per byte (red-dragon-6uyp.81).
 - `EXTRN`, `ENTRY` and V-type constants are not resolved; V-constants hold zero (red-dragon-6uyp.8, red-dragon-6uyp.15).
 - Machine-instruction bytes are not in section storage (a spec non-goal: self-modifying code), so `CLC` against code does not see them. EX finds its target at assembly instead.
 - An EX target written with an explicit base or an index, an EXRL to an absolute target, or one
@@ -589,8 +607,8 @@ Tables are read at the table address plus the argument (times two for two-byte f
 | `tests/integration/hlasm/test_ss_compare.py` | Every storage compare mnemonic on the VM: CC 0-2 and registers; CLC lengths 0 and 256, inequality against the pad, zero lengths, bit 32 cleared or kept, a pad from a base register, CLST ending first and a high ending character, CUSE found, ended, zero substring and negative lengths; CLCLU odd length and CLST's GR0 abend `S0C6` |
 | `tests/unit/hlasm/test_translate_lowering.py` | Translate IR: one unit and one function per iteration at each form's widths, stores only where the form translates, no comparison on a byte image, M3 bit 3 drops the test, odd pairs abend `S0C6` |
 | `tests/integration/hlasm/test_translate.py` | Every translate mnemonic on the VM: storage, registers, CC; TR overlap and lengths, TRT and TRTR CC 0-2 and bit 32, TRE found, ended and length 0, the test character and its control, ignored table bits, each TRTE and TRTRE control; odd lengths abend `S0C6` |
-| `tests/unit/hlasm/test_execute_lowering.py` | Execute IR: byte 1 decoded per format, R1 = 0 or an unlowered target lowers one copy at the EX, one copy per reachable value under a 255-test tree, the opcode-bit guard, `S0C3` and `S0C6` before any copy, unresolved targets abend `S0C1` with a warning |
-| `tests/integration/hlasm/test_execute.py` | EX and EXRL on the VM: MVC length codes 0, 4, 7 and 255, CLI immediates, an SVC number, BAL, BRAS, AR and LHI fields, a BC mask and index, and a branch mask from R1; links after the execute instruction; CC kept; `S0C3`, `S0C6`; indexed targets and opcode modification xfailed (red-dragon-6uyp.77, red-dragon-6uyp.78) |
+| `tests/unit/hlasm/test_execute_lowering.py` | Execute IR: byte 1 decoded per format, R1 = 0 or an unlowered target lowers one copy at the EX, a register field one copy per reachable value under a tree, a data field (MVC, CLI, SVC) one lowering with byte 1 from R1 and one-byte region accesses, the opcode-bit guard, `S0C3` and `S0C6` before any copy, unresolved targets abend `S0C1` with a warning |
+| `tests/integration/hlasm/test_execute.py` | EX and EXRL on the VM: MVC length codes 0, 4, 7 and 255, CLC, XC, TR, TRT, MVN, MVZ, MVCIN and MVO lengths, CLI, MVI, TM, NI, OI and XI immediates, an SVC number, BAL, BRAS, AR and LHI fields, a BC mask and index, and a branch mask from R1; links after the execute instruction; CC kept; `S0C3`, `S0C6`; indexed targets and opcode modification xfailed (red-dragon-6uyp.77, red-dragon-6uyp.78) |
 | `tests/integration/hlasm/test_bridge_parser.py` | The real bridge: macro origins, refused assemblies |
 | `tests/integration/hlasm/test_storage_layout.py` | Section regions and address constants |
 | `tests/integration/hlasm/test_svc.py` | `WTO`, `ABEND` user and system codes, unlowered SVCs, `run()` with our maclib then `copybook_dirs`, call-site spans |

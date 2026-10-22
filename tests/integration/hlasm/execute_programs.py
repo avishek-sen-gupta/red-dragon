@@ -37,11 +37,27 @@ TARGETS = (
     "LOADI    LHI   0,5\n"
     "INNER    EX    0,MOVE\n"
     "INNERRL  EXRL  0,MOVE\n"
+    "COMPAREC CLC   0(0,7),SAME\n"
+    "EXCLUDE  XC    0(0,6),0(7)\n"
+    "XLATE    TR    0(0,6),0(7)\n"
+    "SCAN     TRT   0(0,6),FUNCS\n"
+    "NUMERICS MVN   0(0,6),0(7)\n"
+    "ZONES    MVZ   0(0,6),0(7)\n"
+    "INVERSE  MVCIN 0(0,6),7(7)\n"
+    "OFFSET   MVO   0(0,6),0(0,7)\n"
+    "STORE    MVI   0(6),X'00'\n"
+    "TEST     TM    SRC+1,X'00'\n"
+    "ANDI     NI    0(6),X'00'\n"
+    "ORI      OI    0(6),X'00'\n"
+    "XORI     XI    0(6),X'00'\n"
     "BRANCH   BC    0,SUB-4\n"
     "SUB      LHI   8,1\n"
     "         ABEND 1\n"
     "BIGSRC   DC    256X'5A'\n"
     "BIGOUT   DC    264X'FF'\n"
+    "SAME     DC    X'0123456789000000'\n"
+    "CODES    DC    X'0706050403020100'\n"
+    "FUNCS    DC    X'00000000C1000000'\n"
 )
 
 
@@ -82,6 +98,18 @@ AT_NEXT = _line("LA", f"{NEXT_REGISTER},NEXT")
 
 def _move(length_code: int) -> str:
     return _line("LHI", f"2,{length_code}") + _line("EX", "2,MOVE") + MOVED
+
+
+def _executed(field: str, target: str) -> str:
+    return _line("LHI", f"2,{field}") + _line("EX", f"2,{target}")
+
+
+def _on_codes(field: str, target: str) -> str:
+    return _line("MVC", "OUT(8),CODES") + _executed(field, target) + MOVED
+
+
+def _moved(field: str, target: str) -> str:
+    return _executed(field, target) + MOVED
 
 
 CASES: Mapping[str, ExecuteCase] = {
@@ -205,6 +233,90 @@ CASES: Mapping[str, ExecuteCase] = {
         ABENDED,
         PRESET_CC,
         {LINK_REGISTER: AMODE_31_LINK, PATH_REGISTER: BRANCHED},
+    ),
+    "CLC length from a register, equal": (
+        _executed("4", "COMPAREC"),
+        ABENDED,
+        0,
+        {PATH_REGISTER: FELL_THROUGH},
+    ),
+    "CLC length from a register, high": (
+        _executed("5", "COMPAREC"),
+        ABENDED,
+        2,
+        {PATH_REGISTER: FELL_THROUGH},
+    ),
+    "XC length from a register": (
+        _moved("3", "EXCLUDE"),
+        ABENDED,
+        1,
+        {MOVED_REGISTER: 0xFEDCBA98FFFFFFFF, PATH_REGISTER: FELL_THROUGH},
+    ),
+    "TR length from a register": (
+        _on_codes("3", "XLATE"),
+        ABENDED,
+        PRESET_CC,
+        {MOVED_REGISTER: 0xEFCDAB8903020100, PATH_REGISTER: FELL_THROUGH},
+    ),
+    "TRT length from a register": (
+        _on_codes("3", "SCAN"),
+        ABENDED,
+        2,
+        {2: HIGH_FILL | 0xC1, PATH_REGISTER: FELL_THROUGH},
+    ),
+    "MVN length from a register": (
+        _moved("2", "NUMERICS"),
+        ABENDED,
+        PRESET_CC,
+        {MOVED_REGISTER: 0xF1F3F5FFFFFFFFFF, PATH_REGISTER: FELL_THROUGH},
+    ),
+    "MVZ length from a register": (
+        _moved("2", "ZONES"),
+        ABENDED,
+        PRESET_CC,
+        {MOVED_REGISTER: 0x0F2F4FFFFFFFFFFF, PATH_REGISTER: FELL_THROUGH},
+    ),
+    "MVCIN length from a register": (
+        _moved("3", "INVERSE"),
+        ABENDED,
+        PRESET_CC,
+        {MOVED_REGISTER: 0xEFCDAB89FFFFFFFF, PATH_REGISTER: FELL_THROUGH},
+    ),
+    "MVO lengths from a register": (
+        _moved("X'31'", "OFFSET"),
+        ABENDED,
+        PRESET_CC,
+        {MOVED_REGISTER: 0x0000123FFFFFFFFF, PATH_REGISTER: FELL_THROUGH},
+    ),
+    "MVI immediate from a register": (
+        _moved("X'5A'", "STORE"),
+        ABENDED,
+        PRESET_CC,
+        {MOVED_REGISTER: 0x5AFFFFFFFFFFFFFF, PATH_REGISTER: FELL_THROUGH},
+    ),
+    "TM mask from a register": (
+        _executed("X'30'", "TEST"),
+        ABENDED,
+        1,
+        {PATH_REGISTER: FELL_THROUGH},
+    ),
+    "NI immediate from a register": (
+        _moved("X'3C'", "ANDI"),
+        ABENDED,
+        1,
+        {MOVED_REGISTER: 0x3CFFFFFFFFFFFFFF, PATH_REGISTER: FELL_THROUGH},
+    ),
+    "OI immediate from a register": (
+        _line("XC", "OUT(8),OUT") + _moved("X'81'", "ORI"),
+        ABENDED,
+        1,
+        {MOVED_REGISTER: 0x8100000000000000, PATH_REGISTER: FELL_THROUGH},
+    ),
+    "XI immediate from a register": (
+        _moved("X'0F'", "XORI"),
+        ABENDED,
+        1,
+        {MOVED_REGISTER: 0xF0FFFFFFFFFFFFFF, PATH_REGISTER: FELL_THROUGH},
     ),
     "EX of EX": (_line("EX", "0,INNER"), EXECUTE, PRESET_CC, {}),
     "EX of EXRL": (_line("EX", "0,INNERRL"), EXECUTE, PRESET_CC, {}),
