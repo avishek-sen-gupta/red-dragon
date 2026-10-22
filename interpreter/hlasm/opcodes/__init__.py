@@ -27,6 +27,9 @@ from interpreter.hlasm.opcodes.decimal_conversion import (
     DECIMAL_CONVERSION_LOWERINGS,
 )
 from interpreter.hlasm.opcodes.edit import EDIT_FIELD_LOWERINGS, EDIT_LOWERINGS
+from interpreter.hlasm.opcodes.floating_point_support import (
+    FLOATING_POINT_SUPPORT_LOWERINGS,
+)
 from interpreter.hlasm.opcodes.high_word import HIGH_WORD_LOWERINGS
 from interpreter.hlasm.opcodes.interlocked import (
     INTERLOCKED_FIELD_LOWERINGS,
@@ -110,6 +113,7 @@ OPCODE_LOWERINGS: Mapping[str, StatementLowering] = {
     **PACKED_COMPARE_TEST_LOWERINGS,
     **DECIMAL_CONVERSION_LOWERINGS,
     **EDIT_LOWERINGS,
+    **FLOATING_POINT_SUPPORT_LOWERINGS,
 }
 
 DATA_FIELD_LOWERINGS: Mapping[str, FieldLowering] = {

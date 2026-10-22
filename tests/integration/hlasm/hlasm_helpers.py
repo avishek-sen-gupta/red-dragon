@@ -97,3 +97,8 @@ def run_hlasm_storage(
 def hlasm_run_of(vm: VMState, stdout: str) -> HlasmRun:
     abend = str(_var(vm, "__hlasm_abend"))
     return HlasmRun(_return_code(vm, abend), abend, stdout)
+
+
+def run_hlasm_fpc(source: str) -> tuple[HlasmMachine, int]:
+    vm, stdout = _run_vm(source)
+    return _machine(vm, stdout), int(_var(vm, "__hlasm_fpc"))

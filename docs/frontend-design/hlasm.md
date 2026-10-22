@@ -28,7 +28,8 @@ hlasm_asg (leaf package)
   ▼
 HlasmFrontend
   │  start_up_ir(): GPR region, CC, program mask; one region per section with its
-  │                 DC images; entry registers; access registers
+  │                 DC images; entry registers; access registers;
+  │                 FPRs and FPC
   │  lower():       one IR function for the whole assembly, entered by dispatch
   ▼
 compile_hlasm (interpreter/project/hlasm_compile.py)
@@ -97,6 +98,7 @@ addresses.
 | `interpreter/hlasm/opcodes/loop_branch.py` | The branch on count and branch on index unit |
 | `interpreter/hlasm/opcodes/high_word.py` | The high-word unit |
 | `interpreter/hlasm/opcodes/miscellaneous.py` | The miscellaneous unit: access registers, LCBB, MC, hints, traps |
+| `interpreter/hlasm/opcodes/floating_point_support.py` | The floating-point-support unit: FPR moves, sign forms, the FPC, its checks and the simulated-IEEE trap |
 | `interpreter/hlasm/program_status.py` | SPM, IPM, EPSW |
 | `interpreter/hlasm/checksum.py` | CKSM |
 | `interpreter/hlasm/clock_instructions.py` | STCK, STCKF, STCKE, ECTG |
@@ -128,7 +130,7 @@ addresses.
 | `interpreter/hlasm/statement_location.py` | Each statement's source line, set on the IR it lowers to |
 | `interpreter/hlasm/fixed_width_ir.py` | Fixed-width signed add/subtract/multiply, load-and-test, complement, absolute and negative-absolute and logical add/subtract with carry-in, bitwise connectives, logical and signed shifts and rotates, each with its condition code, the sign CC (0 zero, 1 leftmost bit one, 2 other), and division truncating toward zero, built in IR |
 | `interpreter/hlasm/inline_ir.py` | Splices a builder's IR under fresh registers; `inline_pair` splits a returned pair, such as (result, CC) |
-| `interpreter/hlasm/hlasm_emitter.py` | `HlasmEmitter`: the lowering's instruction sink; `load_ar` and `store_ar` for access registers; an immutable cons-list (`chain_link.py`, `empty_chain.py`) flattened once by `instructions()`, so emission is O(n); `locate_from` records a `LocatedSpan` applied at that flatten |
+| `interpreter/hlasm/hlasm_emitter.py` | `HlasmEmitter`: the lowering's instruction sink; `load_ar` and `store_ar` for access registers; `load_fpr`, `store_fpr` and their high-word forms for FPRs; an immutable cons-list (`chain_link.py`, `empty_chain.py`) flattened once by `instructions()`, so emission is O(n); `locate_from` records a `LocatedSpan` applied at that flatten |
 | `interpreter/hlasm/abend.py` | Stores the code in `__hlasm_abend`, then `Halt_` |
 | `interpreter/hlasm/opcodes/interlocked.py` | The interlocked-update unit |
 | `interpreter/hlasm/place.py`, `places.py` | `Place`: how one lowering reads and replaces an operand; a register's low word or whole value, an even-odd pair joined into one value, storage at an address, storage at an address held in a doubleword (bits 33-63, boundary checked), a register numbered at run time |
@@ -828,10 +830,30 @@ UNPK, UNPKA, UNPKU. Rulings R1, R29, R31, R34, R39.
 - EX (ruling R31) lowers each once on `LENGTH_BYTE`.
 - z390 agrees on every case.
 
+**Floating-point support (red-dragon-6uyp.50).** CPSDR, EFPC, LCDFR, LD, LDGR, LDR, LDY, LE,
+LER, LEY, LFAS, LFPC, LGDR, LNDFR, LPDFR, LXR, LZDR, LZER, LZXR, SFASR, SFPC, SRNM, SRNMB,
+SRNMT, STD, STDY, STE, STEY, STFPC. PFPO is in .56 (ruling R42). Rulings R34, R37, R41.
+
+- `__hlasm_fprs` holds 16 FPRs of 8 bytes, `__hlasm_fpc` the FPC; both start at 0. AFP
+  control is on, so every FPR is usable. All forms are bit moves in IR; none sets the CC.
+- Short forms (LE, LEY, LER, LZER, STE, STEY) use FPR bits 0-31 and leave bits 32-63 alone.
+  LXR and LZXR use pairs (r, r+2); an R with bit value 2 set abends `S0C6`.
+- LCDFR, LNDFR and LPDFR flip, set and clear bit 0; CPSDR R1,R3,R2 takes R2 with R3's sign.
+- SFPC and LFPC (and LFAS, SFASR) abend `S0C6` with the FPC unchanged when bits 6-7, 14-15,
+  24 or 28 are set or the BFP mode is 4-6. The PoO calls this a specification exception;
+  ruling R41's `S0C7` is not used. SRNM sets bits 30-31 and clears 29; SRNMB sets 29-31 and
+  abends `S0C6` on address bits 56-60 or mode 4-6; SRNMT sets 25-27.
+- LFAS and SFASR OR the old flags (byte 1 bits 0-5, as Figure 9-21 has the quantum flag;
+  SFASR's text says 0-4) into the loaded flags. When an old flag meets a loaded mask the FPC
+  is stored with Figure 9-21's DXC in byte 2, then the run abends `S0C7`.
+- z390 starts the FPC at X'70000000', clears bits 32-63 on short loads, routes the sign forms
+  through an HFP value (`S0C7` or lost bits), checks no pair or FPC value and never signals
+  from LFAS or SFASR. The z390 test pins each (red-dragon-6uyp.74).
+
 ## Known Gaps
 
-- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, miscellaneous, packed-decimal arithmetic, packed-decimal compare and test, decimal conversion and edit units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
-- Floating-point instructions are not lowered. Their arithmetic is the leaf `zarch_float` ([zarch-float.md](zarch-float.md)); builtins over it land with red-dragon-6uyp.50 onward.
+- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, miscellaneous, packed-decimal arithmetic, packed-decimal compare and test, decimal conversion, edit and floating-point-support units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
+- Floating-point arithmetic, conversion and PFPO are not lowered. Their arithmetic is the leaf `zarch_float` ([zarch-float.md](zarch-float.md)); builtins over it land with red-dragon-6uyp.51 onward.
 - DC types beyond C, X, B, F, H, P, Z, A, Y and V, and any type extension, raise `UnsupportedDataType` (red-dragon-6uyp.63; floating point E, D, L: red-dragon-6uyp.21).
 - Falling through into DC/DS data or past a CSECT's end skips the data instead of executing it, and a branch into data abends `S0C1` (red-dragon-6uyp.64).
 - Every branch, even to a static relative target, walks the dispatch chain (red-dragon-6uyp.80).
@@ -856,8 +878,8 @@ UNPK, UNPKA, UNPKU. Rulings R1, R29, R31, R34, R39.
 - `run()` defaults to `DEFAULT_BUILTINS`, which has no clock builtins, so a clock instruction
   there stores what the unresolved-call strategy gives. Callers that give `builtins` composed
   with `clock_builtins(clock)` get a clock; the `interpreter.py` CLI supplies a `SystemMachineClock`.
-- The data-exception code is not modelled: a compare-and-trap or load-and-trap trap and a decimal
-  data exception abend `S0C7` and store no DXC.
+- Only LFAS and SFASR store a DXC: a compare-and-trap or load-and-trap trap and a decimal data
+  exception abend `S0C7` and leave the FPC's DXC unchanged.
 - In AMODE 31, LM, STM, LMD, NC, OC, XC, the decimal instructions and the storage moves, compares and translates do not wrap
   EA + offset at 2 GiB; MVCL's overlap test ignores operands that wrap.
 - SRST and SRSTU with R1 below R2 search past the top of storage instead of wrapping to 0.
@@ -982,4 +1004,7 @@ UNPK, UNPKA, UNPKU. Rulings R1, R29, R31, R34, R39.
 | `tests/unit/hlasm/test_edit_lowering.py` | Edit IR: the source read and `S0C7` before the first store, the CC after, EDMK's GR1 last; EX layout; no SYMBOLIC |
 | `tests/integration/hlasm/test_edit.py` | ED and EDMK on the VM: amount mask with CR, zero suppression, field separators, CC from the last field, alternate signs, a fill byte that is X'20' or X'21', a pending digit across X'22', a first digit with a plus code, GR1 marked or kept; EX length; `S0C7` with the pattern, CC and GR1 unchanged |
 | `tests/z390/test_edit_differential.py` | Every edit case against z390 (`-m z390`) |
+| `tests/unit/hlasm/test_floating_point_support_lowering.py` | Floating-point-support IR: FPR region offsets and widths, short forms on 4 bytes; invalid pairs abend before any access; FPC checks before the FPC store, the LFAS/SFASR trap after it; no SYMBOLIC |
+| `tests/integration/hlasm/test_floating_point_support.py` | Every floating-point-support mnemonic on the VM through GRs: moves, low word kept, sign forms, FPC loads and rounding modes, `S0C6` with the FPC unchanged, each Figure 9-21 DXC with `S0C7` |
+| `tests/z390/test_floating_point_support_differential.py` | Every floating-point-support case against z390; its initial FPC, short loads, HFP sign forms, missing checks and signaling pinned (`-m z390`) |
 | `tests/z390/test_conditional_select_count_differential.py` | Every conditional, select and count case against z390; the instructions z390 does not execute and its whole-register SELFHR pinned (`-m z390`) |
