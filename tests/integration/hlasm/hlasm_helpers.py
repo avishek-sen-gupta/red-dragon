@@ -103,3 +103,15 @@ def hlasm_run_of(vm: VMState, stdout: str) -> HlasmRun:
 def run_hlasm_fpc(source: str) -> tuple[HlasmMachine, int]:
     vm, stdout = _run_vm(source)
     return _machine(vm, stdout), int(_var(vm, "__hlasm_fpc"))
+
+
+def _fpr(vm: VMState, register: int) -> int:
+    loaded = vm.load(int(_var(vm, "__hlasm_fprs")) + GPR_BYTES * register, GPR_BYTES)
+    assert isinstance(loaded, list)
+    return int.from_bytes(bytes(loaded), "big")
+
+
+def run_hlasm_float(source: str) -> tuple[HlasmMachine, dict[int, int], int]:
+    vm, stdout = _run_vm(source)
+    fprs = {r: _fpr(vm, r) for r in range(GPR_COUNT)}
+    return _machine(vm, stdout), fprs, int(_var(vm, "__hlasm_fpc"))
