@@ -104,6 +104,13 @@ CHECKSUM_TAIL_VAR = VarName("__hlasm_cksm_tail")
 DECIMAL_VALUE_VAR = VarName("__hlasm_dec_value")
 DECIMAL_INVALID_VAR = VarName("__hlasm_dec_invalid")
 UNPACK_CARRY_VAR = VarName("__hlasm_unpk_carry")
+EDIT_SOURCE_AT_VAR = VarName("__hlasm_ed_source_at")
+EDIT_PENDING_VAR = VarName("__hlasm_ed_pending")
+EDIT_DIGIT_VAR = VarName("__hlasm_ed_digit")
+EDIT_PLUS_VAR = VarName("__hlasm_ed_plus")
+EDIT_SIGNIFICANCE_VAR = VarName("__hlasm_ed_significance")
+EDIT_NONZERO_VAR = VarName("__hlasm_ed_nonzero")
+EDIT_MARK_VAR = VarName("__hlasm_ed_mark")
 
 RETURN_SENTINEL = 0x00000FF0
 ADDRESS_MASK_31 = 0x7FFFFFFF

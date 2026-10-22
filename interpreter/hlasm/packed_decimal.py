@@ -25,6 +25,7 @@ from interpreter.register import Register
 NOT_DIGITS = 0xFC00
 NOT_SIGNS = 0x03FF
 MINUS_SIGNS = (1 << 0xB) | (1 << 0xD)
+PLUS_SIGNS = (1 << 0xA) | (1 << 0xC) | (1 << 0xE) | (1 << 0xF)
 PLUS_SIGN = 0xC
 DECIMAL_BASE = 10
 DIGIT_PAIR_BASE = 100

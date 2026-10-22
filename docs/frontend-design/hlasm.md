@@ -9,7 +9,7 @@ assembly are the che4z language server's, through a forked bridge executable;
 Python lowers what che4z has already resolved. The machine claims z17 problem
 state and stays in AMODE 31. Lowered so far: SVC and the load and store, load
 address and immediates, signed add and subtract, logical add and subtract, compare,
-compare and branch or trap, boolean, shift and rotate, multiply and divide, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, miscellaneous, packed-decimal arithmetic, packed-decimal compare and test and decimal conversion units (see
+compare and branch or trap, boolean, shift and rotate, multiply and divide, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, miscellaneous, packed-decimal arithmetic, packed-decimal compare and test, decimal conversion and edit units (see
 Opcode Units).
 Any other opcode abends `S0C1` at run time.
 
@@ -149,6 +149,7 @@ addresses.
 | `interpreter/hlasm/decimal_exceptions.py` | `S0C7` and `S0CB` before any store; `S0CA` after the store when program-mask bit `0100` is on |
 | `interpreter/hlasm/opcodes/decimal_conversion.py` | The decimal conversion unit |
 | `interpreter/hlasm/decimal_packing.py`, `digit_source.py`, `character_field.py` | Pack digits into a signed-packed field and unpack them into zoned, ASCII or Unicode characters, right to left one result unit at a time; bytes left of the source read as zero |
+| `interpreter/hlasm/opcodes/edit.py`, `edit_operands.py` | The edit unit: pattern and source addresses, the byte reader and the fill byte |
 | `interpreter/hlasm/range_dispatch.py`, `bit_fields.py` | Branch on ascending bounds; masked, shifted and ORed bit fields |
 
 ## Compilation Units
@@ -803,9 +804,33 @@ UNPK, UNPKA, UNPKU. Rulings R1, R29, R31, R34, R39.
 - z390 suppresses an out-of-range CVB and CVBY instead of storing the low word, stores a stale
   value for CVDY, and abends `S0C1` on PKU and UNPKU. The z390 test pins each.
 
+**Edit (red-dragon-6uyp.49).** ED, EDMK. Rulings R29, R31, R34, R39.
+
+- The pattern is edited left to right one byte at a time. Byte 0 is the fill byte, read
+  first, then processed like any other. X'20' and X'21' take the next source digit: the
+  pending right nibble of the last source byte if it is a digit, else the left nibble of a
+  newly fetched byte. Significant digits become zoned (`F0`-`F9`); a zero digit with the
+  significance indicator off becomes the fill byte. X'22' becomes the fill byte and ends the
+  field; message bytes stay when the indicator is on, else become the fill byte.
+- The indicator turns on at a nonzero digit or at X'21', and off at X'22' or after a
+  fetched byte whose right nibble is a plus code (A, C, E, F). B and D leave it alone.
+- CC 0 when the last field is zero or has no digits, else 1 with the indicator on and 2
+  with it off.
+- A left nibble A-F abends `S0C7`. The Principles of Operation leave suppression or
+  termination to the model; we suppress (ruling R34): a first walk over the pattern reads
+  and checks the source digits, then a second one edits. Pattern, CC and GR1 stay unchanged.
+  Right nibbles are never invalid.
+- EDMK puts the address of the rightmost digit made significant by itself (indicator off,
+  digit nonzero) in GR1 bits 33-63, bit 32 zero, bits 0-31 kept. A digit forced
+  significant by X'21' sets nothing, so GR1 can stay unchanged.
+- Overlapping pattern and source are unpredictable by the Principles of Operation; each
+  source byte is read when needed and each pattern byte before it is written.
+- EX (ruling R31) lowers each once on `LENGTH_BYTE`.
+- z390 agrees on every case.
+
 ## Known Gaps
 
-- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, miscellaneous, packed-decimal arithmetic, packed-decimal compare and test and decimal conversion units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
+- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, miscellaneous, packed-decimal arithmetic, packed-decimal compare and test, decimal conversion and edit units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
 - DC types beyond C, X, B, F, H, P, Z, A, Y and V, and any type extension, raise `UnsupportedDataType` (red-dragon-6uyp.63; floating point E, D, L: red-dragon-6uyp.21).
 - Falling through into DC/DS data or past a CSECT's end skips the data instead of executing it, and a branch into data abends `S0C1` (red-dragon-6uyp.64).
 - Every branch, even to a static relative target, walks the dispatch chain (red-dragon-6uyp.80).
@@ -953,4 +978,7 @@ UNPK, UNPKA, UNPKU. Rulings R1, R29, R31, R34, R39.
 | `tests/unit/hlasm/test_decimal_conversion_lowering.py` | Decimal conversion IR: CVB's `S0C7`, R1 write, then `S0C9`; CVBG's `S0C9` before its write; `S0C6` before the first store; UNPKA/UNPKU set the CC last; EX layouts; no SYMBOLIC |
 | `tests/integration/hlasm/test_decimal_conversion.py` | Every decimal conversion mnemonic on the VM: CVB limits, -0, `S0C7`, `S0C9` with the low word stored; CVBG `S0C9` suppressed; CVD/CVDG signs and the high word; PACK and UNPK truncation, padding and overlap; PKA/PKU/UNPKA/UNPKU at full length, CCs and `S0C6`; EX lengths |
 | `tests/z390/test_decimal_conversion_differential.py` | Every decimal conversion case against z390; CVB `S0C9`, CVDY, PKU and UNPKU pinned (`-m z390`) |
+| `tests/unit/hlasm/test_edit_lowering.py` | Edit IR: the source read and `S0C7` before the first store, the CC after, EDMK's GR1 last; EX layout; no SYMBOLIC |
+| `tests/integration/hlasm/test_edit.py` | ED and EDMK on the VM: amount mask with CR, zero suppression, field separators, CC from the last field, alternate signs, a fill byte that is X'21', GR1 marked or kept; EX length; `S0C7` with the pattern, CC and GR1 unchanged |
+| `tests/z390/test_edit_differential.py` | Every edit case against z390 (`-m z390`) |
 | `tests/z390/test_conditional_select_count_differential.py` | Every conditional, select and count case against z390; the instructions z390 does not execute and its whole-register SELFHR pinned (`-m z390`) |
