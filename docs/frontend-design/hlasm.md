@@ -111,6 +111,7 @@ addresses.
 | `interpreter/hlasm/statement_location.py` | Each statement's source line, set on the IR it lowers to |
 | `interpreter/hlasm/fixed_width_ir.py` | Fixed-width signed add/subtract/multiply, load-and-test, complement, absolute and negative-absolute and logical add/subtract with carry-in, bitwise connectives, logical and signed shifts and rotates, each with its condition code, the sign CC (0 zero, 1 leftmost bit one, 2 other), and division truncating toward zero, built in IR |
 | `interpreter/hlasm/inline_ir.py` | Splices a builder's IR under fresh registers; `inline_pair` splits a returned pair, such as (result, CC) |
+| `interpreter/hlasm/hlasm_emitter.py` | `HlasmEmitter`: the lowering's instruction sink, an immutable cons-list (`chain_link.py`, `empty_chain.py`) flattened once by `instructions()`, so emission is O(n); `locate_from` records a `LocatedSpan` applied at that flatten |
 | `interpreter/hlasm/abend.py` | Stores the code in `__hlasm_abend`, then `Halt_` |
 
 ## Compilation Units
@@ -363,7 +364,7 @@ the CC is unchanged.
 - BPP and BPRP are hints with no architected effect and lower to nothing.
 - Every target, relative ones included, goes through `hl_dispatch`; a target that is not a
   machine statement abends `S0C1`. Branching straight to a static relative target's label
-  is deferred as a performance item (red-dragon-6uyp.62).
+  is deferred as a performance item (red-dragon-6uyp.80).
 - z390 branches BIC to the operand address instead of the doubleword stored there, and
   abends `S0C1` on BPP and BPRP. A branch into data runs the data bytes in z390 (J, BC
   and BRCL to FILL end `S0C2`); here it abends `S0C1`. The z390 test pins all three.
@@ -511,7 +512,10 @@ Tables are read at the table address plus the argument (times two for two-byte f
 - Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, and execute units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
 - DC types beyond C, X, B, F, H, P, Z, A, Y and V, and any type extension, raise `UnsupportedDataType` (red-dragon-6uyp.63; floating point E, D, L: red-dragon-6uyp.21).
 - Falling through into DC/DS data or past a CSECT's end skips the data instead of executing it, and a branch into data abends `S0C1` (red-dragon-6uyp.64).
-- Emission is O(n²) in the number of IR instructions, and every branch, even to a static relative target, walks the dispatch chain (red-dragon-6uyp.62).
+- Every branch, even to a static relative target, walks the dispatch chain (red-dragon-6uyp.80).
+- Compile time is linear in IR size but about 0.17 ms per IR instruction, nearly all in the linker
+  and the unit codec (red-dragon-fu6c). EX of an MVC lowers to about 13,300 instructions, so each
+  such site adds about 2.2 s (red-dragon-6uyp.79).
 - `EXTRN`, `ENTRY` and V-type constants are not resolved; V-constants hold zero (red-dragon-6uyp.8, red-dragon-6uyp.15).
 - Machine-instruction bytes are not in section storage (a spec non-goal: self-modifying code), so `CLC` against code does not see them. EX finds its target at assembly instead.
 - An EX target written with an explicit base or an index, an EXRL to an absolute target, or one
@@ -549,6 +553,7 @@ Tables are read at the table address plus the argument (times two for two-byte f
 | `tests/unit/hlasm/test_machine.py` | Machine start-up state |
 | `tests/unit/hlasm/test_dc_encoding.py` | DC images |
 | `tests/unit/hlasm/test_fixed_width_ir.py` | Fixed-width arithmetic, truncating division, bitwise connectives, shifts and rotates, and condition codes |
+| `tests/unit/hlasm/test_hlasm_emitter.py` | The chain shares what it extends; the emitter's order and per-statement source locations |
 | `tests/unit/hlasm/test_lowering_skeleton.py` | Labels, LR, BASR, BALR, BRAS and BCR, dispatch, abends |
 | `tests/unit/hlasm/test_load_store_lowering.py` | Load and store IR: GPR and storage accesses, alignment branch, CC, no SYMBOLIC |
 | `tests/integration/hlasm/test_load_store.py` | Every load and store mnemonic on the VM: registers, run status and CC; alignment abends |
