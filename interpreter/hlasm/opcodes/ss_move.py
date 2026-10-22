@@ -36,6 +36,7 @@ from interpreter.hlasm.long_move import (
 )
 from interpreter.hlasm.move_string import move_string
 from interpreter.hlasm.opcodes.operand_sources import HALFWORD_IMMEDIATE
+from interpreter.hlasm.operand_overlap import starts_inside_source
 from interpreter.hlasm.operands import storage_length_operand, storage_operand
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.instructions import Branch, BranchIf, Label_, LoadIndex
@@ -57,18 +58,6 @@ def _field(emitter: HlasmEmitter, statement: MachineStatement) -> tuple[Addresse
     return (target, source), max(first.length, ONE_BYTE)
 
 
-def _starts_inside(
-    emitter: HlasmEmitter, addresses: Addresses, length: int
-) -> Register:
-    target, source = addresses
-    source_end = emitter.binop(BinopKind.ADD, source, emitter.int_(length))
-    return emitter.binop(
-        BinopKind.AND,
-        emitter.binop(BinopKind.LT, source, target),
-        emitter.binop(BinopKind.LT, target, source_end),
-    )
-
-
 def _block_copy(emitter: HlasmEmitter, addresses: Addresses, length: int) -> None:
     target, source = addresses
     start = emitter.int_(0)
@@ -83,7 +72,7 @@ def _move_characters(emitter: HlasmEmitter, statement: MachineStatement) -> None
         emitter.fresh_label(prefix)
         for prefix in ("hl_mvc_bytes", "hl_mvc_block", "hl_mvc_done")
     )
-    inside = _starts_inside(emitter, addresses, length)
+    inside = starts_inside_source(emitter, addresses, emitter.int_(length))
     emitter.emit_inst(BranchIf(cond_reg=inside, branch_targets=(bytewise, blockwise)))
     emitter.emit_inst(Label_(label=bytewise))
     emit_byte_loop(emitter, length, lambda at: copy_byte(emitter, addresses, at))
@@ -94,19 +83,19 @@ def _move_characters(emitter: HlasmEmitter, statement: MachineStatement) -> None
 
 
 def _copy_inverted(
-    emitter: HlasmEmitter, addresses: Addresses, start: Register, at: Register
+    emitter: HlasmEmitter, addresses: Addresses, no_offset: Register, at: Register
 ) -> None:
     target, source_right = addresses
-    back = emitter.binop(BinopKind.SUB, start, at)
-    image = emitter.load_bytes(source_right, back, ONE_BYTE)
+    mirrored = emitter.binop(BinopKind.SUB, source_right, at)
+    image = emitter.load_bytes(mirrored, no_offset, ONE_BYTE)
     emitter.write_bytes(target, at, ONE_BYTE, image)
 
 
 def _move_inverse(emitter: HlasmEmitter, statement: MachineStatement) -> None:
     addresses, length = _field(emitter, statement)
-    start = emitter.int_(0)
+    no_offset = emitter.int_(0)
     emit_byte_loop(
-        emitter, length, lambda at: _copy_inverted(emitter, addresses, start, at)
+        emitter, length, lambda at: _copy_inverted(emitter, addresses, no_offset, at)
     )
 
 

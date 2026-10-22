@@ -22,7 +22,7 @@ def _test_offset(
     return at
 
 
-def _advance(
+def advance(
     emitter: HlasmEmitter, at: Register, stride: Register, loop: CodeLabel
 ) -> None:
     after = emitter.binop(BinopKind.ADD, at, stride)
@@ -47,7 +47,7 @@ def emit_counted_loop(
     at = _test_offset(emitter, bound, iteration, done)
     emitter.emit_inst(Label_(label=iteration))
     body(at)
-    _advance(emitter, at, stride, loop)
+    advance(emitter, at, stride, loop)
     emitter.emit_inst(Label_(label=done))
 
 
@@ -56,8 +56,16 @@ def emit_byte_loop(emitter: HlasmEmitter, length: int, body: LoopBody) -> None:
     emit_counted_loop(emitter, span, ONE_BYTE, body)
 
 
+def copied_byte(
+    emitter: HlasmEmitter, addresses: tuple[Register, Register], at: Register
+) -> Register:
+    target, source = addresses
+    image = emitter.load_bytes(source, at, ONE_BYTE)
+    emitter.write_bytes(target, at, ONE_BYTE, image)
+    return image
+
+
 def copy_byte(
     emitter: HlasmEmitter, addresses: tuple[Register, Register], at: Register
 ) -> None:
-    target, source = addresses
-    emitter.write_bytes(target, at, ONE_BYTE, emitter.load_bytes(source, at, ONE_BYTE))
+    copied_byte(emitter, addresses, at)

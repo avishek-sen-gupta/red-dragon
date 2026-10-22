@@ -2,6 +2,7 @@
 """MOVE STRING: copies through the ending character in GR0 bits 56-63 in one execution, leaves R1 at that character in the destination and sets CC 1."""
 
 from hlasm_asg.program.machine_statement import MachineStatement
+from interpreter.hlasm.byte_loop import advance, copied_byte
 from interpreter.hlasm.data_movement import FIRST_OPERAND, SECOND_OPERAND
 from interpreter.hlasm.effective_address import register_address
 from interpreter.hlasm.hlasm_constants import (
@@ -13,7 +14,7 @@ from interpreter.hlasm.hlasm_constants import (
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.operands import reg_operand
 from interpreter.hlasm.specification_check import emit_specification_check
-from interpreter.instructions import Branch, BranchIf, Label_, LoadIndex, StoreVar
+from interpreter.instructions import BranchIf, Label_, LoadIndex, StoreVar
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
@@ -32,15 +33,6 @@ def _ending_character(emitter: HlasmEmitter) -> Register:
     return emitter.binop(BinopKind.BIT_AND, gr0, emitter.int_(BYTE_MASK))
 
 
-def _copied_byte(
-    emitter: HlasmEmitter, addresses: tuple[Register, Register], at: Register
-) -> Register:
-    target, source = addresses
-    image = emitter.load_bytes(source, at, ONE_BYTE)
-    emitter.write_bytes(target, at, ONE_BYTE, image)
-    return image
-
-
 def _stop_at_ending(
     emitter: HlasmEmitter,
     copied: tuple[Register, Register],
@@ -54,14 +46,6 @@ def _stop_at_ending(
     emitter.emit_inst(BranchIf(cond_reg=ended, branch_targets=targets))
 
 
-def _next_byte(
-    emitter: HlasmEmitter, at: Register, step: Register, loop: CodeLabel
-) -> None:
-    after = emitter.binop(BinopKind.ADD, at, step)
-    emitter.emit_inst(StoreVar(name=BYTE_LOOP_AT_VAR, value_reg=after))
-    emitter.emit_inst(Branch(label=loop))
-
-
 def _copy_through(
     emitter: HlasmEmitter, addresses: tuple[Register, Register], ending: Register
 ) -> Register:
@@ -73,10 +57,10 @@ def _copy_through(
     )
     emitter.emit_inst(Label_(label=loop))
     at = emitter.load_var(BYTE_LOOP_AT_VAR)
-    copied = (_copied_byte(emitter, addresses, at), first)
+    copied = (copied_byte(emitter, addresses, at), first)
     _stop_at_ending(emitter, copied, ending, (done, more))
     emitter.emit_inst(Label_(label=more))
-    _next_byte(emitter, at, step, loop)
+    advance(emitter, at, step, loop)
     emitter.emit_inst(Label_(label=done))
     return at
 
