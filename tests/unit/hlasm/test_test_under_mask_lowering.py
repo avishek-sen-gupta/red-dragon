@@ -3,6 +3,7 @@
 
 from collections.abc import Sequence
 
+from hlasm_asg.program.abs_address import AbsAddress
 from hlasm_asg.program.imm_operand import ImmOperand
 from hlasm_asg.program.machine_statement import MachineStatement
 from hlasm_asg.program.open_code_origin import OpenCodeOrigin
@@ -74,7 +75,13 @@ def _field_shift(ir: Sequence[InstructionBase]) -> int:
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_each_form_reads_its_byte_or_register_and_writes_only_the_cc():
-    storage = StorageOperand(kind="STORAGE", displacement=8, index=0, base=BASE)
+    storage = StorageOperand(
+        kind="STORAGE",
+        displacement=8,
+        index=0,
+        base=BASE,
+        written=AbsAddress(kind="ABS", value=8),
+    )
     register = RegOperand(kind="REG", value=3)
     lowered = {
         m: _lowered(m, storage if m in ("TM", "TMY") else register)

@@ -23,13 +23,18 @@ def _scaled(emitter: HlasmEmitter, value: Register, shift: int) -> Register:
     return emitter.binop(BinopKind.LSHIFT, value, emitter.int_(shift))
 
 
+def _address(
+    emitter: HlasmEmitter, displacement: int, index: int, base: int, shift: int
+) -> Register:
+    indexed = _plus_register(emitter, emitter.int_(displacement), index)
+    based = _plus_register(emitter, _scaled(emitter, indexed, shift), base)
+    return emitter.binop(BinopKind.BIT_AND, based, emitter.int_(ADDRESS_MASK_31))
+
+
 def indexed_address(
     emitter: HlasmEmitter, operand: StorageOperand, shift: int
 ) -> Register:
-    displaced = emitter.int_(operand.displacement)
-    indexed = _plus_register(emitter, displaced, operand.index)
-    based = _plus_register(emitter, _scaled(emitter, indexed, shift), operand.base)
-    return emitter.binop(BinopKind.BIT_AND, based, emitter.int_(ADDRESS_MASK_31))
+    return _address(emitter, operand.displacement, operand.index, operand.base, shift)
 
 
 def effective_address(emitter: HlasmEmitter, operand: StorageOperand) -> Register:
@@ -39,15 +44,7 @@ def effective_address(emitter: HlasmEmitter, operand: StorageOperand) -> Registe
 def length_operand_address(
     emitter: HlasmEmitter, operand: StorageLengthOperand
 ) -> Register:
-    return effective_address(
-        emitter,
-        StorageOperand(
-            kind="STORAGE",
-            displacement=operand.displacement,
-            index=0,
-            base=operand.base,
-        ),
-    )
+    return _address(emitter, operand.displacement, 0, operand.base, 0)
 
 
 def relative_address(emitter: HlasmEmitter, operand: RelocImmOperand) -> Register:

@@ -3,6 +3,7 @@
 
 from collections.abc import Sequence
 
+from hlasm_asg.program.abs_address import AbsAddress
 from hlasm_asg.program.imm_operand import ImmOperand
 from hlasm_asg.program.machine_statement import MachineStatement
 from hlasm_asg.program.mask_operand import MaskOperand
@@ -56,7 +57,11 @@ def _imm(value: int) -> ImmOperand:
 
 def _indexed(displacement: int) -> StorageOperand:
     return StorageOperand(
-        kind="STORAGE", displacement=displacement, index=INDEX, base=BASE
+        kind="STORAGE",
+        displacement=displacement,
+        index=INDEX,
+        base=BASE,
+        written=AbsAddress(kind="ABS", value=displacement),
     )
 
 
