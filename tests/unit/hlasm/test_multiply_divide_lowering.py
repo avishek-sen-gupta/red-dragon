@@ -3,6 +3,7 @@
 
 from collections.abc import Sequence
 
+from hlasm_asg.program.abs_address import AbsAddress
 from hlasm_asg.program.machine_statement import MachineStatement
 from hlasm_asg.program.open_code_origin import OpenCodeOrigin
 from hlasm_asg.program.operand import Operand
@@ -49,7 +50,13 @@ def _reg(value: int) -> RegOperand:
 
 
 def _storage() -> StorageOperand:
-    return StorageOperand(kind="STORAGE", displacement=8, index=0, base=BASE)
+    return StorageOperand(
+        kind="STORAGE",
+        displacement=8,
+        index=0,
+        base=BASE,
+        written=AbsAddress(kind="ABS", value=8),
+    )
 
 
 def _lowered(statement: MachineStatement) -> tuple[InstructionBase, ...]:

@@ -82,7 +82,13 @@ def _reloc(name: str, section: str, offset: int, length: int, type: str) -> Relo
 
 
 def _storage(displacement: int, base: int) -> StorageOperand:
-    return StorageOperand(kind="STORAGE", displacement=displacement, index=0, base=base)
+    return StorageOperand(
+        kind="STORAGE",
+        displacement=displacement,
+        index=0,
+        base=base,
+        written=AbsAddress(kind="ABS", value=displacement),
+    )
 
 
 EXPECTED = HlasmProgram(

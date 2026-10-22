@@ -46,7 +46,7 @@ addresses.
 | `hlasm_asg/hlasm_bridge_parser.py` | `make_hlasm_parser(syslib)`, `HlasmBridgeParser`; exit 2 → `HlasmParseError`, other failures → `HlasmBridgeFailure` |
 | `interpreter/frontends/__init__.py` | `get_hlasm_parser(syslib)`: the bridge parser with `hlasm-bridge/maclib/` first on SYSLIB |
 | `hlasm-bridge/maclib/` | Our macros: `WTO`, `ABEND` |
-| `hlasm_asg/program/` | The bridge JSON models, one class per file |
+| `hlasm_asg/program/` | The bridge JSON models, one class per file. A D(X,B) storage operand also carries its address as written (`written`): the section and offset of an implicit address, before USING resolution, or the absolute displacement |
 | `interpreter/hlasm/hlasm_frontend.py` | `HlasmFrontend(program)`: `lower()`, `start_up_ir()`, `entry_name`, `entry_label` |
 | `interpreter/hlasm/machine.py` | GPR region (`__hlasm_gprs`, 8 bytes per register), `__hlasm_cc`, `__hlasm_pm` |
 | `interpreter/hlasm/storage_layout.py` | One region per section (`__hlasm_sect_<NAME>`) and its DC images; DC registers carry a per-piece index. Section bases are doubleword aligned: regions are allocated in order from address 4096, the 128-byte GPR region first, and each section is sized up to a doubleword multiple |
