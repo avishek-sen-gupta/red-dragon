@@ -104,7 +104,7 @@ def _copied_sign(emitter: HlasmEmitter, statement: MachineStatement) -> Register
     return emitter.binop(BinopKind.BIT_OR, magnitude, sign)
 
 
-def _pairs(operands: Sequence[int], lowering: StatementLowering) -> StatementLowering:
+def pairs(operands: Sequence[int], lowering: StatementLowering) -> StatementLowering:
     def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
         if any(reg_operand(statement, index) & PAIR_PARTNER for index in operands):
             emit_abend(emitter, SPECIFICATION_EXCEPTION_ABEND)
@@ -197,17 +197,17 @@ def _simulated_dxc(
     return emitter.binop(BinopKind.BIT_OR, marked, inexact)
 
 
+def emit_data_exception(emitter: HlasmEmitter, fpc: Register, dxc: Register) -> None:
+    shifted = emitter.binop(BinopKind.LSHIFT, dxc, emitter.int_(DXC_SHIFT))
+    cleared = keep(LOW_WORD_MASK ^ DXC_FIELD)(emitter, fpc)
+    _store_fpc(emitter, emitter.binop(BinopKind.BIT_OR, cleared, shifted))
+    emit_abend(emitter, DATA_EXCEPTION_ABEND)
+
+
 def _trap(
     emitter: HlasmEmitter, loaded: Register, enabled: Register, signaling: Register
 ) -> None:
-    dxc = emitter.binop(
-        BinopKind.LSHIFT,
-        _simulated_dxc(emitter, enabled, signaling),
-        emitter.int_(DXC_SHIFT),
-    )
-    cleared = keep(LOW_WORD_MASK ^ DXC_FIELD)(emitter, loaded)
-    _store_fpc(emitter, emitter.binop(BinopKind.BIT_OR, cleared, dxc))
-    emit_abend(emitter, DATA_EXCEPTION_ABEND)
+    emit_data_exception(emitter, loaded, _simulated_dxc(emitter, enabled, signaling))
 
 
 def _byte(emitter: HlasmEmitter, value: Register, shift: int) -> Register:
@@ -239,12 +239,12 @@ ROUNDING_ADDRESS = storage_address_at(FPC_OPERAND)
 REGISTER_MOVES: Mapping[str, StatementLowering] = {
     "LER": move(_fpr_short(1), (), _to_fpr_short),
     "LDR": move(_fpr(1), (), _to_fpr),
-    "LXR": _pairs((0, 1), _lower_lxr),
+    "LXR": pairs((0, 1), _lower_lxr),
     "LDGR": move(from_gr64(1), (), _to_fpr),
     "LGDR": move(_fpr(1), (), to_gr64),
     "LZER": move(_zero, (), _to_fpr_short),
     "LZDR": move(_zero, (), _to_fpr),
-    "LZXR": _pairs((0,), _lower_lzxr),
+    "LZXR": pairs((0,), _lower_lzxr),
 }
 
 LOADS_AND_STORES: Mapping[str, StatementLowering] = {

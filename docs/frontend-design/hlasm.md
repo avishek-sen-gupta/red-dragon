@@ -99,6 +99,8 @@ addresses.
 | `interpreter/hlasm/opcodes/high_word.py` | The high-word unit |
 | `interpreter/hlasm/opcodes/miscellaneous.py` | The miscellaneous unit: access registers, LCBB, MC, hints, traps |
 | `interpreter/hlasm/opcodes/floating_point_support.py` | The floating-point-support unit: FPR moves, sign forms, the FPC, its checks and the simulated-IEEE trap |
+| `interpreter/hlasm/opcodes/bfp_arithmetic.py` | The BFP arithmetic unit's builtin forms: add, subtract, multiply, divide, square root, fused, compare, load FP integer, divide to integer, test data class |
+| `interpreter/hlasm/opcodes/bfp_ir.py`, `interpreter/hlasm/ieee_outcome.py` | BFP image IR: field lists, encoding, FPR access by format, an image's CC, and the IEEE trap ladder over an `IeeeOutcome` |
 | `interpreter/hlasm/program_status.py` | SPM, IPM, EPSW |
 | `interpreter/hlasm/checksum.py` | CKSM |
 | `interpreter/hlasm/clock_instructions.py` | STCK, STCKF, STCKE, ECTG |
@@ -851,10 +853,34 @@ SRNMT, STD, STDY, STE, STEY, STFPC. PFPO is in .56 (ruling R42). Rulings R34, R3
   through an HFP value (`S0C7` or lost bits), checks no pair or FPC value and never signals
   from LFAS or SFASR. The z390 test pins each (red-dragon-6uyp.74).
 
+**BFP arithmetic (red-dragon-6uyp.51).** ADB, ADBR, AEB, AEBR, AXBR, CDB, CDBR, CEB, CEBR,
+CXBR, DDB, DDBR, DEB, DEBR, DIDBR, DIEBR, DXBR, FIDBR, FIDBRA, FIEBR, FIEBRA, FIXBR, FIXBRA,
+KDB, KDBR, KEB, KEBR, KXBR, MADB, MADBR, MAEB, MAEBR, MDB, MDBR, MDEB, MDEBR, MEEB, MEEBR, MSDB,
+MSDBR, MSEB, MSEBR, MXBR, MXDB, MXDBR, SDB, SDBR, SEB, SEBR, SQDB, SQDBR, SQEB, SQEBR,
+SQXBR, SXBR, TCDB, TCEB, TCXB. Rulings R34, R41, R43.
+
+- IR splits each operand into sign, biased exponent and fraction and hands the list to a
+  `bfp_builtins()` builtin over `zarch_float`; IR encodes the fields it returns. The
+  rounding code is the M field, or the FPC's BFP mode as `(mode + 4) & 7`.
+- Trap ladder: an enabled invalid or division-by-zero condition sets the DXC and abends
+  `S0C7` with nothing stored. An enabled overflow or underflow (tininess) stores the scaled
+  result, sets DXC 2x or 1x, and abends. Otherwise the result is stored, the unenabled flags
+  are ORed into FPC byte 1, and an enabled inexact sets DXC 08 or 0C and abends.
+- CC: add and subtract from the stored image; compares from the comparison;
+  DIxBR per Figure 19-22; TCxB 0 or 1. The rest leave it.
+- Short results replace FPR bits 0-31 only. Extended operands use pairs (r, r+2). An invalid
+  pair, an M3 or M4 of 2 or 8-15, or DIxBR registers that are not distinct abend `S0C6` at
+  compile time. FIxBRA M4 bit 1 suppresses inexact.
+- z390 writes X'F4F4F4F4' into bits 32-63 of some short results, rounds the fused product,
+  gives CC 1 for unordered compares, ignores the round-toward-minus sign
+  of an exact zero sum, multiplies extended inexactly, rejects AXBR R1 = 1 and any FIxBRA or
+  DIxBR modifier, picks other fused NaNs, and takes no invalid
+  or inexact trap. The z390 test pins each (red-dragon-6uyp.74).
+
 ## Known Gaps
 
-- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, miscellaneous, packed-decimal arithmetic, packed-decimal compare and test, decimal conversion, edit and floating-point-support units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
-- Floating-point arithmetic, conversion and PFPO are not lowered. Their arithmetic is the leaf `zarch_float` ([zarch-float.md](zarch-float.md)); builtins over it land with red-dragon-6uyp.51 onward.
+- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, miscellaneous, packed-decimal arithmetic, packed-decimal compare and test, decimal conversion, edit, floating-point-support and BFP arithmetic units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
+- BFP conversions, HFP, DFP and PFPO are not lowered. Their arithmetic is the leaf `zarch_float` ([zarch-float.md](zarch-float.md)); `bfp_builtins.py` reaches it for BFP (red-dragon-6uyp.51), and the later floating-point units add their builtins.
 - DC types beyond C, X, B, F, H, P, Z, A, Y and V, and any type extension, raise `UnsupportedDataType` (red-dragon-6uyp.63; floating point E, D, L: red-dragon-6uyp.21).
 - Falling through into DC/DS data or past a CSECT's end skips the data instead of executing it, and a branch into data abends `S0C1` (red-dragon-6uyp.64).
 - Every branch, even to a static relative target, walks the dispatch chain (red-dragon-6uyp.80).
@@ -880,8 +906,9 @@ SRNMT, STD, STDY, STE, STEY, STFPC. PFPO is in .56 (ruling R42). Rulings R34, R3
   BFP instruction there stores what the unresolved-call strategy gives. Callers compose
   `clock_builtins(clock)` and `bfp_builtins()`; the `interpreter.py` CLI does both, with a
   `SystemMachineClock`.
-- Only LFAS and SFASR store a DXC: a compare-and-trap or load-and-trap trap and a decimal data
-  exception abend `S0C7` and leave the FPC's DXC unchanged (red-dragon-6uyp.87).
+- Only LFAS, SFASR and the BFP IEEE traps store a DXC: a compare-and-trap or load-and-trap
+  trap and a decimal data exception abend `S0C7` and leave the FPC's DXC unchanged
+  (red-dragon-6uyp.87).
 - In AMODE 31, LM, STM, LMD, NC, OC, XC, the decimal instructions and the storage moves, compares and translates do not wrap
   EA + offset at 2 GiB; MVCL's overlap test ignores operands that wrap.
 - SRST and SRSTU with R1 below R2 search past the top of storage instead of wrapping to 0.
@@ -1009,4 +1036,8 @@ SRNMT, STD, STDY, STE, STEY, STFPC. PFPO is in .56 (ruling R42). Rulings R34, R3
 | `tests/unit/hlasm/test_floating_point_support_lowering.py` | Floating-point-support IR: FPR region offsets and widths, short forms on 4 bytes; invalid pairs abend before any access; FPC checks before the FPC store, the LFAS/SFASR trap after it; no SYMBOLIC |
 | `tests/integration/hlasm/test_floating_point_support.py` | Every floating-point-support mnemonic on the VM through GRs: moves, low word kept, sign forms, FPC loads and rounding modes, `S0C6` with the FPC unchanged, each Figure 9-21 DXC with `S0C7`; EX of LER |
 | `tests/z390/test_floating_point_support_differential.py` | Every floating-point-support case against z390; its initial FPC, short loads, HFP sign forms, missing checks and signaling pinned (`-m z390`) |
+| `tests/unit/hlasm/test_bfp_builtins.py` | BFP builtins: fields to values and back for every class; each builtin's value, scaled value, trap, flags, DXCs and CC |
+| `tests/unit/hlasm/test_bfp_arithmetic_lowering.py` | BFP IR: operands in argument order, one builtin call, then the trap ladder; static `S0C6` before any access; no SYMBOLIC |
+| `tests/integration/hlasm/test_bfp_arithmetic.py` | Every BFP arithmetic mnemonic on the VM: result images, CC and FPC flags; each trap's delivered value, DXC and `S0C7`; fused NaN order and 0 x inf with an SNaN addend |
+| `tests/z390/test_bfp_arithmetic_differential.py` | Every BFP arithmetic case against z390; its faults pinned (`-m z390`) |
 | `tests/z390/test_conditional_select_count_differential.py` | Every conditional, select and count case against z390; the instructions z390 does not execute and its whole-register SELFHR pinned (`-m z390`) |
