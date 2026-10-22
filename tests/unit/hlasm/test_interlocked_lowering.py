@@ -5,6 +5,7 @@ from collections.abc import Sequence
 
 from hlasm_asg.program.operand import Operand
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
+from interpreter.hlasm.locked_operations import LOCKED_OPERATIONS
 from interpreter.hlasm.opcodes import OPCODE_LOWERINGS
 from interpreter.hlasm.opcodes.interlocked import INTERLOCKED_LOWERINGS
 from interpreter.instructions import (
@@ -37,6 +38,13 @@ RS_OPERANDS: Sequence[Operand] = (reg_operand(4), reg_operand(6), storage_operan
 SSF_OPERANDS: Sequence[Operand] = (
     reg_operand(4),
     storage_operand(8),
+    storage_operand(16),
+)
+
+PLO_OPERANDS: Sequence[Operand] = (
+    reg_operand(4),
+    storage_operand(8),
+    reg_operand(6),
     storage_operand(16),
 )
 
@@ -169,6 +177,7 @@ def test_odd_pair_registers_abend_s0c6_before_any_register_is_read():
 def test_every_interlocked_mnemonic_lowers_without_symbolic():
     operands: dict[str, Sequence[Operand]] = {
         "CSST": (storage_operand(8), storage_operand(16), reg_operand(4)),
+        "PLO": PLO_OPERANDS,
         "LPQ": (reg_operand(4), storage_operand(16)),
         "STPQ": (reg_operand(4), storage_operand(16)),
         "TS": (storage_operand(8),),
@@ -182,3 +191,90 @@ def test_every_interlocked_mnemonic_lowers_without_symbolic():
         )
         for mnemonic in INTERLOCKED_LOWERINGS
     } == {mnemonic: False for mnemonic in INTERLOCKED_LOWERINGS}
+
+
+WIDTHS = (4, 8, 16, 32)
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_plo_table_has_a_row_per_function_code_with_its_figure_7_380_shape():
+    expected = {
+        0: (4, 1, 1, ()),
+        1: (8, 1, 1, ()),
+        2: (8, 1, 1, ()),
+        3: (16, 1, 1, ()),
+        4: (4, 1, 1, (0,)),
+        5: (8, 1, 1, ()),
+        6: (8, 1, 1, (0,)),
+        7: (16, 1, 1, ()),
+        8: (4, 2, 2, (0, 2)),
+        9: (8, 2, 2, ()),
+        10: (8, 2, 2, (0, 2)),
+        11: (16, 2, 2, ()),
+        12: (4, 1, 2, (0,)),
+        13: (8, 1, 2, ()),
+        14: (8, 1, 2, (0,)),
+        15: (16, 1, 2, ()),
+        16: (4, 1, 3, (0,)),
+        17: (8, 1, 3, ()),
+        18: (8, 1, 3, (0,)),
+        19: (16, 1, 3, ()),
+        20: (4, 1, 4, (0,)),
+        21: (8, 1, 4, ()),
+        22: (8, 1, 4, (0,)),
+        23: (16, 1, 4, ()),
+        24: (32, 1, 1, ()),
+        25: (32, 1, 1, ()),
+        26: (32, 2, 2, ()),
+        27: (32, 1, 2, ()),
+        28: (32, 1, 3, ()),
+        29: (32, 1, 4, ()),
+        **{30 + k: (w, 3, 3, ()) for k, w in enumerate(WIDTHS)},
+        **{34 + k: (w, 4, 4, ()) for k, w in enumerate(WIDTHS)},
+        38: (32, 0, 1, ()),
+        39: (16, 0, 2, ()),
+        40: (32, 0, 2, ()),
+        **{41 + k: (w, 0, 3, ()) for k, w in enumerate(WIDTHS)},
+        **{45 + k: (w, 0, 4, ()) for k, w in enumerate(WIDTHS)},
+        49: (32, 0, 1, ()),
+        **{50 + k: (w, 0, 2, ()) for k, w in enumerate(WIDTHS)},
+        **{54 + k: (w, 0, 3, ()) for k, w in enumerate(WIDTHS)},
+        **{58 + k: (w, 0, 4, ()) for k, w in enumerate(WIDTHS)},
+    }
+
+    assert {
+        code: (row.width, len(row.compares), len(row.stores), row.even_registers)
+        for code, row in LOCKED_OPERATIONS.items()
+    } == expected
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_plo_checks_gr0_and_the_test_bit_before_selecting_one_block_per_function_code():
+    ir = _lowered("PLO", PLO_OPERANDS)
+    shape = _shape(ir, ACCESSES)
+
+    assert shape[:22] == [
+        "LoadRegion 4+4",
+        ">> 9",
+        "!= 0",
+        "BranchIf",
+        *SPECIFICATION_ABEND,
+        "& 255",
+        ">> 8",
+        "!= 0",
+        "BranchIf",
+        "<= 61",
+        "BranchIf",
+        "StoreVar __hlasm_cc 0",
+        "Branch hl_either_7",
+        "StoreVar __hlasm_cc 3",
+        "Branch hl_either_4",
+        "> 61",
+        "BranchIf",
+        *SPECIFICATION_ABEND,
+        "LoadRegion 100+4",
+        "+ reg",
+    ]
+    assert (
+        sum(1 for i in ir if isinstance(i, Binop) and i.operator == BinopKind.LT) == 61
+    )

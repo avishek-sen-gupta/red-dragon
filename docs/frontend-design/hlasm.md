@@ -62,7 +62,7 @@ addresses.
 | `interpreter/hlasm/opcodes/logical_add_subtract.py` | The logical add and subtract unit |
 | `interpreter/hlasm/opcodes/compare.py` | The compare unit, signed and logical |
 | `interpreter/hlasm/opcodes/compare_branch_trap.py` | The compare-and-branch, compare-and-trap and load-and-trap unit |
-| `interpreter/hlasm/conditional.py` | `emit_when`: IR that runs only when a condition register is true |
+| `interpreter/hlasm/conditional.py` | `emit_when`: IR that runs only when a condition register is true; `emit_either` picks one of two blocks |
 | `interpreter/hlasm/opcodes/boolean.py` | The boolean unit: AND, OR, exclusive OR and the complemented connectives |
 | `interpreter/hlasm/opcodes/shift_rotate.py` | The shift and rotate unit, the RISBG family included |
 | `interpreter/hlasm/opcodes/multiply_divide.py` | The multiply and divide unit |
@@ -124,7 +124,9 @@ addresses.
 | `interpreter/hlasm/place.py`, `places.py` | `Place`: how one lowering reads and replaces an operand; a register's low word or whole value, an even-odd pair joined into one value, storage at an address, storage at an address held in a doubleword (bits 33-63, boundary checked on each access) |
 | `interpreter/hlasm/comparison.py`, `compare_chain.py` | Interlocked compares in order: the first unequal one replaces its place with the operand and leaves, otherwise the equal path runs; `emit_compare_or_refresh` adds CC 0 or 1 |
 | `interpreter/hlasm/compare_swap_store.py` | CSST |
-| `interpreter/hlasm/value_tree.py` | `emit_value_switch`: one block per run-time value under a tree of `<` tests, then a join; EX, CSST |
+| `interpreter/hlasm/perform_locked_operation.py` | PLO: GR0 checks, the test bit, the function-code tree |
+| `interpreter/hlasm/locked_operation.py`, `locked_operations.py`, `plo_frame.py` | A PLO function code as data (`Spot`s resolved against the D2 and D4 addresses) and the table of codes 0-61 |
+| `interpreter/hlasm/value_tree.py` | `emit_value_switch`: one block per run-time value under a tree of `<` tests, then a join; EX, CSST, PLO |
 
 ## Compilation Units
 
@@ -587,7 +589,7 @@ SELFHRO, ...) to the base mnemonic with M3, or M4 for SELECT.
   come from the Principles of Operation.
 
 **Interlocked update (red-dragon-6uyp.42).** CS, CSY, CSG, CDS, CDSY, CDSG; CAL, CALGF, CALG;
-CSST; LAA, LAAG, LAAL, LAALG, LAN, LANG, LAO, LAOG, LAX, LAXG; LPD, LPDG, LPQ, STPQ; TS. One CPU
+CSST; LAA, LAAG, LAAL, LAALG, LAN, LANG, LAO, LAOG, LAX, LAXG; LPD, LPDG, LPQ, STPQ; TS; PLO. One CPU
 (ruling R33): nothing models a lock or another CPU.
 
 - Every storage operand must sit on its own size (word, doubleword, quadword) or the run abends
@@ -608,7 +610,20 @@ CSST; LAA, LAAG, LAAL, LAALG, LAN, LANG, LAO, LAOG, LAX, LAXG; LPD, LPDG, LPQ, S
   that of AR, ALR, NR, OR or XR; LAA and LAAG take the `S0C8` check after both stores.
 - LPD and LPDG load R3 and R3+1 (low words or whole) and set CC 0. LPQ and STPQ move a quadword to
   or from the R1 pair; CC unchanged. TS sets CC from bit 0 of the byte, then stores X'FF'.
-- z390 does not execute CAL, CALGF, CALG or CSST (`S0C1`; one CSST case `S0C5`), checks no
+- PLO: GR0 bits 32-54 nonzero abend `S0C6`. With the test bit (55) on, CC 0 for function codes
+  0-61 and 3 otherwise, and nothing else happens. Otherwise a code over 61 abends `S0C6`, and a
+  tree of `<` tests picks one block per code. The PLO-extension facility (z17) makes 0-61 valid and
+  leaves GR1 unused. Each block comes from a row of `LOCKED_OPERATIONS`, one per code from Figure
+  7-380: width, compares, stores in order, boundary checks and even registers. A register form
+  with an odd R1 (codes 4-22) or R3 (8, 10) abends `S0C6`. D2 (codes 0-29), D4 as an operand, and
+  the parameter list (a doubleword) are checked before anything; an address held in the list
+  (bits 33-63) is checked when its operand is accessed. Compares are unsigned and run in order. The
+  first unequal one replaces its comparison value with the operand and sets CC 1, CC 2 for DCS's
+  second, or CC 2 with the unequal-results byte (list byte 48) set to its number for codes 30-37.
+  All equal: the stores run in the Principles of Operation order and CC 0. Codes 38-61 only load
+  or store and leave the CC.
+- PLO lowers to about 7,500 IR instructions per statement and compiles in about 1.2 s.
+- z390 does not execute CAL, CALGF, CALG, CSST or PLO (`S0C1`; one CSST case `S0C5`), checks no
   boundary in CS, CSG, CDSG, LPD, LPDG, LPQ and STPQ, and sets LAAL's CC from a stale operand
   (CC 3 for a zero sum with carry). The z390 test pins each; those expectations come from the
   Principles of Operation.
@@ -651,6 +666,8 @@ CSST; LAA, LAAG, LAAL, LAALG, LAN, LANG, LAO, LAOG, LAX, LAXG; LPD, LPDG, LPQ, S
 - Nothing sets the program mask until SPM lands (red-dragon-6uyp.45), so `S0C8` is tested only on the VM with the mask set directly, not end to end.
 - One CPU (ruling R33): interlocked updates, serialization and what other CPUs or channel programs
   observe hold trivially; no lock is modelled. LPD and LPDG always set CC 0.
+- EX of PLO with a nonzero R1 expands one PLO copy per value of the R1 and R3 fields
+  (ruling R30), each about 7,500 IR instructions.
 - `ABEND` takes only a self-defining code of 0-4095. Register notation (`ABEND (R2)`) and larger codes are not supported.
 
 ## Test Coverage
@@ -732,7 +749,9 @@ CSST; LAA, LAAG, LAAL, LAALG, LAN, LANG, LAO, LAOG, LAX, LAXG; LPD, LPDG, LPQ, S
 | `tests/unit/hlasm/test_conditional_select_count_lowering.py` | Conditional, select and count IR: the CC mask tested before any operand, SELECT's reads before its write, FLOGR's odd pair `S0C6`, branch-free counts with no builtin, one loop for BEXTG and BDEPG, the count IR's values |
 | `tests/integration/hlasm/test_conditional_select_count.py` | Every conditional, select and count mnemonic and every extended suffix on the VM: met and unmet conditions, masks 0 and 15, kept halves, aliased registers, zero and full operands; CC |
 | `tests/integration/hlasm/test_conditional_select_count_mnemonics.py` | Every load/store-on-condition and SELECT extended spelling reaches its base mnemonic and Figure J-1 mask |
-| `tests/unit/hlasm/test_interlocked_lowering.py` | Interlocked IR: the boundary check first, one compare that swaps or reloads, CAL's second-operand check only when loading, the load-and-operate stores and overflow check, TS, odd pairs abend `S0C6`, no SYMBOLIC |
+| `tests/unit/hlasm/test_interlocked_lowering.py` | Interlocked IR: the boundary check first, one compare that swaps or reloads, CAL's second-operand check only when loading, the load-and-operate stores and overflow check, TS, odd pairs abend `S0C6`, no SYMBOLIC; the PLO table's shape per code, GR0 and test-bit checks before a 62-way tree |
 | `tests/integration/hlasm/test_interlocked.py` | Every interlocked mnemonic on the VM: equal and unequal compares, pairs, CALGF zero extension, every CSST code and characteristic, overflow, carry and boolean CCs, R1 as base or R3, each boundary `S0C6` |
+| `tests/integration/hlasm/test_perform_locked_operation.py` | Every PLO function code on the VM, all compares equal and each one missed, from the tests' own reading of Figure 7-380 and a byte model: registers, storage, unequal-results byte, CC; the test bit, GR0 bits 32-54, code 62, odd registers, misaligned D2, D4, list and listed operands |
+| `tests/z390/test_perform_locked_operation_differential.py` | A PLO case per operation shape: the PoO expectation here, z390's `S0C1` pinned (`-m z390`) |
 | `tests/z390/test_interlocked_differential.py` | Every interlocked case against z390; its missing CAL and CSST, unchecked boundaries and LAAL CC pinned (`-m z390`) |
 | `tests/z390/test_conditional_select_count_differential.py` | Every conditional, select and count case against z390; the instructions z390 does not execute and its whole-register SELFHR pinned (`-m z390`) |

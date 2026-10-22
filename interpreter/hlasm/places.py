@@ -1,5 +1,5 @@
 # pyright: standard
-"""Places for interlocked operands: a register's low word or whole value, an even-odd pair as one value, storage at an address, and storage at an address held in a doubleword."""
+"""Places for interlocked operands: a register's low word or whole value, an even-odd pair as one value, storage at an address or an offset from it, and storage at an address held in a doubleword."""
 
 from interpreter.hlasm.alignment_check import emit_alignment_check
 from interpreter.hlasm.hlasm_constants import (
@@ -41,25 +41,35 @@ def joined(emitter: HlasmEmitter, halves: tuple[Place, Place], bits: int) -> Pla
 
 
 def in_storage(emitter: HlasmEmitter, address: Register, width: int) -> Place:
-    return Place(
-        lambda: emitter.load_storage(address, 0, width),
-        lambda value: emitter.store_storage(address, 0, width, value),
-    )
+    return at_offset(emitter, address, 0, width)
 
 
-def held_address(emitter: HlasmEmitter, holder: Register, boundary: int) -> Register:
-    held = emitter.load_storage(holder, 0, DOUBLEWORD_BYTES)
+def held_address(
+    emitter: HlasmEmitter, holder: Register, offset: int, boundary: int
+) -> Register:
+    held = emitter.load_storage(holder, offset, DOUBLEWORD_BYTES)
     address = emitter.binop(BinopKind.BIT_AND, held, emitter.int_(ADDRESS_MASK_31))
     emit_alignment_check(emitter, address, boundary)
     return address
 
 
-def pointed_to(emitter: HlasmEmitter, holder: Register, width: int) -> Place:
+def at_offset(emitter: HlasmEmitter, base: Register, offset: int, width: int) -> Place:
+    return Place(
+        lambda: emitter.load_storage(base, offset, width),
+        lambda value: emitter.store_storage(base, offset, width, value),
+    )
+
+
+def pointed_to(
+    emitter: HlasmEmitter, holder: Register, offset: int, width: int
+) -> Place:
     def read() -> Register:
-        return emitter.load_storage(held_address(emitter, holder, width), 0, width)
+        address = held_address(emitter, holder, offset, width)
+        return emitter.load_storage(address, 0, width)
 
     def write(value: Register) -> None:
-        emitter.store_storage(held_address(emitter, holder, width), 0, width, value)
+        address = held_address(emitter, holder, offset, width)
+        emitter.store_storage(address, 0, width, value)
 
     return Place(read, write)
 
