@@ -53,6 +53,8 @@ from interpreter.hlasm.opcodes.operand_sources import (
     WORD_STORAGE,
 )
 from interpreter.hlasm.operands import mask_operand, reg_operand
+from interpreter.hlasm.register_part import RegisterPart
+from interpreter.hlasm.register_parts import LOW_WORD_PART
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.instructions import InstructionBase
 
@@ -87,21 +89,22 @@ def from_first_storage(width: int) -> Source:
     return from_storage_at(FIRST_OPERAND, width)
 
 
-def lower_compare_under_mask(
-    emitter: HlasmEmitter, statement: MachineStatement
-) -> None:
-    positions = selected_positions(mask_operand(statement, MASK_OPERAND))
-    if not positions:
-        emitter.set_cc(emitter.int_(EQUAL))
-        return
-    field = register_bytes_under_mask(
-        emitter, reg_operand(statement, FIRST_OPERAND), positions
-    )
-    address = storage_address_at(MASKED_STORAGE_OPERAND)(emitter, statement)
-    stored = emitter.load_storage(address, 0, len(positions))
-    emitter.set_cc(
-        inline_ir(emitter, LOGICAL_32, {PARAM_LEFT: field, PARAM_RIGHT: stored})
-    )
+def compare_under_mask(part: RegisterPart) -> StatementLowering:
+    def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
+        positions = selected_positions(mask_operand(statement, MASK_OPERAND))
+        if not positions:
+            emitter.set_cc(emitter.int_(EQUAL))
+            return
+        field = register_bytes_under_mask(
+            emitter, part, reg_operand(statement, FIRST_OPERAND), positions
+        )
+        address = storage_address_at(MASKED_STORAGE_OPERAND)(emitter, statement)
+        stored = emitter.load_storage(address, 0, len(positions))
+        emitter.set_cc(
+            inline_ir(emitter, LOGICAL_32, {PARAM_LEFT: field, PARAM_RIGHT: stored})
+        )
+
+    return lower
 
 
 SIGNED_HALFWORD_RELATIVE = sign_extended(from_relative(HALFWORD_BYTES), HALFWORD_BITS)
@@ -164,8 +167,8 @@ LOGICAL_COMPARES: Mapping[str, StatementLowering] = {
     "CLGHSI": compare(
         LOGICAL_64, from_first_storage(DOUBLEWORD_BYTES), LOGICAL_HALFWORD_IMMEDIATE
     ),
-    "CLM": lower_compare_under_mask,
-    "CLMY": lower_compare_under_mask,
+    "CLM": compare_under_mask(LOW_WORD_PART),
+    "CLMY": compare_under_mask(LOW_WORD_PART),
 }
 
 COMPARE_FIELD_LOWERINGS: Mapping[str, FieldLowering] = {

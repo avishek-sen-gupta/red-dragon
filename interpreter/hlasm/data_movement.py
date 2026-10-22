@@ -12,7 +12,6 @@ from interpreter.hlasm.hlasm_constants import (
     BITS_PER_BYTE,
     BYTE_MASK,
     DOUBLEWORD_BITS,
-    LOW_WORD_MASK,
     REGISTER_MASK,
     WORD_BITS,
 )
@@ -23,6 +22,7 @@ from interpreter.hlasm.operands import (
     reloc_operand,
     storage_operand,
 )
+from interpreter.hlasm.register_parts import LOW_WORD_PART
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
@@ -232,17 +232,6 @@ def from_odd_gr64(emitter: HlasmEmitter, statement: MachineStatement) -> Registe
     return emitter.load_gr64(reg_operand(statement, REGISTER_OPERAND) + 1)
 
 
-def merge_low_word(
-    emitter: HlasmEmitter, r: int, inserted: Register, field_mask: int
-) -> None:
-    kept = emitter.binop(
-        BinopKind.BIT_AND,
-        emitter.load_gr32(r),
-        emitter.int_(LOW_WORD_MASK & ~field_mask),
-    )
-    emitter.store_gr32(r, emitter.binop(BinopKind.BIT_OR, kept, inserted))
-
-
 def into_bits(field_mask: int) -> Sink:
     def insert(
         emitter: HlasmEmitter, statement: MachineStatement, value: Register
@@ -288,7 +277,7 @@ def into_low_bytes(width: int) -> Sink:
         emitter: HlasmEmitter, statement: MachineStatement, value: Register
     ) -> None:
         r = reg_operand(statement, REGISTER_OPERAND)
-        merge_low_word(emitter, r, value, _ones(width))
+        LOW_WORD_PART.merge(emitter, r, value, _ones(width))
 
     return insert
 

@@ -1,7 +1,7 @@
 # pyright: standard
 """Load and store opcodes: storage, register and relative-long moves, multiples and masked bytes."""
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 
 from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.hlasm.data_movement import (
@@ -13,7 +13,6 @@ from interpreter.hlasm.data_movement import (
     gather_bytes,
     into_low_bytes,
     keep,
-    merge_low_word,
     move,
     reversed_bytes,
     signed,
@@ -41,11 +40,10 @@ from interpreter.hlasm.hlasm_constants import (
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.inline_ir import inline_ir
 from interpreter.hlasm.operands import mask_operand, reg_operand, storage_operand
+from interpreter.hlasm.register_part import RegisterPart
+from interpreter.hlasm.register_parts import LOW_WORD_PART, WHOLE_REGISTER_PART
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.register import Register
-
-type RegisterWrite = Callable[[HlasmEmitter, int, Register], None]
-type RegisterRead = Callable[[HlasmEmitter, int], Register]
 
 RIGHTMOST_BYTE_ZERO_32 = 0xFFFFFF00
 RIGHTMOST_BYTE_ZERO_64 = 0xFFFFFFFF_FFFFFF00
@@ -155,22 +153,26 @@ def _operand_address(
     return effective_address(emitter, storage_operand(statement, index))
 
 
-def _load_multiple(width: int, write: RegisterWrite) -> StatementLowering:
+def load_multiple(part: RegisterPart) -> StatementLowering:
+    width = part.bytes()
+
     def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
         address = _operand_address(emitter, statement, 2)
         _ = [
-            write(emitter, r, emitter.load_storage(address, width * at, width))
+            part.store(emitter, r, emitter.load_storage(address, width * at, width))
             for at, r in enumerate(_register_range(statement))
         ]
 
     return lower
 
 
-def _store_multiple(width: int, read: RegisterRead) -> StatementLowering:
+def store_multiple(part: RegisterPart) -> StatementLowering:
+    width = part.bytes()
+
     def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
         address = _operand_address(emitter, statement, 2)
         _ = [
-            emitter.store_storage(address, width * at, width, read(emitter, r))
+            emitter.store_storage(address, width * at, width, part.load(emitter, r))
             for at, r in enumerate(_register_range(statement))
         ]
 
@@ -204,11 +206,12 @@ def _position_shift(position: int) -> int:
     return LOW_WORD_POSITIONS - 1 - position
 
 
-def lower_insert_under_mask(emitter: HlasmEmitter, statement: MachineStatement) -> None:
-    positions = selected_positions(mask_operand(statement, 1))
-    if not positions:
-        emitter.set_cc(emitter.int_(0))
-        return
+def _insert_selected(
+    emitter: HlasmEmitter,
+    statement: MachineStatement,
+    part: RegisterPart,
+    positions: Sequence[int],
+) -> None:
     width = len(positions)
     loaded = emitter.load_storage(_operand_address(emitter, statement, 2), 0, width)
     moves = tuple(
@@ -217,7 +220,7 @@ def lower_insert_under_mask(emitter: HlasmEmitter, statement: MachineStatement) 
     field_mask = sum(
         BYTE_MASK << (BITS_PER_BYTE * _position_shift(p)) for p in positions
     )
-    merge_low_word(
+    part.merge(
         emitter,
         reg_operand(statement, 0),
         gather_bytes(emitter, loaded, moves),
@@ -226,46 +229,56 @@ def lower_insert_under_mask(emitter: HlasmEmitter, statement: MachineStatement) 
     emitter.set_cc(inline_ir(emitter, SIGN_CC[width], {PARAM_VALUE: loaded}))
 
 
+def insert_under_mask(part: RegisterPart) -> StatementLowering:
+    def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
+        positions = selected_positions(mask_operand(statement, 1))
+        if not positions:
+            emitter.set_cc(emitter.int_(0))
+            return
+        _insert_selected(emitter, statement, part, positions)
+
+    return lower
+
+
 def register_bytes_under_mask(
-    emitter: HlasmEmitter, r: int, positions: Sequence[int]
+    emitter: HlasmEmitter, part: RegisterPart, r: int, positions: Sequence[int]
 ) -> Register:
     width = len(positions)
     moves = tuple(
         (_position_shift(p), width - 1 - at) for at, p in enumerate(positions)
     )
-    return gather_bytes(emitter, emitter.load_gr32(r), moves)
+    return gather_bytes(emitter, part.load(emitter, r), moves)
 
 
-def lower_store_under_mask(emitter: HlasmEmitter, statement: MachineStatement) -> None:
-    positions = selected_positions(mask_operand(statement, 1))
-    if not positions:
-        return
-    emitter.store_storage(
-        _operand_address(emitter, statement, 2),
-        0,
-        len(positions),
-        register_bytes_under_mask(emitter, reg_operand(statement, 0), positions),
-    )
+def store_under_mask(part: RegisterPart) -> StatementLowering:
+    def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
+        positions = selected_positions(mask_operand(statement, 1))
+        if not positions:
+            return
+        emitter.store_storage(
+            _operand_address(emitter, statement, 2),
+            0,
+            len(positions),
+            register_bytes_under_mask(
+                emitter, part, reg_operand(statement, 0), positions
+            ),
+        )
+
+    return lower
 
 
 MULTIPLES: Mapping[str, StatementLowering] = {
-    "LM": _load_multiple(
-        WORD_BYTES, lambda emitter, r, value: emitter.store_gr32(r, value)
-    ),
-    "LMY": _load_multiple(
-        WORD_BYTES, lambda emitter, r, value: emitter.store_gr32(r, value)
-    ),
-    "LMG": _load_multiple(
-        DOUBLEWORD_BYTES, lambda emitter, r, value: emitter.store_gr64(r, value)
-    ),
-    "STM": _store_multiple(WORD_BYTES, lambda emitter, r: emitter.load_gr32(r)),
-    "STMY": _store_multiple(WORD_BYTES, lambda emitter, r: emitter.load_gr32(r)),
-    "STMG": _store_multiple(DOUBLEWORD_BYTES, lambda emitter, r: emitter.load_gr64(r)),
+    "LM": load_multiple(LOW_WORD_PART),
+    "LMY": load_multiple(LOW_WORD_PART),
+    "LMG": load_multiple(WHOLE_REGISTER_PART),
+    "STM": store_multiple(LOW_WORD_PART),
+    "STMY": store_multiple(LOW_WORD_PART),
+    "STMG": store_multiple(WHOLE_REGISTER_PART),
     "LMD": lower_lmd,
-    "ICM": lower_insert_under_mask,
-    "ICMY": lower_insert_under_mask,
-    "STCM": lower_store_under_mask,
-    "STCMY": lower_store_under_mask,
+    "ICM": insert_under_mask(LOW_WORD_PART),
+    "ICMY": insert_under_mask(LOW_WORD_PART),
+    "STCM": store_under_mask(LOW_WORD_PART),
+    "STCMY": store_under_mask(LOW_WORD_PART),
 }
 
 LOAD_STORE_LOWERINGS: Mapping[str, StatementLowering] = {
