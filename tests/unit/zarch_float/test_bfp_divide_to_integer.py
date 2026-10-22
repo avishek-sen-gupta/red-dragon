@@ -75,6 +75,8 @@ def test_partial_and_overflowing_quotients_follow_figure_19_22():
         bfp_divide_to_integer(short_of(2.0**127), short_of(2.0**-126), NE, NE),
         bfp_divide_to_integer(short_of(huge), short_of(3 * 2.0**-126), NE, NE),
         bfp_divide_to_integer(short_of(2.0**-123), short_of(3 * 2.0**-149), NE, NE),
+        bfp_divide_to_integer(short_of(25165822.0), short_of(1.5), TZ, NE),
+        bfp_divide_to_integer(short_of(25165828.0), short_of(1.5), TZ, NE),
     ] == [
         BfpDivideToIntegerResult(
             bfp_exact(long_of(64.0)), long_of(384307168202282304.0), True, False
@@ -90,6 +92,12 @@ def test_partial_and_overflowing_quotients_follow_figure_19_22():
         ),
         BfpDivideToIntegerResult(
             bfp_exact(short_of(2.0**-147)), short_of(22369620.0), True, False
+        ),
+        BfpDivideToIntegerResult(
+            bfp_exact(short_of(1.0)), short_of(16777214.0), False, False
+        ),
+        BfpDivideToIntegerResult(
+            bfp_exact(short_of(1.0)), short_of(16777218.0), True, False
         ),
     ]
 
