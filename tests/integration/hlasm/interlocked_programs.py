@@ -42,7 +42,12 @@ DATA = (
     "NB       DC    X'80'\n"
     "SB       DC    X'7F'\n"
     "ONE      DC    X'01'\n"
+    "         ORG   T+X'528'\n"
+    "DZERO    DC    X'0000000000000000'\n"
 )
+
+
+DATA_SPAN = (0x480, 0x530)
 
 
 def interlocked_program(body: str) -> str:
@@ -267,6 +272,16 @@ LOAD_AND: Mapping[str, Case] = {
         {4: 0x7FFFFFFF_FFFFFFFF, 6: 0x80000000_00000000},
         3,
     ),
+    "LAAG zero": (
+        _lines("LGHI  5,0", "LAAG  4,5,DZERO", "LG    6,DZERO"),
+        {4: 0, 6: 0},
+        0,
+    ),
+    "LAAG negative": (
+        _lines("LGHI  5,-1", "LAAG  4,5,DZERO", "LG    6,DZERO"),
+        {4: 0, 6: ONES},
+        1,
+    ),
     "LAAL carry": (
         _lines("LHI   5,1", "LAAL  4,5,WONES", "L     6,WONES"),
         {4: _low(0xFFFFFFFF), 6: _low(0)},
@@ -298,6 +313,11 @@ LOAD_AND: Mapping[str, Case] = {
         {4: SRC, 6: SRC & DPAIR},
         1,
     ),
+    "LANG zero": (
+        _lines("LG    5,DB", "LANG  4,5,DA", "LG    6,DA"),
+        {4: SRC, 6: 0},
+        0,
+    ),
     "LAO": (
         _lines("LHI   5,3", "LAO   4,5,WA", "L     6,WA"),
         {4: _low(5), 6: _low(7)},
@@ -308,6 +328,11 @@ LOAD_AND: Mapping[str, Case] = {
         {4: SRC, 6: ONES},
         1,
     ),
+    "LAOG zero": (
+        _lines("LGHI  5,0", "LAOG  4,5,DZERO", "LG    6,DZERO"),
+        {4: 0, 6: 0},
+        0,
+    ),
     "LAX": (
         _lines("LHI   5,5", "LAX   4,5,WA", "L     6,WA"),
         {4: _low(5), 6: _low(0)},
@@ -317,6 +342,11 @@ LOAD_AND: Mapping[str, Case] = {
         _lines("LG    5,DB", "LAXG  4,5,DA", "LG    6,DA"),
         {4: SRC, 6: ONES},
         1,
+    ),
+    "LAXG zero": (
+        _lines("LG    5,DA", "LAXG  4,5,DA", "LG    6,DA"),
+        {4: SRC, 6: 0},
+        0,
     ),
     "LAA off a word": (_lines("LAA   4,5,WA+2"), {4: FILL}, 0),
     "LAAG off a doubleword": (_lines("LAAG  4,5,WB"), {4: FILL}, 0),
@@ -342,7 +372,7 @@ LOAD_STORE_PAIR: Mapping[str, Case] = {
         {8: DPAIR, 9: QB_LOW},
         2,
     ),
-    "STPQ off a quadword": (_lines("STPQ  4,DB", "LG    8,DB"), {8: FILL}, 0),
+    "STPQ off a quadword": (_lines("STPQ  4,DB"), {4: FILL, 5: FILL}, 0),
     "TS zero": (_lines("TS    ZB", "LLC   6,ZB"), {6: _low(0xFF)}, 0),
     "TS leftmost one": (_lines("TS    NB", "LLC   6,NB"), {6: _low(0xFF)}, 1),
     "TS leftmost zero": (_lines("TS    SB", "LLC   6,SB"), {6: _low(0xFF)}, 0),

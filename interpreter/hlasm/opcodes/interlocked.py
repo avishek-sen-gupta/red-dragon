@@ -6,6 +6,7 @@ from collections.abc import Callable, Mapping, Sequence
 from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.hlasm.alignment_check import emit_alignment_check
 from interpreter.hlasm.boolean_connective import AND, OR, XOR, BooleanConnective
+from interpreter.hlasm.byte_one_layouts import R1_R3
 from interpreter.hlasm.compare_chain import (
     EQUAL_CC,
     emit_cc,
@@ -23,6 +24,7 @@ from interpreter.hlasm.data_movement import (
     to_aligned_storage,
     to_doubleword_pair,
 )
+from interpreter.hlasm.field_lowering import FieldLowering, written_lowerings
 from interpreter.hlasm.fixed_point_overflow import emit_fixed_point_overflow_check
 from interpreter.hlasm.fixed_width_ir import build_boolean_cc_ir
 from interpreter.hlasm.hlasm_constants import (
@@ -32,6 +34,7 @@ from interpreter.hlasm.hlasm_constants import (
     ONE_BYTE,
     PARAM_LEFT,
     PARAM_RIGHT,
+    QUADWORD_BYTES,
     WORD_BITS,
     WORD_BYTES,
 )
@@ -62,12 +65,11 @@ from interpreter.register import Register
 type RegisterPlace = Callable[[HlasmEmitter, int], Place]
 type AfterStep = Callable[[HlasmEmitter, Register], None]
 
-THIRD_REGISTER = 1
+R3_OPERAND = 1
 SWAPPED_OPERAND = 2
 COMPARE_AND_LOAD_REGISTER = 0
 FIRST_STORAGE = 1
 SECOND_STORAGE = 2
-QUADWORD_BYTES = 16
 TEST_AND_SET_OPERAND = 0
 ALL_ONES_BYTE = BYTE_MASK
 LEFTMOST_BIT_SHIFT = 7
@@ -79,7 +81,7 @@ def _compare_and_swap(register: RegisterPlace, width: int) -> StatementLowering:
     def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
         second = in_storage(emitter, address_of(emitter, statement), width)
         first = register(emitter, reg_operand(statement, REGISTER_OPERAND))
-        third = register(emitter, reg_operand(statement, THIRD_REGISTER))
+        third = register(emitter, reg_operand(statement, R3_OPERAND))
         emit_compare_or_refresh(
             emitter,
             Comparison(first, second, first),
@@ -138,7 +140,7 @@ def _load_and(
     def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
         second = in_storage(emitter, address_of(emitter, statement), width)
         original = second.read()
-        third = register(emitter, reg_operand(statement, THIRD_REGISTER)).read()
+        third = register(emitter, reg_operand(statement, R3_OPERAND)).read()
         first = register(emitter, reg_operand(statement, REGISTER_OPERAND))
         arguments = {PARAM_LEFT: original, PARAM_RIGHT: third}
         store = _store_both(second, first, original)
@@ -182,15 +184,15 @@ COMPARE_AND_SWAP: Mapping[str, StatementLowering] = {
     "CSY": _compare_and_swap(low_word, WORD_BYTES),
     "CSG": _compare_and_swap(whole_register, DOUBLEWORD_BYTES),
     "CDS": even_odd_pairs(
-        (REGISTER_OPERAND, THIRD_REGISTER),
+        (REGISTER_OPERAND, R3_OPERAND),
         _compare_and_swap(low_word_pair, DOUBLEWORD_BYTES),
     ),
     "CDSY": even_odd_pairs(
-        (REGISTER_OPERAND, THIRD_REGISTER),
+        (REGISTER_OPERAND, R3_OPERAND),
         _compare_and_swap(low_word_pair, DOUBLEWORD_BYTES),
     ),
     "CDSG": even_odd_pairs(
-        (REGISTER_OPERAND, THIRD_REGISTER),
+        (REGISTER_OPERAND, R3_OPERAND),
         _compare_and_swap(register_pair, QUADWORD_BYTES),
     ),
     "CSST": lower_compare_and_swap_and_store,
@@ -236,11 +238,15 @@ LOAD_STORE_PAIR: Mapping[str, StatementLowering] = {
     ),
 }
 
+INTERLOCKED_FIELD_LOWERINGS: Mapping[str, FieldLowering] = {
+    "PLO": FieldLowering(R1_R3, lower_perform_locked_operation),
+}
+
 INTERLOCKED_LOWERINGS: Mapping[str, StatementLowering] = {
     **COMPARE_AND_SWAP,
     **COMPARE_AND_LOAD,
     **LOAD_AND,
     **LOAD_STORE_PAIR,
     "TS": lower_test_and_set,
-    "PLO": lower_perform_locked_operation,
+    **written_lowerings(INTERLOCKED_FIELD_LOWERINGS),
 }

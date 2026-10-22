@@ -38,7 +38,7 @@ REPRESENTATIVE = (
 def test_follows_the_principles_of_operation_where_z390_does_not_execute_plo(
     z390: Z390Runner, tmp_path: Path, case: str
 ):
-    program, results, cc = programs.CASES[case]
+    program, results, cc, _ = programs.CASES[case]
 
     assert (
         run_hlasm_machine(program).restricted_to(results),

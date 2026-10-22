@@ -4,9 +4,10 @@
 from collections.abc import Sequence
 
 from hlasm_asg.program.operand import Operand
+from interpreter.hlasm.executed_field import ExecutedField
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.locked_operations import LOCKED_OPERATIONS
-from interpreter.hlasm.opcodes import OPCODE_LOWERINGS
+from interpreter.hlasm.opcodes import DATA_FIELD_LOWERINGS, OPCODE_LOWERINGS
 from interpreter.hlasm.opcodes.interlocked import INTERLOCKED_LOWERINGS
 from interpreter.instructions import (
     Binop,
@@ -22,6 +23,7 @@ from interpreter.instructions import (
     WriteRegion,
 )
 from interpreter.operator_kind import BinopKind
+from interpreter.register import Register
 from tests.covers import NotLanguageFeature, covers
 from tests.unit.hlasm.lowering_helpers import (
     describe,
@@ -251,9 +253,13 @@ def test_plo_table_has_a_row_per_function_code_with_its_figure_7_380_shape():
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_plo_checks_gr0_and_the_test_bit_before_selecting_one_block_per_function_code():
     ir = _lowered("PLO", PLO_OPERANDS)
-    shape = _shape(ir, ACCESSES)
+    tree = next(
+        k
+        for k, i in enumerate(ir)
+        if isinstance(i, Binop) and i.operator == BinopKind.LT
+    )
 
-    assert shape[:22] == [
+    assert _shape(ir[:tree], ACCESSES) == [
         "LoadRegion 4+4",
         ">> 9",
         "!= 0",
@@ -272,9 +278,27 @@ def test_plo_checks_gr0_and_the_test_bit_before_selecting_one_block_per_function
         "> 61",
         "BranchIf",
         *SPECIFICATION_ABEND,
-        "LoadRegion 100+4",
-        "+ reg",
+        *SECOND_ADDRESS,
+        *SECOND_ADDRESS,
     ]
     assert (
         sum(1 for i in ir if isinstance(i, Binop) and i.operator == BinopKind.LT) == 61
     )
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_plo_under_ex_lowers_once_with_r1_and_r3_taken_from_the_field_at_run_time():
+    statement = machine_statement("PLO", PLO_OPERANDS)
+    written, executed = HlasmEmitter(), HlasmEmitter()
+    OPCODE_LOWERINGS["PLO"](written, statement)
+    DATA_FIELD_LOWERINGS["PLO"].lower(
+        executed, statement, ExecutedField(Register("%byte"))
+    )
+    nibbles = [
+        describe(i, {}) for i in executed.instructions()[:8] if isinstance(i, Binop)
+    ]
+
+    assert (
+        len(executed.instructions()) - len(written.instructions()),
+        nibbles,
+    ) == (6, [">> reg", "& reg", ">> reg", "& reg"])

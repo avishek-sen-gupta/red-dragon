@@ -1,5 +1,5 @@
 # pyright: standard
-"""One PLO function code as data: its operand width, compares, stores in order, boundary checks, even registers and what an unequal compare does."""
+"""One PLO function code as data: its operand width, compares, stores in order, boundary checks, even registers, the parameter-list offsets of its operand addresses, and what an unequal compare does."""
 
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -20,4 +20,5 @@ class LockedOperation:
     stores: tuple[tuple[Spot, Spot], ...]
     checks: tuple[tuple[Address, int], ...]
     even_registers: tuple[int, ...]
+    listed: tuple[int, ...]
     unequal: OnUnequal
