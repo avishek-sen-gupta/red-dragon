@@ -9,7 +9,7 @@ assembly are the che4z language server's, through a forked bridge executable;
 Python lowers what che4z has already resolved. The machine claims z17 problem
 state and stays in AMODE 31. Lowered so far: SVC and the load and store, load
 address and immediates, signed add and subtract, logical add and subtract, compare,
-boolean, shift and rotate, multiply and divide, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, and execute units (see
+compare and branch or trap, boolean, shift and rotate, multiply and divide, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, and execute units (see
 Opcode Units).
 Any other opcode abends `S0C1` at run time.
 
@@ -61,6 +61,8 @@ addresses.
 | `interpreter/hlasm/opcodes/signed_add_subtract.py` | The signed add and subtract unit |
 | `interpreter/hlasm/opcodes/logical_add_subtract.py` | The logical add and subtract unit |
 | `interpreter/hlasm/opcodes/compare.py` | The compare unit, signed and logical |
+| `interpreter/hlasm/opcodes/compare_branch_trap.py` | The compare-and-branch, compare-and-trap and load-and-trap unit |
+| `interpreter/hlasm/conditional.py` | `emit_when`: IR that runs only when a condition register is true |
 | `interpreter/hlasm/opcodes/boolean.py` | The boolean unit: AND, OR, exclusive OR and the complemented connectives |
 | `interpreter/hlasm/opcodes/shift_rotate.py` | The shift and rotate unit, the RISBG family included |
 | `interpreter/hlasm/opcodes/multiply_divide.py` | The multiply and divide unit |
@@ -87,7 +89,7 @@ addresses.
 | `interpreter/hlasm/translation_table.py` | A byte translated through a table, the GR1 table address (bits 61-63 ignored), offsets rescaled between unit widths |
 | `interpreter/hlasm/specification_check.py` | A runtime condition abends `S0C6` |
 | `interpreter/hlasm/operand_overlap.py` | Whether a destination starts inside the participating source bytes: MVC's byte-loop test and MVCL's destructive overlap |
-| `interpreter/hlasm/opcodes/branch_on_condition.py` | The branch on condition unit |
+| `interpreter/hlasm/opcodes/branch_on_condition.py` | The branch on condition unit; `mask_selects`, the mask bit `8 >> CC` |
 | `interpreter/hlasm/opcodes/branch_and_link.py` | The branch and link unit and the addressing-mode instructions |
 | `interpreter/hlasm/opcodes/loop_branch.py` | The branch on count and branch on index unit |
 | `interpreter/hlasm/lower_statement.py` | Lowers one statement: EX and EXRL through `execute.py`, any other machine instruction through `OPCODE_LOWERINGS` |
@@ -98,7 +100,7 @@ addresses.
 | `interpreter/hlasm/byte_one_layouts.py` | Byte 1 of each instruction format, by format and operand shape (`operand_slot.py`); an unlisted shape is an opcode byte. Names the data-field layouts: `LENGTH_BYTE`, `LENGTH_NIBBLES`, `IMMEDIATE_BYTE`, `NUMBER_BYTE` |
 | `interpreter/hlasm/byte_one_layout.py`, `byte_one_field.py` | A format's byte-1 fields, ignored bits and opcode bits; the byte a statement encodes, the values R1 can make of it, the statement a value decodes to |
 | `interpreter/hlasm/byte_one_part.py`, `operand_value_part.py`, `storage_index_part.py`, `length_code_part.py` | What a byte-1 field holds: an R, M or I value, an X2 index, or a length code (written length minus one) |
-| `interpreter/hlasm/opcodes/operand_sources.py` | Named second-operand sources shared by the arithmetic, compare and load-sign units |
+| `interpreter/hlasm/opcodes/operand_sources.py` | Named second-operand sources shared by the arithmetic, compare, compare-and-branch and load-sign units |
 | `interpreter/hlasm/opcodes/result_and_cc.py` | Splices a (result, CC) builder over register, storage or immediate operands and stores both; its storage-immediate read-modify-write |
 | `interpreter/hlasm/data_movement.py` | `move(source, transforms, sink)`: storage, relative-long, address, immediate and register sources and sinks, addressed by operand index; sign extension, `MOD 2^n` wrap, masks, shifts, byte reversal, bit fields (`field_of`, `into_field`); the even-odd pair's low words as one 64-bit value, or both registers as one 128-bit value; R1+1 as a source; the storage-immediate read-modify-write |
 | `interpreter/hlasm/effective_address.py` | `effective_address` (D(X,B), AMODE 31), `length_operand_address` (D(L,B)), `indexed_address` (index scaled by the element size), `relative_address` (RELOC_IMM) |
@@ -274,6 +276,27 @@ stored.
   Mask 0 sets CC 0 and reads no storage.
 - Word and doubleword relative-long operands check alignment and abend `S0C6`; z390 does
   not, and the z390 test pins that difference.
+
+**Compare and branch, compare and trap, load and trap (red-dragon-6uyp.29).** CRB, CGRB,
+CLRB, CLGRB, CIB, CGIB, CLIB, CLGIB (branch to D4(B4)); CRJ, CGRJ, CLRJ, CLGRJ, CIJ, CGIJ,
+CLIJ, CLGIJ (relative); CRT, CGRT, CLRT, CLGRT, CIT, CGIT, CLFIT, CLGIT, CLT, CLGT (trap);
+LAT, LGAT, LLGFAT, LLGTAT. None changes the CC. The bridge resolves the extended mnemonics
+(CRJE, CLGTNL, ...) to the base mnemonic with M3: E 8, L 4, H 2, NE 6, NL 10, NH 12.
+
+- The comparison is the compare unit's, at 32 or 64 bits, signed or logical; its result
+  (equal 8, low 4, high 2) is tested against M3 and never stored. CIB, CGIB, CIJ, CGIJ take
+  a signed 8-bit I2; CLIB, CLGIB, CLIJ, CLGIJ an unsigned one; CIT, CGIT a signed 16-bit
+  I2; CLFIT, CLGIT an unsigned one. CLT and CLGT compare with storage at D2(B2).
+- M3 bit 3 is ignored. Bits 0-2 all zero lower to nothing; all one branch or trap without
+  comparing (CLT and CLGT then read no storage, which the Principles of Operation allow).
+- Branch targets go through `hl_dispatch`.
+- A trap is the compare-and-trap data exception: the operation completes, then the run
+  abends `S0C7`. The DXC (X'FF') is not modelled.
+- LAT loads the low word (high word kept), LGAT the doubleword, LLGFAT a word zero-extended,
+  LLGTAT bits 1-31 zero-extended. The register is written, then a zero value traps.
+- z390 abends `S0FF` for a load-and-trap trap (it raises the DXC as the interruption code),
+  and does not execute CLT or CLGT (`S0C1`). The z390 test pins both; the CLT and CLGT
+  expectations come from the Principles of Operation.
 
 **Boolean (red-dragon-6uyp.30).** N, NY, NR, NRK, NG, NGR, NGRK, NI, NIY, NC, NIHF, NIHH,
 NIHL, NILF, NILH, NILL; O, OY, OR, ORK, OG, OGR, OGRK, OI, OIY, OC, OIHF, OIHH, OIHL, OILF,
@@ -530,7 +553,7 @@ variant expansion (ruling R30).
 
 ## Known Gaps
 
-- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, and execute units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
+- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, and execute units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
 - DC types beyond C, X, B, F, H, P, Z, A, Y and V, and any type extension, raise `UnsupportedDataType` (red-dragon-6uyp.63; floating point E, D, L: red-dragon-6uyp.21).
 - Falling through into DC/DS data or past a CSECT's end skips the data instead of executing it, and a branch into data abends `S0C1` (red-dragon-6uyp.64).
 - Every branch, even to a static relative target, walks the dispatch chain (red-dragon-6uyp.80).
@@ -551,6 +574,8 @@ variant expansion (ruling R30).
   abend `S0C1` (red-dragon-6uyp.75). A BASSM or BSM to the return address returns
   whatever mode it selects.
 - Access registers are not modelled: LAE and LAEY set only the general register.
+- The data-exception code is not modelled: a compare-and-trap or load-and-trap trap abends `S0C7`
+  and stores no DXC.
 - In AMODE 31, LM, STM, LMD, NC, OC, XC and the storage moves, compares and translates do not wrap
   EA + offset at 2 GiB; MVCL's overlap test ignores operands that wrap.
 - MVCLE, MVCLU, MVST, CLCLE, CLCLU, CLST, CUSE, TRE, TROO, TROT, TRTO, TRTT, TRTE and TRTRE
@@ -586,6 +611,8 @@ variant expansion (ruling R30).
 | `tests/integration/hlasm/test_logical_add_subtract.py` | Every logical add and subtract mnemonic on the VM: result, CC with carry and borrow |
 | `tests/unit/hlasm/test_compare_lowering.py` | Compare IR: operand widths read, nothing written, only the CC set, relative-long alignment |
 | `tests/integration/hlasm/test_compare.py` | Every compare mnemonic on the VM: CC, operands unchanged, alignment abends |
+| `tests/unit/hlasm/test_compare_branch_trap_lowering.py` | Compare-and-branch and trap IR: the M3 bit tested on the unstored comparison, branch or `S0C7`, masks 0 and 14, load written before the zero test |
+| `tests/integration/hlasm/test_compare_branch_trap.py` | Every compare-and-branch, compare-and-trap and load-and-trap mnemonic and a spread of extended ones on the VM: path, trap, loaded register, CC unchanged, immediate widths |
 | `tests/unit/hlasm/test_boolean_lowering.py` | Boolean IR: operand widths, the field read and replaced, the CC; NC/OC/XC as one byte loop of fixed size |
 | `tests/integration/hlasm/test_boolean.py` | Every boolean mnemonic, NOTR and NOTGR on the VM: result, CC 0 and 1, field CCs, overlapping storage operands, implicit and explicit-0 lengths |
 | `tests/unit/hlasm/test_shift_rotate_lowering.py` | Shift and rotate IR: registers only, CC only for the signed and selected-bits forms, the `S0C8` trap, an odd pair abends `S0C6`, register-span masks |
@@ -598,7 +625,7 @@ variant expansion (ruling R30).
 | `tests/integration/hlasm/test_multiply_divide.py` | Every multiply and divide mnemonic on the VM: products, quotients, remainders, CC; zero divisors and oversized quotients abend `S0C9` with the registers kept |
 | `tests/integration/hlasm/test_shift_rotate_mnemonics.py` | RISBG-family extended spellings reach their base mnemonic and immediates through the bridge |
 | `tests/unit/hlasm/test_branch_on_condition_lowering.py` | Branch on condition IR: the CC mask test, each form's target, the forms that lower to nothing |
-| `tests/integration/hlasm/test_branch_extended_mnemonics.py` | Every branch on condition extended spelling reaches its base mnemonic and mask through the bridge; JCT, JCTG, the JX spellings, JAS and JASL reach theirs with R1 |
+| `tests/integration/hlasm/test_branch_extended_mnemonics.py` | Every branch on condition, compare-and-branch and compare-and-trap extended spelling reaches its base mnemonic and mask through the bridge; JCT, JCTG, the JX spellings, JAS and JASL reach theirs with R1 |
 | `tests/integration/hlasm/test_branch_on_condition.py` | Every branch on condition mnemonic and a spread of extended mnemonics on the VM: path taken, CC unchanged, branches into data abend `S0C1` |
 | `tests/unit/hlasm/test_branch_and_link_lowering.py` | Branch and link IR: target read before the link is written, the AMODE 31 link word, the BASSM and BSM mode test, SAM and TAM |
 | `tests/integration/hlasm/test_branch_and_link.py` | Every branch and link mnemonic, JAS and JASL on the VM: link relative to the next instruction, path, CC; BSM 0,14 and BASSM 14,14 return to the caller; SAM24, SAM64 and switches into AMODE 24 or 64 abend `S0C1`, entering those modes xfailed (red-dragon-6uyp.75) |
@@ -632,6 +659,7 @@ variant expansion (ruling R30).
 | `tests/z390/test_translate_differential.py` | Every translate case against z390; z390's TRE length 0, TROO table alignment and TRTE argument truncation pinned (`-m z390`) |
 | `tests/z390/test_test_under_mask_differential.py` | Every test under mask case against z390; no differences (`-m z390`) |
 | `tests/z390/test_execute_differential.py` | Every execute case against z390; z390's missing odd-target check, BRAS link and ALSI carry CC pinned, and the targets RedDragon abends on run there (`-m z390`) |
+| `tests/z390/test_compare_branch_trap_differential.py` | Every compare-and-branch and trap case against z390; z390's `S0FF` load-and-trap abend and missing CLT and CLGT pinned (`-m z390`) |
 | `tests/z390/test_compare_differential.py` | Every compare mnemonic against z390; the relative-long alignment difference pinned (`-m z390`) |
 | `tests/z390/test_branch_on_condition_differential.py` | Every branch on condition case against z390; the BIC, BPP and BPRP differences and branches into data pinned (`-m z390`) |
 | `tests/z390/test_branch_and_link_differential.py` | Every branch and link case and the mode-setting returns against z390; z390's AMODE 24 and 64 switches pinned (`-m z390`) |

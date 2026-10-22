@@ -1,10 +1,11 @@
 # pyright: standard
-"""The bridge resolves every branch extended mnemonic to its base mnemonic, with its mask or its first register."""
+"""The bridge resolves every branch, compare-and-branch and compare-and-trap extended mnemonic to its base mnemonic, with its mask or its first register."""
 
 from collections.abc import Mapping
 from pathlib import Path
 
 from hlasm_asg.program.machine_statement import MachineStatement
+from hlasm_asg.program.mask_operand import MaskOperand
 from interpreter.frontends import get_hlasm_parser
 from interpreter.hlasm.operands import mask_operand, reg_operand
 from tests.covers import NotLanguageFeature, covers
@@ -103,4 +104,65 @@ def test_every_extended_spelling_reaches_its_base_mnemonic_and_mask(tmp_path: Pa
     }
     assert registered == {
         spelling: (base, r) for spelling, (base, r, _) in REGISTER_SPELLINGS.items()
+    }
+
+
+COMPARE_SUFFIXES: Mapping[str, int] = {
+    "E": 8,
+    "H": 2,
+    "L": 4,
+    "NE": 6,
+    "NH": 12,
+    "NL": 10,
+}
+COMPARE_BASES: Mapping[str, str] = {
+    **{base: "3,4,TGT" for base in ("CRJ", "CGRJ", "CLRJ", "CLGRJ")},
+    **{base: "3,7,TGT" for base in ("CIJ", "CGIJ", "CLIJ", "CLGIJ")},
+    **{base: "3,4,TGT" for base in ("CRB", "CGRB", "CLRB", "CLGRB")},
+    **{base: "3,7,TGT" for base in ("CIB", "CGIB", "CLIB", "CLGIB")},
+    **{base: "3,4" for base in ("CRT", "CGRT", "CLRT", "CLGRT")},
+    **{base: "3,7" for base in ("CIT", "CGIT", "CLFIT", "CLGIT")},
+    **{base: "3,DW" for base in ("CLT", "CLGT")},
+}
+
+
+def _compare_source() -> bytes:
+    lines = "".join(
+        f"         {base + suffix:<8}{operands}\n"
+        for base, operands in COMPARE_BASES.items()
+        for suffix in COMPARE_SUFFIXES
+    )
+    return (
+        "T        CSECT\n"
+        "         BASR  12,0\n"
+        "         USING *,12\n"
+        f"{lines}"
+        "TGT      BR    14\n"
+        "         DS    0D\n"
+        "DW       DC    A(0),A(TGT)\n"
+        "         END\n"
+    ).encode()
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_compare_branch_and_trap_spellings_reach_their_base_mnemonic_and_m3(
+    tmp_path: Path,
+):
+    parser = get_hlasm_parser()
+    program = parser.read(
+        parser.parse_to_file(_compare_source(), "compares.asm", tmp_path / "c.json")
+    )
+    resolved = {
+        s.mnemonic: (
+            s.base_mnemonic,
+            [o.value for o in s.operands if isinstance(o, MaskOperand)],
+        )
+        for s in program.statements
+        if isinstance(s, MachineStatement) and s.base_mnemonic in COMPARE_BASES
+    }
+
+    assert resolved == {
+        base + suffix: (base, [mask])
+        for base in COMPARE_BASES
+        for suffix, mask in COMPARE_SUFFIXES.items()
     }

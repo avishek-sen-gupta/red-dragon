@@ -11,7 +11,6 @@ from interpreter.hlasm.data_movement import (
     from_gr64,
     from_relative,
     from_storage_at,
-    immediate,
     sign_extended,
     storage_address_at,
 )
@@ -45,6 +44,7 @@ from interpreter.hlasm.opcodes.load_store import (
 from interpreter.hlasm.opcodes.operand_sources import (
     DOUBLEWORD_STORAGE,
     HALFWORD_IMMEDIATE,
+    LOGICAL_HALFWORD_IMMEDIATE,
     LOGICAL_WORD_IMMEDIATE,
     SIGNED_HALFWORD_STORAGE,
     SIGNED_LOW_WORD,
@@ -112,7 +112,6 @@ COMPARE_IMMEDIATE_BYTE = FieldLowering(
         lambda immediate: compare(LOGICAL_8, from_first_storage(ONE_BYTE), immediate)
     ),
 )
-LOGICAL_HALFWORD_IMMEDIATE = immediate(HALFWORD_BITS)
 
 SIGNED_COMPARES: Mapping[str, StatementLowering] = {
     "C": compare(SIGNED_32, from_gr32(0), WORD_STORAGE),
