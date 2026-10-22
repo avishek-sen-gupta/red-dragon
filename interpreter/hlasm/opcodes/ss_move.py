@@ -34,7 +34,6 @@ from interpreter.hlasm.hlasm_constants import (
     NIBBLE_BITS,
     NIBBLE_MASK,
     OFFSET_CARRY_VAR,
-    OFFSET_FETCHED_VAR,
     ONE_BYTE,
     WORD_BYTES,
 )
@@ -56,9 +55,13 @@ from interpreter.register import Register
 
 type Addresses = tuple[Register, Register]
 type NibbleConstants = tuple[Register, Register, Register, Register]
+type ByteSite = tuple[Register, Register, Register]
+type NibbleShift = tuple[Register, Register]
 
 LENGTH_REGISTER = 0
 NUMERICS = 0x0F
+FIRST_NIBBLE = (NIBBLE_BITS, NIBBLE_BITS)
+SECOND_NIBBLE = (0, NIBBLE_BITS)
 ZONES = 0xF0
 
 
@@ -177,52 +180,61 @@ def _move_right_to_left(emitter: HlasmEmitter, statement: MachineStatement) -> N
     )
 
 
-def _fetched_byte(
-    emitter: HlasmEmitter, source: Register, source_at: Register, read: UnitReader
-) -> Register:
-    exhausted, present, fetched = (
-        emitter.fresh_label(prefix)
-        for prefix in ("hl_mvo_exhausted", "hl_mvo_present", "hl_mvo_fetched")
-    )
-    before = emitter.binop(BinopKind.LT, source_at, emitter.int_(0))
-    emitter.emit_inst(BranchIf(cond_reg=before, branch_targets=(exhausted, present)))
-    emitter.emit_inst(Label_(label=exhausted))
-    emitter.emit_inst(StoreVar(name=OFFSET_FETCHED_VAR, value_reg=emitter.int_(0)))
-    emitter.emit_inst(Branch(label=fetched))
-    emitter.emit_inst(Label_(label=present))
-    byte = read(source, source_at)
-    emitter.emit_inst(StoreVar(name=OFFSET_FETCHED_VAR, value_reg=byte))
-    emitter.emit_inst(Label_(label=fetched))
-    return emitter.load_var(OFFSET_FETCHED_VAR)
+def _store_offset_byte(
+    emitter: HlasmEmitter, site: ByteSite, at: Register, value: Register
+) -> None:
+    target, last, single = site
+    image = emitter.call(MAKE_LIST, (single, value))
+    emitter.write_bytes(target, emitter.binop(BinopKind.SUB, last, at), ONE_BYTE, image)
 
 
 def _offset_byte(
     emitter: HlasmEmitter,
-    addresses: Addresses,
-    lasts: tuple[Register, Register],
-    read: UnitReader,
+    site: ByteSite,
+    nibble: NibbleShift,
+    source: tuple[Register, Register, UnitReader],
     at: Register,
 ) -> None:
-    target, source = addresses
-    last, source_last = lasts
-    fetched = _fetched_byte(
-        emitter, source, emitter.binop(BinopKind.SUB, source_last, at), read
+    address, source_last, read = source
+    mask, bits = nibble
+    fetched = read(address, emitter.binop(BinopKind.SUB, source_last, at))
+    shifted = emitter.binop(
+        BinopKind.LSHIFT, emitter.binop(BinopKind.BIT_AND, fetched, mask), bits
     )
-    digit = emitter.binop(BinopKind.BIT_AND, fetched, emitter.int_(NIBBLE_MASK))
-    shifted = emitter.binop(BinopKind.LSHIFT, digit, emitter.int_(NIBBLE_BITS))
     result = emitter.binop(
         BinopKind.BIT_OR, shifted, emitter.load_var(OFFSET_CARRY_VAR)
     )
-    image = emitter.call(MAKE_LIST, (emitter.int_(ONE_BYTE), result))
-    emitter.write_bytes(target, emitter.binop(BinopKind.SUB, last, at), ONE_BYTE, image)
-    carry = emitter.binop(BinopKind.RSHIFT, fetched, emitter.int_(NIBBLE_BITS))
+    _store_offset_byte(emitter, site, at, result)
+    carry = emitter.binop(BinopKind.RSHIFT, fetched, bits)
     emitter.emit_inst(StoreVar(name=OFFSET_CARRY_VAR, value_reg=carry))
 
 
-def _move_with_offset(
-    emitter: HlasmEmitter, statement: MachineStatement, field: DataField
+def _zero_extended_byte(
+    emitter: HlasmEmitter, site: ByteSite, no_carry: Register, at: Register
 ) -> None:
-    addresses = (
+    _store_offset_byte(emitter, site, at, emitter.load_var(OFFSET_CARRY_VAR))
+    emitter.emit_inst(StoreVar(name=OFFSET_CARRY_VAR, value_reg=no_carry))
+
+
+def _zero_extend(
+    emitter: HlasmEmitter, site: ByteSite, span: tuple[Register, Register]
+) -> None:
+    no_carry = emitter.int_(0)
+    emit_counted_loop(
+        emitter,
+        span,
+        ONE_BYTE,
+        lambda at: _zero_extended_byte(emitter, site, no_carry, at),
+    )
+
+
+def _keep_sign(emitter: HlasmEmitter, last_byte: Register, mask: Register) -> None:
+    kept = emitter.binop(BinopKind.BIT_AND, last_byte, mask)
+    emitter.emit_inst(StoreVar(name=OFFSET_CARRY_VAR, value_reg=kept))
+
+
+def _offset_addresses(emitter: HlasmEmitter, statement: MachineStatement) -> Addresses:
+    return (
         length_operand_address(
             emitter, storage_length_operand(statement, FIRST_OPERAND)
         ),
@@ -230,23 +242,23 @@ def _move_with_offset(
             emitter, storage_length_operand(statement, SECOND_OPERAND)
         ),
     )
+
+
+def _move_with_offset(
+    emitter: HlasmEmitter, statement: MachineStatement, field: DataField
+) -> None:
+    target, source = _offset_addresses(emitter, statement)
     first_code = field.part(emitter, NIBBLE_BITS, NIBBLE_BITS)
-    lasts = (
-        first_code.value(emitter),
-        field.part(emitter, 0, NIBBLE_BITS).value(emitter),
-    )
+    site = (target, first_code.value(emitter), emitter.int_(ONE_BYTE))
     read = unit_reader(emitter, ONE_BYTE)
-    kept = emitter.binop(
-        BinopKind.BIT_AND,
-        read(addresses[0], lasts[0]),
-        emitter.int_(NIBBLE_MASK),
-    )
-    emitter.emit_inst(StoreVar(name=OFFSET_CARRY_VAR, value_reg=kept))
+    nibble = (emitter.int_(NIBBLE_MASK), emitter.int_(NIBBLE_BITS))
+    _keep_sign(emitter, read(target, site[1]), nibble[0])
+    common = field.shorter(emitter, (FIRST_NIBBLE, SECOND_NIBBLE)).value(emitter)
+    sourced = (source, field.part(emitter, *SECOND_NIBBLE).value(emitter), read)
     emit_byte_loop(
-        emitter,
-        first_code.length(emitter).value(emitter),
-        lambda at: _offset_byte(emitter, addresses, lasts, read, at),
+        emitter, common, lambda at: _offset_byte(emitter, site, nibble, sourced, at)
     )
+    _zero_extend(emitter, site, (common, first_code.length(emitter).value(emitter)))
 
 
 def _store_immediate(width: int) -> StatementLowering:

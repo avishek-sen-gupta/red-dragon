@@ -5,7 +5,12 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from interpreter.hlasm.byte_loop import copy_byte, emit_counted_loop
-from interpreter.hlasm.data_field import DataField, FieldCase, FieldFallback
+from interpreter.hlasm.data_field import (
+    DataField,
+    FieldCase,
+    FieldFallback,
+    FieldPart,
+)
 from interpreter.hlasm.hlasm_constants import BITS_PER_BYTE, ONE_BYTE, SPAN_VALUE_VAR
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.unit_value import unit_reader
@@ -31,6 +36,19 @@ class ExecutedField(DataField):
         return ExecutedField(
             emitter.binop(BinopKind.ADD, self.register, emitter.int_(ONE_BYTE))
         )
+
+    def shorter(
+        self, emitter: HlasmEmitter, parts: tuple[FieldPart, FieldPart]
+    ) -> DataField:
+        first, second = (
+            self.part(emitter, shift, width).value(emitter) for shift, width in parts
+        )
+        excess = emitter.binop(BinopKind.SUB, first, second)
+        negative = emitter.binop(BinopKind.RSHIFT, excess, emitter.int_(BITS_PER_BYTE))
+        least = emitter.binop(
+            BinopKind.ADD, second, emitter.binop(BinopKind.BIT_AND, excess, negative)
+        )
+        return ExecutedField(least).length(emitter)
 
     def _append(self, emitter: HlasmEmitter, shift: Register, byte: Register) -> None:
         moved = emitter.binop(BinopKind.LSHIFT, emitter.load_var(SPAN_VALUE_VAR), shift)

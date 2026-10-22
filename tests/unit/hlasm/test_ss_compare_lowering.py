@@ -151,7 +151,21 @@ def test_clc_compares_both_blocks_once_and_only_sets_the_cc():
             ("LoadRegion", "storage", 256, 0),
         ],
         [("LoadRegion", 1), ("LoadRegion", 1)],
-        [f"StoreVar:{CC}"],
+        [
+            "BranchIf",
+            "Label_",
+            f"StoreVar:{CC}",
+            "Branch",
+            "Label_",
+            "BranchIf",
+            "Label_",
+            f"StoreVar:{CC}",
+            "Branch",
+            "Label_",
+            f"StoreVar:{CC}",
+            "Branch",
+            "Label_",
+        ],
     )
     assert _symbolic([ir, explicit_zero]) == []
 

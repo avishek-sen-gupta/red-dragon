@@ -413,8 +413,9 @@ MVHI, MVGHI; MVCL, MVCLE, MVCLU; MVST. Only MVCL, MVCLE, MVCLU and MVST set the 
   region read and one write move the block. MVN and MVZ always loop, keeping one nibble of
   each destination byte. MVCIN's second address is its rightmost byte.
 - MVCRL moves GR0 bits 56-63 plus one bytes, right to left.
-- MVO is a byte loop, right to left: each source byte fetched once after the bytes to its
-  right are stored, the source zero-extended or truncated on the left.
+- MVO is two byte loops, right to left: the min(L1, L2) bytes with a source byte, each
+  fetched once after the bytes to its right are stored, then the rest of the first operand
+  from the carry and zeros; the source is truncated on the left.
 - MVCL: 24-bit lengths, pad in R2+1 bits 32-39. If the destination starts inside the
   participating source bytes, nothing moves, the lengths are kept and CC is 3; R1 and R2
   only lose bit 32. Otherwise the move completes with CC 0, 1 or 2 from comparing the
@@ -427,7 +428,9 @@ MVHI, MVGHI; MVCL, MVCLE, MVCLU; MVST. Only MVCL, MVCLE, MVCLU and MVST set the 
 - Odd pair registers in MVCL, MVCLE and MVCLU abend `S0C6`; che4z and z390 refuse to
   assemble them, so only the unit test reaches it.
 - Loop cost: about 8 to 9 VM steps per byte for MVC with overlap and the long-move copy and
-  pad, 15 for MVN and MVZ, 4 for the MVCLU pad.
+  pad, 15 for MVN and MVZ, 4 for the MVCLU pad. MVO costs about 19 per byte, as the unrolled
+  form did, plus about 16 to enter its two loops (76 to 92 steps for 3 and 2 bytes, 313 to 333
+  for 16 and 16).
 - z390 runs MVN and MVZ in 8-, 4-, 2- and 1-byte pieces, so overlap does not propagate; abends
   `S0C1` on MVCLU; and ignores GR0 bits 32-55 in MVST. The z390 test pins all three. z390
   lacks MVCRL.
@@ -435,7 +438,7 @@ MVHI, MVGHI; MVCL, MVCLE, MVCLU; MVST. Only MVCL, MVCLE, MVCLU and MVST set the 
 **Storage compares (red-dragon-6uyp.36).** CLC, CLCL, CLCLE, CLCLU, CLST, CUSE. Unsigned, left to
 right: CC 0 equal, 1 first low, 2 first high. Storage is never written.
 
-- CLC compares the two L-byte values as unsigned ints, each read in one block (a byte loop under EX); registers unchanged.
+- CLC reads the two L-byte values as unsigned ints, each in one block (a byte loop under EX), then tests them equal (CC 0) or orders them (CC 1 or 2); registers unchanged. 34 VM steps at any length.
 - CLCL: 24-bit lengths, pad in R2+1 bits 32-39. CLCLE and CLCLU: 32-bit lengths, pad from the
   D2(B2) address (one byte; two for CLCLU, which compares 2-byte characters and abends `S0C6` on
   an odd length). The shorter operand is extended with the pad. With k the offset of the first
@@ -518,10 +521,10 @@ variant expansion (ruling R30).
 - Size and cost: `EX 2,MOVE` with `MOVE MVC 0(0,3),0(4)` lowers to 73 IR instructions (13,324
   under R30); 16 such sites compile in 0.26 s (40 s under R30). An 80-byte move under EX costs
   685 VM steps (65 under R30, which moved a block); a plain `MVC` of 80 bytes stays at 29.
-  An 80-byte CLC under EX costs 1,996 steps (83 under R30). A plain SVC keeps its one service:
+  An 80-byte CLC under EX costs 1,983 steps (83 under R30). A plain SVC keeps its one service:
   39 IR instructions against 107 for the chain.
-- z390 does not check the odd EX target (it abends `S0C1`) and links an executed BRAS after the
-  BRAS. The z390 test pins both.
+- z390 does not check the odd EX target (it abends `S0C1`), links an executed BRAS after the
+  BRAS, and sets CC 1 for an ALSI carry, as it does without EX. The z390 test pins all three.
 
 ## Known Gaps
 
@@ -603,12 +606,12 @@ variant expansion (ruling R30).
 | `tests/integration/hlasm/test_loop_branch.py` | Every branch on count and index mnemonic, JCT, JCTG and the JX spellings on the VM: counting loops, register overlaps, signed wrap, CC unchanged |
 | `tests/unit/hlasm/test_ss_move_lowering.py` | Storage move IR: immediate store widths, the MVC block move beside its byte loop, the nibble loops, odd long-move registers abend `S0C6` |
 | `tests/integration/hlasm/test_ss_move.py` | Every storage move mnemonic on the VM: storage, registers, CC; MVC, MVN, MVZ, MVCIN and MVO overlap, MVCRL's hole, MVO truncation, MVCL CC 0-3, zero first lengths and pad, MVCLE and MVCLU pads; MVCLU odd length and MVST's GR0 abend `S0C6`; the bridge passes MVO lengths as written |
-| `tests/unit/hlasm/test_ss_compare_lowering.py` | Storage compare IR: CLC's one block compare, one unit of each operand per loop iteration, no comparison on a byte image, no storage writes, odd pair registers abend `S0C6` |
+| `tests/unit/hlasm/test_ss_compare_lowering.py` | Storage compare IR: CLC's one block read per operand, an equality test then an order, one unit of each operand per loop iteration, no comparison on a byte image, no storage writes, odd pair registers abend `S0C6` |
 | `tests/integration/hlasm/test_ss_compare.py` | Every storage compare mnemonic on the VM: CC 0-2 and registers; CLC lengths 0 and 256, inequality against the pad, zero lengths, bit 32 cleared or kept, a pad from a base register, CLST ending first and a high ending character, CUSE found, ended, zero substring and negative lengths; CLCLU odd length and CLST's GR0 abend `S0C6` |
 | `tests/unit/hlasm/test_translate_lowering.py` | Translate IR: one unit and one function per iteration at each form's widths, stores only where the form translates, no comparison on a byte image, M3 bit 3 drops the test, odd pairs abend `S0C6` |
 | `tests/integration/hlasm/test_translate.py` | Every translate mnemonic on the VM: storage, registers, CC; TR overlap and lengths, TRT and TRTR CC 0-2 and bit 32, TRE found, ended and length 0, the test character and its control, ignored table bits, each TRTE and TRTRE control; odd lengths abend `S0C6` |
 | `tests/unit/hlasm/test_execute_lowering.py` | Execute IR: byte 1 decoded per format, R1 = 0 or an unlowered target lowers one copy at the EX, a register field one copy per reachable value under a tree, a data field (MVC, CLI, SVC) one lowering with byte 1 from R1 and one-byte region accesses, the opcode-bit guard, `S0C3` and `S0C6` before any copy, unresolved targets abend `S0C1` with a warning |
-| `tests/integration/hlasm/test_execute.py` | EX and EXRL on the VM: MVC length codes 0, 4, 7 and 255, CLC, XC, TR, TRT, MVN, MVZ, MVCIN and MVO lengths, CLI, MVI, TM, NI, OI and XI immediates, an SVC number, BAL, BRAS, AR and LHI fields, a BC mask and index, and a branch mask from R1; links after the execute instruction; CC kept; `S0C3`, `S0C6`; indexed targets and opcode modification xfailed (red-dragon-6uyp.77, red-dragon-6uyp.78) |
+| `tests/integration/hlasm/test_execute.py` | EX and EXRL on the VM: MVC length codes 0, 4, 7 and 255 and a destructive MVC, CLC, NC, OC, XC, TR, TRT, TRTR, MVN, MVZ, MVCIN and MVO lengths, CLI, CLIY, MVI, MVIY, TM, NI, NIY, OI, XI, ASI, AGSI and ALSI immediates (negative ones sign-extended after the OR), an SVC number, BAL, BRAS, AR and LHI fields, a BC mask and index, and a branch mask from R1; links after the execute instruction; CC kept; `S0C3`, `S0C6`; indexed targets and opcode modification xfailed (red-dragon-6uyp.77, red-dragon-6uyp.78) |
 | `tests/integration/hlasm/test_bridge_parser.py` | The real bridge: macro origins, refused assemblies |
 | `tests/integration/hlasm/test_storage_layout.py` | Section regions and address constants |
 | `tests/integration/hlasm/test_svc.py` | `WTO`, `ABEND` user and system codes, unlowered SVCs, `run()` with our maclib then `copybook_dirs`, call-site spans |
@@ -628,7 +631,7 @@ variant expansion (ruling R30).
 | `tests/z390/test_ss_compare_differential.py` | Every storage compare case against z390; z390's CLCL pad, CLCLU, CLST and CUSE differences pinned (`-m z390`) |
 | `tests/z390/test_translate_differential.py` | Every translate case against z390; z390's TRE length 0, TROO table alignment and TRTE argument truncation pinned (`-m z390`) |
 | `tests/z390/test_test_under_mask_differential.py` | Every test under mask case against z390; no differences (`-m z390`) |
-| `tests/z390/test_execute_differential.py` | Every execute case against z390; z390's missing odd-target check and BRAS link pinned, and the targets RedDragon abends on run there (`-m z390`) |
+| `tests/z390/test_execute_differential.py` | Every execute case against z390; z390's missing odd-target check, BRAS link and ALSI carry CC pinned, and the targets RedDragon abends on run there (`-m z390`) |
 | `tests/z390/test_compare_differential.py` | Every compare mnemonic against z390; the relative-long alignment difference pinned (`-m z390`) |
 | `tests/z390/test_branch_on_condition_differential.py` | Every branch on condition case against z390; the BIC, BPP and BPRP differences and branches into data pinned (`-m z390`) |
 | `tests/z390/test_branch_and_link_differential.py` | Every branch and link case and the mode-setting returns against z390; z390's AMODE 24 and 64 switches pinned (`-m z390`) |
