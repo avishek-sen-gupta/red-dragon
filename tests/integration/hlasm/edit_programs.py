@@ -33,6 +33,9 @@ DATA = (
     "MULTI    DC    X'4020212022202120C3D9'\n"
     "SIGNS    DC    X'40202120C3D9'\n"
     "FILLSEL  DC    X'212020'\n"
+    "FILLDIG  DC    X'202020'\n"
+    "PLUSSEL  DC    X'40202020C3D9'\n"
+    "CARRY    DC    X'4020222020C3D9'\n"
     "TEXT     DC    X'40C1C2C3'\n"
     "INV      DC    X'4020212020'\n"
     "P5       DC    PL5'1234567'\n"
@@ -45,6 +48,9 @@ DATA = (
     "ALTM     DC    X'012B'\n"
     "ALTP     DC    X'012F'\n"
     "BAD      DC    X'012CA5'\n"
+    "ZPLUS    DC    X'002C'\n"
+    "ONEP     DC    X'001C'\n"
+    "SPLIT    DC    X'123C'\n"
     "EDX      ED    OUT(1),P5\n"
 )
 
@@ -144,6 +150,12 @@ EDITS: Mapping[str, Case] = {
     "ED fill byte that is a significance starter": _edited(
         ("FILLSEL", 3), "ALTP", _out(0x21F1F2FF_FFFFFFFF, 0xFFFFFFFF_FFFFFFFF), CC_PLUS
     ),
+    "ED fill byte that is a digit selector": _edited(
+        ("FILLDIG", 3), "ONEP", _out(0x2020F1FF_FFFFFFFF, 0xFFFFFFFF_FFFFFFFF), CC_PLUS
+    ),
+    "ED pending right digit carries across a field separator": _edited(
+        ("CARRY", 7), "SPLIT", _out(0x40F140F2_F34040FF, 0xFFFFFFFF_FFFFFFFF), CC_PLUS
+    ),
     "ED without digit selectors fills every message byte": _edited(
         ("TEXT", 4), "TWO", _out(0x40404040_FFFFFFFF, 0xFFFFFFFF_FFFFFFFF), CC_ZERO
     ),
@@ -159,10 +171,16 @@ EDITS: Mapping[str, Case] = {
         (_out(0x40404040_F1F24BF3, 0xF4FFFFFF_FFFFFFFF), 4, CC_PLUS),
     ),
     "EDMK leaves GR1 when a significance starter forces significance": _marked(
-        GR1_FILLED + _line("LA", "1,OUT+5"),
+        GR1_FILLED + _line("LA", "1,OUT+15"),
         BLANKED,
         "P12",
-        (_out(0x40404040_40F04BF1, 0xF2FFFFFF_FFFFFFFF), 5, CC_PLUS),
+        (_out(0x40404040_40F04BF1, 0xF2FFFFFF_FFFFFFFF), 15, CC_PLUS),
+    ),
+    "EDMK marks a first digit with a plus code, then turns significance off": _marked(
+        GR1_FILLED,
+        ("PLUSSEL", 6),
+        "ZPLUS",
+        (_out(0x404040F2_4040FFFF, 0xFFFFFFFF_FFFFFFFF), 3, CC_PLUS),
     ),
     "EDMK marks the rightmost field": _marked(
         GR1_FILLED, FIELDS, "TWO", (FIELDS_EDITED, 5, CC_MINUS)

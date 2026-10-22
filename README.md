@@ -14,7 +14,7 @@
 
 With complete source and all dependencies present, parse → lower → execute makes **0 LLM calls**. LLMs are used only where information is missing.
 
-**Scale:** 15 tree-sitter frontends + COBOL (139 enumerated features) + HLASM (27 opcode units) + LLM frontends · 17,505 tests in the default run (`external`, `nist` and `z390` markers excluded)
+**Scale:** 15 tree-sitter frontends + COBOL (139 enumerated features) + HLASM (27 opcode units) + LLM frontends · 17,508 tests in the default run (`external`, `nist` and `z390` markers excluded)
 
 **COBOL conformance:** measured against the NIST COBOL-85 test suite (CCVS) — see [NIST CCVS conformance](docs/nist/README.md) for the method and dated full-run snapshots, the latest being [2026-10-19](docs/nist/2026-10-19-closing-conformance-report.md).
 

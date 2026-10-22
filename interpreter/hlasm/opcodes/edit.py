@@ -1,5 +1,5 @@
 # pyright: standard
-"""Edit: ED and EDMK replace a pattern left to right by zoned source digits, fill bytes and message bytes under a significance indicator; the source is walked once to check its digits before any store, and EDMK marks the first significant digit in GR1."""
+"""Edit: ED and EDMK replace a pattern left to right by zoned source digits, fill bytes and message bytes under a significance indicator; the source is walked once to check its digits before any store, and EDMK puts in GR1 the address of the first significant digit of the rightmost field."""
 
 from collections.abc import Callable, Mapping
 
