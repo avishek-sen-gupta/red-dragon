@@ -19,9 +19,11 @@ from hlasm_asg.program.storage_length_operand import StorageLengthOperand
 from hlasm_asg.program.storage_operand import StorageOperand
 from interpreter.hlasm.byte_one_layouts import byte_one_layout
 from interpreter.hlasm.execute import lower_execute
+from interpreter.hlasm.hlasm_constants import ABEND_VAR
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.machine_statements import MachineStatements
 from interpreter.hlasm.opcodes import OPCODE_LOWERINGS
+from interpreter.hlasm.operands import imm_operand, storage_length_operand
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -29,8 +31,10 @@ from interpreter.instructions import (
     Const,
     InstructionBase,
     LoadRegion,
+    StoreVar,
     Symbolic,
 )
+from interpreter.var_name import VarName
 from tests.covers import NotLanguageFeature, covers
 
 SECTION = "T"
@@ -107,6 +111,7 @@ def _ex(r1: int, operand: Operand, mnemonic: str = "EX") -> MachineStatement:
     )
 
 
+VARIANT_VAR = VarName("__test_variant")
 MVC = _statement("MVC", "SS-a", (_with_length(0), _storage(0)), length=6)
 CLI = _statement("CLI", "SI", (_storage(4), _imm(0x40)))
 LHI = _statement("LHI", "RI-a", (_reg(3), _imm(5)))
@@ -114,15 +119,8 @@ AR = _statement("AR", "RR", (_reg(2), _reg(3)), length=2)
 
 
 def _marker(emitter: HlasmEmitter, statement: MachineStatement) -> None:
-    rendered = ",".join(
-        str(o.model_dump(exclude={"kind", "written"})) for o in statement.operands
-    )
-    emitter.emit_inst(
-        Const.string(
-            emitter.fresh_reg(),
-            f"{statement.base_mnemonic}@{statement.offset}+{statement.length} {rendered}",
-        )
-    )
+    image = emitter.str_(statement.model_dump_json())
+    emitter.emit_inst(StoreVar(name=VARIANT_VAR, value_reg=image))
 
 
 def _executed(
@@ -133,17 +131,27 @@ def _executed(
     return emitter.instructions()
 
 
-def _markers(ir: Sequence[InstructionBase]) -> list[str]:
-    return [str(i.value) for i in ir if isinstance(i, Const) and "@" in str(i.value)]
-
-
-def _abends(ir: Sequence[InstructionBase]) -> list[str]:
+def _stored(ir: Sequence[InstructionBase], name: VarName) -> list[str]:
+    consts = _constants(ir)
     return [
-        str(i.value) for i in ir if isinstance(i, Const) and str(i.value)[:2] == "S0"
+        str(consts[str(i.value_reg)])
+        for i in ir
+        if isinstance(i, StoreVar) and i.name == name
     ]
 
 
-def _constants(ir: Sequence[InstructionBase]) -> dict[str, int]:
+def _variants(ir: Sequence[InstructionBase]) -> list[MachineStatement]:
+    return [
+        MachineStatement.model_validate_json(image)
+        for image in _stored(ir, VARIANT_VAR)
+    ]
+
+
+def _abends(ir: Sequence[InstructionBase]) -> list[str]:
+    return _stored(ir, ABEND_VAR)
+
+
+def _constants(ir: Sequence[InstructionBase]) -> dict[str, int | str]:
     return {str(i.result_reg): i.value for i in ir if isinstance(i, Const)}
 
 
@@ -174,6 +182,7 @@ def test_byte_one_layouts_decode_each_formats_fields():
     lgr = _statement("LGR", "RRE", (_reg(1), _reg(2)))
     svc = _statement("SVC", "I", (_imm(13),), length=2)
     load = _statement("L", "RX-a", (_reg(1), _storage(8, 5)))
+    ts = _statement("TS", "SI", (_storage(4),))
     cases = {
         "MVC": (MVC, 0x2C),
         "PACK": (pack, 0x75),
@@ -185,6 +194,7 @@ def test_byte_one_layouts_decode_each_formats_fields():
         "CLI": (CLI, 0xC3),
         "LHI": (LHI, 0x7F),
         "AR": (AR, 0x9E),
+        "TS": (ts, 0xFF),
     }
 
     decoded = {
@@ -213,40 +223,39 @@ def test_byte_one_layouts_decode_each_formats_fields():
         "CLI": (0x40, 0xFF, 0x00, (_storage(4), _imm(0xC3))),
         "LHI": (0x30, 0xF0, 0x0F, (_reg(7), _imm(5))),
         "AR": (0x23, 0xFF, 0x00, (_reg(9), _reg(14))),
+        "TS": (0x00, 0x00, 0x00, ts.operands),
     }
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_r1_zero_lowers_the_target_unmodified_at_the_execute():
+def test_r1_zero_or_an_unlowered_target_lowers_one_copy_at_the_execute():
     ex = _ex(0, _at(TARGET_OFFSET))
+    exrl = _ex(
+        0,
+        RelocImmOperand(kind="RELOC_IMM", section=SECTION, offset=TARGET_OFFSET),
+        "EXRL",
+    )
+    spm = _statement("SPM", "RR", (_reg(3),), length=2)
     emitter = HlasmEmitter()
     lower_execute(emitter, ex, MachineStatements((ex, AR)), OPCODE_LOWERINGS["AR"])
     direct = HlasmEmitter()
     OPCODE_LOWERINGS["AR"](
         direct, AR.model_copy(update={"offset": EX_OFFSET, "length": 4})
     )
+    unlowered = _executed(_ex(2, _at(TARGET_OFFSET)), (spm,))
 
     assert (
         emitter.instructions(),
-        _markers(_executed(ex, (MVC,))),
-        _markers(
-            _executed(
-                _ex(
-                    0,
-                    RelocImmOperand(
-                        kind="RELOC_IMM", section=SECTION, offset=TARGET_OFFSET
-                    ),
-                    "EXRL",
-                ),
-                (AR,),
-            )
-        ),
+        _variants(_executed(ex, (MVC,))),
+        _variants(_executed(exrl, (AR,))),
+        _variants(unlowered),
+        any(isinstance(i, LoadRegion) for i in unlowered),
     ) == (
         direct.instructions(),
-        [
-            "MVC@2+4 {'displacement': 0, 'length': 0, 'base': 3},{'displacement': 0, 'index': 0, 'base': 12}"
-        ],
-        ["AR@2+6 {'value': 2},{'value': 3}"],
+        [MVC.model_copy(update={"offset": EX_OFFSET, "length": 4})],
+        [AR.model_copy(update={"offset": EX_OFFSET, "length": 6})],
+        [spm.model_copy(update={"offset": EX_OFFSET, "length": 4})],
+        False,
     )
 
 
@@ -255,19 +264,17 @@ def test_r1_byte_selects_one_inline_copy_per_reachable_value():
     mvc = _executed(_ex(2, _at(TARGET_OFFSET)), (MVC,))
     cli = _executed(_ex(2, _at(TARGET_OFFSET)), (CLI,))
     lhi = _executed(_ex(2, _at(TARGET_OFFSET)), (LHI,))
-    mvc_lengths = [int(m.split("'length': ")[1].split(",")[0]) for m in _markers(mvc)]
-    cli_immediates = [int(m.split("'value': ")[1][:-1]) for m in _markers(cli)]
 
     assert (
-        mvc_lengths,
+        [storage_length_operand(v, 0).length for v in _variants(mvc)],
         len(_compared(mvc)),
         sum(1 for i in mvc if isinstance(i, BranchIf)),
         len({i.label for i in mvc if isinstance(i, Branch)}),
         sum(1 for i in mvc if isinstance(i, Branch)),
         [i.length for i in mvc if isinstance(i, LoadRegion)],
-        cli_immediates,
+        [imm_operand(v, 1) for v in _variants(cli)],
         _compared(cli)[0],
-        [m.split(" ", 1)[1] for m in _markers(lhi)],
+        [v.operands for v in _variants(lhi)],
         _abends(lhi),
         any(isinstance(i, Symbolic) for i in (*mvc, *cli, *lhi)),
     ) == (
@@ -279,12 +286,7 @@ def test_r1_byte_selects_one_inline_copy_per_reachable_value():
         [4],
         [v for v in range(256) if v & 0x40],
         0xC0,
-        [
-            "{'value': 3},{'value': 5}",
-            "{'value': 7},{'value': 5}",
-            "{'value': 11},{'value': 5}",
-            "{'value': 15},{'value': 5}",
-        ],
+        [(_reg(r), _imm(5)) for r in (3, 7, 11, 15)],
         ["S0C1"],
         False,
     )
@@ -313,7 +315,7 @@ def test_execute_and_specification_exceptions_abend_before_any_copy():
     }
 
     assert {
-        name: (_abends(ir), _markers(ir), any(isinstance(i, LoadRegion) for i in ir))
+        name: (_abends(ir), _variants(ir), any(isinstance(i, LoadRegion) for i in ir))
         for name, ir in abends.items()
     } == {
         "EX": (["S0C3"], [], False),
@@ -335,7 +337,7 @@ def test_unresolved_targets_abend_with_a_warning(caplog: pytest.LogCaptureFixtur
         lowered = {name: _executed(ex, (MVC,)) for name, ex in unresolved.items()}
 
     assert (
-        {name: (_abends(ir), _markers(ir)) for name, ir in lowered.items()},
+        {name: (_abends(ir), _variants(ir)) for name, ir in lowered.items()},
         [r.getMessage() for r in caplog.records],
     ) == (
         {name: (["S0C1"], []) for name in unresolved},

@@ -37,8 +37,11 @@ TARGETS = (
     "LOADI    LHI   0,5\n"
     "INNER    EX    0,MOVE\n"
     "INNERRL  EXRL  0,MOVE\n"
+    "BRANCH   BC    0,SUB-4\n"
     "SUB      LHI   8,1\n"
     "         ABEND 1\n"
+    "BIGSRC   DC    256X'5A'\n"
+    "BIGOUT   DC    264X'FF'\n"
 )
 
 
@@ -93,6 +96,34 @@ CASES: Mapping[str, ExecuteCase] = {
         ABENDED,
         PRESET_CC,
         {MOVED_REGISTER: 0x01FFFFFFFFFFFFFF, PATH_REGISTER: FELL_THROUGH},
+    ),
+    "MVC length code 4": (
+        _move(4),
+        ABENDED,
+        PRESET_CC,
+        {MOVED_REGISTER: 0x0123456789FFFFFF, PATH_REGISTER: FELL_THROUGH},
+    ),
+    "MVC length code 255 moves 256 bytes": (
+        _line("LA", "6,BIGOUT")
+        + _line("LA", "7,BIGSRC")
+        + _line("LHI", "2,255")
+        + _line("EX", "2,MOVE")
+        + _line("LG", f"{MOVED_REGISTER},BIGOUT+252"),
+        ABENDED,
+        PRESET_CC,
+        {MOVED_REGISTER: 0x5A5A5A5AFFFFFFFF, PATH_REGISTER: FELL_THROUGH},
+    ),
+    "BC mask and index from a register": (
+        _line("LHI", "4,4") + _line("LHI", "2,X'F4'") + _line("EX", "2,BRANCH"),
+        ABENDED,
+        PRESET_CC,
+        {PATH_REGISTER: BRANCHED},
+    ),
+    "BC unchanged": (
+        _line("EX", "0,BRANCH"),
+        ABENDED,
+        PRESET_CC,
+        {PATH_REGISTER: FELL_THROUGH},
     ),
     "MVC length code 7": (
         _move(7),

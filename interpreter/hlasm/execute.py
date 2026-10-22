@@ -19,6 +19,7 @@ from interpreter.hlasm.hlasm_constants import (
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.machine_statements import MachineStatements
+from interpreter.hlasm.opcodes import OPCODE_LOWERINGS
 from interpreter.hlasm.operands import (
     reg_operand,
     statement_place,
@@ -132,7 +133,7 @@ def _execute(
         }
     )
     r1 = reg_operand(statement, R1_OPERAND)
-    if r1 == NO_REGISTER:
+    if r1 == NO_REGISTER or target.base_mnemonic not in OPCODE_LOWERINGS:
         lower_machine(emitter, placed)
         return
     _expand(emitter, r1, placed, lower_machine)

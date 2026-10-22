@@ -53,7 +53,7 @@ addresses.
 | `interpreter/hlasm/dc_encoding.py` | DC images: C, X, B, F, H, P, Z, A, Y |
 | `interpreter/hlasm/entry_state.py` | Entry resolution and entry registers (R14 = `0xFF0` return sentinel, R13 = 72-byte save area, R15 = entry address) |
 | `interpreter/hlasm/branch_dispatch.py` | `hl_dispatch`: maps a branch address to a statement label; a miss abends `S0C1` |
-| `interpreter/hlasm/operands.py` | `reg_operand`, `mask_operand`, `optional_mask_operand`, `imm_operand`, `storage_operand`, `reloc_operand`, `storage_length_operand`, `vec_reg_operand`, `optional_imm_operand`: typed operand access; a mismatch raises `HlasmLoweringError` |
+| `interpreter/hlasm/operands.py` | `reg_operand`, `mask_operand`, `optional_mask_operand`, `imm_operand`, `value_operand` (R, M or I), `storage_operand`, `reloc_operand`, `storage_length_operand`, `vec_reg_operand`, `optional_imm_operand`: typed operand access; a mismatch raises `HlasmLoweringError`. `statement_place` names a statement in messages |
 | `interpreter/hlasm/hlasm_lowering_error.py` | `HlasmLoweringError`: names the statement (mnemonic, section, offset, operand) and what was found |
 | `interpreter/hlasm/opcodes/svc.py` | SVC, by number |
 | `interpreter/hlasm/opcodes/load_store.py` | The load and store unit |
@@ -489,13 +489,13 @@ Tables are read at the table address plus the argument (times two for two-byte f
   operand's address as written (RELOC, no index). The target runs as if it sat at the execute
   instruction, so link information (BAL, BAS, BRAS) points after the EX or EXRL. Relative
   operands arrive resolved, so they stay relative to the target. The CC is the target's.
-- R1 = 0 lowers one copy of the target. Otherwise v = (GR R1 bits 56-63 OR the target's byte 1),
+- R1 = 0, or a target with no lowering, lowers one copy of the target. Otherwise v = (GR R1 bits 56-63 OR the target's byte 1),
   kept to the format's operand fields; a binary tree of `<` tests over the values v can reach
   (the supersets of the target's byte) selects one inline copy, lowered through
   `OPCODE_LOWERINGS` with its operands decoded from v. Every copy joins after the tree.
 - Byte 1 maps per format and operand shape: SS-a L, SS-b L1/L2, SS-c L1/I3, SS-f L2, SI and SIY
   I2, I (SVC) I, RR R1/R2, RX and RXY R1/X2, RXF R3/X2, RS and RSY R1/R3 or R1/M3, RI and RIL
-  R1, the RIE, RIS, RRS, RSI, RSL, SS-e and SSF fields. Unused fields are ignored. Bits that
+  R1, the RIE, RIS, RRS, RSI, RSL, SS-e and SSF fields. Unused fields (TS's whole byte) are ignored. Bits that
   are opcode (RI and RIL low nibble; all of RRE, RRF, RRD, S, SIL, SSE, E, IE) abend `S0C1` when R1 sets
   any of them.
 - A target that is EX, EXRL, TBEGIN, TBEGINC, TEND or TABORT abends `S0C3`; an odd EX target
@@ -584,8 +584,8 @@ Tables are read at the table address plus the argument (times two for two-byte f
 | `tests/integration/hlasm/test_ss_compare.py` | Every storage compare mnemonic on the VM: CC 0-2 and registers; CLC lengths 0 and 256, inequality against the pad, zero lengths, bit 32 cleared or kept, a pad from a base register, CLST ending first and a high ending character, CUSE found, ended, zero substring and negative lengths; CLCLU odd length and CLST's GR0 abend `S0C6` |
 | `tests/unit/hlasm/test_translate_lowering.py` | Translate IR: one unit and one function per iteration at each form's widths, stores only where the form translates, no comparison on a byte image, M3 bit 3 drops the test, odd pairs abend `S0C6` |
 | `tests/integration/hlasm/test_translate.py` | Every translate mnemonic on the VM: storage, registers, CC; TR overlap and lengths, TRT and TRTR CC 0-2 and bit 32, TRE found, ended and length 0, the test character and its control, ignored table bits, each TRTE and TRTRE control; odd lengths abend `S0C6` |
-| `tests/unit/hlasm/test_execute_lowering.py` | Execute IR: byte 1 decoded per format, R1 = 0 lowers the target unmodified at the EX, one copy per reachable value under a 255-test tree, the opcode-bit guard, `S0C3` and `S0C6` before any copy, unresolved targets abend `S0C1` with a warning |
-| `tests/integration/hlasm/test_execute.py` | EX and EXRL on the VM: MVC lengths, CLI immediates, an SVC number, BAL, BRAS, AR and LHI fields and a branch mask from R1; links after the execute instruction; CC kept; `S0C3`, `S0C6`; indexed targets and opcode modification xfailed (red-dragon-6uyp.77, red-dragon-6uyp.78) |
+| `tests/unit/hlasm/test_execute_lowering.py` | Execute IR: byte 1 decoded per format, R1 = 0 or an unlowered target lowers one copy at the EX, one copy per reachable value under a 255-test tree, the opcode-bit guard, `S0C3` and `S0C6` before any copy, unresolved targets abend `S0C1` with a warning |
+| `tests/integration/hlasm/test_execute.py` | EX and EXRL on the VM: MVC length codes 0, 4, 7 and 255, CLI immediates, an SVC number, BAL, BRAS, AR and LHI fields, a BC mask and index, and a branch mask from R1; links after the execute instruction; CC kept; `S0C3`, `S0C6`; indexed targets and opcode modification xfailed (red-dragon-6uyp.77, red-dragon-6uyp.78) |
 | `tests/integration/hlasm/test_bridge_parser.py` | The real bridge: macro origins, refused assemblies |
 | `tests/integration/hlasm/test_storage_layout.py` | Section regions and address constants |
 | `tests/integration/hlasm/test_svc.py` | `WTO`, `ABEND` user and system codes, unlowered SVCs, `run()` with our maclib then `copybook_dirs`, call-site spans |
