@@ -10,11 +10,14 @@ GPRS_VAR = VarName("__hlasm_gprs")
 CC_VAR = VarName("__hlasm_cc")
 PROGRAM_MASK_VAR = VarName("__hlasm_pm")
 ACCESS_REGISTERS_VAR = VarName("__hlasm_ars")
+FLOATING_POINT_REGISTERS_VAR = VarName("__hlasm_fprs")
+FPC_VAR = VarName("__hlasm_fpc")
 TOD_LAST_VAR = VarName("__hlasm_tod_last")
 
 GPR_COUNT = 16
 GPR_BYTES = 8
 ACCESS_REGISTER_BYTES = 4
+FLOATING_POINT_REGISTER_BYTES = 8
 ONE_BYTE = 1
 DOUBLEWORD_BYTES = 8
 WORD_BYTES = 4
@@ -32,6 +35,7 @@ LOW_WORD_MASK = 0xFFFFFFFF
 REGISTER_MASK = 0xFFFFFFFF_FFFFFFFF
 INITIAL_CC = 0
 INITIAL_PROGRAM_MASK = 0b0110
+INITIAL_FPC = 0
 
 INT_TO_BINARY_BYTES = FuncName("__int_to_binary_bytes")
 BINARY_BYTES_TO_INT = FuncName("__binary_bytes_to_int")
