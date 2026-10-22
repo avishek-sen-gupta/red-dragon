@@ -1,5 +1,5 @@
 # pyright: standard
-"""Accumulates HLASM lowering IR and emits reads and writes of the machine state."""
+"""Accumulates HLASM lowering IR and emits reads and writes of the machine state: general and access registers, CC and storage."""
 
 import dataclasses
 from itertools import count
@@ -8,6 +8,8 @@ from interpreter.func_name import FuncName
 from interpreter.hlasm.chain_link import Chain, extended, flattened
 from interpreter.hlasm.empty_chain import EmptyChain
 from interpreter.hlasm.hlasm_constants import (
+    ACCESS_REGISTER_BYTES,
+    ACCESS_REGISTERS_VAR,
     BINARY_BYTES_TO_INT,
     BITS_PER_BYTE,
     CC_VAR,
@@ -89,6 +91,21 @@ class HlasmEmitter:
 
     def store_gr_high32(self, r: int, value: Register) -> None:
         self._store(GPR_BYTES * r, WORD_BYTES, value)
+
+    def load_ar(self, r: int) -> Register:
+        return self.load_storage(
+            self.load_var(ACCESS_REGISTERS_VAR),
+            ACCESS_REGISTER_BYTES * r,
+            ACCESS_REGISTER_BYTES,
+        )
+
+    def store_ar(self, r: int, value: Register) -> None:
+        self.store_storage(
+            self.load_var(ACCESS_REGISTERS_VAR),
+            ACCESS_REGISTER_BYTES * r,
+            ACCESS_REGISTER_BYTES,
+            value,
+        )
 
     def set_cc(self, value: Register) -> None:
         self.emit_inst(StoreVar(name=CC_VAR, value_reg=value))

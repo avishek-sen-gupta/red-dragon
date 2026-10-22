@@ -2,7 +2,7 @@
 """The GPR region, condition code and program mask, read and written through the VM."""
 
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
-from interpreter.hlasm.machine import machine_allocation
+from interpreter.hlasm.machine import access_register_allocation, machine_allocation
 from interpreter.instructions import Const
 from interpreter.ir import CodeLabel
 from interpreter.register import Register
@@ -50,8 +50,28 @@ def test_gpr_words_are_big_endian_with_the_low_word_at_plus_four():
     assert [
         frame_vars[VarName("__hlasm_cc")].value,
         frame_vars[VarName("__hlasm_pm")].value,
-    ] == [3, 0b0110]
+        frame_vars[VarName("__hlasm_tod_last")].value,
+    ] == [3, 0b0110, 0]
     assert [emitter.fresh_label("hl"), emitter.fresh_label("hl")] == [
         CodeLabel("hl_0"),
         CodeLabel("hl_1"),
+    ]
+
+
+def test_access_registers_are_sixteen_zero_words_in_their_own_region():
+    emitter = HlasmEmitter()
+    emitter.store_ar(15, _const(emitter, 0x1_2345_6789))
+    loads = (emitter.load_ar(15), emitter.load_ar(0))
+    vm = run_straight_line(
+        (*machine_allocation(), *access_register_allocation(), *emitter.instructions()),
+        {},
+    )
+    ars = vm.current_frame.local_vars[VarName("__hlasm_ars")].value
+    gprs = vm.current_frame.local_vars[VarName("__hlasm_gprs")].value
+
+    assert [register_value(vm, reg).value for reg in loads] == [0x23456789, 0]
+    assert [vm.load(ars, 60), vm.load(ars + 60, 4), vm.load(gprs, 128)] == [
+        [0] * 60,
+        [0x23, 0x45, 0x67, 0x89],
+        [0] * 128,
     ]

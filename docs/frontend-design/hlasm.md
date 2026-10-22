@@ -9,7 +9,7 @@ assembly are the che4z language server's, through a forked bridge executable;
 Python lowers what che4z has already resolved. The machine claims z17 problem
 state and stays in AMODE 31. Lowered so far: SVC and the load and store, load
 address and immediates, signed add and subtract, logical add and subtract, compare,
-compare and branch or trap, boolean, shift and rotate, multiply and divide, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, and Unicode conversion and string search units (see
+compare and branch or trap, boolean, shift and rotate, multiply and divide, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, and miscellaneous units (see
 Opcode Units).
 Any other opcode abends `S0C1` at run time.
 
@@ -28,7 +28,7 @@ hlasm_asg (leaf package)
   ▼
 HlasmFrontend
   │  start_up_ir(): GPR region, CC, program mask; one region per section with its
-  │                 DC images; entry registers
+  │                 DC images; entry registers; access registers
   │  lower():       one IR function for the whole assembly, entered by dispatch
   ▼
 compile_hlasm (interpreter/project/hlasm_compile.py)
@@ -48,7 +48,7 @@ addresses.
 | `hlasm-bridge/maclib/` | Our macros: `WTO`, `ABEND` |
 | `hlasm_asg/program/` | The bridge JSON models, one class per file. A D(X,B) storage operand also carries its address as written (`written`): the section and offset of an implicit address, before USING resolution, or the absolute displacement |
 | `interpreter/hlasm/hlasm_frontend.py` | `HlasmFrontend(program)`: `lower()`, `start_up_ir()`, `entry_name`, `entry_label` |
-| `interpreter/hlasm/machine.py` | GPR region (`__hlasm_gprs`, 8 bytes per register), `__hlasm_cc`, `__hlasm_pm` |
+| `interpreter/hlasm/machine.py` | GPR region (`__hlasm_gprs`, 8 bytes per register), `__hlasm_cc`, `__hlasm_pm`, `__hlasm_tod_last` (the last STCK value); the access-register region (`__hlasm_ars`, 4 bytes per register, all 0), allocated after the sections so their addresses do not move |
 | `interpreter/hlasm/storage_layout.py` | One region per section (`__hlasm_sect_<NAME>`) and its DC images; DC registers carry a per-piece index. Section bases are doubleword aligned: regions are allocated in order from address 4096, the 128-byte GPR region first, and each section is sized up to a doubleword multiple |
 | `interpreter/hlasm/dc_encoding.py` | DC images: C, X, B, F, H, P, Z, A, Y |
 | `interpreter/hlasm/entry_state.py` | Entry resolution and entry registers (R14 = `0xFF0` return sentinel, R13 = 72-byte save area, R15 = entry address) |
@@ -96,7 +96,14 @@ addresses.
 | `interpreter/hlasm/opcodes/branch_and_link.py` | The branch and link unit and the addressing-mode instructions |
 | `interpreter/hlasm/opcodes/loop_branch.py` | The branch on count and branch on index unit |
 | `interpreter/hlasm/opcodes/high_word.py` | The high-word unit |
-| `interpreter/hlasm/register_part.py`, `register_parts.py` | `RegisterPart`: the low word, high word or whole register a lowering reads and writes, and `merge` for bytes under a mask |
+| `interpreter/hlasm/opcodes/miscellaneous.py` | The miscellaneous unit: access registers, LCBB, MC, hints, traps |
+| `interpreter/hlasm/program_status.py` | SPM, IPM, EPSW |
+| `interpreter/hlasm/checksum.py` | CKSM |
+| `interpreter/hlasm/clock_instructions.py` | STCK, STCKF, STCKE, ECTG |
+| `interpreter/hlasm/machine_clock.py`, `clock_builtins.py` | `MachineClock` (TOD clock, CPU timer); `clock_builtins(clock)`, the `__hlasm_tod_clock` and `__hlasm_cpu_timer` builtins over it |
+| `interpreter/hlasm/cpu_attributes.py` | ECAG's constant attributes |
+| `interpreter/hlasm/facility_list.py` | STFLE's constant facility list |
+| `interpreter/hlasm/register_part.py`, `register_parts.py` | `RegisterPart`: the low word, high word or whole register, or an access register, that a lowering reads and writes, and `merge` for bytes under a mask |
 | `interpreter/hlasm/lower_statement.py` | Lowers one statement: EX and EXRL through `execute.py`, any other machine instruction through `OPCODE_LOWERINGS` |
 | `interpreter/hlasm/machine_statements.py` | `MachineStatements`: the assembly's machine statements by section and offset |
 | `interpreter/hlasm/execute.py` | EX and EXRL: resolve the target, check it; lower a data-field target once with byte 1 computed in IR, any other target as one inline copy per byte-1 value |
@@ -120,7 +127,7 @@ addresses.
 | `interpreter/hlasm/statement_location.py` | Each statement's source line, set on the IR it lowers to |
 | `interpreter/hlasm/fixed_width_ir.py` | Fixed-width signed add/subtract/multiply, load-and-test, complement, absolute and negative-absolute and logical add/subtract with carry-in, bitwise connectives, logical and signed shifts and rotates, each with its condition code, the sign CC (0 zero, 1 leftmost bit one, 2 other), and division truncating toward zero, built in IR |
 | `interpreter/hlasm/inline_ir.py` | Splices a builder's IR under fresh registers; `inline_pair` splits a returned pair, such as (result, CC) |
-| `interpreter/hlasm/hlasm_emitter.py` | `HlasmEmitter`: the lowering's instruction sink, an immutable cons-list (`chain_link.py`, `empty_chain.py`) flattened once by `instructions()`, so emission is O(n); `locate_from` records a `LocatedSpan` applied at that flatten |
+| `interpreter/hlasm/hlasm_emitter.py` | `HlasmEmitter`: the lowering's instruction sink; `load_ar` and `store_ar` for access registers; an immutable cons-list (`chain_link.py`, `empty_chain.py`) flattened once by `instructions()`, so emission is O(n); `locate_from` records a `LocatedSpan` applied at that flatten |
 | `interpreter/hlasm/abend.py` | Stores the code in `__hlasm_abend`, then `Halt_` |
 | `interpreter/hlasm/opcodes/interlocked.py` | The interlocked-update unit |
 | `interpreter/hlasm/place.py`, `places.py` | `Place`: how one lowering reads and replaces an operand; a register's low word or whole value, an even-odd pair joined into one value, storage at an address, storage at an address held in a doubleword (bits 33-63, boundary checked), a register numbered at run time |
@@ -680,9 +687,52 @@ LLCH, LLHH, LFH, LFHAT, STCH, STHH, STFH, LMH, STMH, ICMH, STCMH; BRCTH (JCTH). 
 - z390 abends `S0FF` on LFHAT of zero (as for LAT) and reports a borrow as a carry for ALSIH with
   a negative immediate (as for ALSI). The z390 test pins both.
 
+**Miscellaneous (red-dragon-6uyp.45).** SPM, IPM, EPSW; CPYA, EAR, SAR, LAM, LAMY, STAM, STAMY;
+CKSM; STCK, STCKF, STCKE, ECTG; ECAG, STFLE, LCBB; MC, NIAI, PFD, PFDRL, TRAP2, TRAP4. SVC is
+its own module.
+
+- SPM sets the CC from R1 bits 34-35 and the program mask from 36-39. IPM zeroes R1 bits 32-33
+  and puts the CC and mask in 34-39. EPSW builds a fixed problem-state PSW (ruling R37): R1's
+  low word gets X'0785' in bits 0-15, the CC and mask in 18-23, EA 0; then, if R2 is not 0, R2's
+  low word gets X'80000000' (BA).
+- Access registers (ruling R35) hold values only: CPYA, EAR and SAR move a word; LAM, LAMY, STAM
+  and STAMY wrap from 15 to 0 and abend `S0C6` off a word boundary before any access.
+- CKSM (ruling R28): R2 even, else `S0C6`. Adds the words at R2 for R2+1's length, the last
+  padded with zeros, into R1's low word with an end-around carry; R2 advances (bit 32 cleared),
+  R2+1 becomes 0, CC 0.
+- Clocks (ruling R36): `__hlasm_tod_clock` returns the 104-bit TOD clock and `__hlasm_cpu_timer`
+  the CPU timer, read from a `MachineClock` given to `clock_builtins`; a builtin because a
+  clock reads outside the program. STCK stores bits 0-63, or one more than the last STCK
+  value if that is not later, so values are unique; STCKF stores bits 0-63; STCKE stores
+  epoch 0, the 104 bits with bit 103 on, and a zero programmable field. All set CC 0. ECTG
+  fetches its three operands, then GR0 ← first − CPU timer, GR1 ← second, R3 ← third.
+- ECAG (ruling R37) returns constants, z17-like rather than published: cache topology
+  X'04070B0B00000000', 256-byte lines, 128 KiB, 36 MiB, 360 MiB and 2,880 MiB, 8, 18, 48
+  and 48 ways (I and D alike), 5,500 cycles per microsecond. Reserved bits 40-53, a reserved
+  ASI, AI or level give all ones.
+- STFLE stores the list X'E1003663F0040C24', X'0000090000000000': a bit is on when the
+  facility's general instructions are all lowered. Floating-point and vector instructions do
+  not count, and 129 (vector) is off although LCBB is lowered. 16 and 24 wait for PKA, PKU,
+  UNPKA and UNPKU, 49 for PPA. It stores min(GR0 bits 56-63 + 1, 2) doublewords, sets
+  those bits to 1, and sets CC 0, or 3 when the list was cut short. Off a doubleword it
+  abends `S0C6`.
+- LCBB: R1's low word ← bytes to the next 64 << M3 boundary, at most 16; CC 0 at 16, else 3.
+  M3 over 6 abends `S0C6`.
+- MC abends `S0C6` when I2 bits 0-3 are not zero; with the monitor masks off (CR8 = 0) it
+  does nothing else. Its I2 is a data field, so EX lowers it once (ruling R31). NIAI, PFD
+  and PFDRL lower to nothing (ruling R38). TRAP2 and TRAP4 abend `S0D3`: no trap control is
+  enabled, a special-operation exception.
+- SPM with program-mask bit `1000` makes every signed overflow abend `S0C8`; the tests run AR,
+  AGR, LCR, LCGR, LPR, LPGR, MSC, MSRKC, MSGC, MSGRKC, SLA, SLAK, SLAG, SLDA, AHHHR, AIH, LAA
+  and LAAG that way against z390.
+- z390 abends `S0C1` on CKSM, EPSW, ECAG, LCBB and MC and `S0C5` on ECTG; leaves the CC after
+  STCK and STCKE; stores zeros for STCKE's bits 64-103; stores one doubleword for STFLE with
+  CC 0, GR0 unchanged and no boundary check; does not check LAM and STAM boundaries; and starts
+  the access registers at F4F4F4F4. The z390 test pins each.
+
 ## Known Gaps
 
-- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, and high-word units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
+- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, and miscellaneous units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
 - DC types beyond C, X, B, F, H, P, Z, A, Y and V, and any type extension, raise `UnsupportedDataType` (red-dragon-6uyp.63; floating point E, D, L: red-dragon-6uyp.21).
 - Falling through into DC/DS data or past a CSECT's end skips the data instead of executing it, and a branch into data abends `S0C1` (red-dragon-6uyp.64).
 - Every branch, even to a static relative target, walks the dispatch chain (red-dragon-6uyp.80).
@@ -702,7 +752,11 @@ LLCH, LLHH, LFH, LFHAT, STCH, STHH, STFH, LMH, STMH, ICMH, STCMH; BRCTH (JCTH). 
 - AMODE 24 and 64 are not modelled: SAM24, SAM64 and BASSM or BSM into those modes
   abend `S0C1` (red-dragon-6uyp.75). A BASSM or BSM to the return address returns
   whatever mode it selects.
-- Access registers are not modelled: LAE and LAEY set only the general register.
+- Access registers hold values only; no instruction addresses through them. LAE and LAEY do
+  not set access register R1 (red-dragon-6uyp.86).
+- `run()` resolves builtins through `core_builtins()`, which has no clock builtins, so a clock
+  instruction there stores what the unresolved-call strategy gives (red-dragon-6uyp.85). Callers that compose
+  `clock_builtins(clock)` get a clock.
 - The data-exception code is not modelled: a compare-and-trap or load-and-trap trap abends `S0C7`
   and stores no DXC.
 - In AMODE 31, LM, STM, LMD, NC, OC, XC and the storage moves, compares and translates do not wrap
@@ -716,7 +770,6 @@ LLCH, LLHH, LFH, LFHAT, STCH, STHH, STFH, LMH, STMH, ICMH, STCMH; BRCTH (JCTH). 
 - Section bases are doubleword aligned only by allocation order. The VM's bump allocator
   starts at 4096 and does not align, so the GPR region (128 bytes) comes first and each
   section is sized up to a doubleword multiple. Addresses differ from z390's load point.
-- Nothing sets the program mask until SPM lands (red-dragon-6uyp.45), so `S0C8` is tested only on the VM with the mask set directly, not end to end.
 - One CPU (ruling R33): interlocked updates, serialization and what other CPUs or channel programs
   observe hold trivially; no lock is modelled. LPD and LPDG always set CC 0.
 - Each PLO statement lowers its whole function-code table inline, about 7,300 IR instructions; the
@@ -814,4 +867,7 @@ LLCH, LLHH, LFH, LFHAT, STCH, STHH, STFH, LMH, STMH, ICMH, STCMH; BRCTH (JCTH). 
 | `tests/unit/hlasm/test_high_word_lowering.py` | High-word IR: the high or low word each form reads, R1's high word the only register written, which forms set the CC or take the `S0C8` check, BRCTH's target before its count, LFHAT's `S0C7` after its load |
 | `tests/integration/hlasm/test_high_word.py` | Every high-word mnemonic and JCTH on the VM: results with the low word kept, CC 0-3, ALSIHN keeping the CC, negative immediates, signed against logical compares, masks 0 and partial, LMH and STMH wrapping, BRCTH wrap, LFHAT trap |
 | `tests/z390/test_high_word_differential.py` | Every high-word case against z390; its `S0FF` for LFHAT and its ALSIH negative-immediate CC pinned (`-m z390`) |
+| `tests/unit/hlasm/test_miscellaneous_lowering.py` | Miscellaneous IR: the CC, mask and registers SPM, IPM and EPSW touch; access-register moves through their region; LAM's boundary check first; clock forms call their builtin and ECTG fetches all operands first; hints lower to nothing, traps abend `S0D3`; the `S0C6` checks before any store; no SYMBOLIC |
+| `tests/integration/hlasm/test_miscellaneous.py` | Every miscellaneous mnemonic on the VM with a fixed clock: registers, CC, abend; AR wrap and boundaries, CKSM tail and carry, ECAG selections, STFLE short, exact and complete, LCBB, STCK uniqueness, MC under EX; `S0C8` end to end after SPM; boundary abends store nothing |
+| `tests/z390/test_miscellaneous_differential.py` | Every miscellaneous case against z390; the instructions z390 does not execute, its clock CCs and STCKE bits, STFLE, unchecked AR boundaries and initial access registers pinned (`-m z390`) |
 | `tests/z390/test_conditional_select_count_differential.py` | Every conditional, select and count case against z390; the instructions z390 does not execute and its whole-register SELFHR pinned (`-m z390`) |

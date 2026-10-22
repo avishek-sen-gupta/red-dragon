@@ -5,12 +5,14 @@ import io
 from contextlib import redirect_stdout
 
 from interpreter.frontends import get_hlasm_parser
+from interpreter.hlasm.clock_builtins import clock_builtins
 from interpreter.project.hlasm_compile import compile_hlasm
 from interpreter.project.program_entry import ProgramEntry
 from interpreter.run import initial_vm_state, run_linked
 from interpreter.var_name import VarName
-from interpreter.vm.builtins import core_builtins
+from interpreter.vm.builtins import compose_builtins, core_builtins
 from interpreter.vm.vm_types import VMState
+from tests.integration.hlasm.fixed_machine_clock import FixedMachineClock
 from tests.integration.hlasm.hlasm_machine import HlasmMachine
 from tests.integration.hlasm.hlasm_run import HlasmRun
 
@@ -55,7 +57,9 @@ def _run_vm(source: str) -> tuple[VMState, str]:
             ProgramEntry(entry),
             max_steps=MAX_STEPS,
             initial_vm=initial_vm_state(),
-            builtins=core_builtins(),
+            builtins=compose_builtins(
+                core_builtins(), clock_builtins(FixedMachineClock())
+            ),
         )
     return vm, console.getvalue()
 

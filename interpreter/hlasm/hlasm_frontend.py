@@ -15,7 +15,7 @@ from interpreter.hlasm.entry_state import entry_address, entry_state, resolve_en
 from interpreter.hlasm.hlasm_constants import OPERATION_EXCEPTION_ABEND
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.lower_statement import lower_statement
-from interpreter.hlasm.machine import machine_allocation
+from interpreter.hlasm.machine import access_register_allocation, machine_allocation
 from interpreter.hlasm.machine_statements import MachineStatements
 from interpreter.hlasm.statement_location import statement_location
 from interpreter.hlasm.storage_layout import section_allocation
@@ -51,6 +51,7 @@ class HlasmFrontend(Frontend):
             *machine_allocation(),
             *section_allocation(self._program),
             *entry_state(self._program),
+            *access_register_allocation(),
         )
 
     def lower(
