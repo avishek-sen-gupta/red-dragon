@@ -154,6 +154,12 @@ def from_gr64(index: int) -> Source:
     return lambda emitter, statement: emitter.load_gr64(reg_operand(statement, index))
 
 
+def from_gr_high32(index: int) -> Source:
+    return lambda emitter, statement: emitter.load_gr_high32(
+        reg_operand(statement, index)
+    )
+
+
 def to_gr32(
     emitter: HlasmEmitter, statement: MachineStatement, value: Register
 ) -> None:
@@ -164,6 +170,12 @@ def to_gr64(
     emitter: HlasmEmitter, statement: MachineStatement, value: Register
 ) -> None:
     emitter.store_gr64(reg_operand(statement, REGISTER_OPERAND), value)
+
+
+def to_gr_high32(
+    emitter: HlasmEmitter, statement: MachineStatement, value: Register
+) -> None:
+    emitter.store_gr_high32(reg_operand(statement, REGISTER_OPERAND), value)
 
 
 def from_even_odd_pair(emitter: HlasmEmitter, statement: MachineStatement) -> Register:

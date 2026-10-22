@@ -9,7 +9,7 @@ assembly are the che4z language server's, through a forked bridge executable;
 Python lowers what che4z has already resolved. The machine claims z17 problem
 state and stays in AMODE 31. Lowered so far: SVC and the load and store, load
 address and immediates, signed add and subtract, logical add and subtract, compare,
-compare and branch or trap, boolean, shift and rotate, multiply and divide, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, and execute units (see
+compare and branch or trap, boolean, shift and rotate, multiply and divide, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, and conditional load and store, select and bit count units (see
 Opcode Units).
 Any other opcode abends `S0C1` at run time.
 
@@ -67,6 +67,9 @@ addresses.
 | `interpreter/hlasm/opcodes/shift_rotate.py` | The shift and rotate unit, the RISBG family included |
 | `interpreter/hlasm/opcodes/multiply_divide.py` | The multiply and divide unit |
 | `interpreter/hlasm/opcodes/load_sign.py` | The load and test, complement, positive and negative unit |
+| `interpreter/hlasm/opcodes/conditional_select_count.py` | The load and store on condition, select, population and bit count unit |
+| `interpreter/hlasm/bit_counts.py` | Branch-free 64-bit counts: population per byte and in total, the right smear, leading and trailing zeros, the lowest and leftmost one bits |
+| `interpreter/hlasm/mask_bit_loop.py` | BEXTG and BDEPG: one IR loop over the mask's one bits |
 | `interpreter/hlasm/opcodes/under_mask.py` | The test under mask unit |
 | `interpreter/hlasm/opcodes/even_odd.py` | An odd register of an even-odd pair form abends `S0C6` before any register is read; R1 by default, or the operands named |
 | `interpreter/hlasm/opcodes/ss_move.py` | The storage-to-storage and storage-immediate move unit |
@@ -102,7 +105,7 @@ addresses.
 | `interpreter/hlasm/byte_one_part.py`, `operand_value_part.py`, `storage_index_part.py`, `length_code_part.py` | What a byte-1 field holds: an R, M or I value, an X2 index, or a length code (written length minus one) |
 | `interpreter/hlasm/opcodes/operand_sources.py` | Named second-operand sources shared by the arithmetic, compare, compare-and-branch and load-sign units |
 | `interpreter/hlasm/opcodes/result_and_cc.py` | Splices a (result, CC) builder over register, storage or immediate operands and stores both; its storage-immediate read-modify-write |
-| `interpreter/hlasm/data_movement.py` | `move(source, transforms, sink)`: storage, relative-long, address, immediate and register sources and sinks, addressed by operand index; sign extension, `MOD 2^n` wrap, masks, shifts, byte reversal, bit fields (`field_of`, `into_field`); the even-odd pair's low words as one 64-bit value, or both registers as one 128-bit value; R1+1 as a source; the storage-immediate read-modify-write |
+| `interpreter/hlasm/data_movement.py` | `move(source, transforms, sink)`: storage, relative-long, address, immediate and register sources and sinks, addressed by operand index; sign extension, `MOD 2^n` wrap, masks, shifts, byte reversal, bit fields (`field_of`, `into_field`); the even-odd pair's low words as one 64-bit value, or both registers as one 128-bit value; R1+1 as a source; high words as a source and a sink; the storage-immediate read-modify-write |
 | `interpreter/hlasm/effective_address.py` | `effective_address` (D(X,B), AMODE 31), `length_operand_address` (D(L,B)), `indexed_address` (index scaled by the element size), `relative_address` (RELOC_IMM) |
 | `interpreter/hlasm/alignment_check.py` | An operand off its boundary abends `S0C6` |
 | `interpreter/hlasm/fixed_point_overflow.py` | CC 3 with program-mask bit `1000` on abends `S0C8` |
@@ -550,9 +553,38 @@ variant expansion (ruling R30).
 - z390 does not check the odd EX target (it abends `S0C1`), links an executed BRAS after the
   BRAS, and sets CC 1 for an ALSI carry, as it does without EX. The z390 test pins all three.
 
+**Load and store on condition, select, bit counts (red-dragon-6uyp.41).** LOCR, LOCGR, LOCFHR,
+LOC, LOCG, LOCFH, LOCHI, LOCGHI, LOCHHI; STOC, STOCG, STOCFH; SELR, SELGR, SELFHR; FLOGR,
+POPCNT, CLZG, CTZG, BEXTG, BDEPG. The bridge resolves the extended mnemonics (LOCRE, STOCGNH,
+SELFHRO, ...) to the base mnemonic with M3, or M4 for SELECT.
+
+- On condition: the M3 bit `8 >> CC` decides whether the move happens; the test comes first, so
+  nothing is read or written otherwise. LOC, LOCR, LOCHI and STOC use the low word, LOCFH,
+  LOCFHR, LOCHHI and STOCFH the high word, the G forms the whole register; the other half is
+  kept. I2 is a signed halfword. The Principles of Operation leave an access exception on an
+  unmet condition model dependent; none is raised. CC unchanged.
+- SELECT reads R2 and R3, writes R3 to R1, then R2 if M4 selects the CC. SELR uses low words,
+  SELFHR high words, SELGR whole registers. CC unchanged.
+- FLOGR: R1 gets the leftmost one's position, or 64; R1+1 gets R2 with that bit cleared; CC 0
+  none found, 2 found. An odd R1 abends `S0C6`; che4z refuses one at assembly. POPCNT counts each
+  byte, or all 64 bits when M3 bit 0 is on; CC 0 zero, 1 not. CLZG and CTZG count leading and
+  trailing zeros, 64 for zero; CC unchanged.
+- BEXTG packs R2's bits under the R3 mask left-justified; BDEPG deposits R2's leftmost n bits (n
+  the mask's ones) at the mask's ones, in order. Both zero the rest; CC unchanged.
+- The counts are branch-free IR (SWAR population, a right smear for the leading zeros and the
+  leftmost one). BEXTG and BDEPG loop once per one bit of the mask, right to left, about 22 VM
+  steps each, moving one bit between that mask bit and a cursor that starts at 2^(64 - n).
+- che4z encodes the NE/NZ, NL/NM and NH/NP suffixes of LOC, LOCG, LOCR, LOCGR, STOC and STOCG as
+  6, 10 and 12; the Principles of Operation give 7, 11 and 13, as z390 does for LOCRNE
+  (red-dragon-6uyp.82). It
+  matters only at CC 3.
+- z390 does not execute LOCHI, LOCGHI, LOCHHI, LOCFHR, LOCFH, STOCFH, CLZG, CTZG, BEXTG or BDEPG
+  (`S0C1`), and SELFHR moves the whole register. The z390 test pins both; those expectations
+  come from the Principles of Operation.
+
 ## Known Gaps
 
-- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, and execute units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
+- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, and conditional load and store, select and bit count units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
 - DC types beyond C, X, B, F, H, P, Z, A, Y and V, and any type extension, raise `UnsupportedDataType` (red-dragon-6uyp.63; floating point E, D, L: red-dragon-6uyp.21).
 - Falling through into DC/DS data or past a CSECT's end skips the data instead of executing it, and a branch into data abends `S0C1` (red-dragon-6uyp.64).
 - Every branch, even to a static relative target, walks the dispatch chain (red-dragon-6uyp.80).
@@ -664,3 +696,7 @@ variant expansion (ruling R30).
 | `tests/z390/test_branch_on_condition_differential.py` | Every branch on condition case against z390; the BIC, BPP and BPRP differences and branches into data pinned (`-m z390`) |
 | `tests/z390/test_branch_and_link_differential.py` | Every branch and link case and the mode-setting returns against z390; z390's AMODE 24 and 64 switches pinned (`-m z390`) |
 | `tests/z390/test_loop_branch_differential.py` | Every branch on count and index case against z390; z390's late reads of R2 and the compare value pinned (`-m z390`) |
+| `tests/unit/hlasm/test_conditional_select_count_lowering.py` | Conditional, select and count IR: the CC mask tested before any operand, SELECT's reads before its write, FLOGR's odd pair `S0C6`, branch-free counts with no builtin, one loop for BEXTG and BDEPG, the count IR's values |
+| `tests/integration/hlasm/test_conditional_select_count.py` | Every conditional, select and count mnemonic and every extended suffix on the VM: met and unmet conditions, masks 0 and 15, kept halves, aliased registers, zero and full operands; CC |
+| `tests/integration/hlasm/test_conditional_select_count_mnemonics.py` | Every load/store-on-condition and SELECT extended spelling reaches its base mnemonic and mask; che4z's facility-1 negated masks xfailed (red-dragon-6uyp.82) |
+| `tests/z390/test_conditional_select_count_differential.py` | Every conditional, select and count case against z390; the instructions z390 does not execute and its whole-register SELFHR pinned (`-m z390`) |

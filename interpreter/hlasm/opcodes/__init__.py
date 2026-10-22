@@ -19,6 +19,9 @@ from interpreter.hlasm.opcodes.compare import (
 from interpreter.hlasm.opcodes.compare_branch_trap import (
     COMPARE_BRANCH_TRAP_LOWERINGS,
 )
+from interpreter.hlasm.opcodes.conditional_select_count import (
+    CONDITIONAL_SELECT_COUNT_LOWERINGS,
+)
 from interpreter.hlasm.opcodes.load_address_immediate import (
     LOAD_ADDRESS_IMMEDIATE_LOWERINGS,
 )
@@ -73,6 +76,7 @@ OPCODE_LOWERINGS: Mapping[str, StatementLowering] = {
     **SS_MOVE_LOWERINGS,
     **SS_COMPARE_LOWERINGS,
     **TRANSLATE_LOWERINGS,
+    **CONDITIONAL_SELECT_COUNT_LOWERINGS,
 }
 
 DATA_FIELD_LOWERINGS: Mapping[str, FieldLowering] = {
