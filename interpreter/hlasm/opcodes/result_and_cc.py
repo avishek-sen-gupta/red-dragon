@@ -1,5 +1,5 @@
 # pyright: standard
-"""Lowerings that splice a (result, CC) builder over register, storage or immediate operands and store both, with no trap."""
+"""Lowerings that splice a (result, CC) builder over register, storage or immediate operands and store both, with optional steps on the CC afterwards."""
 
 from collections.abc import Callable, Mapping, Sequence
 
@@ -28,16 +28,20 @@ def apply_result_and_cc(
 
 
 def result_and_cc(
-    operation: Operation, operands: Sequence[tuple[Register, Source]], sink: Sink
+    operation: Operation,
+    operands: Sequence[tuple[Register, Source]],
+    sink: Sink,
+    after: Sequence[Callable[[HlasmEmitter, Register], None]] = (),
 ) -> StatementLowering:
     def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
         arguments = {param: source(emitter, statement) for param, source in operands}
-        apply_result_and_cc(
+        cc = apply_result_and_cc(
             emitter,
             operation,
             arguments,
             lambda value: sink(emitter, statement, value),
         )
+        _ = [step(emitter, cc) for step in after]
 
     return lower
 
