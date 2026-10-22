@@ -4,8 +4,6 @@
 from collections.abc import Mapping
 from pathlib import Path
 
-import pytest
-
 from hlasm_asg.program.machine_statement import MachineStatement
 from hlasm_asg.program.mask_operand import MaskOperand
 from interpreter.frontends import get_hlasm_parser
@@ -27,16 +25,13 @@ SUFFIXES: Mapping[str, int] = {
     "NP": 13,
     "NO": 14,
 }
-NEGATED = ("NE", "NZ", "NL", "NM", "NH", "NP")
-FACILITY_1: Mapping[str, str] = {
+BASES: Mapping[str, str] = {
     "LOC": "1,W",
     "LOCG": "1,W",
     "LOCR": "1,2",
     "LOCGR": "1,2",
     "STOC": "1,W",
     "STOCG": "1,W",
-}
-FACILITY_2_AND_SELECT: Mapping[str, str] = {
     "LOCFH": "1,W",
     "LOCFHR": "1,2",
     "LOCHI": "1,5",
@@ -47,7 +42,6 @@ FACILITY_2_AND_SELECT: Mapping[str, str] = {
     "SELGR": "1,2,3",
     "SELFHR": "1,2,3",
 }
-BASES = {**FACILITY_1, **FACILITY_2_AND_SELECT}
 
 
 def _resolved(tmp_path: Path) -> Mapping[str, tuple[str, list[int]]]:
@@ -76,36 +70,12 @@ def _resolved(tmp_path: Path) -> Mapping[str, tuple[str, list[int]]]:
     }
 
 
-def _expected(
-    bases: Mapping[str, str], suffixes: Mapping[str, int]
-) -> Mapping[str, tuple[str, list[int]]]:
-    return {
-        base + suffix: (base, [mask])
-        for base in bases
-        for suffix, mask in suffixes.items()
-    }
-
-
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_extended_spellings_reach_their_base_mnemonic_and_mask(tmp_path: Path):
-    resolved = _resolved(tmp_path)
-    plain = {s: m for s, m in SUFFIXES.items() if s not in NEGATED}
     expected = {
-        **_expected(FACILITY_2_AND_SELECT, SUFFIXES),
-        **_expected(FACILITY_1, plain),
+        base + suffix: (base, [mask])
+        for base in BASES
+        for suffix, mask in SUFFIXES.items()
     }
 
-    assert {spelling: resolved[spelling] for spelling in expected} == expected
-
-
-@covers(NotLanguageFeature.INFRASTRUCTURE)
-@pytest.mark.xfail(
-    reason="che4z encodes the facility-1 negated suffixes as 6, 10, 12 — red-dragon-6uyp.82",
-    strict=True,
-)
-def test_negated_facility_1_spellings_reach_the_figure_j1_mask(tmp_path: Path):
-    resolved = _resolved(tmp_path)
-    negated = {s: m for s, m in SUFFIXES.items() if s in NEGATED}
-    expected = _expected(FACILITY_1, negated)
-
-    assert {spelling: resolved[spelling] for spelling in expected} == expected
+    assert _resolved(tmp_path) == expected
