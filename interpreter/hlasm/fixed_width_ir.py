@@ -408,6 +408,67 @@ def build_boolean_cc_ir(
     ]
 
 
+type DropWeight = Callable[[str, Register, Register], Fragment]
+
+
+def _plain_drop_weight(prefix: str, selected: Register, mask: Register) -> Fragment:
+    return _const(prefix, "drop_weight", 2)
+
+
+def _ranked_drop_weight(prefix: str, selected: Register, mask: Register) -> Fragment:
+    doubled, doubled_ir = _binop_const(prefix, "sel2", BinopKind.MUL, selected, 2)
+    surplus, surplus_ir = _binop(prefix, "surplus", BinopKind.SUB, doubled, mask)
+    leftmost_zero, leftmost_zero_ir = _sign_bit(prefix, surplus, MAXIMUM_SHIFT_BITS)
+    weight, weight_ir = _binop_const(
+        prefix, "drop_weight", BinopKind.ADD, leftmost_zero, 1
+    )
+    return weight, (*doubled_ir, *surplus_ir, *leftmost_zero_ir, *weight_ir)
+
+
+def _under_mask_cc_ir(
+    func_name: str, bits: int, drop_weight: DropWeight
+) -> list[InstructionBase]:
+    selected, selected_ir = _binop(
+        func_name, "selected", BinopKind.BIT_AND, PARAM_LEFT, PARAM_RIGHT
+    )
+    unselected, unselected_ir = _binop(
+        func_name, "unselected", BinopKind.SUB, PARAM_RIGHT, selected
+    )
+    any_one, any_one_ir = _nonzero_bit(f"{func_name}.s", selected, bits)
+    any_zero, any_zero_ir = _nonzero_bit(f"{func_name}.u", unselected, bits)
+    weight, weight_ir = drop_weight(func_name, selected, PARAM_RIGHT)
+    drop, drop_ir = _binop(func_name, "drop", BinopKind.MUL, any_zero, weight)
+    from_ones, from_ones_ir = _binop_const(
+        func_name, "from_ones", BinopKind.SUB, drop, 3
+    )
+    negated, negated_ir = _binop_const(
+        func_name, "negated", BinopKind.MUL, from_ones, -1
+    )
+    cc, cc_ir = _binop(func_name, "cc", BinopKind.MUL, any_one, negated)
+    return [
+        *selected_ir,
+        *unselected_ir,
+        *any_one_ir,
+        *any_zero_ir,
+        *weight_ir,
+        *drop_ir,
+        *from_ones_ir,
+        *negated_ir,
+        *cc_ir,
+        Return_(value_reg=cc),
+    ]
+
+
+def build_test_under_mask_cc_ir(func_name: str, bits: int) -> list[InstructionBase]:
+    return _under_mask_cc_ir(func_name, bits, _plain_drop_weight)
+
+
+def build_test_under_mask_ranked_cc_ir(
+    func_name: str, bits: int
+) -> list[InstructionBase]:
+    return _under_mask_cc_ir(func_name, bits, _ranked_drop_weight)
+
+
 def _value_ir(value: Fragment) -> list[InstructionBase]:
     result, result_ir = value
     return [*result_ir, Return_(value_reg=result)]

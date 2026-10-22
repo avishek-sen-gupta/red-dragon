@@ -34,6 +34,8 @@ from interpreter.hlasm.fixed_width_ir import (
     build_sign_cc_ir,
     build_sub_logical_borrow_cc_ir,
     build_sub_signed_cc_ir,
+    build_test_under_mask_cc_ir,
+    build_test_under_mask_ranked_cc_ir,
     build_to_signed_ir,
     build_wrap_ir,
 )
@@ -363,3 +365,23 @@ def test_load_complement_positive_and_negative_set_cc_with_overflow_only_at_the_
         [1 << 40, 2],
         [-(1 << 40), 1],
     ]
+
+
+def test_test_under_mask_builders_give_zero_mixed_and_ones_with_the_mixed_rank_only_when_asked():
+    unranked = build_test_under_mask_cc_ir("tm8", 8)
+    ranked = build_test_under_mask_ranked_cc_ir("tm16", 16)
+    byte_cases = ((0x80, 0x00), (0x7F, 0x80), (0x81, 0xFF), (0xFF, 0x81), (0x01, 0x81))
+    halfword_cases = (
+        (0x0123, 0x0000),
+        (0x0123, 0x0400),
+        (0x0123, 0x0003),
+        (0x0123, 0x0140),
+        (0x0123, 0x0041),
+        (0x8000, 0xFFFF),
+        (0x0001, 0xFFFF),
+        (0xFFFF, 0xFFFF),
+    )
+    assert [
+        [_pair_of(unranked, v, m) for v, m in byte_cases],
+        [_pair_of(ranked, v, m) for v, m in halfword_cases],
+    ] == [[0, 0, 1, 3, 1], [0, 0, 3, 2, 1, 2, 1, 3]]

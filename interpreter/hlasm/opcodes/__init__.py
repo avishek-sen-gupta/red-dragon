@@ -24,6 +24,7 @@ from interpreter.hlasm.opcodes.signed_add_subtract import (
     SIGNED_ADD_SUBTRACT_LOWERINGS,
 )
 from interpreter.hlasm.opcodes.svc import SVC_LOWERINGS
+from interpreter.hlasm.opcodes.under_mask import TEST_UNDER_MASK_LOWERINGS
 from interpreter.hlasm.statement_lowering import StatementLowering
 
 OPCODE_LOWERINGS: Mapping[str, StatementLowering] = {
@@ -40,4 +41,5 @@ OPCODE_LOWERINGS: Mapping[str, StatementLowering] = {
     **BRANCH_AND_LINK_LOWERINGS,
     **LOOP_BRANCH_LOWERINGS,
     **SVC_LOWERINGS,
+    **TEST_UNDER_MASK_LOWERINGS,
 }
