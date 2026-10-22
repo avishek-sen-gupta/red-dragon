@@ -7,10 +7,12 @@ source is lowered to the existing IR and runs on the existing VM. The endgame is
 mixed-language execution — a COBOL (or CICS) program `CALL`s an HLASM subroutine,
 and HLASM calls back into COBOL — with both sides as IR in one linked image.
 
-The first priority is complete coverage of the problem-state instruction set. Macro
-support (the HLASM macro language and system macros) follows. The first runnable
-milestone is a standalone HLASM program that starts, runs and stops; cross-language
-linkage comes later but the register and storage model must not rule it out.
+The first priority is complete coverage of the general, decimal, floating-point and
+vector instruction sets (waves 1 and 2). Running real programs follows: system
+services and COBOL linkage (wave 3), then the macro language (wave 4). The
+specialised facilities come last (wave 5). The first runnable milestone is a
+standalone HLASM program that starts, runs and stops; the register and storage model
+must not rule out cross-language linkage.
 
 An LLM-backed HLASM path already exists (`LLMFrontend(language="hlasm")`,
 `scripts/demo_hlasm.py`). This frontend is the deterministic replacement and does
@@ -64,10 +66,17 @@ Reference and Reference Summary, not binutils (which has non-HLASM aliases).
 | Packed decimal | 23 | 4 |
 | Floating point (BFP, HFP, DFP, FP support) — last in wave 1 | 307 | ≈7 |
 
-**Wave 2:** vector (170), vector-decimal (33), NNPA (6), crypto (13, excluding the
-privileged `PCKMO`), transactional (7).
+**Wave 2:** vector (170), vector-decimal (33).
 
-Then: the HLASM macro language in full and the remaining system macros.
+**Wave 3 — real programs run:** `SAVE`/`RETURN`, `STORAGE`/`GETMAIN`/`FREEMAIN`,
+`CALL`/`LINK`/`LOAD`, `DCB`/`OPEN`/`GET`/`PUT`/`CLOSE`, and COBOL↔HLASM linkage (see
+*System services* and *Cross-language linkage*).
+
+**Wave 4 — the macro language:** conditional assembly, SET symbols, attributes,
+system variable symbols, and the remaining DC types and type extensions.
+
+**Wave 5 — specialised facilities:** NNPA (6), crypto (13, excluding the privileged
+`PCKMO`), transactional execution (7), sort, compression and deflate.
 
 ### Opcode units
 
@@ -211,21 +220,20 @@ in both directions; the bridge belongs to the call boundary, not to either front
 
 ## Branching and merging
 
-One long-lived branch, `hlasm`. It merges into `main` with `--no-ff` at milestones,
-and `main` is merged back into `hlasm` straight after. The branch is kept, not
-recreated. Every merge into `main` passes the full gate. Unfinished work that lands
-on `main` is either not yet wired in or carries `xfail` tests citing the bead id.
+Work lands on `main` directly, one reviewed unit at a time; the `hlasm` branch was
+merged and retired. Every commit passes the full gate. Unfinished work is either not
+yet wired in or carries `xfail` tests citing the bead id.
 
 ## Issue tracking
 
 One epic in this repo's beads, cross-referencing Forge's `red-dragon-forge-6r0s`
 (which weighs the same option). Children: the foundation units, one issue per opcode
 unit with its exact mnemonic list derived from the opcode table, the system-services
-units, the linkage unit, and wave 2 and macro-language issues at coarser grain until
-they start. IR gaps found during the work get their own issues. One further issue,
-outside the epic: check whether IBM Enterprise COBOL stores COMP-1/COMP-2 as
-hexadecimal floating point; RedDragon packs them as IEEE today
-(`byte_builtins.py`), and the HFP work here would close that gap if so.
+units, the linkage unit, and the wave 2, 4 and 5 issues at coarser grain until they
+start. Each issue carries a `wave-N` label. IR gaps found during the work get their
+own issues. One further issue, outside the epic: check whether IBM Enterprise COBOL
+stores COMP-1/COMP-2 as hexadecimal floating point; RedDragon packs them as IEEE
+today (`byte_builtins.py`), and the HFP work here would close that gap if so.
 
 ## Left to the builder
 
