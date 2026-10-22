@@ -35,6 +35,10 @@ def _gpr_bytes(vm: VMState, offset: int, width: int) -> int:
     return int.from_bytes(bytes(loaded), "big")
 
 
+def gpr(vm: VMState, register: int) -> int:
+    return _gpr_bytes(vm, GPR_BYTES * register, GPR_BYTES)
+
+
 def _low_word(vm: VMState, register: int) -> int:
     return _gpr_bytes(vm, GPR_BYTES * register + LOW_WORD_OFFSET, WORD_BYTES)
 

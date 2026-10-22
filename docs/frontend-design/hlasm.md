@@ -101,6 +101,7 @@ addresses.
 | `interpreter/hlasm/checksum.py` | CKSM |
 | `interpreter/hlasm/clock_instructions.py` | STCK, STCKF, STCKE, ECTG |
 | `interpreter/hlasm/machine_clock.py`, `clock_builtins.py` | `MachineClock` (TOD clock, CPU timer); `clock_builtins(clock)`, the `__hlasm_tod_clock` and `__hlasm_cpu_timer` builtins over it |
+| `interpreter/hlasm/system_machine_clock.py` | `SystemMachineClock`, the host clock over injected wall and process-CPU nanosecond readings: TOD from wall time since 1900-01-01 UTC (no leap seconds), CPU timer down from 2^63 - 1 at 4096 units per microsecond |
 | `interpreter/hlasm/cpu_attributes.py` | ECAG's constant attributes |
 | `interpreter/hlasm/facility_list.py` | STFLE's constant facility list |
 | `interpreter/hlasm/register_part.py`, `register_parts.py` | `RegisterPart`: the low word, high word or whole register, or an access register, that a lowering reads and writes, and `merge` for bytes under a mask |
@@ -787,9 +788,9 @@ its own module.
   whatever mode it selects.
 - Access registers hold values only; no instruction addresses through them. LAE and LAEY do
   not set access register R1 (red-dragon-6uyp.86).
-- `run()` resolves builtins through `core_builtins()`, which has no clock builtins, so a clock
-  instruction there stores what the unresolved-call strategy gives (red-dragon-6uyp.85). Callers that compose
-  `clock_builtins(clock)` get a clock.
+- `run()` defaults to `DEFAULT_BUILTINS`, which has no clock builtins, so a clock instruction
+  there stores what the unresolved-call strategy gives. Callers that give `builtins` composed
+  with `clock_builtins(clock)` get a clock; the `interpreter.py` CLI supplies a `SystemMachineClock`.
 - The data-exception code is not modelled: a compare-and-trap or load-and-trap trap and a decimal
   data exception abend `S0C7` and store no DXC.
 - In AMODE 31, LM, STM, LMD, NC, OC, XC, the decimal instructions and the storage moves, compares and translates do not wrap

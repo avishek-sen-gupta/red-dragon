@@ -5,12 +5,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 
 from interpreter import constants
 from interpreter.cli_output import emit
+from interpreter.default_builtins import DEFAULT_BUILTINS
 from interpreter.func_name import FuncName
+from interpreter.hlasm.clock_builtins import clock_builtins
+from interpreter.hlasm.system_machine_clock import SystemMachineClock
 from interpreter.project.entry_point import EntryPoint
 from interpreter.run import run
+from interpreter.vm.builtins import compose_builtins
 
 
 def main():
@@ -86,6 +91,12 @@ result = factorial(5)
         max_steps=args.max_steps,
         verbose=args.verbose,
         frontend_type=args.frontend,
+        builtins=compose_builtins(
+            DEFAULT_BUILTINS,
+            clock_builtins(
+                SystemMachineClock(wall_ns=time.time_ns, cpu_ns=time.process_time_ns)
+            ),
+        ),
     )
 
     emit("\n═══ Final VM State ═══")
