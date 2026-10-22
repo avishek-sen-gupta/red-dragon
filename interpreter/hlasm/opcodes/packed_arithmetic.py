@@ -22,7 +22,6 @@ from interpreter.hlasm.operands import storage_length_operand, storage_operand
 from interpreter.hlasm.packed_decimal import (
     DECIMAL_BASE,
     NOT_DIGITS,
-    Field,
     at_least,
     digit_limit,
     nonzero_bit,
@@ -34,6 +33,7 @@ from interpreter.hlasm.packed_decimal import (
     store_with_cc,
     table_bit,
 )
+from interpreter.hlasm.packed_field import PackedField
 from interpreter.hlasm.packed_value import PackedValue
 from interpreter.hlasm.specification_check import emit_specification_check
 from interpreter.hlasm.statement_lowering import StatementLowering
@@ -47,7 +47,7 @@ SHIFT_BITS = 0x3F
 RIGHT_SHIFT_BIT = 5
 SHIFT_SPAN = 64
 
-type Fields = tuple[Field, Field]
+type Fields = tuple[PackedField, PackedField]
 
 
 def _length(emitter: HlasmEmitter, field: DataField, part: tuple[int, int]) -> Register:
@@ -56,16 +56,18 @@ def _length(emitter: HlasmEmitter, field: DataField, part: tuple[int, int]) -> R
 
 def _first_field(
     emitter: HlasmEmitter, statement: MachineStatement, field: DataField
-) -> Field:
+) -> PackedField:
     first = storage_length_operand(statement, FIRST_OPERAND)
-    return length_operand_address(emitter, first), _length(emitter, field, FIRST_FIELD)
+    return PackedField(
+        length_operand_address(emitter, first), _length(emitter, field, FIRST_FIELD)
+    )
 
 
 def _fields(
     emitter: HlasmEmitter, statement: MachineStatement, field: DataField
 ) -> Fields:
     second = storage_length_operand(statement, SECOND_OPERAND)
-    return _first_field(emitter, statement, field), (
+    return _first_field(emitter, statement, field), PackedField(
         length_operand_address(emitter, second),
         _length(emitter, field, SECOND_FIELD),
     )
@@ -97,7 +99,8 @@ def _add(sign_of_second: int) -> LowerWithField:
             BinopKind.MUL, second, emitter.int_(sign_of_second)
         )
         total = emitter.binop(BinopKind.ADD, first, signed_second)
-        store_signed(emitter, fields[0], total)
+        result, _ = fields
+        store_signed(emitter, result, total)
 
     return lower
 
@@ -112,7 +115,7 @@ def _zero_and_add(
 
 
 def _check_factor_lengths(emitter: HlasmEmitter, fields: Fields) -> Register:
-    first, second = (length for _, length in fields)
+    first, second = (f.length for f in fields)
     too_long = emitter.binop(BinopKind.GT, second, emitter.int_(LONGEST_FACTOR))
     not_shorter = emitter.binop(BinopKind.GE, second, first)
     emit_specification_check(
@@ -139,7 +142,8 @@ def _multiply(
     invalid = emitter.binop(BinopKind.BIT_OR, _either_invalid(emitter, values), crowded)
     emit_data_check(emitter, invalid)
     product = emitter.binop(BinopKind.MUL, multiplicand.magnitude, multiplier.magnitude)
-    store_packed(emitter, fields[0], product, _either_sign(emitter, values))
+    multiplicand_field, _ = fields
+    store_packed(emitter, multiplicand_field, product, _either_sign(emitter, values))
 
 
 def _check_quotient(
@@ -163,15 +167,23 @@ def _store_quotient_and_remainder(
     quotient_length: Register,
 ) -> None:
     dividend, divisor = values
-    address, divisor_length = fields[0][0], fields[1][1]
+    dividend_field, divisor_field = fields
     quotient = emitter.binop(BinopKind.FLOOR_DIV, dividend.magnitude, divisor.magnitude)
     remainder = emitter.binop(BinopKind.MOD, dividend.magnitude, divisor.magnitude)
-    remainder_address = emitter.binop(BinopKind.ADD, address, quotient_length)
-    store_packed(
-        emitter, (address, quotient_length), quotient, _either_sign(emitter, values)
+    remainder_address = emitter.binop(
+        BinopKind.ADD, dividend_field.address, quotient_length
     )
     store_packed(
-        emitter, (remainder_address, divisor_length), remainder, dividend.negative
+        emitter,
+        PackedField(dividend_field.address, quotient_length),
+        quotient,
+        _either_sign(emitter, values),
+    )
+    store_packed(
+        emitter,
+        PackedField(remainder_address, divisor_field.length),
+        remainder,
+        dividend.negative,
     )
 
 

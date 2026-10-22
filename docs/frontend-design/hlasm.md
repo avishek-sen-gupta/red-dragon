@@ -142,7 +142,7 @@ addresses.
 | `interpreter/hlasm/unicode_decoders.py`, `unicode_encoders.py` | UTF-8, UTF-16 and UTF-32 readers (code point, exhaustion, well-formedness) and writers (room check, store) |
 | `interpreter/hlasm/conversion_cursor.py`, `conversion_labels.py` | A conversion step's offsets and its exits |
 | `interpreter/hlasm/opcodes/packed_arithmetic.py` | The packed-decimal arithmetic unit |
-| `interpreter/hlasm/packed_decimal.py`, `packed_value.py` | A signed-packed field at a run-time length read into a magnitude, a negative bit and an invalid bit, all ints; stored right to left with sign C or D; the overflow test and CC |
+| `interpreter/hlasm/packed_decimal.py`, `packed_value.py`, `packed_field.py`, `packed_digit_reader.py`, `packed_byte_sink.py` | A signed-packed field (address, run-time length) read into a magnitude, a negative bit and an invalid bit; stored right to left with sign C or D; the overflow test and CC by int compares |
 | `interpreter/hlasm/decimal_exceptions.py` | `S0C7` and `S0CB` before any store; `S0CA` after the store when program-mask bit `0100` is on |
 | `interpreter/hlasm/range_dispatch.py`, `bit_fields.py` | Branch on ascending bounds; masked, shifted and ORed bit fields |
 

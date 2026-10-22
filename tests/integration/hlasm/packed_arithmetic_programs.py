@@ -59,6 +59,15 @@ DATA = (
     "P9000    DC    PL3'9000'\n"
     "BADD     DC    X'1A3C'\n"
     "BADS     DC    X'1234'\n"
+    "P100     DC    PL3'100'\n"
+    "M100     DC    PL3'-100'\n"
+    "A31      DC    PL16'4444444444444444444444444444444'\n"
+    "N31      DC    PL16'9999999999999999999999999999999'\n"
+    "A15      DC    PL8'123456789012345'\n"
+    "M15      DC    PL8'-999999999999999'\n"
+    "M29      DC    PL16'-77777777777777777777777777777'\n"
+    "D15      DC    PL8'-987654321098765'\n"
+    "W16      DC    PL16'0'\n"
     "APX      AP    W(1),P2(1)\n"
     "SRPX     SRP   W(1),63,0\n"
     "DPX      DP    W(2),M2(1)\n"
@@ -88,6 +97,17 @@ def _line(mnemonic: str, operands: str) -> str:
 LOAD_W = _line("LG", "7,W")
 LOAD_V = _line("LG", "7,VD")
 LOAD_V3 = _line("LG", "7,V3D")
+LOAD_W16 = _line("LMG", "6,7,W16")
+HIGH_RESULT = 6
+
+
+def _zap16(field: str) -> str:
+    return f"         ZAP   W16(16),{field}\n"
+
+
+def _wide(high: int, low: int) -> Mapping[int, int]:
+    return {HIGH_RESULT: high, RESULT: low}
+
 
 ADDS: Mapping[str, Case] = {
     "AP": (
@@ -135,6 +155,31 @@ ADDS: Mapping[str, Case] = {
         {RESULT: 0x00000000_0000000C},
         CC_ZERO,
     ),
+    "AP longer second operand": (
+        _line("MVC", "V(2),P2") + _line("AP", "V(2),P100") + LOAD_V,
+        {RESULT: 0x778C},
+        CC_HIGH,
+    ),
+    "AP longer second operand overflows with the mask off": (
+        MASK_OFF + _line("MVC", "V(2),P2") + _line("AP", "V(2),P1") + LOAD_V,
+        {RESULT: 0x023C},
+        CC_OVERFLOW,
+    ),
+    "SP longer second operand": (
+        _line("MVC", "V(2),P2") + _line("SP", "V(2),M100") + LOAD_V,
+        {RESULT: 0x778C},
+        CC_HIGH,
+    ),
+    "AP 31 digits": (
+        _zap16("A31") + _line("AP", "W16(16),A31") + LOAD_W16,
+        _wide(0x88888888_88888888, 0x88888888_8888888C),
+        CC_HIGH,
+    ),
+    "AP 31 nines plus one overflows with the mask off": (
+        MASK_OFF + _zap16("N31") + _line("AP", "W16(16),ONE") + LOAD_W16,
+        _wide(0, 0xC),
+        CC_OVERFLOW,
+    ),
     "SP overflow to zero keeps the minus sign with the mask off": (
         MASK_OFF + _line("MVC", "V(2),BIGM") + _line("SP", "V(2),ONE") + LOAD_V,
         {RESULT: 0x00000000_0000000D},
@@ -162,6 +207,11 @@ ZERO_AND_ADDS: Mapping[str, Case] = {
         {RESULT: 0x12345C00_0012345C},
         CC_HIGH,
     ),
+    "ZAP 31 digits": (
+        _zap16("N31") + LOAD_W16,
+        _wide(0x99999999_99999999, 0x99999999_9999999C),
+        CC_HIGH,
+    ),
     "ZAP overflow with the mask off": (
         MASK_OFF + _line("ZAP", "V(2),P1") + LOAD_V,
         {RESULT: 0x345C},
@@ -178,6 +228,11 @@ MULTIPLIES: Mapping[str, Case] = {
     "MP negative zero": (
         _zap("ZERO") + SET_CC + _line("MP", "W(8),M2") + LOAD_W,
         {RESULT: 0xD},
+        CC_SET_BY_LTR,
+    ),
+    "MP 8-byte multiplier": (
+        _zap16("A15") + SET_CC + _line("MP", "W16(16),M15") + LOAD_W16,
+        _wide(0x01234567_89012344, 0x87654321_0987655D),
         CC_SET_BY_LTR,
     ),
     "MP rightmost bytes coincide": (
@@ -203,6 +258,11 @@ DIVIDES: Mapping[str, Case] = {
         {RESULT: 0x00000000_000D005D},
         CC_SET_BY_LTR,
     ),
+    "DP 15-digit divisor": (
+        _zap16("M29") + SET_CC + _line("DP", "W16(16),D15") + LOAD_W16,
+        _wide(0x07874999_9991140C, 0x65131271_2835677D),
+        CC_SET_BY_LTR,
+    ),
     "DP largest quotient": (
         _line("MVC", "V3(3),P8991") + SET_CC + _line("DP", "V3(3),NINE") + LOAD_V3,
         {RESULT: 0x999C0C},
@@ -215,6 +275,16 @@ SHIFTS: Mapping[str, Case] = {
         _zap("P1") + _line("SRP", "W(8),3,0") + LOAD_W,
         {RESULT: 0x00000001_2345000C},
         CC_HIGH,
+    ),
+    "SRP left 30 fills 31 digits": (
+        _zap16("ONE") + _line("SRP", "W16(16),30,0") + LOAD_W16,
+        _wide(0x10000000_00000000, 0xC),
+        CC_HIGH,
+    ),
+    "SRP left 31 overflows with the mask off": (
+        MASK_OFF + _zap16("A31") + _line("SRP", "W16(16),31,0") + LOAD_W16,
+        _wide(0, 0xC),
+        CC_OVERFLOW,
     ),
     "SRP right rounds": (
         _zap("P1") + _line("SRP", "W(8),63,5") + LOAD_W,
