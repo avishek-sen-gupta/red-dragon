@@ -14,6 +14,7 @@ from interpreter.registry import build_registry
 from interpreter.run import (
     Completed,
     initial_vm_state,
+    run,
     run_linked,
     run_linked_resumable,
     run_linked_traced,
@@ -66,7 +67,8 @@ def _shout(fn: Builtin):
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_each_run_resolves_builtins_through_its_own_table():
-    linked = _linked("x = shout(6)\n")
+    source = "x = shout(6)\n"
+    linked = _linked(source)
     top = EntryPoint.top_level()
 
     def ran(fn: Builtin) -> object:
@@ -87,7 +89,11 @@ def test_each_run_resolves_builtins_through_its_own_table():
         traced.current_frame.local_vars[VarName("x")].value,
         resumed.vm.current_frame.local_vars[VarName("x")].value,
         type(unknown.current_frame.local_vars[VarName("x")].value).__name__,
-    ) == (60, 3, 3, 60, "SymbolicValue")
+        run(source, builtins=_shout(_tenfold))
+        .current_frame.local_vars[VarName("x")]
+        .value,
+        type(run(source).current_frame.local_vars[VarName("x")].value).__name__,
+    ) == (60, 3, 3, 60, "SymbolicValue", 60, "SymbolicValue")
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

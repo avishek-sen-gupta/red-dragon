@@ -17,6 +17,7 @@ from interpreter import constants
 from interpreter.cfg import CFG, build_cfg
 from interpreter.cfg_types import BasicBlock
 from interpreter.constants import FoundationTypeName, Language, LLMProvider
+from interpreter.default_builtins import DEFAULT_BUILTINS
 from interpreter.frontend import Frontend, get_frontend, make_cobol_parser
 from interpreter.frontend_observer import FrontendObserver
 from interpreter.frontends import get_hlasm_parser
@@ -82,7 +83,6 @@ from interpreter.types.type_resolver import TypeResolver
 from interpreter.types.typed_value import TypedValue, typed, unwrap
 from interpreter.var_name import VarName
 from interpreter.vm.builtin import Builtin
-from interpreter.vm.builtins import core_builtins
 from interpreter.vm.executor import HandlerContext, _try_execute_locally
 from interpreter.vm.field_fallback import (
     FieldFallbackStrategy,
@@ -1466,6 +1466,8 @@ def run(
     copybook_dirs: list[Path] = [],
     tolerant: bool = False,
     null_access: NullAccess = WARN_AND_IGNORE,
+    *,
+    builtins: Mapping[FuncName, Builtin] = DEFAULT_BUILTINS,
 ) -> VMState:
     """End-to-end: parse → lower → build LinkedProgram → run_linked.
 
@@ -1484,6 +1486,8 @@ def run(
         unresolved_call_strategy: Resolution strategy for unknown calls.
         tolerant: Skip (with a WARNING) COBOL statements whose lowering
             raises, instead of failing compilation. Default off. COBOL only.
+        builtins: The builtins table this run resolves builtin calls through
+            (default: ``DEFAULT_BUILTINS``, the core table).
     """
     lang = Language(language)
     pipeline_start = time.perf_counter()
@@ -1515,7 +1519,7 @@ def run(
         backend=backend,
         unresolved_call_strategy=unresolved_call_strategy,
         io_provider=io_provider,
-        builtins=core_builtins(),
+        builtins=builtins,
         initial_vm=initial_vm_state(io_provider=io_provider, null_access=null_access),
     )
     _record_run_times(stats, pipeline_start, exec_start)
