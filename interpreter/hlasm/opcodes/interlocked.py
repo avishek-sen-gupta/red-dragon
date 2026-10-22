@@ -46,6 +46,7 @@ from interpreter.hlasm.opcodes.logical_add_subtract import (
 from interpreter.hlasm.opcodes.result_and_cc import Operation, apply_result_and_cc
 from interpreter.hlasm.opcodes.signed_add_subtract import ADD_32, ADD_64
 from interpreter.hlasm.operands import reg_operand
+from interpreter.hlasm.perform_locked_operation import lower_perform_locked_operation
 from interpreter.hlasm.place import Place
 from interpreter.hlasm.places import (
     in_storage,
@@ -241,4 +242,5 @@ INTERLOCKED_LOWERINGS: Mapping[str, StatementLowering] = {
     **LOAD_AND,
     **LOAD_STORE_PAIR,
     "TS": lower_test_and_set,
+    "PLO": lower_perform_locked_operation,
 }
