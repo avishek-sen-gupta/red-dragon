@@ -33,6 +33,7 @@ Z390_PINNED: Mapping[str, HlasmMachine] = {
         programs.COMPLETED,
         {2: 0x80000001_00000000, 3: 0x7FFF7FFE_00000000, 4: 0x80000001_00000000},
     ),
+    "EX LER": _z390(programs.COMPLETED, {2: 0x01234567_00000000}),
     "LXR invalid pair": _z390(programs.COMPLETED, Z390_COMPLETED_PAST_THE_CHECK),
     "LCDFR LNDFR LPDFR": _z390(programs.DATA_EXCEPTION, {r: FILL for r in range(2, 8)}),
     "CPSDR": _z390(programs.DATA_EXCEPTION, {r: FILL for r in range(2, 5)}),

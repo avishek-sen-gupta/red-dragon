@@ -879,7 +879,7 @@ SRNMT, STD, STDY, STE, STEY, STFPC. PFPO is in .56 (ruling R42). Rulings R34, R3
   there stores what the unresolved-call strategy gives. Callers that give `builtins` composed
   with `clock_builtins(clock)` get a clock; the `interpreter.py` CLI supplies a `SystemMachineClock`.
 - Only LFAS and SFASR store a DXC: a compare-and-trap or load-and-trap trap and a decimal data
-  exception abend `S0C7` and leave the FPC's DXC unchanged.
+  exception abend `S0C7` and leave the FPC's DXC unchanged (red-dragon-6uyp.87).
 - In AMODE 31, LM, STM, LMD, NC, OC, XC, the decimal instructions and the storage moves, compares and translates do not wrap
   EA + offset at 2 GiB; MVCL's overlap test ignores operands that wrap.
 - SRST and SRSTU with R1 below R2 search past the top of storage instead of wrapping to 0.
@@ -1005,6 +1005,6 @@ SRNMT, STD, STDY, STE, STEY, STFPC. PFPO is in .56 (ruling R42). Rulings R34, R3
 | `tests/integration/hlasm/test_edit.py` | ED and EDMK on the VM: amount mask with CR, zero suppression, field separators, CC from the last field, alternate signs, a fill byte that is X'20' or X'21', a pending digit across X'22', a first digit with a plus code, GR1 marked or kept; EX length; `S0C7` with the pattern, CC and GR1 unchanged |
 | `tests/z390/test_edit_differential.py` | Every edit case against z390 (`-m z390`) |
 | `tests/unit/hlasm/test_floating_point_support_lowering.py` | Floating-point-support IR: FPR region offsets and widths, short forms on 4 bytes; invalid pairs abend before any access; FPC checks before the FPC store, the LFAS/SFASR trap after it; no SYMBOLIC |
-| `tests/integration/hlasm/test_floating_point_support.py` | Every floating-point-support mnemonic on the VM through GRs: moves, low word kept, sign forms, FPC loads and rounding modes, `S0C6` with the FPC unchanged, each Figure 9-21 DXC with `S0C7` |
+| `tests/integration/hlasm/test_floating_point_support.py` | Every floating-point-support mnemonic on the VM through GRs: moves, low word kept, sign forms, FPC loads and rounding modes, `S0C6` with the FPC unchanged, each Figure 9-21 DXC with `S0C7`; EX of LER |
 | `tests/z390/test_floating_point_support_differential.py` | Every floating-point-support case against z390; its initial FPC, short loads, HFP sign forms, missing checks and signaling pinned (`-m z390`) |
 | `tests/z390/test_conditional_select_count_differential.py` | Every conditional, select and count case against z390; the instructions z390 does not execute and its whole-register SELFHR pinned (`-m z390`) |

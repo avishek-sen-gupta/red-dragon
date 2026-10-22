@@ -75,7 +75,9 @@ def _shown_store(i: StoreVar, regions: Regions, consts: Consts) -> str:
 
 @_shown.register
 def _shown_load(i: LoadVar, regions: Regions, consts: Consts) -> str:
-    return {True: f"LoadVar {i.name}"}.get(str(i.name) == FPC, "")
+    if str(i.name) == FPC:
+        return f"LoadVar {i.name}"
+    return ""
 
 
 def _trace(mnemonic: str, operands: Sequence[Operand]) -> list[str]:
