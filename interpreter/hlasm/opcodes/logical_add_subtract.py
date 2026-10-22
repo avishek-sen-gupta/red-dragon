@@ -66,7 +66,7 @@ def no_borrow(emitter: HlasmEmitter, statement: MachineStatement) -> Register:
     return emitter.int_(NO_BORROW)
 
 
-def _sum(
+def logical_sum(
     operation: Operation, sink: Sink
 ) -> Callable[[Source, Source], StatementLowering]:
     return lambda left, right: result_and_cc(
@@ -74,7 +74,7 @@ def _sum(
     )
 
 
-def _carried(
+def carried_sum(
     operation: Operation, sink: Sink, carry: Source
 ) -> Callable[[Source, Source], StatementLowering]:
     return lambda left, right: result_and_cc(
@@ -84,14 +84,14 @@ def _carried(
     )
 
 
-ADD_WORD = _sum(ADD_32, to_gr32)
-ADD_DOUBLEWORD = _sum(ADD_64, to_gr64)
-ADD_CARRY_WORD = _carried(ADD_CARRY_32, to_gr32, carry_in)
-ADD_CARRY_DOUBLEWORD = _carried(ADD_CARRY_64, to_gr64, carry_in)
-SUB_WORD = _carried(SUB_BORROW_32, to_gr32, no_borrow)
-SUB_DOUBLEWORD = _carried(SUB_BORROW_64, to_gr64, no_borrow)
-SUB_BORROW_WORD = _carried(SUB_BORROW_32, to_gr32, carry_in)
-SUB_BORROW_DOUBLEWORD = _carried(SUB_BORROW_64, to_gr64, carry_in)
+ADD_WORD = logical_sum(ADD_32, to_gr32)
+ADD_DOUBLEWORD = logical_sum(ADD_64, to_gr64)
+ADD_CARRY_WORD = carried_sum(ADD_CARRY_32, to_gr32, carry_in)
+ADD_CARRY_DOUBLEWORD = carried_sum(ADD_CARRY_64, to_gr64, carry_in)
+SUB_WORD = carried_sum(SUB_BORROW_32, to_gr32, no_borrow)
+SUB_DOUBLEWORD = carried_sum(SUB_BORROW_64, to_gr64, no_borrow)
+SUB_BORROW_WORD = carried_sum(SUB_BORROW_32, to_gr32, carry_in)
+SUB_BORROW_DOUBLEWORD = carried_sum(SUB_BORROW_64, to_gr64, carry_in)
 
 ADDS: Mapping[str, StatementLowering] = {
     "AL": ADD_WORD(from_gr32(0), WORD_STORAGE),

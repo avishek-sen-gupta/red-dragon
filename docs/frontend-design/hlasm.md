@@ -95,6 +95,8 @@ addresses.
 | `interpreter/hlasm/opcodes/branch_on_condition.py` | The branch on condition unit; `mask_selects`, the mask bit `8 >> CC` |
 | `interpreter/hlasm/opcodes/branch_and_link.py` | The branch and link unit and the addressing-mode instructions |
 | `interpreter/hlasm/opcodes/loop_branch.py` | The branch on count and branch on index unit |
+| `interpreter/hlasm/opcodes/high_word.py` | The high-word unit |
+| `interpreter/hlasm/register_part.py`, `register_parts.py` | `RegisterPart`: the low word, high word or whole register a lowering reads and writes, and `merge` for bytes under a mask |
 | `interpreter/hlasm/lower_statement.py` | Lowers one statement: EX and EXRL through `execute.py`, any other machine instruction through `OPCODE_LOWERINGS` |
 | `interpreter/hlasm/machine_statements.py` | `MachineStatements`: the assembly's machine statements by section and offset |
 | `interpreter/hlasm/execute.py` | EX and EXRL: resolve the target, check it; lower a data-field target once with byte 1 computed in IR, any other target as one inline copy per byte-1 value |
@@ -660,9 +662,27 @@ lower as CU12 and CU21.
 - z390 abends `S0C1` on every conversion and on SRSTU; its SRST matches. The z390 test pins the
   `S0C1`s.
 
+**High word (red-dragon-6uyp.44).** AHHHR, AHHLR, SHHHR, SHHLR, AIH; ALHHHR, ALHHLR,
+SLHHHR, SLHHLR, ALSIH, ALSIHN; CHHR, CHLR, CHF, CIH, CLHHR, CLHLR, CLHF, CLIH, CLMH; LBH, LHH,
+LLCH, LLHH, LFH, LFHAT, STCH, STHH, STFH, LMH, STMH, ICMH, STCMH; BRCTH (JCTH). They work on bits
+0-31 of a register and never write R1's low word.
+
+- The register forms take R2's high word; `..HHR` takes R3's high word, `..HLR` its low word.
+  CHLR and CLHLR compare R1's high word with R2's low word.
+- The arithmetic and compares reuse the low-word builders with high-word sources and sink.
+  ICMH, STCMH, CLMH, LMH, STMH and BRCTH reuse ICM, STCM, CLM, LM, STM and BRCT with a
+  `RegisterPart` (low word, high word or whole register). The signed forms set CC 3 on
+  overflow and take the `S0C8` check after the store.
+- ALSIH adds a signed 32-bit immediate as a logical add, so a negative one sets the CC as a
+  subtract would and never CC 0. ALSIHN stores the same sum and leaves the CC.
+- LFHAT loads, then abends `S0C7` if the word is zero, like LAT.
+- No form has a data field in byte 1, so EX expands their variants (ruling R31).
+- z390 abends `S0FF` on LFHAT of zero (as for LAT) and reports a borrow as a carry for ALSIH with
+  a negative immediate (as for ALSI). The z390 test pins both.
+
 ## Known Gaps
 
-- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, and Unicode conversion and string search units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
+- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, and high-word units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
 - DC types beyond C, X, B, F, H, P, Z, A, Y and V, and any type extension, raise `UnsupportedDataType` (red-dragon-6uyp.63; floating point E, D, L: red-dragon-6uyp.21).
 - Falling through into DC/DS data or past a CSECT's end skips the data instead of executing it, and a branch into data abends `S0C1` (red-dragon-6uyp.64).
 - Every branch, even to a static relative target, walks the dispatch chain (red-dragon-6uyp.80).
@@ -791,4 +811,7 @@ lower as CU12 and CU21.
 | `tests/unit/hlasm/test_unicode_string_search_lowering.py` | Conversion and search IR: each form's unit widths read and written, no comparison on a byte image, the checks M3's W bit adds, odd pairs abend `S0C6`, GR0 checked before the search reads storage |
 | `tests/integration/hlasm/test_unicode_string_search.py` | Every conversion and search mnemonic on the VM: output, lengths, addresses and CC 0-2; truncated characters, W on and off for overlong, surrogate, continuation and isolated surrogates; SRST and SRSTU found, not found, end excluded, SRSTU's two-byte compare and odd end, bit 32; GR0 `S0C6` with storage unchanged |
 | `tests/z390/test_unicode_string_search_differential.py` | SRST against z390; z390's `S0C1` on the conversions and SRSTU pinned (`-m z390`) |
+| `tests/unit/hlasm/test_high_word_lowering.py` | High-word IR: the high or low word each form reads, R1's high word the only register written, which forms set the CC or take the `S0C8` check, BRCTH's target before its count, LFHAT's `S0C7` after its load |
+| `tests/integration/hlasm/test_high_word.py` | Every high-word mnemonic and JCTH on the VM: results with the low word kept, CC 0-3, ALSIHN keeping the CC, negative immediates, signed against logical compares, masks 0 and partial, LMH and STMH wrapping, BRCTH wrap, LFHAT trap |
+| `tests/z390/test_high_word_differential.py` | Every high-word case against z390; its `S0FF` for LFHAT and its ALSIH negative-immediate CC pinned (`-m z390`) |
 | `tests/z390/test_conditional_select_count_differential.py` | Every conditional, select and count case against z390; the instructions z390 does not execute and its whole-register SELFHR pinned (`-m z390`) |

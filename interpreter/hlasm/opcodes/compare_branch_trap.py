@@ -116,7 +116,7 @@ def _on_comparison(
     return lower
 
 
-def _trapping_on_zero(sink: Sink) -> Sink:
+def trapping_on_zero(sink: Sink) -> Sink:
     def store_then_test(
         emitter: HlasmEmitter, statement: MachineStatement, value: Register
     ) -> None:
@@ -173,13 +173,13 @@ COMPARE_AND_TRAP: Mapping[str, StatementLowering] = {
 }
 
 LOAD_AND_TRAP: Mapping[str, StatementLowering] = {
-    "LAT": move(from_storage(WORD_BYTES), (), _trapping_on_zero(to_gr32)),
-    "LGAT": move(from_storage(DOUBLEWORD_BYTES), (), _trapping_on_zero(to_gr64)),
-    "LLGFAT": move(from_storage(WORD_BYTES), (), _trapping_on_zero(to_gr64)),
+    "LAT": move(from_storage(WORD_BYTES), (), trapping_on_zero(to_gr32)),
+    "LGAT": move(from_storage(DOUBLEWORD_BYTES), (), trapping_on_zero(to_gr64)),
+    "LLGFAT": move(from_storage(WORD_BYTES), (), trapping_on_zero(to_gr64)),
     "LLGTAT": move(
         from_storage(WORD_BYTES),
         (keep(ADDRESS_MASK_31),),
-        _trapping_on_zero(to_gr64),
+        trapping_on_zero(to_gr64),
     ),
 }
 

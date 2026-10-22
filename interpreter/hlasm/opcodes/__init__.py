@@ -22,6 +22,7 @@ from interpreter.hlasm.opcodes.compare_branch_trap import (
 from interpreter.hlasm.opcodes.conditional_select_count import (
     CONDITIONAL_SELECT_COUNT_LOWERINGS,
 )
+from interpreter.hlasm.opcodes.high_word import HIGH_WORD_LOWERINGS
 from interpreter.hlasm.opcodes.interlocked import (
     INTERLOCKED_FIELD_LOWERINGS,
     INTERLOCKED_LOWERINGS,
@@ -86,6 +87,7 @@ OPCODE_LOWERINGS: Mapping[str, StatementLowering] = {
     **CONDITIONAL_SELECT_COUNT_LOWERINGS,
     **INTERLOCKED_LOWERINGS,
     **UNICODE_STRING_SEARCH_LOWERINGS,
+    **HIGH_WORD_LOWERINGS,
 }
 
 DATA_FIELD_LOWERINGS: Mapping[str, FieldLowering] = {
