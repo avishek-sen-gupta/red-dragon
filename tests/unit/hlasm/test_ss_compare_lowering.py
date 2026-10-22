@@ -12,8 +12,10 @@ from hlasm_asg.program.storage_operand import StorageOperand
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.opcodes import OPCODE_LOWERINGS
 from interpreter.instructions import (
+    Binop,
     Branch,
     BranchIf,
+    CallFunction,
     Const,
     Halt_,
     InstructionBase,
@@ -24,12 +26,15 @@ from interpreter.instructions import (
     Symbolic,
     WriteRegion,
 )
+from interpreter.operator_kind import BinopKind
 from tests.covers import NotLanguageFeature, covers
 
 BASE = 12
 GPRS = "__hlasm_gprs"
 ABEND = "__hlasm_abend"
 CC = "__hlasm_cc"
+IMAGE_BUILTIN = "__int_to_binary_bytes"
+COMPARISONS = frozenset((BinopKind.EQ, BinopKind.NE, BinopKind.LT, BinopKind.GT))
 
 
 def _statement(mnemonic: str, operands: Sequence[Operand]) -> MachineStatement:
@@ -100,6 +105,24 @@ def _control(ir: Sequence[InstructionBase]) -> list[str]:
     ]
 
 
+def _image_comparisons(ir: Sequence[InstructionBase]) -> list[InstructionBase]:
+    images = frozenset(
+        [i.result_reg for i in ir if isinstance(i, LoadRegion)]
+        + [
+            i.result_reg
+            for i in ir
+            if isinstance(i, CallFunction) and str(i.func_name) == IMAGE_BUILTIN
+        ]
+    )
+    return [
+        i
+        for i in ir
+        if isinstance(i, Binop)
+        and i.operator in COMPARISONS
+        and (i.left in images or i.right in images)
+    ]
+
+
 def _symbolic(lowered: Sequence[Sequence[InstructionBase]]) -> list[InstructionBase]:
     return [i for ir in lowered for i in ir if isinstance(i, Symbolic)]
 
@@ -127,7 +150,7 @@ def test_clc_compares_both_blocks_once_and_only_sets_the_cc():
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_long_compares_read_one_unit_of_each_operand_per_iteration_and_write_none():
+def test_long_compares_read_one_unit_of_each_operand_per_iteration_and_compare_ints():
     lowered = {
         "CLCL": _lowered(_statement("CLCL", (_reg(2), _reg(4)))),
         "CLCLE": _lowered(_statement("CLCLE", (_reg(2), _reg(4), _storage(0)))),
@@ -142,6 +165,9 @@ def test_long_compares_read_one_unit_of_each_operand_per_iteration_and_write_non
         "CLCLU": [("LoadRegion", 2)] * 4,
         "CUSE": [("LoadRegion", 1)] * 4,
         "CLST": [("LoadRegion", 1)] * 2,
+    }
+    assert {m: _image_comparisons(ir) for m, ir in lowered.items()} == {
+        m: [] for m in lowered
     }
     assert _symbolic(list(lowered.values())) == []
 

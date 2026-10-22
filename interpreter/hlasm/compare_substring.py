@@ -2,6 +2,7 @@
 """COMPARE UNTIL SUBSTRING EQUAL: scans both operands, the shorter extended with the GR1 pad, for equal runs of the GR0 substring length, in one execution; each operand advances to the start of the last equal run, at most its length."""
 
 from hlasm_asg.program.machine_statement import MachineStatement
+from interpreter.hlasm.compare_cc import emit_cc_constant
 from interpreter.hlasm.data_movement import FIRST_OPERAND, SECOND_OPERAND
 from interpreter.hlasm.effective_address import register_address
 from interpreter.hlasm.hlasm_constants import (
@@ -15,14 +16,12 @@ from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.long_operands import LongOperands
 from interpreter.hlasm.long_registers import (
     Pairs,
-    advance_address,
-    count_down,
+    advance_operands,
     operand_pairs,
     smaller,
 )
 from interpreter.hlasm.long_spans import walk_spans
 from interpreter.hlasm.opcodes.even_odd import even_odd_pairs
-from interpreter.hlasm.unequal_order import emit_cc_constant
 from interpreter.instructions import Branch, BranchIf, Label_, StoreVar
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import BinopKind
@@ -122,38 +121,6 @@ def _ended_cc(emitter: HlasmEmitter, operands: LongOperands, update: CodeLabel) 
     emit_cc_constant(emitter, ENDED_UNEQUAL_CC, ended_unequal, update)
 
 
-def _advance_operand(
-    emitter: HlasmEmitter,
-    r: int,
-    operand: tuple[Register, Register, Register],
-    start: Register,
-) -> None:
-    address, length, written = operand
-    advanced = smaller(emitter, start, length)
-    advance_address(emitter, r, address, advanced)
-    count_down(
-        emitter, r, emitter.binop(BinopKind.SUB, written, advanced), LOW_WORD_MASK
-    )
-
-
-def _update_registers(
-    emitter: HlasmEmitter, pairs: Pairs, operands: LongOperands, written: Lengths
-) -> None:
-    start = emitter.load_var(SUBSTRING_START_VAR)
-    _advance_operand(
-        emitter,
-        pairs[0],
-        (operands.first, operands.first_length, written[0]),
-        start,
-    )
-    _advance_operand(
-        emitter,
-        pairs[1],
-        (operands.second, operands.second_length, written[1]),
-        start,
-    )
-
-
 def _search(
     emitter: HlasmEmitter,
     operands: LongOperands,
@@ -165,7 +132,7 @@ def _search(
     empty = emitter.binop(BinopKind.EQ, substring, emitter.int_(0))
     emitter.emit_inst(BranchIf(cond_reg=empty, branch_targets=(found, search)))
     emitter.emit_inst(Label_(label=search))
-    pad = emitter.image(_low_byte(emitter, PAD_REGISTER), ONE_BYTE)
+    pad = _low_byte(emitter, PAD_REGISTER)
     constants = (substring, emitter.int_(ONE_BYTE))
     walk_spans(
         emitter,
@@ -191,7 +158,8 @@ def _compare_until_substring_equal(
     _search(emitter, operands, substring, (found, update))
     emit_cc_constant(emitter, FOUND_CC, found, update)
     emitter.emit_inst(Label_(label=update))
-    _update_registers(emitter, pairs, operands, written)
+    start = emitter.load_var(SUBSTRING_START_VAR)
+    advance_operands(emitter, pairs, operands, (written, start), LOW_WORD_MASK)
 
 
 COMPARE_UNTIL_SUBSTRING_EQUAL = even_odd_pairs(

@@ -70,7 +70,7 @@ addresses.
 | `interpreter/hlasm/opcodes/ss_move.py` | The storage-to-storage and storage-immediate move unit |
 | `interpreter/hlasm/long_move.py` | MVCL, MVCLE, MVCLU: move, then pad, in one execution |
 | `interpreter/hlasm/long_operands.py` | `LongOperands`: a long move's or compare's addresses, lengths and shorter length, read before any store |
-| `interpreter/hlasm/long_registers.py` | The long forms' register pairs: lengths, both pads, the even-length check, the address advance and length count-down |
+| `interpreter/hlasm/long_registers.py` | The long forms' register pairs: lengths, both pads (as ints), the even-length check, the address advance and length count-down |
 | `interpreter/hlasm/move_string.py` | MVST |
 | `interpreter/hlasm/opcodes/ss_compare.py` | The storage compare unit; CLC |
 | `interpreter/hlasm/long_compare.py` | CLCL, CLCLE, CLCLU |
@@ -78,7 +78,8 @@ addresses.
 | `interpreter/hlasm/compare_string.py` | CLST |
 | `interpreter/hlasm/compare_substring.py` | CUSE |
 | `interpreter/hlasm/ending_character.py` | MVST's and CLST's GR0 ending character and its `S0C6` check |
-| `interpreter/hlasm/unequal_order.py` | CC 1 or 2 from two unequal byte images |
+| `interpreter/hlasm/compare_cc.py` | The storage compares' CCs: a constant CC on a branch; CC 1 or 2 from two unequal unit values |
+| `interpreter/hlasm/unit_value.py` | The unsigned value of a 1- or 2-byte unit at a register offset; compares run on ints, never on byte images |
 | `interpreter/hlasm/specification_check.py` | A runtime condition abends `S0C6` |
 | `interpreter/hlasm/operand_overlap.py` | Whether a destination starts inside the participating source bytes: MVC's byte-loop test and MVCL's destructive overlap |
 | `interpreter/hlasm/opcodes/branch_on_condition.py` | The branch on condition unit |
@@ -433,9 +434,12 @@ right: CC 0 equal, 1 first low, 2 first high. Storage is never written.
   GR0 bits 56-63, pad GR1 bits 56-63. CC 0 when an equal run reaches the substring length
   (length 0 at once); at the end of the longer operand CC 1 if the last bytes were equal, else 2.
   Each operand advances to the start of the last equal run, at most its own length.
-- Loop cost: about 10 VM steps per byte for CLCL, CLCLE and CLST, 9 against the pad, 15 for CUSE.
+- Units are compared as unsigned ints: one `LoadIndex` per byte, `__binary_bytes_to_int` per CLCLU
+  character; the pad and ending character stay ints.
+- Loop cost: about 12 VM steps per unit for CLCL, CLCLE, CLCLU and CLST, 10 against the pad, 17
+  for CUSE.
 - z390 compares the second operand's tail with the pad without swapping the CC (CLCL with the
-  first operand shorter); abends `S0C1` on CLCLU; ends CLST with CC 0 when either operand ends,
+  first operand shorter); abends `S0C1` on CLCLU; ends CLST with CC 0 and the registers untouched when either operand ends,
   and ignores GR0 bits 32-55; takes CUSE's substring length from all of GR0, misses length 0,
   and sets other lengths and CCs. The z390 test pins each difference.
 
@@ -506,8 +510,8 @@ right: CC 0 equal, 1 first low, 2 first high. Storage is never written.
 | `tests/integration/hlasm/test_loop_branch.py` | Every branch on count and index mnemonic, JCT, JCTG and the JX spellings on the VM: counting loops, register overlaps, signed wrap, CC unchanged |
 | `tests/unit/hlasm/test_ss_move_lowering.py` | Storage move IR: immediate store widths, the MVC block move beside its byte loop, the nibble loops, odd long-move registers abend `S0C6` |
 | `tests/integration/hlasm/test_ss_move.py` | Every storage move mnemonic on the VM: storage, registers, CC; MVC, MVN, MVZ, MVCIN and MVO overlap, MVCRL's hole, MVO truncation, MVCL CC 0-3, zero first lengths and pad, MVCLE and MVCLU pads; MVCLU odd length and MVST's GR0 abend `S0C6`; the bridge passes MVO lengths as written |
-| `tests/unit/hlasm/test_ss_compare_lowering.py` | Storage compare IR: CLC's one block compare, one unit of each operand per loop iteration, no storage writes, odd pair registers abend `S0C6` |
-| `tests/integration/hlasm/test_ss_compare.py` | Every storage compare mnemonic on the VM: CC 0-2 and registers; CLC lengths 0 and 256, inequality against the pad, zero lengths, CLST ending first and a high ending character, CUSE found, ended, zero substring and negative lengths; CLCLU odd length and CLST's GR0 abend `S0C6` |
+| `tests/unit/hlasm/test_ss_compare_lowering.py` | Storage compare IR: CLC's one block compare, one unit of each operand per loop iteration, no comparison on a byte image, no storage writes, odd pair registers abend `S0C6` |
+| `tests/integration/hlasm/test_ss_compare.py` | Every storage compare mnemonic on the VM: CC 0-2 and registers; CLC lengths 0 and 256, inequality against the pad, zero lengths, bit 32 cleared or kept, a pad from a base register, CLST ending first and a high ending character, CUSE found, ended, zero substring and negative lengths; CLCLU odd length and CLST's GR0 abend `S0C6` |
 | `tests/integration/hlasm/test_bridge_parser.py` | The real bridge: macro origins, refused assemblies |
 | `tests/integration/hlasm/test_storage_layout.py` | Section regions and address constants |
 | `tests/integration/hlasm/test_svc.py` | `WTO`, `ABEND` user and system codes, unlowered SVCs, `run()` with our maclib then `copybook_dirs`, call-site spans |

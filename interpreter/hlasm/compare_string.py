@@ -3,44 +3,45 @@
 
 from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.hlasm.byte_loop import advance
-from interpreter.hlasm.effective_address import register_address
-from interpreter.hlasm.ending_character import ending_character
-from interpreter.hlasm.hlasm_constants import BYTE_LOOP_AT_VAR, ONE_BYTE
-from interpreter.hlasm.hlasm_emitter import HlasmEmitter
-from interpreter.hlasm.long_registers import advance_address, operand_pairs
-from interpreter.hlasm.unequal_order import (
+from interpreter.hlasm.compare_cc import (
+    EQUAL_CC,
     FIRST_HIGH_CC,
     FIRST_LOW_CC,
     emit_cc_constant,
     emit_unequal_order,
 )
+from interpreter.hlasm.effective_address import register_address
+from interpreter.hlasm.ending_character import ending_character
+from interpreter.hlasm.hlasm_constants import BYTE_LOOP_AT_VAR, ONE_BYTE
+from interpreter.hlasm.hlasm_emitter import HlasmEmitter
+from interpreter.hlasm.long_registers import advance_address, operand_pairs
+from interpreter.hlasm.unit_value import UnitReader, unit_reader
 from interpreter.instructions import BranchIf, Label_, StoreVar
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
 
-type Images = tuple[Register, Register]
-
-EQUAL_CC = 0
+type Values = tuple[Register, Register]
 
 
 def _branch_if_equal(
-    emitter: HlasmEmitter, images: Images, targets: tuple[CodeLabel, CodeLabel]
+    emitter: HlasmEmitter, values: Values, targets: tuple[CodeLabel, CodeLabel]
 ) -> None:
-    left, right = images
+    left, right = values
     equal = emitter.binop(BinopKind.EQ, left, right)
     emitter.emit_inst(BranchIf(cond_reg=equal, branch_targets=targets))
 
 
 def _compare_bytes(
     emitter: HlasmEmitter,
+    read: UnitReader,
     addresses: tuple[Register, Register],
     ending: Register,
     exits: tuple[CodeLabel, CodeLabel, CodeLabel],
-) -> tuple[Register, Images]:
+) -> tuple[Register, Values]:
     ended, unequal, more = exits
     at = emitter.load_var(BYTE_LOOP_AT_VAR)
-    first, second = (emitter.load_bytes(a, at, ONE_BYTE) for a in addresses)
+    first, second = (read(a, at) for a in addresses)
     same = emitter.fresh_label("hl_clst_same")
     _branch_if_equal(emitter, (first, second), (same, unequal))
     emitter.emit_inst(Label_(label=same))
@@ -54,16 +55,17 @@ def _scan(
     addresses: tuple[Register, Register],
     ending: Register,
     exits: tuple[CodeLabel, CodeLabel],
-) -> tuple[Register, Images]:
+) -> tuple[Register, Values]:
     step = emitter.int_(ONE_BYTE)
+    read = unit_reader(emitter, ONE_BYTE)
     emitter.emit_inst(StoreVar(name=BYTE_LOOP_AT_VAR, value_reg=emitter.int_(0)))
     loop, more = emitter.fresh_label("hl_clst_loop"), emitter.fresh_label(
         "hl_clst_more"
     )
     emitter.emit_inst(Label_(label=loop))
-    at, images = _compare_bytes(emitter, addresses, ending, (*exits, more))
+    at, values = _compare_bytes(emitter, read, addresses, ending, (*exits, more))
     advance(emitter, at, step, loop)
-    return at, images
+    return at, values
 
 
 def _ended_first(
@@ -76,13 +78,13 @@ def _ended_first(
 
 def _unequal_cc(
     emitter: HlasmEmitter,
-    images: Images,
+    values: Values,
     ending: Register,
     labels: tuple[CodeLabel, CodeLabel],
 ) -> None:
     unequal, then = labels
     emitter.emit_inst(Label_(label=unequal))
-    first, second = images
+    first, second = values
     first_ended, check_second, second_ended, both_continue = (
         emitter.fresh_label(prefix)
         for prefix in (
@@ -96,7 +98,7 @@ def _unequal_cc(
     emitter.emit_inst(Label_(label=check_second))
     _branch_if_equal(emitter, (second, ending), (second_ended, both_continue))
     emitter.emit_inst(Label_(label=both_continue))
-    emit_unequal_order(emitter, images, then)
+    emit_unequal_order(emitter, values, then)
     _ended_first(emitter, (first_ended, second_ended), then)
 
 
@@ -114,7 +116,7 @@ def _point_at(
 
 def compare_string(emitter: HlasmEmitter, statement: MachineStatement) -> None:
     pairs = operand_pairs(statement)
-    ending = emitter.image(ending_character(emitter), ONE_BYTE)
+    ending = ending_character(emitter)
     addresses = (
         register_address(emitter, pairs[0]),
         register_address(emitter, pairs[1]),
@@ -128,8 +130,8 @@ def compare_string(emitter: HlasmEmitter, statement: MachineStatement) -> None:
             "hl_clst_done",
         )
     )
-    at, images = _scan(emitter, addresses, ending, (ended, unequal))
+    at, values = _scan(emitter, addresses, ending, (ended, unequal))
     emit_cc_constant(emitter, EQUAL_CC, ended, done)
-    _unequal_cc(emitter, images, ending, (unequal, point))
+    _unequal_cc(emitter, values, ending, (unequal, point))
     _point_at(emitter, pairs, addresses, at, point)
     emitter.emit_inst(Label_(label=done))

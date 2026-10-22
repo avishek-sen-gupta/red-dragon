@@ -10,10 +10,12 @@ type Case = tuple[str, Mapping[int, int], int]
 CC_EQUAL = 0
 CC_LOW = 1
 CC_HIGH = 2
-CC_ZERO_DIFFERENCE = 2
+SLR_EQUAL_CC = 2
+SLR_NONZERO_CC = 3
 
 COMPARE_DATA = (
     "         DS    0F\n"
+    "BIT32    DC    X'80000000'\n"
     "LEN6     DC    X'AB000006'\n"
     "PAD2     DC    X'40000002'\n"
     "PAD6     DC    X'40000006'\n"
@@ -45,6 +47,10 @@ def _offsets(first: str, second: str) -> str:
         f"         LA    9,{second}\n"
         "         SLR   4,9\n"
     )
+
+
+def _flagged_pairs(first: str, second: str) -> str:
+    return _pairs(first, second) + "         O     2,BIT32\n" "         O     4,BIT32\n"
 
 
 ADDRESSES_MATCH = {2: HIGH_FILL, 4: HIGH_FILL}
@@ -83,7 +89,7 @@ LONG_COMPARES: Mapping[str, Case] = {
         "         LHI   5,6\n"
         "         CLCL  2,4\n" + _offsets("CMPA+3", "CMPB+3"),
         ADDRESSES_MATCH,
-        CC_ZERO_DIFFERENCE,
+        SLR_EQUAL_CC,
     ),
     "CLCL against the pad": (
         _pairs("CMPA", "CMPA") + "         LHI   3,6\n"
@@ -111,7 +117,7 @@ LONG_COMPARES: Mapping[str, Case] = {
         "         L     5,PAD2\n"
         "         CLCL  2,4\n" + _offsets("PADDED+4", "CMPA+2"),
         ADDRESSES_MATCH,
-        CC_ZERO_DIFFERENCE,
+        SLR_EQUAL_CC,
     ),
     "CLCL lengths zero": (
         _pairs("CMPA", "CMPB") + "         LHI   3,0\n"
@@ -132,7 +138,22 @@ LONG_COMPARES: Mapping[str, Case] = {
         "         LHI   5,2\n"
         "         CLCLE 2,4,X'C3'\n" + _offsets("CMPA+3", "CMPA+2"),
         ADDRESSES_MATCH,
-        CC_ZERO_DIFFERENCE,
+        SLR_EQUAL_CC,
+    ),
+    "CLCLE pad from a base register": (
+        _pairs("CMPA", "CMPA") + "         LHI   3,6\n"
+        "         LHI   5,2\n"
+        "         LA    9,X'100'\n"
+        "         CLCLE 2,4,X'C3'(9)\n",
+        {3: HIGH_FILL | 3, 5: HIGH_FILL},
+        CC_HIGH,
+    ),
+    "CLCL lengths zero clear bit 32": (
+        _flagged_pairs("CMPA", "CMPB") + "         LHI   3,0\n"
+        "         LHI   5,0\n"
+        "         CLCL  2,4\n" + _offsets("CMPA", "CMPB"),
+        ADDRESSES_MATCH,
+        SLR_EQUAL_CC,
     ),
     "CLCLE unequal": (
         _pairs("CMPA", "CMPB") + "         LHI   3,6\n"
@@ -160,7 +181,7 @@ LONG_COMPARES: Mapping[str, Case] = {
         "         LHI   5,6\n"
         "         CLCLU 2,4,0\n" + _offsets("CMPA+2", "CMPB+2"),
         ADDRESSES_MATCH,
-        CC_ZERO_DIFFERENCE,
+        SLR_EQUAL_CC,
     ),
     "CLCLU pad equal": (
         _pairs("PADDED", "CMPA") + "         LHI   3,4\n"
@@ -190,7 +211,7 @@ STRING_COMPARES: Mapping[str, Case] = {
         + "         CLST  2,4\n"
         + _offsets("STRA", "STRA2"),
         ADDRESSES_MATCH,
-        CC_ZERO_DIFFERENCE,
+        SLR_EQUAL_CC,
     ),
     "CLST first ends first": (
         "         LHI   0,0\n" + _pairs("STRC", "STRA") + "         CLST  2,4\n",
@@ -203,7 +224,23 @@ STRING_COMPARES: Mapping[str, Case] = {
         + "         CLST  2,4\n"
         + _offsets("STRC+2", "STRA+2"),
         ADDRESSES_MATCH,
-        CC_ZERO_DIFFERENCE,
+        SLR_EQUAL_CC,
+    ),
+    "CLST clears bit 32": (
+        "         LHI   0,0\n"
+        + _flagged_pairs("STRC", "STRA")
+        + "         CLST  2,4\n"
+        + _offsets("STRC+2", "STRA+2"),
+        ADDRESSES_MATCH,
+        SLR_EQUAL_CC,
+    ),
+    "CLST equal keeps bit 32": (
+        "         LHI   0,0\n"
+        + _flagged_pairs("STRA", "STRA2")
+        + "         CLST  2,4\n"
+        + _offsets("STRA", "STRA2"),
+        {2: HIGH_FILL | 0x80000000, 4: HIGH_FILL | 0x80000000},
+        SLR_NONZERO_CC,
     ),
     "CLST second ends first": (
         "         LHI   0,0\n" + _pairs("STRA", "STRC") + "         CLST  2,4\n",
@@ -237,7 +274,7 @@ SUBSTRING_COMPARES: Mapping[str, Case] = {
         "         LHI   5,6\n"
         "         CUSE  2,4\n" + _offsets("CUSA+2", "CUSB+2"),
         ADDRESSES_MATCH,
-        CC_ZERO_DIFFERENCE,
+        SLR_EQUAL_CC,
     ),
     "CUSE end equal": (
         "         LHI   0,4\n"
@@ -269,7 +306,7 @@ SUBSTRING_COMPARES: Mapping[str, Case] = {
         "         LHI   5,1\n"
         "         CUSE  2,4\n" + _offsets("PADDED+2", "CMPA+1"),
         ADDRESSES_MATCH,
-        CC_ZERO_DIFFERENCE,
+        SLR_EQUAL_CC,
     ),
     "CUSE zero substring": (
         "         LHI   0,0\n"
@@ -278,6 +315,16 @@ SUBSTRING_COMPARES: Mapping[str, Case] = {
         "         CUSE  2,4\n",
         {3: HIGH_FILL | 6, 5: HIGH_FILL | 6},
         CC_EQUAL,
+    ),
+    "CUSE zero substring clears bit 32": (
+        "         LHI   0,0\n"
+        "         LHI   1,X'40'\n"
+        + _flagged_pairs("CUSA", "CUSB")
+        + "         LHI   3,6\n"
+        "         LHI   5,6\n"
+        "         CUSE  2,4\n" + _offsets("CUSA", "CUSB"),
+        ADDRESSES_MATCH,
+        SLR_EQUAL_CC,
     ),
     "CUSE negative length": (
         "         LHI   0,1\n"

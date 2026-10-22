@@ -2,6 +2,7 @@
 """COMPARE LOGICAL LONG, LONG EXTENDED and LONG UNICODE: the operands compare left to right, the shorter extended with the pad, in one execution; each operand advances by the units compared, at most its length."""
 
 from hlasm_asg.program.machine_statement import MachineStatement
+from interpreter.hlasm.compare_cc import EQUAL_CC, emit_unequal_order
 from interpreter.hlasm.data_movement import FIRST_OPERAND, SECOND_OPERAND
 from interpreter.hlasm.hlasm_constants import (
     BYTE_LOOP_AT_VAR,
@@ -17,69 +18,34 @@ from interpreter.hlasm.long_registers import (
     Pad,
     Pairs,
     address_pad,
-    advance_address,
-    count_down,
+    advance_operands,
     even_lengths,
     long_operands,
     no_length_check,
     operand_pairs,
     register_pad,
-    smaller,
 )
 from interpreter.hlasm.long_spans import walk_spans
 from interpreter.hlasm.opcodes.even_odd import even_odd_pairs
 from interpreter.hlasm.statement_lowering import StatementLowering
-from interpreter.hlasm.unequal_order import emit_unequal_order
 from interpreter.instructions import BranchIf, Label_
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
 
-EQUAL_CC = 0
-
 
 def _stop_when_unequal(
-    emitter: HlasmEmitter, unequal: CodeLabel, images: tuple[Register, Register]
+    emitter: HlasmEmitter, unequal: CodeLabel, values: tuple[Register, Register]
 ) -> None:
-    first, second = images
+    first, second = values
     differ, same = emitter.fresh_label("hl_clcl_differ"), emitter.fresh_label(
         "hl_clcl_same"
     )
     differs = emitter.binop(BinopKind.NE, first, second)
     emitter.emit_inst(BranchIf(cond_reg=differs, branch_targets=(differ, same)))
     emitter.emit_inst(Label_(label=differ))
-    emit_unequal_order(emitter, images, unequal)
+    emit_unequal_order(emitter, values, unequal)
     emitter.emit_inst(Label_(label=same))
-
-
-def _advance_operand(
-    emitter: HlasmEmitter,
-    r: int,
-    operand: tuple[Register, Register],
-    compared: Register,
-    length_mask: int,
-) -> None:
-    address, length = operand
-    advanced = smaller(emitter, compared, length)
-    advance_address(emitter, r, address, advanced)
-    count_down(emitter, r, emitter.binop(BinopKind.SUB, length, advanced), length_mask)
-
-
-def _update_registers(
-    emitter: HlasmEmitter, pairs: Pairs, operands: LongOperands, length_mask: int
-) -> None:
-    first, second = pairs
-    compared = emitter.load_var(BYTE_LOOP_AT_VAR)
-    _advance_operand(
-        emitter, first, (operands.first, operands.first_length), compared, length_mask
-    )
-    _advance_operand(
-        emitter,
-        second,
-        (operands.second, operands.second_length),
-        compared,
-        length_mask,
-    )
 
 
 def _compare(
@@ -98,7 +64,9 @@ def _compare(
     )
     emitter.set_cc(emitter.int_(EQUAL_CC))
     emitter.emit_inst(Label_(label=unequal))
-    _update_registers(emitter, pairs, operands, length_mask)
+    lengths = (operands.first_length, operands.second_length)
+    compared = emitter.load_var(BYTE_LOOP_AT_VAR)
+    advance_operands(emitter, pairs, operands, (lengths, compared), length_mask)
 
 
 def _compare_long(emitter: HlasmEmitter, statement: MachineStatement) -> None:
