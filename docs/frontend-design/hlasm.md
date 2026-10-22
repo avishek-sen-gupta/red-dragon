@@ -64,6 +64,7 @@ addresses.
 | `interpreter/hlasm/opcodes/boolean.py` | The boolean unit: AND, OR, exclusive OR and the complemented connectives |
 | `interpreter/hlasm/opcodes/shift_rotate.py` | The shift and rotate unit, the RISBG family included |
 | `interpreter/hlasm/opcodes/multiply_divide.py` | The multiply and divide unit |
+| `interpreter/hlasm/opcodes/load_sign.py` | The load and test, complement, positive and negative unit |
 | `interpreter/hlasm/opcodes/even_odd.py` | An odd R1 of an even-odd pair form abends `S0C6` before any register is read |
 | `interpreter/hlasm/opcodes/branch_on_condition.py` | The branch on condition unit |
 | `interpreter/hlasm/opcodes/branch_and_link.py` | The branch and link unit and the addressing-mode instructions |
@@ -81,7 +82,7 @@ addresses.
 | `interpreter/hlasm/boolean_connective.py` | A bitwise connective: the binop and whether the right operand or the result is complemented; the eight connectives |
 | `interpreter/hlasm/abend_completion.py` | SVC 13 in IR |
 | `interpreter/hlasm/statement_location.py` | Each statement's source line, set on the IR it lowers to |
-| `interpreter/hlasm/fixed_width_ir.py` | Fixed-width signed add/subtract/multiply and logical add/subtract with carry-in, bitwise connectives, logical and signed shifts and rotates, each with its condition code, the sign CC (0 zero, 1 leftmost bit one, 2 other), and division truncating toward zero, built in IR |
+| `interpreter/hlasm/fixed_width_ir.py` | Fixed-width signed add/subtract/multiply, load-and-test, complement, absolute and negative-absolute and logical add/subtract with carry-in, bitwise connectives, logical and signed shifts and rotates, each with its condition code, the sign CC (0 zero, 1 leftmost bit one, 2 other), and division truncating toward zero, built in IR |
 | `interpreter/hlasm/inline_ir.py` | Splices a builder's IR under fresh registers; `inline_pair` splits a returned pair, such as (result, CC) |
 | `interpreter/hlasm/abend.py` | Stores the code in `__hlasm_abend`, then `Halt_` |
 
@@ -283,6 +284,16 @@ The amount is the low six bits of the D2(B2) address; no storage is referenced.
   shifts), so `SRL 2,33` shifts by 1; it does not execute RISBGN (`S0C1`); and it fails
   to assemble SLLHH, SLLHL, SRLHH, SRLHL, SLLLH and SRLLH. The z390 test pins each difference.
 
+**Load and test, complement, positive, negative (red-dragon-6uyp.40).** LT, LTR, LTG, LTGR,
+LTGF, LTGFR load and set CC 0 zero, 1 negative, 2 positive; LTGF and LTGFR sign-extend a
+word. LCR, LCGR (two's complement) and LPR, LPGR (absolute value) overflow only on the
+maximum negative number: it stays, CC 3, and program-mask bit `1000` abends `S0C8`.
+LCGFR and LPGFR sign-extend the low word of R2 first, so they never overflow. LNR, LNGR,
+LNGFR never overflow. 32-bit forms write only the low word of R1.
+
+- z390's LTGR sets the CC but does not write R1; the z390 test pins it (bead
+  red-dragon-6uyp.74).
+
 **Multiply and divide (red-dragon-6uyp.27).** MS, MSY, MSR, MSFI, MH, MHY, MHI, MSG, MSGR,
 MSGF, MSGFR, MSGFI, MGH, MGHI keep the low 32 or 64 bits of the signed product; CC
 unchanged, no overflow. MSC, MSRKC, MSGC, MSGRKC do the same and set CC 0-3, 3 when the
@@ -357,7 +368,7 @@ BRXLG (JXLEG). None changes the CC. BRCTH belongs to the high-word unit.
 
 ## Known Gaps
 
-- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, boolean, shift and rotate, multiply and divide, branch on condition, branch and link, and branch on count and index units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
+- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, boolean, shift and rotate, multiply and divide, load and test with the sign changes, branch on condition, branch and link, and branch on count and index units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
 - DC types beyond C, X, B, F, H, P, Z, A, Y and V, and any type extension, raise `UnsupportedDataType` (red-dragon-6uyp.63; floating point E, D, L: red-dragon-6uyp.21).
 - Falling through into DC/DS data or past a CSECT's end skips the data instead of executing it, and a branch into data abends `S0C1` (red-dragon-6uyp.64).
 - Emission is O(n²) in the number of IR instructions, and every branch, even to a static relative target, walks the dispatch chain (red-dragon-6uyp.62).
@@ -402,6 +413,8 @@ BRXLG (JXLEG). None changes the CC. BRCTH belongs to the high-word unit.
 | `tests/integration/hlasm/test_boolean.py` | Every boolean mnemonic, NOTR and NOTGR on the VM: result, CC 0 and 1, field CCs, overlapping storage operands, implicit and explicit-0 lengths |
 | `tests/unit/hlasm/test_shift_rotate_lowering.py` | Shift and rotate IR: registers only, CC only for the signed and selected-bits forms, the `S0C8` trap, an odd pair abends `S0C6`, register-span masks |
 | `tests/integration/hlasm/test_shift_rotate.py` | Every shift and rotate mnemonic and every RISBG-family extended mnemonic on the VM: result, CC 0-3 or unchanged, amounts 33 and 65 |
+| `tests/unit/hlasm/test_load_sign_lowering.py` | Load and test, complement, positive and negative IR: operand widths, the `S0C8` trap only for LCR, LCGR, LPR, LPGR and only with the mask bit on |
+| `tests/integration/hlasm/test_load_sign.py` | Every load and test, complement, positive and negative mnemonic on the VM, the maximum negative number included |
 | `tests/unit/hlasm/test_multiply_divide_lowering.py` | Multiply and divide IR: operand widths, CC and the `S0C8` trap only for the checked forms, the two `S0C9` checks before the pair is written, an odd pair abends `S0C6` |
 | `tests/integration/hlasm/test_multiply_divide.py` | Every multiply and divide mnemonic on the VM: products, quotients, remainders, CC; zero divisors and oversized quotients abend `S0C9` with the registers kept |
 | `tests/integration/hlasm/test_shift_rotate_mnemonics.py` | RISBG-family extended spellings reach their base mnemonic and immediates through the bridge |
@@ -425,6 +438,7 @@ BRXLG (JXLEG). None changes the CC. BRCTH belongs to the high-word unit.
 | `tests/z390/test_logical_add_subtract_differential.py` | Every logical add and subtract mnemonic against z390; six z390 CC differences pinned (`-m z390`) |
 | `tests/z390/test_boolean_differential.py` | Every boolean mnemonic, NOTR and NOTGR against z390; eleven z390 differences (field CCs, XI, OC overlap) pinned (`-m z390`) |
 | `tests/z390/test_shift_rotate_differential.py` | Every shift and rotate case against z390; z390's 32-bit shifts mod 32, RISBGN `S0C1` and refused shift-logical-high spellings pinned (`-m z390`) |
+| `tests/z390/test_load_sign_differential.py` | Every load and test, complement, positive and negative case against z390; LTGR's missing R1 write pinned (`-m z390`) |
 | `tests/z390/test_multiply_divide_differential.py` | Every multiply and divide case and divide exception against z390; z390's missing quotient-overflow exceptions pinned (`-m z390`) |
 | `tests/z390/test_compare_differential.py` | Every compare mnemonic against z390; the relative-long alignment difference pinned (`-m z390`) |
 | `tests/z390/test_branch_on_condition_differential.py` | Every branch on condition case against z390; the BIC, BPP and BPRP differences and branches into data pinned (`-m z390`) |

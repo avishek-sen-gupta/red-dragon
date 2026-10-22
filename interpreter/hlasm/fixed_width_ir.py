@@ -1,6 +1,8 @@
 # pyright: standard
 """IR builders for fixed-width two's-complement arithmetic, truncating division, bitwise connectives, shifts and rotates, and their condition codes."""
 
+from collections.abc import Callable
+
 from interpreter.hlasm.boolean_connective import BooleanConnective
 from interpreter.hlasm.hlasm_constants import (
     LIST_SET,
@@ -154,6 +156,69 @@ def _signed_arithmetic_cc_ir(
         *result_ir,
         *lost_ir,
         *overflow_ir,
+        *cc_ir,
+        *pair_ir,
+        Return_(value_reg=pair),
+    ]
+
+
+def build_load_test_cc_ir(func_name: str, bits: int) -> list[InstructionBase]:
+    value, value_ir = _to_signed(f"{func_name}.v", PARAM_VALUE, bits)
+    cc, cc_ir = _sign_cc(func_name, value, bits)
+    pair, pair_ir = _pair(func_name, value, cc)
+    return [*value_ir, *cc_ir, *pair_ir, Return_(value_reg=pair)]
+
+
+def _fitted_signed_cc_ir(
+    func_name: str, bits: int, derive: Callable[[str, Register], Fragment]
+) -> list[InstructionBase]:
+    value, value_ir = _to_signed(f"{func_name}.v", PARAM_VALUE, bits)
+    exact, exact_ir = derive(func_name, value)
+    result, result_ir = _to_signed(f"{func_name}.s", exact, bits)
+    lost, lost_ir = _binop(func_name, "lost", BinopKind.SUB, exact, result)
+    overflow, overflow_ir = _nonzero_bit(f"{func_name}.o", lost, 2 * bits)
+    cc, cc_ir = _signed_cc(func_name, result, overflow, bits)
+    pair, pair_ir = _pair(func_name, result, cc)
+    return [
+        *value_ir,
+        *exact_ir,
+        *result_ir,
+        *lost_ir,
+        *overflow_ir,
+        *cc_ir,
+        *pair_ir,
+        Return_(value_reg=pair),
+    ]
+
+
+def _negated(prefix: str, value: Register) -> Fragment:
+    return _binop_const(prefix, "exact", BinopKind.MUL, value, -1)
+
+
+def _magnitude(prefix: str, value: Register) -> Fragment:
+    factor, factor_ir = _sign_factor(f"{prefix}.f", value)
+    exact, exact_ir = _binop(prefix, "exact", BinopKind.MUL, value, factor)
+    return exact, (*factor_ir, *exact_ir)
+
+
+def build_negate_signed_cc_ir(func_name: str, bits: int) -> list[InstructionBase]:
+    return _fitted_signed_cc_ir(func_name, bits, _negated)
+
+
+def build_absolute_signed_cc_ir(func_name: str, bits: int) -> list[InstructionBase]:
+    return _fitted_signed_cc_ir(func_name, bits, _magnitude)
+
+
+def build_negative_absolute_cc_ir(func_name: str, bits: int) -> list[InstructionBase]:
+    value, value_ir = _to_signed(f"{func_name}.v", PARAM_VALUE, bits)
+    magnitude, magnitude_ir = _magnitude(f"{func_name}.m", value)
+    result, result_ir = _negated(func_name, magnitude)
+    cc, cc_ir = _sign_cc(func_name, result, bits)
+    pair, pair_ir = _pair(func_name, result, cc)
+    return [
+        *value_ir,
+        *magnitude_ir,
+        *result_ir,
         *cc_ir,
         *pair_ir,
         Return_(value_reg=pair),
