@@ -1,12 +1,11 @@
 # pyright: standard
-"""STCK, STCKF, STCKE and ECTG over the clock builtins (ruling R36): STCK values made unique against the last one stored, the clock always in the set state."""
+"""STCK, STCKF, STCKE and ECTG over the clock builtins (ruling R36): STCK and STCKE values are unique and in execution order, compared as 104-bit TOD values against the last one stored; the clock is always in the set state."""
 
 from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.hlasm.data_movement import FIRST_OPERAND, SECOND_OPERAND
 from interpreter.hlasm.effective_address import effective_address, register_address
 from interpreter.hlasm.hlasm_constants import (
     CPU_TIMER_BUILTIN,
-    DOUBLEWORD_BITS,
     DOUBLEWORD_BYTES,
     QUADWORD_BYTES,
     TOD_CLOCK_BUILTIN,
@@ -19,6 +18,7 @@ from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
 
 TOD_EXTENSION_BITS = 40
+TOD_ORDER_BITS = 128
 PROGRAMMABLE_FIELD_BITS = 16
 RUNNING_CLOCK_BIT = 1
 SET_STATE_CC = 0
@@ -41,7 +41,7 @@ def _store_clock(
 
 def _later(emitter: HlasmEmitter, value: Register, floor: Register) -> Register:
     difference = emitter.binop(BinopKind.SUB, value, floor)
-    borrow = emitter.binop(BinopKind.RSHIFT, difference, emitter.int_(DOUBLEWORD_BITS))
+    borrow = emitter.binop(BinopKind.RSHIFT, difference, emitter.int_(TOD_ORDER_BITS))
     shortfall = emitter.binop(BinopKind.BIT_AND, difference, borrow)
     return emitter.binop(BinopKind.SUB, value, shortfall)
 
@@ -52,13 +52,23 @@ def _clock_bits(emitter: HlasmEmitter) -> Register:
     )
 
 
+def _shifted(emitter: HlasmEmitter, value: Register, kind: BinopKind) -> Register:
+    return emitter.binop(kind, value, emitter.int_(TOD_EXTENSION_BITS))
+
+
+def _after_last(emitter: HlasmEmitter) -> Register:
+    return emitter.binop(BinopKind.ADD, emitter.load_var(TOD_LAST_VAR), emitter.int_(1))
+
+
 def lower_store_clock(emitter: HlasmEmitter, statement: MachineStatement) -> None:
-    value = _clock_bits(emitter)
-    following = emitter.binop(
-        BinopKind.ADD, emitter.load_var(TOD_LAST_VAR), emitter.int_(1)
+    floor = emitter.binop(
+        BinopKind.ADD,
+        _shifted(emitter, emitter.load_var(TOD_LAST_VAR), BinopKind.RSHIFT),
+        emitter.int_(1),
     )
-    unique = _later(emitter, value, following)
-    emitter.emit_inst(StoreVar(name=TOD_LAST_VAR, value_reg=unique))
+    unique = _later(emitter, _clock_bits(emitter), floor)
+    extended = _shifted(emitter, unique, BinopKind.LSHIFT)
+    emitter.emit_inst(StoreVar(name=TOD_LAST_VAR, value_reg=extended))
     _store_clock(emitter, statement, unique, DOUBLEWORD_BYTES)
 
 
@@ -69,9 +79,13 @@ def lower_store_clock_fast(emitter: HlasmEmitter, statement: MachineStatement) -
 def lower_store_clock_extended(
     emitter: HlasmEmitter, statement: MachineStatement
 ) -> None:
-    running = emitter.binop(
-        BinopKind.BIT_OR, _clock(emitter), emitter.int_(RUNNING_CLOCK_BIT)
+    running_bit = emitter.int_(RUNNING_CLOCK_BIT)
+    running = _later(
+        emitter,
+        emitter.binop(BinopKind.BIT_OR, _clock(emitter), running_bit),
+        emitter.binop(BinopKind.BIT_OR, _after_last(emitter), running_bit),
     )
+    emitter.emit_inst(StoreVar(name=TOD_LAST_VAR, value_reg=running))
     value = emitter.binop(
         BinopKind.LSHIFT, running, emitter.int_(PROGRAMMABLE_FIELD_BITS)
     )

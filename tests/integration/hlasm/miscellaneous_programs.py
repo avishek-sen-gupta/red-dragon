@@ -28,6 +28,7 @@ ONES = 0xFFFFFFFF_FFFFFFFF
 TOD_SHIFT = 40
 STORED_CLOCK = FIXED_TOD_CLOCK >> TOD_SHIFT
 EXTENDED_CLOCK = (FIXED_TOD_CLOCK | 1) << 16
+NEXT_EXTENDED_CLOCK = ((FIXED_TOD_CLOCK | 1) + 2) << 16
 FACILITIES_FIRST = 0xE1003663_F0040C24
 FACILITIES_SECOND = 0x00000900_00000000
 DNEG = 0x80000000_00000081
@@ -245,8 +246,32 @@ CLOCKS: Mapping[str, Case] = {
         {2: EXTENDED_CLOCK >> 64, 3: EXTENDED_CLOCK & ONES},
         0,
     ),
+    "STCKE twice": _ran(
+        PRESET
+        + _line("STCKE", "OUT")
+        + _line("STCKE", "OUT+16")
+        + _line("LMG", "2,5,OUT"),
+        {
+            2: EXTENDED_CLOCK >> 64,
+            3: EXTENDED_CLOCK & ONES,
+            4: NEXT_EXTENDED_CLOCK >> 64,
+            5: NEXT_EXTENDED_CLOCK & ONES,
+        },
+        0,
+    ),
+    "STCK after STCKE": _ran(
+        PRESET
+        + _line("STCKE", "OUT")
+        + _line("STCK", "OUT+16")
+        + _line("LMG", "2,4,OUT"),
+        {2: EXTENDED_CLOCK >> 64, 3: EXTENDED_CLOCK & ONES, 4: STORED_CLOCK + 1},
+        0,
+    ),
     "ECTG": _kept(
-        _line("LA", "3,DPOS") + _line("ECTG", "DNEG,SRC,3"),
+        _line("LGHI", "0,7")
+        + _line("LGHI", "1,9")
+        + _line("LA", "3,DPOS")
+        + _line("ECTG", "DNEG,SRC,3"),
         {0: (DNEG - FIXED_CPU_TIMER) % (1 << 64), 1: SRC_HIGH_ABEND_LOW, 3: DPOS},
     ),
 }
