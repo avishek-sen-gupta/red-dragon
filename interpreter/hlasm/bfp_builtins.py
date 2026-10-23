@@ -12,14 +12,7 @@ from interpreter.hlasm.bfp_layout import (
     BfpLayout,
 )
 from interpreter.hlasm.bfp_operation import BfpOperation, bfp_builtin_name
-from interpreter.hlasm.bfp_slots import (
-    DIVISION_BY_ZERO_BIT,
-    INCREMENTED_BIT,
-    INEXACT_BIT,
-    INVALID_BIT,
-    OVERFLOW_BIT,
-    UNDERFLOW_BIT,
-)
+from interpreter.hlasm.ieee_words import ieee_words
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.builtin import Builtin
 from interpreter.vm.vm import VMState
@@ -59,46 +52,16 @@ from zarch_float.rounding_mode import BFP_MODIFIER_MODES, RoundingMode
 type _Binary = Callable[[BfpValue, BfpValue, RoundingMode], BfpResult]
 type _Fused = Callable[[BfpValue, BfpValue, BfpValue, RoundingMode], BfpResult]
 type _Unary = Callable[[BfpValue, RoundingMode], BfpResult]
-type _Bits = Mapping[Condition, int]
 
 INVALID_CC = 3
 UNREACHABLE_SCALED = (0, 0, 0)
 
-_TRAPS: _Bits = {
-    Condition.INVALID: INVALID_BIT,
-    Condition.DIVISION_BY_ZERO: DIVISION_BY_ZERO_BIT,
-    Condition.OVERFLOW: OVERFLOW_BIT,
-    Condition.TINY: UNDERFLOW_BIT,
-    Condition.INEXACT: INEXACT_BIT,
-}
-_FLAGS: _Bits = {
-    Condition.INVALID: INVALID_BIT,
-    Condition.DIVISION_BY_ZERO: DIVISION_BY_ZERO_BIT,
-    Condition.OVERFLOW: OVERFLOW_BIT,
-    Condition.UNDERFLOW: UNDERFLOW_BIT,
-    Condition.INEXACT: INEXACT_BIT,
-}
-_SCALINGS: _Bits = {Condition.OVERFLOW: OVERFLOW_BIT, Condition.TINY: UNDERFLOW_BIT}
-_DETAILS: _Bits = {
-    Condition.INEXACT: INEXACT_BIT,
-    Condition.INCREMENTED: INCREMENTED_BIT,
-}
-
-
-def _bits(conditions: frozenset[Condition], bits: _Bits) -> int:
-    return sum(bit for condition, bit in bits.items() if condition in conditions)
-
 
 def _outcome(result: BfpResult, cc: int) -> list[int]:
-    scaling = _bits(result.conditions, _SCALINGS)
-    scaled_detail = _bits(result.scaled_conditions, _DETAILS) * bool(scaling)
     return [
         *fields_of(result.value).as_list(),
         *fields_of(result.scaled).as_list(),
-        _bits(result.conditions, _TRAPS),
-        _bits(result.conditions, _FLAGS),
-        scaling | scaled_detail,
-        _bits(result.conditions, _DETAILS),
+        *ieee_words(result.conditions, result.scaled_conditions),
         cc,
     ]
 
@@ -161,10 +124,7 @@ def _integer_outcome(a: BfpValue, result: IntegerResult, image: int) -> list[int
         0,
         0,
         *UNREACHABLE_SCALED,
-        _bits(result.conditions, _TRAPS),
-        _bits(result.conditions, _FLAGS),
-        0,
-        _bits(result.conditions, _DETAILS),
+        *ieee_words(result.conditions, frozenset()),
         _integer_cc(a, result),
     ]
 
