@@ -95,6 +95,13 @@ BIT_LENGTHS_PAST_Z390 = (
 )
 BIT_LENGTHS_PAST_Z390_IMAGE = "B680E0E7CDE00C50" "1000000000000001"
 
+CHANNEL_COMMANDS = (
+    "         CCW   X'02',X'123456',X'20',80\n"
+    "         CCW1  X'03',X'7FFFFFFF',X'40',65535\n"
+    "         CCW0  1,0,0,1\n"
+)
+CHANNEL_COMMANDS_IMAGE = "0212345620000050" "0340FFFF7FFFFFFF" "0100000000000001"
+
 PADDING = "         DC    C'A',F'5',C'B',FD'6'\n"
 PADDING_IMAGE = "C100000000000005" "C2000000000000000000000000000006"
 
@@ -103,6 +110,10 @@ FAMILIES: Mapping[str, tuple[str, str]] = {
     "bit lengths packed from each operand's bit offset": (
         BIT_LENGTHS,
         BIT_LENGTHS_IMAGE,
+    ),
+    "channel command words, format 0 and 1": (
+        CHANNEL_COMMANDS,
+        CHANNEL_COMMANDS_IMAGE,
     ),
     "fixed point with scale, exponents and the U prefix": (
         FIXED_POINT,
