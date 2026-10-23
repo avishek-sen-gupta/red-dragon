@@ -753,7 +753,7 @@ its own module.
 - STFLE stores the list X'E1003F63F47C8C24', X'0000890000000000': a bit is on when the
   facility's problem-state instructions are all lowered. The floating-point bits are on: 20,
   23, 37, 41, 42, 43 (DFP high performance, as 19 is for long displacement), 44, 48 and 80.
-  The vector bits (129, 134, 135, 148, 152, 192, 198, 199) imply each other and turn on
+  The vector bits (129, 134, 135, 148, 152, 192, 198, 199) each imply 129, and some imply others. They turn on
   together at the end of wave 2, so 129 is off although LCBB is lowered. 16 and 24 wait for
   PKA, PKU, UNPKA and UNPKU, 49 for PPA. It stores min(GR0 bits 56-63 + 1, 2) doublewords,
   sets those bits to 1, and sets CC 0, or 3 when the list was cut short. Off a doubleword it
