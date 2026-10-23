@@ -70,6 +70,12 @@ SIGNED_ARITHMETIC: Mapping[str, Case] = {
     ),
     "SHHHR": _ran(_hh("SHHHR", 5, 7), {2: with_high(0xFFFFFFFE)}, CC_ONE),
     "SHHHR zero": _ran(_hh("SHHHR", 7, 7), {2: with_high(0)}, CC_ZERO),
+    "SHHHR overflow": _ran(
+        _hh("SHHHR", 0x80000000, 1), {2: with_high(0x7FFFFFFF)}, CC_THREE
+    ),
+    "AHHLR overflow": _ran(
+        _hl("AHHLR", 0x7FFFFFFF, 1), {2: with_high(0x80000000)}, CC_THREE
+    ),
     "SHHLR overflow": _ran(
         _hl("SHHLR", 0x80000000, 1), {2: with_high(0x7FFFFFFF)}, CC_THREE
     ),
@@ -91,9 +97,11 @@ LOGICAL_ARITHMETIC: Mapping[str, Case] = {
     ),
     "ALHHLR": _ran(_hl("ALHHLR", 5, 7), {2: with_high(12)}, CC_ONE),
     "ALHHLR zero": _ran(_hl("ALHHLR", 0, 0), {2: with_high(0)}, CC_ZERO),
+    "ALHHLR carry": _ran(_hl("ALHHLR", 0xFFFFFFFF, 2), {2: with_high(1)}, CC_THREE),
     "SLHHHR borrow": _ran(_hh("SLHHHR", 5, 7), {2: with_high(0xFFFFFFFE)}, CC_ONE),
     "SLHHHR": _ran(_hh("SLHHHR", 7, 5), {2: with_high(2)}, CC_THREE),
     "SLHHLR zero": _ran(_hl("SLHHLR", 7, 7), {2: with_high(0)}, CC_TWO),
+    "SLHHLR borrow": _ran(_hl("SLHHLR", 1, 2), {2: with_high(0xFFFFFFFF)}, CC_ONE),
     "ALSIH carry": _ran(
         _high(2, 0xFFFFFFF0) + _line("ALSIH", "2,16"), {2: with_high(0)}, CC_TWO
     ),
@@ -153,28 +161,62 @@ COMPARES: Mapping[str, Case] = {
         CC_ONE,
     ),
     "CLHHR high": _ran(
-        _high(3, 0xFFFFFFFF) + _high(4, 1) + _line("CLHHR", "3,4"), {}, CC_TWO
+        _high(3, 0xFFFFFFFF) + _high(4, 1) + _line("CLHHR", "3,4"),
+        {3: with_high(0xFFFFFFFF), 4: with_high(1)},
+        CC_TWO,
     ),
-    "CHLR equal": _ran(_high(3, 5) + _low(4, 5) + _line("CHLR", "3,4"), {}, CC_ZERO),
-    "CHLR high": _ran(
-        _high(3, 1) + _low(4, 0x80000000) + _line("CHLR", "3,4"), {}, CC_TWO
-    ),
-    "CLHLR high": _ran(
-        _high(3, 0x80000000) + _low(4, 1) + _line("CLHLR", "3,4"), {}, CC_TWO
-    ),
-    "CLHLR equal": _ran(_high(3, LOW_FILL) + _line("CLHLR", "3,4"), {}, CC_ZERO),
-    "CHF equal": _ran(_high(3, 0x80000001) + _line("CHF", "3,NEG"), {}, CC_ZERO),
-    "CHF low": _ran(_high(3, 0x80000001) + _line("CHF", "3,POS"), {}, CC_ONE),
-    "CLHF high": _ran(_high(3, 0x80000001) + _line("CLHF", "3,POS"), {}, CC_TWO),
-    "CLHF indexed": _ran(
-        _high(3, 0x7FFF7FFE) + _line("LA", "5,4") + _line("CLHF", "3,NEG(5)"),
-        {},
+    "CHLR equal": _ran(
+        _high(3, 5) + _low(4, 5) + _line("CHLR", "3,4"),
+        {3: with_high(5), 4: with_low(5)},
         CC_ZERO,
     ),
-    "CIH equal": _ran(_high(3, 0xFFFFFFF0) + _line("CIH", "3,-16"), {}, CC_ZERO),
-    "CIH low": _ran(_high(3, 0xFFFFFFF0) + _line("CIH", "3,-15"), {}, CC_ONE),
-    "CLIH high": _ran(_high(3, 0xFFFFFFF0) + _line("CLIH", "3,1"), {}, CC_TWO),
-    "CLIH low": _ran(_high(3, 1) + _line("CLIH", "3,X'FFFFFFF0'"), {}, CC_ONE),
+    "CHLR high": _ran(
+        _high(3, 1) + _low(4, 0x80000000) + _line("CHLR", "3,4"),
+        {3: with_high(1), 4: with_low(0x80000000)},
+        CC_TWO,
+    ),
+    "CLHLR high": _ran(
+        _high(3, 0x80000000) + _low(4, 1) + _line("CLHLR", "3,4"),
+        {3: with_high(0x80000000), 4: with_low(1)},
+        CC_TWO,
+    ),
+    "CLHLR equal": _ran(
+        _high(3, LOW_FILL) + _line("CLHLR", "3,4"),
+        {3: with_high(LOW_FILL), 4: FILL},
+        CC_ZERO,
+    ),
+    "CHF equal": _ran(
+        _high(3, 0x80000001) + _line("CHF", "3,NEG"),
+        {3: with_high(0x80000001)},
+        CC_ZERO,
+    ),
+    "CHF low": _ran(
+        _high(3, 0x80000001) + _line("CHF", "3,POS"), {3: with_high(0x80000001)}, CC_ONE
+    ),
+    "CLHF high": _ran(
+        _high(3, 0x80000001) + _line("CLHF", "3,POS"),
+        {3: with_high(0x80000001)},
+        CC_TWO,
+    ),
+    "CLHF indexed": _ran(
+        _high(3, 0x7FFF7FFE) + _line("LA", "5,4") + _line("CLHF", "3,NEG(5)"),
+        {3: with_high(0x7FFF7FFE)},
+        CC_ZERO,
+    ),
+    "CIH equal": _ran(
+        _high(3, 0xFFFFFFF0) + _line("CIH", "3,-16"),
+        {3: with_high(0xFFFFFFF0)},
+        CC_ZERO,
+    ),
+    "CIH low": _ran(
+        _high(3, 0xFFFFFFF0) + _line("CIH", "3,-15"), {3: with_high(0xFFFFFFF0)}, CC_ONE
+    ),
+    "CLIH high": _ran(
+        _high(3, 0xFFFFFFF0) + _line("CLIH", "3,1"), {3: with_high(0xFFFFFFF0)}, CC_TWO
+    ),
+    "CLIH low": _ran(
+        _high(3, 1) + _line("CLIH", "3,X'FFFFFFF0'"), {3: with_high(1)}, CC_ONE
+    ),
 }
 
 UNDER_MASK: Mapping[str, Case] = {

@@ -210,7 +210,7 @@ def _shape(mnemonic: str, operands: Sequence[Operand]) -> list[str]:
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_brcth_takes_the_target_then_counts_down_the_high_word_and_lfhat_traps_after_loading():
+def test_brcth_takes_the_target_then_counts_down_the_high_word():
     relative = RelocImmOperand(kind="RELOC_IMM", section="T", offset=40)
 
     assert _shape("BRCTH", (reg_operand(4), relative)) == [
@@ -228,6 +228,10 @@ def test_brcth_takes_the_target_then_counts_down_the_high_word_and_lfhat_traps_a
         "StoreVar __hlasm_target reg",
         "Branch hl_dispatch",
     ]
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_lfhat_loads_the_high_word_then_traps_on_zero():
     assert _shape("LFHAT", R2_D8) == [
         "LoadVar __hlasm_gprs",
         "LoadRegion 100+4",

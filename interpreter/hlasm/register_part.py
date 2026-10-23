@@ -16,7 +16,7 @@ class RegisterPart:
     store: Callable[[HlasmEmitter, int, Register], None]
     bits: int
 
-    def bytes(self) -> int:
+    def byte_count(self) -> int:
         return self.bits // BITS_PER_BYTE
 
     def merge(
