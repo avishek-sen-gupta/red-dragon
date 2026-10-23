@@ -23,7 +23,7 @@ from interpreter.hlasm.hfp_layout import (
     SHORT_HFP,
     HfpLayout,
 )
-from interpreter.hlasm.hfp_operation import HfpOperation
+from interpreter.hlasm.hfp_operation import HfpOperation, hfp_builtin_name
 from interpreter.hlasm.hlasm_constants import HFP_EXPONENT_OVERFLOW_ABEND
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.opcodes.bfp_forms import checked
@@ -40,9 +40,10 @@ from interpreter.hlasm.opcodes.fpr_images import (
     storage,
     store_image,
 )
-from interpreter.hlasm.opcodes.hfp_arithmetic import Deliver, field_sources, hfp_call
 from interpreter.hlasm.opcodes.hfp_ir import (
+    field_sources,
     fields_of,
+    image_cc,
     image_of,
     normalized_fields,
     true_zero_low,
@@ -58,13 +59,13 @@ from zarch_float.rounding_mode import (
 )
 
 type GrStore = Callable[[HlasmEmitter, int, Register], None]
+type Store = Callable[[HlasmEmitter, MachineStatement, Register], None]
 
 INTEGER_SLOT = 0
 INTEGER_CC_SLOT = 1
 BFP_CC_SLOT = 3
 MAX_CHARACTERISTIC = 127
 SPECIAL_CC = 3
-POSITIVE_CC = 2
 LARGEST_MAGNITUDE = (1 << LONG_HFP.sign_shift) - 1
 LAYOUTS: Mapping[str, HfpLayout] = {"E": SHORT_HFP, "D": LONG_HFP, "X": EXTENDED_HFP}
 
@@ -78,19 +79,24 @@ def _invalid(modes: Mapping[int, RoundingMode]) -> Callable[[MachineStatement], 
 
 
 def _rounded(
-    builtin: tuple[HfpOperation, HfpLayout], store: Deliver
+    builtin: tuple[HfpOperation, HfpLayout], store: Store
 ) -> StatementLowering:
     layout = builtin[1]
+    name = hfp_builtin_name(*builtin)
     arguments = (_m3, *field_sources(layout, (fpr(THIRD, layout),)))
-    return hfp_call(builtin, arguments, store)
+
+    def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
+        args = tuple(argument(emitter, statement) for argument in arguments)
+        store(emitter, statement, emitter.call(name, args))
+
+    return lower
 
 
-def _integer_into(gr_store: GrStore) -> Deliver:
+def _integer_into(gr_store: GrStore) -> Store:
     def store(
         emitter: HlasmEmitter,
         statement: MachineStatement,
         result: Register,
-        zeroed: Register,
     ) -> None:
         value = list_item(emitter, result, INTEGER_SLOT)
         gr_store(emitter, reg_operand(statement, FIRST), value)
@@ -99,26 +105,17 @@ def _integer_into(gr_store: GrStore) -> Deliver:
     return store
 
 
-def _bfp_into(target: BfpLayout) -> Deliver:
+def _bfp_into(target: BfpLayout) -> Store:
     def store(
         emitter: HlasmEmitter,
         statement: MachineStatement,
         result: Register,
-        zeroed: Register,
     ) -> None:
         image = image_at(emitter, result, emitter.int_(0), target)
         store_image(emitter, reg_operand(statement, FIRST), target, image)
         emitter.set_cc(list_item(emitter, result, BFP_CC_SLOT))
 
     return store
-
-
-def _store_gr32(emitter: HlasmEmitter, r: int, value: Register) -> None:
-    emitter.store_gr32(r, value)
-
-
-def _store_gr64(emitter: HlasmEmitter, r: int, value: Register) -> None:
-    emitter.store_gr64(r, value)
 
 
 def _to_fixed(
@@ -130,8 +127,8 @@ def _to_fixed(
 
 
 _FIXED: Mapping[str, tuple[HfpOperation, GrStore]] = {
-    "CF": (HfpOperation.TO_FIXED_32, _store_gr32),
-    "CG": (HfpOperation.TO_FIXED_64, _store_gr64),
+    "CF": (HfpOperation.TO_FIXED_32, HlasmEmitter.store_gr32),
+    "CG": (HfpOperation.TO_FIXED_64, HlasmEmitter.store_gr64),
 }
 
 TO_FIXED: Mapping[str, StatementLowering] = {
@@ -175,10 +172,6 @@ FROM_FIXED: Mapping[str, StatementLowering] = {
 }
 
 
-def _either(emitter: HlasmEmitter, a: Register, b: Register) -> Register:
-    return emitter.binop(BinopKind.BIT_OR, a, b)
-
-
 def _overflow(
     emitter: HlasmEmitter, biased: Register, characteristic: Register, source: BfpLayout
 ) -> Register:
@@ -186,7 +179,7 @@ def _overflow(
     too_large = emitter.binop(
         BinopKind.GT, characteristic, emitter.int_(MAX_CHARACTERISTIC)
     )
-    return _either(emitter, special, too_large)
+    return emitter.binop(BinopKind.BIT_OR, special, too_large)
 
 
 def _largest(
@@ -196,23 +189,22 @@ def _largest(
         BinopKind.SUB, emitter.int_(1), nan_of(emitter, image, source)
     )
     signed = emitter.binop(BinopKind.MUL, numeric, signed_zero)
-    return _either(emitter, signed, emitter.int_(LARGEST_MAGNITUDE))
-
-
-def _signed_cc(emitter: HlasmEmitter, sign: Register, magnitude: Register) -> Register:
-    nonzero = emitter.binop(BinopKind.NE, magnitude, emitter.int_(0))
-    signed = emitter.binop(BinopKind.SUB, emitter.int_(POSITIVE_CC), sign)
-    return emitter.binop(BinopKind.MUL, nonzero, signed)
+    return emitter.binop(BinopKind.BIT_OR, signed, emitter.int_(LARGEST_MAGNITUDE))
 
 
 def _finite(
-    emitter: HlasmEmitter,
-    fields: tuple[Register, Register, Register],
-    signed_zero: Register,
+    emitter: HlasmEmitter, characteristic: Register, exact: Register, zero: Register
 ) -> Register:
-    underflow = emitter.binop(BinopKind.LT, fields[1], emitter.int_(0))
-    exact = image_of(emitter, fields, LONG_HFP, true_zero_low)
-    return pick(emitter, underflow, signed_zero, exact)
+    underflow = emitter.binop(BinopKind.LT, characteristic, emitter.int_(0))
+    return pick(emitter, underflow, zero, exact)
+
+
+def _exact(
+    emitter: HlasmEmitter, fields: tuple[Register, Register, Register]
+) -> Register:
+    sign, characteristic, fraction = fields
+    wrapped = keep(CHARACTERISTIC_MASK)(emitter, characteristic)
+    return image_of(emitter, (sign, wrapped, fraction), LONG_HFP, true_zero_low)
 
 
 def _hfp_image(
@@ -228,13 +220,16 @@ def _hfp_image(
         BinopKind.LSHIFT, sign, emitter.int_(LONG_HFP.sign_shift)
     )
     largest = _largest(emitter, image, signed_zero, source)
+    exact = _exact(emitter, fields)
     return (
-        pick(emitter, overflow, largest, _finite(emitter, fields, signed_zero)),
+        pick(
+            emitter, overflow, largest, _finite(emitter, fields[1], exact, signed_zero)
+        ),
         pick(
             emitter,
             overflow,
             emitter.int_(SPECIAL_CC),
-            _signed_cc(emitter, sign, binary[0]),
+            image_cc(emitter, exact, LONG_HFP),
         ),
     )
 

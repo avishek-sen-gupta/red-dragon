@@ -70,14 +70,6 @@ LAYOUTS: Mapping[str, BfpLayout] = {
 }
 
 
-def _store_gr32(emitter: HlasmEmitter, r: int, value: Register) -> None:
-    emitter.store_gr32(r, value)
-
-
-def _store_gr64(emitter: HlasmEmitter, r: int, value: Register) -> None:
-    emitter.store_gr64(r, value)
-
-
 def _integer_stored(store: GrStore) -> Deliver:
     def deliver(
         emitter: HlasmEmitter,
@@ -120,10 +112,10 @@ _SIGNED_FORMS: Mapping[str, SuppressedBits] = {
 }
 _LOGICAL_FORMS: Mapping[str, SuppressedBits] = {"BR": inexact_control}
 _INTEGERS: Mapping[str, tuple[BfpOperation, GrStore, Mapping[str, SuppressedBits]]] = {
-    "CF": (BfpOperation.TO_FIXED_32, _store_gr32, _SIGNED_FORMS),
-    "CG": (BfpOperation.TO_FIXED_64, _store_gr64, _SIGNED_FORMS),
-    "CLF": (BfpOperation.TO_LOGICAL_32, _store_gr32, _LOGICAL_FORMS),
-    "CLG": (BfpOperation.TO_LOGICAL_64, _store_gr64, _LOGICAL_FORMS),
+    "CF": (BfpOperation.TO_FIXED_32, HlasmEmitter.store_gr32, _SIGNED_FORMS),
+    "CG": (BfpOperation.TO_FIXED_64, HlasmEmitter.store_gr64, _SIGNED_FORMS),
+    "CLF": (BfpOperation.TO_LOGICAL_32, HlasmEmitter.store_gr32, _LOGICAL_FORMS),
+    "CLG": (BfpOperation.TO_LOGICAL_64, HlasmEmitter.store_gr64, _LOGICAL_FORMS),
 }
 
 TO_FIXED: Mapping[str, StatementLowering] = {

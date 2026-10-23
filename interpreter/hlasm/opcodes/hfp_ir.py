@@ -6,7 +6,7 @@ from collections.abc import Callable, Sequence
 from interpreter.hlasm.abend import emit_abend
 from interpreter.hlasm.bit_counts import leading_zeros
 from interpreter.hlasm.conditional import emit_when
-from interpreter.hlasm.data_movement import keep
+from interpreter.hlasm.data_movement import Source, keep
 from interpreter.hlasm.hfp_layout import (
     CHARACTERISTIC_MASK,
     PART_FRACTION_BITS,
@@ -102,6 +102,16 @@ def fields_of(
 
 def fields_list(emitter: HlasmEmitter, image: Register, layout: HfpLayout) -> Register:
     return list_of(emitter, fields_of(emitter, image, layout))
+
+
+def field_sources(layout: HfpLayout, sources: Sequence[Source]) -> tuple[Source, ...]:
+    return tuple(_field_list(source, layout) for source in sources)
+
+
+def _field_list(image: Source, layout: HfpLayout) -> Source:
+    return lambda emitter, statement: fields_list(
+        emitter, image(emitter, statement), layout
+    )
 
 
 def _positive_part(emitter: HlasmEmitter, value: Register) -> Register:
