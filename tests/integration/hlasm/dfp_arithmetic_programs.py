@@ -121,7 +121,7 @@ ARITHMETIC: Mapping[str, Case] = {
         extended_from(1, "X2")
         + extended_from(4, "X3")
         + lines("MXTR 8,1,4", "LGDR 2,8", "LGDR 3,10")
-        + lines("MXTRA 8,4,4,9", "LGDR 4,8", "LGDR 5,10"),
+        + lines("MXTRA 8,4,4,1", "LGDR 4,8", "LGDR 5,10"),
         {2: EXTENDED_ONE, 3: 6, 4: EXTENDED_ONE, 5: 9},
         PRESET_CC,
     ),
@@ -137,8 +137,16 @@ ARITHMETIC: Mapping[str, Case] = {
         + extended_from(4, "X1")
         + lines("DXTR 8,1,4", "LGDR 2,8", "LGDR 3,10")
         + extended_from(4, "XM1")
-        + lines("DXTRA 8,1,4,12", "LGDR 4,8", "LGDR 5,10"),
+        + lines("DXTRA 8,1,4,1", "LGDR 4,8", "LGDR 5,10"),
         {2: EXTENDED_ONE, 3: 3, 4: 0xA2080000_00000000, 5: 3},
+        PRESET_CC,
+    ),
+    "MXTRA DXTRA with modifiers 8 to 15": case_of(
+        extended_from(1, "X3")
+        + extended_from(4, "XM1")
+        + lines("MXTRA 8,1,4,9", "LGDR 2,8", "LGDR 3,10")
+        + lines("DXTRA 8,1,4,12", "LGDR 4,8", "LGDR 5,10"),
+        {2: 0xA2080000_00000000, 3: 3, 4: 0xA2080000_00000000, 5: 3},
         PRESET_CC,
     ),
     "DDTR rounds a tiny quotient up to Nmin": case_of(
@@ -256,19 +264,16 @@ COMPARE_EXPONENT: Mapping[str, Case] = {
     ),
     "IEDTR IEXTR": case_of(
         lines("LD 1,D1P23", "LGHI 2,397", "IEDTR 3,1,2", "LGDR 4,3")
-        + lines("LGHI 2,-1", "IEDTR 3,1,2", "LGDR 5,3")
-        + lines("LGHI 2,-3", "IEDTR 3,1,2", "LGDR 6,3")
-        + lines("LGHI 2,768", "IEDTR 3,1,2", "LGDR 7,3")
         + extended_from(8, "X3")
         + lines("LGHI 2,6175", "IEXTR 12,8,2", "LGDR 8,12", "LGDR 9,14"),
-        {
-            4: 0x22340000_000000A3,
-            5: 0x78000000_000000A3,
-            6: 0x7E000000_000000A3,
-            7: 0x7C000000_000000A3,
-            8: 0x2207C000_00000000,
-            9: 3,
-        },
+        {4: 0x22340000_000000A3, 8: 0x2207C000_00000000, 9: 3},
+        PRESET_CC,
+    ),
+    "IEDTR makes an infinity, an SNaN and a QNaN": case_of(
+        lines("LD 1,D1P23", "LGHI 2,-1", "IEDTR 3,1,2", "LGDR 5,3")
+        + lines("LGHI 2,-3", "IEDTR 3,1,2", "LGDR 6,3")
+        + lines("LGHI 2,768", "IEDTR 3,1,2", "LGDR 7,3"),
+        {5: 0x78000000_000000A3, 6: 0x7E000000_000000A3, 7: 0x7C000000_000000A3},
         PRESET_CC,
     ),
 }
@@ -298,6 +303,14 @@ ROUNDING: Mapping[str, Case] = {
         },
         PRESET_CC,
         0x00800000 | INEXACT_FLAG | QUANTUM_FLAG,
+    ),
+    "QADTR FIDTR RRDTR keep the source quantum without a quantum trap": case_of(
+        set_fpc(0x04000000)
+        + lines("LD 1,D1P0", "QADTR 3,1,1,1", "LGDR 2,3", "LD 1,D1", "FIDTR 3,1,1,0")
+        + lines("LGDR 3,3", "LGHI 4,5", "LD 1,D1P23", "RRDTR 3,1,4,1", "LGDR 4,3"),
+        {2: 0x22340000_00000010, 3: ONE, 4: 0x22300000_000000A3},
+        PRESET_CC,
+        0x04000000,
     ),
     "RRDTR RRXTR": case_of(
         lines("LD 1,D1P23", "LGHI 2,66", "RRDTR 3,1,2,0", "LGHI 2,0", "RRDTR 4,1,2,0")
@@ -416,6 +429,11 @@ TRAPS: Mapping[str, Trap] = {
     ),
     "load FP integer with XxC traps the quantum": trap_of(
         lines("LD 1,D2P5", "FIDTR 3,5,1,4"), {3: TWO}, 0x04000400
+    ),
+    "quantize traps the quantum against the source quantum": trap_of(
+        lines("LD 1,D1", "LD 2,D1P0", "QADTR 3,1,2,1"),
+        {3: 0x22340000_00000010},
+        0x04000400,
     ),
     "quantize invalid suppresses": trap_of(
         lines("LD 3,D2", "LD 1,D1P23", "LD 7,DQ16", "QADTR 3,1,7,0"),
