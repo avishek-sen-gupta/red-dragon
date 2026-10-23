@@ -7,6 +7,8 @@ from interpreter.hlasm.fpr_layout import FprLayout
 from zarch_float.hfp_format import EXTENDED, LONG, SHORT, HfpFormat
 
 CHARACTERISTIC_BITS = 7
+CHARACTERISTIC_MASK = (1 << CHARACTERISTIC_BITS) - 1
+EXCESS = 64
 PART_WIDTH = 64
 PART_FRACTION_BITS = 56
 

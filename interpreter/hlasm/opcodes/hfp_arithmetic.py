@@ -13,10 +13,14 @@ from interpreter.hlasm.hfp_layout import (
     HfpLayout,
 )
 from interpreter.hlasm.hfp_operation import HfpOperation, hfp_builtin_name
-from interpreter.hlasm.hfp_slots import CONDITIONS_SLOT, DIVIDE_BIT, SQUARE_ROOT_BIT
+from interpreter.hlasm.hfp_slots import (
+    DIVIDE_BIT,
+    OVERFLOW_BIT,
+    SIGNIFICANCE_BIT,
+    SQUARE_ROOT_BIT,
+    UNDERFLOW_BIT,
+)
 from interpreter.hlasm.hlasm_constants import (
-    HFP_DIVIDE_ABEND,
-    HFP_SQUARE_ROOT_ABEND,
     REGISTER_MASK,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
@@ -26,13 +30,11 @@ from interpreter.hlasm.opcodes.fpr_images import (
     SECOND,
     THIRD,
     fpr,
-    list_item,
     pick,
     storage,
     store_image,
 )
 from interpreter.hlasm.opcodes.hfp_ir import (
-    Exceptions,
     LowCharacteristic,
     emit_program_mask_ladder,
     fields_list,
@@ -54,9 +56,21 @@ type Second = Callable[[int, HfpLayout], Source]
 type Form = tuple[HfpLayout, Second]
 type FormLowering = Callable[[HfpLayout, Second], StatementLowering]
 
-SUPPRESSIONS: Mapping[HfpOperation, Exceptions] = {
-    HfpOperation.DIVIDE: ((DIVIDE_BIT, HFP_DIVIDE_ABEND),),
-    HfpOperation.SQUARE_ROOT: ((SQUARE_ROOT_BIT, HFP_SQUARE_ROOT_ABEND),),
+RAISES: Mapping[HfpOperation, int] = {
+    HfpOperation.ADD: OVERFLOW_BIT | UNDERFLOW_BIT | SIGNIFICANCE_BIT,
+    HfpOperation.SUBTRACT: OVERFLOW_BIT | UNDERFLOW_BIT | SIGNIFICANCE_BIT,
+    HfpOperation.ADD_UNNORMALIZED: OVERFLOW_BIT | SIGNIFICANCE_BIT,
+    HfpOperation.SUBTRACT_UNNORMALIZED: OVERFLOW_BIT | SIGNIFICANCE_BIT,
+    HfpOperation.MULTIPLY: OVERFLOW_BIT | UNDERFLOW_BIT,
+    HfpOperation.MULTIPLY_LENGTHENED: OVERFLOW_BIT | UNDERFLOW_BIT,
+    HfpOperation.MULTIPLY_ADD: OVERFLOW_BIT | UNDERFLOW_BIT,
+    HfpOperation.MULTIPLY_SUBTRACT: OVERFLOW_BIT | UNDERFLOW_BIT,
+    HfpOperation.DIVIDE: DIVIDE_BIT | OVERFLOW_BIT | UNDERFLOW_BIT,
+    HfpOperation.HALVE: UNDERFLOW_BIT,
+    HfpOperation.SQUARE_ROOT: SQUARE_ROOT_BIT,
+    HfpOperation.LOAD_FP_INTEGER: 0,
+    HfpOperation.MULTIPLY_UNNORMALIZED: 0,
+    HfpOperation.MULTIPLY_ADD_UNNORMALIZED: 0,
 }
 
 SHORT_REGISTER: Form = (SHORT_HFP, fpr)
@@ -162,15 +176,15 @@ def _hfp(
     deliver: Deliver,
 ) -> StatementLowering:
     name = hfp_builtin_name(*builtin)
-    suppressing = SUPPRESSIONS.get(builtin[0], ())
+    raisable = RAISES[builtin[0]]
 
     def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
         args = tuple(argument(emitter, statement) for argument in arguments)
         result = emitter.call(name, args)
         emit_program_mask_ladder(
             emitter,
-            list_item(emitter, result, CONDITIONS_SLOT),
-            suppressing,
+            result,
+            raisable,
             lambda zeroed: deliver(emitter, statement, result, zeroed),
         )
 
