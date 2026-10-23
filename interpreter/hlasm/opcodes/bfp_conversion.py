@@ -11,6 +11,7 @@ from interpreter.hlasm.bfp_layout import (
     BfpLayout,
 )
 from interpreter.hlasm.bfp_operation import BfpOperation
+from interpreter.hlasm.conditional import pick
 from interpreter.hlasm.data_movement import (
     Source,
     from_gr32,
@@ -52,7 +53,6 @@ from interpreter.hlasm.opcodes.fpr_images import (
     SECOND,
     THIRD,
     fpr,
-    pick,
     signed_magnitude,
     storage,
     store_image,

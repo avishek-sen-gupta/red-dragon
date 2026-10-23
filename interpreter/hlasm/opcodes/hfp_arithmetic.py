@@ -4,6 +4,7 @@
 from collections.abc import Callable, Mapping, Sequence
 
 from hlasm_asg.program.machine_statement import MachineStatement
+from interpreter.hlasm.conditional import pick
 from interpreter.hlasm.data_movement import Source
 from interpreter.hlasm.hfp_layout import (
     EXTENDED_HFP,
@@ -30,7 +31,6 @@ from interpreter.hlasm.opcodes.fpr_images import (
     SECOND,
     THIRD,
     fpr,
-    pick,
     storage,
     store_image,
 )

@@ -10,6 +10,7 @@ from interpreter.hlasm.bfp_layout import (
     SHORT_LAYOUT,
     BfpLayout,
 )
+from interpreter.hlasm.conditional import pick
 from interpreter.hlasm.data_movement import (
     Source,
     keep,
@@ -26,14 +27,7 @@ from interpreter.hlasm.opcodes.bfp_ir import (
 )
 from interpreter.hlasm.opcodes.floating_point_support import pairs
 from interpreter.hlasm.opcodes.fp_ir import emit_ieee_ladder
-from interpreter.hlasm.opcodes.fpr_images import (
-    FIRST,
-    SECOND,
-    compared,
-    fpr,
-    pick,
-    storage,
-)
+from interpreter.hlasm.opcodes.fpr_images import FIRST, SECOND, compared, fpr, storage
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register

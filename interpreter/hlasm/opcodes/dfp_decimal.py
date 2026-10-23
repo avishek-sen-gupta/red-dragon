@@ -4,6 +4,7 @@
 from collections.abc import Callable, Mapping
 
 from hlasm_asg.program.machine_statement import MachineStatement
+from interpreter.hlasm.conditional import pick
 from interpreter.hlasm.data_movement import (
     Sink,
     Source,
@@ -38,7 +39,7 @@ from interpreter.hlasm.opcodes.floating_point_support import (
     pairs,
 )
 from interpreter.hlasm.opcodes.fp_forms import checked
-from interpreter.hlasm.opcodes.fpr_images import FIRST, SECOND, THIRD, fpr, pick
+from interpreter.hlasm.opcodes.fpr_images import FIRST, SECOND, THIRD, fpr
 from interpreter.hlasm.operands import (
     mask_operand,
     optional_mask_operand,

@@ -4,6 +4,7 @@
 from collections.abc import Callable, Mapping
 
 from hlasm_asg.program.machine_statement import MachineStatement
+from interpreter.hlasm.conditional import pick
 from interpreter.hlasm.dfp_fields import INFINITY, QUIET_NAN, SIGNALING_NAN
 from interpreter.hlasm.dfp_layout import EXTENDED_DFP, LONG_DFP, DfpLayout
 from interpreter.hlasm.fp_slots import INVALID_BIT
@@ -18,7 +19,7 @@ from interpreter.hlasm.opcodes.dfp_ir import (
 )
 from interpreter.hlasm.opcodes.floating_point_support import pairs
 from interpreter.hlasm.opcodes.fp_ir import emit_ieee_ladder
-from interpreter.hlasm.opcodes.fpr_images import FIRST, SECOND, compared, fpr, pick
+from interpreter.hlasm.opcodes.fpr_images import FIRST, SECOND, compared, fpr
 from interpreter.hlasm.operands import reg_operand
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.operator_kind import BinopKind

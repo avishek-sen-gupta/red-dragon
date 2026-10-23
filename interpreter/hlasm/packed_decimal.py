@@ -32,14 +32,14 @@ DIGIT_PAIR_BASE = 100
 SIGN_CC_STEP = 2
 
 
-def _bin(
+def constant_binop(
     emitter: HlasmEmitter, operator: BinopKind, left: Register, right: int
 ) -> Register:
     return emitter.binop(operator, left, emitter.int_(right))
 
 
 def table_bit(emitter: HlasmEmitter, table: Register, nibble: Register) -> Register:
-    return _bin(
+    return constant_binop(
         emitter, BinopKind.BIT_AND, emitter.binop(BinopKind.RSHIFT, table, nibble), 1
     )
 
@@ -49,8 +49,8 @@ def power_of_ten(emitter: HlasmEmitter, exponent: Register) -> Register:
 
 
 def digit_limit(emitter: HlasmEmitter, length: Register) -> Register:
-    doubled = _bin(emitter, BinopKind.MUL, length, 2)
-    return power_of_ten(emitter, _bin(emitter, BinopKind.SUB, doubled, 1))
+    doubled = constant_binop(emitter, BinopKind.MUL, length, 2)
+    return power_of_ten(emitter, constant_binop(emitter, BinopKind.SUB, doubled, 1))
 
 
 def negative_bit(emitter: HlasmEmitter, value: Register) -> Register:
@@ -66,7 +66,7 @@ def at_least(emitter: HlasmEmitter, value: Register, bound: Register) -> Registe
 
 
 def sign_factor(emitter: HlasmEmitter, negative: Register) -> Register:
-    doubled = _bin(emitter, BinopKind.MUL, negative, 2)
+    doubled = constant_binop(emitter, BinopKind.MUL, negative, 2)
     return emitter.binop(BinopKind.SUB, emitter.int_(1), doubled)
 
 
@@ -76,9 +76,9 @@ def signed_value(emitter: HlasmEmitter, value: PackedValue) -> Register:
     )
 
 
-def _nibbles(emitter: HlasmEmitter, byte: Register) -> tuple[Register, Register]:
-    high = _bin(emitter, BinopKind.RSHIFT, byte, NIBBLE_BITS)
-    return high, _bin(emitter, BinopKind.BIT_AND, byte, NIBBLE_MASK)
+def nibbles(emitter: HlasmEmitter, byte: Register) -> tuple[Register, Register]:
+    high = constant_binop(emitter, BinopKind.RSHIFT, byte, NIBBLE_BITS)
+    return high, constant_binop(emitter, BinopKind.BIT_AND, byte, NIBBLE_MASK)
 
 
 def _flag(emitter: HlasmEmitter, bit: Register) -> None:
@@ -93,12 +93,12 @@ def _digit_pair(
     site: PackedDigitReader,
     at: Register,
 ) -> None:
-    high, low = _nibbles(emitter, site.read(site.address, at))
-    shifted = _bin(
+    high, low = nibbles(emitter, site.read(site.address, at))
+    shifted = constant_binop(
         emitter, BinopKind.MUL, emitter.load_var(DECIMAL_VALUE_VAR), DIGIT_PAIR_BASE
     )
     pair = emitter.binop(
-        BinopKind.ADD, _bin(emitter, BinopKind.MUL, high, DECIMAL_BASE), low
+        BinopKind.ADD, constant_binop(emitter, BinopKind.MUL, high, DECIMAL_BASE), low
     )
     emitter.emit_inst(
         StoreVar(
@@ -119,8 +119,8 @@ def _digit_pair(
 def _sign_byte(
     emitter: HlasmEmitter, site: PackedDigitReader, last: Register
 ) -> PackedValue:
-    high, sign = _nibbles(emitter, site.read(site.address, last))
-    shifted = _bin(
+    high, sign = nibbles(emitter, site.read(site.address, last))
+    shifted = constant_binop(
         emitter, BinopKind.MUL, emitter.load_var(DECIMAL_VALUE_VAR), DECIMAL_BASE
     )
     _flag(emitter, table_bit(emitter, site.not_digits, high))
@@ -138,7 +138,7 @@ def read_packed(emitter: HlasmEmitter, field: PackedField) -> PackedValue:
     site = PackedDigitReader(
         field.address, unit_reader(emitter, ONE_BYTE), emitter.int_(NOT_DIGITS)
     )
-    last = _bin(emitter, BinopKind.SUB, field.length, ONE_BYTE)
+    last = constant_binop(emitter, BinopKind.SUB, field.length, ONE_BYTE)
     emit_byte_loop(emitter, last, lambda at: _digit_pair(emitter, site, at))
     return _sign_byte(emitter, site, last)
 
@@ -153,9 +153,11 @@ def _write_byte(
     emitter.write_bytes(sink.address, at, ONE_BYTE, image)
 
 
-def _packed_byte(emitter: HlasmEmitter, high: Register, low: Register) -> Register:
+def packed_byte(emitter: HlasmEmitter, high: Register, low: Register) -> Register:
     return emitter.binop(
-        BinopKind.BIT_OR, _bin(emitter, BinopKind.LSHIFT, high, NIBBLE_BITS), low
+        BinopKind.BIT_OR,
+        constant_binop(emitter, BinopKind.LSHIFT, high, NIBBLE_BITS),
+        low,
     )
 
 
@@ -163,14 +165,14 @@ def _store_pair(
     emitter: HlasmEmitter, sink: PackedByteSink, last: Register, at: Register
 ) -> None:
     remaining = emitter.load_var(DECIMAL_VALUE_VAR)
-    low = _bin(emitter, BinopKind.MOD, remaining, DECIMAL_BASE)
-    tens = _bin(emitter, BinopKind.FLOOR_DIV, remaining, DECIMAL_BASE)
-    high = _bin(emitter, BinopKind.MOD, tens, DECIMAL_BASE)
-    offset = _bin(
+    low = constant_binop(emitter, BinopKind.MOD, remaining, DECIMAL_BASE)
+    tens = constant_binop(emitter, BinopKind.FLOOR_DIV, remaining, DECIMAL_BASE)
+    high = constant_binop(emitter, BinopKind.MOD, tens, DECIMAL_BASE)
+    offset = constant_binop(
         emitter, BinopKind.SUB, emitter.binop(BinopKind.SUB, last, at), ONE_BYTE
     )
-    _write_byte(emitter, sink, offset, _packed_byte(emitter, high, low))
-    rest = _bin(emitter, BinopKind.FLOOR_DIV, remaining, DIGIT_PAIR_BASE)
+    _write_byte(emitter, sink, offset, packed_byte(emitter, high, low))
+    rest = constant_binop(emitter, BinopKind.FLOOR_DIV, remaining, DIGIT_PAIR_BASE)
     emitter.emit_inst(StoreVar(name=DECIMAL_VALUE_VAR, value_reg=rest))
 
 
@@ -178,11 +180,11 @@ def store_packed(
     emitter: HlasmEmitter, field: PackedField, magnitude: Register, negative: Register
 ) -> None:
     sink = PackedByteSink(field.address, emitter.int_(ONE_BYTE))
-    last = _bin(emitter, BinopKind.SUB, field.length, ONE_BYTE)
-    units = _bin(emitter, BinopKind.MOD, magnitude, DECIMAL_BASE)
-    sign = _bin(emitter, BinopKind.BIT_OR, negative, PLUS_SIGN)
-    _write_byte(emitter, sink, last, _packed_byte(emitter, units, sign))
-    rest = _bin(emitter, BinopKind.FLOOR_DIV, magnitude, DECIMAL_BASE)
+    last = constant_binop(emitter, BinopKind.SUB, field.length, ONE_BYTE)
+    units = constant_binop(emitter, BinopKind.MOD, magnitude, DECIMAL_BASE)
+    sign = constant_binop(emitter, BinopKind.BIT_OR, negative, PLUS_SIGN)
+    _write_byte(emitter, sink, last, packed_byte(emitter, units, sign))
+    rest = constant_binop(emitter, BinopKind.FLOOR_DIV, magnitude, DECIMAL_BASE)
     emitter.emit_inst(StoreVar(name=DECIMAL_VALUE_VAR, value_reg=rest))
     emit_byte_loop(emitter, last, lambda at: _store_pair(emitter, sink, last, at))
 
@@ -211,7 +213,13 @@ def store_with_cc(
     emit_decimal_overflow_check(emitter, overflow)
 
 
-def store_signed(emitter: HlasmEmitter, field: PackedField, value: Register) -> None:
+def magnitude_and_sign(
+    emitter: HlasmEmitter, value: Register
+) -> tuple[Register, Register]:
     negative = negative_bit(emitter, value)
     magnitude = emitter.binop(BinopKind.MUL, value, sign_factor(emitter, negative))
-    store_with_cc(emitter, field, magnitude, negative)
+    return magnitude, negative
+
+
+def store_signed(emitter: HlasmEmitter, field: PackedField, value: Register) -> None:
+    store_with_cc(emitter, field, *magnitude_and_sign(emitter, value))

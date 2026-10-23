@@ -4,6 +4,7 @@
 from collections.abc import Callable
 
 from hlasm_asg.program.machine_statement import MachineStatement
+from interpreter.hlasm.conditional import pick
 from interpreter.hlasm.data_movement import Source, keep
 from interpreter.hlasm.dfp_fields import INFINITY, QUIET_NAN
 from interpreter.hlasm.dfp_layout import DfpLayout
@@ -17,7 +18,7 @@ from interpreter.hlasm.opcodes.floating_point_support import (
 )
 from interpreter.hlasm.opcodes.fp_forms import Deliver, SuppressedBits
 from interpreter.hlasm.opcodes.fp_ir import enabled_traps, field_at, fpc_mode_code
-from interpreter.hlasm.opcodes.fpr_images import list_item, pick, store_image
+from interpreter.hlasm.opcodes.fpr_images import list_item, store_image
 from interpreter.hlasm.operands import optional_mask_operand, reg_operand
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register

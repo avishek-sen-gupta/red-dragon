@@ -3,6 +3,7 @@
 
 from collections.abc import Mapping, Sequence
 
+from interpreter.hlasm.conditional import pick
 from interpreter.hlasm.data_movement import keep
 from interpreter.hlasm.dfp_fields import INFINITY, QUIET_NAN, SIGNALING_NAN
 from interpreter.hlasm.dfp_layout import (
@@ -14,7 +15,7 @@ from interpreter.hlasm.dfp_layout import (
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.ir_function import Body, IrFunction
 from interpreter.hlasm.opcodes.dpd_lanes import declets_to_integer, integer_to_declets
-from interpreter.hlasm.opcodes.fpr_images import compared, list_of, pick
+from interpreter.hlasm.opcodes.fpr_images import compared, list_of
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
 

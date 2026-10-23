@@ -6,6 +6,7 @@ from collections.abc import Callable, Sequence
 from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.func_name import FuncName
 from interpreter.hlasm.abend import emit_abend
+from interpreter.hlasm.conditional import pick
 from interpreter.hlasm.data_movement import Source, keep
 from interpreter.hlasm.fp_slots import CC_SLOT, INEXACT_BIT
 from interpreter.hlasm.fpr_layout import FprLayout
@@ -23,7 +24,6 @@ from interpreter.hlasm.opcodes.fpr_images import (
     FOURTH,
     list_item,
     load_image,
-    pick,
     store_image,
 )
 from interpreter.hlasm.operands import optional_mask_operand, reg_operand
