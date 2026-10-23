@@ -116,7 +116,8 @@ _IMPLICIT_LENGTHS: Mapping[str, Callable[[str], int]] = {
     "Z": lambda text: len(_digits(text)),
 }
 
-_ADDRESS_TYPES = frozenset({"A", "Y", "V"})
+_ADDRESS_TYPES = frozenset({"A", "Y", "V", "S"})
+_FIXED_POINT_TYPES = frozenset({"F", "H"})
 
 _ALIGNMENTS: Mapping[str, int] = {"F": 4, "H": 2, "A": 4, "Y": 2, "V": 4}
 
@@ -136,6 +137,13 @@ def _check_supported(item: DcItem) -> None:
         else OTHER_TYPES_ISSUE
     )
     raise UnsupportedDataType(item.type + item.extension, issue)
+
+
+def _check_modifiers(item: DcItem) -> None:
+    if item.type in _FIXED_POINT_TYPES and (item.scale != 0 or item.exponent != 0):
+        raise UnsupportedDataType(
+            f"{item.type} with a scale or exponent modifier", ENCODING_ISSUE
+        )
 
 
 def _values(item: DcItem, text: str) -> tuple[str, ...]:
@@ -193,6 +201,7 @@ def _copies(
 
 def encode_dc(item: DcItem) -> tuple[DcPiece, ...]:
     _check_supported(item)
+    _check_modifiers(item)
     if isinstance(item.nominal, OmittedNominal):
         return ()
     return _copies(item, item.nominal)

@@ -6,7 +6,9 @@ from __future__ import annotations
 import pytest
 
 from hlasm_asg.program.abs_address import AbsAddress
+from hlasm_asg.program.address import Address
 from hlasm_asg.program.addresses_nominal import AddressesNominal
+from hlasm_asg.program.base_displacement_address import BaseDisplacementAddress
 from hlasm_asg.program.dc_item import DcItem
 from hlasm_asg.program.external_address import ExternalAddress
 from hlasm_asg.program.length_unit import LengthUnit
@@ -49,7 +51,7 @@ def _item(
 
 def _address_item(
     type_: str,
-    values: tuple[AbsAddress | RelocAddress | ExternalAddress, ...],
+    values: tuple[Address, ...],
     length: int,
     explicit_length: bool = False,
 ) -> DcItem:
@@ -157,57 +159,51 @@ def test_address_constants_are_absolute_relocated_or_external():
 
 
 @pytest.mark.parametrize(
-    ("type_", "extension", "length_unit", "message"),
+    ("type_", "extension", "message"),
+    [
+        ("E", "", "DC type E is not supported yet — red-dragon-6uyp.21"),
+        ("D", "", "DC type D is not supported yet — red-dragon-6uyp.21"),
+        ("L", "", "DC type L is not supported yet — red-dragon-6uyp.21"),
+        ("E", "H", "DC type EH is not supported yet — red-dragon-6uyp.21"),
+        ("C", "A", "DC type CA is not supported yet — red-dragon-6uyp.63"),
+    ],
+)
+def test_rejects_types_without_an_encoding(type_: str, extension: str, message: str):
+    with pytest.raises(UnsupportedDataType) as refused:
+        encode_dc(_item(type_, "1", 4, extension=extension))
+    assert str(refused.value) == message
+
+
+@pytest.mark.parametrize(
+    ("item", "message"),
     [
         (
-            "E",
-            "",
-            LengthUnit.BYTE,
-            "DC type E is not supported yet — red-dragon-6uyp.21",
-        ),
-        (
-            "D",
-            "",
-            LengthUnit.BYTE,
-            "DC type D is not supported yet — red-dragon-6uyp.21",
-        ),
-        (
-            "L",
-            "",
-            LengthUnit.BYTE,
-            "DC type L is not supported yet — red-dragon-6uyp.21",
-        ),
-        (
-            "E",
-            "H",
-            LengthUnit.BYTE,
-            "DC type EH is not supported yet — red-dragon-6uyp.21",
-        ),
-        (
-            "C",
-            "A",
-            LengthUnit.BYTE,
-            "DC type CA is not supported yet — red-dragon-6uyp.63",
-        ),
-        (
-            "S",
-            "",
-            LengthUnit.BYTE,
-            "DC type S is not supported yet — red-dragon-6uyp.63",
-        ),
-        (
-            "B",
-            "",
-            LengthUnit.BIT,
+            _item("B", "1010", 4, True, length_unit=LengthUnit.BIT),
             "DC type BL.4 is not supported yet — red-dragon-6uyp.93",
+        ),
+        (
+            _item("F", "1", 4).model_copy(update={"scale": 2}),
+            "DC type F with a scale or exponent modifier is not supported yet — red-dragon-6uyp.93",
+        ),
+        (
+            _item("H", "100", 2).model_copy(update={"exponent": 1}),
+            "DC type H with a scale or exponent modifier is not supported yet — red-dragon-6uyp.93",
+        ),
+        (
+            _address_item(
+                "S",
+                (
+                    BaseDisplacementAddress(
+                        kind="BASE_DISPLACEMENT", base=12, displacement=4
+                    ),
+                ),
+                2,
+            ),
+            "DC type S is not supported yet — red-dragon-6uyp.93",
         ),
     ],
 )
-def test_rejects_types_without_an_encoding(
-    type_: str, extension: str, length_unit: LengthUnit, message: str
-):
+def test_refuses_what_waits_for_the_dc_encoder(item: DcItem, message: str):
     with pytest.raises(UnsupportedDataType) as refused:
-        encode_dc(
-            _item(type_, "1", 4, True, extension=extension, length_unit=length_unit)
-        )
+        encode_dc(item)
     assert str(refused.value) == message
