@@ -1,12 +1,12 @@
 # pyright: standard
-"""HFP add, subtract, compare, multiply, divide, halve and square root (PoO chapter 18)."""
+"""HFP add, subtract, compare, multiply, multiply and add, divide, halve, square root and load FP integer (PoO chapter 18)."""
 
 from fractions import Fraction
 from math import isqrt
 
 from zarch_float.comparison_result import ComparisonResult
 from zarch_float.condition import Condition
-from zarch_float.hfp_format import HfpFormat
+from zarch_float.hfp_format import EXTENDED, HfpFormat
 from zarch_float.hfp_result import HfpResult
 from zarch_float.hfp_truncation import in_range, normalized, true_zero, truncated
 from zarch_float.hfp_value import HfpValue
@@ -87,3 +87,42 @@ def hfp_square_root(a: HfpValue) -> HfpResult:
     if a.negative:
         return HfpResult(a, frozenset({Condition.HFP_SQUARE_ROOT}))
     return _root(a)
+
+
+def hfp_load_fp_integer(a: HfpValue) -> HfpResult:
+    magnitude = a.magnitude()
+    whole = magnitude.numerator // magnitude.denominator
+    return truncated(a.format, a.negative, Fraction(whole))
+
+
+def _fused(a: HfpValue, b: HfpValue, c: HfpValue) -> HfpResult:
+    total = a.signed() * b.signed() + c.signed()
+    return truncated(c.format, total < 0, abs(total))
+
+
+def hfp_multiply_add(a: HfpValue, b: HfpValue, c: HfpValue) -> HfpResult:
+    return _fused(a, b, c)
+
+
+def hfp_multiply_subtract(a: HfpValue, b: HfpValue, c: HfpValue) -> HfpResult:
+    return _fused(a, b, c.negated())
+
+
+def hfp_multiply_unnormalized(a: HfpValue, b: HfpValue) -> HfpResult:
+    product = HfpValue(
+        EXTENDED,
+        a.negative != b.negative,
+        a.fraction * b.fraction,
+        a.exponent + b.exponent,
+    )
+    return HfpResult(product, frozenset())
+
+
+def hfp_multiply_add_unnormalized(a: HfpValue, b: HfpValue, c: HfpValue) -> HfpResult:
+    product = hfp_multiply_unnormalized(a, b).value
+    unit = Fraction(16) ** (product.exponent - EXTENDED.digits)
+    total = (product.signed() + c.signed()) / unit
+    window = int(abs(total)) % 16**EXTENDED.digits
+    return HfpResult(
+        HfpValue(EXTENDED, total < 0, window, product.exponent), frozenset()
+    )
