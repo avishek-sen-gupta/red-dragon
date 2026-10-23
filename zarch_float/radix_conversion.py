@@ -11,6 +11,7 @@ from zarch_float.bfp_value import BfpValue
 from zarch_float.condition import Condition, raised
 from zarch_float.dfp_context import quotient
 from zarch_float.dfp_format import DfpFormat
+from zarch_float.dfp_result import DfpResult
 from zarch_float.dfp_rounding import DfpRounding
 from zarch_float.dfp_value import DfpValue
 from zarch_float.exact_rounding import leading_exponent, round_ratio
@@ -116,10 +117,14 @@ def _largest_quantum(value: DfpValue) -> DfpValue:
     )
 
 
-def _dfp_exact(value: DfpValue, controls: RadixControls) -> RadixResult:
+def _dfp_delivered(result: DfpResult, controls: RadixControls) -> RadixResult:
+    value, conditions = result.value, result.conditions
+    if Condition.INEXACT in conditions:
+        return radix_exact(value, conditions | {Condition.QUANTUM})
     if not controls.quantum_of_one:
-        return radix_exact(_largest_quantum(value))
-    return radix_exact(value, raised((Condition.QUANTUM, value.exponent > 0)))
+        return radix_exact(_largest_quantum(value), conditions)
+    off_one = raised((Condition.QUANTUM, value.exponent > 0))
+    return radix_exact(value, conditions | off_one)
 
 
 def _dfp_scaled(rounded_scaled: DfpValue) -> tuple[DfpValue, int]:
@@ -140,15 +145,16 @@ def _dfp_finite(
     divided = quotient(signed.numerator, signed.denominator)
     rounding = DfpRounding(target, mode, target, NO_SCALING)
     rounded = rounding.apply(divided, lambda: signed)
-    if rounded.conditions & _TRAPPED:
-        scaled, scaling = _dfp_scaled(rounded.scaled)
-        conditions = rounded.conditions | {Condition.QUANTUM}
-        return RadixResult(
-            rounded.value, conditions, scaled, rounded.scaled_conditions, scaling
-        )
-    if Condition.INEXACT in rounded.conditions:
-        return radix_exact(rounded.value, rounded.conditions | {Condition.QUANTUM})
-    return _dfp_exact(rounded.value, controls)
+    delivered = _dfp_delivered(rounded, controls)
+    if not rounded.conditions & _TRAPPED:
+        return delivered
+    scaled, scaling = _dfp_scaled(rounded.scaled)
+    return replace(
+        delivered,
+        scaled=scaled,
+        scaled_conditions=rounded.scaled_conditions,
+        scaling=scaling,
+    )
 
 
 def _to_dfp(
