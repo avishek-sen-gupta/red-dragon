@@ -15,6 +15,8 @@ from interpreter.hlasm.hlasm_constants import (
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.opcodes.bfp_ir import (
+    OutcomeStep,
+    as_raised,
     current_mode,
     emit_ieee_ladder,
     fields_list,
@@ -107,13 +109,17 @@ def ieee_call(
     arguments: Sequence[Source],
     deliver: Deliver,
     suppressed: SuppressedBits,
+    step: OutcomeStep = as_raised,
 ) -> StatementLowering:
     def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
         args = tuple(argument(emitter, statement) for argument in arguments)
         result = emitter.call(name, args)
         outcome = without(emitter, outcome_of(emitter, result), suppressed(statement))
         emit_ieee_ladder(
-            emitter, outcome, lambda slot: deliver(emitter, statement, result, slot)
+            emitter,
+            outcome,
+            lambda slot: deliver(emitter, statement, result, slot),
+            step,
         )
 
     return lower

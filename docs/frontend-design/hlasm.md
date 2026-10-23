@@ -1009,8 +1009,9 @@ SLXT, SRDT, SRXT, SXTR, SXTRA, TDCDT, TDCET, TDCXT, TDGDT, TDGET, TDGXT. Rulings
   rounds; the encode IR function builds the canonical result image after delivery.
 - Rounding: M4 0 or 2 (and the non-A forms) take the FPC DFP mode, bits 25-27, as code
   `mode + 8`; 1 and 3-15 are the modifier. M4 0 or 8-15 suppress the quantum exception.
-- The trap ladder is the BFP one. The quantum exception (mask and flag X'04', DXC 04)
-  completes after the store, and is not recognized when an inexact trap is taken.
+- The trap ladder is the BFP one, with a DFP-only step first (`dfp_ir.quantum_yields`): the
+  quantum exception (mask and flag X'04', DXC 04) completes after the store, and is not
+  recognized when an inexact trap is taken. BFP IR carries no quantum step.
 - CC: add and subtract per figure 20-10, 3 for a NaN; multiply and divide leave it.
 - FIxTR, QAxTR and RRxTR call builtins. FIxTR rounds and sets XqC by M3; M4 bit 1 (X'4')
   suppresses inexact. QAxTR takes the quantum from R2 and the value from R3; RRxTR the

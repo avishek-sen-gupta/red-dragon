@@ -210,3 +210,11 @@ def test_every_mnemonic_lowers_without_symbolic():
     assert [
         m for m, ir in lowered.items() if any(isinstance(i, Symbolic) for i in ir)
     ] == []
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_bfp_ladder_carries_no_quantum_step():
+    assert {m: len(lowered_ir(m, registers(1, 4))) for m in ("ADBR", "CDBR")} == {
+        "ADBR": 164,
+        "CDBR": 134,
+    }
