@@ -116,3 +116,22 @@ QUANTUM is raised as the PoO defines the quantum-exception condition: inexact, o
 finite result off the preferred quantum; DIVIDE's own four cases; and, for LOAD FP INTEGER,
 QUANTIZE and REROUND, a delivered quantum other than the source's. QUANTIZE, REROUND and
 LOAD FP INTEGER report only INVALID, INEXACT, INCREMENTED and QUANTUM.
+
+## Radix conversion
+
+`convert_radix(value, target, mode, controls)` (`radix_conversion.py`) is PFPO's convert
+floating-point radix (PoO 9-35 to 9-46): the exact source value, of any radix, rounds once into
+a target of another. `RadixControls` holds the target controls (HFP overflow and underflow
+reporting, DPQC); `RadixResult` adds to the value, scaled value and conditions the scaling
+exponent PFPO returns in GR1. The scaled value lies in 1 <= |z| < radix, unlike the other
+operations' fixed trap scale.
+
+- BFP targets round with `BfpRounding`; DFP targets with `DfpRounding` over
+  `dfp_context.quotient`. An exact DFP result takes quantum 1 (DPQC) or the largest quantum
+  and raises QUANTUM only off quantum 1; an inexact one the smallest quantum, with QUANTUM.
+- HFP targets round to the format's hex digits by the method. Beyond characteristic 127:
+  INVALID and ±Hmax, or OVERFLOW and INEXACT when reported. Below 0: a true zero with INEXACT,
+  or TINY, UNDERFLOW and INEXACT when reported.
+- NaNs keep sign and payload when it fits, else payload 0; an SNaN raises INVALID. To HFP a NaN
+  is +Hmax and an infinity ±Hmax, both INVALID.
+
