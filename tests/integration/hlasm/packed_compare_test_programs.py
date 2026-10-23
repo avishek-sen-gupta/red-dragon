@@ -22,7 +22,11 @@ CC_SET_BY_TM = 3
 
 SET_CC = "         TM    ONES,X'FF'\n"
 
+DATA_SPAN = (0x400, 0x470)
+SECTION = "T"
+
 DATA = (
+    "         ORG   T+X'400'\n"
     "ONES     DC    X'FF'\n"
     "P5       DC    PL3'12345'\n"
     "P5L      DC    PL8'12345'\n"
@@ -31,6 +35,8 @@ DATA = (
     "ALTP     DC    X'12345F'\n"
     "ALTM     DC    X'12345B'\n"
     "NZ       DC    X'0D'\n"
+    "NZB      DC    X'0B'\n"
+    "SIGNS    DC    X'1A1B1E'\n"
     "PZ       DC    PL4'0'\n"
     "AZ       DC    X'000A'\n"
     "N31      DC    PL16'9999999999999999999999999999999'\n"
@@ -73,6 +79,7 @@ COMPARES: Mapping[str, Case] = {
     "CP alternate plus sign": (_line("CP", "ALTP,P5"), CC_ZERO),
     "CP alternate minus sign": (_line("CP", "M5,ALTM"), CC_ZERO),
     "CP alternate plus zero against negative zero": (_line("CP", "AZ,NZ"), CC_ZERO),
+    "CP alternate minus zero against positive zero": (_line("CP", "NZB,PZ"), CC_ZERO),
     "CP first low": (_line("CP", "M5,P5"), CC_LOW),
     "CP first high": (_line("CP", "P5,M5"), CC_HIGH),
     "CP larger negative magnitude is low": (_line("CP", "M5,M1"), CC_LOW),
@@ -84,6 +91,9 @@ COMPARES: Mapping[str, Case] = {
 TESTS: Mapping[str, Case] = {
     "TP valid": (_line("TP", "P5"), CC_ZERO),
     "TP valid with sign F": (_line("TP", "ALTP"), CC_ZERO),
+    "TP valid with sign A": (_line("TP", "SIGNS(1)"), CC_ZERO),
+    "TP valid with sign B": (_line("TP", "SIGNS+1(1)"), CC_ZERO),
+    "TP valid with sign E": (_line("TP", "SIGNS+2(1)"), CC_ZERO),
     "TP sign invalid": (_line("TP", "BADS"), CC_SIGN_INVALID),
     "TP digit invalid": (_line("TP", "BADD"), CC_DIGIT_INVALID),
     "TP digit beside the sign invalid": (_line("TP", "BADH"), CC_DIGIT_INVALID),
@@ -104,6 +114,14 @@ DATA_EXCEPTIONS: Mapping[str, Case] = {
     ),
     "CP invalid sign in the second operand": (
         SET_CC + _line("CP", "P5,BADS"),
+        CC_SET_BY_TM,
+    ),
+    "CP invalid sign in the first operand": (
+        SET_CC + _line("CP", "BADS,P5"),
+        CC_SET_BY_TM,
+    ),
+    "CP invalid digit in the second operand": (
+        SET_CC + _line("CP", "P5,BADD"),
         CC_SET_BY_TM,
     ),
     "CP invalid operands that are equal": (

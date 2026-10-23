@@ -4,7 +4,6 @@
 from collections.abc import Mapping
 
 from hlasm_asg.program.operand import Operand
-from hlasm_asg.program.storage_length_operand import StorageLengthOperand
 from interpreter.hlasm.byte_one_layouts import (
     LENGTH_BYTE,
     LENGTH_NIBBLES,
@@ -18,28 +17,20 @@ from tests.covers import NotLanguageFeature, covers
 from tests.unit.hlasm.lowering_helpers import (
     machine_statement,
     reg_operand,
+    storage_length_operand,
     storage_operand,
 )
 from tests.unit.hlasm.storage_events import storage_events
-
-BASE = 12
-
-
-def _with_length(displacement: int, length: int) -> StorageLengthOperand:
-    return StorageLengthOperand(
-        kind="STORAGE_LENGTH", displacement=displacement, length=length, base=BASE
-    )
-
 
 STATEMENTS: Mapping[str, tuple[Operand, ...]] = {
     "CVB": (reg_operand(3), storage_operand(8)),
     "CVBG": (reg_operand(3), storage_operand(8)),
     "CVDG": (reg_operand(3), storage_operand(8)),
-    "PACK": (_with_length(8, 8), _with_length(300, 5)),
-    "UNPK": (_with_length(300, 5), _with_length(8, 3)),
-    "PKA": (storage_operand(8), _with_length(300, 5)),
-    "UNPKA": (_with_length(300, 8), storage_operand(8)),
-    "UNPKU": (_with_length(300, 8), storage_operand(8)),
+    "PACK": (storage_length_operand(8, 8), storage_length_operand(300, 5)),
+    "UNPK": (storage_length_operand(300, 5), storage_length_operand(8, 3)),
+    "PKA": (storage_operand(8), storage_length_operand(300, 5)),
+    "UNPKA": (storage_length_operand(300, 8), storage_operand(8)),
+    "UNPKU": (storage_length_operand(300, 8), storage_operand(8)),
 }
 
 

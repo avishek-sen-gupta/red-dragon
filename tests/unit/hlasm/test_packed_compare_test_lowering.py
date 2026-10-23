@@ -2,51 +2,41 @@
 """CP and TP lowerings: CP reads both operands and abends S0C7 before it sets the CC, TP reads one and only sets the CC, neither writes storage, and EX sees byte 1 as one data field."""
 
 from hlasm_asg.program.machine_statement import MachineStatement
-from hlasm_asg.program.storage_length_operand import StorageLengthOperand
 from interpreter.hlasm.byte_one_layouts import (
     LENGTH_HIGH_NIBBLE,
     LENGTH_NIBBLES,
     byte_one_layout,
 )
-from interpreter.hlasm.hlasm_emitter import HlasmEmitter
-from interpreter.hlasm.opcodes import DATA_FIELD_LOWERINGS, OPCODE_LOWERINGS
-from interpreter.instructions import InstructionBase, Symbolic
+from interpreter.hlasm.opcodes import DATA_FIELD_LOWERINGS
+from interpreter.instructions import Symbolic
 from tests.covers import NotLanguageFeature, covers
-from tests.unit.hlasm.lowering_helpers import machine_statement
+from tests.unit.hlasm.lowering_helpers import (
+    lowered,
+    machine_statement,
+    storage_length_operand,
+)
 from tests.unit.hlasm.storage_events import storage_events
-
-BASE = 12
-
-
-def _with_length(displacement: int, length: int) -> StorageLengthOperand:
-    return StorageLengthOperand(
-        kind="STORAGE_LENGTH", displacement=displacement, length=length, base=BASE
-    )
 
 
 def _cp() -> MachineStatement:
-    return machine_statement("CP", (_with_length(8, 8), _with_length(300, 2)))
+    return machine_statement(
+        "CP", (storage_length_operand(8, 8), storage_length_operand(300, 2))
+    )
 
 
 def _tp() -> MachineStatement:
-    return machine_statement("TP", (_with_length(8, 16),))
-
-
-def _lowered(statement: MachineStatement) -> tuple[InstructionBase, ...]:
-    emitter = HlasmEmitter()
-    OPCODE_LOWERINGS[statement.base_mnemonic](emitter, statement)
-    return emitter.instructions()
+    return machine_statement("TP", (storage_length_operand(8, 16),))
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_cp_checks_both_operands_before_its_cc_and_tp_only_sets_the_cc():
-    lowered = {"CP": _lowered(_cp()), "TP": _lowered(_tp())}
+    irs = {"CP": lowered(_cp()), "TP": lowered(_tp())}
 
-    assert {m: storage_events(ir) for m, ir in lowered.items()} == {
+    assert {m: storage_events(ir) for m, ir in irs.items()} == {
         "CP": ["read", "S0C7", "cc"],
         "TP": ["read", "cc"],
     }
-    assert [i for ir in lowered.values() for i in ir if isinstance(i, Symbolic)] == []
+    assert [i for ir in irs.values() for i in ir if isinstance(i, Symbolic)] == []
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
