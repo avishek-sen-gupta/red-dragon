@@ -1267,7 +1267,7 @@ Rulings R43, R45, R48, R52.
 | `tests/z390/test_floating_point_support_differential.py` | Every floating-point-support case against z390; its initial FPC, short loads, HFP sign forms, missing checks and signaling pinned (`-m z390`) |
 | `tests/unit/hlasm/test_bfp_builtins.py` | BFP builtins: fields to values and back for every class; each builtin family's value, scaled value, trap, flags, DXCs and CC |
 | `tests/unit/hlasm/test_bfp_arithmetic_lowering.py` | BFP IR: operands in argument order, one builtin call, then the trap ladder; static `S0C6` before any access; compares, test data class and sign forms without a builtin; no SYMBOLIC in all 70 |
-| `tests/integration/hlasm/test_bfp_arithmetic.py` | Every BFP arithmetic mnemonic on the VM: result images, CC and FPC flags; signed compares and every TCDB class bit; each trap's delivered value, DXC and `S0C7`; fused NaN order and 0 x inf with an SNaN addend |
+| `tests/integration/hlasm/test_bfp_arithmetic.py` | Every BFP arithmetic mnemonic on the VM: result images, CC and FPC flags; signed and extended compares and every TCEB, TCDB and TCXB class bit; each trap's delivered value, DXC and `S0C7`; fused NaN order and 0 x inf with an SNaN addend |
 | `tests/z390/test_bfp_arithmetic_differential.py` | Every BFP arithmetic case against z390; its faults pinned (`-m z390`) |
 | `tests/unit/hlasm/test_bfp_conversion_lowering.py` | BFP conversion IR: builtin forms call then run the ladder; exact forms call nothing; static `S0C6` before any access; no SYMBOLIC |
 | `tests/integration/hlasm/test_bfp_conversion.py` | Every BFP conversion mnemonic on the VM: GR or FPR results, CC, FPC flags, and trap DXCs and `S0C7` |
