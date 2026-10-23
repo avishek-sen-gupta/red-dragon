@@ -80,7 +80,15 @@ def _tail_from_mask_test(shape: Sequence[str]) -> list[str]:
 RELATIVE_40 = ["LoadVar __hlasm_sect_T", "+ 40"]
 STORAGE_16 = [*_gpr(BASE, 4), "+ reg", "& 2147483647"]
 DISPATCH = ["StoreVar __hlasm_target reg", "Branch hl_dispatch"]
-TRAP = ["StoreVar __hlasm_abend S0C7", "Halt_"]
+TRAP = [
+    "LoadVar __hlasm_fpc",
+    "<< 8",
+    "& 4294902015",
+    "| reg",
+    "StoreVar __hlasm_fpc reg",
+    "StoreVar __hlasm_abend S0C7",
+    "Halt_",
+]
 WRAP_64 = "% 18446744073709551616"
 
 

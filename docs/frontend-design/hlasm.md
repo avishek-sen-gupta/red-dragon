@@ -171,7 +171,7 @@ addresses.
 | `interpreter/hlasm/opcodes/packed_compare_test.py` | The packed-decimal compare and test unit |
 | `interpreter/hlasm/packed_decimal.py`, `packed_value.py`, `packed_field.py`, `packed_digit_reader.py`, `packed_byte_sink.py` | A signed-packed field (address, run-time length) read into a magnitude, a negative bit, a bad-digit bit and a bad-sign bit; stored right to left with sign C or D; the overflow test and CC by int compares |
 | `interpreter/hlasm/packed_operands.py` | The packed operands as fields with L1 (and SS-b's L2) from byte 1, read and checked together |
-| `interpreter/hlasm/decimal_exceptions.py` | `S0C7` and `S0CB` before any store; `S0CA` after the store when program-mask bit `0100` is on |
+| `interpreter/hlasm/decimal_exceptions.py` | `S0C7` (DXC 00 in the FPC) and `S0CB` before any store; `S0CA` after the store when program-mask bit `0100` is on |
 | `interpreter/hlasm/opcodes/decimal_conversion.py` | The decimal conversion unit |
 | `interpreter/hlasm/decimal_packing.py`, `digit_source.py`, `character_field.py` | Pack digits into a signed-packed field and unpack them into zoned, ASCII or Unicode characters, right to left one result unit at a time; bytes left of the source read as zero |
 | `interpreter/hlasm/opcodes/edit.py`, `edit_operands.py` | The edit unit: pattern and source addresses, the byte reader and the fill byte |
@@ -350,7 +350,7 @@ LAT, LGAT, LLGFAT, LLGTAT. None changes the CC. The bridge resolves the extended
   comparing (CLT and CLGT then read no storage, which the Principles of Operation allow).
 - Branch targets go through `hl_dispatch`.
 - A trap is the compare-and-trap data exception: the operation completes, then the run
-  abends `S0C7`. The DXC (X'FF') is not modelled.
+  abends `S0C7` with DXC X'FF' in FPC byte 2. Load-and-trap does the same.
 - LAT loads the low word (high word kept), LGAT the doubleword, LLGFAT a word zero-extended,
   LLGTAT bits 1-31 zero-extended. The register is written, then a zero value traps.
 - z390 abends `S0FF` for a load-and-trap trap (it raises the DXC as the interruption code),
@@ -1137,9 +1137,6 @@ Rulings R43, R45, R48, R52.
   instruction there stores what the unresolved-call strategy gives. Callers compose
   `clock_builtins(clock)`, `bfp_builtins()`, `hfp_builtins()`, `dfp_builtins()` and `pfpo_builtins()`; the `interpreter.py` CLI does all five, with a
   `SystemMachineClock`.
-- Only LFAS, SFASR and the BFP IEEE traps store a DXC: a compare-and-trap or load-and-trap
-  trap and a decimal data exception abend `S0C7` and leave the FPC's DXC unchanged
-  (red-dragon-6uyp.87).
 - In AMODE 31, LM, STM, LMD, NC, OC, XC, the decimal instructions and the storage moves, compares and translates do not wrap
   EA + offset at 2 GiB; MVCL's overlap test ignores operands that wrap.
 - SRST and SRSTU with R1 below R2 search past the top of storage instead of wrapping to 0.
@@ -1184,6 +1181,7 @@ Rulings R43, R45, R48, R52.
 | `tests/integration/hlasm/test_compare.py` | Every compare mnemonic on the VM: CC, operands unchanged, alignment abends |
 | `tests/unit/hlasm/test_compare_branch_trap_lowering.py` | Compare-and-branch and trap IR: the M3 bit tested on the unstored comparison, branch or `S0C7`, masks 0 and 14, load written before the zero test |
 | `tests/integration/hlasm/test_compare_branch_trap.py` | Every compare-and-branch, compare-and-trap and load-and-trap mnemonic and a spread of extended ones on the VM: path, trap, loaded register, CC unchanged, immediate widths, masks 0, 1, 14 and 15 |
+| `tests/integration/hlasm/test_data_exception_code.py` | Each non-IEEE data exception on the VM stores its DXC in FPC byte 2 and keeps the rest: 00 for a decimal operand, FF for compare-and-trap and load-and-trap |
 | `tests/unit/hlasm/test_boolean_lowering.py` | Boolean IR: operand widths, the field read and replaced, the CC; NC/OC/XC as one byte loop of fixed size |
 | `tests/integration/hlasm/test_boolean.py` | Every boolean mnemonic, NOTR and NOTGR on the VM: result, CC 0 and 1, field CCs, overlapping storage operands, implicit and explicit-0 lengths, `__hlasm_ss_any` reset between statements |
 | `tests/unit/hlasm/test_shift_rotate_lowering.py` | Shift and rotate IR: registers only, CC only for the signed and selected-bits forms, the `S0C8` trap, an odd pair abends `S0C6`, register-span masks |

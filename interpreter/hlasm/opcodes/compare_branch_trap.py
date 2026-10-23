@@ -1,10 +1,9 @@
 # pyright: standard
-"""Compare and branch, compare and trap, load and trap: M3 picks the comparison results that branch or raise the compare-and-trap data exception (S0C7); the CC is unchanged."""
+"""Compare and branch, compare and trap, load and trap: M3 picks the comparison results that branch or raise the compare-and-trap data exception (DXC FF in the FPC, S0C7); the CC is unchanged."""
 
 from collections.abc import Callable, Mapping
 
 from hlasm_asg.program.machine_statement import MachineStatement
-from interpreter.hlasm.abend import emit_abend
 from interpreter.hlasm.branch_dispatch import emit_branch
 from interpreter.hlasm.conditional import emit_when
 from interpreter.hlasm.data_movement import (
@@ -26,7 +25,6 @@ from interpreter.hlasm.data_movement import (
 from interpreter.hlasm.hlasm_constants import (
     ADDRESS_MASK_31,
     BITS_PER_BYTE,
-    DATA_EXCEPTION_ABEND,
     DOUBLEWORD_BYTES,
     PARAM_LEFT,
     PARAM_RIGHT,
@@ -41,6 +39,10 @@ from interpreter.hlasm.opcodes.compare import (
     SIGNED_32,
     SIGNED_64,
     Comparison,
+)
+from interpreter.hlasm.opcodes.floating_point_support import (
+    COMPARE_AND_TRAP_DXC,
+    emit_coded_data_exception,
 )
 from interpreter.hlasm.opcodes.operand_sources import (
     HALFWORD_IMMEDIATE,
@@ -70,7 +72,7 @@ def _branch_to(target: Source) -> Outcome:
 
 
 def _trap(emitter: HlasmEmitter, statement: MachineStatement) -> None:
-    emit_abend(emitter, DATA_EXCEPTION_ABEND)
+    emit_coded_data_exception(emitter, COMPARE_AND_TRAP_DXC)
 
 
 BRANCH = _branch_to(storage_address_at(TARGET_OPERAND))
