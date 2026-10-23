@@ -109,9 +109,9 @@ def _deliver_once(
     fpc: Register,
     enabled: Register,
     outcome: IeeeOutcome,
-    deliver: tuple[Deliver, ScaledTrap],
+    store: Deliver,
+    scaled_trap: ScaledTrap,
 ) -> None:
-    store, scaled_trap = deliver
     scaling = keep(SCALING_BITS)(emitter, enabled)
     scaled = emitter.binop(BinopKind.NE, scaling, emitter.int_(0))
     store(emitter.binop(BinopKind.MUL, scaled, emitter.int_(SCALED_SLOT)))
@@ -145,7 +145,7 @@ def emit_ieee_ladder(
     _when_any(
         emitter, suppressing, lambda: emit_data_exception(emitter, fpc, suppressing)
     )
-    _deliver_once(emitter, fpc, enabled, outcome, (deliver, end.scaled_trap))
+    _deliver_once(emitter, fpc, enabled, outcome, deliver, end.scaled_trap)
     untrapped, flagged = _stored_flags(emitter, fpc, outcome.flags, enabled)
     _when_any(
         emitter,
