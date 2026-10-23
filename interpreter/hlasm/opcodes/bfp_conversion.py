@@ -11,14 +11,16 @@ from interpreter.hlasm.bfp_layout import (
     BfpLayout,
 )
 from interpreter.hlasm.bfp_operation import BfpOperation
-from interpreter.hlasm.bfp_slots import CC_SLOT
+from interpreter.hlasm.bfp_slots import CC_SLOT, INVALID_BIT
 from interpreter.hlasm.data_movement import (
     Source,
     from_gr32,
     from_gr64,
+    keep,
     sign_extended,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
+from interpreter.hlasm.ieee_outcome import IeeeOutcome
 from interpreter.hlasm.opcodes.bfp_forms import (
     FIRST,
     SECOND,
@@ -35,9 +37,18 @@ from interpreter.hlasm.opcodes.bfp_forms import (
     modifier,
     no_cc,
     signals_all,
+    storage,
     stored,
 )
-from interpreter.hlasm.opcodes.bfp_ir import exact_image, list_item, store_image
+from interpreter.hlasm.opcodes.bfp_ir import (
+    emit_ieee_ladder,
+    exact_image,
+    image_at,
+    list_item,
+    load_image,
+    signaling_nan_of,
+    store_image,
+)
 from interpreter.hlasm.opcodes.floating_point_support import pairs
 from interpreter.hlasm.operands import reg_operand
 from interpreter.hlasm.statement_lowering import StatementLowering
@@ -192,7 +203,157 @@ FROM_FIXED: Mapping[str, StatementLowering] = {
     },
 }
 
+
+def _pick(
+    emitter: HlasmEmitter, chosen: Register, then: Register, otherwise: Register
+) -> Register:
+    difference = emitter.binop(BinopKind.SUB, then, otherwise)
+    taken = emitter.binop(BinopKind.MUL, chosen, difference)
+    return emitter.binop(BinopKind.ADD, otherwise, taken)
+
+
+def _special_image(
+    emitter: HlasmEmitter,
+    image: Register,
+    source: BfpLayout,
+    target: BfpLayout,
+) -> Register:
+    fraction = keep((1 << source.fraction_bits) - 1)(emitter, image)
+    widening = target.fraction_bits - source.fraction_bits
+    payload = emitter.binop(BinopKind.LSHIFT, fraction, emitter.int_(widening))
+    snan = signaling_nan_of(emitter, image, source)
+    quieting = emitter.binop(BinopKind.MUL, snan, emitter.int_(target.quiet_bit))
+    quieted = emitter.binop(BinopKind.BIT_OR, payload, quieting)
+    return emitter.binop(BinopKind.BIT_OR, quieted, emitter.int_(target.infinity))
+
+
+def _significand(
+    emitter: HlasmEmitter, image: Register, biased: Register, source: BfpLayout
+) -> tuple[Register, Register]:
+    normal = emitter.binop(BinopKind.NE, biased, emitter.int_(0))
+    implied = emitter.binop(
+        BinopKind.LSHIFT, normal, emitter.int_(source.fraction_bits)
+    )
+    fraction = keep((1 << source.fraction_bits) - 1)(emitter, image)
+    magnitude = emitter.binop(BinopKind.BIT_OR, fraction, implied)
+    floor = emitter.binop(BinopKind.SUB, emitter.int_(1), normal)
+    unbiased = emitter.binop(BinopKind.ADD, biased, floor)
+    exponent = emitter.binop(
+        BinopKind.SUB,
+        unbiased,
+        emitter.int_(source.format.emax + source.fraction_bits),
+    )
+    return magnitude, exponent
+
+
+def _lengthened_image(
+    emitter: HlasmEmitter, image: Register, source: BfpLayout, target: BfpLayout
+) -> Register:
+    sign = emitter.binop(BinopKind.RSHIFT, image, emitter.int_(source.sign_shift))
+    shifted = emitter.binop(BinopKind.RSHIFT, image, emitter.int_(source.fraction_bits))
+    biased = keep(source.exponent_mask)(emitter, shifted)
+    magnitude, exponent = _significand(emitter, image, biased, source)
+    finite = exact_image(emitter, sign, magnitude, exponent, target)
+    special = emitter.binop(BinopKind.EQ, biased, emitter.int_(source.exponent_mask))
+    signed = emitter.binop(BinopKind.LSHIFT, sign, emitter.int_(target.sign_shift))
+    special_image = emitter.binop(
+        BinopKind.BIT_OR, signed, _special_image(emitter, image, source, target)
+    )
+    return _pick(emitter, special, special_image, finite)
+
+
+def _lengthen(
+    source: BfpLayout, target: BfpLayout, operand: Source
+) -> StatementLowering:
+    def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
+        image = operand(emitter, statement)
+        result = _lengthened_image(emitter, image, source, target)
+        snan = signaling_nan_of(emitter, image, source)
+        invalid = emitter.binop(BinopKind.MUL, snan, emitter.int_(INVALID_BIT))
+        none = emitter.int_(0)
+        emit_ieee_ladder(
+            emitter,
+            IeeeOutcome(invalid, invalid, none, none),
+            lambda slot: store_image(
+                emitter, reg_operand(statement, FIRST), target, result
+            ),
+        )
+
+    return _with_pair(target, (FIRST,), lower)
+
+
+def _rounded_stored(source: BfpLayout, target: BfpLayout) -> Deliver:
+    narrowing = source.width - target.width
+
+    def deliver(
+        emitter: HlasmEmitter,
+        statement: MachineStatement,
+        result: Register,
+        slot: Register,
+    ) -> None:
+        r1 = reg_operand(statement, FIRST)
+        rounded = image_at(emitter, result, slot, target)
+        scaled = image_at(emitter, result, slot, source)
+        kept = keep((1 << narrowing) - 1)(emitter, load_image(emitter, r1, source))
+        placed = emitter.binop(BinopKind.LSHIFT, rounded, emitter.int_(narrowing))
+        merged = emitter.binop(BinopKind.BIT_OR, placed, kept)
+        trapped = emitter.binop(BinopKind.NE, slot, emitter.int_(0))
+        store_image(emitter, r1, source, _pick(emitter, trapped, scaled, merged))
+
+    return deliver
+
+
+def _round(
+    rounding: tuple[BfpOperation, BfpLayout, BfpLayout],
+    operands: tuple[int, Source],
+    suppressed: SuppressedBits,
+) -> StatementLowering:
+    operation, source, target = rounding
+    r2, mode = operands
+    lowering = ieee(
+        (operation, source),
+        (mode, fields(fpr(r2, source), source)),
+        _rounded_stored(source, target),
+        suppressed,
+    )
+    return _with_pair(source, (FIRST, r2), lowering)
+
+
+_ROUNDINGS: Mapping[str, tuple[BfpOperation, BfpLayout, BfpLayout]] = {
+    "LEDBR": (BfpOperation.ROUNDED_TO_SHORT, LONG_LAYOUT, SHORT_LAYOUT),
+    "LDXBR": (BfpOperation.ROUNDED_TO_LONG, EXTENDED_LAYOUT, LONG_LAYOUT),
+    "LEXBR": (BfpOperation.ROUNDED_TO_SHORT, EXTENDED_LAYOUT, SHORT_LAYOUT),
+}
+_LENGTHENINGS: Mapping[str, tuple[BfpLayout, BfpLayout]] = {
+    "LDE": (SHORT_LAYOUT, LONG_LAYOUT),
+    "LXD": (LONG_LAYOUT, EXTENDED_LAYOUT),
+    "LXE": (SHORT_LAYOUT, EXTENDED_LAYOUT),
+}
+
+LENGTHEN_ROUND: Mapping[str, StatementLowering] = {
+    **{
+        f"{name}BR": _lengthen(source, target, fpr(SECOND, source))
+        for name, (source, target) in _LENGTHENINGS.items()
+    },
+    **{
+        f"{name}B": _lengthen(source, target, storage(SECOND, source))
+        for name, (source, target) in _LENGTHENINGS.items()
+    },
+    **{
+        name: _round(rounding, (SECOND, current), signals_all)
+        for name, rounding in _ROUNDINGS.items()
+    },
+    **{
+        f"{name}A": checked(
+            invalid_modifier(SECOND),
+            _round(rounding, (THIRD, modifier(SECOND)), inexact_control),
+        )
+        for name, rounding in _ROUNDINGS.items()
+    },
+}
+
 BFP_CONVERSION_LOWERINGS: Mapping[str, StatementLowering] = {
     **TO_FIXED,
     **FROM_FIXED,
+    **LENGTHEN_ROUND,
 }

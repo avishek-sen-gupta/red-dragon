@@ -1,5 +1,5 @@
 # pyright: standard
-"""BFP conversion programs leave the same declared registers, CC and abend in RedDragon and in z390, bar z390's faults below; those expectations come from the Principles of Operation (figures 19-18 to 19-20). Converting to fixed, z390 rejects a nonzero M4 (S0C6), ignores the FPC rounding mode, wraps or loses bits on out-of-range sources instead of delivering the maximum with CC 3, gives CC 0 for -0.5 rounded to 0 and for -infinity, converts -1 to logical 1, abends S0C5 on a NaN source, and takes no inexact trap. Converting from fixed, it also writes X'F4F4F4F4' into bits 32-63 of short results, ignores M3, garbles logical sources and the low half of extended results."""
+"""BFP conversion programs leave the same declared registers, CC and abend in RedDragon and in z390, bar z390's faults below; those expectations come from the Principles of Operation (figures 19-18 to 19-20). Converting to fixed, z390 rejects a nonzero M4 (S0C6), ignores the FPC rounding mode, wraps or loses bits on out-of-range sources instead of delivering the maximum with CC 3, gives CC 0 for -0.5 rounded to 0 and for -infinity, converts -1 to logical 1, abends S0C5 on a NaN source, and takes no inexact trap. Converting from fixed, it also writes X'F4F4F4F4' into bits 32-63 of short results, ignores M3, garbles logical sources and the low half of extended results. Between formats, it loses bits lengthening a subnormal to extended, abends S0C5 lengthening an infinity or NaN to extended, ignores M3 on LEDBRA and LDXBRA, and takes no LOAD ROUNDED overflow, underflow or invalid trap."""
 
 from collections.abc import Mapping
 from pathlib import Path
@@ -95,9 +95,28 @@ Z390_PINNED: Mapping[str, HlasmMachine] = {
             5: 0xFFFE0000_00000000,
         },
     ),
+    "LXDBR LXDB": _z390(
+        ADDRESSING,
+        2,
+        {2: 0x3BCCFFFF_FFFFFFFF, 3: 0xF31D3125_4DAAFAD1, 4: FILL, 5: FILL},
+    ),
+    "LXEBR LXEB": _z390(
+        ADDRESSING, 2, {2: 0xC0020000_00000000, 3: 0, 4: FILL, 5: FILL}
+    ),
+    "LEDBR LEDBRA": _z390(
+        COMPLETED,
+        2,
+        {2: 0x3EAAAAAB_55555555, 3: 0x3EAAAAAB_55555555, 4: 0x7F800000_FFFFFFFF},
+    ),
+    "LDXBR LDXBRA": _z390(
+        COMPLETED, 2, {2: 0x3FF00000_00000000, 3: 0x1000, 4: 0x3FF00000_00000000}
+    ),
 }
 Z390_TRAPS: Mapping[str, tuple[str, int]] = {
     "CEFBR inexact traps after the store": (COMPLETED, 2),
+    "LXDBR invalid suppresses": (ADDRESSING, 2),
+    "LEDBR overflow delivers the scaled long result": (COMPLETED, 2),
+    "LDXBR underflow delivers the scaled extended result": (COMPLETED, 2),
 }
 AGREED = [case for case in programs.CASES if case not in Z390_PINNED]
 

@@ -7,7 +7,9 @@ from hlasm_asg.program.operand import Operand
 from interpreter.instructions import Symbolic
 from tests.covers import NotLanguageFeature, covers
 from tests.unit.hlasm.bfp_trace import (
+    ADDRESS,
     CC,
+    D8,
     READ_FPC,
     SPECIFICATION,
     ladder,
@@ -74,6 +76,37 @@ def test_from_fixed_rounds_through_the_builtin_unless_the_target_is_wide_enough(
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_lengthening_is_ir_and_rounding_merges_into_the_source_format_register():
+    assert {
+        "LDEBR": trace("LDEBR", registers(1, 2)),
+        "LXEB": trace("LXEB", (reg_operand(4), D8)),
+        "LEDBR": trace("LEDBR", registers(1, 2)),
+        "LEXBRA": trace("LEXBRA", _rrfe(4, 5, 8, 4)),
+    } == {
+        "LDEBR": ["read fpr 16+4", *ladder("write fpr 8+8")],
+        "LXEB": [
+            ADDRESS,
+            "read storage +4",
+            *ladder("write fpr 32+8", "write fpr 48+8"),
+        ],
+        "LEDBR": [
+            READ_FPC,
+            "read fpr 16+8",
+            "call rounded_to_short_long",
+            *ladder("read fpr 8+8", "write fpr 8+8"),
+        ],
+        "LEXBRA": [
+            "read fpr 64+8",
+            "read fpr 80+8",
+            "call rounded_to_short_extended",
+            *ladder(
+                "read fpr 32+8", "read fpr 48+8", "write fpr 32+8", "write fpr 48+8"
+            ),
+        ],
+    }
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_invalid_pairs_and_modifiers_abend_before_any_access():
     traces = [
         trace("CFDBR", _rrf(2, 2, 1)),
@@ -85,6 +118,11 @@ def test_invalid_pairs_and_modifiers_abend_before_any_access():
         trace("CXLGBR", _rrfe(6, 0, 1, 0)),
         trace("CDFBRA", _rrfe(1, 2, 1, 0)),
         trace("CELFBR", _rrfe(1, 9, 1, 0)),
+        trace("LXDBR", registers(2, 1)),
+        trace("LXEB", (reg_operand(3), D8)),
+        trace("LDXBR", registers(0, 2)),
+        trace("LEXBR", registers(2, 0)),
+        trace("LEDBRA", _rrfe(1, 2, 2, 0)),
     ]
 
     assert traces == [[SPECIFICATION]] * len(traces)
@@ -97,6 +135,9 @@ FAMILIES: Mapping[str, tuple[Operand, ...]] = {
     "CEFBR CDFBR CXFBR CEGBR CDGBR CXGBR": registers(4, 2),
     "CEFBRA CDFBRA CXFBRA CEGBRA CDGBRA CXGBRA": _rrfe(4, 0, 2, 4),
     "CELFBR CDLFBR CXLFBR CELGBR CDLGBR CXLGBR": _rrfe(4, 1, 2, 0),
+    "LDEBR LXDBR LXEBR LEDBR LDXBR LEXBR": registers(4, 1),
+    "LDEB LXDB LXEB": (reg_operand(4), D8),
+    "LEDBRA LDXBRA LEXBRA": _rrfe(4, 3, 1, 4),
 }
 
 
@@ -108,7 +149,7 @@ def test_every_mnemonic_lowers_without_symbolic():
         for m in names.split()
     }
 
-    assert len(lowered) == 36
+    assert len(lowered) == 48
     assert [
         m for m, ir in lowered.items() if any(isinstance(i, Symbolic) for i in ir)
     ] == []
