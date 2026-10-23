@@ -102,6 +102,8 @@ addresses.
 | `interpreter/hlasm/opcodes/bfp_arithmetic.py` | The BFP arithmetic unit's builtin forms: add, subtract, multiply, divide, square root, fused, load FP integer, divide to integer |
 | `interpreter/hlasm/opcodes/bfp_class.py` | BFP COMPARE, COMPARE AND SIGNAL and TEST DATA CLASS, in IR (ruling R44) |
 | `interpreter/hlasm/opcodes/bfp_sign.py` | BFP LOAD AND TEST and the sign forms, in IR |
+| `interpreter/hlasm/opcodes/bfp_conversion.py` | BFP conversions: to fixed and logical through builtins (red-dragon-6uyp.52) |
+| `interpreter/hlasm/opcodes/bfp_forms.py` | Statement-level BFP parts shared by the BFP units: operand sources, the M3 modifier and its check, stores after delivery, one builtin call through the ladder |
 | `interpreter/hlasm/opcodes/bfp_ir.py`, `interpreter/hlasm/ieee_outcome.py` | BFP image IR: field lists, encoding, FPR access by format, an image's CC, and the IEEE trap ladder over an `IeeeOutcome` |
 | `interpreter/hlasm/program_status.py` | SPM, IPM, EPSW |
 | `interpreter/hlasm/checksum.py` | CKSM |
@@ -887,10 +889,27 @@ SQXBR, SXBR, TCDB, TCEB, TCXB. Rulings R34, R41, R43.
   DIxBR modifier, does not quiet LTDBR's SNaN, picks other fused NaNs, misclassifies
   subnormals, infinities, NaNs and -0 in TCDB, and takes no invalid or inexact trap. The z390 test pins each (red-dragon-6uyp.74).
 
+**BFP conversions (red-dragon-6uyp.52).** CFDBR, CFDBRA, CFEBR, CFEBRA, CFXBR, CFXBRA,
+CGDBR, CGDBRA, CGEBR, CGEBRA, CGXBR, CGXBRA, CLFDBR, CLFEBR, CLFXBR, CLGDBR, CLGEBR,
+CLGXBR. Rulings R43-R45.
+
+- To fixed and to logical round through a `to_fixed_32/64` or `to_logical_32/64` builtin and
+  the .51 ladder. The builtin returns the integer's image and the CC: 3 when invalid, else
+  0, 1 or 2 by the source, so -0.5 rounded to 0 gives CC 1. A 32-bit result replaces bits
+  32-63 of R1.
+- A NaN or out-of-range source is invalid: enabled, `S0C7` with R1 and the CC unchanged;
+  masked, the maximum of the source's sign (signed; a NaN gives the negative one) or 0 or
+  the unsigned maximum (logical), CC 3, the invalid flag, and inexact (flag or DXC 08).
+- M3 of 2 or 8-15, or an extended R2 that is not a pair, abends `S0C6`. M4 bit 1 suppresses
+  inexact on the A forms and the logical forms.
+- z390 rejects a nonzero M4, ignores the FPC mode, wraps or loses bits out of range, gives
+  CC 0 for -0.5 to 0 and for -infinity, converts -1 to logical 1, abends `S0C5` on a NaN
+  and takes no inexact trap. The z390 test pins each (red-dragon-6uyp.74).
+
 ## Known Gaps
 
-- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, miscellaneous, packed-decimal arithmetic, packed-decimal compare and test, decimal conversion, edit, floating-point-support and BFP arithmetic units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
-- BFP conversions, HFP, DFP and PFPO are not lowered. Their arithmetic is the leaf `zarch_float` ([zarch-float.md](zarch-float.md)); `bfp_builtins.py` reaches it for BFP (red-dragon-6uyp.51), and the later floating-point units add their builtins.
+- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, miscellaneous, packed-decimal arithmetic, packed-decimal compare and test, decimal conversion, edit, floating-point-support, BFP arithmetic and BFP to-fixed conversion units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
+- BFP conversions from fixed and between formats, HFP, DFP and PFPO are not lowered. Their arithmetic is the leaf `zarch_float` ([zarch-float.md](zarch-float.md)); `bfp_builtins.py` reaches it for BFP (red-dragon-6uyp.51), and the later floating-point units add their builtins.
 - DC types beyond C, X, B, F, H, P, Z, A, Y and V, and any type extension, raise `UnsupportedDataType` (red-dragon-6uyp.63; floating point E, D, L: red-dragon-6uyp.21).
 - Falling through into DC/DS data or past a CSECT's end skips the data instead of executing it, and a branch into data abends `S0C1` (red-dragon-6uyp.64).
 - Every branch, even to a static relative target, walks the dispatch chain (red-dragon-6uyp.80).
@@ -1050,4 +1069,7 @@ SQXBR, SXBR, TCDB, TCEB, TCXB. Rulings R34, R41, R43.
 | `tests/unit/hlasm/test_bfp_arithmetic_lowering.py` | BFP IR: operands in argument order, one builtin call, then the trap ladder; static `S0C6` before any access; compares, test data class and sign forms without a builtin; no SYMBOLIC in all 70 |
 | `tests/integration/hlasm/test_bfp_arithmetic.py` | Every BFP arithmetic mnemonic on the VM: result images, CC and FPC flags; signed compares and every TCDB class bit; each trap's delivered value, DXC and `S0C7`; fused NaN order and 0 x inf with an SNaN addend |
 | `tests/z390/test_bfp_arithmetic_differential.py` | Every BFP arithmetic case against z390; its faults pinned (`-m z390`) |
+| `tests/unit/hlasm/test_bfp_conversion_lowering.py` | BFP conversion IR: builtin forms call then run the ladder; static `S0C6` before any access; no SYMBOLIC |
+| `tests/integration/hlasm/test_bfp_conversion.py` | Every BFP conversion mnemonic on the VM: GR or FPR results, CC, FPC flags, and trap DXCs and `S0C7` |
+| `tests/z390/test_bfp_conversion_differential.py` | Every BFP conversion case against z390; its faults pinned (`-m z390`) |
 | `tests/z390/test_conditional_select_count_differential.py` | Every conditional, select and count case against z390; the instructions z390 does not execute and its whole-register SELFHR pinned (`-m z390`) |
