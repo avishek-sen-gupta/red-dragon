@@ -3,54 +3,41 @@
 
 from hlasm_asg.program.machine_statement import MachineStatement
 from hlasm_asg.program.operand import Operand
-from hlasm_asg.program.storage_length_operand import StorageLengthOperand
 from interpreter.hlasm.byte_one_layouts import (
     LENGTH_AND_IMMEDIATE,
     LENGTH_NIBBLES,
     byte_one_layout,
 )
-from interpreter.hlasm.hlasm_emitter import HlasmEmitter
-from interpreter.hlasm.opcodes import DATA_FIELD_LOWERINGS, OPCODE_LOWERINGS
-from interpreter.instructions import InstructionBase, Symbolic
+from interpreter.hlasm.opcodes import DATA_FIELD_LOWERINGS
+from interpreter.instructions import Symbolic
 from tests.covers import NotLanguageFeature, covers
 from tests.unit.hlasm.lowering_helpers import (
     imm_operand,
+    lowered,
     machine_statement,
+    storage_length_operand,
     storage_operand,
 )
 from tests.unit.hlasm.storage_events import storage_events
 
-BASE = 12
 PACKED = ("AP", "SP", "ZAP", "MP", "DP", "SRP")
 CHECKED_THEN_STORED = ["read", "S0C7", "write", "cc", "S0CA"]
 
 
-def _with_length(displacement: int, length: int) -> StorageLengthOperand:
-    return StorageLengthOperand(
-        kind="STORAGE_LENGTH", displacement=displacement, length=length, base=BASE
-    )
-
-
 def _statement(mnemonic: str) -> MachineStatement:
     operands: tuple[Operand, ...] = (
-        (_with_length(8, 8), storage_operand(63), imm_operand(5))
+        (storage_length_operand(8, 8), storage_operand(63), imm_operand(5))
         if mnemonic == "SRP"
-        else (_with_length(8, 8), _with_length(300, 2))
+        else (storage_length_operand(8, 8), storage_length_operand(300, 2))
     )
     return machine_statement(mnemonic, operands)
 
 
-def _lowered(statement: MachineStatement) -> tuple[InstructionBase, ...]:
-    emitter = HlasmEmitter()
-    OPCODE_LOWERINGS[statement.base_mnemonic](emitter, statement)
-    return emitter.instructions()
-
-
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_every_check_precedes_the_first_store_and_the_cc_precedes_the_overflow_abend():
-    lowered = {m: _lowered(_statement(m)) for m in PACKED}
+    irs = {m: lowered(_statement(m)) for m in PACKED}
 
-    assert {m: storage_events(ir) for m, ir in lowered.items()} == {
+    assert {m: storage_events(ir) for m, ir in irs.items()} == {
         "AP": CHECKED_THEN_STORED,
         "SP": CHECKED_THEN_STORED,
         "ZAP": CHECKED_THEN_STORED,
@@ -58,7 +45,7 @@ def test_every_check_precedes_the_first_store_and_the_cc_precedes_the_overflow_a
         "MP": ["S0C6", "read", "S0C7", "write"],
         "DP": ["S0C6", "read", "S0C7", "S0CB", "write"],
     }
-    assert [i for ir in lowered.values() for i in ir if isinstance(i, Symbolic)] == []
+    assert [i for ir in irs.values() for i in ir if isinstance(i, Symbolic)] == []
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

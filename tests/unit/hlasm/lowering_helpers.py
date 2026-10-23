@@ -13,6 +13,8 @@ from hlasm_asg.program.operand import Operand
 from hlasm_asg.program.reg_operand import RegOperand
 from hlasm_asg.program.storage_length_operand import StorageLengthOperand
 from hlasm_asg.program.storage_operand import StorageOperand
+from interpreter.hlasm.hlasm_emitter import HlasmEmitter
+from interpreter.hlasm.opcodes import OPCODE_LOWERINGS
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -71,6 +73,12 @@ def storage_length_operand(displacement: int, length: int) -> StorageLengthOpera
         length=length,
         base=BASE_REGISTER,
     )
+
+
+def lowered(statement: MachineStatement) -> tuple[InstructionBase, ...]:
+    emitter = HlasmEmitter()
+    OPCODE_LOWERINGS[statement.base_mnemonic](emitter, statement)
+    return emitter.instructions()
 
 
 @singledispatch
