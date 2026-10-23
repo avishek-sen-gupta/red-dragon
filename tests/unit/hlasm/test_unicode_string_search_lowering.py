@@ -1,6 +1,7 @@
 # pyright: standard
 """Unicode conversion and string search lowerings: the unit widths each form reads and writes, no comparison on a byte image, the well-formedness checks M3 adds, the odd-pair checks and the GR0 check before the search reads storage."""
 
+from collections import Counter
 from collections.abc import Sequence
 
 from hlasm_asg.program.operand import Operand
@@ -11,6 +12,7 @@ from interpreter.instructions import (
     Branch,
     BranchIf,
     CallFunction,
+    Const,
     Halt_,
     InstructionBase,
     Label_,
@@ -135,27 +137,45 @@ def test_conversions_read_and_write_each_forms_units_and_compare_ints():
     assert [i for ir in lowered.values() for i in ir if isinstance(i, Symbolic)] == []
 
 
+def _compared_constants(ir: Sequence[InstructionBase]) -> Counter[tuple[str, int]]:
+    constants = {i.result_reg: i.value for i in ir if isinstance(i, Const)}
+    return Counter(
+        (b.operator.name, constants[b.right])
+        for b in _comparisons(ir)
+        if b.right in constants
+    )
+
+
+UTF8_CHECKS = {
+    ("LT", 0xC2): 1,
+    ("LT", 0xF5): 1,
+    ("NE", 0x80): 6,
+    ("LT", 0x800): 1,
+    ("EQ", 0xD800): 1,
+    ("LT", 0x10000): 1,
+    ("GE", 0x110000): 1,
+}
+LOW_SURROGATE_CHECK = {("NE", 0xDC00): 1}
+
+
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_well_formedness_control_adds_the_checks_and_other_m3_bits_do_not():
-    counts = {
-        f"{m} {controls}": len(_comparisons(_pair(m, controls)))
-        for m in ("CU12", "CU14", "CU21", "CU24")
-        for controls in ((), (0b1110,), (0b0001,))
+    forms = ("CU12", "CU14", "CU21", "CU24")
+    added = {
+        m: dict(
+            _compared_constants(_pair(m, (0b0001,))) - _compared_constants(_pair(m, ()))
+        )
+        for m in forms
     }
 
-    assert counts == {
-        "CU12 ()": 11,
-        "CU12 (14,)": 11,
-        "CU12 (1,)": 21,
-        "CU14 ()": 10,
-        "CU14 (14,)": 10,
-        "CU14 (1,)": 20,
-        "CU21 ()": 11,
-        "CU21 (14,)": 11,
-        "CU21 (1,)": 12,
-        "CU24 ()": 6,
-        "CU24 (14,)": 6,
-        "CU24 (1,)": 7,
+    assert added == {
+        "CU12": UTF8_CHECKS,
+        "CU14": UTF8_CHECKS,
+        "CU21": LOW_SURROGATE_CHECK,
+        "CU24": LOW_SURROGATE_CHECK,
+    }
+    assert {m: _pair(m, (0b1110,)) == _pair(m, ()) for m in forms} == {
+        m: True for m in forms
     }
 
 

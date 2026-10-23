@@ -46,6 +46,9 @@ DATA = (
     "STR      DC    C'ABCDE'\n"
     "HSTR     DC    X'004100420043'\n"
     "HSTR2    DC    X'42000042'\n"
+    "BELOW800 DC    X'E09FBF'\n"
+    "BELOW1M  DC    X'F08FBFBF'\n"
+    "ABOVE10F DC    X'F4908080'\n"
 )
 
 DATA_SPAN = (0x480, 0x490)
@@ -227,6 +230,55 @@ UTF8_TO_UTF16: Mapping[str, Case] = {
         (0, CC_INVALID),
     ),
     **_converted(
+        "CU12 both operands end together",
+        "         CU12  2,4\n",
+        (10, "U8", 10),
+        "0041 00E9 20AC D83DDE00",
+        (10, CC_EXHAUSTED),
+    ),
+    **_converted(
+        "CU12 three-byte below 800 unchecked",
+        "         CU12  2,4\n",
+        (16, "BELOW800", 3),
+        "07FF",
+        (3, CC_EXHAUSTED),
+    ),
+    **_converted(
+        "CU12 three-byte below 800 checked",
+        "         CU12  2,4,1\n",
+        (16, "BELOW800", 3),
+        "",
+        (0, CC_INVALID),
+    ),
+    **_converted(
+        "CU12 four-byte below 10000 unchecked",
+        "         CU12  2,4\n",
+        (16, "BELOW1M", 4),
+        "DBFF DFFF",
+        (4, CC_EXHAUSTED),
+    ),
+    **_converted(
+        "CU12 four-byte below 10000 checked",
+        "         CU12  2,4,1\n",
+        (16, "BELOW1M", 4),
+        "",
+        (0, CC_INVALID),
+    ),
+    **_converted(
+        "CU12 four-byte above 10FFFF unchecked",
+        "         CU12  2,4\n",
+        (16, "ABOVE10F", 4),
+        "D800 DC00",
+        (4, CC_EXHAUSTED),
+    ),
+    **_converted(
+        "CU12 four-byte above 10FFFF checked",
+        "         CU12  2,4,1\n",
+        (16, "ABOVE10F", 4),
+        "",
+        (0, CC_INVALID),
+    ),
+    **_converted(
         "CUTFU exhausted",
         "         CUTFU 2,4\n",
         (16, "U8", 10),
@@ -344,6 +396,13 @@ UTF16_TO_UTF8: Mapping[str, Case] = {
         UTF8_TEXT,
         (10, CC_EXHAUSTED),
     ),
+    **_converted(
+        "CUUTF unpaired high surrogate checked",
+        "         CUUTF 2,4,1\n",
+        (16, "HIGH16", 4),
+        "",
+        (0, CC_INVALID),
+    ),
 }
 
 UTF16_TO_UTF32: Mapping[str, Case] = {
@@ -372,6 +431,13 @@ UTF16_TO_UTF32: Mapping[str, Case] = {
         "CU24 isolated low surrogate checked",
         "         CU24  2,4,1\n",
         (16, "LOW16", 2),
+        "",
+        (0, CC_INVALID),
+    ),
+    **_converted(
+        "CU24 unpaired high surrogate checked",
+        "         CU24  2,4,1\n",
+        (16, "HIGH16", 4),
         "",
         (0, CC_INVALID),
     ),
@@ -442,6 +508,13 @@ UTF32_TO_UTF16: Mapping[str, Case] = {
         (9, "U32", 16),
         "0041 00E9 20AC",
         (12, CC_FULL),
+    ),
+    **_converted(
+        "CU42 high surrogate invalid",
+        "         CU42  2,4\n",
+        (16, "SURR32", 8),
+        "0041",
+        (4, CC_INVALID),
     ),
     **_converted(
         "CU42 low surrogate invalid",
@@ -562,18 +635,18 @@ CASES: Mapping[str, Case] = {
 SPECIFICATION_EXCEPTIONS: Mapping[str, Case] = {
     "SRST GR0 bits 32-55": (
         "         LLILF 0,X'100'\n"
-        "         LA    2,STR+5\n"
-        "         LA    4,STR\n"
+        "         LGHI  2,5\n"
+        "         LGHI  4,1\n"
         "         SRST  2,4\n",
-        {0: 0x100},
+        {0: 0x100, 2: 5, 4: 1},
         INITIAL_CC,
     ),
     "SRSTU GR0 bits 32-47": (
         "         LLILF 0,X'10042'\n"
-        "         LA    2,HSTR+6\n"
-        "         LA    4,HSTR\n"
+        "         LGHI  2,6\n"
+        "         LGHI  4,2\n"
         "         SRSTU 2,4\n",
-        {0: 0x10042},
+        {0: 0x10042, 2: 6, 4: 2},
         INITIAL_CC,
     ),
 }
