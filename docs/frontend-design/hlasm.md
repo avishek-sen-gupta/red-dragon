@@ -111,6 +111,7 @@ addresses.
 | `interpreter/hlasm/opcodes/hfp_ir.py` | HFP image IR: field lists, normalized fields of a binary value, encoding with the extended low-order part, an image's CC, and the program-mask ladder |
 | `interpreter/hlasm/opcodes/hfp_conversion.py` | HFP conversions: to fixed and to BFP through builtins; from fixed, from BFP, load lengthened and load rounded in IR (red-dragon-6uyp.54) |
 | `interpreter/hlasm/opcodes/dfp_codec.py`, `dpd_lanes.py`, `interpreter/hlasm/dfp_layout.py` | DFP images to `[negative, e, significand]` and back as IR functions, one per format (ruling R49); `e` is the biased exponent or -1/-2/-3 for infinity, QNaN, SNaN. All declets decode or encode at once, ten bits per lane |
+| `interpreter/hlasm/opcodes/pfpo.py`, `interpreter/hlasm/pfpo_builtins.py`, `pfpo_formats.py` | PFPO: GR0 decoded and checked, format dispatches around the `__hlasm_pfpo` builtin, the return code and alternate action (red-dragon-6uyp.56) |
 | `interpreter/hlasm/opcodes/dfp_decimal.py`, `decimal_lanes.py` | DFP to and from signed packed, unsigned packed and zoned decimal in IR, over decimal lanes (red-dragon-6uyp.56) |
 | `interpreter/hlasm/opcodes/dfp_conversion.py` | DFP conversions: to and from fixed and logical and LOAD ROUNDED through builtins; LOAD LENGTHENED in IR (red-dragon-6uyp.56) |
 | `interpreter/hlasm/ir_function.py`, `program_function.py` | An IR function called by name; the call records it on the emitter, and the frontend defines each recorded function once after the entry function, repeating until no body calls an undefined one |
@@ -1078,10 +1079,29 @@ Rulings R43, R45, R48, R52.
   eight-bit lane, and lanes combined pairwise into the integer, both IR functions defined once
   per program; a lane digit above 9 is found by bit tests on all lanes at once.
 
+**PFPO (red-dragon-6uyp.56, ruling R52d).** PERFORM FLOATING-POINT OPERATION, PoO 9-35 to 9-46.
+
+- GR0 bits 32-63 are decoded in IR. The function is valid when the operation type is 01, both
+  format codes are in figure 9-25, their radixes differ, the method is 0, 1 or 8-15, and a BFP
+  target has bits 58-59 zero. The test bit sets CC 0 or 3 and a zero return code; otherwise an
+  invalid function is `S0C6`.
+- A dispatch on the source format decodes FPR 4 (or 4 and 6) with the family's IR (BFP and HFP
+  field lists, the DPD decoder). `pfpo_builtins()` has one builtin, `__hlasm_pfpo(word, method,
+  fields)`, over `zarch_float.convert_radix`; method 0 and 1 are the FPC DFP and BFP modes. A
+  dispatch on the target format encodes the delivered value into FPR 0 (or 0 and 2).
+- GR1 bits 32-63 take 0, or the scaling exponent when a trapped overflow or underflow delivers
+  the scaled value (1 <= |z| < radix). With bit 57 (alternate action) that trap sets the DXC
+  and CC 2 and does not interrupt. Invalid suppresses with GR1 unchanged. CC 1 marks a nontrap
+  exception.
+- Bit 56 suppresses inexact. For a DFP target bit 58 permits the quantum exception and bit 59
+  picks the exact result's quantum: 1 when on, the largest when off (figure 9-29). For an HFP
+  target bit 58 reports overflow as IEEE overflow (else invalid, +-Hmax) and bit 59 reports
+  underflow (else a true zero, inexact). An IEEE NaN becomes +Hmax, an infinity +-Hmax.
+
 ## Known Gaps
 
-- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, miscellaneous, packed-decimal arithmetic, packed-decimal compare and test, decimal conversion, edit, floating-point-support, BFP arithmetic, BFP conversion, HFP arithmetic, HFP conversion and DFP arithmetic units, and the DFP conversions bar PFPO, are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
-- PFPO is not lowered yet (red-dragon-6uyp.56). Floating-point arithmetic is the leaf `zarch_float` ([zarch-float.md](zarch-float.md)); `bfp_builtins.py`, `hfp_builtins.py` and `dfp_builtins.py` reach it (red-dragon-6uyp.51, .53, .54, .55), and the later floating-point units add their builtins.
+- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, miscellaneous, packed-decimal arithmetic, packed-decimal compare and test, decimal conversion, edit, floating-point-support, BFP arithmetic, BFP conversion, HFP arithmetic, HFP conversion and DFP arithmetic units, DFP conversion and PFPO, are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
+- Floating-point arithmetic is the leaf `zarch_float` ([zarch-float.md](zarch-float.md)); `bfp_builtins.py`, `hfp_builtins.py`, `dfp_builtins.py` and `pfpo_builtins.py` reach it (red-dragon-6uyp.51, .53 to .56).
 - DC types beyond C, X, B, F, H, P, Z, A, Y and V, and any type extension, raise `UnsupportedDataType` (red-dragon-6uyp.63; floating point E, D, L: red-dragon-6uyp.21).
 - Falling through into DC/DS data or past a CSECT's end skips the data instead of executing it, and a branch into data abends `S0C1` (red-dragon-6uyp.64).
 - Every branch, even to a static relative target, walks the dispatch chain (red-dragon-6uyp.80).
@@ -1105,7 +1125,7 @@ Rulings R43, R45, R48, R52.
   not set access register R1 (red-dragon-6uyp.86).
 - `run()` defaults to `DEFAULT_BUILTINS`, which has no clock or floating-point builtins, so such an
   instruction there stores what the unresolved-call strategy gives. Callers compose
-  `clock_builtins(clock)`, `bfp_builtins()`, `hfp_builtins()` and `dfp_builtins()`; the `interpreter.py` CLI does all four, with a
+  `clock_builtins(clock)`, `bfp_builtins()`, `hfp_builtins()`, `dfp_builtins()` and `pfpo_builtins()`; the `interpreter.py` CLI does all five, with a
   `SystemMachineClock`.
 - Only LFAS, SFASR and the BFP IEEE traps store a DXC: a compare-and-trap or load-and-trap
   trap and a decimal data exception abend `S0C7` and leave the FPC's DXC unchanged
@@ -1257,6 +1277,7 @@ Rulings R43, R45, R48, R52.
 | `tests/unit/hlasm/test_dfp_arithmetic_lowering.py` | DFP IR: operands decoded in argument order, one builtin call, the ladder, then encode and store; the A forms' modifier replaces the FPC read; invalid pairs abend `S0C6` before any access; no SYMBOLIC |
 | `tests/integration/hlasm/test_dfp_arithmetic.py` | Every DFP arithmetic mnemonic on the VM: images, CC and FPC flags; the FPC DFP mode; the tininess edge; each trap's delivered value, DXC and `S0C7`, quantum traps included |
 | `tests/z390/test_dfp_arithmetic_differential.py` | Every DFP arithmetic case against z390; its faults pinned (`-m z390`) |
+| `tests/unit/hlasm/test_pfpo_builtins.py`, `test_pfpo_lowering.py` | PFPO: the builtin's formats, controls and scaling exponent; the lowering's decoders, encoders, single call and GR1 store |
 | `tests/unit/hlasm/test_decimal_lanes.py` | Decimal lanes: digits spread into packed and zoned lanes and combine back; a digit above 9 is caught in any lane |
 | `tests/unit/hlasm/test_dfp_conversion_lowering.py` | DFP conversion IR: the operand read and decoded, one builtin call, the ladder, then the GR or encoded FPR store; invalid pairs abend `S0C6` before any access; no SYMBOLIC |
 | `tests/integration/hlasm/test_dfp_conversion.py` | Every DFP conversion mnemonic on the VM: results, CC and FPC flags; each trap's delivered value, DXC and `S0C7` |

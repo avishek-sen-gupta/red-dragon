@@ -118,5 +118,9 @@ def from_decimal(number: Decimal, target: DfpFormat) -> DfpValue:
     return DfpValue(target, number.is_signed(), kind, significand, parts.exponent)
 
 
+def quotient(numerator: int, denominator: int) -> DecimalOperation:
+    return lambda context: context.divide(Decimal(numerator), Decimal(denominator))
+
+
 def to_integral(value: DfpValue, mode: RoundingMode) -> int:
     return int(to_decimal(value).to_integral_value(rounding=_ROUNDINGS[mode]))

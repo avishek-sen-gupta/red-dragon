@@ -73,6 +73,7 @@ from interpreter.hlasm.opcodes.packed_compare_test import (
     PACKED_COMPARE_TEST_FIELD_LOWERINGS,
     PACKED_COMPARE_TEST_LOWERINGS,
 )
+from interpreter.hlasm.opcodes.pfpo import PFPO_LOWERINGS
 from interpreter.hlasm.opcodes.shift_rotate import SHIFT_ROTATE_LOWERINGS
 from interpreter.hlasm.opcodes.signed_add_subtract import (
     SIGNED_ADD_SUBTRACT_FIELD_LOWERINGS,
@@ -142,6 +143,7 @@ OPCODE_LOWERINGS: Mapping[str, StatementLowering] = {
     **DFP_ROUNDING_LOWERINGS,
     **DFP_CONVERSION_LOWERINGS,
     **DFP_DECIMAL_LOWERINGS,
+    **PFPO_LOWERINGS,
     **DFP_SHIFT_LOWERINGS,
     **DFP_CLASS_LOWERINGS,
 }

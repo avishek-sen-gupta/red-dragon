@@ -4,9 +4,11 @@
 from collections.abc import Mapping
 
 from tests.integration.hlasm.bfp_arithmetic_programs import (
+    COMPLETED,
     DATA_EXCEPTION,
     INEXACT_FLAG,
     INVALID_FLAG,
+    PRESET,
     PRESET_CC,
     Case,
     Trap,
@@ -15,6 +17,7 @@ from tests.integration.hlasm.bfp_arithmetic_programs import (
     cc_word,
     extended_from,
     lines,
+    set_fpc,
     trap_of,
 )
 from tests.integration.hlasm.dfp_arithmetic_programs import DATA, QUANTUM_FLAG
@@ -60,6 +63,14 @@ CONVERSION_DATA = (
     "Z5M      DC    X'F1F2F3F4D5'\n"
     "A5       DC    X'3030303432'\n"
     "ZBAD     DC    X'F1FAF3'\n"
+    "         DS    0D\n"
+    "BTENTH   DC    X'3FB999999999999A'\n"
+    "BTEN     DC    X'40240000',X'00000000'\n"
+    "BTWO3    DC    X'3FE5555555555555'\n"
+    "BM1P5    DC    X'BFF8000000000000'\n"
+    "B1E300   DC    X'7E37E43C8800759C'\n"
+    "DTENTH   DC    X'25F8000000000000'\n"
+    "H1       DC    X'41100000'\n"
 )
 
 
@@ -320,11 +331,95 @@ STORAGE_DECIMAL: Mapping[str, Case] = {
     ),
 }
 
+
+PERFORM = "         PFPO\n"
+
+
+def _pfpo(function: int, source: str) -> str:
+    return lines("LG 1,FILL", source, f"IILF 0,X'{function:08X}'") + PERFORM
+
+
+PFPO: Mapping[str, Case] = {
+    "PFPO test bit sets CC 0 or 3 and a zero return code": case_of(
+        lines("LG 1,FILL", "IILF 0,X'81090600'")
+        + PERFORM
+        + cc_into(8)
+        + lines("LGR 2,1", "IILF 0,X'81070700'")
+        + PERFORM
+        + cc_into(9)
+        + lines("IILF 0,X'81050630'")
+        + PERFORM,
+        {8: cc_word(0), 2: HIGH_FILL, 9: cc_word(3)},
+        3,
+    ),
+    "PFPO BFP long to DFP long rounds by the DFP mode": case_of(
+        _pfpo(0x01090600, "LD 4,BTENTH") + lines("LGDR 2,0", "LGR 3,1"),
+        {2: 0x25F80000_00000000, 3: HIGH_FILL},
+        1,
+        INEXACT_FLAG,
+    ),
+    "PFPO DFP long to BFP long": case_of(
+        _pfpo(0x01060900, "LD 4,DTENTH") + lines("LGDR 2,0"),
+        {2: 0x3FB99999_9999999A},
+        1,
+        INEXACT_FLAG,
+    ),
+    "PFPO HFP short to BFP short and BFP long to HFP long are exact": case_of(
+        _pfpo(0x01050000, "LE 4,H1")
+        + lines("LGDR 2,0")
+        + _pfpo(0x01010600, "LD 4,BM1P5")
+        + lines("LGDR 3,0"),
+        {2: 0x3F800000_00000000, 3: 0xC1180000_00000000},
+        0,
+    ),
+    "PFPO turns a DFP NaN into plus Hmax": case_of(
+        _pfpo(0x01000900, "LD 4,DQNAN") + lines("LGDR 2,0"),
+        {2: 0x7FFFFFFF_00000000},
+        1,
+        INVALID_FLAG,
+    ),
+    "PFPO picks the exact DFP quantum by DPQC": case_of(
+        _pfpo(0x01090600, "LD 4,BTEN")
+        + lines("LGDR 2,0")
+        + _pfpo(0x01090610, "LD 4,BTEN")
+        + lines("LGDR 3,0"),
+        {2: 0x223C0000_00000001, 3: 0x22380000_00000010},
+        0,
+    ),
+    "PFPO rounds by the BFP mode for method 1": case_of(
+        set_fpc(2) + _pfpo(0x01090601, "LD 4,BTWO3") + lines("LGDR 2,0"),
+        {2: 0x39FB66D9_B66D9B67},
+        1,
+        INEXACT_FLAG | 2,
+    ),
+    "PFPO alternate action delivers the scaled overflow with CC 2": (
+        set_fpc(0x20000000)
+        + PRESET
+        + lines("LZDR 0")
+        + _pfpo(0x01080640, "LD 4,B1E300")
+        + lines("LGDR 2,0", "LGR 3,1"),
+        {2: 0x25F00000_00000000, 3: HIGH_FILL | 300},
+        2,
+        COMPLETED,
+        0x20002800,
+    ),
+    "PFPO masked overflow gives infinity and a zero return code": case_of(
+        _pfpo(0x01080600, "LD 4,B1E300") + lines("LGDR 2,0", "LGR 3,1"),
+        {2: 0x78000000_00000000, 3: HIGH_FILL},
+        1,
+        0x00280000,
+    ),
+    "PFPO with an invalid function abends S0C6": _ended(
+        lines("IILF 0,X'01070600'") + PERFORM, PRESET_CC, "S0C6"
+    ),
+}
+
 CASES: Mapping[str, Case] = {
     **FIXED,
     **LENGTHEN_ROUND,
     **REGISTER_DECIMAL,
     **STORAGE_DECIMAL,
+    **PFPO,
 }
 
 TRAPS: Mapping[str, Trap] = {
@@ -367,6 +462,16 @@ TRAPS: Mapping[str, Trap] = {
     ),
     "CDPT suppresses on a bad sign with DXC 0": trap_of(
         lines("LD 1,D1", "CDPT 1,U3(3),8"), {1: 0x22380000_00000001}, 0
+    ),
+    "PFPO overflow traps after the scaled store": trap_of(
+        lines("LZDR 0") + _pfpo(0x01080600, "LD 4,B1E300"),
+        {0: 0x25F00000_00000000},
+        0x20002800,
+    ),
+    "PFPO invalid suppresses": trap_of(
+        lines("LZDR 0") + _pfpo(0x01060900, "LD 4,DSNAN"),
+        {0: 0},
+        0x80008000,
     ),
     "CDLGTR quantum traps after the store": trap_of(
         lines("LG 2,GU64", "CDLGTR 1,5,2,0"),
