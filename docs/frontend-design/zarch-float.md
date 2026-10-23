@@ -15,6 +15,9 @@ the builtins in `interpreter/hlasm/bfp_builtins.py` (red-dragon-6uyp.51).
 - **Conditions are data.** A result carries the `Condition`s it raised. The caller
   applies the FPC masks, the XiC/XxC/XqC controls and the PSW masks, and raises the
   data exception or program interruption.
+- **Only what lowering calls.** Operations the IR does itself (BFP and HFP compare and
+  lengthening, HFP LOAD ROUNDED and CONVERT FROM FIXED) are not here. VM tests pinned to
+  the PoO cover them (ruling R48).
 
 ## Shared modules
 
@@ -44,8 +47,7 @@ in the source format), with its own inexact and incremented conditions.
 | `bfp_add`, `bfp_subtract`, `bfp_multiply`, `bfp_divide` | `(a, b, mode)` |
 | `bfp_square_root` | `(a, mode)` |
 | `bfp_multiply_add`, `bfp_multiply_subtract` | `(a, b, c, mode)` = a × b ± c, one rounding. MADBR passes op3, op2, op1 |
-| `bfp_compare`, `bfp_compare_signaling` | `ComparisonResult` |
-| `bfp_load_rounded`, `bfp_load_lengthened` | NaN payloads truncate on the right or extend with zeros |
+| `bfp_load_rounded` | NaN payloads truncate on the right |
 | `bfp_round_to_integral` | LOAD FP INTEGER |
 | `bfp_from_integer`, `bfp_to_integer` | Signed and unsigned alike: the caller reads the register. Out of range and NaN give an end of the `IntegerFormat` with INVALID and INEXACT |
 | `bfp_divide_to_integer` | `(a, b, quotient_mode, remainder_mode)`: `BfpDivideToIntegerResult(remainder, quotient, partial, quotient_overflow)`. Final when \|q\| < 2^p or q is an integer; otherwise the quotient is truncated to p bits and the remainder is exact, without TINY. An overflowing quotient is scaled by 2^-192/-1536 |
@@ -81,8 +83,7 @@ the operation is suppressed.
 | `hfp_load_fp_integer` | FIER, FIDR, FIXR: truncated to an integer and normalized |
 | `hfp_multiply_add`, `hfp_multiply_subtract` | `(a, b, c)` = a × b ± c exact, normalized and truncated once to c's format; no significance (MAE, MAD, MSE, MSD) |
 | `hfp_multiply_unnormalized`, `hfp_multiply_add_unnormalized` | Long operands: the 28-digit product, or the 28 digits of product + c aligned with it, unnormalized, the exponent unwrapped and no conditions (MY, MAY). A zero sum is positive; a zero product keeps the sign |
-| `hfp_load_rounded`, `hfp_load_lengthened` | LOAD ROUNDED adds a half at the first dropped bit; a carry shifts right |
-| `hfp_from_integer`, `hfp_to_integer` | From: normalized, truncated. To: under the M3 method; out of range gives an end of the range with OUT_OF_RANGE (CC 3) |
+| `hfp_to_integer` | Under the M3 method; out of range gives an end of the range with OUT_OF_RANGE (CC 3) |
 | `hfp_to_bfp` | `(a, target, mode)`: TBEDR, TBDR. A zero keeps its sign; otherwise the BFP rounding, so tiny values are denormalized and overflow gives infinity or Nmax by method (figure 9-20). The caller ignores the IEEE conditions bar OVERFLOW (CC 3) |
 
 Zero fractions give a positive true zero from multiply, multiply and add, divide, halve,

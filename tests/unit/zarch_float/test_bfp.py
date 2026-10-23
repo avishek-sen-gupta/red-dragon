@@ -25,20 +25,16 @@ from zarch_float.bfp_arithmetic import (
     bfp_square_root,
     bfp_subtract,
 )
-from zarch_float.bfp_compare import bfp_compare, bfp_compare_signaling
 from zarch_float.bfp_convert import (
     bfp_from_integer,
-    bfp_load_lengthened,
     bfp_load_rounded,
     bfp_round_to_integral,
     bfp_to_integer,
     bfp_widened,
 )
 from zarch_float.bfp_format import EXTENDED, LONG, SHORT
-from zarch_float.bfp_result import BfpResult, bfp_exact
+from zarch_float.bfp_result import BfpResult
 from zarch_float.bfp_value import BfpValue
-from zarch_float.comparison import Comparison
-from zarch_float.comparison_result import ComparisonResult
 from zarch_float.condition import Condition
 from zarch_float.float_kind import FloatKind
 from zarch_float.integer_format import SIGNED_32, SIGNED_64, UNSIGNED_32
@@ -288,28 +284,12 @@ def test_nans_propagate_in_operand_order_and_compare_unordered():
         LONG, False, FloatKind.QNAN
     )
     assert bfp_multiply_subtract(one, one, QUIET_B, NE).value == QUIET_B
-    assert [
-        bfp_compare(QUIET_A, one),
-        bfp_compare(one, SIGNAL_C),
-        bfp_compare_signaling(one, QUIET_A),
-        bfp_compare(long_of(-0.0), zero),
-        bfp_compare(long_of(-math.inf), long_of(-NMAX)),
-        bfp_compare(long_of(1.0 + 2 * HALF_ULP), one),
-    ] == [
-        ComparisonResult(Comparison.UNORDERED, NONE),
-        ComparisonResult(Comparison.UNORDERED, INVALID),
-        ComparisonResult(Comparison.UNORDERED, INVALID),
-        ComparisonResult(Comparison.EQUAL, NONE),
-        ComparisonResult(Comparison.LOW, NONE),
-        ComparisonResult(Comparison.HIGH, NONE),
-    ]
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_format_conversions_round_once_and_resize_nan_payloads():
     narrowed_overflow = bfp_load_rounded(long_of(1e39), SHORT, NE)
     long_quiet = BfpValue(LONG, True, FloatKind.QNAN, (0x5 << 29) | 1)
-    short_signal = BfpValue(SHORT, False, FloatKind.SNAN, 0x3)
 
     assert _short(bfp_load_rounded(long_of(1.0 + 2.0**-24), SHORT, NE)) == (
         short_bits(1.0),
@@ -322,10 +302,6 @@ def test_format_conversions_round_once_and_resize_nan_payloads():
     assert bfp_load_rounded(long_quiet, SHORT, NE).value == BfpValue(
         SHORT, True, FloatKind.QNAN, 0x5
     )
-    assert bfp_load_lengthened(short_signal, LONG) == bfp_exact(
-        BfpValue(LONG, False, FloatKind.QNAN, 0x3 << 29), INVALID
-    )
-    assert bfp_load_lengthened(short_of(2.0**-149), LONG).value == long_of(2.0**-149)
     assert _value(bfp_divide(_extended(1), _extended(3), NE)) == (
         BfpValue(EXTENDED, False, FloatKind.FINITE, (2**114 - 1) // 3, -114),
         INEXACT,

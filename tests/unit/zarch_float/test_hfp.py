@@ -25,9 +25,6 @@ from zarch_float.hfp_arithmetic import (
     hfp_subtract,
 )
 from zarch_float.hfp_convert import (
-    hfp_from_integer,
-    hfp_load_lengthened,
-    hfp_load_rounded,
     hfp_to_bfp,
     hfp_to_integer,
 )
@@ -137,29 +134,10 @@ def test_multiply_divide_and_halve_truncate_exact_intermediates():
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_conversions_round_or_truncate_as_each_instruction_states():
+def test_to_integer_rounds_by_the_method_and_clamps_out_of_range():
     nearest_even, nearest_away = RoundingMode.NEAREST_EVEN, RoundingMode.NEAREST_AWAY
     two_and_a_half = short(0x41280000)
 
-    assert _out(hfp_load_rounded(long(0x4110000080000000), SHORT)) == (0x41100001, NONE)
-    assert _out(hfp_load_rounded(long(0x411000007FFFFFFF), SHORT)) == (0x41100000, NONE)
-    assert _out(hfp_load_rounded(long(0xC1FFFFFF80000000), SHORT)) == (0xC2100000, NONE)
-    assert _out(hfp_load_rounded(long(0x7FFFFFFF80000000), SHORT)) == (
-        0x00100000,
-        OVERFLOW,
-    )
-    assert hfp_load_lengthened(short(0x41123456), LONG).value == long(
-        0x4112345600000000
-    )
-    assert hfp_load_lengthened(long(0xC500000000000000), EXTENDED).value == HfpValue(
-        EXTENDED, True, 0, -64
-    )
-    assert [_out(hfp_from_integer(n, SHORT)) for n in (255, -1, 2**31 - 1, 0)] == [
-        (0x42FF0000, NONE),
-        (0xC1100000, NONE),
-        (0x487FFFFF, NONE),
-        (0x00000000, NONE),
-    ]
     assert [
         hfp_to_integer(two_and_a_half, SIGNED_32, nearest_even),
         hfp_to_integer(two_and_a_half, SIGNED_32, nearest_away),

@@ -45,10 +45,6 @@ def _resized(value: BfpValue, rounding: BfpRounding) -> BfpResult:
     return resizes[value.kind]()
 
 
-def bfp_load_lengthened(a: BfpValue, target: BfpFormat) -> BfpResult:
-    return _resized(a, rounding_into(target, RoundingMode.NEAREST_EVEN))
-
-
 def bfp_load_rounded(a: BfpValue, target: BfpFormat, mode: RoundingMode) -> BfpResult:
     scale = _LOAD_ROUNDED_TRAP_SCALE[a.format]
     return _resized(a, BfpRounding(target, mode, a.format, scale))
