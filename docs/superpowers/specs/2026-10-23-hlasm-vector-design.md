@@ -132,7 +132,7 @@ chapter 21). Chapter 26's NNP converts stay in wave 5.
 8. STFLE vector bits.
 
 Steps 1 and 2 run now, so the register layout is fixed before more code depends on
-it. Steps 3-8 wait until waves 3 and 4 are done: vector instructions appear mainly
-in compiler output, while nearly every hand-written program needs system services
-and macros first. Exact mnemonic lists per unit come from
+it. Steps 3-8 wait until waves 4 and 3 are done, in that order: vector instructions
+appear mainly in compiler output, while nearly every hand-written program needs
+macros and system services first. Exact mnemonic lists per unit come from
 `hlasm_asg/opcode_units.json` when the units are filed.
