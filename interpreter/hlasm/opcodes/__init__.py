@@ -34,6 +34,8 @@ from interpreter.hlasm.opcodes.edit import EDIT_FIELD_LOWERINGS, EDIT_LOWERINGS
 from interpreter.hlasm.opcodes.floating_point_support import (
     FLOATING_POINT_SUPPORT_LOWERINGS,
 )
+from interpreter.hlasm.opcodes.hfp_arithmetic import HFP_ARITHMETIC_LOWERINGS
+from interpreter.hlasm.opcodes.hfp_sign import HFP_SIGN_LOWERINGS
 from interpreter.hlasm.opcodes.high_word import HIGH_WORD_LOWERINGS
 from interpreter.hlasm.opcodes.interlocked import (
     INTERLOCKED_FIELD_LOWERINGS,
@@ -122,6 +124,8 @@ OPCODE_LOWERINGS: Mapping[str, StatementLowering] = {
     **BFP_CLASS_LOWERINGS,
     **BFP_CONVERSION_LOWERINGS,
     **BFP_SIGN_LOWERINGS,
+    **HFP_ARITHMETIC_LOWERINGS,
+    **HFP_SIGN_LOWERINGS,
 }
 
 DATA_FIELD_LOWERINGS: Mapping[str, FieldLowering] = {

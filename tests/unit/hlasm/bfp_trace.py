@@ -1,5 +1,5 @@
 # pyright: standard
-"""Traces of HLASM lowerings as the region accesses, FPC and CC writes, abends and BFP builtin calls they emit, for BFP lowering tests."""
+"""Traces of HLASM lowerings as the region accesses, FPC, program-mask and CC accesses, abends and floating-point builtin calls they emit, for BFP and HFP lowering tests."""
 
 from collections.abc import Mapping, Sequence
 from functools import singledispatch
@@ -31,9 +31,11 @@ ADDRESS = "read gpr 100+4"
 SPECIFICATION = "StoreVar __hlasm_abend S0C6"
 DATA = "StoreVar __hlasm_abend S0C7"
 READ_FPC = f"LoadVar {FPC}"
+READ_PM = "LoadVar __hlasm_pm"
 WRITE_FPC = f"StoreVar {FPC} reg"
 CC = "StoreVar __hlasm_cc reg"
 BFP = "__hlasm_bfp_"
+HFP = "__hlasm_hfp_"
 
 type Regions = Mapping[Register, str]
 type Consts = Mapping[Register, int | str]
@@ -77,13 +79,14 @@ def _shown_store(i: StoreVar, regions: Regions, consts: Consts) -> str:
 
 @_shown.register
 def _shown_load(i: LoadVar, regions: Regions, consts: Consts) -> str:
-    return {FPC: READ_FPC}.get(str(i.name), "")
+    return {FPC: READ_FPC, "__hlasm_pm": READ_PM}.get(str(i.name), "")
 
 
 @_shown.register
 def _shown_call(i: CallFunction, regions: Regions, consts: Consts) -> str:
     name = str(i.func_name)
-    return f"call {name[len(BFP):]}" if name.startswith(BFP) else ""
+    shown = {BFP: "call ", HFP: "call hfp "}
+    return next((f"{shown[p]}{name[len(p):]}" for p in shown if name.startswith(p)), "")
 
 
 def trace(mnemonic: str, operands: Sequence[Operand]) -> list[str]:
