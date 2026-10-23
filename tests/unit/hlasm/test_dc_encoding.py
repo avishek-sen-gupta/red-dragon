@@ -21,6 +21,7 @@ from interpreter.hlasm.address_slot import AddressSlot
 from interpreter.hlasm.bit_length_image import BitLengthImage
 from interpreter.hlasm.constant_image import ConstantImage
 from interpreter.hlasm.dc_encoding import encode_dc
+from interpreter.hlasm.dc_exponent_out_of_range import DcExponentOutOfRange
 from interpreter.hlasm.dc_value_out_of_range import DcValueOutOfRange
 from interpreter.hlasm.unsupported_data_type import UnsupportedDataType
 
@@ -236,7 +237,7 @@ def test_fixed_point_nominals_round_scale_and_take_exponents():
         (_fixed("-2147483649", 4), "F'-2147483649'"),
         (_fixed("U4294967296", 4), "F'U4294967296'"),
         (_fixed("128", 1), "F'128'"),
-        (_fixed("1E80", 4), "F'1E80'"),
+        (_fixed("1E10", 4), "F'1E10'"),
         (_fixed("1", 4, scale=31), "F'1'"),
         (_fixed("2147483647.5", 4), "F'2147483647.5'"),
         (_item("H", "32768", 2), "H'32768'"),
@@ -252,6 +253,41 @@ def test_fixed_point_values_outside_their_length_refuse(item: DcItem, constant: 
         encode_dc(item, ORIGIN)
     assert str(refused.value) == (
         f"{constant} at line 7 of src/t.asm does not fit its length — ASMA072E"
+    )
+
+
+def _absolute_y(value: int) -> DcItem:
+    return _address_item("Y", (AbsAddress(kind="ABS", value=value),), 2)
+
+
+def test_y_constants_hold_a_signed_or_unsigned_halfword_and_refuse_beyond_it():
+    assert [_image(_absolute_y(value)) for value in (65535, -32768)] == [
+        [0xFF, 0xFF],
+        [0x80, 0x00],
+    ]
+    for value in (70000, -32769):
+        with pytest.raises(DcValueOutOfRange) as refused:
+            encode_dc(_absolute_y(value), ORIGIN)
+        assert str(refused.value) == (
+            f"Y({value}) at line 7 of src/t.asm does not fit its length — ASMA072E"
+        )
+
+
+@pytest.mark.parametrize(
+    ("item", "constant"),
+    [
+        (_fixed("1E-90", 4), "F'1E-90'"),
+        (_fixed("1E76", 4), "F'1E76'"),
+        (_fixed("1E9999999", 4), "F'1E9999999'"),
+        (_fixed("1E-9999999", 4), "F'1E-9999999'"),
+        (_fixed("1E70", 4, exponent=10), "F'1E70'"),
+    ],
+)
+def test_a_written_exponent_outside_its_range_refuses(item: DcItem, constant: str):
+    with pytest.raises(DcExponentOutOfRange) as refused:
+        encode_dc(item, ORIGIN)
+    assert str(refused.value) == (
+        f"{constant} at line 7 of src/t.asm has an exponent outside -85 to +75"
     )
 
 

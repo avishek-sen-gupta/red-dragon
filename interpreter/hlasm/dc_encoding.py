@@ -23,6 +23,7 @@ from interpreter.encoding.ebcdic_table import EbcdicTable
 from interpreter.hlasm.address_slot import AddressSlot
 from interpreter.hlasm.bit_length_image import BitLengthImage
 from interpreter.hlasm.constant_image import ConstantImage
+from interpreter.hlasm.dc_exponent_out_of_range import DcExponentOutOfRange
 from interpreter.hlasm.dc_value_out_of_range import DcValueOutOfRange
 from interpreter.hlasm.hlasm_constants import BITS_PER_BYTE
 from interpreter.hlasm.hlasm_lowering_error import HlasmLoweringError
@@ -59,6 +60,10 @@ _LOW_DISPLACEMENT_MASK = 0xFFF
 _HIGH_DISPLACEMENT_MASK = 0xFF
 _LOW_DISPLACEMENT_SHIFT = 8
 _UNSIGNED = "U"
+_EXPONENT = "E"
+_EXPONENT_RANGE = range(-85, 76)
+_Y_RANGE = range(-(1 << 15), 1 << 16)
+_EXTERNAL_ADDRESS_ISSUE = "red-dragon-6uyp.8"
 _FORMAT_1_CCW = "CCW1"
 _FORMAT_1_COMMAND_SHIFT = 24
 _FORMAT_1_FLAGS_SHIFT = 16
@@ -183,9 +188,15 @@ def _check_supported(item: DcItem) -> None:
     raise UnsupportedDataType(_code(item), _issue(item))
 
 
-def _fixed_value(item: DcItem, text: str) -> int:
-    number = Fraction(text.replace(_SPACE, "").removeprefix(_UNSIGNED))
-    scaled = abs(number) * _DECIMAL_BASE**item.exponent * _BINARY_BASE**item.scale
+def _fixed_value(item: DcItem, text: str, origin: Origin) -> int:
+    mantissa, _, written = (
+        text.replace(_SPACE, "").removeprefix(_UNSIGNED).upper().partition(_EXPONENT)
+    )
+    exponent = int(written or "0") + item.exponent
+    if exponent not in _EXPONENT_RANGE:
+        raise DcExponentOutOfRange(f"{_code(item)}'{text}'", origin)
+    number = Fraction(mantissa)
+    scaled = abs(number) * _DECIMAL_BASE**exponent * _BINARY_BASE**item.scale
     magnitude = floor(scaled + _HALF)
     return -magnitude if number < 0 else magnitude
 
@@ -197,7 +208,7 @@ def _fixed_range(text: str, bits: int) -> range:
 
 
 def _fixed(item: DcItem, text: str, bits: int, origin: Origin) -> int:
-    value = _fixed_value(item, text)
+    value = _fixed_value(item, text, origin)
     if value not in _fixed_range(text, bits):
         raise DcValueOutOfRange(f"{_code(item)}'{text}'", origin)
     return _truncated(value, bits)
@@ -237,32 +248,50 @@ def _base_displacement(item: DcItem, base: int, displacement: int) -> int:
     return (base << _LONG_BASE_SHIFT) | (low << _LOW_DISPLACEMENT_SHIFT) | high
 
 
+def _absolute_address(item: DcItem, number: int, origin: Origin) -> int:
+    if item.type == "Y" and number not in _Y_RANGE:
+        raise DcValueOutOfRange(f"{_code(item)}({number})", origin)
+    return _truncated(number, item.length * BITS_PER_BYTE)
+
+
 def _assembled_address(
-    item: DcItem, value: AbsAddress | BaseDisplacementAddress
+    item: DcItem, value: AbsAddress | BaseDisplacementAddress, origin: Origin
 ) -> int:
     match value:
         case AbsAddress(value=number):
-            return _truncated(number, item.length * BITS_PER_BYTE)
+            return _absolute_address(item, number, origin)
         case BaseDisplacementAddress(base=base, displacement=displacement):
             return _base_displacement(item, base, displacement)
 
 
-def _address_piece(item: DcItem, value: Address) -> DcPiece:
+def _address_piece(item: DcItem, value: Address, origin: Origin) -> DcPiece:
     if isinstance(value, RelocAddress):
         return AddressSlot(value, item.length)
     if isinstance(value, ExternalAddress):
         return _image(0, item.length)
-    return _image(_assembled_address(item, value), item.length)
+    return _image(_assembled_address(item, value, origin), item.length)
 
 
-def _ccw_address(value: Address, width: int) -> DcPiece:
+def _unencodable_ccw_address(
+    statement: CcwStatement, value: ExternalAddress | BaseDisplacementAddress
+) -> DcPiece:
+    if isinstance(value, ExternalAddress):
+        raise UnsupportedDataType(
+            f"{statement.mnemonic} with an external data address",
+            _EXTERNAL_ADDRESS_ISSUE,
+        )
+    raise HlasmLoweringError(
+        "CCW data address", "an absolute or relocatable value", value.kind
+    )
+
+
+def _ccw_address(statement: CcwStatement, width: int) -> DcPiece:
+    value = statement.address
     if isinstance(value, RelocAddress):
         return AddressSlot(value, width)
     if isinstance(value, AbsAddress):
         return _image(value.value, width)
-    raise HlasmLoweringError(
-        "CCW data address", "an absolute or relocatable value", value.kind
-    )
+    return _unencodable_ccw_address(statement, value)
 
 
 def encode_ccw(statement: CcwStatement) -> tuple[DcPiece, ...]:
@@ -274,11 +303,11 @@ def encode_ccw(statement: CcwStatement) -> tuple[DcPiece, ...]:
                 | statement.count,
                 _FORMAT_1_FIELDS_BYTES,
             ),
-            _ccw_address(statement.address, _FORMAT_1_ADDRESS_BYTES),
+            _ccw_address(statement, _FORMAT_1_ADDRESS_BYTES),
         )
     return (
         _image(statement.command_code, _COMMAND_CODE_BYTES),
-        _ccw_address(statement.address, _FORMAT_0_ADDRESS_BYTES),
+        _ccw_address(statement, _FORMAT_0_ADDRESS_BYTES),
         _image(
             (statement.flags << _FORMAT_0_FLAGS_SHIFT) | statement.count,
             _FORMAT_0_FIELDS_BYTES,
@@ -286,8 +315,10 @@ def encode_ccw(statement: CcwStatement) -> tuple[DcPiece, ...]:
     )
 
 
-def _address_pieces(item: DcItem, values: Sequence[Address]) -> tuple[DcPiece, ...]:
-    return tuple(_address_piece(item, value) for value in values)
+def _address_pieces(
+    item: DcItem, values: Sequence[Address], origin: Origin
+) -> tuple[DcPiece, ...]:
+    return tuple(_address_piece(item, value, origin) for value in values)
 
 
 def _operand(
@@ -299,7 +330,7 @@ def _operand(
                 _string_piece(item, value, origin) for value in _values(item, text)
             )
         case AddressesNominal(values=values):
-            return _address_pieces(item, values)
+            return _address_pieces(item, values, origin)
 
 
 def _copies(
@@ -310,7 +341,9 @@ def _copies(
     match nominal:
         case PerCopyAddressesNominal(copies=copies):
             return tuple(
-                chain.from_iterable(_address_pieces(item, values) for values in copies)
+                chain.from_iterable(
+                    _address_pieces(item, values, origin) for values in copies
+                )
             )
         case once:
             return _operand(item, once, origin) * item.duplication
