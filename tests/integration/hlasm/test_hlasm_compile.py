@@ -1,11 +1,14 @@
 # pyright: standard
 """HLASM compiled to unit files, linked and run through the shared linker."""
 
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
-from hlasm_asg.hlasm_bridge_parser import make_hlasm_parser
+from hlasm_asg.hlasm_bridge_parser import BRIDGE_ENV_VAR, make_hlasm_parser
 from interpreter.constants import Language
 from interpreter.project.hlasm_compile import compile_hlasm, lower_hlasm_program
 from interpreter.run import run
@@ -24,6 +27,7 @@ RETURNS_SEVEN = (
     "         END   HELLO\n"
 )
 SEVEN = RETURNS_SEVEN.encode("utf-8")
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 @pytest.fixture
@@ -120,3 +124,28 @@ def test_wild_branch_abends_s0c1():
     )
 
     assert run_hlasm(source) == HlasmRun(return_code=0, abend="S0C1", stdout="")
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_the_bridge_is_found_from_any_working_directory(tmp_path: Path):
+    script = tmp_path / "assemble.py"
+    script.write_text(
+        "from pathlib import Path\n"
+        "from hlasm_asg.hlasm_bridge_parser import make_hlasm_parser\n"
+        "from interpreter.project.hlasm_compile import compile_hlasm\n"
+        f"compile_hlasm({SEVEN!r}, parser=make_hlasm_parser(), work_dir=Path('work'))\n"
+    )
+    env = {
+        **{k: v for k, v in os.environ.items() if k != BRIDGE_ENV_VAR},
+        "PYTHONPATH": str(REPO_ROOT),
+    }
+
+    ran = subprocess.run(
+        [sys.executable, str(script)], cwd=tmp_path, env=env, capture_output=True
+    )
+
+    assert (ran.returncode, ran.stderr) == (0, b"")
+    assert (
+        sum(1 for p in (tmp_path / "work").iterdir() if p.name.endswith(".unit.json"))
+        == 1
+    )

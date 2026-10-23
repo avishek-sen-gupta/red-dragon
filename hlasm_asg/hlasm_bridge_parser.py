@@ -20,7 +20,14 @@ from hlasm_asg.subprocess_runner import SubprocessRunner
 logger = logging.getLogger(__name__)
 
 SOURCE_FILE_NAME = "source.asm"
-DEFAULT_BRIDGE = "hlasm-bridge/che4z/build/bin/hlasm_ast_bridge"
+DEFAULT_BRIDGE = str(
+    Path(__file__).resolve().parents[1]
+    / "hlasm-bridge"
+    / "che4z"
+    / "build"
+    / "bin"
+    / "hlasm_ast_bridge"
+)
 BRIDGE_ENV_VAR = "HLASM_AST_BRIDGE"
 REFUSED_EXIT_CODE = 2
 
