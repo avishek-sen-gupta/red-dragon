@@ -161,7 +161,7 @@ MULTIPLE_ADDRESS = storage_address_at(2)
 def load_multiple(
     part: RegisterPart, address_of: Source = MULTIPLE_ADDRESS
 ) -> StatementLowering:
-    width = part.bytes()
+    width = part.byte_count()
 
     def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
         address = address_of(emitter, statement)
@@ -176,7 +176,7 @@ def load_multiple(
 def store_multiple(
     part: RegisterPart, address_of: Source = MULTIPLE_ADDRESS
 ) -> StatementLowering:
-    width = part.bytes()
+    width = part.byte_count()
 
     def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
         address = address_of(emitter, statement)
