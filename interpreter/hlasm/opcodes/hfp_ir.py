@@ -249,11 +249,7 @@ def _only(exceptions: Exceptions, raisable: int) -> Exceptions:
     return tuple((bit, code) for bit, code in exceptions if bit & raisable)
 
 
-def _zeroed(
-    emitter: HlasmEmitter, conditions: Register, mask: Register, raisable: int
-) -> Register:
-    if not raisable & MASKABLE_BITS:
-        return emitter.int_(0)
+def _zeroed(emitter: HlasmEmitter, conditions: Register, mask: Register) -> Register:
     unmasked = emitter.binop(BinopKind.BIT_XOR, mask, emitter.int_(MASKABLE_BITS))
     zeroed = emitter.binop(
         BinopKind.BIT_AND, keep(MASKABLE_BITS)(emitter, conditions), unmasked
@@ -265,7 +261,7 @@ def _completed(
     emitter: HlasmEmitter, conditions: Register, raisable: int, deliver: Deliver
 ) -> None:
     mask = emitter.load_var(PROGRAM_MASK_VAR)
-    deliver(_zeroed(emitter, conditions, mask, raisable))
+    deliver(_zeroed(emitter, conditions, mask))
     enabled = emitter.binop(BinopKind.BIT_OR, mask, emitter.int_(OVERFLOW_BIT))
     taken = emitter.binop(BinopKind.BIT_AND, conditions, enabled)
     _abend_on(emitter, taken, _only(COMPLETING, raisable))

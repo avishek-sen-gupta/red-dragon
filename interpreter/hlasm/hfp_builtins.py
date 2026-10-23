@@ -49,8 +49,10 @@ from zarch_float.hfp_value import HfpValue
 from zarch_float.integer_format import SIGNED_32, SIGNED_64, IntegerFormat
 from zarch_float.rounding_mode import HFP_MODIFIER_MODES, HFP_TO_BFP_MODIFIER_MODES
 
-type _Rule = Callable[..., HfpResult]
+type _Rule = Callable[[Sequence[HfpValue]], HfpResult]
+type _Unary = Callable[[HfpValue], HfpResult]
 type _Binary = Callable[[HfpValue, HfpValue], HfpResult]
+type _Ternary = Callable[[HfpValue, HfpValue, HfpValue], HfpResult]
 
 SPECIAL_CC = 3
 POSITIVE_CC = 2
@@ -84,8 +86,8 @@ def _outcome(result: HfpResult) -> list[int]:
 
 def _apply(rule: _Rule, layout: HfpLayout) -> Builtin:
     def call(args: Sequence[TypedValue], vm: VMState) -> BuiltinResult:
-        operands = (_operand(arg, layout) for arg in args)
-        return BuiltinResult(value=_outcome(rule(*operands)))
+        operands = tuple(_operand(arg, layout) for arg in args)
+        return BuiltinResult(value=_outcome(rule(operands)))
 
     return call
 
@@ -127,6 +129,18 @@ def _to_bfp(target: BfpLayout) -> Builtin:
     return call
 
 
+def _unary(rule: _Unary) -> _Rule:
+    return lambda operands: rule(operands[0])
+
+
+def _binary(rule: _Binary) -> _Rule:
+    return lambda operands: rule(operands[0], operands[1])
+
+
+def _ternary(rule: _Ternary) -> _Rule:
+    return lambda operands: rule(operands[0], operands[1], operands[2])
+
+
 def _normalized(
     normalize: bool, rule: Callable[[HfpValue, HfpValue, bool], HfpResult]
 ) -> _Binary:
@@ -141,22 +155,28 @@ _ALL = (SHORT_HFP, LONG_HFP, EXTENDED_HFP)
 _SHORT_AND_LONG = (SHORT_HFP, LONG_HFP)
 
 _RULES: Mapping[HfpOperation, tuple[_Rule, tuple[HfpLayout, ...]]] = {
-    HfpOperation.ADD: (_normalized(True, hfp_add), _ALL),
-    HfpOperation.SUBTRACT: (_normalized(True, hfp_subtract), _ALL),
-    HfpOperation.ADD_UNNORMALIZED: (_normalized(False, hfp_add), _SHORT_AND_LONG),
-    HfpOperation.SUBTRACT_UNNORMALIZED: (
-        _normalized(False, hfp_subtract),
+    HfpOperation.ADD: (_binary(_normalized(True, hfp_add)), _ALL),
+    HfpOperation.SUBTRACT: (_binary(_normalized(True, hfp_subtract)), _ALL),
+    HfpOperation.ADD_UNNORMALIZED: (
+        _binary(_normalized(False, hfp_add)),
         _SHORT_AND_LONG,
     ),
-    HfpOperation.DIVIDE: (hfp_divide, _ALL),
-    HfpOperation.MULTIPLY_UNNORMALIZED: (hfp_multiply_unnormalized, (LONG_HFP,)),
-    HfpOperation.HALVE: (hfp_halve, _SHORT_AND_LONG),
-    HfpOperation.SQUARE_ROOT: (hfp_square_root, _ALL),
-    HfpOperation.LOAD_FP_INTEGER: (hfp_load_fp_integer, _ALL),
-    HfpOperation.MULTIPLY_ADD: (hfp_multiply_add, _SHORT_AND_LONG),
-    HfpOperation.MULTIPLY_SUBTRACT: (hfp_multiply_subtract, _SHORT_AND_LONG),
+    HfpOperation.SUBTRACT_UNNORMALIZED: (
+        _binary(_normalized(False, hfp_subtract)),
+        _SHORT_AND_LONG,
+    ),
+    HfpOperation.DIVIDE: (_binary(hfp_divide), _ALL),
+    HfpOperation.MULTIPLY_UNNORMALIZED: (
+        _binary(hfp_multiply_unnormalized),
+        (LONG_HFP,),
+    ),
+    HfpOperation.HALVE: (_unary(hfp_halve), _SHORT_AND_LONG),
+    HfpOperation.SQUARE_ROOT: (_unary(hfp_square_root), _ALL),
+    HfpOperation.LOAD_FP_INTEGER: (_unary(hfp_load_fp_integer), _ALL),
+    HfpOperation.MULTIPLY_ADD: (_ternary(hfp_multiply_add), _SHORT_AND_LONG),
+    HfpOperation.MULTIPLY_SUBTRACT: (_ternary(hfp_multiply_subtract), _SHORT_AND_LONG),
     HfpOperation.MULTIPLY_ADD_UNNORMALIZED: (
-        hfp_multiply_add_unnormalized,
+        _ternary(hfp_multiply_add_unnormalized),
         (LONG_HFP,),
     ),
 }
@@ -196,7 +216,7 @@ def hfp_builtins() -> Mapping[FuncName, Builtin]:
             for layout in layouts
         },
         **{
-            hfp_builtin_name(op, source): _apply(_into(target), source)
+            hfp_builtin_name(op, source): _apply(_binary(_into(target)), source)
             for op, source, target in _MULTIPLIES
         },
         **{
