@@ -18,6 +18,7 @@ from hlasm_asg.program.per_copy_addresses_nominal import PerCopyAddressesNominal
 from hlasm_asg.program.reloc_address import RelocAddress
 from hlasm_asg.program.string_nominal import StringNominal
 from interpreter.hlasm.address_slot import AddressSlot
+from interpreter.hlasm.bit_length_image import BitLengthImage
 from interpreter.hlasm.constant_image import ConstantImage
 from interpreter.hlasm.dc_encoding import encode_dc
 from interpreter.hlasm.dc_value_out_of_range import DcValueOutOfRange
@@ -74,9 +75,11 @@ def _address_item(
 
 
 def _image(item: DcItem) -> list[int]:
+    pieces = encode_dc(item, ORIGIN)
+    assert not isinstance(pieces, BitLengthImage)
     return [
         byte
-        for piece in encode_dc(item, ORIGIN)
+        for piece in pieces
         if isinstance(piece, ConstantImage)
         for byte in piece.image
     ]
@@ -318,16 +321,63 @@ def test_rejects_types_without_an_encoding(type_: str, extension: str, message: 
     assert str(refused.value) == message
 
 
-@pytest.mark.parametrize(
-    ("item", "message"),
-    [
-        (
-            _item("B", "1010", 4, True, length_unit=LengthUnit.BIT),
-            "DC type BL.4 is not supported yet — red-dragon-6uyp.93",
+def _bit_item(type_: str, value: str, bits: int, duplication: int = 1) -> DcItem:
+    return _item(type_, value, bits, True, duplication, length_unit=LengthUnit.BIT)
+
+
+def test_bit_length_operands_encode_each_value_in_its_bits():
+    items = (
+        _bit_item("F", "-1,1000", 12),
+        _bit_item("F", "-2", 12, duplication=3),
+        _bit_item("B", "1,0,1", 3),
+        _bit_item("X", "ABCDE", 12),
+        _bit_item("C", "AB", 12),
+        _bit_item("C", "A", 12),
+        _item("C", "A", 12, True, extension="A", length_unit=LengthUnit.BIT),
+        _bit_item("P", "5", 12),
+        _bit_item("Z", "5", 12),
+        _bit_item("H", "3", 4),
+        _address_item("A", (AbsAddress(kind="ABS", value=-1),), 4).model_copy(
+            update={"length_unit": LengthUnit.BIT, "explicit_length": True}
         ),
-    ],
-)
-def test_refuses_what_waits_for_the_dc_encoder(item: DcItem, message: str):
+    )
+    assert [encode_dc(item, ORIGIN) for item in items] == [
+        BitLengthImage((0xFFF, 0x3E8), 12),
+        BitLengthImage((0xFFE,) * 3, 12),
+        BitLengthImage((1, 0, 1), 3),
+        BitLengthImage((0xCDE,), 12),
+        BitLengthImage((0xC1C,), 12),
+        BitLengthImage((0xC14,), 12),
+        BitLengthImage((0x412,), 12),
+        BitLengthImage((0x05C,), 12),
+        BitLengthImage((0x0C5,), 12),
+        BitLengthImage((3,), 4),
+        BitLengthImage((0xF,), 4),
+    ]
+
+
+def test_bit_length_fixed_point_outside_its_bits_refuses():
+    with pytest.raises(DcValueOutOfRange) as refused:
+        encode_dc(_bit_item("F", "4000", 12), ORIGIN)
+    assert str(refused.value) == (
+        "F'4000' at line 7 of src/t.asm does not fit its length — ASMA072E"
+    )
+
+
+def test_location_counter_in_bit_length_copies_refuses():
+    item = _bit_item("A", "", 4, duplication=2).model_copy(
+        update={
+            "nominal": PerCopyAddressesNominal(
+                kind="ADDRESSES_PER_COPY",
+                copies=(
+                    (AbsAddress(kind="ABS", value=0),),
+                    (AbsAddress(kind="ABS", value=4),),
+                ),
+            )
+        }
+    )
     with pytest.raises(UnsupportedDataType) as refused:
         encode_dc(item, ORIGIN)
-    assert str(refused.value) == message
+    assert str(refused.value) == (
+        "DC type AL.4 with * in its values is not supported yet — red-dragon-6uyp.97"
+    )

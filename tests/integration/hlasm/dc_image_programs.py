@@ -65,11 +65,45 @@ FIXED_POINT_IMAGE = (
     "0000000F80000000"
 )
 
+BIT_LENGTHS = (
+    "         DC    FL.12'-1,1000'\n"
+    "         DC    FL.12'-1'\n"
+    "         DC    BL.4'1010',BL.4'0101'\n"
+    "         DC    AL.4(1),AL.4(2)\n"
+    "         DC    HL.4'3'\n"
+    "         DC    3FL.12'-2'\n"
+    "         DC    CL.12'AB'\n"
+    "         DC    X'77'\n"
+    "         DC    FL.12'-1,1000,-2'\n"
+    "         DC    CL.12'A'\n"
+    "         DC    X'66'\n"
+    "         DC    PL.12'5'\n"
+    "         DC    BL.12'101010101010',BL.4'1111'\n"
+    "         DC    CAL.12'A'\n"
+    "         DC    X'5555'\n"
+)
+BIT_LENGTHS_IMAGE = (
+    "FFF3E8FFF0A51230" "FFEFFEFFE0C1C077" "FFF3E8FFE0C14066" "05C0AAAF41205555"
+)
+
+BIT_LENGTHS_PAST_Z390 = (
+    "         DC    3BL.3'101'\n"
+    "         DC    BL.3'111',C'X'\n"
+    "         DC    XL.12'ABCDE'\n"
+    "         DC    ZL.12'5'\n"
+    "         DC    BL.4'1',F'1'\n"
+)
+BIT_LENGTHS_PAST_Z390_IMAGE = "B680E0E7CDE00C50" "1000000000000001"
+
 PADDING = "         DC    C'A',F'5',C'B',FD'6'\n"
 PADDING_IMAGE = "C100000000000005" "C2000000000000000000000000000006"
 
 FAMILIES: Mapping[str, tuple[str, str]] = {
     "doubleword, character-set and base-displacement types": (TYPES, TYPES_IMAGE),
+    "bit lengths packed from each operand's bit offset": (
+        BIT_LENGTHS,
+        BIT_LENGTHS_IMAGE,
+    ),
     "fixed point with scale, exponents and the U prefix": (
         FIXED_POINT,
         FIXED_POINT_IMAGE,
