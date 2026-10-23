@@ -4,6 +4,7 @@
 from collections.abc import Sequence
 from itertools import accumulate, chain
 
+from hlasm_asg.program.ccw_statement import CcwStatement
 from hlasm_asg.program.dc_item import DcItem
 from hlasm_asg.program.dc_statement import DcStatement
 from hlasm_asg.program.hlasm_program import HlasmProgram
@@ -11,7 +12,12 @@ from hlasm_asg.program.section import Section
 from hlasm_asg.program.section_kind import SectionKind
 from interpreter.hlasm.address_slot import AddressSlot
 from interpreter.hlasm.constant_image import ConstantImage
-from interpreter.hlasm.dc_encoding import DcPiece, dc_alignment, encode_dc
+from interpreter.hlasm.dc_encoding import (
+    ENCODING_ISSUE,
+    DcPiece,
+    dc_alignment,
+    encode_dc,
+)
 from interpreter.hlasm.hlasm_constants import (
     BITS_PER_BYTE,
     DOUBLEWORD_BYTES,
@@ -19,6 +25,7 @@ from interpreter.hlasm.hlasm_constants import (
     SECTION_VAR_PREFIX,
 )
 from interpreter.hlasm.placed_piece import PlacedPiece
+from interpreter.hlasm.unsupported_data_type import UnsupportedDataType
 from interpreter.instructions import (
     AllocRegion,
     Binop,
@@ -149,7 +156,14 @@ def _write(index: int, placed: PlacedPiece) -> tuple[InstructionBase, ...]:
     )
 
 
+def _refuse_channel_commands(program: HlasmProgram) -> None:
+    commands = [s.mnemonic for s in program.statements if isinstance(s, CcwStatement)]
+    if commands:
+        raise UnsupportedDataType(commands[0], ENCODING_ISSUE)
+
+
 def section_allocation(program: HlasmProgram) -> tuple[InstructionBase, ...]:
+    _refuse_channel_commands(program)
     sections = tuple(s for s in program.sections if s.kind != SectionKind.DSECT)
     names = frozenset(section.name for section in sections)
     return (
