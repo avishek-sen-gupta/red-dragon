@@ -50,9 +50,28 @@ TYPES_IMAGE = (
     "2020200C0009EEFF"
 )
 
+FIXED_POINT = (
+    "         DC    FS2'1',FS4'1.25'\n"
+    "         DC    HS1'-3.5',H'-1E2',H'U65535',H'7'\n"
+    "         DC    F'1E2',FE1'1.5'\n"
+    "         DC    FE1'100',F'U4294967295'\n"
+    "         DC    F'1.5E1',F'-2147483648'\n"
+)
+FIXED_POINT_IMAGE = (
+    "0000000400000014"
+    "FFF9FF9CFFFF0007"
+    "000000640000000F"
+    "000003E8FFFFFFFF"
+    "0000000F80000000"
+)
+
 PADDING = "         DC    C'A',F'5',C'B',FD'6'\n"
 PADDING_IMAGE = "C100000000000005" "C2000000000000000000000000000006"
 
 FAMILIES: Mapping[str, tuple[str, str]] = {
     "doubleword, character-set and base-displacement types": (TYPES, TYPES_IMAGE),
+    "fixed point with scale, exponents and the U prefix": (
+        FIXED_POINT,
+        FIXED_POINT_IMAGE,
+    ),
 }

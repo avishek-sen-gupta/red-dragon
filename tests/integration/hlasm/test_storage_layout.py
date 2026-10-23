@@ -10,6 +10,7 @@ import pytest
 from hlasm_asg.hlasm_bridge_parser import make_hlasm_parser
 from hlasm_asg.program.hlasm_program import HlasmProgram
 from hlasm_asg.program.reloc_symbol import RelocSymbol
+from interpreter.hlasm.dc_value_out_of_range import DcValueOutOfRange
 from interpreter.hlasm.machine import machine_allocation
 from interpreter.hlasm.storage_layout import section_allocation, section_var
 from interpreter.hlasm.unsupported_statement import UnsupportedStatement
@@ -67,6 +68,30 @@ TEST     CSECT
          BR    14
          CCW1  X'02',FIELD,X'20',4
 FIELD    DC    F'0'
+         END   TEST
+"""
+
+
+OUT_OF_RANGE_SOURCE = b"""\
+TEST     CSECT
+         BR    14
+         DC    H'1',F'2147483648'
+         END   TEST
+"""
+
+OUT_OF_RANGE_LITERAL_SOURCE = b"""\
+TEST     CSECT
+         USING TEST,15
+         LH    1,=H'40000'
+         BR    14
+         END   TEST
+"""
+
+LITERAL_STAR_SOURCE = b"""\
+TEST     CSECT
+         USING TEST,15
+         BR    14
+         L     1,=2A(*)
          END   TEST
 """
 
@@ -173,3 +198,39 @@ def test_v_type_constant_holds_the_named_section_address(tmp_path: Path):
     assert vm.load(_base(vm, "HELLO") + 4, 4) == list(
         _base(vm, "OTHER").to_bytes(4, "big")
     )
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+@pytest.mark.parametrize(
+    ("source", "message"),
+    [
+        (
+            OUT_OF_RANGE_SOURCE,
+            "F'2147483648' at line 3 of src/hello.asm does not fit its length — ASMA072E",
+        ),
+        (
+            OUT_OF_RANGE_LITERAL_SOURCE,
+            "H'40000' at line 3 of src/hello.asm does not fit its length — ASMA072E",
+        ),
+    ],
+)
+def test_a_value_outside_its_length_refuses_naming_the_statement(
+    source: bytes, message: str, tmp_path: Path
+):
+    program = _assemble(source, tmp_path)
+
+    with pytest.raises(DcValueOutOfRange) as refused:
+        section_allocation(program)
+
+    assert str(refused.value) == message
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_star_in_a_duplicated_literal_is_the_instruction_address_in_every_copy(
+    tmp_path: Path,
+):
+    program = _assemble(LITERAL_STAR_SOURCE, tmp_path)
+    vm = _start(program)
+    base = _base(vm, "TEST")
+
+    assert vm.load(base + 8, 8) == list((base + 2).to_bytes(4, "big")) * 2
