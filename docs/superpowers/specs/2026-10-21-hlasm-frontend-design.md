@@ -7,10 +7,12 @@ source is lowered to the existing IR and runs on the existing VM. The endgame is
 mixed-language execution — a COBOL (or CICS) program `CALL`s an HLASM subroutine,
 and HLASM calls back into COBOL — with both sides as IR in one linked image.
 
-The first priority is complete coverage of the general, decimal, floating-point and
-vector instruction sets (waves 1 and 2). Running real programs follows: system
-services and COBOL linkage (wave 3), then the macro language (wave 4). The
-specialised facilities come last (wave 5). The first runnable milestone is a
+The first priority is complete coverage of the general, decimal and floating-point
+instruction sets (wave 1). Running real programs follows: system services and COBOL
+linkage (wave 3), then the macro language (wave 4). Vector (wave 2) comes after them,
+since vector instructions appear mainly in compiler output; only its register layout
+is fixed first (`2026-10-23-hlasm-vector-design.md`). The specialised facilities
+come last (wave 5). The first runnable milestone is a
 standalone HLASM program that starts, runs and stops; the register and storage model
 must not rule out cross-language linkage.
 
@@ -66,7 +68,8 @@ Reference and Reference Summary, not binutils (which has non-HLASM aliases).
 | Packed decimal | 23 | 4 |
 | Floating point (BFP, HFP, DFP, FP support) — last in wave 1 | 307 | ≈7 |
 
-**Wave 2:** vector (170), vector-decimal (33).
+**Wave 2 (after waves 3 and 4):** vector (169), vector-decimal (33). Data layout in
+`2026-10-23-hlasm-vector-design.md`.
 
 **Wave 3 — real programs run:** `SAVE`/`RETURN`, `STORAGE`/`GETMAIN`/`FREEMAIN`,
 `CALL`/`LINK`/`LOAD`, `DCB`/`OPEN`/`GET`/`PUT`/`CLOSE`, and COBOL↔HLASM linkage (see
