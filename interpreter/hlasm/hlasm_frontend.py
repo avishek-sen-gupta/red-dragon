@@ -21,6 +21,7 @@ from interpreter.hlasm.machine import (
     machine_allocation,
 )
 from interpreter.hlasm.machine_statements import MachineStatements
+from interpreter.hlasm.program_functions import program_functions
 from interpreter.hlasm.statement_location import statement_location
 from interpreter.hlasm.storage_layout import section_allocation
 from interpreter.instructions import Branch, InstructionBase, Label_
@@ -36,6 +37,7 @@ class HlasmFrontend(Frontend):
         self._program = program
         self._entry = resolve_entry(program)
         self._statements = MachineStatements(program.statements)
+        self._functions = program_functions(program.statements)
 
     @property
     def entry_name(self) -> str:
@@ -48,7 +50,13 @@ class HlasmFrontend(Frontend):
     @property
     def func_symbol_table(self) -> dict[CodeLabel, FuncRef]:
         label = self.entry_label
-        return {label: FuncRef(name=FuncName(str(label)), label=label)}
+        return {
+            label: FuncRef(name=FuncName(str(label)), label=label),
+            **{
+                f.label: FuncRef(name=FuncName(f.name), label=f.label)
+                for f in self._functions
+            },
+        }
 
     def start_up_ir(self) -> tuple[InstructionBase, ...]:
         return (
@@ -65,6 +73,11 @@ class HlasmFrontend(Frontend):
         namespace_resolver: NamespaceResolver = Frontend._NULL_RESOLVER,
     ) -> list[InstructionBase]:
         emitter = HlasmEmitter()
+        self._lower_entry(emitter)
+        _ = [function.define(emitter) for function in self._functions]
+        return list(emitter.instructions())
+
+    def _lower_entry(self, emitter: HlasmEmitter) -> None:
         end_label = CodeLabel(f"end_{self._entry.name.lower()}_1")
         emitter.emit_inst(Label_(label=CodeLabel("entry")))
         emitter.emit_inst(Branch(label=end_label))
@@ -77,7 +90,6 @@ class HlasmFrontend(Frontend):
         emit_abend(emitter, OPERATION_EXCEPTION_ABEND)
         emit_dispatch(emitter, self._program)
         emitter.emit_inst(Label_(label=end_label))
-        return list(emitter.instructions())
 
     def _placed_statements(self) -> tuple[tuple[Statement, bool], ...]:
         rank = {s.name: at for at, s in enumerate(self._program.sections)}

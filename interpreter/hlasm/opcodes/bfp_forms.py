@@ -4,6 +4,7 @@
 from collections.abc import Callable, Sequence
 
 from hlasm_asg.program.machine_statement import MachineStatement
+from interpreter.func_name import FuncName
 from interpreter.hlasm.abend import emit_abend
 from interpreter.hlasm.bfp_layout import BfpLayout
 from interpreter.hlasm.bfp_operation import BfpOperation, bfp_builtin_name
@@ -92,8 +93,15 @@ def ieee(
     deliver: Deliver,
     suppressed: SuppressedBits = signals_all,
 ) -> StatementLowering:
-    name = bfp_builtin_name(*builtin)
+    return ieee_call(bfp_builtin_name(*builtin), arguments, deliver, suppressed)
 
+
+def ieee_call(
+    name: FuncName,
+    arguments: Sequence[Source],
+    deliver: Deliver,
+    suppressed: SuppressedBits,
+) -> StatementLowering:
     def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
         args = tuple(argument(emitter, statement) for argument in arguments)
         result = emitter.call(name, args)

@@ -1,5 +1,5 @@
 # pyright: standard
-"""IR for BFP images: field lists for the builtins, images from result fields or from an exact magnitude, an image's condition code, and the IEEE trap ladder (ruling R43)."""
+"""IR for BFP images: field lists for the builtins, images from result fields or from an exact magnitude, an image's condition code, and the IEEE trap ladder (ruling R43), which takes the quantum exception only where no inexact trap is (PoO figure 20-6)."""
 
 from collections.abc import Callable
 from dataclasses import replace
@@ -9,7 +9,9 @@ from interpreter.hlasm.bfp_layout import (
 )
 from interpreter.hlasm.bfp_slots import (
     FLAGS_SLOT,
+    INEXACT_BIT,
     INEXACT_DXC_SLOT,
+    QUANTUM_BIT,
     SCALED_DXC_SLOT,
     SCALED_SLOT,
     SCALING_BITS,
@@ -42,6 +44,7 @@ from interpreter.register import Register
 type Deliver = Callable[[Register], None]
 
 FPC_TO_MODIFIER = 4
+QUANTUM_DXC = 0x04
 NAN_CC = 3
 POSITIVE_CC = 2
 
@@ -56,7 +59,7 @@ def fields_list(emitter: HlasmEmitter, image: Register, layout: BfpLayout) -> Re
     return list_of(emitter, (sign, biased, fraction))
 
 
-def _field_at(
+def field_at(
     emitter: HlasmEmitter, result: Register, slot: Register, at: int
 ) -> Register:
     index = emitter.binop(BinopKind.ADD, slot, emitter.int_(at))
@@ -66,7 +69,7 @@ def _field_at(
 def image_at(
     emitter: HlasmEmitter, result: Register, slot: Register, layout: BfpLayout
 ) -> Register:
-    sign, biased, fraction = (_field_at(emitter, result, slot, at) for at in range(3))
+    sign, biased, fraction = (field_at(emitter, result, slot, at) for at in range(3))
     placed = emitter.binop(
         BinopKind.BIT_OR,
         emitter.binop(BinopKind.LSHIFT, sign, emitter.int_(layout.sign_shift)),
@@ -217,10 +220,27 @@ def _deliver_once(
     )
 
 
+def _quantum_yields(
+    emitter: HlasmEmitter, fpc: Register, outcome: IeeeOutcome
+) -> IeeeOutcome:
+    inexact = keep(INEXACT_BIT)(emitter, _enabled(emitter, fpc, outcome.trap))
+    taken = emitter.binop(BinopKind.NE, inexact, emitter.int_(0))
+    unrecognized = emitter.binop(BinopKind.MUL, taken, emitter.int_(QUANTUM_BIT))
+    dxc = pick(emitter, taken, outcome.inexact_dxc, emitter.int_(QUANTUM_DXC))
+    kept = emitter.binop(BinopKind.BIT_XOR, unrecognized, emitter.int_(BYTE_MASK))
+    return IeeeOutcome(
+        emitter.binop(BinopKind.BIT_AND, outcome.trap, kept),
+        emitter.binop(BinopKind.BIT_AND, outcome.flags, kept),
+        outcome.scaled_dxc,
+        dxc,
+    )
+
+
 def emit_ieee_ladder(
-    emitter: HlasmEmitter, outcome: IeeeOutcome, deliver: Deliver
+    emitter: HlasmEmitter, raised: IeeeOutcome, deliver: Deliver
 ) -> None:
     fpc = emitter.load_var(FPC_VAR)
+    outcome = _quantum_yields(emitter, fpc, raised)
     enabled = _enabled(emitter, fpc, outcome.trap)
     suppressing = keep(SUPPRESSING_BITS)(emitter, enabled)
     _when_any(
