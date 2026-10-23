@@ -108,13 +108,14 @@ addresses.
 | `interpreter/hlasm/opcodes/hfp_arithmetic.py` | The HFP arithmetic unit's builtin forms: add, subtract, compare, multiply, divide, halve, square root, load FP integer, the multiply-and-add forms (red-dragon-6uyp.53) |
 | `interpreter/hlasm/opcodes/hfp_sign.py` | HFP LOAD AND TEST and the sign forms, in IR |
 | `interpreter/hlasm/opcodes/hfp_ir.py` | HFP image IR: field lists, encoding with the extended low-order part, an image's CC, and the program-mask ladder |
+| `interpreter/hlasm/opcodes/hfp_conversion.py` | HFP conversions: to fixed and to BFP through builtins (red-dragon-6uyp.54) |
 | `interpreter/hlasm/opcodes/fpr_images.py`, `interpreter/hlasm/fpr_layout.py` | Floating-point images of any radix: FPR access by width (short high word, long, pair), FPR and storage operand sources, result-list items, an arithmetic select |
 | `interpreter/hlasm/program_status.py` | SPM, IPM, EPSW |
 | `interpreter/hlasm/checksum.py` | CKSM |
 | `interpreter/hlasm/clock_instructions.py` | STCK, STCKF, STCKE, ECTG |
 | `interpreter/hlasm/machine_clock.py`, `clock_builtins.py` | `MachineClock` (TOD clock, CPU timer); `clock_builtins(clock)`, the `__hlasm_tod_clock` and `__hlasm_cpu_timer` builtins over it |
 | `interpreter/hlasm/bfp_builtins.py`, `bfp_fields.py`, `bfp_layout.py`, `bfp_operation.py`, `bfp_slots.py` | `bfp_builtins()`, one `__hlasm_bfp_<operation>_<format>` builtin per operation and format over `zarch_float`; operands arrive as `[sign, biased exponent, fraction]` lists and results leave as fields plus the trap, flag and DXC bits (ruling R43) |
-| `interpreter/hlasm/hfp_builtins.py`, `hfp_layout.py`, `hfp_operation.py`, `hfp_slots.py` | `hfp_builtins()`, one `__hlasm_hfp_<operation>_<format>` builtin per operation and source format over `zarch_float`; operands arrive as `[sign, characteristic, fraction]` lists and results leave as the same fields, characteristic modulo 128, plus condition bits (ruling R46) |
+| `interpreter/hlasm/hfp_builtins.py`, `hfp_layout.py`, `hfp_operation.py`, `hfp_slots.py` | `hfp_builtins()`, one `__hlasm_hfp_<operation>_<format>` builtin per operation and source format over `zarch_float`; operands arrive as `[sign, characteristic, fraction]` lists and results leave as the same fields, characteristic modulo 128, plus condition bits (ruling R46); the conversions take M3 first and return `[image, cc]` (to fixed) or BFP fields and the CC (to BFP) |
 | `interpreter/hlasm/system_machine_clock.py` | `SystemMachineClock`, the host clock over injected wall and process-CPU nanosecond readings: TOD from wall time since 1900-01-01 UTC (no leap seconds), CPU timer down from 2^63 - 1 at 4096 units per microsecond |
 | `interpreter/hlasm/cpu_attributes.py` | ECAG's constant attributes |
 | `interpreter/hlasm/facility_list.py` | STFLE's constant facility list |
@@ -961,10 +962,25 @@ SW, SWR, SXR. Rulings R34, R39, R41, R46.
   MAYL, stores a nonzero value for a masked underflow, and abends `S0C7` for a negative
   square root. The z390 test pins each (red-dragon-6uyp.74).
 
+**HFP conversions (red-dragon-6uyp.54).** CFDR, CFER, CFXR, CGDR, CGER, CGXR, TBDR, TBEDR.
+Ruling R47.
+
+- To fixed and to BFP round by M3 through a `to_fixed_32/64` or `to_bfp_short/long`
+  builtin. There is no ladder: neither raises a program check. M3 0 truncates; the FPC mode
+  is not used. M3 3 is valid only for TBxDR. Any other M3, or an extended R2 that is not a
+  pair, abends `S0C6`.
+- The CC comes from the source: 0 for a zero fraction, else 1 or 2 by sign, so 0.3 rounded
+  to 0 gives CC 2. CC 3 means out of range (to fixed: the maximum of the source's sign) or
+  overflow (to BFP: infinity or Nmax by method, figure 9-20). A tiny TBEDR source is
+  denormalized and keeps CC 1 or 2.
+- z390 sets the to-fixed CC from the result, wraps out-of-range sources, writes X'F4F4F4F4'
+  into bits 32-63 of TBEDR results, flushes tiny TBEDR values to +0 with CC 0, gives CC 2 on
+  overflow and garbles TBDR. The z390 test pins each (red-dragon-6uyp.74).
+
 ## Known Gaps
 
-- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, miscellaneous, packed-decimal arithmetic, packed-decimal compare and test, decimal conversion, edit, floating-point-support, BFP arithmetic, BFP conversion and HFP arithmetic units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
-- HFP conversions, DFP and PFPO are not lowered. Their arithmetic is the leaf `zarch_float` ([zarch-float.md](zarch-float.md)); `bfp_builtins.py` and `hfp_builtins.py` reach it (red-dragon-6uyp.51, .53), and the later floating-point units add their builtins.
+- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, miscellaneous, packed-decimal arithmetic, packed-decimal compare and test, decimal conversion, edit, floating-point-support, BFP arithmetic, BFP conversion and HFP arithmetic units, and the HFP conversions listed above, are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
+- The rest of the HFP conversions (red-dragon-6uyp.54), DFP and PFPO are not lowered. Their arithmetic is the leaf `zarch_float` ([zarch-float.md](zarch-float.md)); `bfp_builtins.py` and `hfp_builtins.py` reach it (red-dragon-6uyp.51, .53), and the later floating-point units add their builtins.
 - DC types beyond C, X, B, F, H, P, Z, A, Y and V, and any type extension, raise `UnsupportedDataType` (red-dragon-6uyp.63; floating point E, D, L: red-dragon-6uyp.21).
 - Falling through into DC/DS data or past a CSECT's end skips the data instead of executing it, and a branch into data abends `S0C1` (red-dragon-6uyp.64).
 - Every branch, even to a static relative target, walks the dispatch chain (red-dragon-6uyp.80).
@@ -1131,4 +1147,7 @@ SW, SWR, SXR. Rulings R34, R39, R41, R46.
 | `tests/unit/hlasm/test_hfp_arithmetic_lowering.py` | HFP IR: operands in argument order, one call, then the program-mask ladder; sign forms without a call; invalid pairs abend `S0C6` before any access; no SYMBOLIC in all 81 |
 | `tests/integration/hlasm/test_hfp_arithmetic.py` | Every HFP arithmetic mnemonic on the VM: result images and CC; each exception's stored or suppressed result and abend, with its mask bit on and off |
 | `tests/z390/test_hfp_arithmetic_differential.py` | Every HFP arithmetic case against z390; its faults pinned (`-m z390`) |
+| `tests/unit/hlasm/test_hfp_conversion_lowering.py` | HFP conversion IR: rounding forms read M3 and the operand, call, store and set the CC; static `S0C6` before any access; no SYMBOLIC |
+| `tests/integration/hlasm/test_hfp_conversion.py` | Every HFP conversion mnemonic on the VM: GR or FPR results and CC |
+| `tests/z390/test_hfp_conversion_differential.py` | Every HFP conversion case against z390; its faults pinned (`-m z390`) |
 | `tests/z390/test_conditional_select_count_differential.py` | Every conditional, select and count case against z390; the instructions z390 does not execute and its whole-register SELFHR pinned (`-m z390`) |

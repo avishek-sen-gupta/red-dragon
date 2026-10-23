@@ -1,9 +1,13 @@
 # pyright: standard
-"""The HFP arithmetic builtins over zarch_float; the "too cumbersome" clause: guard-digit alignment, normalization and exact products, quotients and roots of up to 28 hexadecimal digits in IR would dwarf the program."""
+"""The HFP arithmetic and rounding conversion builtins over zarch_float; the "too cumbersome" clause: guard-digit alignment, normalization, exact products, quotients and roots of up to 28 hexadecimal digits, and rounding by a method into fixed point or BFP, in IR would dwarf the program."""
 
 from collections.abc import Callable, Mapping, Sequence
 
 from interpreter.func_name import FuncName
+from interpreter.hlasm.bfp_fields import fields_of
+from interpreter.hlasm.bfp_layout import LONG_LAYOUT as LONG_BFP
+from interpreter.hlasm.bfp_layout import SHORT_LAYOUT as SHORT_BFP
+from interpreter.hlasm.bfp_layout import BfpLayout
 from interpreter.hlasm.hfp_layout import (
     CHARACTERISTIC_MASK,
     EXCESS,
@@ -39,11 +43,17 @@ from zarch_float.hfp_arithmetic import (
     hfp_square_root,
     hfp_subtract,
 )
+from zarch_float.hfp_convert import hfp_to_bfp, hfp_to_integer
 from zarch_float.hfp_result import HfpResult
 from zarch_float.hfp_value import HfpValue
+from zarch_float.integer_format import SIGNED_32, SIGNED_64, IntegerFormat
+from zarch_float.rounding_mode import HFP_MODIFIER_MODES, HFP_TO_BFP_MODIFIER_MODES
 
 type _Rule = Callable[..., HfpResult]
 type _Binary = Callable[[HfpValue, HfpValue], HfpResult]
+
+SPECIAL_CC = 3
+POSITIVE_CC = 2
 
 
 _BITS: Mapping[Condition, int] = {
@@ -84,6 +94,35 @@ def _compare(layout: HfpLayout) -> Builtin:
     def call(args: Sequence[TypedValue], vm: VMState) -> BuiltinResult:
         a, b = (_operand(arg, layout) for arg in args)
         return BuiltinResult(value=hfp_compare(a, b).comparison.value)
+
+    return call
+
+
+def _source_cc(a: HfpValue, special: bool) -> int:
+    return SPECIAL_CC if special else (a.fraction != 0) * (POSITIVE_CC - a.negative)
+
+
+def _to_fixed(target: IntegerFormat, layout: HfpLayout) -> Builtin:
+    def call(args: Sequence[TypedValue], vm: VMState) -> BuiltinResult:
+        mode, a = args
+        operand = _operand(a, layout)
+        result = hfp_to_integer(operand, target, HFP_MODIFIER_MODES[int(mode.value)])
+        image = result.value & (target.maximum - target.minimum)
+        special = Condition.OUT_OF_RANGE in result.conditions
+        return BuiltinResult(value=[image, _source_cc(operand, special)])
+
+    return call
+
+
+def _to_bfp(target: BfpLayout) -> Builtin:
+    def call(args: Sequence[TypedValue], vm: VMState) -> BuiltinResult:
+        mode, a = args
+        operand = _operand(a, LONG_HFP)
+        method = HFP_TO_BFP_MODIFIER_MODES[int(mode.value)]
+        result = hfp_to_bfp(operand, target.format, method)
+        special = Condition.OVERFLOW in result.conditions
+        fields = fields_of(result.value).as_list()
+        return BuiltinResult(value=[*fields, _source_cc(operand, special)])
 
     return call
 
@@ -130,8 +169,27 @@ _MULTIPLIES = (
 )
 
 
+_TO_FIXED: Mapping[HfpOperation, IntegerFormat] = {
+    HfpOperation.TO_FIXED_32: SIGNED_32,
+    HfpOperation.TO_FIXED_64: SIGNED_64,
+}
+_TO_BFP: Mapping[HfpOperation, BfpLayout] = {
+    HfpOperation.TO_BFP_SHORT: SHORT_BFP,
+    HfpOperation.TO_BFP_LONG: LONG_BFP,
+}
+
+
 def hfp_builtins() -> Mapping[FuncName, Builtin]:
     return {
+        **{
+            hfp_builtin_name(op, layout): _to_fixed(target, layout)
+            for op, target in _TO_FIXED.items()
+            for layout in _ALL
+        },
+        **{
+            hfp_builtin_name(op, LONG_HFP): _to_bfp(target)
+            for op, target in _TO_BFP.items()
+        },
         **{
             hfp_builtin_name(op, layout): _apply(rule, layout)
             for op, (rule, layouts) in _RULES.items()

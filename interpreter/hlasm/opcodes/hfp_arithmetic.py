@@ -71,6 +71,10 @@ RAISES: Mapping[HfpOperation, int] = {
     HfpOperation.LOAD_FP_INTEGER: 0,
     HfpOperation.MULTIPLY_UNNORMALIZED: 0,
     HfpOperation.MULTIPLY_ADD_UNNORMALIZED: 0,
+    HfpOperation.TO_FIXED_32: 0,
+    HfpOperation.TO_FIXED_64: 0,
+    HfpOperation.TO_BFP_SHORT: 0,
+    HfpOperation.TO_BFP_LONG: 0,
 }
 
 SHORT_REGISTER: Form = (SHORT_HFP, fpr)
@@ -103,7 +107,7 @@ def _fields(image: Source, layout: HfpLayout) -> Source:
     )
 
 
-def _operands(layout: HfpLayout, sources: Sequence[Source]) -> tuple[Source, ...]:
+def field_sources(layout: HfpLayout, sources: Sequence[Source]) -> tuple[Source, ...]:
     return tuple(_fields(source, layout) for source in sources)
 
 
@@ -170,7 +174,7 @@ def _into(layout: HfpLayout, after: AfterStore) -> Deliver:
     return _stored(_register, (layout, layout), (_whole, true_zero_low), after)
 
 
-def _hfp(
+def hfp_call(
     builtin: tuple[HfpOperation, HfpLayout],
     arguments: Sequence[Source],
     deliver: Deliver,
@@ -192,13 +196,13 @@ def _hfp(
 
 
 def _pair_operands(layout: HfpLayout, second: Second) -> tuple[Source, ...]:
-    return _operands(layout, (fpr(FIRST, layout), second(SECOND, layout)))
+    return field_sources(layout, (fpr(FIRST, layout), second(SECOND, layout)))
 
 
 def _arithmetic(operation: HfpOperation, after: AfterStore) -> FormLowering:
     def lowering(layout: HfpLayout, second: Second) -> StatementLowering:
         operands = _pair_operands(layout, second)
-        lowered = _hfp((operation, layout), operands, _into(layout, after))
+        lowered = hfp_call((operation, layout), operands, _into(layout, after))
         return _paired(layout, (FIRST, SECOND), lowered)
 
     return lowering
@@ -219,7 +223,9 @@ def _lengthened(target: HfpLayout) -> FormLowering:
     def lowering(source: HfpLayout, second: Second) -> StatementLowering:
         operands = _pair_operands(source, second)
         deliver = _into(target, _no_cc)
-        lowered = _hfp((HfpOperation.MULTIPLY_LENGTHENED, source), operands, deliver)
+        lowered = hfp_call(
+            (HfpOperation.MULTIPLY_LENGTHENED, source), operands, deliver
+        )
         return _paired(target, (FIRST,), lowered)
 
     return lowering
@@ -227,8 +233,8 @@ def _lengthened(target: HfpLayout) -> FormLowering:
 
 def _unary(operation: HfpOperation) -> FormLowering:
     def lowering(layout: HfpLayout, second: Second) -> StatementLowering:
-        operands = _operands(layout, (second(SECOND, layout),))
-        lowered = _hfp((operation, layout), operands, _into(layout, _no_cc))
+        operands = field_sources(layout, (second(SECOND, layout),))
+        lowered = hfp_call((operation, layout), operands, _into(layout, _no_cc))
         return _paired(layout, (FIRST, SECOND), lowered)
 
     return lowering
@@ -238,25 +244,25 @@ def _fused(operation: HfpOperation) -> FormLowering:
     def lowering(layout: HfpLayout, second: Second) -> StatementLowering:
         sources = (fpr(SECOND, layout), second(THIRD, layout), fpr(FIRST, layout))
         deliver = _into(layout, _no_cc)
-        return _hfp((operation, layout), _operands(layout, sources), deliver)
+        return hfp_call((operation, layout), field_sources(layout, sources), deliver)
 
     return lowering
 
 
 def _product(second: Second) -> tuple[Source, ...]:
-    return _operands(LONG_HFP, (fpr(SECOND, LONG_HFP), second(THIRD, LONG_HFP)))
+    return field_sources(LONG_HFP, (fpr(SECOND, LONG_HFP), second(THIRD, LONG_HFP)))
 
 
 def _unnormalized_product(deliver: Deliver) -> FormLowering:
-    return lambda layout, second: _hfp(
+    return lambda layout, second: hfp_call(
         (HfpOperation.MULTIPLY_UNNORMALIZED, LONG_HFP), _product(second), deliver
     )
 
 
 def _unnormalized_sum(deliver: Deliver) -> FormLowering:
-    return lambda layout, second: _hfp(
+    return lambda layout, second: hfp_call(
         (HfpOperation.MULTIPLY_ADD_UNNORMALIZED, LONG_HFP),
-        (*_product(second), *_operands(LONG_HFP, (fpr(FIRST, LONG_HFP),))),
+        (*_product(second), *field_sources(LONG_HFP, (fpr(FIRST, LONG_HFP),))),
         deliver,
     )
 
