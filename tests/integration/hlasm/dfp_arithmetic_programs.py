@@ -157,7 +157,7 @@ ARITHMETIC: Mapping[str, Case] = {
         PRESET_CC,
         UNDERFLOW_FLAG | INEXACT_FLAG,
     ),
-    "ADTR NaNs and infinity set CC 3 and 2": case_of(
+    "ADTR and SDTR with NaNs and infinity set CC 3 and 1": case_of(
         lines("LD 1,DQNAN", "LD 2,D1", "ADTR 3,2,1", "LGDR 2,3")
         + cc_into(8)
         + lines("LD 1,DINF", "SDTR 3,2,1", "LGDR 3,3")
