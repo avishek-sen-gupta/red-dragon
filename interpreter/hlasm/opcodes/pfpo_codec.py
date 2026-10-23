@@ -29,9 +29,15 @@ FORMAT_CODES = tuple(sorted(LAYOUTS))
 type Leaf = Callable[[PfpoLayout], Register]
 
 
-def format_code(emitter: HlasmEmitter, word: Register, shift: int) -> Register:
+def word_field(
+    emitter: HlasmEmitter, word: Register, shift: int, mask: int
+) -> Register:
     moved = emitter.binop(BinopKind.RSHIFT, word, emitter.int_(shift))
-    return keep(BYTE_MASK)(emitter, moved)
+    return keep(mask)(emitter, moved)
+
+
+def format_code(emitter: HlasmEmitter, word: Register, shift: int) -> Register:
+    return word_field(emitter, word, shift, BYTE_MASK)
 
 
 def _switched(emitter: HlasmEmitter, code: Register, leaf: Leaf) -> Register:

@@ -197,10 +197,14 @@ def _simulated_dxc(
     return emitter.binop(BinopKind.BIT_OR, marked, inexact)
 
 
-def emit_data_exception(emitter: HlasmEmitter, fpc: Register, dxc: Register) -> None:
+def store_dxc(emitter: HlasmEmitter, fpc: Register, dxc: Register) -> None:
     shifted = emitter.binop(BinopKind.LSHIFT, dxc, emitter.int_(DXC_SHIFT))
     cleared = keep(LOW_WORD_MASK ^ DXC_FIELD)(emitter, fpc)
     _store_fpc(emitter, emitter.binop(BinopKind.BIT_OR, cleared, shifted))
+
+
+def emit_data_exception(emitter: HlasmEmitter, fpc: Register, dxc: Register) -> None:
+    store_dxc(emitter, fpc, dxc)
     emit_abend(emitter, DATA_EXCEPTION_ABEND)
 
 

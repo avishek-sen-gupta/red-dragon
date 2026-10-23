@@ -18,7 +18,7 @@ from tests.unit.hlasm.fp_trace import (
     trace,
 )
 
-PFPO_STATEMENT_SIZE = 213
+PFPO_STATEMENT_SIZE = 211
 
 
 def _calls(function: IrFunction) -> list[str]:

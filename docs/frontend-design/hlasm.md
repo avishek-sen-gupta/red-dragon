@@ -1085,7 +1085,7 @@ Rulings R43, R45, R48, R52.
   format codes are in figure 9-25, their radixes differ, the method is 0, 1 or 8-15, and a BFP
   target has bits 58-59 zero. The test bit sets CC 0 or 3 and a zero return code; otherwise an
   invalid function is `S0C6`.
-- Four IR functions, defined once per program (ruling R51), keep the statement small (213
+- Four IR functions, defined once per program (ruling R51), keep the statement small (211
   instructions): `__hlasm_pfpo_valid` checks the word, `__hlasm_pfpo_method` resolves the method
   against the FPC, and `pfpo_codec.py`'s `__hlasm_pfpo_decode` and `__hlasm_pfpo_encode` hold the
   format dispatches: the FPR 4/6 image to the family's field list (BFP and HFP field IR, the DPD

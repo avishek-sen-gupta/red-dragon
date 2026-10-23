@@ -9,7 +9,6 @@ from interpreter.hlasm.conditional import emit_either, emit_when
 from interpreter.hlasm.data_movement import keep
 from interpreter.hlasm.hlasm_constants import (
     FPC_VAR,
-    LOW_WORD_MASK,
     SPECIFICATION_EXCEPTION_ABEND,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
@@ -27,9 +26,8 @@ from interpreter.hlasm.opcodes.dfp_ir import (
 )
 from interpreter.hlasm.opcodes.floating_point_support import (
     DFP_MODE_SHIFT,
-    DXC_FIELD,
-    DXC_SHIFT,
     emit_data_exception,
+    store_dxc,
 )
 from interpreter.hlasm.opcodes.fpr_images import (
     compared,
@@ -45,11 +43,12 @@ from interpreter.hlasm.opcodes.pfpo_codec import (
     SOURCE_SHIFT,
     TARGET_SHIFT,
     format_code,
+    word_field,
 )
 from interpreter.hlasm.packed_decimal import table_bit
 from interpreter.hlasm.pfpo_formats import LAYOUTS, PFPO_BUILTIN
 from interpreter.hlasm.statement_lowering import StatementLowering
-from interpreter.instructions import Branch, Label_, StoreVar
+from interpreter.instructions import Branch, Label_
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
@@ -79,11 +78,6 @@ ALTERNATE_CC = 2
 SCALING_SLOT = 10
 
 
-def _field(emitter: HlasmEmitter, word: Register, shift: int, mask: int) -> Register:
-    moved = emitter.binop(BinopKind.RSHIFT, word, emitter.int_(shift))
-    return keep(mask)(emitter, moved)
-
-
 def _radix(emitter: HlasmEmitter, code: Register) -> Register:
     return emitter.binop(
         BinopKind.ADD,
@@ -103,8 +97,8 @@ def _valid(emitter: HlasmEmitter, parameters: Sequence[Register]) -> Register:
     (word,) = parameters
     target = format_code(emitter, word, TARGET_SHIFT)
     source = format_code(emitter, word, SOURCE_SHIFT)
-    operation = _field(emitter, word, OPERATION_SHIFT, OPERATION_MASK)
-    controls = _field(emitter, word, CONTROLS_SHIFT, CONTROLS_MASK)
+    operation = word_field(emitter, word, OPERATION_SHIFT, OPERATION_MASK)
+    controls = word_field(emitter, word, CONTROLS_SHIFT, CONTROLS_MASK)
     target_radix = _radix(emitter, target)
     bfp_target = compared(emitter, BinopKind.EQ, target_radix, BFP_RADIX)
     formats = emitter.int_(VALID_FORMATS)
@@ -165,19 +159,12 @@ def _alternate_or_trap(word: Register, done: CodeLabel) -> ScaledTrap:
         )
 
         def completed() -> None:
-            shifted = emitter.binop(BinopKind.LSHIFT, dxc, emitter.int_(DXC_SHIFT))
-            cleared = keep(LOW_WORD_MASK ^ DXC_FIELD)(emitter, fpc)
-            coded = emitter.binop(BinopKind.BIT_OR, cleared, shifted)
-            emitter.emit_inst(StoreVar(name=FPC_VAR, value_reg=coded))
+            store_dxc(emitter, fpc, dxc)
             emitter.set_cc(emitter.int_(ALTERNATE_CC))
             emitter.emit_inst(Branch(label=done))
 
-        emit_either(
-            emitter,
-            alternate,
-            completed,
-            lambda: emit_data_exception(emitter, fpc, dxc),
-        )
+        emit_when(emitter, alternate, completed)
+        emit_data_exception(emitter, fpc, dxc)
 
     return trap
 
@@ -220,7 +207,7 @@ def _converted(emitter: HlasmEmitter, word: Register) -> None:
 def _lower_pfpo(emitter: HlasmEmitter, statement: MachineStatement) -> None:
     word = emitter.load_gr32(FUNCTION_REGISTER)
     valid = PFPO_VALID.call(emitter, (word,))
-    testing = _field(emitter, word, TEST_SHIFT, 1)
+    testing = word_field(emitter, word, TEST_SHIFT, 1)
 
     def performed() -> None:
         emit_when(
