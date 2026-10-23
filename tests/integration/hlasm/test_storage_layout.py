@@ -13,6 +13,7 @@ from hlasm_asg.program.reloc_symbol import RelocSymbol
 from interpreter.hlasm.dc_value_out_of_range import DcValueOutOfRange
 from interpreter.hlasm.machine import machine_allocation
 from interpreter.hlasm.storage_layout import section_allocation, section_var
+from interpreter.hlasm.unsupported_data_type import UnsupportedDataType
 from interpreter.vm.vm_types import VMState
 from tests.covers import NotLanguageFeature, covers
 from tests.integration.hlasm.hlasm_helpers import BARE_ASSEMBLY
@@ -93,6 +94,26 @@ TEST     CSECT
          USING TEST,15
          BR    14
          L     1,=2A(*)
+         END   TEST
+"""
+
+
+EXTERNAL_CHANNEL_COMMAND_SOURCE = b"""\
+TEST     CSECT
+         EXTRN EXT
+         BR    14
+         CCW   2,EXT,0,4
+         END   TEST
+"""
+
+S_LITERAL_SOURCE = b"""\
+TEST     CSECT
+         USING TEST,12
+         L     1,=S(FLD)
+         DROP  12
+         USING TEST,11
+         LTORG
+FLD      DC    F'0'
          END   TEST
 """
 
@@ -244,3 +265,23 @@ def test_star_in_a_duplicated_literal_is_the_instruction_address_in_every_copy(
     base = _base(vm, "TEST")
 
     assert vm.load(base + 8, 8) == list((base + 2).to_bytes(4, "big")) * 2
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_a_channel_command_word_naming_an_external_symbol_refuses(tmp_path: Path):
+    program = _assemble(EXTERNAL_CHANNEL_COMMAND_SOURCE, tmp_path)
+
+    with pytest.raises(UnsupportedDataType) as refused:
+        section_allocation(program)
+
+    assert str(refused.value) == (
+        "DC type CCW with an external data address is not supported yet — red-dragon-6uyp.8"
+    )
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_an_s_type_literal_resolves_through_the_using_at_its_pool(tmp_path: Path):
+    program = _assemble(S_LITERAL_SOURCE, tmp_path)
+    vm = _start(program)
+
+    assert vm.load(_base(vm, "TEST") + 8, 2) == [0xB0, 0x0C]
