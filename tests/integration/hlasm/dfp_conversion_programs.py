@@ -44,6 +44,14 @@ CONVERSION_DATA = (
     "SINFX    DC    X'78000005'\n"
     "SSNAN    DC    X'FE000042'\n"
     "SQNAN    DC    X'7C000007'\n"
+    "         DS    0D\n"
+    "PK12345M DC    X'000000000012345D'\n"
+    "PU16     DC    X'1234567890123456'\n"
+    "PU32L    DC    X'7890123456789012'\n"
+    "PKBAD    DC    X'00000000001A345C'\n"
+    "PKSIGN   DC    X'0000000000123454'\n"
+    "DM12345  DC    X'A2380000000049C5'\n"
+    "XBIG     DC    X'A606D34B9C1E28E5',X'6F3C127177823534'\n"
 )
 
 
@@ -181,7 +189,43 @@ LENGTHEN_ROUND: Mapping[str, Case] = {
     ),
 }
 
-CASES: Mapping[str, Case] = {**FIXED, **LENGTHEN_ROUND}
+REGISTER_DECIMAL: Mapping[str, Case] = {
+    "CDSTR CDUTR": case_of(
+        lines("LG 2,PK12345M", "CDSTR 1,2", "LG 3,PU16", "CDUTR 4,3")
+        + lines("LGDR 2,1", "LGDR 3,4"),
+        {2: 0xA2380000_000049C5, 3: 0x263934B9_C1E28E56},
+        PRESET_CC,
+    ),
+    "CXSTR CXUTR": case_of(
+        lines("LGHI 4,0", "LGHI 5,X'123C'", "CXSTR 8,4", "LGDR 2,8", "LGDR 3,10")
+        + lines("LG 6,PU16", "LG 7,PU32L", "CXUTR 8,6", "LGDR 4,8", "LGDR 5,10"),
+        {
+            2: 0x22080000_00000000,
+            3: 0xA3,
+            4: 0x22080127_17782353,
+            5: 0x4B9C1E28_E56F3C12,
+        },
+        PRESET_CC,
+    ),
+    "CSDTR CUDTR": case_of(
+        lines("LD 1,DM12345", "CSDTR 2,1,0", "LD 1,D16", "CSDTR 3,1,1")
+        + lines("CUDTR 4,1", "LD 1,DQNAN", "CUDTR 5,1"),
+        {2: 0x12345D, 3: 0x23456789_0123456F, 4: 0x12345678_90123456, 5: 5},
+        PRESET_CC,
+    ),
+    "CSXTR CUXTR": case_of(
+        extended_from(8, "XBIG") + lines("CSXTR 4,8,0", "CUXTR 6,8"),
+        {
+            4: 0x45678901_23456789,
+            5: 0x01234567_8901234D,
+            6: 0x34567890_12345678,
+            7: 0x90123456_78901234,
+        },
+        PRESET_CC,
+    ),
+}
+
+CASES: Mapping[str, Case] = {**FIXED, **LENGTHEN_ROUND, **REGISTER_DECIMAL}
 
 TRAPS: Mapping[str, Trap] = {
     "CGDTR invalid suppresses and leaves the CC": trap_of(
@@ -205,6 +249,15 @@ TRAPS: Mapping[str, Trap] = {
         lines("LD 1,DMAX", "LEDTR 1,0,1,0"),
         {1: 0x41240000_00100000},
         0x20002C00,
+    ),
+    "CDSTR suppresses on a bad digit with DXC 0": trap_of(
+        lines("LD 1,D1", "LG 2,PKBAD", "CDSTR 1,2"), {1: 0x22380000_00000001}, 0
+    ),
+    "CDSTR suppresses on a bad sign with DXC 0": trap_of(
+        lines("LD 1,D1", "LG 2,PKSIGN", "CDSTR 1,2"), {1: 0x22380000_00000001}, 0
+    ),
+    "CDUTR suppresses on a bad digit with DXC 0": trap_of(
+        lines("LD 1,D1", "LG 2,PKBAD", "CDUTR 1,2"), {1: 0x22380000_00000001}, 0
     ),
     "CDLGTR quantum traps after the store": trap_of(
         lines("LG 2,GU64", "CDLGTR 1,5,2,0"),

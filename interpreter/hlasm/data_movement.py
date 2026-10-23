@@ -204,14 +204,18 @@ def to_even_odd_pair(
     emitter.store_gr32(r + 1, value)
 
 
-def from_doubleword_pair(
-    emitter: HlasmEmitter, statement: MachineStatement
-) -> Register:
-    r = reg_operand(statement, REGISTER_OPERAND)
-    high = emitter.binop(
-        BinopKind.LSHIFT, emitter.load_gr64(r), emitter.int_(DOUBLEWORD_BITS)
-    )
-    return emitter.binop(BinopKind.BIT_OR, high, emitter.load_gr64(r + 1))
+def doubleword_pair_at(index: int) -> Source:
+    def pair(emitter: HlasmEmitter, statement: MachineStatement) -> Register:
+        r = reg_operand(statement, index)
+        high = emitter.binop(
+            BinopKind.LSHIFT, emitter.load_gr64(r), emitter.int_(DOUBLEWORD_BITS)
+        )
+        return emitter.binop(BinopKind.BIT_OR, high, emitter.load_gr64(r + 1))
+
+    return pair
+
+
+from_doubleword_pair = doubleword_pair_at(REGISTER_OPERAND)
 
 
 def to_doubleword_pair(

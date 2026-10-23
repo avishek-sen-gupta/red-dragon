@@ -34,6 +34,7 @@ from interpreter.hlasm.opcodes.dfp_arithmetic import DFP_ARITHMETIC_LOWERINGS
 from interpreter.hlasm.opcodes.dfp_class import DFP_CLASS_LOWERINGS
 from interpreter.hlasm.opcodes.dfp_compare import DFP_COMPARE_LOWERINGS
 from interpreter.hlasm.opcodes.dfp_conversion import DFP_CONVERSION_LOWERINGS
+from interpreter.hlasm.opcodes.dfp_decimal import DFP_DECIMAL_LOWERINGS
 from interpreter.hlasm.opcodes.dfp_exponent import DFP_EXPONENT_LOWERINGS
 from interpreter.hlasm.opcodes.dfp_rounding import DFP_ROUNDING_LOWERINGS
 from interpreter.hlasm.opcodes.dfp_shift import DFP_SHIFT_LOWERINGS
@@ -140,6 +141,7 @@ OPCODE_LOWERINGS: Mapping[str, StatementLowering] = {
     **DFP_EXPONENT_LOWERINGS,
     **DFP_ROUNDING_LOWERINGS,
     **DFP_CONVERSION_LOWERINGS,
+    **DFP_DECIMAL_LOWERINGS,
     **DFP_SHIFT_LOWERINGS,
     **DFP_CLASS_LOWERINGS,
 }

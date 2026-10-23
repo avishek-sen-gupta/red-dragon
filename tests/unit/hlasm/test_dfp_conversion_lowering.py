@@ -8,8 +8,10 @@ from interpreter.instructions import Symbolic
 from tests.covers import NotLanguageFeature, covers
 from tests.unit.hlasm.fp_trace import (
     CC,
+    DATA,
     READ_FPC,
     SPECIFICATION,
+    WRITE_FPC,
     ladder,
     lowered_ir,
     registers,
@@ -104,6 +106,51 @@ def test_lengthening_is_ir_and_rounding_merges_into_the_source_format_register()
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_register_decimal_forms_check_then_combine_or_spread_the_digits():
+    assert {
+        "CDSTR": trace("CDSTR", registers(1, 2)),
+        "CXUTR": trace("CXUTR", registers(4, 6)),
+        "CSDTR": trace("CSDTR", (*registers(2, 1), mask_operand(1))),
+        "CUXTR": trace("CUXTR", registers(6, 4)),
+    } == {
+        "CDSTR": [
+            "read gpr 16+8",
+            READ_FPC,
+            WRITE_FPC,
+            DATA,
+            "call decimal value_4_18",
+            ENCODE_LONG,
+            "write fpr 8+8",
+        ],
+        "CXUTR": [
+            "read gpr 48+8",
+            "read gpr 56+8",
+            READ_FPC,
+            WRITE_FPC,
+            DATA,
+            "call decimal value_4_36",
+            ENCODE_EXTENDED,
+            "write fpr 32+8",
+            "write fpr 48+8",
+        ],
+        "CSDTR": [
+            "read fpr 8+8",
+            DECODE_LONG,
+            "call decimal lanes_4_16",
+            "write gpr 16+8",
+        ],
+        "CUXTR": [
+            "read fpr 32+8",
+            "read fpr 48+8",
+            DECODE_EXTENDED,
+            "call decimal lanes_4_34",
+            "write gpr 48+8",
+            "write gpr 56+8",
+        ],
+    }
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_invalid_pairs_abend_before_any_access():
     traces = [
         trace("CXFTR", _rrfe(2, 0, 1, 0)),
@@ -115,9 +162,15 @@ def test_invalid_pairs_abend_before_any_access():
         trace("LXDTR", (*registers(2, 1), mask_operand(0))),
         trace("LDXTR", _rrfe(1, 0, 6, 0)),
         trace("LDXTR", _rrfe(3, 0, 4, 0)),
+        trace("CXSTR", registers(2, 4)),
+        trace("CXSTR", registers(4, 5)),
+        trace("CXUTR", registers(1, 3)),
+        trace("CSXTR", (*registers(4, 2), mask_operand(0))),
+        trace("CSXTR", (*registers(3, 4), mask_operand(0))),
+        trace("CUXTR", registers(4, 6)),
     ]
 
-    assert traces == [[SPECIFICATION]] * 9
+    assert traces == [[SPECIFICATION]] * 15
 
 
 FAMILIES: Mapping[str, tuple[Operand, ...]] = {
@@ -127,6 +180,8 @@ FAMILIES: Mapping[str, tuple[Operand, ...]] = {
     "CFDTR CFXTR CGDTRA CGXTRA CLFDTR CLFXTR CLGDTR CLGXTR": _rrfe(4, 1, 0, 4),
     "LDETR LXDTR": (*registers(0, 4), mask_operand(8)),
     "LEDTR LDXTR": _rrfe(0, 1, 4, 12),
+    "CDSTR CXSTR CDUTR CXUTR CUDTR CUXTR": registers(4, 8),
+    "CSDTR CSXTR": (*registers(6, 4), mask_operand(1)),
 }
 
 
@@ -138,7 +193,7 @@ def test_every_mnemonic_lowers_without_symbolic():
         for m in names.split()
     }
 
-    assert len(lowered) == 24
+    assert len(lowered) == 32
     assert [
         m for m, ir in lowered.items() if any(isinstance(i, Symbolic) for i in ir)
     ] == []
