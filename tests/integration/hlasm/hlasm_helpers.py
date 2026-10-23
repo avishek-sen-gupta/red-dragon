@@ -24,6 +24,8 @@ MAX_STEPS = 20_000
 GPR_BYTES = 8
 LOW_WORD_OFFSET = 4
 WORD_BYTES = 4
+DOUBLEWORD_BYTES = 8
+VECTOR_REGISTER_BYTES = 16
 GPR_COUNT = 16
 RETURN_CODE_REGISTER = 15
 NO_RETURN_CODE = 0
@@ -114,7 +116,10 @@ def run_hlasm_fpc(source: str) -> tuple[HlasmMachine, int]:
 
 
 def _fpr(vm: VMState, register: int) -> int:
-    loaded = vm.load(int(_var(vm, "__hlasm_fprs")) + GPR_BYTES * register, GPR_BYTES)
+    loaded = vm.load(
+        int(_var(vm, "__hlasm_vrs")) + VECTOR_REGISTER_BYTES * register,
+        DOUBLEWORD_BYTES,
+    )
     assert isinstance(loaded, list)
     return int.from_bytes(bytes(loaded), "big")
 

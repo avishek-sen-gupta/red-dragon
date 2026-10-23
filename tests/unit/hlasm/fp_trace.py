@@ -23,7 +23,7 @@ from tests.unit.hlasm.lowering_helpers import (
     storage_operand,
 )
 
-REGIONS = {"__hlasm_gprs": "gpr", "__hlasm_fprs": "fpr"}
+REGIONS = {"__hlasm_gprs": "gpr", "__hlasm_vrs": "fpr"}
 STORAGE = "storage"
 FPC = "__hlasm_fpc"
 D8 = storage_operand(8)

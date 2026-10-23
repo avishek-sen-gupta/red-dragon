@@ -30,16 +30,16 @@ def test_rounding_forms_call_the_builtin_then_store_and_set_the_cc():
         "TBEDR": trace("TBEDR", _rrf(1, 3, 2)),
         "TBDR": trace("TBDR", _rrf(1, 0, 2)),
     } == {
-        "CFER": ["read fpr 8+4", "call hfp to_fixed_32_short", "write gpr 20+4", CC],
+        "CFER": ["read fpr 16+4", "call hfp to_fixed_32_short", "write gpr 20+4", CC],
         "CGXR": [
-            "read fpr 32+8",
-            "read fpr 48+8",
+            "read fpr 64+8",
+            "read fpr 96+8",
             "call hfp to_fixed_64_extended",
             "write gpr 24+8",
             CC,
         ],
-        "TBEDR": ["read fpr 16+8", "call hfp to_bfp_short_long", "write fpr 8+4", CC],
-        "TBDR": ["read fpr 16+8", "call hfp to_bfp_long_long", "write fpr 8+8", CC],
+        "TBEDR": ["read fpr 32+8", "call hfp to_bfp_short_long", "write fpr 16+4", CC],
+        "TBDR": ["read fpr 32+8", "call hfp to_bfp_long_long", "write fpr 16+8", CC],
     }
 
 
@@ -51,10 +51,10 @@ def test_from_fixed_and_bfp_to_hfp_are_ir_without_a_call():
         "THDER": trace("THDER", registers(1, 2)),
         "THDR": trace("THDR", registers(1, 2)),
     } == {
-        "CEFR": ["read gpr 20+4", "write fpr 8+4"],
-        "CXGR": ["read gpr 16+8", "write fpr 32+8", "write fpr 48+8"],
-        "THDER": ["read fpr 16+4", "write fpr 8+8", CC],
-        "THDR": ["read fpr 16+8", "write fpr 8+8", CC],
+        "CEFR": ["read gpr 20+4", "write fpr 16+4"],
+        "CXGR": ["read gpr 16+8", "write fpr 64+8", "write fpr 96+8"],
+        "THDER": ["read fpr 32+4", "write fpr 16+8", CC],
+        "THDR": ["read fpr 32+8", "write fpr 16+8", CC],
     }
 
 
@@ -68,10 +68,10 @@ def test_lengthening_is_ir_and_rounding_stores_before_the_overflow_abend():
         "LEDR": trace("LEDR", registers(1, 2)),
         "LEXR": trace("LEXR", registers(1, 4)),
     } == {
-        "LDER": ["read fpr 16+4", "write fpr 8+8"],
-        "LXD": [ADDRESS, "read storage +8", "write fpr 32+8", "write fpr 48+8"],
-        "LEDR": ["read fpr 16+8", "write fpr 8+4", overflow],
-        "LEXR": ["read fpr 32+8", "read fpr 48+8", "write fpr 8+4", overflow],
+        "LDER": ["read fpr 32+4", "write fpr 16+8"],
+        "LXD": [ADDRESS, "read storage +8", "write fpr 64+8", "write fpr 96+8"],
+        "LEDR": ["read fpr 32+8", "write fpr 16+4", overflow],
+        "LEXR": ["read fpr 64+8", "read fpr 96+8", "write fpr 16+4", overflow],
     }
 
 
