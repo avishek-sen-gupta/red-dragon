@@ -269,6 +269,7 @@ EXPECTED = HlasmProgram(
                 nominal=StringNominal(kind="STRING", value="7"),
                 **_placed(48),
             ),
+            origin=_open(5),
         ),
     ),
     amodes=(),
