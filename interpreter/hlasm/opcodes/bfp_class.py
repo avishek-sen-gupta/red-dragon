@@ -13,31 +13,32 @@ from interpreter.hlasm.bfp_layout import (
 from interpreter.hlasm.bfp_slots import INVALID_BIT
 from interpreter.hlasm.data_movement import (
     Source,
-    from_storage_at,
     keep,
     storage_address_at,
 )
-from interpreter.hlasm.hlasm_constants import BITS_PER_BYTE
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.ieee_outcome import IeeeOutcome
 from interpreter.hlasm.opcodes.bfp_ir import (
     emit_ieee_ladder,
-    load_image,
     magnitude_of,
     nan_of,
-    pick,
     quiet_of,
     signaling_nan_of,
 )
 from interpreter.hlasm.opcodes.floating_point_support import pairs
-from interpreter.hlasm.operands import reg_operand
+from interpreter.hlasm.opcodes.fpr_images import (
+    FIRST,
+    SECOND,
+    fpr,
+    pick,
+    storage,
+)
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
 
 type Signals = Callable[[HlasmEmitter, Register, BfpLayout], Register]
 
-FIRST, SECOND = 0, 1
 UNORDERED_CC = 3
 HIGH_CC = 2
 DATA_CLASS_BITS = 0xFFF
@@ -45,16 +46,6 @@ LAST_CLASS_BIT = 11
 SUBNORMAL_CLASS = 2
 INFINITY_CLASS = 3
 SIGNALING_CLASS = 5
-
-
-def _fpr(index: int, layout: BfpLayout) -> Source:
-    return lambda emitter, statement: load_image(
-        emitter, reg_operand(statement, index), layout
-    )
-
-
-def _storage(layout: BfpLayout) -> Source:
-    return from_storage_at(SECOND, layout.width // BITS_PER_BYTE)
 
 
 def _times(emitter: HlasmEmitter, value: Register, factor: int) -> Register:
@@ -104,7 +95,7 @@ def _compare_cc(
 
 
 def _compare(signals: Signals, layout: BfpLayout, second: Source) -> StatementLowering:
-    first = _fpr(FIRST, layout)
+    first = fpr(FIRST, layout)
 
     def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
         a, b = first(emitter, statement), second(emitter, statement)
@@ -125,14 +116,14 @@ def _compare_forms(
 ) -> Mapping[str, StatementLowering]:
     short, long, extended, short_storage, long_storage = names
     return {
-        short: _compare(signals, SHORT_LAYOUT, _fpr(SECOND, SHORT_LAYOUT)),
-        long: _compare(signals, LONG_LAYOUT, _fpr(SECOND, LONG_LAYOUT)),
+        short: _compare(signals, SHORT_LAYOUT, fpr(SECOND, SHORT_LAYOUT)),
+        long: _compare(signals, LONG_LAYOUT, fpr(SECOND, LONG_LAYOUT)),
         extended: pairs(
             (FIRST, SECOND),
-            _compare(signals, EXTENDED_LAYOUT, _fpr(SECOND, EXTENDED_LAYOUT)),
+            _compare(signals, EXTENDED_LAYOUT, fpr(SECOND, EXTENDED_LAYOUT)),
         ),
-        short_storage: _compare(signals, SHORT_LAYOUT, _storage(SHORT_LAYOUT)),
-        long_storage: _compare(signals, LONG_LAYOUT, _storage(LONG_LAYOUT)),
+        short_storage: _compare(signals, SHORT_LAYOUT, storage(SECOND, SHORT_LAYOUT)),
+        long_storage: _compare(signals, LONG_LAYOUT, storage(SECOND, LONG_LAYOUT)),
     }
 
 
@@ -172,7 +163,7 @@ def _data_class(emitter: HlasmEmitter, image: Register, layout: BfpLayout) -> Re
 
 
 def _test_data_class(layout: BfpLayout) -> StatementLowering:
-    operand = _fpr(FIRST, layout)
+    operand = fpr(FIRST, layout)
     address = storage_address_at(SECOND)
 
     def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:

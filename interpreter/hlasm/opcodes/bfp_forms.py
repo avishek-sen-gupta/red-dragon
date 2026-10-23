@@ -8,9 +8,8 @@ from interpreter.hlasm.abend import emit_abend
 from interpreter.hlasm.bfp_layout import BfpLayout
 from interpreter.hlasm.bfp_operation import BfpOperation, bfp_builtin_name
 from interpreter.hlasm.bfp_slots import INEXACT_BIT
-from interpreter.hlasm.data_movement import Source, from_storage_at
+from interpreter.hlasm.data_movement import Source
 from interpreter.hlasm.hlasm_constants import (
-    BITS_PER_BYTE,
     SPECIFICATION_EXCEPTION_ABEND,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
@@ -20,11 +19,10 @@ from interpreter.hlasm.opcodes.bfp_ir import (
     fields_list,
     image_at,
     image_cc,
-    load_image,
     outcome_of,
-    store_image,
     without,
 )
+from interpreter.hlasm.opcodes.fpr_images import FOURTH, store_image
 from interpreter.hlasm.operands import mask_operand, optional_mask_operand, reg_operand
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.register import Register
@@ -35,17 +33,6 @@ type SuppressedBits = Callable[[MachineStatement], int]
 
 VALID_MODIFIERS = frozenset({0, 1, 3, 4, 5, 6, 7})
 INEXACT_CONTROL = 0b0100
-FIRST, SECOND, THIRD, FOURTH = 0, 1, 2, 3
-
-
-def fpr(index: int, layout: BfpLayout) -> Source:
-    return lambda emitter, statement: load_image(
-        emitter, reg_operand(statement, index), layout
-    )
-
-
-def storage(index: int, layout: BfpLayout) -> Source:
-    return from_storage_at(index, layout.width // BITS_PER_BYTE)
 
 
 def fields(image: Source, layout: BfpLayout) -> Source:
