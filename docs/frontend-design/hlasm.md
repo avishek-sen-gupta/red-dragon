@@ -55,7 +55,7 @@ addresses.
 | `interpreter/hlasm/dc_encoding.py` | DC images: C, X, B, F, H, P, Z, A, Y |
 | `interpreter/hlasm/entry_state.py` | Entry resolution and entry registers (R14 = `0xFF0` return sentinel, R13 = 72-byte save area, R15 = entry address) |
 | `interpreter/hlasm/branch_dispatch.py` | `hl_dispatch`: maps a branch address to a statement label; a miss abends `S0C1` |
-| `interpreter/hlasm/operands.py` | `reg_operand`, `mask_operand`, `optional_mask_operand`, `imm_operand`, `value_operand` (R, M or I), `storage_operand`, `reloc_operand`, `storage_length_operand`, `vec_reg_operand`, `optional_imm_operand`: typed operand access; a mismatch raises `HlasmLoweringError`. `statement_place` names a statement in messages |
+| `interpreter/hlasm/operands.py` | `reg_operand`, `mask_operand`, `optional_mask_operand`, `imm_operand`, `value_operand` (R, M or I), `storage_operand`, `reloc_operand`, `storage_length_operand`, `vec_reg_operand`, `vector_indexed_operand` (D(V,B), its own type), `optional_imm_operand`: typed operand access; a mismatch raises `HlasmLoweringError`. `statement_place` names a statement in messages |
 | `interpreter/hlasm/hlasm_lowering_error.py` | `HlasmLoweringError`: names the statement (mnemonic, section, offset, operand) and what was found |
 | `interpreter/hlasm/opcodes/svc.py` | SVC, by number, written or set by EX |
 | `interpreter/hlasm/opcodes/load_store.py` | The load and store unit |
@@ -99,7 +99,10 @@ addresses.
 | `interpreter/hlasm/opcodes/loop_branch.py` | The branch on count and branch on index unit |
 | `interpreter/hlasm/opcodes/high_word.py` | The high-word unit |
 | `interpreter/hlasm/opcodes/miscellaneous.py` | The miscellaneous unit: access registers, LCBB, MC, hints, traps |
-| `interpreter/hlasm/opcodes/floating_point_support.py` | The floating-point-support unit: FPR moves, sign forms, the FPC, its checks and the simulated-IEEE trap |
+| `interpreter/hlasm/opcodes/floating_point_support.py` | The floating-point-support unit: FPR moves, sign forms, the FPC, its checks and the simulated-IEEE trap; `emit_vector_exception` (VXC to the DXC byte, `S0DB`) |
+| `interpreter/hlasm/element_size.py`, `vector_elements.py` | `ElementSize` (ES 0-4); vector elements by static index and by run-time index modulo the element count |
+| `interpreter/hlasm/element_return_field.py` | The fields of an element function's one return value: result, CC, FPC flags, VXC, trap |
+| `interpreter/hlasm/opcodes/vector_fields.py` | `m_field` (omitted is 0); element-size, must-be-zero and static-index checks that abend `S0C6` at lowering |
 | `interpreter/hlasm/opcodes/bfp_arithmetic.py` | The BFP arithmetic unit's builtin forms: add, subtract, multiply, divide, square root, fused, load FP integer, divide to integer |
 | `interpreter/hlasm/opcodes/bfp_class.py` | BFP COMPARE, COMPARE AND SIGNAL and TEST DATA CLASS, in IR (ruling R44) |
 | `interpreter/hlasm/opcodes/bfp_sign.py` | BFP LOAD AND TEST and the sign forms, in IR |
@@ -141,7 +144,7 @@ addresses.
 | `interpreter/hlasm/opcodes/operand_sources.py` | Named second-operand sources shared by the arithmetic, compare, compare-and-branch and load-sign units |
 | `interpreter/hlasm/opcodes/result_and_cc.py` | Splices a (result, CC) builder over register, storage or immediate operands and stores both; its storage-immediate read-modify-write |
 | `interpreter/hlasm/data_movement.py` | `move(source, transforms, sink)`: storage, relative-long, address, immediate and register sources and sinks, addressed by operand index; sign extension, `MOD 2^n` wrap, masks, shifts, byte reversal, bit fields (`field_of`, `into_field`); the even-odd pair's low words as one 64-bit value, or both registers as one 128-bit value; R1+1 as a source; high words as a source and a sink; the storage-immediate read-modify-write |
-| `interpreter/hlasm/effective_address.py` | `effective_address` (D(X,B), AMODE 31), `length_operand_address` (D(L,B)), `indexed_address` (index scaled by the element size), `relative_address` (RELOC_IMM) |
+| `interpreter/hlasm/effective_address.py` | `effective_address` (D(X,B), AMODE 31), `length_operand_address` (D(L,B)), `indexed_address` (index scaled by the element size), `vector_indexed_address` (D(V,B), a vector element as index), `relative_address` (RELOC_IMM) |
 | `interpreter/hlasm/alignment_check.py` | An operand off its boundary abends `S0C6` |
 | `interpreter/hlasm/fixed_point_overflow.py` | CC 3 with program-mask bit `1000` on abends `S0C8` |
 | `interpreter/hlasm/fixed_point_divide.py` | A raised divide condition abends `S0C9`; no mask applies |
@@ -1115,6 +1118,18 @@ layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.
 - `__hlasm_vrs` holds 32 vector registers of 16 bytes, VR v at offset 16v, big-endian. FPR f is
   bytes 0-7 of VR f. Scalar FP writes and pair reads leave bytes 8-15 unchanged, one of the
   outcomes PoO 2-6 permits.
+- A whole VR is one unsigned 128-bit value (`load_vr`, `store_vr`). Element i of size s is
+  bytes i*s to i*s+s-1. A static index at or past the element count abends `S0C6` at
+  lowering; a run-time index is taken modulo the count, as z15 does (PoO leaves it
+  unpredictable).
+- Element functions return one value: the result in bits 0-127, CC at 128-129, FPC flags at
+  136-143, VXC at 144-151 and a trap bit at 152. The caller splits it with shifts and masks.
+- An omitted trailing M operand is 0. An element size outside the instruction's allowed set,
+  or a set must-be-zero M bit, abends `S0C6` at lowering (R34).
+- A VRV operand D2(V2,B2) arrives as a storage operand whose index is a VR. It is read as its
+  own type, so the GPR address path cannot take it; the address adds V2's element.
+- A vector-processing exception (PIC 001B) stores the VXC (index << 4 | code) in FPC byte 2
+  and abends `S0DB`, as PIC 0013 gives `S0D3` and 001D `S0DD`.
 - Our che4z fork exports `VZERO v` as `VGBM v,0`. Upstream che4z gives `VGBM 1,v`.
 
 ## Known Gaps
@@ -1174,6 +1189,7 @@ layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.
 | `tests/unit/hlasm/test_bridge_exit_codes.py` | Parser exit-code handling |
 | `tests/unit/hlasm/test_operands.py` | Typed operand access and its failures |
 | `tests/unit/hlasm/test_machine.py` | Machine start-up state |
+| `tests/unit/hlasm/test_vector_registers.py` | Vector registers on the VM: 128-bit values over the FPRs, elements by static and run-time index, return fields, M-field checks, the VRV address, the VXC |
 | `tests/unit/hlasm/test_dc_encoding.py` | DC images |
 | `tests/unit/hlasm/test_fixed_width_ir.py` | Fixed-width arithmetic, truncating division, bitwise connectives, shifts and rotates, and condition codes |
 | `tests/unit/hlasm/test_hlasm_emitter.py` | The chain shares what it extends; the emitter's order and per-statement source locations |
@@ -1244,6 +1260,7 @@ layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.
 | `tests/z390/test_loop_branch_differential.py` | Every branch on count and index case against z390; z390's late reads of R2 and the compare value pinned (`-m z390`) |
 | `tests/unit/hlasm/test_conditional_select_count_lowering.py` | Conditional, select and count IR: the CC mask tested before any operand, SELECT's reads before its write, FLOGR's odd pair `S0C6`, branch-free counts with no builtin, one loop for BEXTG and BDEPG, the count IR's values |
 | `tests/integration/hlasm/test_conditional_select_count.py` | Every conditional, select and count mnemonic and every extended suffix on the VM: met and unmet conditions, masks 0 and 15, kept halves, aliased registers, zero and full operands; CC |
+| `tests/integration/hlasm/test_vector_extended_mnemonics.py` | VZERO and VONE reach VGBM of their own register |
 | `tests/integration/hlasm/test_conditional_select_count_mnemonics.py` | Every load/store-on-condition and SELECT extended spelling reaches its base mnemonic and Figure J-1 mask |
 | `tests/unit/hlasm/test_interlocked_lowering.py` | Interlocked IR: the boundary check first, one compare that swaps or reloads, CAL's second-operand check only when loading, the load-and-operate stores and overflow check, TS, odd pairs abend `S0C6`, no SYMBOLIC; the PLO table's shape per code, GR0 and test-bit checks before a 62-way tree, PLO under EX lowered once |
 | `tests/integration/hlasm/test_interlocked.py` | Every interlocked mnemonic on the VM: equal and unequal compares, pairs, CALGF zero extension, every CSST code and characteristic, overflow, carry and boolean CCs (zero CCs at 64 bits), R1 as base or R3, each boundary `S0C6` with storage unchanged |

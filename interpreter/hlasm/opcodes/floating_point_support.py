@@ -1,5 +1,5 @@
 # pyright: standard
-"""Floating-point-support opcodes: FPR loads, stores and moves, the sign-bit forms, and the FPC with its validity checks and simulated-IEEE trap."""
+"""Floating-point-support opcodes: FPR loads, stores and moves, the sign-bit forms, the FPC with its validity checks and simulated-IEEE trap, and the vector-processing exception's VXC in the DXC byte."""
 
 from collections.abc import Mapping, Sequence
 from functools import reduce
@@ -31,6 +31,7 @@ from interpreter.hlasm.hlasm_constants import (
     LOW_WORD_MASK,
     REGISTER_MASK,
     SPECIFICATION_EXCEPTION_ABEND,
+    VECTOR_PROCESSING_ABEND,
     WORD_BYTES,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
@@ -208,6 +209,11 @@ def store_dxc(emitter: HlasmEmitter, fpc: Register, dxc: Register) -> None:
 def emit_data_exception(emitter: HlasmEmitter, fpc: Register, dxc: Register) -> None:
     store_dxc(emitter, fpc, dxc)
     emit_abend(emitter, DATA_EXCEPTION_ABEND)
+
+
+def emit_vector_exception(emitter: HlasmEmitter, vxc: Register) -> None:
+    store_dxc(emitter, emitter.load_var(FPC_VAR), vxc)
+    emit_abend(emitter, VECTOR_PROCESSING_ABEND)
 
 
 def emit_coded_data_exception(emitter: HlasmEmitter, dxc: int) -> None:

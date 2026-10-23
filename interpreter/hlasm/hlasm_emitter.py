@@ -120,28 +120,34 @@ class HlasmEmitter:
         )
 
     def load_fpr(self, r: int) -> Register:
-        return self._load_fpr(r, DOUBLEWORD_BYTES)
+        return self.load_vr_part(r, 0, DOUBLEWORD_BYTES)
 
     def store_fpr(self, r: int, value: Register) -> None:
-        self._store_fpr(r, DOUBLEWORD_BYTES, value)
+        self.store_vr_part(r, 0, DOUBLEWORD_BYTES, value)
 
     def load_fpr_high32(self, r: int) -> Register:
-        return self._load_fpr(r, WORD_BYTES)
+        return self.load_vr_part(r, 0, WORD_BYTES)
 
     def store_fpr_high32(self, r: int, value: Register) -> None:
-        self._store_fpr(r, WORD_BYTES, value)
+        self.store_vr_part(r, 0, WORD_BYTES, value)
 
-    def _load_fpr(self, r: int, width: int) -> Register:
+    def load_vr(self, v: int) -> Register:
+        return self.load_vr_part(v, 0, VECTOR_REGISTER_BYTES)
+
+    def store_vr(self, v: int, value: Register) -> None:
+        self.store_vr_part(v, 0, VECTOR_REGISTER_BYTES, value)
+
+    def load_vr_part(self, v: int, offset: int, width: int) -> Register:
         return self.load_storage(
             self.load_var(VECTOR_REGISTERS_VAR),
-            VECTOR_REGISTER_BYTES * r,
+            VECTOR_REGISTER_BYTES * v + offset,
             width,
         )
 
-    def _store_fpr(self, r: int, width: int, value: Register) -> None:
+    def store_vr_part(self, v: int, offset: int, width: int, value: Register) -> None:
         self.store_storage(
             self.load_var(VECTOR_REGISTERS_VAR),
-            VECTOR_REGISTER_BYTES * r,
+            VECTOR_REGISTER_BYTES * v + offset,
             width,
             value,
         )
