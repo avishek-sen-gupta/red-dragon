@@ -8,7 +8,7 @@ from interpreter.func_name import FuncName
 from interpreter.hlasm.abend import emit_abend
 from interpreter.hlasm.bfp_layout import BfpLayout
 from interpreter.hlasm.bfp_operation import BfpOperation, bfp_builtin_name
-from interpreter.hlasm.bfp_slots import INEXACT_BIT
+from interpreter.hlasm.bfp_slots import CC_SLOT, INEXACT_BIT
 from interpreter.hlasm.data_movement import Source
 from interpreter.hlasm.hlasm_constants import (
     SPECIFICATION_EXCEPTION_ABEND,
@@ -23,7 +23,7 @@ from interpreter.hlasm.opcodes.bfp_ir import (
     outcome_of,
     without,
 )
-from interpreter.hlasm.opcodes.fpr_images import FOURTH, store_image
+from interpreter.hlasm.opcodes.fpr_images import FOURTH, list_item, store_image
 from interpreter.hlasm.operands import mask_operand, optional_mask_operand, reg_operand
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.register import Register
@@ -76,6 +76,12 @@ def stored(index: int, layout: BfpLayout, after: AfterStore) -> Deliver:
         after(emitter, image)
 
     return deliver
+
+
+def result_cc(
+    emitter: HlasmEmitter, statement: MachineStatement, result: Register, slot: Register
+) -> None:
+    emitter.set_cc(list_item(emitter, result, CC_SLOT))
 
 
 def signals_all(statement: MachineStatement) -> int:

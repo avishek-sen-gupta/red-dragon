@@ -30,6 +30,7 @@ def test_builtin_forms_decode_in_argument_order_then_call_then_trap_and_encode()
         "ADTRA": trace("ADTRA", (*registers(1, 2, 3), mask_operand(1))),
         "SXTR": trace("SXTR", registers(0, 4, 8)),
         "DDTRA": trace("DDTRA", (*registers(1, 2, 3), mask_operand(0))),
+        "CDTR": trace("CDTR", registers(1, 2)),
     }
 
     assert traces == {
@@ -70,6 +71,43 @@ def test_builtin_forms_decode_in_argument_order_then_call_then_trap_and_encode()
             "call dfp divide_long",
             *ladder(ENCODE_LONG, "write fpr 8+8"),
         ],
+        "CDTR": [
+            "read fpr 8+8",
+            DECODE_LONG,
+            "read fpr 16+8",
+            DECODE_LONG,
+            "call dfp compare_long",
+            *ladder(CC),
+        ],
+    }
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_field_forms_decode_and_compute_in_ir():
+    traces = {
+        "CEDTR": trace("CEDTR", registers(1, 2)),
+        "LTDTR": trace("LTDTR", registers(1, 2)),
+        "EEDTR": trace("EEDTR", registers(1, 2)),
+        "IEXTR": trace("IEXTR", registers(4, 1, 2)),
+    }
+
+    assert traces == {
+        "CEDTR": ["read fpr 8+8", DECODE_LONG, "read fpr 16+8", DECODE_LONG, CC],
+        "LTDTR": [
+            "read fpr 16+8",
+            DECODE_LONG,
+            *ladder(ENCODE_LONG, "write fpr 8+8", CC),
+        ],
+        "EEDTR": ["read fpr 16+8", DECODE_LONG, "write gpr 8+8"],
+        "IEXTR": [
+            "read gpr 16+8",
+            "read fpr 8+8",
+            "read fpr 24+8",
+            DECODE_EXTENDED,
+            ENCODE_EXTENDED,
+            "write fpr 32+8",
+            "write fpr 48+8",
+        ],
     }
 
 
@@ -79,9 +117,13 @@ def test_invalid_pairs_abend_before_any_access():
         trace("AXTR", registers(2, 4, 8)),
         trace("MXTRA", (*registers(0, 6, 8), mask_operand(1))),
         trace("DXTR", registers(0, 4, 14)),
+        trace("CXTR", registers(1, 2)),
+        trace("LTXTR", registers(0, 6)),
+        trace("EEXTR", registers(2, 2)),
+        trace("IEXTR", registers(2, 1, 4)),
     ]
 
-    assert traces == [[SPECIFICATION]] * 3
+    assert traces == [[SPECIFICATION]] * 7
 
 
 FAMILIES: Mapping[str, tuple[Operand, ...]] = {
@@ -90,6 +132,9 @@ FAMILIES: Mapping[str, tuple[Operand, ...]] = {
         *registers(0, 4, 8),
         mask_operand(3),
     ),
+    "CDTR CXTR KDTR KXTR CEDTR CEXTR LTDTR LTXTR": registers(0, 4),
+    "EEDTR EEXTR ESDTR ESXTR": registers(2, 4),
+    "IEDTR IEXTR": registers(0, 4, 2),
 }
 
 
@@ -101,7 +146,7 @@ def test_every_mnemonic_lowers_without_symbolic():
         for m in names.split()
     }
 
-    assert len(lowered) == 16
+    assert len(lowered) == 30
     assert [
         m for m, ir in lowered.items() if any(isinstance(i, Symbolic) for i in ir)
     ] == []
