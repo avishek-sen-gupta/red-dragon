@@ -11,17 +11,12 @@ from interpreter.hlasm.hlasm_constants import (
     MASK_LOOP_RESULT_VAR,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
-from interpreter.instructions import Branch, BranchIf, Label_, StoreVar
+from interpreter.instructions import Branch, BranchIf, Label_
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
-from interpreter.var_name import VarName
 
 type Positions = Callable[[Register, Register], tuple[Register, Register]]
-
-
-def _set(emitter: HlasmEmitter, name: VarName, value: Register) -> None:
-    emitter.emit_inst(StoreVar(name=name, value_reg=value))
 
 
 def _start(emitter: HlasmEmitter, mask: Register) -> None:
@@ -29,9 +24,9 @@ def _start(emitter: HlasmEmitter, mask: Register) -> None:
         BinopKind.SUB, emitter.int_(DOUBLEWORD_BITS), population(emitter, mask)
     )
     cursor = emitter.binop(BinopKind.LSHIFT, emitter.int_(1), unused)
-    _set(emitter, MASK_LOOP_REST_VAR, mask)
-    _set(emitter, MASK_LOOP_RESULT_VAR, emitter.int_(0))
-    _set(emitter, MASK_LOOP_CURSOR_VAR, cursor)
+    emitter.store_var(MASK_LOOP_REST_VAR, mask)
+    emitter.store_var(MASK_LOOP_RESULT_VAR, emitter.int_(0))
+    emitter.store_var(MASK_LOOP_CURSOR_VAR, cursor)
 
 
 def _moved_bit(
@@ -50,13 +45,14 @@ def _iteration(
     cursor = emitter.load_var(MASK_LOOP_CURSOR_VAR)
     moved = _moved_bit(emitter, value, positions(low, cursor))
     result = emitter.load_var(MASK_LOOP_RESULT_VAR)
-    _set(emitter, MASK_LOOP_RESULT_VAR, emitter.binop(BinopKind.BIT_OR, result, moved))
-    _set(
-        emitter,
+    emitter.store_var(
+        MASK_LOOP_RESULT_VAR, emitter.binop(BinopKind.BIT_OR, result, moved)
+    )
+    emitter.store_var(
         MASK_LOOP_CURSOR_VAR,
         emitter.binop(BinopKind.LSHIFT, cursor, emitter.int_(1)),
     )
-    _set(emitter, MASK_LOOP_REST_VAR, emitter.binop(BinopKind.BIT_XOR, rest, low))
+    emitter.store_var(MASK_LOOP_REST_VAR, emitter.binop(BinopKind.BIT_XOR, rest, low))
 
 
 def _remaining(emitter: HlasmEmitter, step: CodeLabel, done: CodeLabel) -> Register:

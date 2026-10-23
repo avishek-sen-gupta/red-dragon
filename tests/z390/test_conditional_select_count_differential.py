@@ -19,20 +19,28 @@ pytestmark = pytest.mark.z390
 ABENDED = HlasmRun(return_code=0, abend="U0001", stdout="")
 OPERATION = HlasmRun(return_code=0, abend="S0C1", stdout="")
 
-NOT_EXECUTED_BASES = (
-    "LOCHI",
-    "LOCGHI",
-    "LOCHHI",
-    "LOCFHR",
-    "LOCFH",
-    "STOCFH",
-    "CLZG",
-    "CTZG",
-    "BEXTG",
-    "BDEPG",
-)
 NOT_EXECUTED = [
-    case for case in programs.CASES if case.split(" ")[0].startswith(NOT_EXECUTED_BASES)
+    "LOCFHR",
+    "LOCFHRP",
+    "LOCFHRM",
+    "LOCFHRNZ",
+    "LOCFH",
+    "LOCFHNP",
+    "LOCFHNM",
+    "LOCHI",
+    "LOCHIH",
+    "LOCHINL",
+    "LOCGHI",
+    "LOCGHIZ",
+    "LOCGHINH",
+    "LOCHHI",
+    "LOCHHINE",
+    "LOCHHINO",
+    "STOCFH",
+    "STOCFHO",
+    "STOCFHE",
+    *programs.ZERO_COUNTS,
+    *programs.BITS_UNDER_MASK,
 ]
 BEFORE_THE_INSTRUCTION: Mapping[str, Mapping[int, int]] = {
     "CTZG in place": {4: programs.SRCP},

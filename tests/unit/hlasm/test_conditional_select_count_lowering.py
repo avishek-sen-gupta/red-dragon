@@ -102,6 +102,7 @@ def _when(mask: int) -> list[str]:
 
 
 STORAGE_16 = [*_gpr(8 * BASE + 4, 4), "+ reg", "& 2147483647"]
+SELECTED_9 = [*_when(9)[:-1], "- reg", "* reg", "+ reg"]
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
@@ -145,7 +146,7 @@ def test_on_condition_forms_test_the_cc_mask_before_touching_an_operand():
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_select_reads_both_operands_then_writes_the_third_and_the_second_if_selected():
+def test_select_reads_both_operands_then_writes_the_selected_one_once():
     shapes = {
         name: _shape(
             _lowered(
@@ -159,22 +160,19 @@ def test_select_reads_both_operands_then_writes_the_third_and_the_second_if_sele
         "SELR": [
             *_gpr(44, 4),
             *_gpr(52, 4),
-            *_written(36, 4),
-            *_when(9),
+            *SELECTED_9,
             *_written(36, 4),
         ],
         "SELGR": [
             *_gpr(40, 8),
             *_gpr(48, 8),
-            *_written(32, 8),
-            *_when(9),
+            *SELECTED_9,
             *_written(32, 8),
         ],
         "SELFHR": [
             *_gpr(40, 4),
             *_gpr(48, 4),
-            *_written(32, 4),
-            *_when(9),
+            *SELECTED_9,
             *_written(32, 4),
         ],
     }

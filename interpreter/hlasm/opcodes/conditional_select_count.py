@@ -40,6 +40,7 @@ from interpreter.hlasm.inline_ir import inline_ir
 from interpreter.hlasm.mask_bit_loop import deposited_bits, extracted_bits
 from interpreter.hlasm.opcodes.branch_on_condition import mask_selects
 from interpreter.hlasm.opcodes.even_odd import even_odd
+from interpreter.hlasm.opcodes.fpr_images import pick
 from interpreter.hlasm.opcodes.operand_sources import (
     DOUBLEWORD_STORAGE,
     HALFWORD_IMMEDIATE,
@@ -80,9 +81,8 @@ def _select(source_of: Callable[[int], Source], sink: Sink) -> StatementLowering
 
     def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
         chosen, otherwise = second(emitter, statement), third(emitter, statement)
-        sink(emitter, statement, otherwise)
         selected = _selects(emitter, statement, SELECT_MASK_OPERAND)
-        emit_when(emitter, selected, lambda: sink(emitter, statement, chosen))
+        sink(emitter, statement, pick(emitter, selected, chosen, otherwise))
 
     return lower
 
