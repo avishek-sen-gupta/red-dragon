@@ -1,7 +1,8 @@
 # pyright: standard
-"""The DPD codec IR: declets decode and encode as PoO figures 20-32 and 20-33 give them, noncanonical declets included, and each format's image splits into sign, biased exponent or special code, and significand, and back canonically."""
+"""The DPD codec IR: every declet encodes as PoO figure 20-32 gives it (the fixture transcribes the figure) and decodes back, and the noncanonical declets decode as figure 20-33 gives them, noncanonical declets included, and each format's image splits into sign, biased exponent or special code, and significand, and back canonically."""
 
 from collections.abc import Callable, Sequence
+from pathlib import Path
 
 from interpreter.hlasm.dfp_layout import EXTENDED_DFP, LONG_DFP, SHORT_DFP, DfpLayout
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
@@ -16,19 +17,18 @@ type Builder = Callable[[HlasmEmitter, Sequence[Register]], Register]
 
 ALL_DECLETS = 1024
 DECLET_VALUES = 1000
-FIGURE_20_32 = {
-    9: 0x009,
-    80: 0x00A,
-    123: 0x0A3,
-    456: 0x256,
-    789: 0x3CF,
-    800: 0x00C,
-    808: 0x02E,
-    880: 0x00E,
-    88: 0x04E,
-    888: 0x06E,
-    999: 0x0FF,
-}
+FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def _figure_20_32() -> dict[int, int]:
+    rows = (FIXTURES / "dpd_figure_20_32.txt").read_text().splitlines()
+    return {
+        int(row[:2]) * 10 + column: int(declet, 16)
+        for row in rows
+        for column, declet in enumerate(row.split()[1:])
+    }
+
+
 NONCANONICAL = {
     0x16E: 888,
     0x16F: 889,
@@ -90,10 +90,12 @@ def test_declets_follow_the_dpd_figures():
     declets = _every_declet_encoded()
     values = _every_declet_decoded()
 
-    assert {n: declets[n] for n in FIGURE_20_32} == FIGURE_20_32
-    assert [values[declets[n]] for n in range(DECLET_VALUES)] == list(
-        range(DECLET_VALUES)
-    )
+    figure = _figure_20_32()
+
+    assert dict(enumerate(declets)) == figure
+    assert {figure[n]: values[figure[n]] for n in range(DECLET_VALUES)} == {
+        figure[n]: n for n in range(DECLET_VALUES)
+    }
     assert {
         d: values[d] for d in range(ALL_DECLETS) if d not in set(declets)
     } == NONCANONICAL

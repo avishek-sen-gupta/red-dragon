@@ -56,7 +56,7 @@ Z390_PINNED: Mapping[str, HlasmMachine] = {
     "DDTR rounds a tiny quotient up to Nmin": _z390(
         2, {2: 0xA5A5A5A5_A5A5A5A5}, "S0CC"
     ),
-    "ADTR NaNs and infinity set CC 3 and 2": _z390(
+    "ADTR and SDTR with NaNs and infinity set CC 3 and 1": _z390(
         2,
         {
             2: 0x22380000_00000001,
