@@ -1028,6 +1028,11 @@ SLXT, SRDT, SRXT, SXTR, SXTRA, TDCDT, TDCET, TDCXT, TDGDT, TDGET, TDGXT. Rulings
 - TDCxT and TDGxT select mask bit 11 - (2 x class or group + sign) of EA bits 52-63. Subnormal
   is nonzero below Nmin; extreme is e 0 or MBE; a subnormal with a nonextreme exponent is
   safe nonzero (allowed by 20-57).
+- z390 encodes zero results with biased exponent 0, ignores the FPC DFP mode and M4 methods,
+  keeps the source quantum in FIxTR, abends on M4 8-15, nonzero FIDTR M3 or QADTR M4, the
+  tiny-quotient edge and IEDTR specials, treats infinities and NaNs as numbers, misclassifies
+  TDCDT and TDGDT, and takes no IEEE or quantum trap. The z390 test pins each
+  (red-dragon-6uyp.74).
 
 ## Known Gaps
 
@@ -1206,4 +1211,5 @@ SLXT, SRDT, SRXT, SXTR, SXTRA, TDCDT, TDCET, TDCXT, TDGDT, TDGET, TDGXT. Rulings
 | `tests/unit/hlasm/test_dfp_builtins.py` | DFP builtins: fields to values and back for every kind; each family's value, scaled value, trap, flags, DXCs and CC |
 | `tests/unit/hlasm/test_dfp_arithmetic_lowering.py` | DFP IR: operands decoded in argument order, one builtin call, the ladder, then encode and store; the A forms' modifier replaces the FPC read; invalid pairs abend `S0C6` before any access; no SYMBOLIC |
 | `tests/integration/hlasm/test_dfp_arithmetic.py` | Every DFP arithmetic mnemonic on the VM: images, CC and FPC flags; the FPC DFP mode; the tininess edge; each trap's delivered value, DXC and `S0C7`, quantum traps included |
+| `tests/z390/test_dfp_arithmetic_differential.py` | Every DFP arithmetic case against z390; its faults pinned (`-m z390`) |
 | `tests/z390/test_conditional_select_count_differential.py` | Every conditional, select and count case against z390; the instructions z390 does not execute and its whole-register SELFHR pinned (`-m z390`) |
