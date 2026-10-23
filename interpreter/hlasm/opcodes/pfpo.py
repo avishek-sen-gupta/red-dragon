@@ -6,11 +6,6 @@ from collections.abc import Mapping
 from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.hlasm.abend import emit_abend
 from interpreter.hlasm.bfp_layout import BfpLayout
-from interpreter.hlasm.bfp_slots import (
-    SCALED_SLOT,
-    SCALING_BITS,
-    SUPPRESSING_BITS,
-)
 from interpreter.hlasm.conditional import emit_either, emit_when
 from interpreter.hlasm.data_movement import keep
 from interpreter.hlasm.dfp_layout import DfpLayout
@@ -23,11 +18,11 @@ from interpreter.hlasm.hlasm_constants import (
     SPECIFICATION_EXCEPTION_ABEND,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
-from interpreter.hlasm.ieee_outcome import IeeeOutcome
+from interpreter.hlasm.ladder_end import LadderEnd, ScaledTrap
 from interpreter.hlasm.opcodes import hfp_ir
 from interpreter.hlasm.opcodes.bfp_ir import (
     current_mode,
-    enabled_traps,
+    emit_ieee_ladder,
     field_at,
     fields_list,
     image_at,
@@ -44,7 +39,6 @@ from interpreter.hlasm.opcodes.dfp_ir import (
 from interpreter.hlasm.opcodes.floating_point_support import (
     DXC_FIELD,
     DXC_SHIFT,
-    FLAG_SHIFT,
     emit_data_exception,
 )
 from interpreter.hlasm.opcodes.fpr_images import (
@@ -58,7 +52,8 @@ from interpreter.hlasm.packed_decimal import table_bit
 from interpreter.hlasm.pfpo_formats import LAYOUTS, PFPO_BUILTIN, PfpoLayout
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.hlasm.value_tree import emit_value_switch
-from interpreter.instructions import StoreVar
+from interpreter.instructions import Branch, Label_, StoreVar
+from interpreter.ir import CodeLabel
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
 
@@ -235,86 +230,54 @@ def _deliver(
     emit_value_switch(emitter, code, FORMAT_CODES, leaf)
 
 
-def _alternate_or_trap(
-    emitter: HlasmEmitter, word: Register, fpc: Register, dxc: Register
-) -> None:
-    alternate = emitter.binop(
-        BinopKind.NE, keep(ALTERNATE_BIT)(emitter, word), emitter.int_(0)
-    )
-
-    def completed() -> None:
-        shifted = emitter.binop(BinopKind.LSHIFT, dxc, emitter.int_(DXC_SHIFT))
-        cleared = keep(LOW_WORD_MASK ^ DXC_FIELD)(emitter, fpc)
-        emitter.emit_inst(
-            StoreVar(
-                name=FPC_VAR,
-                value_reg=emitter.binop(BinopKind.BIT_OR, cleared, shifted),
-            )
+def _alternate_or_trap(word: Register, done: CodeLabel) -> ScaledTrap:
+    def trap(emitter: HlasmEmitter, fpc: Register, dxc: Register) -> None:
+        alternate = emitter.binop(
+            BinopKind.NE, keep(ALTERNATE_BIT)(emitter, word), emitter.int_(0)
         )
-        emitter.set_cc(emitter.int_(ALTERNATE_CC))
 
-    emit_either(
-        emitter, alternate, completed, lambda: emit_data_exception(emitter, fpc, dxc)
-    )
+        def completed() -> None:
+            shifted = emitter.binop(BinopKind.LSHIFT, dxc, emitter.int_(DXC_SHIFT))
+            cleared = keep(LOW_WORD_MASK ^ DXC_FIELD)(emitter, fpc)
+            coded = emitter.binop(BinopKind.BIT_OR, cleared, shifted)
+            emitter.emit_inst(StoreVar(name=FPC_VAR, value_reg=coded))
+            emitter.set_cc(emitter.int_(ALTERNATE_CC))
+            emitter.emit_inst(Branch(label=done))
 
+        emit_either(
+            emitter,
+            alternate,
+            completed,
+            lambda: emit_data_exception(emitter, fpc, dxc),
+        )
 
-def _flagged(
-    emitter: HlasmEmitter, fpc: Register, outcome: IeeeOutcome, enabled: Register
-) -> None:
-    inverted = emitter.binop(BinopKind.BIT_XOR, enabled, emitter.int_(BYTE_MASK))
-    raised = emitter.binop(BinopKind.BIT_AND, outcome.flags, inverted)
-    moved = emitter.binop(BinopKind.LSHIFT, raised, emitter.int_(FLAG_SHIFT))
-    flagged = emitter.binop(BinopKind.BIT_OR, fpc, moved)
-    emitter.emit_inst(StoreVar(name=FPC_VAR, value_reg=flagged))
-    trapped = emitter.binop(BinopKind.NE, enabled, emitter.int_(0))
-
-    def nontrap() -> None:
-        nonzero = emitter.binop(BinopKind.NE, raised, emitter.int_(0))
-        emitter.set_cc(emitter.binop(BinopKind.MUL, nonzero, emitter.int_(NONTRAP_CC)))
-
-    emit_either(
-        emitter,
-        trapped,
-        lambda: emit_data_exception(emitter, flagged, outcome.inexact_dxc),
-        nontrap,
-    )
+    return trap
 
 
-def _suppress_on(emitter: HlasmEmitter, fpc: Register, enabled: Register) -> None:
-    suppressing = keep(SUPPRESSING_BITS)(emitter, enabled)
-    emit_when(
-        emitter,
-        emitter.binop(BinopKind.NE, suppressing, emitter.int_(0)),
-        lambda: emit_data_exception(emitter, fpc, suppressing),
-    )
-
-
-def _delivered(
-    emitter: HlasmEmitter, word: Register, result: Register, enabled: Register
-) -> Register:
-    scaling = keep(SCALING_BITS)(emitter, enabled)
-    scaled = emitter.binop(BinopKind.NE, scaling, emitter.int_(0))
-    slot = emitter.binop(BinopKind.MUL, scaled, emitter.int_(SCALED_SLOT))
-    _deliver(emitter, word, result, slot)
-    exponent = list_item(emitter, result, SCALING_SLOT)
-    _set_return_code(emitter, emitter.binop(BinopKind.MUL, scaled, exponent))
-    return scaled
+def _nontrap_cc(emitter: HlasmEmitter, raised: Register) -> None:
+    nonzero = emitter.binop(BinopKind.NE, raised, emitter.int_(0))
+    emitter.set_cc(emitter.binop(BinopKind.MUL, nonzero, emitter.int_(NONTRAP_CC)))
 
 
 def _converted(emitter: HlasmEmitter, word: Register) -> None:
     fields = _decoded_source(emitter, word)
     result = emitter.call(PFPO_BUILTIN, (word, _method(emitter, word), fields))
-    fpc = emitter.load_var(FPC_VAR)
-    outcome = quantum_yields(emitter, fpc, outcome_of(emitter, result))
-    enabled = enabled_traps(emitter, fpc, outcome.trap)
-    _suppress_on(emitter, fpc, enabled)
-    scaled = _delivered(emitter, word, result, enabled)
-    emit_either(
+    done = emitter.fresh_label("hl_pfpo_done")
+
+    def deliver(slot: Register) -> None:
+        _deliver(emitter, word, result, slot)
+        exponent = list_item(emitter, result, SCALING_SLOT)
+        scaled = emitter.binop(BinopKind.NE, slot, emitter.int_(0))
+        _set_return_code(emitter, emitter.binop(BinopKind.MUL, scaled, exponent))
+
+    emit_ieee_ladder(
         emitter,
-        scaled,
-        lambda: _alternate_or_trap(emitter, word, fpc, outcome.scaled_dxc),
-        lambda: _flagged(emitter, fpc, outcome, enabled),
+        outcome_of(emitter, result),
+        deliver,
+        quantum_yields,
+        LadderEnd(_alternate_or_trap(word, done), _nontrap_cc),
     )
+    emitter.emit_inst(Label_(label=done))
 
 
 def _lower_pfpo(emitter: HlasmEmitter, statement: MachineStatement) -> None:

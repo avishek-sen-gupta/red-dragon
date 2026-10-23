@@ -1091,7 +1091,9 @@ Rulings R43, R45, R48, R52.
   dispatch on the target format encodes the delivered value into FPR 0 (or 0 and 2).
 - GR1 bits 32-63 take 0, or the scaling exponent when a trapped overflow or underflow delivers
   the scaled value (1 <= |z| < radix). With bit 57 (alternate action) that trap sets the DXC
-  and CC 2 and does not interrupt. Invalid suppresses with GR1 unchanged. CC 1 marks a nontrap
+  and CC 2 and does not interrupt. PFPO runs the shared BFP ladder, giving it a `LadderEnd`
+  (`ladder_end.py`) for the alternate action and the CC 1 that follows a completion without an
+  interruption. Invalid suppresses with GR1 unchanged. CC 1 marks a nontrap
   exception.
 - Bit 56 suppresses inexact. For a DFP target bit 58 permits the quantum exception and bit 59
   picks the exact result's quantum: 1 when on, the largest when off (figure 9-29). For an HFP

@@ -1,5 +1,5 @@
 # pyright: standard
-"""IR for BFP images: field lists for the builtins, images from result fields or from an exact magnitude, an image's condition code, and the IEEE trap ladder (ruling R43), with a step a radix may apply to the outcome first."""
+"""IR for BFP images: field lists for the builtins, images from result fields or from an exact magnitude, an image's condition code, and the IEEE trap ladder (ruling R43), with a step a radix may apply to the outcome first and an end an instruction may change."""
 
 from collections.abc import Callable
 from dataclasses import replace
@@ -27,6 +27,7 @@ from interpreter.hlasm.hlasm_constants import (
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.ieee_outcome import IeeeOutcome
+from interpreter.hlasm.ladder_end import LadderEnd, ScaledTrap
 from interpreter.hlasm.opcodes.floating_point_support import (
     BFP_MODE_SHIFT,
     FLAG_SHIFT,
@@ -197,13 +198,23 @@ def enabled_traps(emitter: HlasmEmitter, fpc: Register, trap: Register) -> Regis
     return emitter.binop(BinopKind.BIT_AND, trap, keep(IEEE_BITS)(emitter, shifted))
 
 
-def _flagged(
-    emitter: HlasmEmitter, fpc: Register, flags: Register, enabled: Register
-) -> Register:
+def _untrapped(emitter: HlasmEmitter, flags: Register, enabled: Register) -> Register:
     inverted = emitter.binop(BinopKind.BIT_XOR, enabled, emitter.int_(BYTE_MASK))
-    raised = emitter.binop(BinopKind.BIT_AND, flags, inverted)
+    return emitter.binop(BinopKind.BIT_AND, flags, inverted)
+
+
+def _flagged(emitter: HlasmEmitter, fpc: Register, raised: Register) -> Register:
     moved = emitter.binop(BinopKind.LSHIFT, raised, emitter.int_(FLAG_SHIFT))
     return emitter.binop(BinopKind.BIT_OR, fpc, moved)
+
+
+def _stored_flags(
+    emitter: HlasmEmitter, fpc: Register, flags: Register, enabled: Register
+) -> tuple[Register, Register]:
+    untrapped = _untrapped(emitter, flags, enabled)
+    flagged = _flagged(emitter, fpc, untrapped)
+    emitter.emit_inst(StoreVar(name=FPC_VAR, value_reg=flagged))
+    return untrapped, flagged
 
 
 def _when_any(emitter: HlasmEmitter, bits: Register, then: Callable[[], None]) -> None:
@@ -215,14 +226,13 @@ def _deliver_once(
     fpc: Register,
     enabled: Register,
     outcome: IeeeOutcome,
-    deliver: Deliver,
+    deliver: tuple[Deliver, ScaledTrap],
 ) -> None:
+    store, scaled_trap = deliver
     scaling = keep(SCALING_BITS)(emitter, enabled)
     scaled = emitter.binop(BinopKind.NE, scaling, emitter.int_(0))
-    deliver(emitter.binop(BinopKind.MUL, scaled, emitter.int_(SCALED_SLOT)))
-    emit_when(
-        emitter, scaled, lambda: emit_data_exception(emitter, fpc, outcome.scaled_dxc)
-    )
+    store(emitter.binop(BinopKind.MUL, scaled, emitter.int_(SCALED_SLOT)))
+    emit_when(emitter, scaled, lambda: scaled_trap(emitter, fpc, outcome.scaled_dxc))
 
 
 def as_raised(
@@ -231,11 +241,19 @@ def as_raised(
     return outcome
 
 
+def _no_cc(emitter: HlasmEmitter, raised: Register) -> None:
+    return None
+
+
+TRAPPING_END = LadderEnd(emit_data_exception, _no_cc)
+
+
 def emit_ieee_ladder(
     emitter: HlasmEmitter,
     raised: IeeeOutcome,
     deliver: Deliver,
     step: OutcomeStep = as_raised,
+    end: LadderEnd = TRAPPING_END,
 ) -> None:
     fpc = emitter.load_var(FPC_VAR)
     outcome = step(emitter, fpc, raised)
@@ -244,11 +262,11 @@ def emit_ieee_ladder(
     _when_any(
         emitter, suppressing, lambda: emit_data_exception(emitter, fpc, suppressing)
     )
-    _deliver_once(emitter, fpc, enabled, outcome, deliver)
-    flagged = _flagged(emitter, fpc, outcome.flags, enabled)
-    emitter.emit_inst(StoreVar(name=FPC_VAR, value_reg=flagged))
+    _deliver_once(emitter, fpc, enabled, outcome, (deliver, end.scaled_trap))
+    untrapped, flagged = _stored_flags(emitter, fpc, outcome.flags, enabled)
     _when_any(
         emitter,
         enabled,
         lambda: emit_data_exception(emitter, flagged, outcome.inexact_dxc),
     )
+    end.completed(emitter, untrapped)
