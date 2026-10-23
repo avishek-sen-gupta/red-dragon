@@ -56,6 +56,7 @@ TEST     CSECT
          BR    14
          DC    0F
          DC    A(0),A(*)
+         DC    2A(*),A(*,*),2A(*,*+2)
          END   TEST
 """
 
@@ -108,14 +109,19 @@ def test_address_constant_holds_runtime_address(tmp_path: Path):
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_star_in_a_later_operand_is_that_operands_address_after_an_empty_fullword(
+def test_star_is_the_address_of_each_constant_after_an_empty_fullword(
     tmp_path: Path,
 ):
     program = _assemble(LOCATION_COUNTER_SOURCE, tmp_path)
     vm = _start(program)
     base = _base(vm, "TEST")
 
-    assert vm.load(base + 4, 8) == [0, 0, 0, 0, *(base + 8).to_bytes(4, "big")]
+    words = [base + offset for offset in (8, 12, 16, 20, 24, 28, 34, 36, 42)]
+
+    assert vm.load(base + 4, 40) == [
+        *[0, 0, 0, 0],
+        *(byte for word in words for byte in word.to_bytes(4, "big")),
+    ]
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

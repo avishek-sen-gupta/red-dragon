@@ -1,7 +1,8 @@
 # pyright: standard
 """Byte images of DC operands, computed when the program is assembled."""
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
+from itertools import chain
 
 from hlasm_asg.program.abs_address import AbsAddress
 from hlasm_asg.program.address import Address
@@ -11,6 +12,7 @@ from hlasm_asg.program.dc_item import DcItem
 from hlasm_asg.program.external_address import ExternalAddress
 from hlasm_asg.program.length_unit import LengthUnit
 from hlasm_asg.program.omitted_nominal import OmittedNominal
+from hlasm_asg.program.per_copy_addresses_nominal import PerCopyAddressesNominal
 from hlasm_asg.program.reloc_address import RelocAddress
 from hlasm_asg.program.string_nominal import StringNominal
 from interpreter.encoding.ebcdic_table import EbcdicTable
@@ -163,6 +165,10 @@ def _address_piece(value: Address, width: int) -> DcPiece:
     return ConstantImage(_binary(_assembled_address(value), width))
 
 
+def _address_pieces(item: DcItem, values: Sequence[Address]) -> tuple[DcPiece, ...]:
+    return tuple(_address_piece(value, item.length) for value in values)
+
+
 def _operand(
     item: DcItem, nominal: StringNominal | AddressesNominal
 ) -> tuple[DcPiece, ...]:
@@ -170,14 +176,26 @@ def _operand(
         case StringNominal(value=text):
             return tuple(_string_piece(item, value) for value in _values(item, text))
         case AddressesNominal(values=values):
-            return tuple(_address_piece(value, item.length) for value in values)
+            return _address_pieces(item, values)
+
+
+def _copies(
+    item: DcItem, nominal: StringNominal | AddressesNominal | PerCopyAddressesNominal
+) -> tuple[DcPiece, ...]:
+    match nominal:
+        case PerCopyAddressesNominal(copies=copies):
+            return tuple(
+                chain.from_iterable(_address_pieces(item, values) for values in copies)
+            )
+        case once:
+            return _operand(item, once) * item.duplication
 
 
 def encode_dc(item: DcItem) -> tuple[DcPiece, ...]:
     _check_supported(item)
     if isinstance(item.nominal, OmittedNominal):
         return ()
-    return _operand(item, item.nominal) * item.duplication
+    return _copies(item, item.nominal)
 
 
 def dc_alignment(item: DcItem) -> int:

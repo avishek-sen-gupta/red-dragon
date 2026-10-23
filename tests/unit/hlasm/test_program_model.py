@@ -33,6 +33,7 @@ from hlasm_asg.program.mask_operand import MaskOperand
 from hlasm_asg.program.named_entry import NamedEntry
 from hlasm_asg.program.omitted_nominal import OmittedNominal
 from hlasm_asg.program.open_code_origin import OpenCodeOrigin
+from hlasm_asg.program.per_copy_addresses_nominal import PerCopyAddressesNominal
 from hlasm_asg.program.reg_operand import RegOperand
 from hlasm_asg.program.related_location import RelatedLocation
 from hlasm_asg.program.reloc_address import RelocAddress
@@ -433,6 +434,32 @@ WAVE4_STATEMENTS = (
                 offset=16,
                 bit_offset=0,
                 nominal=StringNominal(kind="STRING", value="1"),
+            ),
+        ),
+    ),
+    _wave4_dc(
+        20,
+        "",
+        14,
+        (
+            DcItem(
+                type="A",
+                extension="",
+                duplication=2,
+                length=4,
+                length_unit=LengthUnit.BYTE,
+                explicit_length=False,
+                scale=0,
+                exponent=0,
+                offset=20,
+                bit_offset=0,
+                nominal=PerCopyAddressesNominal(
+                    kind="ADDRESSES_PER_COPY",
+                    copies=(
+                        (RelocAddress(kind="RELOC", section="T", offset=20),),
+                        (RelocAddress(kind="RELOC", section="T", offset=24),),
+                    ),
+                ),
             ),
         ),
     ),

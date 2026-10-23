@@ -9,8 +9,10 @@ from pydantic import Field
 
 from hlasm_asg.program.addresses_nominal import AddressesNominal
 from hlasm_asg.program.omitted_nominal import OmittedNominal
+from hlasm_asg.program.per_copy_addresses_nominal import PerCopyAddressesNominal
 from hlasm_asg.program.string_nominal import StringNominal
 
 Nominal = Annotated[
-    StringNominal | AddressesNominal | OmittedNominal, Field(discriminator="kind")
+    StringNominal | AddressesNominal | PerCopyAddressesNominal | OmittedNominal,
+    Field(discriminator="kind"),
 ]

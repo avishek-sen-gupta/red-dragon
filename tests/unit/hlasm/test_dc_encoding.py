@@ -11,6 +11,7 @@ from hlasm_asg.program.dc_item import DcItem
 from hlasm_asg.program.external_address import ExternalAddress
 from hlasm_asg.program.length_unit import LengthUnit
 from hlasm_asg.program.omitted_nominal import OmittedNominal
+from hlasm_asg.program.per_copy_addresses_nominal import PerCopyAddressesNominal
 from hlasm_asg.program.reloc_address import RelocAddress
 from hlasm_asg.program.string_nominal import StringNominal
 from interpreter.hlasm.address_slot import AddressSlot
@@ -19,6 +20,7 @@ from interpreter.hlasm.dc_encoding import encode_dc
 from interpreter.hlasm.unsupported_data_type import UnsupportedDataType
 
 FIELD = RelocAddress(kind="RELOC", section="HELLO", offset=8)
+NEXT = RelocAddress(kind="RELOC", section="HELLO", offset=12)
 
 
 def _item(
@@ -135,6 +137,14 @@ def test_address_constants_are_absolute_relocated_or_external():
         _address_item("A", (FIELD,), 3, explicit_length=True),
         _address_item("Y", (FIELD,), 2),
         _address_item("V", (ExternalAddress(kind="EXTERNAL", name="EXTRN"),), 4),
+        _address_item("A", (), 4).model_copy(
+            update={
+                "duplication": 2,
+                "nominal": PerCopyAddressesNominal(
+                    kind="ADDRESSES_PER_COPY", copies=((FIELD,), (NEXT,))
+                ),
+            }
+        ),
     )
     assert [encode_dc(item) for item in items] == [
         (AddressSlot(FIELD, 4), ConstantImage((0, 0, 0, 8))),
@@ -142,6 +152,7 @@ def test_address_constants_are_absolute_relocated_or_external():
         (AddressSlot(FIELD, 3),),
         (AddressSlot(FIELD, 2),),
         (ConstantImage((0, 0, 0, 0)),),
+        (AddressSlot(FIELD, 4), AddressSlot(NEXT, 4)),
     ]
 
 
