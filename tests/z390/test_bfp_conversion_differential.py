@@ -1,5 +1,5 @@
 # pyright: standard
-"""BFP conversion programs leave the same declared registers, CC and abend in RedDragon and in z390, bar z390's faults below; those expectations come from the Principles of Operation (figures 19-18 to 19-20). Converting to fixed, z390 rejects a nonzero M4 (S0C6), ignores the FPC rounding mode, wraps or loses bits on out-of-range sources instead of delivering the maximum with CC 3, gives CC 0 for -0.5 rounded to 0 and for -infinity, converts -1 to logical 1, abends S0C5 on a NaN source, and takes no inexact trap."""
+"""BFP conversion programs leave the same declared registers, CC and abend in RedDragon and in z390, bar z390's faults below; those expectations come from the Principles of Operation (figures 19-18 to 19-20). Converting to fixed, z390 rejects a nonzero M4 (S0C6), ignores the FPC rounding mode, wraps or loses bits on out-of-range sources instead of delivering the maximum with CC 3, gives CC 0 for -0.5 rounded to 0 and for -infinity, converts -1 to logical 1, abends S0C5 on a NaN source, and takes no inexact trap. Converting from fixed, it also writes X'F4F4F4F4' into bits 32-63 of short results, ignores M3, garbles logical sources and the low half of extended results."""
 
 from collections.abc import Mapping
 from pathlib import Path
@@ -19,6 +19,7 @@ pytestmark = pytest.mark.z390
 COMPLETED = "U0001"
 SPECIFICATION = "S0C6"
 ADDRESSING = "S0C5"
+Z390_LOW = 0xF4F4F4F4
 
 
 def _z390(abend: str, cc: int, registers: Mapping[int, int]) -> HlasmMachine:
@@ -59,6 +60,44 @@ Z390_PINNED: Mapping[str, HlasmMachine] = {
         ADDRESSING, 2, {2: FILL}
     ),
     "CFDBR inexact traps after the store": _z390(COMPLETED, 2, {2: _low(4)}),
+    "CEFBR CEFBRA": _z390(
+        SPECIFICATION, 2, {3: 0x4B800000_00000000 | Z390_LOW, 5: FILL}
+    ),
+    "CEGBR CEGBRA": _z390(
+        COMPLETED,
+        2,
+        {3: 0xDF000000_00000000 | Z390_LOW, 5: 0x5F000000_00000000 | Z390_LOW},
+    ),
+    "CDGBR CDGBRA": _z390(
+        COMPLETED, 1, {4: 0x43400000_00000000, 5: 0xC3400000_00000000}
+    ),
+    "CELFBR CELGBR CDLGBR": _z390(
+        SPECIFICATION, 2, {2: 0xF4F4F4F4_F4F4F4F4, 4: FILL, 5: FILL}
+    ),
+    "CDLFBR": _z390(COMPLETED, 2, {2: 0xF4F4F4F4_F4F4F4F4}),
+    "CXGBR CXGBRA": _z390(
+        SPECIFICATION,
+        2,
+        {
+            2: 0xC03E0000_00000000,
+            3: 0x01800000_00000000,
+            4: 0x7FFFFFFF_FFFFFFFF,
+            5: FILL,
+        },
+    ),
+    "CXLFBR CXLGBR": _z390(
+        COMPLETED,
+        2,
+        {
+            2: 0xC03D6969_69680000,
+            3: 0x00040000_00000000,
+            4: 0x403EFFFF_FFFFFFFF,
+            5: 0xFFFE0000_00000000,
+        },
+    ),
+}
+Z390_TRAPS: Mapping[str, tuple[str, int]] = {
+    "CEFBR inexact traps after the store": (COMPLETED, 2),
 }
 AGREED = [case for case in programs.CASES if case not in Z390_PINNED]
 
@@ -92,3 +131,20 @@ def test_case_follows_the_principles_of_operation_where_z390_differs(
         programs.expected(case),
         Z390_PINNED[case],
     )
+
+
+def _trap_ends(z390: Z390Runner, tmp_path: Path, case: str) -> list[tuple[str, int]]:
+    source = programs.program(programs.TRAPS[case][0])
+    machines = (run_hlasm_machine(source), z390.run_machine(source, tmp_path))
+    return [(machine.run.abend, machine.cc) for machine in machines]
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+@pytest.mark.parametrize("case", list(programs.TRAPS))
+def test_trap_ends_the_run_as_in_z390_or_as_pinned(
+    z390: Z390Runner, tmp_path: Path, case: str
+):
+    run, cc = programs.expected_trap(case)[:2]
+    ours = (run.abend, cc)
+
+    assert _trap_ends(z390, tmp_path, case) == [ours, Z390_TRAPS.get(case, ours)]
