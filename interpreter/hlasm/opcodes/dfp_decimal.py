@@ -14,22 +14,37 @@ from interpreter.hlasm.data_movement import (
     to_doubleword_pair,
     to_gr64,
 )
+from interpreter.hlasm.decimal_exceptions import emit_decimal_overflow_check
 from interpreter.hlasm.dfp_layout import EXTENDED_DFP, LONG_DFP, DfpLayout
+from interpreter.hlasm.effective_address import length_operand_address
 from interpreter.hlasm.hlasm_constants import FPC_VAR
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.opcodes.bfp_forms import checked
 from interpreter.hlasm.opcodes.decimal_lanes import (
     combined_digits,
     invalid_digits,
+    lanes_of,
     spread_digits,
 )
-from interpreter.hlasm.opcodes.dfp_ir import Fields, decoded, fields_of, store_fields
+from interpreter.hlasm.opcodes.dfp_ir import (
+    SIGN,
+    SIGNIFICAND,
+    Fields,
+    decoded,
+    fields_of,
+    store_fields,
+)
 from interpreter.hlasm.opcodes.floating_point_support import (
     emit_data_exception,
     pairs,
 )
 from interpreter.hlasm.opcodes.fpr_images import FIRST, SECOND, THIRD, fpr, pick
-from interpreter.hlasm.operands import optional_mask_operand, reg_operand
+from interpreter.hlasm.operands import (
+    mask_operand,
+    optional_mask_operand,
+    reg_operand,
+    storage_length_operand,
+)
 from interpreter.hlasm.packed_decimal import MINUS_SIGNS, NOT_SIGNS, table_bit
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.operator_kind import BinopKind
@@ -186,4 +201,216 @@ REGISTER_FORMS: Mapping[str, StatementLowering] = {
 }
 
 
-DFP_DECIMAL_LOWERINGS: Mapping[str, StatementLowering] = {**REGISTER_FORMS}
+ZONED_LANE = 8
+SIGN_CONTROL = 0b1000
+ZONE_CONTROL = 0b0100
+PLUS_CONTROL = 0b0010
+LAST_CONTROL = 0b0001
+NUMERIC_ZONE = 0xF0
+CHARACTER_ZONE = 0x30
+ZONE_SHIFT = 4
+SPECIAL_CC = 3
+POSITIVE_CC = 2
+
+
+def _length(statement: MachineStatement) -> int:
+    return max(storage_length_operand(statement, SECOND).length, 1)
+
+
+def _address(emitter: HlasmEmitter, statement: MachineStatement) -> Register:
+    return length_operand_address(emitter, storage_length_operand(statement, SECOND))
+
+
+def _longer_than(limit: int) -> Callable[[MachineStatement], bool]:
+    return lambda statement: _length(statement) > limit
+
+
+def _controls(statement: MachineStatement) -> int:
+    return mask_operand(statement, THIRD)
+
+
+def _ignored_sign(emitter: HlasmEmitter, nibbles: SignedDigits) -> SignedDigits:
+    digits = nibbles[0]
+    zero = emitter.int_(0)
+    return digits, zero, zero
+
+
+def _packed_nibbles(
+    emitter: HlasmEmitter, image: Register, controls: int
+) -> SignedDigits:
+    if not controls & SIGN_CONTROL:
+        return unsigned_nibbles(emitter, image)
+    nibbles = signed_nibbles(emitter, image)
+    if controls & LAST_CONTROL:
+        return _ignored_sign(emitter, nibbles)
+    return nibbles
+
+
+def _invalid_packed(
+    emitter: HlasmEmitter,
+    value: Register,
+    nibbles: tuple[Register, Register, int],
+    layout: DfpLayout,
+) -> Register:
+    digits, bad_sign, count = nibbles
+    limit = emitter.int_(10**layout.format.precision)
+    unused = emitter.binop(BinopKind.GE, value, limit)
+    bad_digits = invalid_digits(emitter, digits, PACKED_LANE, count)
+    bad_operand = emitter.binop(BinopKind.BIT_OR, bad_sign, unused)
+    return emitter.binop(BinopKind.BIT_OR, bad_digits, bad_operand)
+
+
+def _packed_value(
+    emitter: HlasmEmitter, statement: MachineStatement, layout: DfpLayout
+) -> SignedDigits:
+    length, controls = _length(statement), _controls(statement)
+    image = emitter.load_storage(_address(emitter, statement), 0, length)
+    digits, negative, bad_sign = _packed_nibbles(emitter, image, controls)
+    count = 2 * length - bool(controls & SIGN_CONTROL)
+    function = combined_digits(PACKED_LANE, packed_count(layout))
+    value = function.call(emitter, (digits,))
+    nibbles = (digits, bad_sign, count)
+    return value, negative, _invalid_packed(emitter, value, nibbles, layout)
+
+
+def _from_packed(layout: DfpLayout) -> StatementLowering:
+    def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
+        value, negative, bad = _packed_value(emitter, statement, layout)
+        emit_general_operand_check(emitter, bad)
+        fields = converted(emitter, value, negative, layout)
+        store_fields(emitter, reg_operand(statement, FIRST), layout, fields)
+
+    return lower
+
+
+def _zoned_sign(
+    emitter: HlasmEmitter, image: Register, controls: int
+) -> tuple[Register, Register]:
+    if not controls & SIGN_CONTROL:
+        zero = emitter.int_(0)
+        return zero, zero
+    zone = emitter.binop(BinopKind.RSHIFT, image, emitter.int_(ZONE_SHIFT))
+    _, negative, bad_sign = signed_nibbles(emitter, zone)
+    return negative, bad_sign
+
+
+def _from_zoned(layout: DfpLayout) -> StatementLowering:
+    def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
+        length, controls = _length(statement), _controls(statement)
+        image = emitter.load_storage(_address(emitter, statement), 0, length)
+        negative, bad_sign = _zoned_sign(emitter, image, controls)
+        bad = emitter.binop(
+            BinopKind.BIT_OR,
+            invalid_digits(emitter, image, ZONED_LANE, length),
+            bad_sign,
+        )
+        emit_general_operand_check(emitter, bad)
+        function = combined_digits(ZONED_LANE, layout.format.precision)
+        value = function.call(emitter, (image,))
+        fields = converted(emitter, value, negative, layout)
+        store_fields(emitter, reg_operand(statement, FIRST), layout, fields)
+
+    return lower
+
+
+def _shown_sign(
+    emitter: HlasmEmitter, sign: Register, kept: Register, controls: int
+) -> Register:
+    preferred = bool(controls & PLUS_CONTROL)
+    if not controls & LAST_CONTROL:
+        return sign_code(emitter, sign, preferred)
+    nonzero = emitter.binop(BinopKind.NE, kept, emitter.int_(0))
+    shown = emitter.binop(BinopKind.MUL, sign, nonzero)
+    return sign_code(emitter, shown, preferred)
+
+
+def _digits_cc(emitter: HlasmEmitter, fields: Fields, overflow: Register) -> Register:
+    sign, exponent, significand = fields
+    special = emitter.binop(BinopKind.LT, exponent, emitter.int_(0))
+    partial = emitter.binop(BinopKind.BIT_OR, special, overflow)
+    nonzero = emitter.binop(BinopKind.NE, significand, emitter.int_(0))
+    signed = emitter.binop(BinopKind.SUB, emitter.int_(POSITIVE_CC), sign)
+    number = emitter.binop(BinopKind.MUL, nonzero, signed)
+    return pick(emitter, partial, emitter.int_(SPECIAL_CC), number)
+
+
+def _zones(length: int, controls: int) -> int:
+    zone = CHARACTER_ZONE if controls & ZONE_CONTROL else NUMERIC_ZONE
+    zones = lanes_of(zone, ZONED_LANE, length)
+    return zones & ~NUMERIC_ZONE if controls & SIGN_CONTROL else zones
+
+
+def _with_sign(
+    emitter: HlasmEmitter, image: Register, code: Register, zoned: bool
+) -> Register:
+    if zoned:
+        placed = emitter.binop(BinopKind.LSHIFT, code, emitter.int_(ZONE_SHIFT))
+        return emitter.binop(BinopKind.BIT_OR, image, placed)
+    shifted = emitter.binop(BinopKind.LSHIFT, image, emitter.int_(PACKED_LANE))
+    return emitter.binop(BinopKind.BIT_OR, shifted, code)
+
+
+def _decimal_image(
+    emitter: HlasmEmitter,
+    digits: tuple[Register, int],
+    signs: tuple[Register, Register],
+    form: tuple[int, bool],
+) -> Register:
+    image, length = digits
+    sign, kept = signs
+    controls, zoned = form
+    zones = emitter.int_(_zones(length, controls) if zoned else 0)
+    zoned_image = emitter.binop(BinopKind.BIT_OR, image, zones)
+    if not controls & SIGN_CONTROL:
+        return zoned_image
+    code = _shown_sign(emitter, sign, kept, controls)
+    return _with_sign(emitter, zoned_image, code, zoned)
+
+
+def _completed(emitter: HlasmEmitter, fields: Fields, kept: Register) -> None:
+    overflow = emitter.binop(BinopKind.NE, fields[SIGNIFICAND], kept)
+    emitter.set_cc(_digits_cc(emitter, fields, overflow))
+    emit_decimal_overflow_check(emitter, overflow)
+
+
+def _to_decimal(layout: DfpLayout, zoned: bool) -> StatementLowering:
+    lanes = (ZONED_LANE if zoned else PACKED_LANE, layout.format.precision)
+    _source = decoded(fpr(FIRST, layout), layout)
+
+    def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
+        length, controls = _length(statement), _controls(statement)
+        fields = fields_of(emitter, _source(emitter, statement))
+        count = length if zoned else 2 * length - bool(controls & SIGN_CONTROL)
+        kept, digits = digit_lanes(emitter, fields[SIGNIFICAND], count, lanes)
+        image = _decimal_image(
+            emitter, (digits, length), (fields[SIGN], kept), (controls, zoned)
+        )
+        emitter.store_storage(_address(emitter, statement), 0, length, image)
+        _completed(emitter, fields, kept)
+
+    return lower
+
+
+def _storage_form(
+    layout: DfpLayout, limit: int, lowering: StatementLowering
+) -> StatementLowering:
+    paired = pairs((FIRST,), lowering) if layout is EXTENDED_DFP else lowering
+    return checked(_longer_than(limit), paired)
+
+
+STORAGE_FORMS: Mapping[str, StatementLowering] = {
+    "CDPT": _storage_form(LONG_DFP, 9, _from_packed(LONG_DFP)),
+    "CXPT": _storage_form(EXTENDED_DFP, 18, _from_packed(EXTENDED_DFP)),
+    "CDZT": _storage_form(LONG_DFP, 16, _from_zoned(LONG_DFP)),
+    "CXZT": _storage_form(EXTENDED_DFP, 34, _from_zoned(EXTENDED_DFP)),
+    "CPDT": _storage_form(LONG_DFP, 9, _to_decimal(LONG_DFP, False)),
+    "CPXT": _storage_form(EXTENDED_DFP, 18, _to_decimal(EXTENDED_DFP, False)),
+    "CZDT": _storage_form(LONG_DFP, 16, _to_decimal(LONG_DFP, True)),
+    "CZXT": _storage_form(EXTENDED_DFP, 34, _to_decimal(EXTENDED_DFP, True)),
+}
+
+
+DFP_DECIMAL_LOWERINGS: Mapping[str, StatementLowering] = {
+    **REGISTER_FORMS,
+    **STORAGE_FORMS,
+}

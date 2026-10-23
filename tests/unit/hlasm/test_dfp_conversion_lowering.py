@@ -7,9 +7,11 @@ from hlasm_asg.program.operand import Operand
 from interpreter.instructions import Symbolic
 from tests.covers import NotLanguageFeature, covers
 from tests.unit.hlasm.fp_trace import (
+    ADDRESS,
     CC,
     DATA,
     READ_FPC,
+    READ_PM,
     SPECIFICATION,
     WRITE_FPC,
     ladder,
@@ -17,7 +19,11 @@ from tests.unit.hlasm.fp_trace import (
     registers,
     trace,
 )
-from tests.unit.hlasm.lowering_helpers import mask_operand, reg_operand
+from tests.unit.hlasm.lowering_helpers import (
+    mask_operand,
+    reg_operand,
+    storage_length_operand,
+)
 
 DECODE_LONG = "call dfp decode_long"
 DECODE_EXTENDED = "call dfp decode_extended"
@@ -150,6 +156,63 @@ def test_register_decimal_forms_check_then_combine_or_spread_the_digits():
     }
 
 
+def _rslb(r1: int, length: int, m3: int) -> tuple[Operand, ...]:
+    return (reg_operand(r1), storage_length_operand(8, length), mask_operand(m3))
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_storage_decimal_forms_read_or_write_the_field_at_its_length():
+    assert {
+        "CDPT": trace("CDPT", _rslb(1, 9, 8)),
+        "CXZT": trace("CXZT", _rslb(4, 34, 0)),
+        "CPDT": trace("CPDT", _rslb(1, 3, 8)),
+        "CZXT": trace("CZXT", _rslb(4, 34, 8)),
+    } == {
+        "CDPT": [
+            ADDRESS,
+            "read storage +9",
+            "call decimal value_4_18",
+            READ_FPC,
+            WRITE_FPC,
+            DATA,
+            ENCODE_LONG,
+            "write fpr 8+8",
+        ],
+        "CXZT": [
+            ADDRESS,
+            "read storage +34",
+            READ_FPC,
+            WRITE_FPC,
+            DATA,
+            "call decimal value_8_34",
+            ENCODE_EXTENDED,
+            "write fpr 32+8",
+            "write fpr 48+8",
+        ],
+        "CPDT": [
+            "read fpr 8+8",
+            DECODE_LONG,
+            "call decimal lanes_4_16",
+            ADDRESS,
+            "write storage +3",
+            CC,
+            READ_PM,
+            "StoreVar __hlasm_abend S0CA",
+        ],
+        "CZXT": [
+            "read fpr 32+8",
+            "read fpr 48+8",
+            DECODE_EXTENDED,
+            "call decimal lanes_8_34",
+            ADDRESS,
+            "write storage +34",
+            CC,
+            READ_PM,
+            "StoreVar __hlasm_abend S0CA",
+        ],
+    }
+
+
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_invalid_pairs_abend_before_any_access():
     traces = [
@@ -168,9 +231,19 @@ def test_invalid_pairs_abend_before_any_access():
         trace("CSXTR", (*registers(4, 2), mask_operand(0))),
         trace("CSXTR", (*registers(3, 4), mask_operand(0))),
         trace("CUXTR", registers(4, 6)),
+        trace("CXPT", _rslb(2, 3, 0)),
+        trace("CPXT", _rslb(6, 3, 0)),
+        trace("CXZT", _rslb(3, 3, 0)),
+        trace("CZXT", _rslb(7, 3, 0)),
+        trace("CDPT", _rslb(1, 10, 0)),
+        trace("CXPT", _rslb(0, 19, 0)),
+        trace("CPDT", _rslb(1, 10, 0)),
+        trace("CDZT", _rslb(1, 17, 0)),
+        trace("CZDT", _rslb(1, 17, 0)),
+        trace("CXZT", _rslb(0, 35, 0)),
     ]
 
-    assert traces == [[SPECIFICATION]] * 15
+    assert traces == [[SPECIFICATION]] * 25
 
 
 FAMILIES: Mapping[str, tuple[Operand, ...]] = {
@@ -182,6 +255,7 @@ FAMILIES: Mapping[str, tuple[Operand, ...]] = {
     "LEDTR LDXTR": _rrfe(0, 1, 4, 12),
     "CDSTR CXSTR CDUTR CXUTR CUDTR CUXTR": registers(4, 8),
     "CSDTR CSXTR": (*registers(6, 4), mask_operand(1)),
+    "CDPT CXPT CPDT CPXT CDZT CXZT CZDT CZXT": _rslb(4, 9, 15),
 }
 
 
@@ -193,7 +267,7 @@ def test_every_mnemonic_lowers_without_symbolic():
         for m in names.split()
     }
 
-    assert len(lowered) == 32
+    assert len(lowered) == 40
     assert [
         m for m, ir in lowered.items() if any(isinstance(i, Symbolic) for i in ir)
     ] == []

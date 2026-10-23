@@ -1041,7 +1041,7 @@ SLXT, SRDT, SRXT, SXTR, SXTRA, TDCDT, TDCET, TDCXT, TDGDT, TDGET, TDGXT. Rulings
 
 **DFP conversions (red-dragon-6uyp.56).** CDFTR, CDGTR, CDGTRA, CDLFTR, CDLGTR, CXFTR, CXGTR,
 CXGTRA, CXLFTR, CXLGTR, CFDTR, CFXTR, CGDTR, CGDTRA, CGXTR, CGXTRA, CLFDTR, CLFXTR, CLGDTR,
-CLGXTR, LDETR, LDXTR, LEDTR, LXDTR, CDSTR, CXSTR, CDUTR, CXUTR, CSDTR, CSXTR, CUDTR, CUXTR.
+CLGXTR, LDETR, LDXTR, LEDTR, LXDTR, CDSTR, CXSTR, CDUTR, CXUTR, CSDTR, CSXTR, CUDTR, CUXTR, CDPT, CXPT, CDZT, CXZT, CPDT, CPXT, CZDT, CZXT.
 Rulings R43, R45, R48, R52.
 
 - To and from fixed and logical call `dfp_builtins()` builtins over `zarch_float`'s
@@ -1065,14 +1065,23 @@ Rulings R43, R45, R48, R52.
   quantum 1. CSDTR/CSXTR store the rightmost 15 or 31 digits and a sign (D minus, C plus, F
   plus when M4 bit 3), CUDTR/CUXTR 16 or 32 digits; specials convert their trailing digits.
   An odd GR pair register is `S0C6`.
+- CDPT/CXPT and CDZT/CXZT read L2 bytes (at most 9/18 and 16/34, else `S0C6`). M3 bit 0 (S)
+  makes the rightmost nibble (packed) or zone (zoned) a sign; packed M3 bit 3 (I) ignores it.
+  Zones are otherwise ignored. Packed digits beyond 16 or 34 must be zero. Any bad digit or sign
+  is DXC 0, `S0C7`, suppressed.
+- CPDT/CPXT and CZDT/CZXT store the rightmost L2 bytes of digits: zones F, or 3 with Z (M3
+  bit 1); S puts a sign in the rightmost nibble or zone, P (bit 2) makes plus F, F (bit 3)
+  makes a zero result plus. Specials convert their trailing digits. CC 0 zero, 1 minus,
+  2 plus, 3 special or lost nonzero digits; lost digits then abend `S0CA` after the store
+  when the program mask's decimal-overflow bit is on.
 - Digits move through `decimal_lanes.py`: an integer spread one digit per four- or
   eight-bit lane, and lanes combined pairwise into the integer, both IR functions defined once
   per program; a lane digit above 9 is found by bit tests on all lanes at once.
 
 ## Known Gaps
 
-- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, miscellaneous, packed-decimal arithmetic, packed-decimal compare and test, decimal conversion, edit, floating-point-support, BFP arithmetic, BFP conversion, HFP arithmetic, HFP conversion and DFP arithmetic units, and the DFP fixed-point, format and register-decimal conversions, are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
-- The other DFP conversions and PFPO are not lowered yet (red-dragon-6uyp.56). Floating-point arithmetic is the leaf `zarch_float` ([zarch-float.md](zarch-float.md)); `bfp_builtins.py`, `hfp_builtins.py` and `dfp_builtins.py` reach it (red-dragon-6uyp.51, .53, .54, .55), and the later floating-point units add their builtins.
+- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, miscellaneous, packed-decimal arithmetic, packed-decimal compare and test, decimal conversion, edit, floating-point-support, BFP arithmetic, BFP conversion, HFP arithmetic, HFP conversion and DFP arithmetic units, and the DFP conversions bar PFPO, are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
+- PFPO is not lowered yet (red-dragon-6uyp.56). Floating-point arithmetic is the leaf `zarch_float` ([zarch-float.md](zarch-float.md)); `bfp_builtins.py`, `hfp_builtins.py` and `dfp_builtins.py` reach it (red-dragon-6uyp.51, .53, .54, .55), and the later floating-point units add their builtins.
 - DC types beyond C, X, B, F, H, P, Z, A, Y and V, and any type extension, raise `UnsupportedDataType` (red-dragon-6uyp.63; floating point E, D, L: red-dragon-6uyp.21).
 - Falling through into DC/DS data or past a CSECT's end skips the data instead of executing it, and a branch into data abends `S0C1` (red-dragon-6uyp.64).
 - Every branch, even to a static relative target, walks the dispatch chain (red-dragon-6uyp.80).

@@ -52,6 +52,14 @@ CONVERSION_DATA = (
     "PKSIGN   DC    X'0000000000123454'\n"
     "DM12345  DC    X'A2380000000049C5'\n"
     "XBIG     DC    X'A606D34B9C1E28E5',X'6F3C127177823534'\n"
+    "DM0      DC    X'A238000000000000'\n"
+    "P5M      DC    X'12345D'\n"
+    "U3       DC    X'012345'\n"
+    "PBIG     DC    X'012345678901234567',X'89012345678901234C'\n"
+    "PUNUSED  DC    X'010000000000000000'\n"
+    "Z5M      DC    X'F1F2F3F4D5'\n"
+    "A5       DC    X'3030303432'\n"
+    "ZBAD     DC    X'F1FAF3'\n"
 )
 
 
@@ -225,7 +233,99 @@ REGISTER_DECIMAL: Mapping[str, Case] = {
     ),
 }
 
-CASES: Mapping[str, Case] = {**FIXED, **LENGTHEN_ROUND, **REGISTER_DECIMAL}
+MASK_OFF = lines("LA 1,0", "SPM 1")
+
+
+def _ended(body: str, cc: int, abend: str) -> Case:
+    return (*case_of(body, {}, cc)[:3], abend, 0)
+
+
+STORAGE_DECIMAL: Mapping[str, Case] = {
+    "CDPT CXPT": case_of(
+        lines("CDPT 1,P5M(3),8", "CDPT 2,U3(3),0", "CDPT 3,P5M(3),9")
+        + lines("CXPT 4,PBIG(18),8", "LGDR 2,1", "LGDR 3,2", "LGDR 5,3")
+        + lines("LGDR 6,4", "LGDR 7,6"),
+        {
+            2: 0xA2380000_000049C5,
+            3: 0x22380000_000049C5,
+            5: 0x22380000_000049C5,
+            6: 0x2608134B_9C1E28E5,
+            7: 0x6F3C1271_77823534,
+        },
+        PRESET_CC,
+    ),
+    "CDZT CXZT": case_of(
+        lines("CDZT 1,Z5M(5),8", "CDZT 2,Z5M(5),0", "CXZT 4,A5(5),0")
+        + lines("LGDR 2,1", "LGDR 3,2", "LGDR 5,4", "LGDR 6,6"),
+        {
+            2: 0xA2380000_000049C5,
+            3: 0x22380000_000049C5,
+            5: 0x22080000_00000000,
+            6: 0x42,
+        },
+        PRESET_CC,
+    ),
+    "CPDT CPXT": case_of(
+        MASK_OFF
+        + lines("LD 1,DM12345", "CPDT 1,OUT(4),8")
+        + cc_into(8)
+        + lines("CPDT 1,OUT+4(4),0", "CPDT 1,OUT+8(2),0")
+        + cc_into(9)
+        + extended_from(4, "XBIG")
+        + lines("CPXT 4,OUT+16(18),8", "LG 2,OUT", "LG 3,OUT+8")
+        + lines("LG 4,OUT+16", "LG 5,OUT+24", "LG 6,OUT+32"),
+        {
+            8: cc_word(1),
+            9: cc_word(3),
+            2: 0x0012345D_00012345,
+            3: 0x2345FFFF_FFFFFFFF,
+            4: 0x01234567_89012345,
+            5: 0x67890123_45678901,
+            6: 0x234DFFFF_FFFFFFFF,
+        },
+        1,
+    ),
+    "CPDT converts specials with CC 3 and forces a plus zero": case_of(
+        lines("LD 1,DINFX", "CPDT 1,OUT(2),8")
+        + cc_into(8)
+        + lines("LD 1,DM0", "CPDT 1,OUT+2(2),8", "CPDT 1,OUT+4(2),9")
+        + lines("CPDT 1,OUT+6(2),11", "LG 2,OUT"),
+        {8: cc_word(3), 2: 0x005C000D_000C000F},
+        0,
+    ),
+    "CZDT CZXT": case_of(
+        MASK_OFF
+        + lines("LD 1,DM12345", "CZDT 1,OUT(5),8", "CZDT 1,OUT+8(5),12")
+        + lines("CZDT 1,OUT+16(6),0", "LD 1,DM0", "CZDT 1,OUT+32(2),9")
+        + extended_from(4, "XBIG")
+        + lines("CZXT 4,OUT+24(3),2", "LG 2,OUT", "LG 3,OUT+8")
+        + lines("LG 4,OUT+16", "LG 5,OUT+24", "LG 6,OUT+32"),
+        {
+            2: 0xF1F2F3F4_D5FFFFFF,
+            3: 0x31323334_D5FFFFFF,
+            4: 0xF0F1F2F3_F4F5FFFF,
+            5: 0xF2F3F4FF_FFFFFFFF,
+            6: 0xF0C0FFFF_FFFFFFFF,
+        },
+        3,
+    ),
+    "CPDT lost digits complete then abend S0CA": _ended(
+        lines("LD 1,DM12345", "CPDT 1,OUT(2),0"), 3, "S0CA"
+    ),
+    "CDPT longer than 9 bytes abends S0C6": _ended(
+        lines("CDPT 1,PBIG(10),0"), PRESET_CC, "S0C6"
+    ),
+    "CZXT longer than 34 bytes abends S0C6": _ended(
+        lines("CZXT 0,OUT(35),0"), PRESET_CC, "S0C6"
+    ),
+}
+
+CASES: Mapping[str, Case] = {
+    **FIXED,
+    **LENGTHEN_ROUND,
+    **REGISTER_DECIMAL,
+    **STORAGE_DECIMAL,
+}
 
 TRAPS: Mapping[str, Trap] = {
     "CGDTR invalid suppresses and leaves the CC": trap_of(
@@ -258,6 +358,15 @@ TRAPS: Mapping[str, Trap] = {
     ),
     "CDUTR suppresses on a bad digit with DXC 0": trap_of(
         lines("LD 1,D1", "LG 2,PKBAD", "CDUTR 1,2"), {1: 0x22380000_00000001}, 0
+    ),
+    "CDPT suppresses on a nonzero unused digit with DXC 0": trap_of(
+        lines("LD 1,D1", "CDPT 1,PUNUSED(9),0"), {1: 0x22380000_00000001}, 0
+    ),
+    "CDZT suppresses on a bad digit with DXC 0": trap_of(
+        lines("LD 1,D1", "CDZT 1,ZBAD(3),0"), {1: 0x22380000_00000001}, 0
+    ),
+    "CDPT suppresses on a bad sign with DXC 0": trap_of(
+        lines("LD 1,D1", "CDPT 1,U3(3),8"), {1: 0x22380000_00000001}, 0
     ),
     "CDLGTR quantum traps after the store": trap_of(
         lines("LG 2,GU64", "CDLGTR 1,5,2,0"),
