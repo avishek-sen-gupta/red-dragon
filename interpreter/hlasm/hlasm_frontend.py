@@ -1,5 +1,7 @@
 # pyright: standard
-"""Lowers an assembled HLASM program to one IR function entered at its entry point."""
+"""Lowers an assembled HLASM program to one IR function entered at its entry point, then defines the IR functions its lowerings called."""
+
+from functools import cached_property
 
 from hlasm_asg.program.hlasm_program import HlasmProgram
 from hlasm_asg.program.statement import Statement
@@ -21,7 +23,7 @@ from interpreter.hlasm.machine import (
     machine_allocation,
 )
 from interpreter.hlasm.machine_statements import MachineStatements
-from interpreter.hlasm.program_functions import program_functions
+from interpreter.hlasm.program_function import ProgramFunction
 from interpreter.hlasm.statement_location import statement_location
 from interpreter.hlasm.storage_layout import section_allocation
 from interpreter.instructions import Branch, InstructionBase, Label_
@@ -37,7 +39,6 @@ class HlasmFrontend(Frontend):
         self._program = program
         self._entry = resolve_entry(program)
         self._statements = MachineStatements(program.statements)
-        self._functions = program_functions(program.statements)
 
     @property
     def entry_name(self) -> str:
@@ -54,7 +55,7 @@ class HlasmFrontend(Frontend):
             label: FuncRef(name=FuncName(str(label)), label=label),
             **{
                 f.label: FuncRef(name=FuncName(f.name), label=f.label)
-                for f in self._functions
+                for f in self._lowered[1]
             },
         }
 
@@ -72,10 +73,17 @@ class HlasmFrontend(Frontend):
         source: bytes,
         namespace_resolver: NamespaceResolver = Frontend._NULL_RESOLVER,
     ) -> list[InstructionBase]:
+        return list(self._lowered[0])
+
+    @cached_property
+    def _lowered(
+        self,
+    ) -> tuple[tuple[InstructionBase, ...], tuple[ProgramFunction, ...]]:
         emitter = HlasmEmitter()
         self._lower_entry(emitter)
-        _ = [function.define(emitter) for function in self._functions]
-        return list(emitter.instructions())
+        functions = emitter.used_functions()
+        _ = [function.define(emitter) for function in functions]
+        return emitter.instructions(), functions
 
     def _lower_entry(self, emitter: HlasmEmitter) -> None:
         end_label = CodeLabel(f"end_{self._entry.name.lower()}_1")

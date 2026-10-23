@@ -111,7 +111,7 @@ addresses.
 | `interpreter/hlasm/opcodes/hfp_ir.py` | HFP image IR: field lists, normalized fields of a binary value, encoding with the extended low-order part, an image's CC, and the program-mask ladder |
 | `interpreter/hlasm/opcodes/hfp_conversion.py` | HFP conversions: to fixed and to BFP through builtins; from fixed, from BFP, load lengthened and load rounded in IR (red-dragon-6uyp.54) |
 | `interpreter/hlasm/opcodes/dfp_codec.py`, `dpd_lanes.py`, `interpreter/hlasm/dfp_layout.py` | DFP images to `[negative, e, significand]` and back as IR functions, one per format (ruling R49); `e` is the biased exponent or -1/-2/-3 for infinity, QNaN, SNaN. All declets decode or encode at once, ten bits per lane |
-| `interpreter/hlasm/ir_function.py` | An IR function defined once per program after the entry function and called by name |
+| `interpreter/hlasm/ir_function.py`, `program_function.py` | An IR function called by name; the call records it on the emitter, and the frontend defines each recorded function once after the entry function |
 | `interpreter/hlasm/opcodes/fpr_images.py`, `interpreter/hlasm/fpr_layout.py` | Floating-point images of any radix: FPR access by width (short high word, long, pair), FPR and storage operand sources, result-list items, an arithmetic select |
 | `interpreter/hlasm/program_status.py` | SPM, IPM, EPSW |
 | `interpreter/hlasm/checksum.py` | CKSM |
@@ -1209,6 +1209,7 @@ SLXT, SRDT, SRXT, SXTR, SXTRA, TDCDT, TDCET, TDCXT, TDGDT, TDGET, TDGXT. Rulings
 | `tests/integration/hlasm/test_hfp_conversion.py` | Every HFP conversion mnemonic on the VM: GR or FPR results and CC; LOAD ROUNDED overflow stores, then `S0CC` |
 | `tests/z390/test_hfp_conversion_differential.py` | Every HFP conversion case against z390; its faults pinned (`-m z390`) |
 | `tests/unit/hlasm/test_dpd_codec.py` | DPD codec IR: all 1000 declets against figures 20-32 and 20-33, the 24 noncanonical declets, each format's fields and canonical encoding |
+| `tests/unit/hlasm/test_program_functions.py` | A DFP program defines each codec function it calls once; a program without DFP defines none |
 | `tests/unit/hlasm/test_dfp_builtins.py` | DFP builtins: fields to values and back for every kind; each family's value, scaled value, trap, flags, DXCs and CC |
 | `tests/unit/hlasm/test_dfp_arithmetic_lowering.py` | DFP IR: operands decoded in argument order, one builtin call, the ladder, then encode and store; the A forms' modifier replaces the FPC read; invalid pairs abend `S0C6` before any access; no SYMBOLIC |
 | `tests/integration/hlasm/test_dfp_arithmetic.py` | Every DFP arithmetic mnemonic on the VM: images, CC and FPC flags; the FPC DFP mode; the tininess edge; each trap's delivered value, DXC and `S0C7`, quantum traps included |
