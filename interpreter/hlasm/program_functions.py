@@ -7,10 +7,12 @@ from hlasm_asg.program.machine_statement import MachineStatement
 from hlasm_asg.program.statement import Statement
 from interpreter.hlasm.ir_function import IrFunction
 from interpreter.hlasm.opcodes.dfp_arithmetic import DFP_ARITHMETIC_LOWERINGS
+from interpreter.hlasm.opcodes.dfp_class import DFP_CLASS_LOWERINGS
 from interpreter.hlasm.opcodes.dfp_codec import DFP_CODEC_FUNCTIONS
 from interpreter.hlasm.opcodes.dfp_compare import DFP_COMPARE_LOWERINGS
 from interpreter.hlasm.opcodes.dfp_exponent import DFP_EXPONENT_LOWERINGS
 from interpreter.hlasm.opcodes.dfp_rounding import DFP_ROUNDING_LOWERINGS
+from interpreter.hlasm.opcodes.dfp_shift import DFP_SHIFT_LOWERINGS
 
 DFP_MNEMONICS = frozenset(
     {
@@ -18,6 +20,8 @@ DFP_MNEMONICS = frozenset(
         **DFP_COMPARE_LOWERINGS,
         **DFP_EXPONENT_LOWERINGS,
         **DFP_ROUNDING_LOWERINGS,
+        **DFP_SHIFT_LOWERINGS,
+        **DFP_CLASS_LOWERINGS,
     }
 )
 

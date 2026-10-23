@@ -7,7 +7,9 @@ from hlasm_asg.program.operand import Operand
 from interpreter.instructions import Symbolic
 from tests.covers import NotLanguageFeature, covers
 from tests.unit.hlasm.fp_trace import (
+    ADDRESS,
     CC,
+    D8,
     READ_FPC,
     SPECIFICATION,
     ladder,
@@ -98,6 +100,9 @@ def test_field_forms_decode_and_compute_in_ir():
         "LTDTR": trace("LTDTR", registers(1, 2)),
         "EEDTR": trace("EEDTR", registers(1, 2)),
         "IEXTR": trace("IEXTR", registers(4, 1, 2)),
+        "SLDT": trace("SLDT", (reg_operand(1), reg_operand(3), D8)),
+        "TDCET": trace("TDCET", (reg_operand(1), D8)),
+        "TDGXT": trace("TDGXT", (reg_operand(4), D8)),
     }
 
     assert traces == {
@@ -117,6 +122,9 @@ def test_field_forms_decode_and_compute_in_ir():
             "write fpr 32+8",
             "write fpr 48+8",
         ],
+        "SLDT": [ADDRESS, "read fpr 24+8", DECODE_LONG, ENCODE_LONG, "write fpr 8+8"],
+        "TDCET": [ADDRESS, "read fpr 8+4", "call dfp decode_short", CC],
+        "TDGXT": [ADDRESS, "read fpr 32+8", "read fpr 48+8", DECODE_EXTENDED, CC],
     }
 
 
@@ -135,9 +143,13 @@ def test_invalid_pairs_abend_before_any_access():
         ),
         trace("QAXTR", (*registers(0, 4, 10), mask_operand(0))),
         trace("RRXTR", (*registers(4, 2, 1), mask_operand(0))),
+        trace("SLXT", (reg_operand(0), reg_operand(2), D8)),
+        trace("SRXT", (reg_operand(6), reg_operand(4), D8)),
+        trace("TDCXT", (reg_operand(2), D8)),
+        trace("TDGXT", (reg_operand(3), D8)),
     ]
 
-    assert traces == [[SPECIFICATION]] * 10
+    assert traces == [[SPECIFICATION]] * 14
 
 
 FAMILIES: Mapping[str, tuple[Operand, ...]] = {
@@ -151,6 +163,8 @@ FAMILIES: Mapping[str, tuple[Operand, ...]] = {
     "IEDTR IEXTR": registers(0, 4, 2),
     "FIDTR FIXTR": (reg_operand(0), mask_operand(1), reg_operand(4), mask_operand(4)),
     "QADTR QAXTR RRDTR RRXTR": (*registers(0, 4, 1), mask_operand(3)),
+    "SLDT SLXT SRDT SRXT": (reg_operand(0), reg_operand(4), D8),
+    "TDCET TDCDT TDCXT TDGET TDGDT TDGXT": (reg_operand(0), D8),
 }
 
 
@@ -162,7 +176,7 @@ def test_every_mnemonic_lowers_without_symbolic():
         for m in names.split()
     }
 
-    assert len(lowered) == 36
+    assert len(lowered) == 46
     assert [
         m for m, ir in lowered.items() if any(isinstance(i, Symbolic) for i in ir)
     ] == []

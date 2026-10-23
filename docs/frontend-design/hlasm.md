@@ -1001,8 +1001,8 @@ TBEDR, THDER, THDR. Ruling R47.
 
 **DFP arithmetic (red-dragon-6uyp.55).** ADTR, ADTRA, AXTR, AXTRA, CDTR, CEDTR, CEXTR, CXTR,
 DDTR, DDTRA, DXTR, DXTRA, EEDTR, EEXTR, ESDTR, ESXTR, FIDTR, FIXTR, IEDTR, IEXTR, KDTR,
-KXTR, LTDTR, LTXTR, MDTR, MDTRA, MXTR, MXTRA, QADTR, QAXTR, RRDTR, RRXTR, SDTR, SDTRA, SXTR,
-SXTRA. Rulings R34, R41, R43, R44, R49.
+KXTR, LTDTR, LTXTR, MDTR, MDTRA, MXTR, MXTRA, QADTR, QAXTR, RRDTR, RRXTR, SDTR, SDTRA, SLDT,
+SLXT, SRDT, SRXT, SXTR, SXTRA, TDCDT, TDCET, TDCXT, TDGDT, TDGET, TDGXT. Rulings R34, R41, R43, R44, R49.
 
 - Each operand goes through the format's decode IR function to `[negative, e, significand]`
   (`e` the biased exponent, or -1 infinity, -2 QNaN, -3 SNaN); a `dfp_builtins()` builtin
@@ -1023,6 +1023,11 @@ SXTRA. Rulings R34, R41, R43, R44, R49.
   zero) or `e`; IExTR takes GR R2 signed, keeping 0..MBE, -1 and -3 and making anything else
   a QNaN, with the third operand's sign and digits; LTxTR canonicalizes, drops an infinity's
   digits and quiets an SNaN through the ladder.
+- SLxT and SRxT shift by EA bits 58-63: all digits of a finite number, the trailing digits of
+  an infinity or NaN; the exponent and kind stay.
+- TDCxT and TDGxT select mask bit 11 - (2 x class or group + sign) of EA bits 52-63. Subnormal
+  is nonzero below Nmin; extreme is e 0 or MBE; a subnormal with a nonextreme exponent is
+  safe nonzero (allowed by 20-57).
 
 ## Known Gaps
 
