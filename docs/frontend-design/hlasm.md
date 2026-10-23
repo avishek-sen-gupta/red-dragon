@@ -750,11 +750,13 @@ its own module.
   X'04070B0B00000000', 256-byte lines, 128 KiB, 36 MiB, 360 MiB and 2,880 MiB, 8, 18, 48
   and 48 ways (I and D alike), 5,500 cycles per microsecond. Reserved bits 40-53, a reserved
   ASI, AI or level give all ones.
-- STFLE stores the list X'E1003663F0040C24', X'0000090000000000': a bit is on when the
-  facility's general instructions are all lowered. Floating-point and vector instructions do
-  not count, and 129 (vector) is off although LCBB is lowered. 16 and 24 wait for PKA, PKU,
-  UNPKA and UNPKU, 49 for PPA. It stores min(GR0 bits 56-63 + 1, 2) doublewords, sets
-  those bits to 1, and sets CC 0, or 3 when the list was cut short. Off a doubleword it
+- STFLE stores the list X'E1003F63F47C8C24', X'0000890000000000': a bit is on when the
+  facility's problem-state instructions are all lowered. The floating-point bits are on: 20,
+  23, 37, 41, 42, 43 (DFP high performance, as 19 is for long displacement), 44, 48 and 80.
+  The vector bits (129, 134, 135, 148, 152, 192, 198, 199) imply each other and turn on
+  together at the end of wave 2, so 129 is off although LCBB is lowered. 16 and 24 wait for
+  PKA, PKU, UNPKA and UNPKU, 49 for PPA. It stores min(GR0 bits 56-63 + 1, 2) doublewords,
+  sets those bits to 1, and sets CC 0, or 3 when the list was cut short. Off a doubleword it
   abends `S0C6`.
 - LCBB: R1's low word ← bytes to the next 64 << M3 boundary, at most 16; CC 0 at 16, else 3.
   M3 over 6 abends `S0C6`.
