@@ -1097,6 +1097,9 @@ Rulings R43, R45, R48, R52.
   picks the exact result's quantum: 1 when on, the largest when off (figure 9-29). For an HFP
   target bit 58 reports overflow as IEEE overflow (else invalid, +-Hmax) and bit 59 reports
   underflow (else a true zero, inexact). An IEEE NaN becomes +Hmax, an infinity +-Hmax.
+- z390 does not emulate CDZT, CXZT, CPDT, CPXT or CZDT, abends on several valid fixed-point
+  and LDETR forms, ignores M3 methods and the PFPO controls, return code and CC 1, and takes no
+  DFP IEEE or quantum trap. The z390 test pins each to the PoO (red-dragon-6uyp.74).
 
 ## Known Gaps
 
@@ -1277,6 +1280,7 @@ Rulings R43, R45, R48, R52.
 | `tests/unit/hlasm/test_dfp_arithmetic_lowering.py` | DFP IR: operands decoded in argument order, one builtin call, the ladder, then encode and store; the A forms' modifier replaces the FPC read; invalid pairs abend `S0C6` before any access; no SYMBOLIC |
 | `tests/integration/hlasm/test_dfp_arithmetic.py` | Every DFP arithmetic mnemonic on the VM: images, CC and FPC flags; the FPC DFP mode; the tininess edge; each trap's delivered value, DXC and `S0C7`, quantum traps included |
 | `tests/z390/test_dfp_arithmetic_differential.py` | Every DFP arithmetic case against z390; its faults pinned (`-m z390`) |
+| `tests/z390/test_dfp_conversion_differential.py` | Every DFP conversion and PFPO case against z390; its faults pinned (`-m z390`) |
 | `tests/unit/hlasm/test_pfpo_builtins.py`, `test_pfpo_lowering.py` | PFPO: the builtin's formats, controls and scaling exponent; the lowering's decoders, encoders, single call and GR1 store |
 | `tests/unit/hlasm/test_decimal_lanes.py` | Decimal lanes: digits spread into packed and zoned lanes and combine back; a digit above 9 is caught in any lane |
 | `tests/unit/hlasm/test_dfp_conversion_lowering.py` | DFP conversion IR: the operand read and decoded, one builtin call, the ladder, then the GR or encoded FPR store; invalid pairs abend `S0C6` before any access; no SYMBOLIC |
