@@ -101,3 +101,9 @@ def signed_magnitude(
     doubled = emitter.binop(BinopKind.MUL, negative, emitter.int_(2))
     flipped = emitter.binop(BinopKind.MUL, doubled, value)
     return negative, emitter.binop(BinopKind.SUB, value, flipped)
+
+
+def compared(
+    emitter: HlasmEmitter, operator: BinopKind, value: Register, against: int
+) -> Register:
+    return emitter.binop(operator, value, emitter.int_(against))

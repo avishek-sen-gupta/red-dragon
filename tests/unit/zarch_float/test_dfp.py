@@ -2,13 +2,9 @@
 """DFP arithmetic: rounding methods, preferred quanta and conditions per the PoO."""
 
 from tests.covers import NotLanguageFeature, covers
-from zarch_float.comparison import Comparison
-from zarch_float.comparison_result import ComparisonResult
 from zarch_float.condition import Condition
 from zarch_float.dfp_arithmetic import (
     dfp_add,
-    dfp_compare,
-    dfp_compare_signaling,
     dfp_divide,
     dfp_multiply,
     dfp_quantize,
@@ -230,19 +226,6 @@ def test_invalid_operations_nans_and_comparisons():
         negative_zero(-2),
         NONE,
     )
-    assert [
-        dfp_compare(num(10, -1), num(100, -2)),
-        dfp_compare(quiet, num(1, 0)),
-        dfp_compare(num(1, 0), signaling),
-        dfp_compare_signaling(num(1, 0), quiet),
-        dfp_compare(special(FloatKind.INFINITY, True), num(-1, 300)),
-    ] == [
-        ComparisonResult(Comparison.EQUAL, NONE),
-        ComparisonResult(Comparison.UNORDERED, NONE),
-        ComparisonResult(Comparison.UNORDERED, INVALID),
-        ComparisonResult(Comparison.UNORDERED, INVALID),
-        ComparisonResult(Comparison.LOW, NONE),
-    ]
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

@@ -15,8 +15,6 @@ class DfpOperation(Enum):
     QUANTIZE = "quantize"
     REROUND = "reround"
     ROUND_TO_INTEGRAL = "round_to_integral"
-    COMPARE = "compare"
-    COMPARE_SIGNALING = "compare_signaling"
 
 
 def dfp_builtin_name(operation: DfpOperation, layout: DfpLayout) -> FuncName:

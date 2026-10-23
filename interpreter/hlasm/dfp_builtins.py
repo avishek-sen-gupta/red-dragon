@@ -1,5 +1,5 @@
 # pyright: standard
-"""The DFP builtins over zarch_float; the "too cumbersome" clause: rounding to a preferred quantum by eight methods and aligning coefficients across exponents thousands apart, in IR, would dwarf the program."""
+"""The DFP builtins over zarch_float; the "too cumbersome" clause: rounding to a preferred quantum by eight methods, in IR, would dwarf the program."""
 
 from collections.abc import Callable, Mapping, Sequence
 
@@ -12,11 +12,8 @@ from interpreter.types.typed_value import TypedValue
 from interpreter.vm.builtin import Builtin
 from interpreter.vm.vm import VMState
 from interpreter.vm.vm_types import BuiltinResult
-from zarch_float.comparison_result import ComparisonResult
 from zarch_float.dfp_arithmetic import (
     dfp_add,
-    dfp_compare,
-    dfp_compare_signaling,
     dfp_divide,
     dfp_multiply,
     dfp_quantize,
@@ -29,9 +26,6 @@ from zarch_float.dfp_value import DfpValue
 from zarch_float.rounding_mode import DFP_MODIFIER_MODES, RoundingMode
 
 type _Binary = Callable[[DfpValue, DfpValue, RoundingMode], DfpResult]
-type _Compare = Callable[[DfpValue, DfpValue], ComparisonResult]
-
-NO_FIELDS = (0, 0, 0)
 
 
 def _outcome(result: DfpResult) -> list[int]:
@@ -78,28 +72,12 @@ def _integral(layout: DfpLayout) -> Builtin:
     return call
 
 
-def _compare(rule: _Compare, layout: DfpLayout) -> Builtin:
-    def call(args: Sequence[TypedValue], vm: VMState) -> BuiltinResult:
-        a, b = args
-        compared = rule(_operand(a, layout), _operand(b, layout))
-        words = ieee_words(compared.conditions, frozenset())
-        return BuiltinResult(
-            value=[*NO_FIELDS, *NO_FIELDS, *words, compared.comparison.value]
-        )
-
-    return call
-
-
 _BINARIES: Mapping[DfpOperation, _Binary] = {
     DfpOperation.ADD: dfp_add,
     DfpOperation.SUBTRACT: dfp_subtract,
     DfpOperation.MULTIPLY: dfp_multiply,
     DfpOperation.DIVIDE: dfp_divide,
     DfpOperation.QUANTIZE: dfp_quantize,
-}
-_COMPARES: Mapping[DfpOperation, _Compare] = {
-    DfpOperation.COMPARE: dfp_compare,
-    DfpOperation.COMPARE_SIGNALING: dfp_compare_signaling,
 }
 _LAYOUTS = (LONG_DFP, EXTENDED_DFP)
 
@@ -109,11 +87,6 @@ def dfp_builtins() -> Mapping[FuncName, Builtin]:
         **{
             dfp_builtin_name(op, layout): _binary(rule, layout)
             for op, rule in _BINARIES.items()
-            for layout in _LAYOUTS
-        },
-        **{
-            dfp_builtin_name(op, layout): _compare(rule, layout)
-            for op, rule in _COMPARES.items()
             for layout in _LAYOUTS
         },
         **{

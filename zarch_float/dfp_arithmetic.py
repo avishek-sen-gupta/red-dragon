@@ -1,12 +1,10 @@
 # pyright: standard
-"""DFP add, subtract, multiply, divide, quantize, reround and compare (PoO chapter 20)."""
+"""DFP add, subtract, multiply, divide, quantize and reround (PoO chapter 20)."""
 
 from collections.abc import Callable, Mapping
 from decimal import Context, Decimal
 from fractions import Fraction
 
-from zarch_float.comparison import Comparison
-from zarch_float.comparison_result import ComparisonResult
 from zarch_float.condition import Condition, raised
 from zarch_float.dfp_context import bounded, from_decimal, to_decimal, unbounded
 from zarch_float.dfp_nan import has_nan, invalid, propagate_nan
@@ -15,7 +13,6 @@ from zarch_float.dfp_result import DfpResult, dfp_exact
 from zarch_float.dfp_rounding import Exact, dfp_rounding_into
 from zarch_float.dfp_value import DfpValue
 from zarch_float.float_kind import FloatKind
-from zarch_float.ordering import ordered
 from zarch_float.rounding_mode import RoundingMode
 
 type _Binary = Callable[[Context, Decimal, Decimal], Decimal]
@@ -122,28 +119,3 @@ def dfp_reround(value: DfpValue, significance: int, mode: RoundingMode) -> DfpRe
     if _keeps_value(value, significance):
         return dfp_exact(value)
     return _rerounded(value, significance, mode)
-
-
-def _rank(value: DfpValue) -> tuple[int, Fraction]:
-    if value.kind is FloatKind.INFINITY:
-        return (-1 if value.negative else 1), Fraction(0)
-    return 0, value.signed()
-
-
-def _compare(
-    a: DfpValue, b: DfpValue, signaling: frozenset[FloatKind]
-) -> ComparisonResult:
-    if has_nan((a, b)):
-        invalid_operands = a.kind in signaling or b.kind in signaling
-        return ComparisonResult(
-            Comparison.UNORDERED, raised((Condition.INVALID, invalid_operands))
-        )
-    return ComparisonResult(ordered(_rank(a), _rank(b)), frozenset())
-
-
-def dfp_compare(a: DfpValue, b: DfpValue) -> ComparisonResult:
-    return _compare(a, b, frozenset({FloatKind.SNAN}))
-
-
-def dfp_compare_signaling(a: DfpValue, b: DfpValue) -> ComparisonResult:
-    return _compare(a, b, frozenset({FloatKind.SNAN, FloatKind.QNAN}))

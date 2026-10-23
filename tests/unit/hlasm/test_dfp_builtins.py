@@ -20,10 +20,8 @@ TWO = [0, 398, 2]
 THREE = [0, 398, 3]
 ZERO = [0, 398, 0]
 INFINITY = [0, -1, 0]
-QNAN = [0, -2, 7]
 LARGEST = [0, 767, 10**16 - 1]
 TEN = [0, 398, 10]
-NO_FIELDS = [0, 0, 0]
 
 
 def _call(name: str, args: Sequence[int | list[int]]) -> int | list[int]:
@@ -72,8 +70,6 @@ def test_builtins_return_value_scaled_value_trap_flags_and_dxcs():
         "quantize": _call("quantize_long", [NEAREST_EVEN, [0, 396, 123], [0, 397, 1]]),
         "reround": _call("reround_long", [NEAREST_EVEN, [0, 398, 123456], 3]),
         "integral": _call("round_to_integral_extended", [TOWARD_ZERO, [1, 6175, 25]]),
-        "compare": _call("compare_long", [ONE, TWO]),
-        "compare and signal": _call("compare_signaling_long", [ONE, QNAN]),
     } == {
         "add": [*THREE, *THREE, 0, 0, 0, 0, 0],
         "inexact quotient": [
@@ -90,6 +86,4 @@ def test_builtins_return_value_scaled_value_trap_flags_and_dxcs():
         "quantize": [0, 397, 12, 0, 397, 12, 0x0C, 0x0C, 0, 0x08, 0],
         "reround": [0, 401, 123, 0, 401, 123, 0x0C, 0x0C, 0, 0x08, 0],
         "integral": [1, 6176, 2, 1, 6176, 2, 0x0C, 0x0C, 0, 0x08, 0],
-        "compare": [*NO_FIELDS, *NO_FIELDS, 0, 0, 0, 0, 1],
-        "compare and signal": [*NO_FIELDS, *NO_FIELDS, 0x80, 0x80, 0, 0, 3],
     }

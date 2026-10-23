@@ -1017,9 +1017,10 @@ SLXT, SRDT, SRXT, SXTR, SXTRA, TDCDT, TDCET, TDCXT, TDGDT, TDGET, TDGXT. Rulings
   suppresses inexact. QAxTR takes the quantum from R2 and the value from R3; RRxTR the
   significance from GR R2 bits 58-63. Their quantum exception compares the result's quantum
   with the third operand's.
-- CxTR and KxTR call a compare builtin (alignment across exponents): CxTR signals on an
-  SNaN, KxTR on any NaN.
-- IR on the decoded fields (R44): CExTR compares `e` for finite operands, infinities equal,
+- CxTR and KxTR are IR (ruling R50): both coefficients scale to the lower exponent, an
+  infinity ranks beyond any finite value, a NaN gives CC 3; CxTR signals on an SNaN, KxTR on
+  any NaN.
+- Also IR on the decoded fields (R44): CExTR compares `e` for finite operands, infinities equal,
   NaNs equal, other mixes CC 3; EExTR stores `e` in a GR; ESxTR the significant digits (0 for
   zero) or `e`; IExTR takes GR R2 signed, keeping 0..MBE, -1 and -3 and making anything else
   a QNaN, with the third operand's sign and digits; LTxTR canonicalizes, drops an infinity's

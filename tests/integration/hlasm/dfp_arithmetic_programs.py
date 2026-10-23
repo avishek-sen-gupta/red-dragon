@@ -60,6 +60,7 @@ DATA = (
     "DM2P5    DC    X'A2340000',X'00000025'\n"
     "DQ16     DC    X'21F8000000000001'\n"
     "DSUB     DC    X'0000000000000001'\n"
+    "DMINF    DC    X'F800000000000000'\n"
     "DNMIN    DC    X'003C000000000001'\n"
     "DBELOW   DC    X'0038000000000001'\n"
     "DZEXT    DC    X'0000000000000000'\n"
@@ -69,6 +70,7 @@ DATA = (
     "X3       DC    X'22080000000000000000000000000003'\n"
     "XM1      DC    X'A2080000000000000000000000000001'\n"
     "XP0      DC    X'2207C000000000000000000000000010'\n"
+    "XNEAR    DC    X'25FFC000000000000000000000000001'\n"
 )
 
 
@@ -199,6 +201,38 @@ COMPARE_EXPONENT: Mapping[str, Case] = {
         {8: cc_word(1), 9: cc_word(0), 10: cc_word(3)},
         3,
         0x00800000,
+    ),
+    "CDTR orders signs, infinities, zeros and distant exponents": case_of(
+        lines("LD 1,DM1", "LD 2,D1", "CDTR 1,2")
+        + cc_into(2)
+        + lines("LD 1,DINF", "CDTR 1,1")
+        + cc_into(3)
+        + lines("LD 1,DMINF", "LD 2,DM1", "CDTR 1,2")
+        + cc_into(4)
+        + lines("LD 1,D0", "LD 2,DZEXT", "CDTR 1,2")
+        + cc_into(5)
+        + lines("LD 1,DMAX", "LD 2,DSUB", "CDTR 1,2")
+        + cc_into(6)
+        + lines("LD 1,DTINY", "CDTR 2,1")
+        + cc_into(7)
+        + extended_from(4, "XM1")
+        + extended_from(1, "X1")
+        + lines("CXTR 4,1"),
+        {
+            2: cc_word(1),
+            3: cc_word(0),
+            4: cc_word(1),
+            5: cc_word(0),
+            6: cc_word(2),
+            7: cc_word(1),
+        },
+        1,
+    ),
+    "CDTR leaves a QNaN unsignaled": case_of(
+        lines("LD 1,D1", "LD 2,DQNAN", "CDTR 1,2"), {}, 3
+    ),
+    "CXTR tells apart values whose exponents differ by 33": case_of(
+        extended_from(1, "XNEAR") + extended_from(4, "X1") + lines("CXTR 1,4"), {}, 2
     ),
     "CXTR KXTR": case_of(
         extended_from(1, "X2")
