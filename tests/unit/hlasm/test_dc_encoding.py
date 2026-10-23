@@ -12,6 +12,7 @@ from hlasm_asg.program.base_displacement_address import BaseDisplacementAddress
 from hlasm_asg.program.dc_item import DcItem
 from hlasm_asg.program.external_address import ExternalAddress
 from hlasm_asg.program.length_unit import LengthUnit
+from hlasm_asg.program.macro_origin import MacroOrigin
 from hlasm_asg.program.omitted_nominal import OmittedNominal
 from hlasm_asg.program.per_copy_addresses_nominal import PerCopyAddressesNominal
 from hlasm_asg.program.reloc_address import RelocAddress
@@ -19,8 +20,10 @@ from hlasm_asg.program.string_nominal import StringNominal
 from interpreter.hlasm.address_slot import AddressSlot
 from interpreter.hlasm.constant_image import ConstantImage
 from interpreter.hlasm.dc_encoding import encode_dc
+from interpreter.hlasm.dc_value_out_of_range import DcValueOutOfRange
 from interpreter.hlasm.unsupported_data_type import UnsupportedDataType
 
+ORIGIN = MacroOrigin(kind="MACRO", file="src/t.asm", line=7, macro="GEN", depth=1)
 FIELD = RelocAddress(kind="RELOC", section="HELLO", offset=8)
 NEXT = RelocAddress(kind="RELOC", section="HELLO", offset=12)
 
@@ -73,7 +76,7 @@ def _address_item(
 def _image(item: DcItem) -> list[int]:
     return [
         byte
-        for piece in encode_dc(item)
+        for piece in encode_dc(item, ORIGIN)
         if isinstance(piece, ConstantImage)
         for byte in piece.image
     ]
@@ -92,7 +95,7 @@ def test_encodes_character_hex_binary_fixed_packed_zoned():
         _item("B", "1,100000000", 1),
         _item("F", "-1", 4),
         _item("F", "1,2", 4),
-        _item("F", "300", 1, explicit_length=True),
+        _item("F", "-1", 1, explicit_length=True),
         _item("F", "1", 4, duplication=2),
         _item("F", "1", 4, duplication=0),
         _item("F", "", 4, duplication=0).model_copy(
@@ -118,7 +121,7 @@ def test_encodes_character_hex_binary_fixed_packed_zoned():
         [0x01, 0x01, 0x00],
         [0xFF] * 4,
         [0, 0, 0, 1, 0, 0, 0, 2],
-        [0x2C],
+        [0xFF],
         [0, 0, 0, 1, 0, 0, 0, 1],
         [],
         [],
@@ -148,7 +151,7 @@ def test_address_constants_are_absolute_relocated_or_external():
             }
         ),
     )
-    assert [encode_dc(item) for item in items] == [
+    assert [encode_dc(item, ORIGIN) for item in items] == [
         (AddressSlot(FIELD, 4), ConstantImage((0, 0, 0, 8))),
         (ConstantImage((0xFF, 0xFF)),),
         (AddressSlot(FIELD, 3),),
@@ -156,6 +159,97 @@ def test_address_constants_are_absolute_relocated_or_external():
         (ConstantImage((0, 0, 0, 0)),),
         (AddressSlot(FIELD, 4), AddressSlot(NEXT, 4)),
     ]
+
+
+def _fixed(value: str, length: int, scale: int = 0, exponent: int = 0) -> DcItem:
+    return _item("F", value, length, explicit_length=length != 4).model_copy(
+        update={"scale": scale, "exponent": exponent}
+    )
+
+
+def test_fixed_point_nominals_round_scale_and_take_exponents():
+    items = (
+        _fixed("1.5", 4),
+        _fixed("-1.5", 4),
+        _fixed("1.4", 4),
+        _fixed("2.5", 4),
+        _fixed(".5", 4),
+        _fixed("1E-1", 4),
+        _fixed("0.25", 4, scale=1),
+        _fixed("3", 4, scale=-1),
+        _fixed("1", 4, scale=2),
+        _fixed("1.25", 4, scale=4),
+        _fixed("15", 4, exponent=-1),
+        _fixed("100", 4, exponent=1),
+        _fixed("1.5", 4, exponent=1),
+        _fixed("1E2", 4),
+        _fixed("1.5E1", 4),
+        _fixed("123 456", 4),
+        _fixed("U4294967295", 4),
+        _fixed("-2147483648", 4),
+        _fixed("U255", 1),
+        _fixed("-128", 1),
+        _item("H", "-3.5", 2).model_copy(update={"scale": 1}),
+        _item("H", "-1E2", 2),
+        _item("H", "U65535", 2),
+        _item("H", "-25.46", 2).model_copy(update={"scale": 6}),
+        _item("F", "U18446744073709551615", 8, extension="D"),
+        _item("F", "-9223372036854775808", 8, extension="D"),
+    )
+    assert [_image(item) for item in items] == [
+        [0, 0, 0, 2],
+        [0xFF, 0xFF, 0xFF, 0xFE],
+        [0, 0, 0, 1],
+        [0, 0, 0, 3],
+        [0, 0, 0, 1],
+        [0, 0, 0, 0],
+        [0, 0, 0, 1],
+        [0, 0, 0, 2],
+        [0, 0, 0, 4],
+        [0, 0, 0, 0x14],
+        [0, 0, 0, 2],
+        [0, 0, 0x03, 0xE8],
+        [0, 0, 0, 0x0F],
+        [0, 0, 0, 0x64],
+        [0, 0, 0, 0x0F],
+        [0, 0x01, 0xE2, 0x40],
+        [0xFF] * 4,
+        [0x80, 0, 0, 0],
+        [0xFF],
+        [0x80],
+        [0xFF, 0xF9],
+        [0xFF, 0x9C],
+        [0xFF, 0xFF],
+        [0xF9, 0xA3],
+        [0xFF] * 8,
+        [0x80] + [0] * 7,
+    ]
+
+
+@pytest.mark.parametrize(
+    ("item", "constant"),
+    [
+        (_fixed("2147483648", 4), "F'2147483648'"),
+        (_fixed("-2147483649", 4), "F'-2147483649'"),
+        (_fixed("U4294967296", 4), "F'U4294967296'"),
+        (_fixed("128", 1), "F'128'"),
+        (_fixed("1E80", 4), "F'1E80'"),
+        (_fixed("1", 4, scale=31), "F'1'"),
+        (_fixed("2147483647.5", 4), "F'2147483647.5'"),
+        (_item("H", "32768", 2), "H'32768'"),
+        (_item("H", "1,U65536", 2), "H'U65536'"),
+        (
+            _item("F", "9223372036854775808", 8, extension="D"),
+            "FD'9223372036854775808'",
+        ),
+    ],
+)
+def test_fixed_point_values_outside_their_length_refuse(item: DcItem, constant: str):
+    with pytest.raises(DcValueOutOfRange) as refused:
+        encode_dc(item, ORIGIN)
+    assert str(refused.value) == (
+        f"{constant} at line 7 of src/t.asm does not fit its length — ASMA072E"
+    )
 
 
 def _based(base: int, displacement: int) -> BaseDisplacementAddress:
@@ -192,14 +286,15 @@ def test_doubleword_character_set_and_base_displacement_types():
         [0xC0, 0x08, 0x00, 0x9F, 0xFE, 0xFF],
     ]
     assert encode_dc(
-        _address_item("A", (FIELD,), 8).model_copy(update={"extension": "D"})
+        _address_item("A", (FIELD,), 8).model_copy(update={"extension": "D"}), ORIGIN
     ) == (
         AddressSlot(FIELD, 8),
     )
     assert encode_dc(
         _address_item(
             "V", (ExternalAddress(kind="EXTERNAL", name="EXTRN"),), 8
-        ).model_copy(update={"extension": "D"})
+        ).model_copy(update={"extension": "D"}),
+        ORIGIN,
     ) == (ConstantImage((0,) * 8),)
 
 
@@ -219,7 +314,7 @@ def test_doubleword_character_set_and_base_displacement_types():
 )
 def test_rejects_types_without_an_encoding(type_: str, extension: str, message: str):
     with pytest.raises(UnsupportedDataType) as refused:
-        encode_dc(_item(type_, "1", 4, extension=extension))
+        encode_dc(_item(type_, "1", 4, extension=extension), ORIGIN)
     assert str(refused.value) == message
 
 
@@ -230,17 +325,9 @@ def test_rejects_types_without_an_encoding(type_: str, extension: str, message: 
             _item("B", "1010", 4, True, length_unit=LengthUnit.BIT),
             "DC type BL.4 is not supported yet — red-dragon-6uyp.93",
         ),
-        (
-            _item("F", "1", 4).model_copy(update={"scale": 2}),
-            "DC type F with a scale or exponent modifier is not supported yet — red-dragon-6uyp.93",
-        ),
-        (
-            _item("H", "100", 2).model_copy(update={"exponent": 1}),
-            "DC type H with a scale or exponent modifier is not supported yet — red-dragon-6uyp.93",
-        ),
     ],
 )
 def test_refuses_what_waits_for_the_dc_encoder(item: DcItem, message: str):
     with pytest.raises(UnsupportedDataType) as refused:
-        encode_dc(item)
+        encode_dc(item, ORIGIN)
     assert str(refused.value) == message

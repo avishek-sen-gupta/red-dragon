@@ -2,7 +2,9 @@
 """Byte images of DC operands, computed when the program is assembled."""
 
 from collections.abc import Callable, Mapping, Sequence
+from fractions import Fraction
 from itertools import chain
+from math import floor
 
 from hlasm_asg.program.abs_address import AbsAddress
 from hlasm_asg.program.address import Address
@@ -12,12 +14,14 @@ from hlasm_asg.program.dc_item import DcItem
 from hlasm_asg.program.external_address import ExternalAddress
 from hlasm_asg.program.length_unit import LengthUnit
 from hlasm_asg.program.omitted_nominal import OmittedNominal
+from hlasm_asg.program.origin import Origin
 from hlasm_asg.program.per_copy_addresses_nominal import PerCopyAddressesNominal
 from hlasm_asg.program.reloc_address import RelocAddress
 from hlasm_asg.program.string_nominal import StringNominal
 from interpreter.encoding.ebcdic_table import EbcdicTable
 from interpreter.hlasm.address_slot import AddressSlot
 from interpreter.hlasm.constant_image import ConstantImage
+from interpreter.hlasm.dc_value_out_of_range import DcValueOutOfRange
 from interpreter.hlasm.hlasm_constants import BITS_PER_BYTE
 from interpreter.hlasm.unsupported_data_type import UnsupportedDataType
 
@@ -51,6 +55,11 @@ _LONG_BASE_SHIFT = 20
 _LOW_DISPLACEMENT_MASK = 0xFFF
 _HIGH_DISPLACEMENT_MASK = 0xFF
 _LOW_DISPLACEMENT_SHIFT = 8
+_UNSIGNED = "U"
+_SPACE = " "
+_HALF = Fraction(1, 2)
+_DECIMAL_BASE = Fraction(10)
+_BINARY_BASE = Fraction(2)
 
 
 def _bytes_of(bits: int) -> int:
@@ -92,10 +101,6 @@ def _binary(text: str, bits: int) -> int:
     return _truncated(int(text, _BINARY_RADIX), bits)
 
 
-def _fixed(text: str, bits: int) -> int:
-    return _truncated(int(text), bits)
-
-
 def _digits(text: str) -> str:
     return text.lstrip(_SIGNS).replace(_DECIMAL_POINT, "")
 
@@ -132,9 +137,6 @@ _STRING_ENCODERS: Mapping[str, Encoder] = {
     "CU": _characters(_unicode, _UNICODE_SPACE),
     "X": _hex,
     "B": _binary,
-    "F": _fixed,
-    "FD": _fixed,
-    "H": _fixed,
     "P": _packed,
     "Z": _zoned,
 }
@@ -147,7 +149,8 @@ _VALUE_LENGTHS: Mapping[str, Callable[[str], int]] = {
 }
 
 _ADDRESS_TYPES = frozenset({"A", "AD", "Y", "V", "VD", "S", "SY"})
-_FIXED_POINT_TYPES = frozenset({"F", "H"})
+_FIXED_POINT_TYPES = frozenset({"F", "FD", "H"})
+_SUPPORTED_TYPES = _STRING_ENCODERS.keys() | _ADDRESS_TYPES | _FIXED_POINT_TYPES
 
 
 def _code(item: DcItem) -> str:
@@ -165,16 +168,35 @@ def _issue(item: DcItem) -> str:
 def _check_supported(item: DcItem) -> None:
     if item.length_unit == LengthUnit.BIT:
         raise UnsupportedDataType(f"{_code(item)}L.{item.length}", ENCODING_ISSUE)
-    if _code(item) in _STRING_ENCODERS or _code(item) in _ADDRESS_TYPES:
+    if _code(item) in _SUPPORTED_TYPES:
         return
     raise UnsupportedDataType(_code(item), _issue(item))
 
 
-def _check_modifiers(item: DcItem) -> None:
-    if item.type in _FIXED_POINT_TYPES and (item.scale != 0 or item.exponent != 0):
-        raise UnsupportedDataType(
-            f"{item.type} with a scale or exponent modifier", ENCODING_ISSUE
-        )
+def _fixed_value(item: DcItem, text: str) -> int:
+    number = Fraction(text.replace(_SPACE, "").removeprefix(_UNSIGNED))
+    scaled = abs(number) * _DECIMAL_BASE**item.exponent * _BINARY_BASE**item.scale
+    magnitude = floor(scaled + _HALF)
+    return -magnitude if number < 0 else magnitude
+
+
+def _fixed_range(text: str, bits: int) -> range:
+    if text.startswith(_UNSIGNED):
+        return range(1 << bits)
+    return range(-(1 << (bits - 1)), 1 << (bits - 1))
+
+
+def _fixed(item: DcItem, text: str, bits: int, origin: Origin) -> int:
+    value = _fixed_value(item, text)
+    if value not in _fixed_range(text, bits):
+        raise DcValueOutOfRange(f"{_code(item)}'{text}'", origin)
+    return _truncated(value, bits)
+
+
+def _string_value(item: DcItem, text: str, bits: int, origin: Origin) -> int:
+    if _code(item) in _FIXED_POINT_TYPES:
+        return _fixed(item, text, bits, origin)
+    return _STRING_ENCODERS[_code(item)](text, bits)
 
 
 def _values(item: DcItem, text: str) -> tuple[str, ...]:
@@ -187,14 +209,14 @@ def _image(value: int, length: int) -> ConstantImage:
     return ConstantImage(tuple(value.to_bytes(length, "big")))
 
 
-def _string_piece(item: DcItem, text: str) -> ConstantImage:
+def _string_piece(item: DcItem, text: str, origin: Origin) -> ConstantImage:
     code = _code(item)
     length = (
         _VALUE_LENGTHS[code](text)
         if code in _VALUE_LENGTHS and not item.explicit_length
         else item.length
     )
-    return _image(_STRING_ENCODERS[code](text, length * BITS_PER_BYTE), length)
+    return _image(_string_value(item, text, length * BITS_PER_BYTE, origin), length)
 
 
 def _base_displacement(item: DcItem, base: int, displacement: int) -> int:
@@ -228,17 +250,21 @@ def _address_pieces(item: DcItem, values: Sequence[Address]) -> tuple[DcPiece, .
 
 
 def _operand(
-    item: DcItem, nominal: StringNominal | AddressesNominal
+    item: DcItem, nominal: StringNominal | AddressesNominal, origin: Origin
 ) -> tuple[DcPiece, ...]:
     match nominal:
         case StringNominal(value=text):
-            return tuple(_string_piece(item, value) for value in _values(item, text))
+            return tuple(
+                _string_piece(item, value, origin) for value in _values(item, text)
+            )
         case AddressesNominal(values=values):
             return _address_pieces(item, values)
 
 
 def _copies(
-    item: DcItem, nominal: StringNominal | AddressesNominal | PerCopyAddressesNominal
+    item: DcItem,
+    nominal: StringNominal | AddressesNominal | PerCopyAddressesNominal,
+    origin: Origin,
 ) -> tuple[DcPiece, ...]:
     match nominal:
         case PerCopyAddressesNominal(copies=copies):
@@ -246,12 +272,11 @@ def _copies(
                 chain.from_iterable(_address_pieces(item, values) for values in copies)
             )
         case once:
-            return _operand(item, once) * item.duplication
+            return _operand(item, once, origin) * item.duplication
 
 
-def encode_dc(item: DcItem) -> tuple[DcPiece, ...]:
+def encode_dc(item: DcItem, origin: Origin) -> tuple[DcPiece, ...]:
     _check_supported(item)
-    _check_modifiers(item)
     if isinstance(item.nominal, OmittedNominal):
         return ()
-    return _copies(item, item.nominal)
+    return _copies(item, item.nominal, origin)

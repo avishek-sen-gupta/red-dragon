@@ -8,6 +8,7 @@ from hlasm_asg.program.ccw_statement import CcwStatement
 from hlasm_asg.program.dc_item import DcItem
 from hlasm_asg.program.dc_statement import DcStatement
 from hlasm_asg.program.hlasm_program import HlasmProgram
+from hlasm_asg.program.origin import Origin
 from hlasm_asg.program.section import Section
 from hlasm_asg.program.section_kind import SectionKind
 from interpreter.hlasm.address_slot import AddressSlot
@@ -71,22 +72,25 @@ def _place_pieces(
     )
 
 
-def _place_items(section: str, items: Sequence[DcItem]) -> tuple[PlacedPiece, ...]:
+def _place_items(
+    section: str, items: Sequence[DcItem], origin: Origin
+) -> tuple[PlacedPiece, ...]:
     return tuple(
         chain.from_iterable(
-            _place_pieces(section, item.offset, encode_dc(item)) for item in items
+            _place_pieces(section, item.offset, encode_dc(item, origin))
+            for item in items
         )
     )
 
 
 def _placed(program: HlasmProgram, sections: frozenset[str]) -> tuple[PlacedPiece, ...]:
     statements = (
-        _place_items(s.section, s.items)
+        _place_items(s.section, s.items, s.origin)
         for s in program.statements
         if isinstance(s, DcStatement) and s.section in sections
     )
     literals = (
-        _place_items(literal.section, (literal.item,))
+        _place_items(literal.section, (literal.item,), literal.origin)
         for literal in program.literals
         if literal.section in sections
     )
