@@ -105,12 +105,16 @@ addresses.
 | `interpreter/hlasm/opcodes/bfp_conversion.py` | BFP conversions: to fixed and logical, rounding from fixed and LOAD ROUNDED through builtins; exact from fixed and lengthening in IR (red-dragon-6uyp.52) |
 | `interpreter/hlasm/opcodes/bfp_forms.py` | Statement-level BFP parts shared by the BFP units: the M3 modifier and its check, stores after delivery, one builtin call through the ladder |
 | `interpreter/hlasm/opcodes/bfp_ir.py`, `interpreter/hlasm/ieee_outcome.py` | BFP image IR: field lists, encoding, an image's CC, and the IEEE trap ladder over an `IeeeOutcome` |
+| `interpreter/hlasm/opcodes/hfp_arithmetic.py` | The HFP arithmetic unit's builtin forms: add, subtract, compare, multiply, divide, halve, square root, load FP integer, the multiply-and-add forms (red-dragon-6uyp.53) |
+| `interpreter/hlasm/opcodes/hfp_sign.py` | HFP LOAD AND TEST and the sign forms, in IR |
+| `interpreter/hlasm/opcodes/hfp_ir.py` | HFP image IR: field lists, encoding with the extended low-order part, an image's CC, and the program-mask ladder |
 | `interpreter/hlasm/opcodes/fpr_images.py`, `interpreter/hlasm/fpr_layout.py` | Floating-point images of any radix: FPR access by width (short high word, long, pair), FPR and storage operand sources, result-list items, an arithmetic select |
 | `interpreter/hlasm/program_status.py` | SPM, IPM, EPSW |
 | `interpreter/hlasm/checksum.py` | CKSM |
 | `interpreter/hlasm/clock_instructions.py` | STCK, STCKF, STCKE, ECTG |
 | `interpreter/hlasm/machine_clock.py`, `clock_builtins.py` | `MachineClock` (TOD clock, CPU timer); `clock_builtins(clock)`, the `__hlasm_tod_clock` and `__hlasm_cpu_timer` builtins over it |
 | `interpreter/hlasm/bfp_builtins.py`, `bfp_fields.py`, `bfp_layout.py`, `bfp_operation.py`, `bfp_slots.py` | `bfp_builtins()`, one `__hlasm_bfp_<operation>_<format>` builtin per operation and format over `zarch_float`; operands arrive as `[sign, biased exponent, fraction]` lists and results leave as fields plus the trap, flag and DXC bits (ruling R43) |
+| `interpreter/hlasm/hfp_builtins.py`, `hfp_layout.py`, `hfp_operation.py`, `hfp_slots.py` | `hfp_builtins()`, one `__hlasm_hfp_<operation>_<format>` builtin per operation and source format over `zarch_float`; operands arrive as `[sign, characteristic, fraction]` lists and results leave as the same fields, characteristic modulo 128, plus condition bits (ruling R46) |
 | `interpreter/hlasm/system_machine_clock.py` | `SystemMachineClock`, the host clock over injected wall and process-CPU nanosecond readings: TOD from wall time since 1900-01-01 UTC (no leap seconds), CPU timer down from 2^63 - 1 at 4096 units per microsecond |
 | `interpreter/hlasm/cpu_attributes.py` | ECAG's constant attributes |
 | `interpreter/hlasm/facility_list.py` | STFLE's constant facility list |
@@ -924,10 +928,42 @@ LEDBRA, LEXBR, LEXBRA, LXDB, LXDBR, LXEB, LXEBR. Rulings R43-R45.
   NaN to extended and takes no LOAD ROUNDED trap. The z390 test pins each
   (red-dragon-6uyp.74).
 
+**HFP arithmetic (red-dragon-6uyp.53).** AD, ADR, AE, AER, AU, AUR, AW, AWR, AXR, CD, CDR,
+CE, CER, CXR, DD, DDR, DE, DER, DXR, FIDR, FIER, FIXR, HDR, HER, LCDR, LCER, LCXR, LNDR,
+LNER, LNXR, LPDR, LPER, LPXR, LTDR, LTER, LTXR, MAD, MADR, MAE, MAER, MAY, MAYH, MAYHR,
+MAYL, MAYLR, MAYR, MD, MDE, MDER, MDR, ME, MEE, MEER, MER, MSD, MSDR, MSE, MSER, MXD, MXDR,
+MXR, MY, MYH, MYHR, MYL, MYLR, MYR, SD, SDR, SE, SER, SQD, SQDR, SQE, SQER, SQXR, SU, SUR,
+SW, SWR, SXR. Rulings R34, R39, R41, R46.
+
+- IR splits each operand into sign, characteristic and fraction and hands the list to an
+  `hfp_builtins()` builtin over `zarch_float`; IR encodes what it returns. Compare uses the
+  same normalized subtraction, so it is a builtin too; it returns the CC.
+- Program-mask ladder: an HFP divide abends `S0CF` and a negative square root `S0DD`
+  (PIC 001D), both with nothing stored. Otherwise the result is stored with its
+  characteristic modulo 128, or a true zero when underflow or significance is raised with
+  its mask bit (0010, 0001) off. Then overflow abends `S0CC`, and underflow and
+  significance abend `S0CD` and `S0CE` when their mask bits are on.
+- Extended results set the low-order sign to the high-order sign and its characteristic to
+  the high one minus 14 modulo 128, or 0 for a true zero. MY and MAY wrap both
+  characteristics even for a zero fraction.
+- CC: add, subtract and the sign forms give 0 for a zero fraction, else 1 or 2 by sign;
+  compare gives 0 when the difference with its guard digit is zero. The rest leave it.
+- Short results replace FPR bits 0-31 only. Extended operands use pairs (r, r+2); MXD, MXDR,
+  MY and MYR check R1 only; MAY and MAYR take any R1, write the pair holding it and use R1
+  itself as the addend. An invalid pair abends `S0C6` at compile time.
+- LT, LC, LN and LP change the sign in IR. Short and long images keep their characteristic;
+  an extended zero fraction becomes a true zero with the new sign.
+- z390 writes X'F4F4F4F4' into bits 32-63 of some short results, rounds or uses host floating
+  point where HFP truncates (SDR, SWR, SW, MD, MXDR, MSE, SQD), ignores the guard digit in
+  unnormalized subtraction and COMPARE, drops the sign of MY, MYH and MYL, makes a zero MY
+  product, LTDR and LCDR of a zero fraction a true zero, rejects MAY R1 = 6, garbles MAYH and
+  MAYL, stores a nonzero value for a masked underflow, and abends `S0C7` for a negative
+  square root. The z390 test pins each (red-dragon-6uyp.74).
+
 ## Known Gaps
 
-- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, miscellaneous, packed-decimal arithmetic, packed-decimal compare and test, decimal conversion, edit, floating-point-support, BFP arithmetic and BFP conversion units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
-- HFP, DFP and PFPO are not lowered. Their arithmetic is the leaf `zarch_float` ([zarch-float.md](zarch-float.md)); `bfp_builtins.py` reaches it for BFP (red-dragon-6uyp.51), and the later floating-point units add their builtins.
+- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, miscellaneous, packed-decimal arithmetic, packed-decimal compare and test, decimal conversion, edit, floating-point-support, BFP arithmetic, BFP conversion and HFP arithmetic units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
+- HFP conversions, DFP and PFPO are not lowered. Their arithmetic is the leaf `zarch_float` ([zarch-float.md](zarch-float.md)); `bfp_builtins.py` and `hfp_builtins.py` reach it (red-dragon-6uyp.51, .53), and the later floating-point units add their builtins.
 - DC types beyond C, X, B, F, H, P, Z, A, Y and V, and any type extension, raise `UnsupportedDataType` (red-dragon-6uyp.63; floating point E, D, L: red-dragon-6uyp.21).
 - Falling through into DC/DS data or past a CSECT's end skips the data instead of executing it, and a branch into data abends `S0C1` (red-dragon-6uyp.64).
 - Every branch, even to a static relative target, walks the dispatch chain (red-dragon-6uyp.80).
@@ -949,9 +985,9 @@ LEDBRA, LEXBR, LEXBRA, LXDB, LXDBR, LXEB, LXEBR. Rulings R43-R45.
   whatever mode it selects.
 - Access registers hold values only; no instruction addresses through them. LAE and LAEY do
   not set access register R1 (red-dragon-6uyp.86).
-- `run()` defaults to `DEFAULT_BUILTINS`, which has no clock or BFP builtins, so a clock or
-  BFP instruction there stores what the unresolved-call strategy gives. Callers compose
-  `clock_builtins(clock)` and `bfp_builtins()`; the `interpreter.py` CLI does both, with a
+- `run()` defaults to `DEFAULT_BUILTINS`, which has no clock, BFP or HFP builtins, so such an
+  instruction there stores what the unresolved-call strategy gives. Callers compose
+  `clock_builtins(clock)`, `bfp_builtins()` and `hfp_builtins()`; the `interpreter.py` CLI does all three, with a
   `SystemMachineClock`.
 - Only LFAS, SFASR and the BFP IEEE traps store a DXC: a compare-and-trap or load-and-trap
   trap and a decimal data exception abend `S0C7` and leave the FPC's DXC unchanged
@@ -1090,4 +1126,8 @@ LEDBRA, LEXBR, LEXBRA, LXDB, LXDBR, LXEB, LXEBR. Rulings R43-R45.
 | `tests/unit/hlasm/test_bfp_conversion_lowering.py` | BFP conversion IR: builtin forms call then run the ladder; exact forms call nothing; static `S0C6` before any access; no SYMBOLIC |
 | `tests/integration/hlasm/test_bfp_conversion.py` | Every BFP conversion mnemonic on the VM: GR or FPR results, CC, FPC flags, and trap DXCs and `S0C7` |
 | `tests/z390/test_bfp_conversion_differential.py` | Every BFP conversion case against z390; its faults pinned (`-m z390`) |
+| `tests/unit/hlasm/test_hfp_builtins.py` | HFP builtins: fields, the characteristic modulo 128 and condition bits for each family; compare's CC |
+| `tests/unit/hlasm/test_hfp_arithmetic_lowering.py` | HFP IR: operands in argument order, one call, then the program-mask ladder; sign forms without a call; invalid pairs abend `S0C6` before any access; no SYMBOLIC in all 81 |
+| `tests/integration/hlasm/test_hfp_arithmetic.py` | Every HFP arithmetic mnemonic on the VM: result images and CC; each exception's stored or suppressed result and abend, with its mask bit on and off |
+| `tests/z390/test_hfp_arithmetic_differential.py` | Every HFP arithmetic case against z390; its faults pinned (`-m z390`) |
 | `tests/z390/test_conditional_select_count_differential.py` | Every conditional, select and count case against z390; the instructions z390 does not execute and its whole-register SELFHR pinned (`-m z390`) |
