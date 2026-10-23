@@ -191,6 +191,6 @@ DECODERS: Mapping[DfpLayout, IrFunction] = {
 }
 ENCODERS: Mapping[DfpLayout, IrFunction] = {
     layout: IrFunction(f"__hlasm_dfp_encode_{layout.suffix}", 3, _encode(layout))
-    for layout in (LONG_DFP, EXTENDED_DFP)
+    for layout in (SHORT_DFP, LONG_DFP, EXTENDED_DFP)
 }
 DFP_CODEC_FUNCTIONS: tuple[IrFunction, ...] = (*DECODERS.values(), *ENCODERS.values())

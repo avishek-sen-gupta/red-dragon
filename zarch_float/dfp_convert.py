@@ -57,10 +57,6 @@ def _resized(
     return resizes[value.kind]()
 
 
-def dfp_load_lengthened(a: DfpValue, target: DfpFormat) -> DfpResult:
-    return _resized(a, target, lambda: dfp_exact(replace(a, format=target)))
-
-
 def dfp_load_rounded(a: DfpValue, target: DfpFormat, mode: RoundingMode) -> DfpResult:
     return _resized(a, target, lambda: _rounded_finite(a, target, mode))
 

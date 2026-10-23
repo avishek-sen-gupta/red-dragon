@@ -112,3 +112,28 @@ def test_fixed_point_builtins_report_the_value_or_the_integer_image_and_cc():
         "nan to logical": [0, 0, 0, 0, 0, 0, 0x80, 0x80, 0, 0, 3],
         "zero to fixed": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     }
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_load_rounded_rounds_into_the_target_or_keeps_specials_under_xic():
+    assert {
+        "rounded": _call(
+            "load_rounded_long", [NEAREST_EVEN, [0, 398, 1234567890123456], 0]
+        ),
+        "infinity": _call(
+            "load_rounded_extended", [NEAREST_EVEN, [1, -1, 10**20 + 7], 0]
+        ),
+        "kept infinity": _call(
+            "load_rounded_long", [NEAREST_EVEN, [0, -1, 123456789], 1]
+        ),
+        "kept snan": _call("load_rounded_long", [NEAREST_EVEN, [1, -3, 123456789], 1]),
+        "quieted snan": _call(
+            "load_rounded_long", [NEAREST_EVEN, [1, -3, 123456789], 0]
+        ),
+    } == {
+        "rounded": [0, 110, 1234568, 0, 110, 1234568, 0x0C, 0x0C, 0, 0x0C, 0],
+        "infinity": [1, -1, 0, 1, -1, 0, 0, 0, 0, 0, 0],
+        "kept infinity": [0, -1, 456789, 0, -1, 456789, 0, 0, 0, 0, 0],
+        "kept snan": [1, -3, 456789, 1, -3, 456789, 0, 0, 0, 0, 0],
+        "quieted snan": [1, -2, 456789, 1, -2, 123456789, 0x80, 0x80, 0, 0, 0],
+    }

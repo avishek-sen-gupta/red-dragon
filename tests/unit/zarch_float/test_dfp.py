@@ -13,7 +13,6 @@ from zarch_float.dfp_arithmetic import (
 )
 from zarch_float.dfp_convert import (
     dfp_from_integer,
-    dfp_load_lengthened,
     dfp_load_rounded,
     dfp_round_to_integral,
     dfp_to_integer,
@@ -232,16 +231,6 @@ def test_invalid_operations_nans_and_comparisons():
 def test_conversions_between_formats_and_fixed_point():
     overflowing = dfp_load_rounded(num(1, 97), SHORT, NE)
 
-    assert out(dfp_load_lengthened(num(1234567, -3, SHORT), LONG)) == (
-        num(1234567, -3),
-        NONE,
-    )
-    assert out(
-        dfp_load_lengthened(DfpValue(SHORT, True, FloatKind.SNAN, 42), LONG)
-    ) == (
-        DfpValue(LONG, True, FloatKind.QNAN, 42),
-        INVALID,
-    )
     assert dfp_load_rounded(
         special(FloatKind.QNAN, False, 123456789), SHORT, NE
     ).value == DfpValue(SHORT, False, FloatKind.QNAN, 456789)
