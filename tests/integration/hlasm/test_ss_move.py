@@ -10,7 +10,7 @@ from hlasm_asg.program.storage_length_operand import StorageLengthOperand
 from interpreter.frontends import get_hlasm_parser
 from tests.covers import NotLanguageFeature, covers
 from tests.integration.hlasm import ss_move_programs as programs
-from tests.integration.hlasm.hlasm_helpers import run_hlasm_machine
+from tests.integration.hlasm.hlasm_helpers import BARE_ASSEMBLY, run_hlasm_machine
 from tests.integration.hlasm.hlasm_machine import HlasmMachine
 from tests.integration.hlasm.hlasm_run import HlasmRun
 
@@ -52,7 +52,9 @@ MVO_LENGTHS = (
 def test_bridge_gives_mvo_lengths_as_written(tmp_path: Path):
     parser = get_hlasm_parser()
     program = parser.read(
-        parser.parse_to_file(MVO_LENGTHS.encode(), "mvo.asm", tmp_path / "mvo.json")
+        parser.parse_to_file(
+            MVO_LENGTHS.encode(), "mvo.asm", tmp_path / "mvo.json", BARE_ASSEMBLY
+        )
     )
 
     assert [

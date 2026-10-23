@@ -8,6 +8,7 @@ from hlasm_asg.program.machine_statement import MachineStatement
 from hlasm_asg.program.mask_operand import MaskOperand
 from interpreter.frontends import get_hlasm_parser
 from tests.covers import NotLanguageFeature, covers
+from tests.integration.hlasm.hlasm_helpers import BARE_ASSEMBLY
 
 SUFFIXES: Mapping[str, int] = {
     "O": 1,
@@ -59,7 +60,9 @@ def _resolved(tmp_path: Path) -> Mapping[str, tuple[str, list[int]]]:
         "         END\n"
     ).encode()
     parser = get_hlasm_parser()
-    program = parser.read(parser.parse_to_file(source, "c.asm", tmp_path / "c.json"))
+    program = parser.read(
+        parser.parse_to_file(source, "c.asm", tmp_path / "c.json", BARE_ASSEMBLY)
+    )
     return {
         s.mnemonic: (
             s.base_mnemonic,

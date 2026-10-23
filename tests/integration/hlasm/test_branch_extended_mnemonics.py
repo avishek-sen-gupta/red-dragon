@@ -9,6 +9,7 @@ from hlasm_asg.program.mask_operand import MaskOperand
 from interpreter.frontends import get_hlasm_parser
 from interpreter.hlasm.operands import mask_operand, reg_operand
 from tests.covers import NotLanguageFeature, covers
+from tests.integration.hlasm.hlasm_helpers import BARE_ASSEMBLY
 
 CONDITIONS: Mapping[str, int] = {
     "O": 1,
@@ -85,7 +86,9 @@ def _source() -> bytes:
 def test_every_extended_spelling_reaches_its_base_mnemonic_and_mask(tmp_path: Path):
     parser = get_hlasm_parser()
     program = parser.read(
-        parser.parse_to_file(_source(), "branches.asm", tmp_path / "branches.json")
+        parser.parse_to_file(
+            _source(), "branches.asm", tmp_path / "branches.json", BARE_ASSEMBLY
+        )
     )
     machine = [s for s in program.statements if isinstance(s, MachineStatement)]
     masked = {
@@ -150,7 +153,9 @@ def test_compare_branch_and_trap_spellings_reach_their_base_mnemonic_and_m3(
 ):
     parser = get_hlasm_parser()
     program = parser.read(
-        parser.parse_to_file(_compare_source(), "compares.asm", tmp_path / "c.json")
+        parser.parse_to_file(
+            _compare_source(), "compares.asm", tmp_path / "c.json", BARE_ASSEMBLY
+        )
     )
     resolved = {
         s.mnemonic: (

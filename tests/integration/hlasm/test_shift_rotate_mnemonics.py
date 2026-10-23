@@ -9,6 +9,7 @@ from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.frontends import get_hlasm_parser
 from interpreter.hlasm.opcodes.shift_rotate import CONTROL_BIT
 from tests.covers import NotLanguageFeature, covers
+from tests.integration.hlasm.hlasm_helpers import BARE_ASSEMBLY
 
 SPELLINGS: Mapping[str, tuple[str, str, tuple[int, ...]]] = {
     "LHHR": ("5,3", "RISBHG", (0, 31)),
@@ -38,7 +39,9 @@ def _source() -> bytes:
 def test_extended_spellings_reach_their_base_mnemonic_and_immediates(tmp_path: Path):
     parser = get_hlasm_parser()
     program = parser.read(
-        parser.parse_to_file(_source(), "shifts.asm", tmp_path / "shifts.json")
+        parser.parse_to_file(
+            _source(), "shifts.asm", tmp_path / "shifts.json", BARE_ASSEMBLY
+        )
     )
     resolved = {
         s.mnemonic: (

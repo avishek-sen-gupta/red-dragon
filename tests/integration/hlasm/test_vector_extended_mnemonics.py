@@ -8,13 +8,16 @@ from hlasm_asg.program.machine_statement import MachineStatement
 from hlasm_asg.program.vec_reg_operand import VecRegOperand
 from interpreter.frontends import get_hlasm_parser
 from tests.covers import NotLanguageFeature, covers
+from tests.integration.hlasm.hlasm_helpers import BARE_ASSEMBLY
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_vzero_and_vone_are_vgbm_of_their_register(tmp_path: Path):
     source = b"T        CSECT\n         VZERO 5\n         VONE  20\n         END\n"
     parser = get_hlasm_parser()
-    program = parser.read(parser.parse_to_file(source, "v.asm", tmp_path / "v.json"))
+    program = parser.read(
+        parser.parse_to_file(source, "v.asm", tmp_path / "v.json", BARE_ASSEMBLY)
+    )
 
     assert [
         (s.mnemonic, s.base_mnemonic, s.operands)

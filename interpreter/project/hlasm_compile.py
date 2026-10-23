@@ -9,12 +9,14 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from hlasm_asg.assembly_inputs import AssemblyInputs
 from hlasm_asg.hlasm_ast_parser import HlasmAstParser
 from interpreter.constants import Language
 from interpreter.frontends import get_hlasm_frontend
 from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.project.compiler import build_export_table
 from interpreter.project.fresh_work_dir import FRESH_WORK_DIR, FreshWorkDir
+from interpreter.project.hlasm_compile_options import HlasmCompileOptions
 from interpreter.project.hlasm_lowering_settings import HlasmLoweringSettings
 from interpreter.project.ir_codec import IrCodec
 from interpreter.project.linked_codec import LinkedCodec
@@ -27,6 +29,7 @@ from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 
 _MAIN_PATH = Path("__main__.asm")
 _PROJECT_ROOT = Path("/")
+_NO_INPUTS = HlasmCompileOptions()
 
 
 @dataclass(frozen=True)
@@ -35,17 +38,23 @@ class _Assembly:
 
     program: SourceFile
     parser: HlasmAstParser
+    options: HlasmCompileOptions
     work_dir: Path
 
     def _artifact(self, kind: str) -> Path:
-        settings = HlasmLoweringSettings(tuple(str(d) for d in self.parser.syslib))
+        settings = HlasmLoweringSettings(
+            self.parser.syslib, self.parser.identity, self.options.names
+        )
         return settings.artifact(self.program, self.work_dir, kind)
 
     def ast(self) -> Path:
         target = self._artifact("ast")
         if not target.exists():
             self.parser.parse_to_file(
-                self.program.source, str(self.program.path), target
+                self.program.source,
+                str(self.program.path),
+                target,
+                AssemblyInputs(self.options.names, self.options.clock.now()),
             )
         return target
 
@@ -109,10 +118,16 @@ def _work_dir(given: Path | FreshWorkDir) -> Path:
 
 
 def lower_hlasm_program(
-    source: bytes, *, parser: HlasmAstParser, work_dir: Path
+    source: bytes,
+    *,
+    parser: HlasmAstParser,
+    work_dir: Path,
+    options: HlasmCompileOptions = _NO_INPUTS,
 ) -> tuple[Path, ...]:
     return (
-        _Assembly(SourceFile(_MAIN_PATH, source), parser, _work_dir(work_dir)).unit(),
+        _Assembly(
+            SourceFile(_MAIN_PATH, source), parser, options, _work_dir(work_dir)
+        ).unit(),
     )
 
 
@@ -120,8 +135,9 @@ def compile_hlasm(
     source: bytes,
     *,
     parser: HlasmAstParser,
+    options: HlasmCompileOptions = _NO_INPUTS,
     work_dir: Path | FreshWorkDir = FRESH_WORK_DIR,
 ) -> LinkedProgram:
     return _Assembly(
-        SourceFile(_MAIN_PATH, source), parser, _work_dir(work_dir)
+        SourceFile(_MAIN_PATH, source), parser, options, _work_dir(work_dir)
     ).linked()

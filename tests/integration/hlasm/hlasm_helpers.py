@@ -3,7 +3,9 @@
 
 import io
 from contextlib import redirect_stdout
+from datetime import UTC, datetime
 
+from hlasm_asg.assembly_inputs import AssemblyInputs
 from interpreter.frontends import get_hlasm_parser
 from interpreter.hlasm.bfp_builtins import bfp_builtins
 from interpreter.hlasm.clock_builtins import clock_builtins
@@ -11,6 +13,7 @@ from interpreter.hlasm.dfp_builtins import dfp_builtins
 from interpreter.hlasm.hfp_builtins import hfp_builtins
 from interpreter.hlasm.pfpo_builtins import pfpo_builtins
 from interpreter.project.hlasm_compile import compile_hlasm
+from interpreter.project.hlasm_compile_options import HlasmCompileOptions
 from interpreter.project.program_entry import ProgramEntry
 from interpreter.run import initial_vm_state, run_linked
 from interpreter.var_name import VarName
@@ -29,6 +32,8 @@ VECTOR_REGISTER_BYTES = 16
 GPR_COUNT = 16
 RETURN_CODE_REGISTER = 15
 NO_RETURN_CODE = 0
+NO_INPUTS = HlasmCompileOptions()
+BARE_ASSEMBLY = AssemblyInputs({}, datetime(2026, 1, 1, tzinfo=UTC))
 
 
 def _var(vm: VMState, name: str) -> int | str:
@@ -57,8 +62,12 @@ def _return_code(vm: VMState, abend: str) -> int:
             return NO_RETURN_CODE
 
 
-def _run_vm(source: str) -> tuple[VMState, str]:
-    linked = compile_hlasm(source.encode("utf-8"), parser=get_hlasm_parser())
+def _run_vm(
+    source: str, options: HlasmCompileOptions = NO_INPUTS
+) -> tuple[VMState, str]:
+    linked = compile_hlasm(
+        source.encode("utf-8"), parser=get_hlasm_parser(), options=options
+    )
     (entry,) = linked.programs
     console = io.StringIO()
     with redirect_stdout(console):
@@ -79,8 +88,8 @@ def _run_vm(source: str) -> tuple[VMState, str]:
     return vm, console.getvalue()
 
 
-def run_hlasm(source: str) -> HlasmRun:
-    return hlasm_run_of(*_run_vm(source))
+def run_hlasm(source: str, options: HlasmCompileOptions = NO_INPUTS) -> HlasmRun:
+    return hlasm_run_of(*_run_vm(source, options))
 
 
 def _machine(vm: VMState, stdout: str) -> HlasmMachine:

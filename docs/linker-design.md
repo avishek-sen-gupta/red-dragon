@@ -466,10 +466,11 @@ linking apart (ADR-185):
 
 ### 7.4 HLASM units
 
-`compile_hlasm(source, *, parser, work_dir)` (`hlasm_compile.py`) runs the same
+`compile_hlasm(source, *, parser, options, work_dir)` (`hlasm_compile.py`) runs the same
 three stages for one assembly: `__main__-<digest>.ast.json`,
 `__main__-<digest>.unit.json`, then `image-<digest>.linked.json`. The digest covers
-the source and the parser's SYSLIB directories (`HlasmLoweringSettings`). The unit's
+the source, the SYSLIB directories and their file contents, the bridge binary and the
+supplied system-variable values, but not the assembly clock (`HlasmLoweringSettings`). The unit's
 `program` is the entry name and `programs` maps it to the namespaced entry label,
 which is also `entry_func_label`. Unlike COBOL, the start-up depends on the
 program (one region per section, entry registers), so link reads the AST file

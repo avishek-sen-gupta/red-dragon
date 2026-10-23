@@ -25,6 +25,7 @@ from hlasm_asg.program.residency_mode import ResidencyMode
 from hlasm_asg.program.rmode_setting import RmodeSetting
 from hlasm_asg.program.severity import Severity
 from tests.covers import NotLanguageFeature, covers
+from tests.integration.hlasm.hlasm_helpers import BARE_ASSEMBLY
 
 MACRO_SOURCE = b"HELLO    CSECT\n         MYM\n         BR    14\n         END\n"
 MACRO_LIBRARY = b"         MACRO\n         MYM\n         LA    3,1\n         MEND\n"
@@ -64,7 +65,9 @@ class TestBridgeParser:
     ):
         parser = make_hlasm_parser([syslib])
 
-        out = parser.parse_to_file(MACRO_SOURCE, SOURCE_NAME, tmp_path / "program.json")
+        out = parser.parse_to_file(
+            MACRO_SOURCE, SOURCE_NAME, tmp_path / "program.json", BARE_ASSEMBLY
+        )
         program = parser.read(out)
 
         macro_origin, open_origin = [s.origin for s in program.statements]
@@ -81,7 +84,9 @@ class TestBridgeParser:
         parser = make_hlasm_parser()
 
         program = parser.read(
-            parser.parse_to_file(EXPORTS_SOURCE, SOURCE_NAME, tmp_path / "p.json")
+            parser.parse_to_file(
+                EXPORTS_SOURCE, SOURCE_NAME, tmp_path / "p.json", BARE_ASSEMBLY
+            )
         )
 
         bits, ccw, field = program.statements
@@ -144,7 +149,10 @@ class TestBridgeParser:
 
         with pytest.raises(HlasmParseError, match="M120 line 1") as refused:
             parser.parse_to_file(
-                b"         LA    99,0\n", SOURCE_NAME, tmp_path / "program.json"
+                b"         LA    99,0\n",
+                SOURCE_NAME,
+                tmp_path / "program.json",
+                BARE_ASSEMBLY,
             )
 
         (diagnostic,) = refused.value.diagnostics
