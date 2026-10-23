@@ -15,6 +15,11 @@ class DfpOperation(Enum):
     QUANTIZE = "quantize"
     REROUND = "reround"
     ROUND_TO_INTEGRAL = "round_to_integral"
+    FROM_FIXED = "from_fixed"
+    TO_FIXED_32 = "to_fixed_32"
+    TO_FIXED_64 = "to_fixed_64"
+    TO_LOGICAL_32 = "to_logical_32"
+    TO_LOGICAL_64 = "to_logical_64"
 
 
 def dfp_builtin_name(operation: DfpOperation, layout: DfpLayout) -> FuncName:
