@@ -1,8 +1,10 @@
 # pyright: standard
 """Run-unit start-up IR that allocates each section and writes its constants and literals."""
 
-from collections.abc import Sequence
-from itertools import accumulate, chain
+from collections.abc import Iterable, Sequence
+from functools import reduce
+from itertools import accumulate, chain, groupby
+from operator import itemgetter, or_
 
 from hlasm_asg.program.ccw_statement import CcwStatement
 from hlasm_asg.program.dc_item import DcItem
@@ -12,6 +14,7 @@ from hlasm_asg.program.origin import Origin
 from hlasm_asg.program.section import Section
 from hlasm_asg.program.section_kind import SectionKind
 from interpreter.hlasm.address_slot import AddressSlot
+from interpreter.hlasm.bit_length_image import BitLengthImage
 from interpreter.hlasm.constant_image import ConstantImage
 from interpreter.hlasm.dc_encoding import ENCODING_ISSUE, DcPiece, encode_dc
 from interpreter.hlasm.hlasm_constants import (
@@ -37,6 +40,7 @@ from interpreter.register import Register
 from interpreter.var_name import VarName
 
 type Fragment = tuple[Register, tuple[InstructionBase, ...]]
+type ByteAt = tuple[int, int]
 
 
 def section_var(name: str) -> VarName:
@@ -72,15 +76,51 @@ def _place_pieces(
     )
 
 
+def _field_bytes(start: int, bits: int, value: int) -> tuple[ByteAt, ...]:
+    first = start // BITS_PER_BYTE
+    end = -(-(start + bits) // BITS_PER_BYTE)
+    shifted = value << (end * BITS_PER_BYTE - start - bits)
+    return tuple(
+        zip(range(first, end), shifted.to_bytes(end - first, "big"), strict=True)
+    )
+
+
+def _image_bytes(item: DcItem, image: BitLengthImage) -> tuple[ByteAt, ...]:
+    start = item.offset * BITS_PER_BYTE + item.bit_offset
+    return tuple(
+        chain.from_iterable(
+            _field_bytes(start + index * image.bits, image.bits, value)
+            for index, value in enumerate(image.values)
+        )
+    )
+
+
+def _packed_bytes(
+    section: str, contributions: Iterable[ByteAt]
+) -> tuple[PlacedPiece, ...]:
+    return tuple(
+        PlacedPiece(
+            section, offset, ConstantImage((reduce(or_, (b for _, b in group)),))
+        )
+        for offset, group in groupby(sorted(contributions), itemgetter(0))
+    )
+
+
 def _place_items(
     section: str, items: Sequence[DcItem], origin: Origin
 ) -> tuple[PlacedPiece, ...]:
-    return tuple(
-        chain.from_iterable(
-            _place_pieces(section, item.offset, encode_dc(item, origin))
-            for item in items
-        )
+    encoded = tuple((item, encode_dc(item, origin)) for item in items)
+    bits = chain.from_iterable(
+        _image_bytes(item, image)
+        for item, image in encoded
+        if isinstance(image, BitLengthImage)
     )
+    pieces = chain.from_iterable(
+        _place_pieces(section, item.offset, image)
+        for item, image in encoded
+        if not isinstance(image, BitLengthImage)
+    )
+    return (*pieces, *_packed_bytes(section, bits))
 
 
 def _placed(program: HlasmProgram, sections: frozenset[str]) -> tuple[PlacedPiece, ...]:

@@ -20,9 +20,11 @@ from hlasm_asg.program.reloc_address import RelocAddress
 from hlasm_asg.program.string_nominal import StringNominal
 from interpreter.encoding.ebcdic_table import EbcdicTable
 from interpreter.hlasm.address_slot import AddressSlot
+from interpreter.hlasm.bit_length_image import BitLengthImage
 from interpreter.hlasm.constant_image import ConstantImage
 from interpreter.hlasm.dc_value_out_of_range import DcValueOutOfRange
 from interpreter.hlasm.hlasm_constants import BITS_PER_BYTE
+from interpreter.hlasm.hlasm_lowering_error import HlasmLoweringError
 from interpreter.hlasm.unsupported_data_type import UnsupportedDataType
 
 type DcPiece = ConstantImage | AddressSlot
@@ -32,6 +34,7 @@ FLOATING_POINT_ISSUE = "red-dragon-6uyp.94"
 LINKER_TYPES_ISSUE = "red-dragon-6uyp.96"
 OTHER_TYPES_ISSUE = "red-dragon-6uyp.63"
 ENCODING_ISSUE = "red-dragon-6uyp.93"
+BIT_LENGTH_STAR_ISSUE = "red-dragon-6uyp.97"
 
 _FLOATING_POINT_TYPES = frozenset({"E", "D", "L"})
 _LINKER_TYPES = frozenset({"Q", "J"})
@@ -166,8 +169,6 @@ def _issue(item: DcItem) -> str:
 
 
 def _check_supported(item: DcItem) -> None:
-    if item.length_unit == LengthUnit.BIT:
-        raise UnsupportedDataType(f"{_code(item)}L.{item.length}", ENCODING_ISSUE)
     if _code(item) in _SUPPORTED_TYPES:
         return
     raise UnsupportedDataType(_code(item), _issue(item))
@@ -275,8 +276,47 @@ def _copies(
             return _operand(item, once, origin) * item.duplication
 
 
-def encode_dc(item: DcItem, origin: Origin) -> tuple[DcPiece, ...]:
+def _bit_address(item: DcItem, value: Address) -> int:
+    if isinstance(value, AbsAddress):
+        return _truncated(value.value, item.length)
+    raise HlasmLoweringError(
+        f"{_code(item)}L.{item.length}", "an absolute value", value.kind
+    )
+
+
+def _bit_values(
+    item: DcItem, nominal: StringNominal | AddressesNominal, origin: Origin
+) -> tuple[int, ...]:
+    match nominal:
+        case StringNominal(value=text):
+            return tuple(
+                _string_value(item, value, item.length, origin)
+                for value in _values(item, text)
+            )
+        case AddressesNominal(values=values):
+            return tuple(_bit_address(item, value) for value in values)
+
+
+def _bit_image(
+    item: DcItem,
+    nominal: StringNominal | AddressesNominal | PerCopyAddressesNominal,
+    origin: Origin,
+) -> BitLengthImage:
+    match nominal:
+        case PerCopyAddressesNominal():
+            raise UnsupportedDataType(
+                f"{_code(item)}L.{item.length} with * in its values",
+                BIT_LENGTH_STAR_ISSUE,
+            )
+        case once:
+            values = _bit_values(item, once, origin)
+            return BitLengthImage(values * item.duplication, item.length)
+
+
+def encode_dc(item: DcItem, origin: Origin) -> tuple[DcPiece, ...] | BitLengthImage:
     _check_supported(item)
     if isinstance(item.nominal, OmittedNominal):
         return ()
+    if item.length_unit == LengthUnit.BIT:
+        return _bit_image(item, item.nominal, origin)
     return _copies(item, item.nominal, origin)
