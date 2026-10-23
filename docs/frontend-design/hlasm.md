@@ -118,6 +118,7 @@ addresses.
 | `interpreter/hlasm/machine_clock.py`, `clock_builtins.py` | `MachineClock` (TOD clock, CPU timer); `clock_builtins(clock)`, the `__hlasm_tod_clock` and `__hlasm_cpu_timer` builtins over it |
 | `interpreter/hlasm/bfp_builtins.py`, `bfp_fields.py`, `bfp_layout.py`, `bfp_operation.py`, `bfp_slots.py` | `bfp_builtins()`, one `__hlasm_bfp_<operation>_<format>` builtin per operation and format over `zarch_float`; operands arrive as `[sign, biased exponent, fraction]` lists and results leave as fields plus the trap, flag and DXC bits (ruling R43) |
 | `interpreter/hlasm/hfp_builtins.py`, `hfp_layout.py`, `hfp_operation.py`, `hfp_slots.py` | `hfp_builtins()`, one `__hlasm_hfp_<operation>_<format>` builtin per operation and source format over `zarch_float`; operands arrive as `[sign, characteristic, fraction]` lists and results leave as the same fields, characteristic modulo 128, plus condition bits (ruling R46); the conversions take M3 first and return `[image, cc]` (to fixed) or BFP fields and the CC (to BFP) |
+| `interpreter/hlasm/dfp_builtins.py`, `dfp_fields.py`, `dfp_operation.py`, `ieee_words.py` | `dfp_builtins()`, one `__hlasm_dfp_<operation>_<format>` builtin per operation and format over `zarch_float`; operands arrive as `[negative, e, significand]` lists and results leave in the BFP result-list layout, the quantum condition as FPC bit X'04' (ruling R49) |
 | `interpreter/hlasm/system_machine_clock.py` | `SystemMachineClock`, the host clock over injected wall and process-CPU nanosecond readings: TOD from wall time since 1900-01-01 UTC (no leap seconds), CPU timer down from 2^63 - 1 at 4096 units per microsecond |
 | `interpreter/hlasm/cpu_attributes.py` | ECAG's constant attributes |
 | `interpreter/hlasm/facility_list.py` | STFLE's constant facility list |
@@ -1022,9 +1023,9 @@ TBEDR, THDER, THDR. Ruling R47.
   whatever mode it selects.
 - Access registers hold values only; no instruction addresses through them. LAE and LAEY do
   not set access register R1 (red-dragon-6uyp.86).
-- `run()` defaults to `DEFAULT_BUILTINS`, which has no clock, BFP or HFP builtins, so such an
+- `run()` defaults to `DEFAULT_BUILTINS`, which has no clock or floating-point builtins, so such an
   instruction there stores what the unresolved-call strategy gives. Callers compose
-  `clock_builtins(clock)`, `bfp_builtins()` and `hfp_builtins()`; the `interpreter.py` CLI does all three, with a
+  `clock_builtins(clock)`, `bfp_builtins()`, `hfp_builtins()` and `dfp_builtins()`; the `interpreter.py` CLI does all four, with a
   `SystemMachineClock`.
 - Only LFAS, SFASR and the BFP IEEE traps store a DXC: a compare-and-trap or load-and-trap
   trap and a decimal data exception abend `S0C7` and leave the FPC's DXC unchanged
@@ -1171,4 +1172,5 @@ TBEDR, THDER, THDR. Ruling R47.
 | `tests/integration/hlasm/test_hfp_conversion.py` | Every HFP conversion mnemonic on the VM: GR or FPR results and CC; LOAD ROUNDED overflow stores, then `S0CC` |
 | `tests/z390/test_hfp_conversion_differential.py` | Every HFP conversion case against z390; its faults pinned (`-m z390`) |
 | `tests/unit/hlasm/test_dpd_codec.py` | DPD codec IR: all 1000 declets against figures 20-32 and 20-33, the 24 noncanonical declets, each format's fields and canonical encoding |
+| `tests/unit/hlasm/test_dfp_builtins.py` | DFP builtins: fields to values and back for every kind; each family's value, scaled value, trap, flags, DXCs and CC |
 | `tests/z390/test_conditional_select_count_differential.py` | Every conditional, select and count case against z390; the instructions z390 does not execute and its whole-register SELFHR pinned (`-m z390`) |

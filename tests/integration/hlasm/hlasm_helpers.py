@@ -7,6 +7,7 @@ from contextlib import redirect_stdout
 from interpreter.frontends import get_hlasm_parser
 from interpreter.hlasm.bfp_builtins import bfp_builtins
 from interpreter.hlasm.clock_builtins import clock_builtins
+from interpreter.hlasm.dfp_builtins import dfp_builtins
 from interpreter.hlasm.hfp_builtins import hfp_builtins
 from interpreter.project.hlasm_compile import compile_hlasm
 from interpreter.project.program_entry import ProgramEntry
@@ -68,6 +69,7 @@ def _run_vm(source: str) -> tuple[VMState, str]:
                 clock_builtins(FixedMachineClock()),
                 bfp_builtins(),
                 hfp_builtins(),
+                dfp_builtins(),
             ),
         )
     return vm, console.getvalue()

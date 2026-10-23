@@ -9,6 +9,7 @@ from interpreter.hlasm.bfp_slots import (
     INEXACT_BIT,
     INVALID_BIT,
     OVERFLOW_BIT,
+    QUANTUM_BIT,
     UNDERFLOW_BIT,
 )
 from zarch_float.condition import Condition
@@ -21,6 +22,7 @@ _TRAPS: _Bits = {
     Condition.OVERFLOW: OVERFLOW_BIT,
     Condition.TINY: UNDERFLOW_BIT,
     Condition.INEXACT: INEXACT_BIT,
+    Condition.QUANTUM: QUANTUM_BIT,
 }
 _FLAGS: _Bits = {
     Condition.INVALID: INVALID_BIT,
@@ -28,6 +30,7 @@ _FLAGS: _Bits = {
     Condition.OVERFLOW: OVERFLOW_BIT,
     Condition.UNDERFLOW: UNDERFLOW_BIT,
     Condition.INEXACT: INEXACT_BIT,
+    Condition.QUANTUM: QUANTUM_BIT,
 }
 _SCALINGS: _Bits = {Condition.OVERFLOW: OVERFLOW_BIT, Condition.TINY: UNDERFLOW_BIT}
 _DETAILS: _Bits = {
