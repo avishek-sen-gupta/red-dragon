@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import shutil
 import tempfile
 from collections.abc import Sequence
 from pathlib import Path
@@ -14,7 +15,9 @@ from hlasm_asg.assembly_inputs import AssemblyInputs
 from hlasm_asg.diagnostic_report import DiagnosticReport
 from hlasm_asg.hlasm_ast_parser import HlasmAstParser
 from hlasm_asg.hlasm_bridge_failure import HlasmBridgeFailure
+from hlasm_asg.hlasm_bridge_not_found import HlasmBridgeNotFound
 from hlasm_asg.hlasm_parse_error import HlasmParseError
+from hlasm_asg.missing_syslib_directory import MissingSyslibDirectory
 from hlasm_asg.program.hlasm_program import HlasmProgram
 from hlasm_asg.real_subprocess_runner import RealSubprocessRunner
 from hlasm_asg.subprocess_runner import SubprocessRunner
@@ -38,6 +41,9 @@ class HlasmBridgeParser(HlasmAstParser):
     def __init__(
         self, runner: SubprocessRunner, bridge: str, syslib: Sequence[Path] = ()
     ):
+        missing = [d for d in syslib if not d.is_dir()]
+        if missing:
+            raise MissingSyslibDirectory(missing[0])
         self._runner = runner
         self._bridge = bridge
         self._syslib = tuple(syslib)
@@ -94,8 +100,15 @@ class HlasmBridgeParser(HlasmAstParser):
         return HlasmProgram.model_validate_json(path.read_text(encoding="utf-8"))
 
 
+def resolve_bridge(name: str) -> str:
+    found = shutil.which(name)
+    if not found:
+        raise HlasmBridgeNotFound(name)
+    return found
+
+
 def bridge_executable() -> str:
-    return os.environ.get(BRIDGE_ENV_VAR, DEFAULT_BRIDGE)
+    return resolve_bridge(os.environ.get(BRIDGE_ENV_VAR, DEFAULT_BRIDGE))
 
 
 def make_hlasm_parser(syslib: Sequence[Path] = ()) -> HlasmBridgeParser:

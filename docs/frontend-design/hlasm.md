@@ -45,7 +45,7 @@ addresses.
 
 | Module | Purpose |
 |---|---|
-| `hlasm_asg/hlasm_bridge_parser.py` | `make_hlasm_parser(syslib)`, `HlasmBridgeParser`; exit 2 → `HlasmParseError`, other failures → `HlasmBridgeFailure`. The default bridge path is resolved from the package, not the working directory; `HLASM_AST_BRIDGE` overrides it. `identity` is the SHA-256 of the bridge binary |
+| `hlasm_asg/hlasm_bridge_parser.py` | `make_hlasm_parser(syslib)`, `HlasmBridgeParser`; exit 2 → `HlasmParseError`, other failures → `HlasmBridgeFailure`. The default bridge path is resolved from the package, not the working directory; `HLASM_AST_BRIDGE` overrides it, and a bare name there is looked up on `PATH`. A bridge that cannot be found raises `HlasmBridgeNotFound`; a SYSLIB directory that does not exist raises `MissingSyslibDirectory`, from `compile_hlasm` and from `run(copybook_dirs=...)` alike. `identity` is the SHA-256 of the bridge binary |
 | `hlasm_asg/assembly_input.py`, `assembly_inputs.py` | `AssemblyInput` (SYSPARM, SYSJOB, SYSSTEP, SYSIN_DSN, SYSIN_MEMBER); `AssemblyInputs`: the values one assembly is given and the instant it reads |
 | `interpreter/project/hlasm_compile_options.py` | `HlasmCompileOptions(names, clock)`: the inputs `compile_hlasm` takes; `clock` is an `AssemblyClock` (`hlasm_asg/assembly_clock.py`; COBOL's `CompileClock`, which the import contracts keep from `interpreter.project`), `SystemAssemblyClock` by default |
 | `interpreter/frontends/__init__.py` | `get_hlasm_parser(syslib)`: the bridge parser with `hlasm-bridge/maclib/` first on SYSLIB |
@@ -203,15 +203,16 @@ is not in the digest: a reused unit keeps the time it was assembled at, as COBOL
 
 `HlasmCompileOptions.names` maps an `AssemblyInput` to its value, and the bridge gets
 each one as an option (`--sysparm`, `--sysjob`, `--sysstep`, `--sysin-dsn`,
-`--sysin-member`). Nothing is defaulted: a variable that was not given is undefined,
-and reading it refuses the assembly with `E010 Unknown variable: <name>` at its line
-(`HlasmParseError`). This includes `&SYSPARM`, which HLASM sets to the null string when
-the SYSPARM option is absent; supply the empty string for that. `&SYSJOB`, `&SYSSTEP` and
+`--sysin-member`). An unsupplied `&SYSPARM` is the null string, as in HLASM. Any other
+name that was not given is undefined, and reading it refuses the assembly with
+`E010 Unknown variable: <name>` at its line (`HlasmParseError`). A SYSPARM over 255
+characters, HLASM's limit, or a clock reading without a UTC offset raises
+`UnusableAssemblyInput` before the bridge runs. `&SYSJOB`, `&SYSSTEP` and
 `&SYSPARM` are global; `&SYSIN_DSN` and `&SYSIN_MEMBER` exist only inside macros, as
 che4z defines them. No CLI flag supplies them yet.
 
 The clock is read once per assembly, when the bridge runs, and passed as an ISO
-instant with its UTC offset (`--clock`). `&SYSDATE`, `&SYSDATC`, `&SYSTIME` and
+instant with its UTC offset (`--clock`); the bridge refuses a field out of range. `&SYSDATE`, `&SYSDATC`, `&SYSTIME` and
 `AREAD CLOCKB`/`CLOCKD` use its local time. `&SYSCLOCK` uses its UTC time, so every
 macro call sees the same `&SYSCLOCK`; HLASM takes a new reading per call.
 
@@ -1266,8 +1267,8 @@ layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.
 | `tests/integration/hlasm/test_bridge_parser.py` | The real bridge: macro origins, refused assemblies; operand placement, modifiers, S-constants, CCW, AMODE/RMODE and diagnostic call stacks |
 | `tests/integration/hlasm/test_storage_layout.py` | Section regions and address constants; `*` in each constant after `DC 0F` |
 | `tests/integration/hlasm/test_svc.py` | `WTO`, `ABEND` user and system codes, unlowered SVCs, `run()` with our maclib then `copybook_dirs`, call-site spans |
-| `tests/integration/hlasm/test_hlasm_compile.py` | Unit files; reuse that follows the inputs, SYSLIB member contents and the bridge, not the clock; assembly inputs, clock and `&SYSSEQF` printed through WTO; an input not given refused; the bridge found from another working directory; `run()`, return code, default entry, BALR/BR, wild branch |
-| `tests/unit/hlasm/test_bridge_command.py` | The bridge command carries each supplied input and the clock as options |
+| `tests/integration/hlasm/test_hlasm_compile.py` | Unit files; reuse that follows the inputs, SYSLIB member contents and the bridge, not the clock; assembly inputs, clock and `&SYSSEQF` printed through WTO; an unsupplied `&SYSPARM` is null and another input not given is refused; a missing SYSLIB directory refused; a bridge name found on `PATH`; the bridge found from another working directory; `run()`, return code, default entry, BALR/BR, wild branch |
+| `tests/unit/hlasm/test_bridge_command.py` | The bridge command carries each supplied input and the clock as options; a naive clock and a SYSPARM over 255 characters are refused |
 | `tests/integration/hlasm/test_instruction_table.py`, `test_opcode_unit_coverage.py` | Instruction table and opcode-unit coverage |
 | `tests/z390/test_foundation_differential.py` | Return code, WTO, user abend and assembly failure against z390 (`-m z390`) |
 | `tests/z390/test_z390_log.py` | Registers and CC from a z390 abend dump (default run) |
