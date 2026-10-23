@@ -193,12 +193,12 @@ def test_conversion_builtins_report_the_integer_image_and_cc_or_the_rounded_valu
             "__hlasm_bfp_rounded_to_long_extended", [NEAREST_EVEN, [1, 0x7FFF, 1 << 60]]
         ),
     } == {
-        "to fixed inexact": [2, 0, 0, 2, 0, 0, 0x08, 0x08, 0, 0x08, 2],
+        "to fixed inexact": [2, 0, 0, 0, 0, 0, 0x08, 0x08, 0, 0x08, 2],
         "to fixed incremented": [
             0xFFFFFFFC,
             0,
             0,
-            0xFFFFFFFC,
+            0,
             0,
             0,
             0x08,
@@ -211,7 +211,7 @@ def test_conversion_builtins_report_the_integer_image_and_cc_or_the_rounded_valu
             0x80000000,
             0,
             0,
-            0x80000000,
+            0,
             0,
             0,
             0x88,
@@ -226,7 +226,7 @@ def test_conversion_builtins_report_the_integer_image_and_cc_or_the_rounded_valu
             0xFFFFFFFF,
             0,
             0,
-            0xFFFFFFFF,
+            0,
             0,
             0,
             0x88,

@@ -25,6 +25,7 @@ from interpreter.hlasm.opcodes.bfp_ir import (
     load_image,
     magnitude_of,
     nan_of,
+    pick,
     quiet_of,
     signaling_nan_of,
 )
@@ -99,10 +100,7 @@ def _compare_cc(
 ) -> Register:
     ordered = _ordered_cc(emitter, a, b, layout)
     unordered = _either(emitter, nan_of, a, b, layout)
-    to_unordered = emitter.binop(BinopKind.SUB, emitter.int_(UNORDERED_CC), ordered)
-    return emitter.binop(
-        BinopKind.ADD, ordered, emitter.binop(BinopKind.MUL, unordered, to_unordered)
-    )
+    return pick(emitter, unordered, emitter.int_(UNORDERED_CC), ordered)
 
 
 def _compare(signals: Signals, layout: BfpLayout, second: Source) -> StatementLowering:

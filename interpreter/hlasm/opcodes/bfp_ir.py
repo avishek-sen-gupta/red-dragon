@@ -158,6 +158,14 @@ def exact_image(
     )
 
 
+def pick(
+    emitter: HlasmEmitter, chosen: Register, then: Register, otherwise: Register
+) -> Register:
+    difference = emitter.binop(BinopKind.SUB, then, otherwise)
+    taken = emitter.binop(BinopKind.MUL, chosen, difference)
+    return emitter.binop(BinopKind.ADD, otherwise, taken)
+
+
 def image_cc(emitter: HlasmEmitter, image: Register, layout: BfpLayout) -> Register:
     magnitude = keep(layout.magnitude_mask)(emitter, image)
     sign = emitter.binop(BinopKind.RSHIFT, image, emitter.int_(layout.sign_shift))
@@ -165,10 +173,7 @@ def image_cc(emitter: HlasmEmitter, image: Register, layout: BfpLayout) -> Regis
     nonzero = emitter.binop(BinopKind.NE, magnitude, emitter.int_(0))
     signed = emitter.binop(BinopKind.SUB, emitter.int_(POSITIVE_CC), sign)
     number = emitter.binop(BinopKind.MUL, nonzero, signed)
-    to_nan = emitter.binop(BinopKind.SUB, emitter.int_(NAN_CC), number)
-    return emitter.binop(
-        BinopKind.ADD, number, emitter.binop(BinopKind.MUL, nan, to_nan)
-    )
+    return pick(emitter, nan, emitter.int_(NAN_CC), number)
 
 
 def magnitude_of(emitter: HlasmEmitter, image: Register, layout: BfpLayout) -> Register:

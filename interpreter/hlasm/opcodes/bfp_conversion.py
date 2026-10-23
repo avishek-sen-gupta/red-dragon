@@ -46,6 +46,7 @@ from interpreter.hlasm.opcodes.bfp_ir import (
     image_at,
     list_item,
     load_image,
+    pick,
     signaling_nan_of,
     store_image,
 )
@@ -204,14 +205,6 @@ FROM_FIXED: Mapping[str, StatementLowering] = {
 }
 
 
-def _pick(
-    emitter: HlasmEmitter, chosen: Register, then: Register, otherwise: Register
-) -> Register:
-    difference = emitter.binop(BinopKind.SUB, then, otherwise)
-    taken = emitter.binop(BinopKind.MUL, chosen, difference)
-    return emitter.binop(BinopKind.ADD, otherwise, taken)
-
-
 def _special_image(
     emitter: HlasmEmitter,
     image: Register,
@@ -259,7 +252,7 @@ def _lengthened_image(
     special_image = emitter.binop(
         BinopKind.BIT_OR, signed, _special_image(emitter, image, source, target)
     )
-    return _pick(emitter, special, special_image, finite)
+    return pick(emitter, special, special_image, finite)
 
 
 def _lengthen(
@@ -298,7 +291,7 @@ def _rounded_stored(source: BfpLayout, target: BfpLayout) -> Deliver:
         placed = emitter.binop(BinopKind.LSHIFT, rounded, emitter.int_(narrowing))
         merged = emitter.binop(BinopKind.BIT_OR, placed, kept)
         trapped = emitter.binop(BinopKind.NE, slot, emitter.int_(0))
-        store_image(emitter, r1, source, _pick(emitter, trapped, scaled, merged))
+        store_image(emitter, r1, source, pick(emitter, trapped, scaled, merged))
 
     return deliver
 
