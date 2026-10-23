@@ -4,19 +4,19 @@
 from collections.abc import Callable
 
 from hlasm_asg.program.machine_statement import MachineStatement
-from interpreter.hlasm.bfp_slots import INEXACT_BIT, QUANTUM_BIT
 from interpreter.hlasm.data_movement import Source, keep
 from interpreter.hlasm.dfp_fields import INFINITY, QUIET_NAN
 from interpreter.hlasm.dfp_layout import DfpLayout
+from interpreter.hlasm.fp_slots import INEXACT_BIT, QUANTUM_BIT
 from interpreter.hlasm.hlasm_constants import BYTE_MASK
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.ieee_outcome import IeeeOutcome
-from interpreter.hlasm.opcodes.bfp_forms import Deliver, SuppressedBits
-from interpreter.hlasm.opcodes.bfp_ir import enabled_traps, field_at, fpc_mode_code
 from interpreter.hlasm.opcodes.dfp_codec import DECODERS, ENCODERS
 from interpreter.hlasm.opcodes.floating_point_support import (
     DFP_MODE_SHIFT,
 )
+from interpreter.hlasm.opcodes.fp_forms import Deliver, SuppressedBits
+from interpreter.hlasm.opcodes.fp_ir import enabled_traps, field_at, fpc_mode_code
 from interpreter.hlasm.opcodes.fpr_images import list_item, pick, store_image
 from interpreter.hlasm.operands import optional_mask_operand, reg_operand
 from interpreter.operator_kind import BinopKind

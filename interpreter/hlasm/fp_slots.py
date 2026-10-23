@@ -1,5 +1,5 @@
 # pyright: standard
-"""Positions in a BFP builtin's result list, and the FPC mask, flag and DXC bits its trap and flag words use."""
+"""Positions in an IEEE builtin's result list (BFP and DFP), and the FPC mask, flag and DXC bits its trap and flag words use."""
 
 SCALED_SLOT = 3
 TRAP_SLOT = 6

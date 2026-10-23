@@ -3,7 +3,7 @@
 
 from collections.abc import Mapping
 
-from interpreter.hlasm.bfp_slots import (
+from interpreter.hlasm.fp_slots import (
     DIVISION_BY_ZERO_BIT,
     INCREMENTED_BIT,
     INEXACT_BIT,

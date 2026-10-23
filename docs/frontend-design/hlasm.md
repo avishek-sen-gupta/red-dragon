@@ -104,8 +104,10 @@ addresses.
 | `interpreter/hlasm/opcodes/bfp_class.py` | BFP COMPARE, COMPARE AND SIGNAL and TEST DATA CLASS, in IR (ruling R44) |
 | `interpreter/hlasm/opcodes/bfp_sign.py` | BFP LOAD AND TEST and the sign forms, in IR |
 | `interpreter/hlasm/opcodes/bfp_conversion.py` | BFP conversions: to fixed and logical, rounding from fixed and LOAD ROUNDED through builtins; exact from fixed and lengthening in IR (red-dragon-6uyp.52) |
-| `interpreter/hlasm/opcodes/bfp_forms.py` | Statement-level BFP parts shared by the BFP units: the M3 modifier and its check, stores after delivery, one builtin call through the ladder |
-| `interpreter/hlasm/opcodes/bfp_ir.py`, `interpreter/hlasm/ieee_outcome.py` | BFP image IR: field lists, encoding, an image's CC, and the IEEE trap ladder over an `IeeeOutcome` |
+| `interpreter/hlasm/opcodes/bfp_forms.py` | Statement-level BFP parts: the M3 modifier and its check, image stores after delivery, a BFP builtin call |
+| `interpreter/hlasm/opcodes/fp_forms.py` | Statement-level parts BFP and DFP share: one builtin call through the ladder, suppressed bits, the specification check, GR and rounded-image stores |
+| `interpreter/hlasm/opcodes/bfp_ir.py` | BFP image IR: field lists, encoding, an image's CC, the BFP rounding mode |
+| `interpreter/hlasm/opcodes/fp_ir.py`, `interpreter/hlasm/ieee_outcome.py`, `interpreter/hlasm/fp_slots.py` | IR both IEEE radixes share: result fields, FPC mode codes, the result-list slots and FPC bits, and the IEEE trap ladder over an `IeeeOutcome` |
 | `interpreter/hlasm/opcodes/hfp_arithmetic.py` | The HFP arithmetic unit's builtin forms: add, subtract, compare, multiply, divide, halve, square root, load FP integer, the multiply-and-add forms (red-dragon-6uyp.53) |
 | `interpreter/hlasm/opcodes/hfp_sign.py` | HFP LOAD AND TEST and the sign forms, in IR |
 | `interpreter/hlasm/opcodes/hfp_ir.py` | HFP image IR: field lists, normalized fields of a binary value, encoding with the extended low-order part, an image's CC, and the program-mask ladder |
@@ -121,7 +123,7 @@ addresses.
 | `interpreter/hlasm/clock_instructions.py` | STCK, STCKF, STCKE, ECTG |
 | `interpreter/hlasm/machine_clock.py`, `clock_builtins.py` | `MachineClock` (TOD clock, CPU timer); `clock_builtins(clock)`, the `__hlasm_tod_clock` and `__hlasm_cpu_timer` builtins over it |
 | `interpreter/hlasm/integer_outcome.py` | A fixed-point conversion builtin's result list: the integer image, the IEEE words and the CC (3 when invalid, else the source's sign); shared by the BFP and DFP builtins |
-| `interpreter/hlasm/bfp_builtins.py`, `bfp_fields.py`, `bfp_layout.py`, `bfp_operation.py`, `bfp_slots.py` | `bfp_builtins()`, one `__hlasm_bfp_<operation>_<format>` builtin per operation and format over `zarch_float`; operands arrive as `[sign, biased exponent, fraction]` lists and results leave as fields plus the trap, flag and DXC bits (ruling R43) |
+| `interpreter/hlasm/bfp_builtins.py`, `bfp_fields.py`, `bfp_layout.py`, `bfp_operation.py` | `bfp_builtins()`, one `__hlasm_bfp_<operation>_<format>` builtin per operation and format over `zarch_float`; operands arrive as `[sign, biased exponent, fraction]` lists and results leave as fields plus the trap, flag and DXC bits (ruling R43) |
 | `interpreter/hlasm/hfp_builtins.py`, `hfp_layout.py`, `hfp_operation.py`, `hfp_slots.py` | `hfp_builtins()`, one `__hlasm_hfp_<operation>_<format>` builtin per operation and source format over `zarch_float`; operands arrive as `[sign, characteristic, fraction]` lists and results leave as the same fields, characteristic modulo 128, plus condition bits (ruling R46); the conversions take M3 first and return `[image, cc]` (to fixed) or BFP fields and the CC (to BFP) |
 | `interpreter/hlasm/dfp_builtins.py`, `dfp_fields.py`, `dfp_operation.py`, `ieee_words.py` | `dfp_builtins()`, one `__hlasm_dfp_<operation>_<format>` builtin per operation and format over `zarch_float`; operands arrive as `[negative, e, significand]` lists and results leave in the BFP result-list layout, the quantum condition as FPC bit X'04' (ruling R49) |
 | `interpreter/hlasm/system_machine_clock.py` | `SystemMachineClock`, the host clock over injected wall and process-CPU nanosecond readings: TOD from wall time since 1900-01-01 UTC (no leap seconds), CPU timer down from 2^63 - 1 at 4096 units per microsecond |

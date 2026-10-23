@@ -14,12 +14,7 @@ from interpreter.hlasm.hlasm_constants import (
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.ir_function import IrFunction
 from interpreter.hlasm.ladder_end import LadderEnd, ScaledTrap
-from interpreter.hlasm.opcodes.bfp_ir import (
-    bfp_mode_of,
-    emit_ieee_ladder,
-    mode_code_of,
-    outcome_of,
-)
+from interpreter.hlasm.opcodes.bfp_ir import bfp_mode_of
 from interpreter.hlasm.opcodes.dfp_ir import (
     DFP_FPC_TO_MODIFIER,
     quantum_yields,
@@ -29,6 +24,7 @@ from interpreter.hlasm.opcodes.floating_point_support import (
     emit_data_exception,
     store_dxc,
 )
+from interpreter.hlasm.opcodes.fp_ir import emit_ieee_ladder, mode_code_of, outcome_of
 from interpreter.hlasm.opcodes.fpr_images import (
     compared,
     list_item,

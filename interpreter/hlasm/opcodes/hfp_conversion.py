@@ -26,9 +26,9 @@ from interpreter.hlasm.hfp_layout import (
 from interpreter.hlasm.hfp_operation import HfpOperation, hfp_builtin_name
 from interpreter.hlasm.hlasm_constants import HFP_EXPONENT_OVERFLOW_ABEND
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
-from interpreter.hlasm.opcodes.bfp_forms import checked
 from interpreter.hlasm.opcodes.bfp_ir import image_at, nan_of, significand_of
 from interpreter.hlasm.opcodes.floating_point_support import pairs
+from interpreter.hlasm.opcodes.fp_forms import checked
 from interpreter.hlasm.opcodes.fpr_images import (
     FIRST,
     SECOND,
