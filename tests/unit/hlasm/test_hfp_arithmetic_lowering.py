@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from hlasm_asg.program.operand import Operand
 from interpreter.instructions import Symbolic
 from tests.covers import NotLanguageFeature, covers
-from tests.unit.hlasm.bfp_trace import (
+from tests.unit.hlasm.fp_trace import (
     ADDRESS,
     CC,
     D8,
