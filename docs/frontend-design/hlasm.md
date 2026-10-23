@@ -1108,6 +1108,11 @@ Rulings R43, R45, R48, R52.
   and LDETR forms, ignores M3 methods and the PFPO controls, return code and CC 1, and takes no
   DFP IEEE or quantum trap. The z390 test pins each to the PoO (red-dragon-6uyp.74).
 
+**Vector registers (red-dragon-6uyp.90).** No vector opcode is lowered yet; this is the
+layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.md`, ruling R53).
+
+- Our che4z fork exports `VZERO v` as `VGBM v,0`. Upstream che4z gives `VGBM 1,v`.
+
 ## Known Gaps
 
 - Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, miscellaneous, packed-decimal arithmetic, packed-decimal compare and test, decimal conversion, edit, floating-point-support, BFP arithmetic, BFP conversion, HFP arithmetic, HFP conversion and DFP arithmetic units, DFP conversion and PFPO, are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
