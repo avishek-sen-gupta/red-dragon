@@ -1,7 +1,7 @@
 # pyright: standard
 """BFP arithmetic programs, one or more per mnemonic, shared by the VM tests and the z390 differential tests; FPRs come back through LGDR, intermediate CCs through IPM, and every program first clears the FPC."""
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 
 from tests.integration.hlasm.hlasm_machine import HlasmMachine
 from tests.integration.hlasm.hlasm_run import HlasmRun
@@ -68,6 +68,27 @@ DATA = (
     "STINY2   DC    X'00000002'\n"
     "SBIG     DC    X'7F000000'\n"
     "SNMIN    DC    X'00800000'\n"
+    "TS0      DC    X'00000000'\n"
+    "TSM1     DC    X'BF800000'\n"
+    "TSSUB    DC    X'00000001'\n"
+    "TSMSUB   DC    X'80000001'\n"
+    "TSINF    DC    X'7F800000'\n"
+    "TSMINF   DC    X'FF800000'\n"
+    "TSMQNAN  DC    X'FFC00000'\n"
+    "TSSNAN   DC    X'7F800001'\n"
+    "TSMSNAN  DC    X'FF800001'\n"
+    "         DS    0D\n"
+    "TX0      DC    X'00000000000000000000000000000000'\n"
+    "TXM0     DC    X'80000000000000000000000000000000'\n"
+    "TXM1     DC    X'BFFF0000000000000000000000000000'\n"
+    "TXSUB    DC    X'00000000000000000000000000000001'\n"
+    "TXMSUB   DC    X'80000000000000000000000000000001'\n"
+    "TXINF    DC    X'7FFF0000000000000000000000000000'\n"
+    "TXMINF   DC    X'FFFF0000000000000000000000000000'\n"
+    "TXQNAN   DC    X'7FFF8000000000000000000000000000'\n"
+    "TXMQNAN  DC    X'FFFF8000000000000000000000000000'\n"
+    "TXSNAN   DC    X'7FFF0000000000000000000000000001'\n"
+    "TXMSNAN  DC    X'FFFF0000000000000000000000000001'\n"
 )
 
 
@@ -107,7 +128,7 @@ def case_of(body: str, registers: Mapping[int, int], cc: int, fpc: int = 0) -> C
     return (set_fpc(0) + PRESET + body, registers, cc, COMPLETED, fpc)
 
 
-CLASSES = (
+LONG_CLASSES = (
     "D0",
     "DM0",
     "D1",
@@ -121,23 +142,71 @@ CLASSES = (
     "DSNAN",
     "DMSNAN",
 )
+SHORT_CLASSES = (
+    "TS0",
+    "SM0",
+    "S1",
+    "TSM1",
+    "TSSUB",
+    "TSMSUB",
+    "TSINF",
+    "TSMINF",
+    "SQNAN",
+    "TSMQNAN",
+    "TSSNAN",
+    "TSMSNAN",
+)
+EXTENDED_CLASSES = (
+    "TX0",
+    "TXM0",
+    "X1",
+    "TXM1",
+    "TXSUB",
+    "TXMSUB",
+    "TXINF",
+    "TXMINF",
+    "TXQNAN",
+    "TXMQNAN",
+    "TXSNAN",
+    "TXMSNAN",
+)
 
 
-def _classes(selected: int, others: int, first: int) -> str:
+def _load_short(label: str) -> str:
+    return lines(f"LE 1,{label}")
+
+
+def _load_long(label: str) -> str:
+    return lines(f"LD 1,{label}")
+
+
+def _load_extended(label: str) -> str:
+    return extended_from(1, label)
+
+
+type ClassTest = tuple[str, Callable[[str], str], tuple[str, ...]]
+
+TCEB: ClassTest = ("TCEB", _load_short, SHORT_CLASSES)
+TCDB: ClassTest = ("TCDB", _load_long, LONG_CLASSES)
+TCXB: ClassTest = ("TCXB", _load_extended, EXTENDED_CLASSES)
+
+
+def _classes(test: ClassTest, selected: int, others: int, first: int) -> str:
+    mnemonic, load, labels = test
     return "".join(
-        lines(
-            f"LD 1,{label}",
-            f"TCDB 1,X'{(1 << (11 - at)) * selected | (0xFFF ^ (1 << (11 - at))) * others:03X}'",
+        load(label)
+        + lines(
+            f"{mnemonic} 1,X'{(1 << (11 - at)) * selected | (0xFFF ^ (1 << (11 - at))) * others:03X}'",
         )
         + cc_into(2 + at - first)
-        for at, label in enumerate(CLASSES)
+        for at, label in enumerate(labels)
         if first <= at < first + 6
     )
 
 
-def _class_case(selected: int, others: int, first: int) -> Case:
+def _class_case(test: ClassTest, selected: int, others: int, first: int) -> Case:
     return case_of(
-        _classes(selected, others, first),
+        _classes(test, selected, others, first),
         {2 + at: cc_word(selected) for at in range(6)},
         selected,
     )
@@ -359,16 +428,27 @@ COMPARES: Mapping[str, Case] = {
         {8: cc_word(1), 9: cc_word(0), 10: cc_word(0)},
         2,
     ),
+    "CXBR high": case_of(
+        extended_from(1, "X3") + extended_from(4, "X2") + lines("CXBR 1,4"), {}, 2
+    ),
     "KXBR": case_of(
         extended_from(1, "X1") + extended_from(4, "X2") + lines("KXBR 1,4"), {}, 1
     ),
 }
 
 INTEGRAL: Mapping[str, Case] = {
-    "TCDB selects the class bit, zeros to subnormals": _class_case(1, 0, 0),
-    "TCDB selects the class bit, infinities to SNaNs": _class_case(1, 0, 6),
-    "TCDB misses every other bit, zeros to subnormals": _class_case(0, 1, 0),
-    "TCDB misses every other bit, infinities to SNaNs": _class_case(0, 1, 6),
+    "TCEB selects the class bit, zeros to subnormals": _class_case(TCEB, 1, 0, 0),
+    "TCEB selects the class bit, infinities to SNaNs": _class_case(TCEB, 1, 0, 6),
+    "TCEB misses every other bit, zeros to subnormals": _class_case(TCEB, 0, 1, 0),
+    "TCEB misses every other bit, infinities to SNaNs": _class_case(TCEB, 0, 1, 6),
+    "TCDB selects the class bit, zeros to subnormals": _class_case(TCDB, 1, 0, 0),
+    "TCDB selects the class bit, infinities to SNaNs": _class_case(TCDB, 1, 0, 6),
+    "TCDB misses every other bit, zeros to subnormals": _class_case(TCDB, 0, 1, 0),
+    "TCDB misses every other bit, infinities to SNaNs": _class_case(TCDB, 0, 1, 6),
+    "TCXB selects the class bit, zeros to subnormals": _class_case(TCXB, 1, 0, 0),
+    "TCXB selects the class bit, infinities to SNaNs": _class_case(TCXB, 1, 0, 6),
+    "TCXB misses every other bit, zeros to subnormals": _class_case(TCXB, 0, 1, 0),
+    "TCXB misses every other bit, infinities to SNaNs": _class_case(TCXB, 0, 1, 6),
     "FIEBR FIEBRA": case_of(
         zeroed_short(1, 2, 3)
         + lines("LE 2,SM2P5", "FIEBR 1,0,2", "LGDR 2,1", "FIEBRA 3,1,2,4", "LGDR 3,3"),
