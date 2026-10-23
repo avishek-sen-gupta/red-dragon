@@ -28,6 +28,9 @@ SET_CC = "         LTR   2,2\n"
 DIGITS_10 = "X'31323334353637383930'"
 CHARACTERS_10 = "X'0031003200330034003500360037003800390030'"
 
+OUT_SPAN = (0xC00, 0xC78)
+SECTION = "T"
+
 DATA = (
     "FILL     DC    10X'A5A5A5A5A5A5A5A5'\n"
     "P7       DC    PL8'1234567'\n"
@@ -76,6 +79,7 @@ DATA = (
     "BADS16   DC    XL13'00',X'123457'\n"
     "BADD16   DC    XL13'00',X'1A345C'\n"
     "N31      DC    X'12345678',X'90123456',X'78901234',X'5678901C'\n"
+    "         ORG   T+X'C00'\n"
     "OUT      DC    XL8'FFFFFFFFFFFFFFFF'\n"
     "OUT16    DC    2XL8'FFFFFFFFFFFFFFFF'\n"
     "OUT32    DC    4XL8'FFFFFFFFFFFFFFFF'\n"
@@ -130,7 +134,8 @@ def _moved(lines: str, load: str, results: Mapping[int, int]) -> Case:
 
 
 def _unpacked(lines: str, load: str, results: Mapping[int, int], cc: int) -> Case:
-    return (lines + load, results, cc)
+    preset = "" if cc == CC_SET_BY_LTR else SET_CC
+    return (preset + lines + load, results, cc)
 
 
 LOAD_OUT = _line("LG", f"{FIRST},OUT")
@@ -170,6 +175,9 @@ TO_DECIMAL: Mapping[str, Case] = {
     "CVD negative": _stored(
         _line("LHI", f"{RESULT},-1234"), "CVD", LOAD_OUT, _loaded(0x1234D)
     ),
+    "CVD positive": _stored(
+        _line("LHI", f"{RESULT},1234"), "CVD", LOAD_OUT, _loaded(0x1234C)
+    ),
     "CVD zero ignores the high word": _stored(
         _line("LHI", f"{RESULT},0"), "CVD", LOAD_OUT, _loaded(0xC)
     ),
@@ -182,6 +190,14 @@ TO_DECIMAL: Mapping[str, Case] = {
         + _line("CVDG", f"{RESULT},OUT16")
         + LOAD_OUT16,
         _loaded(0x00000000_00009223, 0x37203685_4775808D),
+        CC_SET_BY_LTR,
+    ),
+    "CVDG positive": (
+        _line("LGHI", f"{RESULT},5678")
+        + SET_CC
+        + _line("CVDG", f"{RESULT},OUT16")
+        + LOAD_OUT16,
+        _loaded(0, 0x5678C),
         CC_SET_BY_LTR,
     ),
     "CVDG uses the high word": (
