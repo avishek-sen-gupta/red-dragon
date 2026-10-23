@@ -1289,5 +1289,5 @@ Rulings R43, R45, R48, R52.
 | `tests/unit/hlasm/test_pfpo_builtins.py`, `test_pfpo_lowering.py` | PFPO: the builtin's formats, controls and scaling exponent; the lowering's decoders, encoders, single call and GR1 store |
 | `tests/unit/hlasm/test_decimal_lanes.py` | Decimal lanes: digits spread into packed and zoned lanes and combine back; a digit above 9 is caught in any lane |
 | `tests/unit/hlasm/test_dfp_conversion_lowering.py` | DFP conversion IR: the operand read and decoded, one builtin call, the ladder, then the GR or encoded FPR store; invalid pairs abend `S0C6` before any access; no SYMBOLIC |
-| `tests/integration/hlasm/test_dfp_conversion.py` | Every DFP conversion mnemonic on the VM: results, CC and FPC flags; each trap's delivered value, DXC and `S0C7` |
+| `tests/integration/hlasm/test_dfp_conversion.py` | Every DFP conversion mnemonic and PFPO on the VM: results, CC and FPC flags; each trap's delivered value, DXC and `S0C7`; PFPO's GR1 return code on a trap; EX of an RSL-b form |
 | `tests/z390/test_conditional_select_count_differential.py` | Every conditional, select and count case against z390; the instructions z390 does not execute and its whole-register SELFHR pinned (`-m z390`) |

@@ -20,14 +20,21 @@ from tests.integration.hlasm.bfp_arithmetic_programs import (
     set_fpc,
     trap_of,
 )
-from tests.integration.hlasm.dfp_arithmetic_programs import DATA, QUANTUM_FLAG
+from tests.integration.hlasm.dfp_arithmetic_programs import (
+    DATA,
+    QUANTUM_FLAG,
+    UNDERFLOW_FLAG,
+)
 from tests.integration.hlasm.hlasm_machine import HlasmMachine
 from tests.integration.hlasm.hlasm_run import HlasmRun
 from tests.integration.hlasm.load_store_programs import (
     ABEND,
+    FILL,
     HIGH_FILL,
     based_program,
 )
+
+OVERFLOW_FLAG = 0x00200000
 
 CONVERSION_DATA = (
     "         DS    0D\n"
@@ -71,6 +78,9 @@ CONVERSION_DATA = (
     "B1E300   DC    X'7E37E43C8800759C'\n"
     "DTENTH   DC    X'25F8000000000000'\n"
     "H1       DC    X'41100000'\n"
+    "D1E80    DC    X'2378000000000001'\n"
+    "DM1EM80  DC    X'A0F8000000000001'\n"
+    "XCDZT    CDZT  3,Z5M(1),8\n"
 )
 
 
@@ -244,6 +254,7 @@ REGISTER_DECIMAL: Mapping[str, Case] = {
     ),
 }
 
+DXC_PRESET = set_fpc(0x00000C00)
 MASK_OFF = lines("LA 1,0", "SPM 1")
 
 
@@ -409,6 +420,35 @@ PFPO: Mapping[str, Case] = {
         1,
         0x00280000,
     ),
+    "PFPO HFP short to DFP long": case_of(
+        _pfpo(0x01090000, "LE 4,H1") + lines("LGDR 2,0"),
+        {2: 0x22380000_00000001},
+        0,
+    ),
+    "PFPO reports HFP overflow as invalid or as overflow by bit 58": case_of(
+        _pfpo(0x01000900, "LD 4,D1E80")
+        + lines("LGDR 2,0")
+        + _pfpo(0x01000920, "LD 4,D1E80")
+        + lines("LGDR 3,0"),
+        {2: 0x7FFFFFFF_00000000, 3: 0x7FFFFFFF_00000000},
+        1,
+        INVALID_FLAG | OVERFLOW_FLAG | INEXACT_FLAG,
+    ),
+    "PFPO gives HFP underflow a signed true zero, unreported without bit 59": case_of(
+        _pfpo(0x01000900, "LD 4,DM1EM80") + lines("LGDR 2,0"),
+        {2: 0x80000000_00000000},
+        1,
+        INEXACT_FLAG,
+    ),
+    "PFPO reports HFP underflow under bit 59": case_of(
+        _pfpo(0x01000910, "LD 4,DM1EM80") + lines("LGDR 2,0"),
+        {2: 0x80000000_00000000},
+        1,
+        UNDERFLOW_FLAG | INEXACT_FLAG,
+    ),
+    "EX of CDZT takes the length from R1": case_of(
+        lines("LA 1,4", "EX 1,XCDZT", "LGDR 2,3"), {2: 0xA2380000_000049C5}, PRESET_CC
+    ),
     "PFPO with an invalid function abends S0C6": _ended(
         lines("IILF 0,X'01070600'") + PERFORM, PRESET_CC, "S0C6"
     ),
@@ -446,22 +486,30 @@ TRAPS: Mapping[str, Trap] = {
         0x20002C00,
     ),
     "CDSTR suppresses on a bad digit with DXC 0": trap_of(
-        lines("LD 1,D1", "LG 2,PKBAD", "CDSTR 1,2"), {1: 0x22380000_00000001}, 0
+        DXC_PRESET + lines("LD 1,D1", "LG 2,PKBAD", "CDSTR 1,2"),
+        {1: 0x22380000_00000001},
+        0,
     ),
     "CDSTR suppresses on a bad sign with DXC 0": trap_of(
-        lines("LD 1,D1", "LG 2,PKSIGN", "CDSTR 1,2"), {1: 0x22380000_00000001}, 0
+        DXC_PRESET + lines("LD 1,D1", "LG 2,PKSIGN", "CDSTR 1,2"),
+        {1: 0x22380000_00000001},
+        0,
     ),
     "CDUTR suppresses on a bad digit with DXC 0": trap_of(
-        lines("LD 1,D1", "LG 2,PKBAD", "CDUTR 1,2"), {1: 0x22380000_00000001}, 0
+        DXC_PRESET + lines("LD 1,D1", "LG 2,PKBAD", "CDUTR 1,2"),
+        {1: 0x22380000_00000001},
+        0,
     ),
     "CDPT suppresses on a nonzero unused digit with DXC 0": trap_of(
-        lines("LD 1,D1", "CDPT 1,PUNUSED(9),0"), {1: 0x22380000_00000001}, 0
+        DXC_PRESET + lines("LD 1,D1", "CDPT 1,PUNUSED(9),0"),
+        {1: 0x22380000_00000001},
+        0,
     ),
     "CDZT suppresses on a bad digit with DXC 0": trap_of(
-        lines("LD 1,D1", "CDZT 1,ZBAD(3),0"), {1: 0x22380000_00000001}, 0
+        DXC_PRESET + lines("LD 1,D1", "CDZT 1,ZBAD(3),0"), {1: 0x22380000_00000001}, 0
     ),
     "CDPT suppresses on a bad sign with DXC 0": trap_of(
-        lines("LD 1,D1", "CDPT 1,U3(3),8"), {1: 0x22380000_00000001}, 0
+        DXC_PRESET + lines("LD 1,D1", "CDPT 1,U3(3),8"), {1: 0x22380000_00000001}, 0
     ),
     "PFPO overflow traps after the scaled store": trap_of(
         lines("LZDR 0") + _pfpo(0x01080600, "LD 4,B1E300"),
@@ -473,11 +521,25 @@ TRAPS: Mapping[str, Trap] = {
         {0: 0},
         0x80008000,
     ),
+    "PFPO inexact traps with a zero return code": trap_of(
+        _pfpo(0x01090600, "LD 4,BTENTH"), {0: 0x25F80000_00000000}, 0x08000800
+    ),
+    "PFPO quantum traps with a zero return code": trap_of(
+        _pfpo(0x01090620, "LD 4,BTENTH"), {0: 0x25F80000_00000000}, 0x04080400
+    ),
     "CDLGTR quantum traps after the store": trap_of(
         lines("LG 2,GU64", "CDLGTR 1,5,2,0"),
         {1: 0x264A4CDD_2077C2DD},
         0x04080400,
     ),
+}
+
+
+TRAP_RETURN_CODES: Mapping[str, int] = {
+    "PFPO inexact traps with a zero return code": HIGH_FILL,
+    "PFPO quantum traps with a zero return code": HIGH_FILL,
+    "PFPO overflow traps after the scaled store": HIGH_FILL | 300,
+    "PFPO invalid suppresses": FILL,
 }
 
 

@@ -1,5 +1,5 @@
 # pyright: standard
-"""DFP conversion and PFPO programs leave the same declared registers, CC and abend in RedDragon and in z390, bar z390's faults pinned below; those expectations come from the Principles of Operation (chapter 20; PFPO 9-35 to 9-46), not from z390. z390 abends S0C1 for CDZT, CXZT, CPDT and CPXT (not emulated) and S0C5 for CZDT; abends S0C5 or S0C6 for CDGTR(A), CXGTR(A), CDLGTR, CGDTR(A), CGXTR(A), LDETR of an SNaN or infinity and the PFPO test bit; treats CDLFTR's source as signed; ignores M3 methods (CFXTR) and FPC modes (PFPO method 1); sets CC 0 for a negative fraction to logical (figure 20-19: CC 1) gives 1 and CC 1 for -1 to logical (CC 3 with 0); drops a NaN's digits in CUDTR and garbles LEDTR's XiC results; does not check CDPT's length or unused digits; gives PFPO no CC 1, return code, DPQC, alternate action, overflow handling or Hmax; and takes no DFP IEEE or quantum trap."""
+"""DFP conversion and PFPO programs leave the same declared registers, CC and abend in RedDragon and in z390, bar z390's faults pinned below; those expectations come from the Principles of Operation (chapter 20; PFPO 9-35 to 9-46), not from z390. z390 abends S0C1 for CDZT, CXZT, CPDT and CPXT (not emulated) and S0C5 for CZDT; abends S0C5 or S0C6 for CDGTR(A), CXGTR(A), CDLGTR, CGDTR(A), CGXTR(A), LDETR of an SNaN or infinity and the PFPO test bit; treats CDLFTR's source as signed; ignores M3 methods (CFXTR) and FPC modes (PFPO method 1); sets CC 0 for a negative fraction to logical (figure 20-19: CC 1) and gives 1 with CC 1 for -1 to logical (figure 20-19: 0 with CC 3); drops a NaN's digits in CUDTR and garbles LEDTR's XiC results; does not check CDPT's length or unused digits; gives PFPO no CC 1, return code, DPQC, alternate action, overflow handling or Hmax and wraps an out-of-range HFP characteristic; and takes no DFP IEEE or quantum trap."""
 
 from collections.abc import Mapping
 from pathlib import Path
@@ -139,6 +139,14 @@ Z390_PINNED: Mapping[str, HlasmMachine] = {
         0, {2: 0xA5A5A5A5_A5A5A5A5, 3: 0xA5A5A5A5_A5A5A5A5}, "S0CC"
     ),
     "PFPO with an invalid function abends S0C6": _z390(0, {}),
+    "PFPO reports HFP overflow as invalid or as overflow by bit 58": _z390(
+        0, {2: 0x8335F9DF_F4F4F4F4, 3: 0x8335F9DF_F4F4F4F4}
+    ),
+    "PFPO gives HFP underflow a signed true zero, unreported without bit 59": _z390(
+        0, {2: 0xFE4BE2B0_F4F4F4F4}
+    ),
+    "PFPO reports HFP underflow under bit 59": _z390(0, {2: 0xFE4BE2B0_F4F4F4F4}),
+    "EX of CDZT takes the length from R1": _z390(2, {2: 0xA5A5A5A5_A5A5A5A5}, "S0C1"),
 }
 AGREED = [case for case in programs.CASES if case not in Z390_PINNED]
 
@@ -152,6 +160,8 @@ Z390_TRAPS: Mapping[str, tuple[str, int]] = {
     "PFPO overflow traps after the scaled store": ("U0001", 0),
     "PFPO invalid suppresses": ("U0001", 0),
     "CDLGTR quantum traps after the store": ("S0C6", 2),
+    "PFPO inexact traps with a zero return code": ("U0001", 0),
+    "PFPO quantum traps with a zero return code": ("U0001", 0),
 }
 
 

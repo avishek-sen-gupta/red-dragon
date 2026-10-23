@@ -31,3 +31,11 @@ def test_dfp_conversion_trap_delivers_or_suppresses_then_abends_with_the_dxc(
     assert (machine.run, machine.cc, {r: fpr_images[r] for r in fprs}, fpc) == (
         programs.expected_trap(case)
     )
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+@pytest.mark.parametrize("case", list(programs.TRAP_RETURN_CODES))
+def test_pfpo_trap_leaves_its_return_code_in_gr1(case: str):
+    machine = run_hlasm_float(programs.program(programs.TRAPS[case][0]))[0]
+
+    assert machine.restricted_to([1]).gprs == {1: programs.TRAP_RETURN_CODES[case]}
