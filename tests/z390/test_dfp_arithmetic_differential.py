@@ -1,5 +1,5 @@
 # pyright: standard
-"""DFP arithmetic programs leave the same declared registers, CC and abend in RedDragon and in z390, bar z390's faults below; those expectations come from the Principles of Operation, chapter 20. z390 encodes a zero result with biased exponent 0 and drops the minus sign of an exact zero difference rounded toward minus infinity; ignores the FPC DFP mode and the M4 method, so MDTRA, DDTRA and the tie round otherwise; keeps the source quantum in FIDTR and FIXTR and rounds QADTR 1.23 to 1.3; abends S0C5 for an M4 of 8-15 and for a zero divisor, S0C6 for a nonzero FIDTR M3 or QADTR M4, and S0CC for the tiny quotient and IEDTR specials; treats infinities and NaNs as numbers in ADTR, CDTR, CEDTR, LTDTR, EEDTR, ESDTR, SLDT and SRDT; misclassifies subnormals, NaNs, infinities and extreme exponents in TDCDT and TDGDT; and takes no IEEE or quantum trap. The quantum exception is therefore pinned only to the PoO (20-50, 20-43, 20-53): it compares the result's quantum with the third operand's."""
+"""DFP arithmetic programs leave the same declared registers, CC and abend in RedDragon and in z390, bar z390's faults below; those expectations come from the Principles of Operation, chapter 20. z390 encodes a zero result with biased exponent 0 and drops the minus sign of an exact zero difference rounded toward minus infinity; ignores the FPC DFP mode and the M4 method, so MDTRA, DDTRA and the tie round otherwise; keeps the source quantum in FIDTR and FIXTR and rounds QADTR 1.23 to 1.3; abends S0C5 for an M4 of 8-15 and for a zero divisor, S0C6 for a nonzero FIDTR M3 or QADTR M4, and S0CC for the tiny quotient and IEDTR specials; treats infinities and NaNs as numbers in ADTR, CDTR (so minus infinity is above -1), CEDTR, LTDTR, EEDTR, ESDTR, SLDT and SRDT; misclassifies subnormals, NaNs, infinities and extreme exponents in TDCDT and TDGDT; and takes no IEEE or quantum trap. The quantum exception is therefore pinned only to the PoO (20-50, 20-43, 20-53): it compares the result's quantum with the third operand's."""
 
 from collections.abc import Mapping
 from pathlib import Path
@@ -25,6 +25,18 @@ def _z390(
 
 
 Z390_PINNED: Mapping[str, HlasmMachine] = {
+    "CDTR orders signs, infinities, zeros and distant exponents": _z390(
+        1,
+        {
+            2: 0xA5A5A5A5_00000001,
+            3: 0xA5A5A5A5_00000000,
+            4: 0xA5A5A5A5_00000002,
+            5: 0xA5A5A5A5_00000000,
+            6: 0xA5A5A5A5_00000002,
+            7: 0xA5A5A5A5_00000001,
+        },
+    ),
+    "CDTR leaves a QNaN unsignaled": _z390(2, {}),
     "AXTR AXTRA": _z390(
         0, {2: 0x22080000_00000000, 3: 3, 9: 0xA5A5A5A5_00000002, 4: 0, 5: 0}
     ),

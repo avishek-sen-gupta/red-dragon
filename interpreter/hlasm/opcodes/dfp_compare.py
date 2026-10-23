@@ -1,16 +1,14 @@
 # pyright: standard
-"""DFP COMPARE and COMPARE AND SIGNAL through a builtin; COMPARE BIASED EXPONENT and LOAD AND TEST in IR on the decoded fields (ruling R44, PoO 20-22, 20-23, 20-41, figures 20-15, 20-24)."""
+"""DFP COMPARE, COMPARE AND SIGNAL, COMPARE BIASED EXPONENT and LOAD AND TEST in IR on the decoded fields (rulings R44, R50; PoO 20-22, 20-23, 20-41, figures 20-12 to 20-15, 20-24): compare aligns both coefficients to the lower exponent and orders infinities ahead of them."""
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 
 from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.hlasm.bfp_slots import INVALID_BIT
-from interpreter.hlasm.dfp_fields import INFINITY, SIGNALING_NAN
+from interpreter.hlasm.dfp_fields import INFINITY, QUIET_NAN, SIGNALING_NAN
 from interpreter.hlasm.dfp_layout import EXTENDED_DFP, LONG_DFP, DfpLayout
-from interpreter.hlasm.dfp_operation import DfpOperation, dfp_builtin_name
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.ieee_outcome import IeeeOutcome
-from interpreter.hlasm.opcodes.bfp_forms import ieee_call, result_cc, signals_all
 from interpreter.hlasm.opcodes.bfp_ir import emit_ieee_ladder
 from interpreter.hlasm.opcodes.dfp_ir import (
     Fields,
@@ -20,7 +18,7 @@ from interpreter.hlasm.opcodes.dfp_ir import (
     store_fields,
 )
 from interpreter.hlasm.opcodes.floating_point_support import pairs
-from interpreter.hlasm.opcodes.fpr_images import FIRST, SECOND, fpr, pick
+from interpreter.hlasm.opcodes.fpr_images import FIRST, SECOND, compared, fpr, pick
 from interpreter.hlasm.operands import reg_operand
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.operator_kind import BinopKind
@@ -30,21 +28,127 @@ UNORDERED_CC = 3
 HIGH_CC = 2
 
 
-def _compare(operation: DfpOperation, layout: DfpLayout) -> StatementLowering:
-    return ieee_call(
-        dfp_builtin_name(operation, layout),
-        (decoded(fpr(FIRST, layout), layout), decoded(fpr(SECOND, layout), layout)),
-        result_cc,
-        signals_all,
-    )
-
-
 def _operands(
     emitter: HlasmEmitter, statement: MachineStatement, layout: DfpLayout
 ) -> tuple[Fields, Fields]:
     first = decoded(fpr(FIRST, layout), layout)(emitter, statement)
     second = decoded(fpr(SECOND, layout), layout)(emitter, statement)
     return fields_of(emitter, first), fields_of(emitter, second)
+
+
+type Signals = Callable[[HlasmEmitter, Register], Register]
+
+
+def _op(
+    emitter: HlasmEmitter, operator: BinopKind, left: Register, right: Register
+) -> Register:
+    return emitter.binop(operator, left, right)
+
+
+def _signaling(emitter: HlasmEmitter, exponent: Register) -> Register:
+    return compared(emitter, BinopKind.EQ, exponent, SIGNALING_NAN)
+
+
+def _any_nan(emitter: HlasmEmitter, exponent: Register) -> Register:
+    return compared(emitter, BinopKind.LE, exponent, QUIET_NAN)
+
+
+def _signed_magnitude(
+    emitter: HlasmEmitter, fields: Fields, finite: Register, floor: Register
+) -> Register:
+    sign, exponent, significand = fields
+    scale = _op(
+        emitter,
+        BinopKind.POWER,
+        emitter.int_(10),
+        _op(
+            emitter, BinopKind.SUB, _op(emitter, BinopKind.MUL, exponent, finite), floor
+        ),
+    )
+    magnitude = _op(
+        emitter, BinopKind.MUL, _op(emitter, BinopKind.MUL, significand, finite), scale
+    )
+    return _op(emitter, BinopKind.MUL, magnitude, _direction(emitter, sign))
+
+
+def _direction(emitter: HlasmEmitter, sign: Register) -> Register:
+    doubled = _op(emitter, BinopKind.MUL, sign, emitter.int_(2))
+    return _op(emitter, BinopKind.SUB, emitter.int_(1), doubled)
+
+
+def _orders(
+    emitter: HlasmEmitter, a: Fields, b: Fields
+) -> tuple[Register, Register, Register, Register]:
+    finite_a, finite_b = (
+        compared(emitter, BinopKind.GE, fields[1], 0) for fields in (a, b)
+    )
+    exponent_a = _op(emitter, BinopKind.MUL, a[1], finite_a)
+    exponent_b = _op(emitter, BinopKind.MUL, b[1], finite_b)
+    lower = _op(emitter, BinopKind.LT, exponent_a, exponent_b)
+    floor = pick(emitter, lower, exponent_a, exponent_b)
+    rank_a, rank_b = (
+        _op(
+            emitter,
+            BinopKind.MUL,
+            compared(emitter, BinopKind.EQ, fields[1], INFINITY),
+            _direction(emitter, fields[0]),
+        )
+        for fields in (a, b)
+    )
+    return (
+        rank_a,
+        _signed_magnitude(emitter, a, finite_a, floor),
+        rank_b,
+        _signed_magnitude(emitter, b, finite_b, floor),
+    )
+
+
+def _before(
+    emitter: HlasmEmitter, orders: tuple[Register, Register, Register, Register]
+) -> Register:
+    rank_a, value_a, rank_b, value_b = orders
+    tied = _op(emitter, BinopKind.EQ, rank_a, rank_b)
+    smaller = _op(emitter, BinopKind.LT, value_a, value_b)
+    return _op(
+        emitter,
+        BinopKind.BIT_OR,
+        _op(emitter, BinopKind.LT, rank_a, rank_b),
+        _op(emitter, BinopKind.MUL, tied, smaller),
+    )
+
+
+def _compare_cc(emitter: HlasmEmitter, a: Fields, b: Fields) -> Register:
+    rank_a, value_a, rank_b, value_b = _orders(emitter, a, b)
+    low = _before(emitter, (rank_a, value_a, rank_b, value_b))
+    high = _before(emitter, (rank_b, value_b, rank_a, value_a))
+    order = _op(
+        emitter,
+        BinopKind.ADD,
+        low,
+        _op(emitter, BinopKind.MUL, high, emitter.int_(HIGH_CC)),
+    )
+    unordered = _op(
+        emitter, BinopKind.BIT_OR, _any_nan(emitter, a[1]), _any_nan(emitter, b[1])
+    )
+    return pick(emitter, unordered, emitter.int_(UNORDERED_CC), order)
+
+
+def _compare(signals: Signals, layout: DfpLayout) -> StatementLowering:
+    def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
+        a, b = _operands(emitter, statement, layout)
+        signaled = _op(
+            emitter, BinopKind.BIT_OR, signals(emitter, a[1]), signals(emitter, b[1])
+        )
+        invalid = _op(emitter, BinopKind.MUL, signaled, emitter.int_(INVALID_BIT))
+        cc = _compare_cc(emitter, a, b)
+        none = emitter.int_(0)
+        emit_ieee_ladder(
+            emitter,
+            IeeeOutcome(invalid, invalid, none, none),
+            lambda slot: emitter.set_cc(cc),
+        )
+
+    return lower
 
 
 def _kind(emitter: HlasmEmitter, exponent: Register) -> Register:
@@ -110,13 +214,13 @@ def _forms(
 
 DFP_COMPARE_LOWERINGS: Mapping[str, StatementLowering] = {
     **_forms(
-        _compare(DfpOperation.COMPARE, LONG_DFP),
-        _compare(DfpOperation.COMPARE, EXTENDED_DFP),
+        _compare(_signaling, LONG_DFP),
+        _compare(_signaling, EXTENDED_DFP),
         ("CDTR", "CXTR"),
     ),
     **_forms(
-        _compare(DfpOperation.COMPARE_SIGNALING, LONG_DFP),
-        _compare(DfpOperation.COMPARE_SIGNALING, EXTENDED_DFP),
+        _compare(_any_nan, LONG_DFP),
+        _compare(_any_nan, EXTENDED_DFP),
         ("KDTR", "KXTR"),
     ),
     **_forms(

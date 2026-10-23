@@ -15,7 +15,7 @@ the builtins in `interpreter/hlasm/bfp_builtins.py`, `hfp_builtins.py` and `dfp_
 - **Conditions are data.** A result carries the `Condition`s it raised. The caller
   applies the FPC masks, the XiC/XxC/XqC controls and the PSW masks, and raises the
   data exception or program interruption.
-- **Only what lowering calls.** Operations the IR does itself (BFP and HFP compare and
+- **Only what lowering calls.** Operations the IR does itself (BFP and DFP compare, BFP and HFP
   lengthening, HFP LOAD ROUNDED and CONVERT FROM FIXED) are not here. VM tests pinned to
   the PoO cover them (ruling R48).
 
@@ -108,7 +108,6 @@ shorter precision. INCREMENTED compares with the exact `Fraction`.
 | `dfp_add`, `dfp_subtract`, `dfp_multiply`, `dfp_divide` | `(a, b, mode)`, `a` the second operand of the instruction |
 | `dfp_quantize` | `(value, quantum, mode)`: NaNs are chosen in the PoO's order (quantum operand first), which is not `decimal`'s |
 | `dfp_reround` | `(value, significance, mode)` |
-| `dfp_compare`, `dfp_compare_signaling` | `ComparisonResult` |
 | `dfp_load_rounded`, `dfp_load_lengthened` | NaN payloads lose leftmost digits or keep them |
 | `dfp_round_to_integral` | LOAD FP INTEGER |
 | `dfp_from_integer`, `dfp_to_integer` | Out of range and NaN raise INVALID without INEXACT, unlike BFP |

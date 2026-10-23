@@ -32,7 +32,6 @@ def test_builtin_forms_decode_in_argument_order_then_call_then_trap_and_encode()
         "ADTRA": trace("ADTRA", (*registers(1, 2, 3), mask_operand(1))),
         "SXTR": trace("SXTR", registers(0, 4, 8)),
         "DDTRA": trace("DDTRA", (*registers(1, 2, 3), mask_operand(0))),
-        "CDTR": trace("CDTR", registers(1, 2)),
         "RRDTR": trace("RRDTR", (*registers(1, 3, 2), mask_operand(0))),
     }
 
@@ -74,14 +73,6 @@ def test_builtin_forms_decode_in_argument_order_then_call_then_trap_and_encode()
             "call dfp divide_long",
             *ladder(ENCODE_LONG, "write fpr 8+8"),
         ],
-        "CDTR": [
-            "read fpr 8+8",
-            DECODE_LONG,
-            "read fpr 16+8",
-            DECODE_LONG,
-            "call dfp compare_long",
-            *ladder(CC),
-        ],
         "RRDTR": [
             READ_FPC,
             "read fpr 24+8",
@@ -97,6 +88,7 @@ def test_builtin_forms_decode_in_argument_order_then_call_then_trap_and_encode()
 def test_field_forms_decode_and_compute_in_ir():
     traces = {
         "CEDTR": trace("CEDTR", registers(1, 2)),
+        "KXTR": trace("KXTR", registers(1, 4)),
         "LTDTR": trace("LTDTR", registers(1, 2)),
         "EEDTR": trace("EEDTR", registers(1, 2)),
         "IEXTR": trace("IEXTR", registers(4, 1, 2)),
@@ -107,6 +99,15 @@ def test_field_forms_decode_and_compute_in_ir():
 
     assert traces == {
         "CEDTR": ["read fpr 8+8", DECODE_LONG, "read fpr 16+8", DECODE_LONG, CC],
+        "KXTR": [
+            "read fpr 8+8",
+            "read fpr 24+8",
+            DECODE_EXTENDED,
+            "read fpr 32+8",
+            "read fpr 48+8",
+            DECODE_EXTENDED,
+            *ladder(CC),
+        ],
         "LTDTR": [
             "read fpr 16+8",
             DECODE_LONG,
