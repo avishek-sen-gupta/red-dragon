@@ -35,10 +35,8 @@ from interpreter.hlasm.operands import storage_length_operand, storage_operand
 from interpreter.hlasm.packed_decimal import PLUS_SIGNS, table_bit
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.hlasm.unit_value import unit_reader
-from interpreter.instructions import StoreVar
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
-from interpreter.var_name import VarName
 
 type Marker = Callable[[Register, Register], None]
 
@@ -56,10 +54,6 @@ def _bin(
     emitter: HlasmEmitter, operator: BinopKind, left: Register, right: int
 ) -> Register:
     return emitter.binop(operator, left, emitter.int_(right))
-
-
-def _set(emitter: HlasmEmitter, name: VarName, value: Register) -> None:
-    emitter.emit_inst(StoreVar(name=name, value_reg=value))
 
 
 def _not(emitter: HlasmEmitter, bit: Register) -> Register:
@@ -84,21 +78,25 @@ def _selects_digit(emitter: HlasmEmitter, pattern_byte: Register) -> Register:
 
 
 def _take_pending(emitter: HlasmEmitter, pending: Register) -> None:
-    _set(emitter, EDIT_DIGIT_VAR, pending)
-    _set(emitter, EDIT_PLUS_VAR, emitter.int_(0))
-    _set(emitter, EDIT_PENDING_VAR, emitter.int_(NO_DIGIT))
+    emitter.store_var(EDIT_DIGIT_VAR, pending)
+    emitter.store_var(EDIT_PLUS_VAR, emitter.int_(0))
+    emitter.store_var(EDIT_PENDING_VAR, emitter.int_(NO_DIGIT))
 
 
 def _fetch(emitter: HlasmEmitter, operands: EditOperands) -> None:
     at = emitter.load_var(EDIT_SOURCE_AT_VAR)
     byte = operands.read(operands.source, at)
-    _set(emitter, EDIT_SOURCE_AT_VAR, _bin(emitter, BinopKind.ADD, at, ONE_BYTE))
+    emitter.store_var(EDIT_SOURCE_AT_VAR, _bin(emitter, BinopKind.ADD, at, ONE_BYTE))
     right = _bin(emitter, BinopKind.BIT_AND, byte, NIBBLE_MASK)
     is_digit = _bin(emitter, BinopKind.LE, right, LARGEST_DIGIT)
     pending = _chosen(emitter, is_digit, right, emitter.int_(NO_DIGIT))
-    _set(emitter, EDIT_PENDING_VAR, pending)
-    _set(emitter, EDIT_DIGIT_VAR, _bin(emitter, BinopKind.RSHIFT, byte, NIBBLE_BITS))
-    _set(emitter, EDIT_PLUS_VAR, table_bit(emitter, emitter.int_(PLUS_SIGNS), right))
+    emitter.store_var(EDIT_PENDING_VAR, pending)
+    emitter.store_var(
+        EDIT_DIGIT_VAR, _bin(emitter, BinopKind.RSHIFT, byte, NIBBLE_BITS)
+    )
+    emitter.store_var(
+        EDIT_PLUS_VAR, table_bit(emitter, emitter.int_(PLUS_SIGNS), right)
+    )
 
 
 def _examine(
@@ -115,15 +113,17 @@ def _examine(
 
 
 def _start(emitter: HlasmEmitter) -> None:
-    _set(emitter, EDIT_SOURCE_AT_VAR, emitter.int_(0))
-    _set(emitter, EDIT_PENDING_VAR, emitter.int_(NO_DIGIT))
+    emitter.store_var(EDIT_SOURCE_AT_VAR, emitter.int_(0))
+    emitter.store_var(EDIT_PENDING_VAR, emitter.int_(NO_DIGIT))
 
 
 def _check_digit(emitter: HlasmEmitter, operands: EditOperands) -> None:
     digit, _ = _examine(emitter, operands)
     invalid = _bin(emitter, BinopKind.GT, digit, LARGEST_DIGIT)
     seen = emitter.load_var(DECIMAL_INVALID_VAR)
-    _set(emitter, DECIMAL_INVALID_VAR, emitter.binop(BinopKind.BIT_OR, seen, invalid))
+    emitter.store_var(
+        DECIMAL_INVALID_VAR, emitter.binop(BinopKind.BIT_OR, seen, invalid)
+    )
 
 
 def _check_byte(emitter: HlasmEmitter, operands: EditOperands, at: Register) -> None:
@@ -142,7 +142,7 @@ def _write(
 
 def _combine(emitter: HlasmEmitter, operator: BinopKind, bit: Register) -> None:
     seen = emitter.load_var(EDIT_NONZERO_VAR)
-    _set(emitter, EDIT_NONZERO_VAR, emitter.binop(operator, seen, bit))
+    emitter.store_var(EDIT_NONZERO_VAR, emitter.binop(operator, seen, bit))
 
 
 def _turn_significance(
@@ -150,8 +150,7 @@ def _turn_significance(
 ) -> None:
     starter = _bin(emitter, BinopKind.EQ, pattern_byte, SIGNIFICANCE_STARTER)
     on = emitter.binop(BinopKind.BIT_OR, significant, starter)
-    _set(
-        emitter,
+    emitter.store_var(
         EDIT_SIGNIFICANCE_VAR,
         emitter.binop(BinopKind.BIT_AND, on, _not(emitter, plus)),
     )
@@ -192,7 +191,7 @@ def _edit_other(
         BinopKind.BIT_AND, emitter.load_var(EDIT_SIGNIFICANCE_VAR), within
     )
     _write(emitter, operands, at, _chosen(emitter, on, pattern_byte, operands.fill))
-    _set(emitter, EDIT_SIGNIFICANCE_VAR, on)
+    emitter.store_var(EDIT_SIGNIFICANCE_VAR, on)
     _combine(emitter, BinopKind.BIT_AND, within)
 
 
@@ -230,7 +229,7 @@ def _check_source(
     emitter: HlasmEmitter, operands: EditOperands, length: Register
 ) -> None:
     _start(emitter)
-    _set(emitter, DECIMAL_INVALID_VAR, emitter.int_(0))
+    emitter.store_var(DECIMAL_INVALID_VAR, emitter.int_(0))
     emit_byte_loop(emitter, length, lambda at: _check_byte(emitter, operands, at))
     emit_data_check(emitter, emitter.load_var(DECIMAL_INVALID_VAR))
 
@@ -242,8 +241,8 @@ def _emit_edit(
     operands = _operands(emitter, statement)
     _check_source(emitter, operands, length)
     _start(emitter)
-    _set(emitter, EDIT_SIGNIFICANCE_VAR, emitter.int_(0))
-    _set(emitter, EDIT_NONZERO_VAR, emitter.int_(0))
+    emitter.store_var(EDIT_SIGNIFICANCE_VAR, emitter.int_(0))
+    emitter.store_var(EDIT_NONZERO_VAR, emitter.int_(0))
     emit_byte_loop(emitter, length, lambda at: _edit_byte(emitter, operands, at, mark))
     emitter.set_cc(_edit_cc(emitter))
 
@@ -254,13 +253,13 @@ def _edit(emitter: HlasmEmitter, statement: MachineStatement, field: DataField) 
 
 def _remember(emitter: HlasmEmitter, first: Register, address: Register) -> None:
     kept = emitter.load_var(EDIT_MARK_VAR)
-    _set(emitter, EDIT_MARK_VAR, _chosen(emitter, first, address, kept))
+    emitter.store_var(EDIT_MARK_VAR, _chosen(emitter, first, address, kept))
 
 
 def _edit_and_mark(
     emitter: HlasmEmitter, statement: MachineStatement, field: DataField
 ) -> None:
-    _set(emitter, EDIT_MARK_VAR, emitter.int_(NO_DIGIT))
+    emitter.store_var(EDIT_MARK_VAR, emitter.int_(NO_DIGIT))
     _emit_edit(
         emitter,
         statement,

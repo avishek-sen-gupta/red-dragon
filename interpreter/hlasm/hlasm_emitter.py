@@ -178,6 +178,9 @@ class HlasmEmitter:
         self.emit_inst(LoadVar(result_reg=reg, name=name))
         return reg
 
+    def store_var(self, name: VarName, value: Register) -> None:
+        self.emit_inst(StoreVar(name=name, value_reg=value))
+
     def _gprs(self) -> Register:
         return self.load_var(GPRS_VAR)
 
