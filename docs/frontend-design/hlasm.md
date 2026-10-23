@@ -64,7 +64,7 @@ addresses.
 | `interpreter/hlasm/opcodes/logical_add_subtract.py` | The logical add and subtract unit |
 | `interpreter/hlasm/opcodes/compare.py` | The compare unit, signed and logical |
 | `interpreter/hlasm/opcodes/compare_branch_trap.py` | The compare-and-branch, compare-and-trap and load-and-trap unit |
-| `interpreter/hlasm/conditional.py` | `emit_when`: IR that runs only when a condition register is true; `emit_either` picks one of two blocks |
+| `interpreter/hlasm/conditional.py` | `emit_when`: IR that runs only when a condition register is true; `emit_either` picks one of two blocks; `pick` selects one of two values without a branch |
 | `interpreter/hlasm/opcodes/boolean.py` | The boolean unit: AND, OR, exclusive OR and the complemented connectives |
 | `interpreter/hlasm/opcodes/shift_rotate.py` | The shift and rotate unit, the RISBG family included |
 | `interpreter/hlasm/opcodes/multiply_divide.py` | The multiply and divide unit |
@@ -117,7 +117,7 @@ addresses.
 | `interpreter/hlasm/opcodes/dfp_decimal.py`, `decimal_lanes.py` | DFP to and from signed packed, unsigned packed and zoned decimal in IR, over decimal lanes (red-dragon-6uyp.56) |
 | `interpreter/hlasm/opcodes/dfp_conversion.py` | DFP conversions: to and from fixed and logical and LOAD ROUNDED through builtins; LOAD LENGTHENED in IR (red-dragon-6uyp.56) |
 | `interpreter/hlasm/ir_function.py`, `program_function.py` | An IR function called by name; the call records it on the emitter, and the frontend defines each recorded function once after the entry function, repeating until no body calls an undefined one |
-| `interpreter/hlasm/opcodes/fpr_images.py`, `interpreter/hlasm/fpr_layout.py` | Floating-point images of any radix: FPR access by width (short high word, long, pair), FPR and storage operand sources, result-list items, an arithmetic select |
+| `interpreter/hlasm/opcodes/fpr_images.py`, `interpreter/hlasm/fpr_layout.py` | Floating-point images of any radix: FPR access by width (short high word, long, pair), FPR and storage operand sources, result-list items |
 | `interpreter/hlasm/program_status.py` | SPM, IPM, EPSW |
 | `interpreter/hlasm/checksum.py` | CKSM |
 | `interpreter/hlasm/clock_instructions.py` | STCK, STCKF, STCKE, ECTG |
@@ -173,7 +173,7 @@ addresses.
 | `interpreter/hlasm/packed_operands.py` | The packed operands as fields with L1 (and SS-b's L2) from byte 1, read and checked together |
 | `interpreter/hlasm/decimal_exceptions.py` | `S0C7` (DXC 00 in the FPC) and `S0CB` before any store; `S0CA` after the store when program-mask bit `0100` is on |
 | `interpreter/hlasm/opcodes/decimal_conversion.py` | The decimal conversion unit |
-| `interpreter/hlasm/decimal_packing.py`, `digit_source.py`, `character_field.py` | Pack digits into a signed-packed field and unpack them into zoned, ASCII or Unicode characters, right to left one result unit at a time; bytes left of the source read as zero |
+| `interpreter/hlasm/decimal_packing.py`, `digit_source.py`, `character_field.py` | Pack digits into a signed-packed field and unpack them into zoned, ASCII or Unicode characters, right to left one result unit at a time, each source byte fetched once; bytes left of the source read as zero |
 | `interpreter/hlasm/opcodes/edit.py`, `edit_operands.py` | The edit unit: pattern and source addresses, the byte reader and the fill byte |
 | `interpreter/hlasm/range_dispatch.py`, `bit_fields.py` | Branch on ascending bounds; masked, shifted and ORed bit fields |
 

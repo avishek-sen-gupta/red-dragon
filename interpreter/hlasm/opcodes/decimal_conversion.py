@@ -45,9 +45,8 @@ from interpreter.hlasm.packed_decimal import (
     MINUS_SIGNS,
     NOT_SIGNS,
     PLUS_SIGN,
-    negative_bit,
+    magnitude_and_sign,
     read_packed,
-    sign_factor,
     signed_value,
     store_packed,
     table_bit,
@@ -104,10 +103,10 @@ def _to_binary_long(emitter: HlasmEmitter, statement: MachineStatement) -> None:
 def _to_decimal(source: Source, bits: int, width: int) -> StatementLowering:
     def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
         value = signed(bits)(emitter, source(emitter, statement))
-        negative = negative_bit(emitter, value)
-        magnitude = emitter.binop(BinopKind.MUL, value, sign_factor(emitter, negative))
         store_packed(
-            emitter, _packed_operand(emitter, statement, width), magnitude, negative
+            emitter,
+            _packed_operand(emitter, statement, width),
+            *magnitude_and_sign(emitter, value),
         )
 
     return lower

@@ -4,13 +4,14 @@
 from collections.abc import Callable, Mapping, Sequence
 
 from hlasm_asg.program.machine_statement import MachineStatement
+from interpreter.hlasm.conditional import pick
 from interpreter.hlasm.data_movement import from_gr64
 from interpreter.hlasm.dfp_fields import INFINITY, QUIET_NAN, SIGNALING_NAN
 from interpreter.hlasm.dfp_layout import EXTENDED_DFP, LONG_DFP, DfpLayout
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.opcodes.dfp_ir import decoded, fields_of, store_fields
 from interpreter.hlasm.opcodes.floating_point_support import pairs
-from interpreter.hlasm.opcodes.fpr_images import FIRST, SECOND, THIRD, fpr, pick
+from interpreter.hlasm.opcodes.fpr_images import FIRST, SECOND, THIRD, fpr
 from interpreter.hlasm.operands import reg_operand
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.operator_kind import BinopKind

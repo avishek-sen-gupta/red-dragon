@@ -5,7 +5,7 @@ from collections.abc import Callable, Mapping, Sequence
 
 from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.hlasm.abend import emit_abend
-from interpreter.hlasm.conditional import emit_either, emit_when
+from interpreter.hlasm.conditional import emit_either, emit_when, pick
 from interpreter.hlasm.data_movement import keep
 from interpreter.hlasm.hlasm_constants import (
     FPC_VAR,
@@ -29,7 +29,6 @@ from interpreter.hlasm.opcodes.fpr_images import (
     compared,
     list_item,
     load_image,
-    pick,
     store_image,
 )
 from interpreter.hlasm.opcodes.pfpo_codec import (

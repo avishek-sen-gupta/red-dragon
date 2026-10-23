@@ -4,6 +4,7 @@
 from collections.abc import Callable, Mapping
 
 from hlasm_asg.program.machine_statement import MachineStatement
+from interpreter.hlasm.conditional import pick
 from interpreter.hlasm.data_movement import Source, from_gr32, from_gr64, sign_extended
 from interpreter.hlasm.dfp_fields import INFINITY, SIGNALING_NAN
 from interpreter.hlasm.dfp_layout import EXTENDED_DFP, LONG_DFP, SHORT_DFP, DfpLayout
@@ -43,7 +44,6 @@ from interpreter.hlasm.opcodes.fpr_images import (
     THIRD,
     compared,
     fpr,
-    pick,
 )
 from interpreter.hlasm.operands import optional_mask_operand, reg_operand
 from interpreter.hlasm.statement_lowering import StatementLowering

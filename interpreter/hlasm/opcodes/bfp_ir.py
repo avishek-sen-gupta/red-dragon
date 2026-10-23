@@ -3,12 +3,13 @@
 
 from interpreter.hlasm.bfp_layout import BfpLayout
 from interpreter.hlasm.bit_counts import leading_zeros
+from interpreter.hlasm.conditional import pick
 from interpreter.hlasm.data_movement import keep
 from interpreter.hlasm.hlasm_constants import DOUBLEWORD_BITS, FPC_VAR
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.opcodes.floating_point_support import BFP_MODE_SHIFT, MODE_FIELD
 from interpreter.hlasm.opcodes.fp_ir import field_at, mode_code_of
-from interpreter.hlasm.opcodes.fpr_images import list_of, pick
+from interpreter.hlasm.opcodes.fpr_images import list_of
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
 

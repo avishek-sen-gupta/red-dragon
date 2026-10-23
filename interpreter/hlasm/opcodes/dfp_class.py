@@ -4,6 +4,7 @@
 from collections.abc import Callable, Mapping
 
 from hlasm_asg.program.machine_statement import MachineStatement
+from interpreter.hlasm.conditional import pick
 from interpreter.hlasm.data_movement import keep, storage_address_at
 from interpreter.hlasm.dfp_layout import (
     EXTENDED_DFP,
@@ -14,7 +15,7 @@ from interpreter.hlasm.dfp_layout import (
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.opcodes.dfp_ir import Fields, decoded, fields_of
 from interpreter.hlasm.opcodes.floating_point_support import pairs
-from interpreter.hlasm.opcodes.fpr_images import FIRST, SECOND, compared, fpr, pick
+from interpreter.hlasm.opcodes.fpr_images import FIRST, SECOND, compared, fpr
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register

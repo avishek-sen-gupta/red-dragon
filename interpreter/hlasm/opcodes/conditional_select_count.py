@@ -14,7 +14,7 @@ from interpreter.hlasm.bit_counts import (
     smeared_right,
     trailing_zeros,
 )
-from interpreter.hlasm.conditional import emit_when
+from interpreter.hlasm.conditional import emit_when, pick
 from interpreter.hlasm.data_movement import (
     REGISTER_OPERAND,
     Sink,
@@ -40,7 +40,6 @@ from interpreter.hlasm.inline_ir import inline_ir
 from interpreter.hlasm.mask_bit_loop import deposited_bits, extracted_bits
 from interpreter.hlasm.opcodes.branch_on_condition import mask_selects
 from interpreter.hlasm.opcodes.even_odd import even_odd
-from interpreter.hlasm.opcodes.fpr_images import pick
 from interpreter.hlasm.opcodes.operand_sources import (
     DOUBLEWORD_STORAGE,
     HALFWORD_IMMEDIATE,

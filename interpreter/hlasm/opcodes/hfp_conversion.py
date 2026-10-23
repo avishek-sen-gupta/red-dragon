@@ -8,7 +8,7 @@ from interpreter.hlasm.abend import emit_abend
 from interpreter.hlasm.bfp_layout import LONG_LAYOUT as LONG_BFP
 from interpreter.hlasm.bfp_layout import SHORT_LAYOUT as SHORT_BFP
 from interpreter.hlasm.bfp_layout import BfpLayout
-from interpreter.hlasm.conditional import emit_when
+from interpreter.hlasm.conditional import emit_when, pick
 from interpreter.hlasm.data_movement import (
     Source,
     from_gr32,
@@ -35,7 +35,6 @@ from interpreter.hlasm.opcodes.fpr_images import (
     THIRD,
     fpr,
     list_item,
-    pick,
     signed_magnitude,
     storage,
     store_image,

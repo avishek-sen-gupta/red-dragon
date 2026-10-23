@@ -86,14 +86,6 @@ def list_item(emitter: HlasmEmitter, items: Register, slot: int) -> Register:
     return emitter.call(LIST_GET, (items, emitter.int_(slot)))
 
 
-def pick(
-    emitter: HlasmEmitter, chosen: Register, then: Register, otherwise: Register
-) -> Register:
-    difference = emitter.binop(BinopKind.SUB, then, otherwise)
-    taken = emitter.binop(BinopKind.MUL, chosen, difference)
-    return emitter.binop(BinopKind.ADD, otherwise, taken)
-
-
 def signed_magnitude(
     emitter: HlasmEmitter, value: Register
 ) -> tuple[Register, Register]:
