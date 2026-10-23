@@ -13,7 +13,6 @@ from hlasm_asg.program.reloc_symbol import RelocSymbol
 from interpreter.hlasm.dc_value_out_of_range import DcValueOutOfRange
 from interpreter.hlasm.machine import machine_allocation
 from interpreter.hlasm.storage_layout import section_allocation, section_var
-from interpreter.hlasm.unsupported_statement import UnsupportedStatement
 from interpreter.vm.vm_types import VMState
 from tests.covers import NotLanguageFeature, covers
 from tests.integration.hlasm.hlasm_helpers import BARE_ASSEMBLY
@@ -67,7 +66,9 @@ CHANNEL_COMMAND_SOURCE = b"""\
 TEST     CSECT
          BR    14
          CCW1  X'02',FIELD,X'20',4
+         CCW0  X'02',FIELD,X'20',4
 FIELD    DC    F'0'
+         CCW1  3,=A(FIELD),0,8
          END   TEST
 """
 
@@ -162,15 +163,24 @@ def test_star_is_the_address_of_each_constant_after_an_empty_fullword(
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_channel_command_words_refuse_until_they_are_encoded(tmp_path: Path):
+def test_channel_command_words_hold_their_relocated_addresses(tmp_path: Path):
     program = _assemble(CHANNEL_COMMAND_SOURCE, tmp_path)
+    vm = _start(program)
+    base = _base(vm, "TEST")
+    field, literal = base + 24, base + 40
 
-    with pytest.raises(UnsupportedStatement) as refused:
-        section_allocation(program)
-
-    assert str(refused.value) == (
-        "CCW1 statements are not supported yet — red-dragon-6uyp.93"
-    )
+    assert vm.load(base + 8, 36) == [
+        *[0x02, 0x20, 0x00, 0x04],
+        *field.to_bytes(4, "big"),
+        *[0x02],
+        *(field % (1 << 24)).to_bytes(3, "big"),
+        *[0x20, 0x00, 0x00, 0x04],
+        *[0, 0, 0, 0],
+        *[0, 0, 0, 0],
+        *[0x03, 0x00, 0x00, 0x08],
+        *literal.to_bytes(4, "big"),
+        *field.to_bytes(4, "big"),
+    ]
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

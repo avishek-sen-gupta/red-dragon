@@ -16,7 +16,7 @@ from hlasm_asg.program.section_kind import SectionKind
 from interpreter.hlasm.address_slot import AddressSlot
 from interpreter.hlasm.bit_length_image import BitLengthImage
 from interpreter.hlasm.constant_image import ConstantImage
-from interpreter.hlasm.dc_encoding import ENCODING_ISSUE, DcPiece, encode_dc
+from interpreter.hlasm.dc_encoding import DcPiece, encode_ccw, encode_dc
 from interpreter.hlasm.hlasm_constants import (
     BITS_PER_BYTE,
     DOUBLEWORD_BYTES,
@@ -24,7 +24,6 @@ from interpreter.hlasm.hlasm_constants import (
     SECTION_VAR_PREFIX,
 )
 from interpreter.hlasm.placed_piece import PlacedPiece
-from interpreter.hlasm.unsupported_statement import UnsupportedStatement
 from interpreter.instructions import (
     AllocRegion,
     Binop,
@@ -134,7 +133,12 @@ def _placed(program: HlasmProgram, sections: frozenset[str]) -> tuple[PlacedPiec
         for literal in program.literals
         if literal.section in sections
     )
-    return tuple(chain.from_iterable(chain(statements, literals)))
+    channel_commands = (
+        _place_pieces(s.section, s.offset, encode_ccw(s))
+        for s in program.statements
+        if isinstance(s, CcwStatement) and s.section in sections
+    )
+    return tuple(chain.from_iterable(chain(statements, literals, channel_commands)))
 
 
 def _constant_value(prefix: str, piece: ConstantImage) -> Fragment:
@@ -189,14 +193,7 @@ def _write(index: int, placed: PlacedPiece) -> tuple[InstructionBase, ...]:
     )
 
 
-def _refuse_channel_commands(program: HlasmProgram) -> None:
-    commands = [s.mnemonic for s in program.statements if isinstance(s, CcwStatement)]
-    if commands:
-        raise UnsupportedStatement(commands[0], ENCODING_ISSUE)
-
-
 def section_allocation(program: HlasmProgram) -> tuple[InstructionBase, ...]:
-    _refuse_channel_commands(program)
     sections = tuple(s for s in program.sections if s.kind != SectionKind.DSECT)
     names = frozenset(section.name for section in sections)
     return (

@@ -10,6 +10,7 @@ from hlasm_asg.program.abs_address import AbsAddress
 from hlasm_asg.program.address import Address
 from hlasm_asg.program.addresses_nominal import AddressesNominal
 from hlasm_asg.program.base_displacement_address import BaseDisplacementAddress
+from hlasm_asg.program.ccw_statement import CcwStatement
 from hlasm_asg.program.dc_item import DcItem
 from hlasm_asg.program.external_address import ExternalAddress
 from hlasm_asg.program.length_unit import LengthUnit
@@ -33,7 +34,6 @@ type Encoder = Callable[[str, int], int]
 FLOATING_POINT_ISSUE = "red-dragon-6uyp.94"
 LINKER_TYPES_ISSUE = "red-dragon-6uyp.96"
 OTHER_TYPES_ISSUE = "red-dragon-6uyp.63"
-ENCODING_ISSUE = "red-dragon-6uyp.93"
 BIT_LENGTH_STAR_ISSUE = "red-dragon-6uyp.97"
 
 _FLOATING_POINT_TYPES = frozenset({"E", "D", "L"})
@@ -59,6 +59,15 @@ _LOW_DISPLACEMENT_MASK = 0xFFF
 _HIGH_DISPLACEMENT_MASK = 0xFF
 _LOW_DISPLACEMENT_SHIFT = 8
 _UNSIGNED = "U"
+_FORMAT_1_CCW = "CCW1"
+_FORMAT_1_COMMAND_SHIFT = 24
+_FORMAT_1_FLAGS_SHIFT = 16
+_FORMAT_1_FIELDS_BYTES = 4
+_FORMAT_1_ADDRESS_BYTES = 4
+_COMMAND_CODE_BYTES = 1
+_FORMAT_0_ADDRESS_BYTES = 3
+_FORMAT_0_FLAGS_SHIFT = 24
+_FORMAT_0_FIELDS_BYTES = 4
 _SPACE = " "
 _HALF = Fraction(1, 2)
 _DECIMAL_BASE = Fraction(10)
@@ -244,6 +253,37 @@ def _address_piece(item: DcItem, value: Address) -> DcPiece:
     if isinstance(value, ExternalAddress):
         return _image(0, item.length)
     return _image(_assembled_address(item, value), item.length)
+
+
+def _ccw_address(value: Address, width: int) -> DcPiece:
+    if isinstance(value, RelocAddress):
+        return AddressSlot(value, width)
+    if isinstance(value, AbsAddress):
+        return _image(value.value, width)
+    raise HlasmLoweringError(
+        "CCW data address", "an absolute or relocatable value", value.kind
+    )
+
+
+def encode_ccw(statement: CcwStatement) -> tuple[DcPiece, ...]:
+    if statement.mnemonic == _FORMAT_1_CCW:
+        return (
+            _image(
+                (statement.command_code << _FORMAT_1_COMMAND_SHIFT)
+                | (statement.flags << _FORMAT_1_FLAGS_SHIFT)
+                | statement.count,
+                _FORMAT_1_FIELDS_BYTES,
+            ),
+            _ccw_address(statement.address, _FORMAT_1_ADDRESS_BYTES),
+        )
+    return (
+        _image(statement.command_code, _COMMAND_CODE_BYTES),
+        _ccw_address(statement.address, _FORMAT_0_ADDRESS_BYTES),
+        _image(
+            (statement.flags << _FORMAT_0_FLAGS_SHIFT) | statement.count,
+            _FORMAT_0_FIELDS_BYTES,
+        ),
+    )
 
 
 def _address_pieces(item: DcItem, values: Sequence[Address]) -> tuple[DcPiece, ...]:
