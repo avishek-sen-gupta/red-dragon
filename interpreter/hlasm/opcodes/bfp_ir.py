@@ -158,18 +158,16 @@ def signaling_nan_of(
     return emitter.binop(BinopKind.MUL, nan_of(emitter, image, layout), loud)
 
 
-def fpc_mode_code(
-    emitter: HlasmEmitter, shift: int, offset: int, codes: int
-) -> Register:
+def fpc_mode_code(emitter: HlasmEmitter, shift: int, offset: int) -> Register:
     fpc = emitter.load_var(FPC_VAR)
     moved = emitter.binop(BinopKind.RSHIFT, fpc, emitter.int_(shift)) if shift else fpc
     mode = keep(MODE_FIELD)(emitter, moved)
-    shifted = emitter.binop(BinopKind.ADD, mode, emitter.int_(offset))
-    return keep(codes)(emitter, shifted)
+    return emitter.binop(BinopKind.ADD, mode, emitter.int_(offset))
 
 
 def current_mode(emitter: HlasmEmitter) -> Register:
-    return fpc_mode_code(emitter, BFP_MODE_SHIFT, BFP_FPC_TO_MODIFIER, MODE_FIELD)
+    code = fpc_mode_code(emitter, BFP_MODE_SHIFT, BFP_FPC_TO_MODIFIER)
+    return keep(MODE_FIELD)(emitter, code)
 
 
 def outcome_of(emitter: HlasmEmitter, result: Register) -> IeeeOutcome:
