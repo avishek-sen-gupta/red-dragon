@@ -1,5 +1,5 @@
 # pyright: standard
-"""BFP conversion programs leave the same declared registers, CC and abend in RedDragon and in z390, bar z390's faults below; those expectations come from the Principles of Operation (figures 19-18 to 19-20). Converting to fixed, z390 rejects a nonzero M4 (S0C6), ignores the FPC rounding mode, wraps or loses bits on out-of-range sources instead of delivering the maximum with CC 3, gives CC 0 for -0.5 rounded to 0 and for -infinity, converts -1 to logical 1, abends S0C5 on a NaN source, and takes no inexact trap. Converting from fixed, it also writes X'F4F4F4F4' into bits 32-63 of short results, ignores M3, garbles logical sources and the low half of extended results. Between formats, it loses bits lengthening a subnormal to extended, abends S0C5 lengthening an infinity or NaN to extended, ignores M3 on LEDBRA and LDXBRA, and takes no LOAD ROUNDED overflow, underflow or invalid trap."""
+"""BFP conversion programs leave the same declared registers, CC and abend in RedDragon and in z390, bar z390's faults below; those expectations come from the Principles of Operation (figures 19-18 to 19-20). Converting to fixed, z390 rejects a nonzero M4 and an M3 of 3 (S0C6), ignores the FPC rounding mode, wraps or loses bits on out-of-range sources instead of delivering the maximum with CC 3, gives CC 0 for -0.5 rounded to 0 and for -infinity, converts -1 to logical 1, abends S0C5 on a NaN source, and takes no inexact trap. Converting from fixed, it also writes X'F4F4F4F4' into bits 32-63 of short results, ignores M3, garbles logical sources and the low half of extended results. Between formats, it loses bits lengthening a subnormal to extended, abends S0C5 lengthening an infinity or NaN to extended, ignores M3 on LEDBRA and LDXBRA, takes no LOAD ROUNDED overflow or underflow trap, and abends S0C5 instead of the invalid trap for LXDBR (LOAD LENGTHENED) of an SNaN."""
 
 from collections.abc import Mapping
 from pathlib import Path
@@ -110,6 +110,25 @@ Z390_PINNED: Mapping[str, HlasmMachine] = {
     ),
     "LDXBR LDXBRA": _z390(
         COMPLETED, 2, {2: 0x3FF00000_00000000, 3: 0x1000, 4: 0x3FF00000_00000000}
+    ),
+    "CFDBR of a negative NaN gives MN": _z390(ADDRESSING, 2, {2: FILL}),
+    "CFDBR CGDBRA prepare for shorter precision": _z390(
+        SPECIFICATION, 2, {2: FILL, 3: FILL}
+    ),
+    "CEFBRA prepare for shorter precision": _z390(
+        COMPLETED, 2, {3: 0x4B800000_00000000 | Z390_LOW}
+    ),
+    "LDEB LXDB LXEB keep the sign of -0 and NaNs and normalise a subnormal": _z390(
+        ADDRESSING,
+        2,
+        {
+            2: 0x80000000_00000000,
+            3: 0xFFF80000_20000000,
+            4: FILL,
+            5: FILL,
+            6: FILL,
+            7: HIGH_FILL,
+        },
     ),
 }
 Z390_TRAPS: Mapping[str, tuple[str, int]] = {

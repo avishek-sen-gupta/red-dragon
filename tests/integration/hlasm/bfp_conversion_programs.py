@@ -46,6 +46,7 @@ CONVERSION_DATA = (
     "S2P64    DC    X'5F800000'\n"
     "SMHALF   DC    X'BF000000'\n"
     "SSNAN    DC    X'7F800001'\n"
+    "SMQNAN   DC    X'FFC00001'\n"
     "         DS    0D\n"
     "XTINY    DC    X'3BE50000000000000000000000000000'\n"
 )
@@ -165,6 +166,18 @@ TO_FIXED: Mapping[str, Case] = {
         {2: 0, 8: cc_word(0), 3: 3},
         2,
     ),
+    "CFDBR of a negative NaN gives MN": case_of(
+        lines("LD 1,DMQNAN", "CFDBR 2,0,1"),
+        {2: _low(0x80000000)},
+        3,
+        BOTH_FLAGS,
+    ),
+    "CFDBR CGDBRA prepare for shorter precision": case_of(
+        lines("LD 1,D2P5", "CFDBR 2,3,1", "LD 1,D3P5", "CGDBRA 3,3,1,0"),
+        {2: _low(3), 3: 3},
+        2,
+        INEXACT_FLAG,
+    ),
     "CLFDBR inexact control under an enabled mask": case_of(
         set_fpc(0x08000000) + lines("LD 1,D3P5", "CLFDBR 2,0,1,4"),
         {2: _low(4)},
@@ -219,6 +232,12 @@ FROM_FIXED: Mapping[str, Case] = {
         PRESET_CC,
         INEXACT_FLAG,
     ),
+    "CEFBRA prepare for shorter precision": case_of(
+        zeroed_short(1) + lines("IILF 2,X'01000001'", "CEFBRA 1,3,2,0", "LGDR 3,1"),
+        {3: high_word(0x4B800001)},
+        PRESET_CC,
+        INEXACT_FLAG,
+    ),
     "CDFBR CDFBRA": case_of(
         lines("IILF 2,X'FFFFFFFF'", "CDFBR 1,2", "LGDR 2,1")
         + lines("IILF 3,X'80000000'", "CDFBRA 4,7,3,0", "LGDR 3,4")
@@ -267,6 +286,20 @@ LENGTHEN_ROUND: Mapping[str, Case] = {
         lines("LE 2,SM1P5", "LDEBR 1,2", "LGDR 2,1", "LDEB 3,STINY3", "LGDR 3,3")
         + lines("LDEB 4,SQNAN", "LGDR 4,4"),
         {2: 0xBFF80000_00000000, 3: 0x36B80000_00000000, 4: 0x7FF80000_00000000},
+        PRESET_CC,
+    ),
+    "LDEB LXDB LXEB keep the sign of -0 and NaNs and normalise a subnormal": case_of(
+        lines("LDEB 1,SM0", "LGDR 2,1", "LDEB 3,SMQNAN", "LGDR 3,3")
+        + lines("LXDB 4,DMQNAN", "LGDR 4,4", "LGDR 5,6")
+        + lines("LXEB 8,STINY3", "LGDR 6,8", "LGDR 7,10"),
+        {
+            2: 0x80000000_00000000,
+            3: 0xFFF80000_20000000,
+            4: 0xFFFF8000_00000000,
+            5: 0x50000000_00000000,
+            6: 0x3F6B8000_00000000,
+            7: 0,
+        },
         PRESET_CC,
     ),
     "LDEBR quiets a masked SNaN": case_of(
