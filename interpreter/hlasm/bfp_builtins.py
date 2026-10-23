@@ -13,6 +13,7 @@ from interpreter.hlasm.bfp_layout import (
 )
 from interpreter.hlasm.bfp_operation import BfpOperation, bfp_builtin_name
 from interpreter.hlasm.ieee_words import ieee_words
+from interpreter.hlasm.integer_outcome import integer_outcome, sign_cc
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.builtin import Builtin
 from interpreter.vm.vm import VMState
@@ -37,7 +38,6 @@ from zarch_float.bfp_divide_to_integer import bfp_divide_to_integer
 from zarch_float.bfp_divide_to_integer_result import BfpDivideToIntegerResult
 from zarch_float.bfp_result import BfpResult
 from zarch_float.bfp_value import BfpValue
-from zarch_float.condition import Condition
 from zarch_float.float_kind import FloatKind
 from zarch_float.integer_format import (
     SIGNED_32,
@@ -46,15 +46,11 @@ from zarch_float.integer_format import (
     UNSIGNED_64,
     IntegerFormat,
 )
-from zarch_float.integer_result import IntegerResult
 from zarch_float.rounding_mode import BFP_MODIFIER_MODES, RoundingMode
 
 type _Binary = Callable[[BfpValue, BfpValue, RoundingMode], BfpResult]
 type _Fused = Callable[[BfpValue, BfpValue, BfpValue, RoundingMode], BfpResult]
 type _Unary = Callable[[BfpValue, RoundingMode], BfpResult]
-
-INVALID_CC = 3
-UNREACHABLE_SCALED = (0, 0, 0)
 
 
 def _outcome(result: BfpResult, cc: int) -> list[int]:
@@ -113,29 +109,13 @@ def _lengthened(source: BfpLayout, target: BfpLayout) -> Builtin:
     return call
 
 
-def _integer_cc(a: BfpValue, result: IntegerResult) -> int:
-    signed_cc = (a.kind is not FloatKind.ZERO) * (2 - a.negative)
-    return INVALID_CC if Condition.INVALID in result.conditions else signed_cc
-
-
-def _integer_outcome(a: BfpValue, result: IntegerResult, image: int) -> list[int]:
-    return [
-        image,
-        0,
-        0,
-        *UNREACHABLE_SCALED,
-        *ieee_words(result.conditions, frozenset()),
-        _integer_cc(a, result),
-    ]
-
-
 def _to_integer(target: IntegerFormat, layout: BfpLayout) -> Builtin:
     def call(args: Sequence[TypedValue], vm: VMState) -> BuiltinResult:
         mode, a = args
         operand = _operand(a, layout)
         result = bfp_to_integer(operand, target, _mode(mode))
-        image = result.value & (target.maximum - target.minimum)
-        return BuiltinResult(value=_integer_outcome(operand, result, image))
+        source_cc = sign_cc(operand.kind is FloatKind.ZERO, operand.negative)
+        return BuiltinResult(value=integer_outcome(source_cc, result, target))
 
     return call
 

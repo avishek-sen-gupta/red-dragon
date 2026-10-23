@@ -19,6 +19,7 @@ from interpreter.hlasm.data_movement import (
     keep,
     sign_extended,
 )
+from interpreter.hlasm.fpr_layout import FprLayout
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.ieee_outcome import IeeeOutcome
 from interpreter.hlasm.opcodes.bfp_forms import (
@@ -62,6 +63,7 @@ from interpreter.register import Register
 
 type GrStore = Callable[[HlasmEmitter, int, Register], None]
 type GrRead = Callable[[int], Source]
+type ImageAt[L: FprLayout] = Callable[[HlasmEmitter, Register, Register, L], Register]
 
 LAYOUTS: Mapping[str, BfpLayout] = {
     "E": SHORT_LAYOUT,
@@ -70,7 +72,7 @@ LAYOUTS: Mapping[str, BfpLayout] = {
 }
 
 
-def _integer_stored(store: GrStore) -> Deliver:
+def integer_stored(store: GrStore) -> Deliver:
     def deliver(
         emitter: HlasmEmitter,
         statement: MachineStatement,
@@ -100,7 +102,7 @@ def _to_integer(
     lowering = ieee(
         (operation, layout),
         (modifier(SECOND), fields(fpr(THIRD, layout), layout)),
-        _integer_stored(store),
+        integer_stored(store),
         suppressed,
     )
     return checked(invalid_modifier(SECOND), _with_pair(layout, (THIRD,), lowering))
@@ -248,7 +250,7 @@ def _lengthen(
     return _with_pair(target, (FIRST,), lower)
 
 
-def _rounded_stored(source: BfpLayout, target: BfpLayout) -> Deliver:
+def rounded_stored[L: FprLayout](source: L, target: L, image: ImageAt[L]) -> Deliver:
     narrowing = source.width - target.width
 
     def deliver(
@@ -258,8 +260,8 @@ def _rounded_stored(source: BfpLayout, target: BfpLayout) -> Deliver:
         slot: Register,
     ) -> None:
         r1 = reg_operand(statement, FIRST)
-        rounded = image_at(emitter, result, slot, target)
-        scaled = image_at(emitter, result, slot, source)
+        rounded = image(emitter, result, slot, target)
+        scaled = image(emitter, result, slot, source)
         kept = keep((1 << narrowing) - 1)(emitter, load_image(emitter, r1, source))
         placed = emitter.binop(BinopKind.LSHIFT, rounded, emitter.int_(narrowing))
         merged = emitter.binop(BinopKind.BIT_OR, placed, kept)
@@ -279,7 +281,7 @@ def _round(
     lowering = ieee(
         (operation, source),
         (mode, fields(fpr(r2, source), source)),
-        _rounded_stored(source, target),
+        rounded_stored(source, target, image_at),
         suppressed,
     )
     return _with_pair(source, (FIRST, r2), lowering)
