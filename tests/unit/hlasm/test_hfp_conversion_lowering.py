@@ -1,5 +1,5 @@
 # pyright: standard
-"""HFP conversion lowerings: the rounding forms read M3 and the operand, call one builtin, store and set the CC with no program-mask ladder; static checks abend before any access."""
+"""HFP conversion lowerings: the rounding forms read M3 and the operand, call one builtin, store and set the CC with no program-mask ladder; the exact and truncating forms are IR alone; static checks abend before any access."""
 
 from collections.abc import Mapping
 
@@ -10,6 +10,7 @@ from tests.unit.hlasm.fp_trace import (
     CC,
     SPECIFICATION,
     lowered_ir,
+    registers,
     trace,
 )
 from tests.unit.hlasm.lowering_helpers import mask_operand, reg_operand
@@ -41,6 +42,21 @@ def test_rounding_forms_call_the_builtin_then_store_and_set_the_cc():
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_from_fixed_and_bfp_to_hfp_are_ir_without_a_call():
+    assert {
+        "CEFR": trace("CEFR", registers(1, 2)),
+        "CXGR": trace("CXGR", registers(4, 2)),
+        "THDER": trace("THDER", registers(1, 2)),
+        "THDR": trace("THDR", registers(1, 2)),
+    } == {
+        "CEFR": ["read gpr 20+4", "write fpr 8+4"],
+        "CXGR": ["read gpr 16+8", "write fpr 32+8", "write fpr 48+8"],
+        "THDER": ["read fpr 16+4", "write fpr 8+8", CC],
+        "THDR": ["read fpr 16+8", "write fpr 8+8", CC],
+    }
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_invalid_pairs_and_modifiers_abend_before_any_access():
     traces = [
         trace("CFER", _rrf(2, 3, 1)),
@@ -50,6 +66,8 @@ def test_invalid_pairs_and_modifiers_abend_before_any_access():
         trace("CGXR", _rrf(2, 4, 7)),
         trace("TBEDR", _rrf(1, 2, 2)),
         trace("TBDR", _rrf(1, 8, 2)),
+        trace("CXFR", registers(2, 1)),
+        trace("CXGR", registers(7, 1)),
     ]
 
     assert traces == [[SPECIFICATION]] * len(traces)
@@ -58,6 +76,7 @@ def test_invalid_pairs_and_modifiers_abend_before_any_access():
 FAMILIES: Mapping[str, tuple[Operand, ...]] = {
     "CFER CFDR CFXR CGER CGDR CGXR": _rrf(1, 4, 4),
     "TBEDR TBDR": _rrf(1, 1, 4),
+    "CEFR CDFR CXFR CEGR CDGR CXGR THDER THDR": registers(4, 2),
 }
 
 
@@ -69,7 +88,7 @@ def test_every_mnemonic_lowers_without_symbolic():
         for m in names.split()
     }
 
-    assert len(lowered) == 8
+    assert len(lowered) == 16
     assert [
         m for m, ir in lowered.items() if any(isinstance(i, Symbolic) for i in ir)
     ] == []

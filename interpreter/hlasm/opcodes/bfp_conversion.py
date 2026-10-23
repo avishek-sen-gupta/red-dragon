@@ -40,6 +40,7 @@ from interpreter.hlasm.opcodes.bfp_ir import (
     exact_image,
     image_at,
     signaling_nan_of,
+    significand_of,
 )
 from interpreter.hlasm.opcodes.floating_point_support import pairs
 from interpreter.hlasm.opcodes.fpr_images import (
@@ -50,6 +51,7 @@ from interpreter.hlasm.opcodes.fpr_images import (
     list_item,
     load_image,
     pick,
+    signed_magnitude,
     storage,
     store_image,
 )
@@ -138,11 +140,7 @@ def _signed(read: GrRead, bits: int) -> GrRead:
 
 def _from_exact(layout: BfpLayout, integer: Source) -> StatementLowering:
     def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
-        value = integer(emitter, statement)
-        negative = emitter.binop(BinopKind.LT, value, emitter.int_(0))
-        doubled = emitter.binop(BinopKind.MUL, negative, emitter.int_(2))
-        flipped = emitter.binop(BinopKind.MUL, doubled, value)
-        magnitude = emitter.binop(BinopKind.SUB, value, flipped)
+        negative, magnitude = signed_magnitude(emitter, integer(emitter, statement))
         image = exact_image(emitter, negative, magnitude, emitter.int_(0), layout)
         store_image(emitter, reg_operand(statement, FIRST), layout, image)
 
@@ -222,32 +220,13 @@ def _special_image(
     return emitter.binop(BinopKind.BIT_OR, quieted, emitter.int_(target.infinity))
 
 
-def _significand(
-    emitter: HlasmEmitter, image: Register, biased: Register, source: BfpLayout
-) -> tuple[Register, Register]:
-    normal = emitter.binop(BinopKind.NE, biased, emitter.int_(0))
-    implied = emitter.binop(
-        BinopKind.LSHIFT, normal, emitter.int_(source.fraction_bits)
-    )
-    fraction = keep((1 << source.fraction_bits) - 1)(emitter, image)
-    magnitude = emitter.binop(BinopKind.BIT_OR, fraction, implied)
-    floor = emitter.binop(BinopKind.SUB, emitter.int_(1), normal)
-    unbiased = emitter.binop(BinopKind.ADD, biased, floor)
-    exponent = emitter.binop(
-        BinopKind.SUB,
-        unbiased,
-        emitter.int_(source.format.emax + source.fraction_bits),
-    )
-    return magnitude, exponent
-
-
 def _lengthened_image(
     emitter: HlasmEmitter, image: Register, source: BfpLayout, target: BfpLayout
 ) -> Register:
     sign = emitter.binop(BinopKind.RSHIFT, image, emitter.int_(source.sign_shift))
     shifted = emitter.binop(BinopKind.RSHIFT, image, emitter.int_(source.fraction_bits))
     biased = keep(source.exponent_mask)(emitter, shifted)
-    magnitude, exponent = _significand(emitter, image, biased, source)
+    magnitude, exponent = significand_of(emitter, image, biased, source)
     finite = exact_image(emitter, sign, magnitude, exponent, target)
     special = emitter.binop(BinopKind.EQ, biased, emitter.int_(source.exponent_mask))
     signed = emitter.binop(BinopKind.LSHIFT, sign, emitter.int_(target.sign_shift))

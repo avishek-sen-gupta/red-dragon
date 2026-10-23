@@ -1,9 +1,10 @@
 # pyright: standard
-"""IR for HFP images: field lists for the builtins, images from result fields with the extended low-order part, an image's condition code, and the program-mask ladder (ruling R46)."""
+"""IR for HFP images: field lists for the builtins, normalized fields of an exact binary value, images from result fields with the extended low-order part, an image's condition code, and the program-mask ladder (ruling R46)."""
 
 from collections.abc import Callable, Sequence
 
 from interpreter.hlasm.abend import emit_abend
+from interpreter.hlasm.bit_counts import leading_zeros
 from interpreter.hlasm.conditional import emit_when
 from interpreter.hlasm.data_movement import keep
 from interpreter.hlasm.hfp_layout import (
@@ -22,6 +23,7 @@ from interpreter.hlasm.hfp_slots import (
     UNDERFLOW_BIT,
 )
 from interpreter.hlasm.hlasm_constants import (
+    DOUBLEWORD_BITS,
     HFP_DIVIDE_ABEND,
     HFP_EXPONENT_OVERFLOW_ABEND,
     HFP_EXPONENT_UNDERFLOW_ABEND,
@@ -41,6 +43,9 @@ type Exceptions = Sequence[tuple[int, str]]
 PART_MASK = (1 << PART_WIDTH) - 1
 PART_FRACTION_MASK = (1 << PART_FRACTION_BITS) - 1
 LOW_CHARACTERISTIC_OFFSET = 128 - 14
+EXCESS_DIGIT = 65
+BITS_PER_DIGIT = 4
+DIGIT_SHIFT = 2
 POSITIVE_CC = 2
 SIGN, CHARACTERISTIC, FRACTION = 0, 1, 2
 SUPPRESSING: Exceptions = (
@@ -97,6 +102,47 @@ def fields_of(
 
 def fields_list(emitter: HlasmEmitter, image: Register, layout: HfpLayout) -> Register:
     return list_of(emitter, fields_of(emitter, image, layout))
+
+
+def _positive_part(emitter: HlasmEmitter, value: Register) -> Register:
+    positive = emitter.binop(BinopKind.GT, value, emitter.int_(0))
+    return emitter.binop(BinopKind.MUL, positive, value)
+
+
+def normalized_fields(
+    emitter: HlasmEmitter,
+    negative: Register,
+    binary: tuple[Register, Register],
+    layout: HfpLayout,
+) -> tuple[Register, Register, Register]:
+    magnitude, exponent = binary
+    top = emitter.binop(
+        BinopKind.SUB,
+        emitter.int_(DOUBLEWORD_BITS - 1),
+        leading_zeros(emitter, magnitude),
+    )
+    leading = emitter.binop(BinopKind.ADD, top, exponent)
+    digits = _shifted(emitter, leading, DIGIT_SHIFT)
+    characteristic = emitter.binop(BinopKind.ADD, digits, emitter.int_(EXCESS_DIGIT))
+    shift = emitter.binop(
+        BinopKind.SUB,
+        emitter.binop(BinopKind.ADD, exponent, emitter.int_(layout.fraction_bits)),
+        emitter.binop(
+            BinopKind.MUL,
+            emitter.binop(BinopKind.ADD, digits, emitter.int_(1)),
+            emitter.int_(BITS_PER_DIGIT),
+        ),
+    )
+    left = emitter.binop(BinopKind.LSHIFT, magnitude, _positive_part(emitter, shift))
+    right = _positive_part(
+        emitter, emitter.binop(BinopKind.SUB, emitter.int_(0), shift)
+    )
+    nonzero = emitter.binop(BinopKind.NE, magnitude, emitter.int_(0))
+    return (
+        negative,
+        emitter.binop(BinopKind.MUL, nonzero, characteristic),
+        emitter.binop(BinopKind.RSHIFT, left, right),
+    )
 
 
 def true_zero_low(
