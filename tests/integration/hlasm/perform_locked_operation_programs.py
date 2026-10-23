@@ -511,7 +511,7 @@ SPECIAL_CASES: Mapping[str, Case] = {
 }
 
 EXECUTED = (
-    _lines("LA    0,4", "L     4,OP2", "LHI   5,555", "LHI   2,X'46'", "EX    2,PLOT")
+    _lines("LA    0,0", "L     4,OP2", "LHI   2,X'46'", "EX    2,PLOT")
     + _lines("J     EXECUTED")
     + "PLOT     PLO   0,OP2,0,OP4\n"
     + "EXECUTED DS    0H\n"
@@ -520,9 +520,9 @@ EXECUTED = (
 EXECUTE_CASES: Mapping[str, Case] = {
     "EX of PLO takes R1 and R3 from the EX register": (
         plo_program(EXECUTED, parameter_list(INITIAL["PL"], {})),
-        {2: HIGH_FILL | 0x46, 4: HIGH_FILL | 201, 5: HIGH_FILL | 555},
+        {2: HIGH_FILL | 0x46, 4: HIGH_FILL | 201, 6: HIGH_FILL | 401},
         0,
-        storage_of(write(INITIAL, SECOND, WORD, 555), {}),
+        storage_of(INITIAL, {}),
     ),
 }
 
