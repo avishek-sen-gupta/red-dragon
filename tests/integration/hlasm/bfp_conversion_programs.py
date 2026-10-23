@@ -10,12 +10,16 @@ from tests.integration.hlasm.bfp_arithmetic_programs import (
     INVALID_FLAG,
     PRESET_CC,
     Case,
+    Trap,
     case_of,
     cc_into,
     cc_word,
     extended_from,
+    high_word,
     lines,
     set_fpc,
+    trap_of,
+    zeroed_short,
 )
 from tests.integration.hlasm.hlasm_machine import HlasmMachine
 from tests.integration.hlasm.hlasm_run import HlasmRun
@@ -178,7 +182,97 @@ TO_FIXED: Mapping[str, Case] = {
     ),
 }
 
-CASES: Mapping[str, Case] = {**TO_FIXED}
+FROM_FIXED: Mapping[str, Case] = {
+    "CEFBR CEFBRA": case_of(
+        zeroed_short(1, 4)
+        + lines("IILF 2,X'01000001'", "CEFBR 1,2", "LGDR 3,1")
+        + lines("CEFBRA 4,6,2,4", "LGDR 5,4"),
+        {3: high_word(0x4B800000), 5: high_word(0x4B800001)},
+        PRESET_CC,
+        INEXACT_FLAG,
+    ),
+    "CEGBR CEGBRA": case_of(
+        zeroed_short(1, 4)
+        + lines("LLIHF 2,X'80000000'", "CEGBR 1,2", "LGDR 3,1")
+        + lines("LLIHF 2,X'7FFFFFFF'", "IILF 2,X'FFFFFFFF'", "CEGBRA 4,5,2,0")
+        + lines("LGDR 5,4"),
+        {3: high_word(0xDF000000), 5: high_word(0x5EFFFFFF)},
+        PRESET_CC,
+        INEXACT_FLAG,
+    ),
+    "CDGBR CDGBRA": case_of(
+        lines("LLIHF 2,X'00200000'", "IILF 2,1", "CDGBR 1,2", "LGDR 4,1")
+        + lines("LCGR 3,2", "CDGBRA 5,7,3,0", "LGDR 5,5"),
+        {4: 0x43400000_00000000, 5: 0xC3400000_00000001},
+        1,
+        INEXACT_FLAG,
+    ),
+    "CELFBR CELGBR CDLGBR": case_of(
+        zeroed_short(1, 4)
+        + lines("IILF 2,X'FFFFFFFF'", "CELFBR 1,0,2,0", "LGDR 2,1")
+        + lines("LGHI 3,-1", "CELGBR 4,0,3,4", "LGDR 4,4")
+        + lines("CDLGBR 5,5,3,0", "LGDR 5,5"),
+        {2: high_word(0x4F800000), 4: high_word(0x5F800000), 5: 0x43EFFFFF_FFFFFFFF},
+        PRESET_CC,
+        INEXACT_FLAG,
+    ),
+    "CDFBR CDFBRA": case_of(
+        lines("IILF 2,X'FFFFFFFF'", "CDFBR 1,2", "LGDR 2,1")
+        + lines("IILF 3,X'80000000'", "CDFBRA 4,7,3,0", "LGDR 3,4")
+        + lines("IILF 5,0", "CDFBR 6,5", "LGDR 4,6"),
+        {2: 0xBFF00000_00000000, 3: 0xC1E00000_00000000, 4: 0},
+        PRESET_CC,
+    ),
+    "CDLFBR": case_of(
+        lines("IILF 2,X'FFFFFFFF'", "CDLFBR 1,0,2,0", "LGDR 2,1"),
+        {2: 0x41EFFFFF_FFE00000},
+        PRESET_CC,
+    ),
+    "CXFBR CXFBRA": case_of(
+        lines("IILF 2,7", "CXFBR 1,2", "LGDR 2,1", "LGDR 3,3")
+        + lines("IILF 4,X'80000000'", "CXFBRA 4,3,4,0", "LGDR 4,4", "LGDR 5,6"),
+        {2: 0x4001C000_00000000, 3: 0, 4: 0xC01E0000_00000000, 5: 0},
+        PRESET_CC,
+    ),
+    "CXGBR CXGBRA": case_of(
+        lines("LLIHF 2,X'80000000'", "CXGBR 1,2", "LGDR 2,1", "LGDR 3,3")
+        + lines("LLIHF 4,X'7FFFFFFF'", "IILF 4,X'FFFFFFFF'", "CXGBRA 8,0,4,4")
+        + lines("LGDR 4,8", "LGDR 5,10"),
+        {
+            2: 0xC03E0000_00000000,
+            3: 0,
+            4: 0x403DFFFF_FFFFFFFF,
+            5: 0xFFFC0000_00000000,
+        },
+        PRESET_CC,
+    ),
+    "CXLFBR CXLGBR": case_of(
+        lines("IILF 2,X'FFFFFFFF'", "CXLFBR 1,0,2,0", "LGDR 2,1", "LGDR 3,3")
+        + lines("LGHI 4,-1", "CXLGBR 8,0,4,0", "LGDR 4,8", "LGDR 5,10"),
+        {
+            2: 0x401EFFFF_FFFE0000,
+            3: 0,
+            4: 0x403EFFFF_FFFFFFFF,
+            5: 0xFFFE0000_00000000,
+        },
+        PRESET_CC,
+    ),
+}
+
+CASES: Mapping[str, Case] = {**TO_FIXED, **FROM_FIXED}
+
+TRAPS: Mapping[str, Trap] = {
+    "CEFBR inexact traps after the store": trap_of(
+        zeroed_short(1) + lines("IILF 2,X'01000001'", "CEFBR 1,2"),
+        {1: high_word(0x4B800000)},
+        0x08000800,
+    ),
+}
+
+
+def expected_trap(case: str) -> tuple[HlasmRun, int, Mapping[int, int], int]:
+    fprs, cc, fpc = TRAPS[case][1:]
+    return HlasmRun(return_code=0, abend=DATA_EXCEPTION, stdout=""), cc, fprs, fpc
 
 
 def expected(case: str) -> HlasmMachine:

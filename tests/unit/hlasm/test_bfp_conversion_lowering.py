@@ -12,6 +12,7 @@ from tests.unit.hlasm.bfp_trace import (
     SPECIFICATION,
     ladder,
     lowered_ir,
+    registers,
     trace,
 )
 from tests.unit.hlasm.lowering_helpers import mask_operand, reg_operand
@@ -53,6 +54,26 @@ def test_to_fixed_forms_call_the_builtin_then_store_the_gr_and_cc():
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_from_fixed_rounds_through_the_builtin_unless_the_target_is_wide_enough():
+    assert {
+        "CEFBR": trace("CEFBR", registers(1, 2)),
+        "CDLGBR": trace("CDLGBR", _rrfe(1, 5, 2, 0)),
+        "CDFBR": trace("CDFBR", registers(1, 2)),
+        "CXLGBR": trace("CXLGBR", _rrfe(4, 0, 2, 0)),
+    } == {
+        "CEFBR": [
+            READ_FPC,
+            "read gpr 20+4",
+            "call from_fixed_short",
+            *ladder("write fpr 8+4"),
+        ],
+        "CDLGBR": ["read gpr 16+8", "call from_fixed_long", *ladder("write fpr 8+8")],
+        "CDFBR": ["read gpr 20+4", "write fpr 8+8"],
+        "CXLGBR": ["read gpr 16+8", "write fpr 32+8", "write fpr 48+8"],
+    }
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_invalid_pairs_and_modifiers_abend_before_any_access():
     traces = [
         trace("CFDBR", _rrf(2, 2, 1)),
@@ -60,6 +81,10 @@ def test_invalid_pairs_and_modifiers_abend_before_any_access():
         trace("CFXBR", _rrf(2, 0, 2)),
         trace("CLGXBR", _rrfe(2, 0, 6, 0)),
         trace("CLFEBR", _rrfe(2, 15, 1, 0)),
+        trace("CXFBR", registers(2, 1)),
+        trace("CXLGBR", _rrfe(6, 0, 1, 0)),
+        trace("CDFBRA", _rrfe(1, 2, 1, 0)),
+        trace("CELFBR", _rrfe(1, 9, 1, 0)),
     ]
 
     assert traces == [[SPECIFICATION]] * len(traces)
@@ -69,6 +94,9 @@ FAMILIES: Mapping[str, tuple[Operand, ...]] = {
     "CFEBR CFDBR CFXBR CGEBR CGDBR CGXBR": _rrf(1, 0, 4),
     "CFEBRA CFDBRA CFXBRA CGEBRA CGDBRA CGXBRA": _rrfe(1, 0, 4, 4),
     "CLFEBR CLFDBR CLFXBR CLGEBR CLGDBR CLGXBR": _rrfe(1, 5, 4, 0),
+    "CEFBR CDFBR CXFBR CEGBR CDGBR CXGBR": registers(4, 2),
+    "CEFBRA CDFBRA CXFBRA CEGBRA CDGBRA CXGBRA": _rrfe(4, 0, 2, 4),
+    "CELFBR CDLFBR CXLFBR CELGBR CDLGBR CXLGBR": _rrfe(4, 1, 2, 0),
 }
 
 
@@ -80,7 +108,7 @@ def test_every_mnemonic_lowers_without_symbolic():
         for m in names.split()
     }
 
-    assert len(lowered) == 18
+    assert len(lowered) == 36
     assert [
         m for m, ir in lowered.items() if any(isinstance(i, Symbolic) for i in ir)
     ] == []

@@ -1,5 +1,5 @@
 # pyright: standard
-"""IR for BFP images: field lists for the builtins, images from result fields, FPR access by layout, an image's condition code, and the IEEE trap ladder (ruling R43)."""
+"""IR for BFP images: field lists for the builtins, images from result fields or from an exact magnitude, FPR access by layout, an image's condition code, and the IEEE trap ladder (ruling R43)."""
 
 from collections.abc import Callable, Mapping
 from dataclasses import replace
@@ -21,6 +21,7 @@ from interpreter.hlasm.bfp_slots import (
     SUPPRESSING_BITS,
     TRAP_SLOT,
 )
+from interpreter.hlasm.bit_counts import leading_zeros
 from interpreter.hlasm.conditional import emit_when
 from interpreter.hlasm.data_movement import keep
 from interpreter.hlasm.hlasm_constants import (
@@ -126,6 +127,35 @@ def image_at(
         emitter.binop(BinopKind.LSHIFT, biased, emitter.int_(layout.fraction_bits)),
     )
     return emitter.binop(BinopKind.BIT_OR, placed, fraction)
+
+
+def _normal_magnitude(
+    emitter: HlasmEmitter, magnitude: Register, exponent: Register, layout: BfpLayout
+) -> Register:
+    zeros = leading_zeros(emitter, magnitude)
+    top = emitter.binop(BinopKind.SUB, emitter.int_(DOUBLEWORD_BITS - 1), zeros)
+    scale = emitter.binop(BinopKind.ADD, exponent, emitter.int_(layout.format.emax))
+    biased = emitter.binop(BinopKind.ADD, scale, top)
+    left = emitter.binop(BinopKind.SUB, emitter.int_(layout.fraction_bits), top)
+    justified = emitter.binop(BinopKind.LSHIFT, magnitude, left)
+    fraction = keep((1 << layout.fraction_bits) - 1)(emitter, justified)
+    placed = emitter.binop(BinopKind.LSHIFT, biased, emitter.int_(layout.fraction_bits))
+    return emitter.binop(BinopKind.BIT_OR, placed, fraction)
+
+
+def exact_image(
+    emitter: HlasmEmitter,
+    negative: Register,
+    magnitude: Register,
+    exponent: Register,
+    layout: BfpLayout,
+) -> Register:
+    finite = _normal_magnitude(emitter, magnitude, exponent, layout)
+    nonzero = emitter.binop(BinopKind.NE, magnitude, emitter.int_(0))
+    sign = emitter.binop(BinopKind.LSHIFT, negative, emitter.int_(layout.sign_shift))
+    return emitter.binop(
+        BinopKind.BIT_OR, sign, emitter.binop(BinopKind.MUL, nonzero, finite)
+    )
 
 
 def image_cc(emitter: HlasmEmitter, image: Register, layout: BfpLayout) -> Register:
