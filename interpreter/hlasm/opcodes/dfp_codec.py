@@ -4,6 +4,7 @@
 from collections.abc import Mapping, Sequence
 
 from interpreter.hlasm.data_movement import keep
+from interpreter.hlasm.dfp_fields import INFINITY, QUIET_NAN, SIGNALING_NAN
 from interpreter.hlasm.dfp_layout import (
     EXTENDED_DFP,
     LONG_DFP,
@@ -25,9 +26,6 @@ BIG_DIGIT = 8
 DIGIT_BITS = 0b111
 HIGH_BITS = 0b11
 HIGH_SHIFT = 3
-INFINITY = -1
-QUIET_NAN = -2
-SIGNALING_NAN = -3
 
 
 def _shifted(emitter: HlasmEmitter, value: Register, shift: int) -> Register:
