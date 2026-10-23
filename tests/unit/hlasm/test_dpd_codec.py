@@ -143,13 +143,13 @@ def test_images_decode_to_fields_and_encode_canonically():
         name: _run(DECODERS[case[0]].body, case[1]) for name, case in IMAGES.items()
     }
     encoded = {
-        name: _run(ENCODERS[case[0]].body, *case[2])
-        for name, case in IMAGES.items()
-        if case[0] in ENCODERS
+        name: _run(ENCODERS[case[0]].body, *case[2]) for name, case in IMAGES.items()
     }
 
     assert decoded == {name: case[2] for name, case in IMAGES.items()}
     assert encoded == {
+        "short 1": 0x22500001,
+        "short -9.999999E96 at the top exponent": 0xF7F3FCFF,
         "long 1": 0x22380000_00000001,
         "long 9E15 with an LMD of 9": 0x6E380000_00000000,
         "long -0 at the bottom exponent": 0x80000000_00000000,

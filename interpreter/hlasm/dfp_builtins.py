@@ -4,8 +4,18 @@
 from collections.abc import Callable, Mapping, Sequence
 
 from interpreter.func_name import FuncName
-from interpreter.hlasm.dfp_fields import dfp_fields_of, dfp_value_of
-from interpreter.hlasm.dfp_layout import EXTENDED_DFP, LONG_DFP, DfpLayout
+from interpreter.hlasm.dfp_fields import (
+    INFINITY,
+    SIGNALING_NAN,
+    dfp_fields_of,
+    dfp_value_of,
+)
+from interpreter.hlasm.dfp_layout import (
+    EXTENDED_DFP,
+    LONG_DFP,
+    SHORT_DFP,
+    DfpLayout,
+)
 from interpreter.hlasm.dfp_operation import DfpOperation, dfp_builtin_name
 from interpreter.hlasm.ieee_words import ieee_words
 from interpreter.hlasm.integer_outcome import integer_outcome, sign_cc
@@ -23,6 +33,7 @@ from zarch_float.dfp_arithmetic import (
 )
 from zarch_float.dfp_convert import (
     dfp_from_integer,
+    dfp_load_rounded,
     dfp_round_to_integral,
     dfp_to_integer,
 )
@@ -105,6 +116,33 @@ def _to_integer(target: IntegerFormat, layout: DfpLayout) -> Builtin:
     return call
 
 
+_KEPT_CODES: Mapping[FloatKind, int] = {
+    FloatKind.INFINITY: INFINITY,
+    FloatKind.SNAN: SIGNALING_NAN,
+}
+NO_WORDS = (0, 0, 0, 0, 0)
+SIGNIFICAND = 2
+
+
+def _kept(operand: DfpValue, digits: int, target: DfpLayout) -> list[int]:
+    payload = digits % 10**target.trailing_digits
+    fields = [int(operand.negative), _KEPT_CODES[operand.kind], payload]
+    return [*fields, *fields, *NO_WORDS]
+
+
+def _load_rounded(source: DfpLayout, target: DfpLayout) -> Builtin:
+    def call(args: Sequence[TypedValue], vm: VMState) -> BuiltinResult:
+        mode, a, keeps_specials = args
+        operand = _operand(a, source)
+        if int(keeps_specials.value) and operand.kind in _KEPT_CODES:
+            digits = int(a.value[SIGNIFICAND])
+            return BuiltinResult(value=_kept(operand, digits, target))
+        result = dfp_load_rounded(operand, target.format, _mode(mode))
+        return BuiltinResult(value=_outcome(result))
+
+    return call
+
+
 _BINARIES: Mapping[DfpOperation, _Binary] = {
     DfpOperation.ADD: dfp_add,
     DfpOperation.SUBTRACT: dfp_subtract,
@@ -136,6 +174,12 @@ def dfp_builtins() -> Mapping[FuncName, Builtin]:
             dfp_builtin_name(DfpOperation.ROUND_TO_INTEGRAL, layout): _integral(layout)
             for layout in _LAYOUTS
         },
+        dfp_builtin_name(DfpOperation.LOAD_ROUNDED, LONG_DFP): _load_rounded(
+            LONG_DFP, SHORT_DFP
+        ),
+        dfp_builtin_name(DfpOperation.LOAD_ROUNDED, EXTENDED_DFP): _load_rounded(
+            EXTENDED_DFP, LONG_DFP
+        ),
         **{
             dfp_builtin_name(DfpOperation.FROM_FIXED, layout): _from_integer(layout)
             for layout in _LAYOUTS

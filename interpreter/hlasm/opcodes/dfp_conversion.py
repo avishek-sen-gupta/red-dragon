@@ -1,34 +1,60 @@
 # pyright: standard
-"""DFP conversions to and from fixed point: IR decodes or reads the operand, a zarch_float builtin rounds to the target and the trap ladder delivers (ruling R52, PoO 20-24 to 20-32)."""
+"""DFP conversions to and from fixed point and between DFP formats: a zarch_float builtin rounds to the target and the trap ladder delivers; LOAD LENGTHENED is exact and IR alone (ruling R52, PoO 20-24 to 20-32, 20-45, 20-46)."""
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 
 from hlasm_asg.program.machine_statement import MachineStatement
-from interpreter.hlasm.bfp_slots import QUANTUM_BIT
+from interpreter.hlasm.bfp_slots import INVALID_BIT, QUANTUM_BIT
 from interpreter.hlasm.data_movement import Source, from_gr32, from_gr64, sign_extended
-from interpreter.hlasm.dfp_layout import EXTENDED_DFP, LONG_DFP, DfpLayout
+from interpreter.hlasm.dfp_fields import INFINITY, SIGNALING_NAN
+from interpreter.hlasm.dfp_layout import EXTENDED_DFP, LONG_DFP, SHORT_DFP, DfpLayout
 from interpreter.hlasm.dfp_operation import DfpOperation, dfp_builtin_name
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
-from interpreter.hlasm.opcodes.bfp_conversion import GrStore, integer_stored
+from interpreter.hlasm.ieee_outcome import IeeeOutcome
+from interpreter.hlasm.opcodes.bfp_conversion import (
+    GrStore,
+    integer_stored,
+    rounded_stored,
+)
 from interpreter.hlasm.opcodes.bfp_forms import (
     SuppressedBits,
     ieee_call,
     inexact_control,
 )
+from interpreter.hlasm.opcodes.bfp_ir import emit_ieee_ladder, field_at
+from interpreter.hlasm.opcodes.dfp_codec import ENCODERS
 from interpreter.hlasm.opcodes.dfp_ir import (
+    EXPONENT,
+    SIGN,
+    SIGNIFICAND,
+    Fields,
     and_inexact_control,
     current_dfp_mode,
     decoded,
     dfp_modifier,
+    fields_of,
     no_cc,
     quantum_control,
     quantum_yields,
+    store_fields,
     stored,
 )
 from interpreter.hlasm.opcodes.floating_point_support import pairs
-from interpreter.hlasm.opcodes.fpr_images import FIRST, SECOND, THIRD, fpr
+from interpreter.hlasm.opcodes.fpr_images import (
+    FIRST,
+    FOURTH,
+    SECOND,
+    THIRD,
+    compared,
+    fpr,
+    pick,
+)
+from interpreter.hlasm.operands import optional_mask_operand, reg_operand
 from interpreter.hlasm.statement_lowering import StatementLowering
+from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
+
+INVALID_CONTROL = 0b1000
 
 LAYOUTS: Mapping[str, DfpLayout] = {"D": LONG_DFP, "X": EXTENDED_DFP}
 
@@ -123,8 +149,87 @@ FROM_FIXED: Mapping[str, StatementLowering] = {
     },
 }
 
+
+def _keeps_specials(index: int) -> Callable[[MachineStatement], bool]:
+    return lambda statement: bool(
+        optional_mask_operand(statement, index, 0) & INVALID_CONTROL
+    )
+
+
+def _widened(emitter: HlasmEmitter, fields: Fields, delta: int, keeps: bool) -> Fields:
+    sign, exponent, significand = fields
+    finite = compared(emitter, BinopKind.GE, exponent, 0)
+    moved = emitter.binop(BinopKind.ADD, exponent, emitter.int_(delta))
+    if keeps:
+        return sign, pick(emitter, finite, moved, exponent), significand
+    signaling = compared(emitter, BinopKind.EQ, exponent, SIGNALING_NAN)
+    quieted = emitter.binop(BinopKind.ADD, exponent, signaling)
+    finite_or_nan = compared(emitter, BinopKind.NE, exponent, INFINITY)
+    digits = emitter.binop(BinopKind.MUL, significand, finite_or_nan)
+    return sign, pick(emitter, finite, moved, quieted), digits
+
+
+def _lengthen(source: DfpLayout, target: DfpLayout) -> StatementLowering:
+    delta = target.bias - source.bias
+
+    def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
+        keeps = _keeps_specials(THIRD)(statement)
+        fields = fields_of(
+            emitter, decoded(fpr(SECOND, source), source)(emitter, statement)
+        )
+        result = _widened(emitter, fields, delta, keeps)
+        signaling = compared(emitter, BinopKind.EQ, fields[EXPONENT], SIGNALING_NAN)
+        invalid = emitter.binop(
+            BinopKind.MUL, signaling, emitter.int_(INVALID_BIT * (not keeps))
+        )
+        none = emitter.int_(0)
+        emit_ieee_ladder(
+            emitter,
+            IeeeOutcome(invalid, invalid, none, none),
+            lambda slot: store_fields(
+                emitter, reg_operand(statement, FIRST), target, result
+            ),
+        )
+
+    return lower
+
+
+def _encoded_at(
+    emitter: HlasmEmitter, result: Register, slot: Register, layout: DfpLayout
+) -> Register:
+    fields = (
+        field_at(emitter, result, slot, at) for at in (SIGN, EXPONENT, SIGNIFICAND)
+    )
+    sign, exponent, significand = fields
+    return ENCODERS[layout].call(emitter, (sign, exponent, significand))
+
+
+def _round(source: DfpLayout, target: DfpLayout) -> StatementLowering:
+    keeps = _keeps_specials(FOURTH)
+    return ieee_call(
+        dfp_builtin_name(DfpOperation.LOAD_ROUNDED, source),
+        (
+            dfp_modifier(SECOND),
+            decoded(fpr(THIRD, source), source),
+            lambda emitter, statement: emitter.int_(int(keeps(statement))),
+        ),
+        rounded_stored(source, target, _encoded_at),
+        and_inexact_control(quantum_control(SECOND), inexact_control),
+        quantum_yields,
+    )
+
+
+LENGTHEN_ROUND: Mapping[str, StatementLowering] = {
+    "LDETR": _lengthen(SHORT_DFP, LONG_DFP),
+    "LXDTR": pairs((FIRST,), _lengthen(LONG_DFP, EXTENDED_DFP)),
+    "LEDTR": _round(LONG_DFP, SHORT_DFP),
+    "LDXTR": pairs((FIRST, THIRD), _round(EXTENDED_DFP, LONG_DFP)),
+}
+
+
 DFP_CONVERSION_LOWERINGS: Mapping[str, StatementLowering] = {
     **TO_FIXED,
     **{f"CG{letter}TRA": TO_FIXED[f"CG{letter}TR"] for letter in LAYOUTS},
     **FROM_FIXED,
+    **LENGTHEN_ROUND,
 }

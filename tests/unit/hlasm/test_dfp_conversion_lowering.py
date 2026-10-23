@@ -75,6 +75,35 @@ def test_fixed_point_forms_call_the_builtin_then_store_through_the_ladder():
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_lengthening_is_ir_and_rounding_merges_into_the_source_format_register():
+    assert {
+        "LDETR": trace("LDETR", (*registers(1, 2), mask_operand(0))),
+        "LXDTR": trace("LXDTR", (*registers(4, 1), mask_operand(8))),
+        "LEDTR": trace("LEDTR", _rrfe(1, 0, 2, 0)),
+    } == {
+        "LDETR": [
+            "read fpr 16+4",
+            "call dfp decode_short",
+            *ladder(ENCODE_LONG, "write fpr 8+8"),
+        ],
+        "LXDTR": [
+            "read fpr 8+8",
+            DECODE_LONG,
+            *ladder(ENCODE_EXTENDED, "write fpr 32+8", "write fpr 48+8"),
+        ],
+        "LEDTR": [
+            READ_FPC,
+            "read fpr 16+8",
+            DECODE_LONG,
+            "call dfp load_rounded_long",
+            *ladder(
+                "call dfp encode_short", ENCODE_LONG, "read fpr 8+8", "write fpr 8+8"
+            ),
+        ],
+    }
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_invalid_pairs_abend_before_any_access():
     traces = [
         trace("CXFTR", _rrfe(2, 0, 1, 0)),
@@ -83,9 +112,12 @@ def test_invalid_pairs_abend_before_any_access():
         trace("CFXTR", _rrfe(1, 0, 2, 0)),
         trace("CGXTRA", _rrfe(1, 0, 6, 0)),
         trace("CLGXTR", _rrfe(1, 0, 3, 0)),
+        trace("LXDTR", (*registers(2, 1), mask_operand(0))),
+        trace("LDXTR", _rrfe(1, 0, 6, 0)),
+        trace("LDXTR", _rrfe(3, 0, 4, 0)),
     ]
 
-    assert traces == [[SPECIFICATION]] * 6
+    assert traces == [[SPECIFICATION]] * 9
 
 
 FAMILIES: Mapping[str, tuple[Operand, ...]] = {
@@ -93,6 +125,8 @@ FAMILIES: Mapping[str, tuple[Operand, ...]] = {
     "CDGTRA CXGTRA CDFTR CXFTR CDLFTR CXLFTR CDLGTR CXLGTR": _rrfe(0, 1, 4, 4),
     "CGDTR CGXTR": _rrf(4, 1, 0),
     "CFDTR CFXTR CGDTRA CGXTRA CLFDTR CLFXTR CLGDTR CLGXTR": _rrfe(4, 1, 0, 4),
+    "LDETR LXDTR": (*registers(0, 4), mask_operand(8)),
+    "LEDTR LDXTR": _rrfe(0, 1, 4, 12),
 }
 
 
@@ -104,7 +138,7 @@ def test_every_mnemonic_lowers_without_symbolic():
         for m in names.split()
     }
 
-    assert len(lowered) == 20
+    assert len(lowered) == 24
     assert [
         m for m, ir in lowered.items() if any(isinstance(i, Symbolic) for i in ir)
     ] == []

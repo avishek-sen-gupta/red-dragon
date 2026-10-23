@@ -111,7 +111,7 @@ addresses.
 | `interpreter/hlasm/opcodes/hfp_ir.py` | HFP image IR: field lists, normalized fields of a binary value, encoding with the extended low-order part, an image's CC, and the program-mask ladder |
 | `interpreter/hlasm/opcodes/hfp_conversion.py` | HFP conversions: to fixed and to BFP through builtins; from fixed, from BFP, load lengthened and load rounded in IR (red-dragon-6uyp.54) |
 | `interpreter/hlasm/opcodes/dfp_codec.py`, `dpd_lanes.py`, `interpreter/hlasm/dfp_layout.py` | DFP images to `[negative, e, significand]` and back as IR functions, one per format (ruling R49); `e` is the biased exponent or -1/-2/-3 for infinity, QNaN, SNaN. All declets decode or encode at once, ten bits per lane |
-| `interpreter/hlasm/opcodes/dfp_conversion.py` | DFP conversions: to and from fixed and logical through builtins (red-dragon-6uyp.56) |
+| `interpreter/hlasm/opcodes/dfp_conversion.py` | DFP conversions: to and from fixed and logical and LOAD ROUNDED through builtins; LOAD LENGTHENED in IR (red-dragon-6uyp.56) |
 | `interpreter/hlasm/ir_function.py`, `program_function.py` | An IR function called by name; the call records it on the emitter, and the frontend defines each recorded function once after the entry function, repeating until no body calls an undefined one |
 | `interpreter/hlasm/opcodes/fpr_images.py`, `interpreter/hlasm/fpr_layout.py` | Floating-point images of any radix: FPR access by width (short high word, long, pair), FPR and storage operand sources, result-list items, an arithmetic select |
 | `interpreter/hlasm/program_status.py` | SPM, IPM, EPSW |
@@ -1040,7 +1040,7 @@ SLXT, SRDT, SRXT, SXTR, SXTRA, TDCDT, TDCET, TDCXT, TDGDT, TDGET, TDGXT. Rulings
 
 **DFP conversions (red-dragon-6uyp.56).** CDFTR, CDGTR, CDGTRA, CDLFTR, CDLGTR, CXFTR, CXGTR,
 CXGTRA, CXLFTR, CXLGTR, CFDTR, CFXTR, CGDTR, CGDTRA, CGXTR, CGXTRA, CLFDTR, CLFXTR, CLGDTR,
-CLGXTR. Rulings R43, R45, R52.
+CLGXTR, LDETR, LDXTR, LEDTR, LXDTR. Rulings R43, R45, R48, R52.
 
 - To and from fixed and logical call `dfp_builtins()` builtins over `zarch_float`'s
   `dfp_from_integer` and `dfp_to_integer`, through the BFP trap ladder.
@@ -1051,6 +1051,12 @@ CLGXTR. Rulings R43, R45, R52.
   the nearest end of the range (0 for a NaN to logical, the minimum for a NaN to fixed) and CC
   3; unmasked, `S0C7` DXC 80 with the GR and CC unchanged. Otherwise the CC is the source's
   sign, 0 for a zero.
+- LDETR and LXDTR are IR: the biased exponent moves by the bias difference. M4 bit 0 (X'8') is
+  XiC: off, an SNaN signals invalid and becomes a QNaN and an infinity loses its digits; on,
+  both keep their digits and nothing signals.
+- LEDTR and LDXTR call the `load_rounded` builtin, the XiC bit its third argument. The short or
+  long result lands in the left of R1, the rest unchanged; a trapped overflow or underflow
+  stores the scaled value in the source format (`rounded_stored`, shared with BFP).
 
 ## Known Gaps
 

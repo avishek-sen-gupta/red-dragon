@@ -37,6 +37,13 @@ CONVERSION_DATA = (
     "XU32P5   DC    X'2207C0000000000000000010AAFDCADD'\n"
     "XQNAN    DC    X'7C000000000000000000000000000000'\n"
     "XZERO    DC    X'22080000000000000000000000000000'\n"
+    "D16      DC    X'263934B9C1E28E56'\n"
+    "DINFP    DC    X'780000000A395BCF'\n"
+    "DSNANP   DC    X'7E0000000A395BCF'\n"
+    "SVAL     DC    X'A624D2E7'\n"
+    "SINFX    DC    X'78000005'\n"
+    "SSNAN    DC    X'FE000042'\n"
+    "SQNAN    DC    X'7C000007'\n"
 )
 
 
@@ -132,7 +139,49 @@ FIXED: Mapping[str, Case] = {
     ),
 }
 
-CASES: Mapping[str, Case] = {**FIXED}
+LENGTHEN_ROUND: Mapping[str, Case] = {
+    "LDETR LXDTR": case_of(
+        lines("LE 1,SVAL", "LDETR 2,1,0", "LXDTR 4,2,0")
+        + lines("LGDR 3,2", "LGDR 4,4", "LGDR 5,6"),
+        {3: 0xA22C0000_0014D2E7, 4: 0xA2074000_00000000, 5: 0x14D2E7},
+        PRESET_CC,
+    ),
+    "LDETR keeps an infinity's digits and an SNaN only under XiC": case_of(
+        lines("LE 1,SINFX", "LDETR 2,1,0", "LDETR 3,1,8", "LE 1,SSNAN")
+        + lines("LDETR 4,1,8", "LE 1,SQNAN", "LDETR 5,1,0")
+        + lines("LGDR 2,2", "LGDR 3,3", "LGDR 4,4", "LGDR 5,5"),
+        {
+            2: 0x78000000_00000000,
+            3: 0x78000000_00000005,
+            4: 0xFE000000_00000042,
+            5: 0x7C000000_00000007,
+        },
+        PRESET_CC,
+    ),
+    "LDETR quiets an SNaN": case_of(
+        lines("LE 1,SSNAN", "LDETR 2,1,0", "LGDR 2,2"),
+        {2: 0xFC000000_00000042},
+        PRESET_CC,
+        INVALID_FLAG,
+    ),
+    "LEDTR LDXTR": case_of(
+        lines("LD 1,D16", "LD 2,D1", "LEDTR 2,0,1,0", "LGDR 3,2")
+        + extended_from(4, "X3")
+        + lines("LDXTR 4,0,4,0", "LGDR 4,4", "LGDR 5,6"),
+        {3: 0x26E4D2E8_00000001, 4: 0x22380000_00000003, 5: 3},
+        PRESET_CC,
+        INEXACT_FLAG,
+    ),
+    "LEDTR keeps an infinity's and an SNaN's last digits only under XiC": case_of(
+        lines("LZDR 2", "LZDR 3", "LZDR 4", "LD 1,DINFP", "LEDTR 2,0,1,0")
+        + lines("LEDTR 3,0,1,8", "LD 1,DSNANP", "LEDTR 4,0,1,8")
+        + lines("LGDR 2,2", "LGDR 3,3", "LGDR 4,4"),
+        {2: 0x78000000_00000000, 3: 0x78095BCF_00000000, 4: 0x7E095BCF_00000000},
+        PRESET_CC,
+    ),
+}
+
+CASES: Mapping[str, Case] = {**FIXED, **LENGTHEN_ROUND}
 
 TRAPS: Mapping[str, Trap] = {
     "CGDTR invalid suppresses and leaves the CC": trap_of(
@@ -146,6 +195,16 @@ TRAPS: Mapping[str, Trap] = {
     ),
     "CDGTR inexact traps after the store": trap_of(
         lines("LG 2,G17", "CDGTR 1,2"), {1: 0x263D34B9_C1E28E57}, 0x08000C00
+    ),
+    "LDETR invalid suppresses": trap_of(
+        lines("LD 2,D1", "LE 1,SSNAN", "LDETR 2,1,0"),
+        {2: 0x22380000_00000001},
+        0x80008000,
+    ),
+    "LEDTR overflow delivers the scaled long result": trap_of(
+        lines("LD 1,DMAX", "LEDTR 1,0,1,0"),
+        {1: 0x41240000_00100000},
+        0x20002C00,
     ),
     "CDLGTR quantum traps after the store": trap_of(
         lines("LG 2,GU64", "CDLGTR 1,5,2,0"),
