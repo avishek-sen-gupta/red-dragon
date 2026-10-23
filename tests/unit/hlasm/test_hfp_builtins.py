@@ -1,5 +1,5 @@
 # pyright: standard
-"""The HFP builtins map sign, characteristic and fraction fields to zarch_float values and back: results carry the characteristic modulo 128 and condition bits aligned with the program mask; compare returns the CC."""
+"""The HFP builtins map sign, characteristic and fraction fields to zarch_float values and back: results carry the characteristic modulo 128 and condition bits aligned with the program mask; compare returns the CC; conversions return the image and the CC of the source."""
 
 from collections.abc import Sequence
 
@@ -14,7 +14,7 @@ ONE, TWO, THREE = [0, 0x41, 0x100000], [0, 0x41, 0x200000], [0, 0x41, 0x300000]
 LONG_ONE, LONG_TWO = [0, 0x41, 1 << 52], [0, 0x41, 2 << 52]
 
 
-def _call(name: str, args: Sequence[list[int]]) -> int | list[int]:
+def _call(name: str, args: Sequence[int | list[int]]) -> int | list[int]:
     builtin = hfp_builtins()[FuncName(f"__hlasm_hfp_{name}")]
     return builtin([typed(arg) for arg in args], VMState()).value
 
@@ -62,3 +62,30 @@ def test_compare_returns_the_cc_of_the_guard_digit_difference():
         _call("compare_long", [[0, 0x42, 0], [0, 0x40, 1]]),
         _call("compare_extended", [[1, 0x41, 1 << 108], [0, 0x41, 1 << 108]]),
     ] == [2, 0, 1]
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_conversions_round_by_m3_and_return_the_result_with_the_source_cc():
+    assert {
+        "nearest away": _call("to_fixed_32_short", [1, [0, 0x41, 0x280000]]),
+        "truncated": _call("to_fixed_32_short", [0, [1, 0x41, 0x280000]]),
+        "rounded to zero": _call("to_fixed_32_long", [5, [0, 0x40, 0x4CCCCCCCCCCCCC]]),
+        "negative zero": _call("to_fixed_64_short", [4, [1, 0x41, 0]]),
+        "out of range": _call("to_fixed_64_extended", [4, [0, 0x51, 1 << 108]]),
+        "short BFP": _call("to_bfp_short_long", [4, [0, 0x41, 1 << 52]]),
+        "overflow": _call("to_bfp_short_long", [1, [0, 0x7F, 1 << 52]]),
+        "tiny": _call("to_bfp_short_long", [4, [1, 0x19, 1 << 52]]),
+        "signed zero": _call("to_bfp_long_long", [4, [1, 0, 0]]),
+        "long BFP": _call("to_bfp_long_long", [4, [0, 0x41, 1 << 52 | 1]]),
+    } == {
+        "nearest away": [3, 2],
+        "truncated": [0xFFFFFFFE, 1],
+        "rounded to zero": [0, 2],
+        "negative zero": [0, 0],
+        "out of range": [0x7FFFFFFF_FFFFFFFF, 3],
+        "short BFP": [0, 127, 0, 2],
+        "overflow": [0, 255, 0, 3],
+        "tiny": [1, 0, 0, 1],
+        "signed zero": [1, 0, 0, 0],
+        "long BFP": [0, 1023, 1, 2],
+    }

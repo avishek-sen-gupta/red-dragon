@@ -23,6 +23,10 @@ class HfpOperation(Enum):
     MULTIPLY_SUBTRACT = "multiply_subtract"
     MULTIPLY_UNNORMALIZED = "multiply_unnormalized"
     MULTIPLY_ADD_UNNORMALIZED = "multiply_add_unnormalized"
+    TO_FIXED_32 = "to_fixed_32"
+    TO_FIXED_64 = "to_fixed_64"
+    TO_BFP_SHORT = "to_bfp_short"
+    TO_BFP_LONG = "to_bfp_long"
 
 
 def hfp_builtin_name(operation: HfpOperation, layout: HfpLayout) -> FuncName:
