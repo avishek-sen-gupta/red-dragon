@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from interpreter.func_name import FuncName
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
+from interpreter.hlasm.program_function import ProgramFunction
 from interpreter.instructions import (
     Branch,
     Const,
@@ -22,7 +23,7 @@ type Body = Callable[[HlasmEmitter, Sequence[Register]], Register]
 
 
 @dataclass(frozen=True)
-class IrFunction:
+class IrFunction(ProgramFunction):
     name: str
     arity: int
     body: Body
@@ -50,4 +51,5 @@ class IrFunction:
         emitter.emit_inst(DeclVar(name=VarName(self.name), value_reg=reference))
 
     def call(self, emitter: HlasmEmitter, arguments: Sequence[Register]) -> Register:
+        emitter.use_function(self)
         return emitter.call(FuncName(self.name), tuple(arguments))

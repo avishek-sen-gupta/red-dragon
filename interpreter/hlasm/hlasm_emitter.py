@@ -2,6 +2,7 @@
 """Accumulates HLASM lowering IR and emits reads and writes of the machine state: general, access and floating-point registers, CC and storage."""
 
 import dataclasses
+from collections.abc import Mapping
 from itertools import count
 
 from interpreter.func_name import FuncName
@@ -22,6 +23,7 @@ from interpreter.hlasm.hlasm_constants import (
     WORD_BYTES,
 )
 from interpreter.hlasm.located_span import LocatedSpan
+from interpreter.hlasm.program_function import ProgramFunction
 from interpreter.instructions import (
     Binop,
     CallFunction,
@@ -47,6 +49,7 @@ class HlasmEmitter:
         self._labels = count()
         self._instructions: Chain[InstructionBase] = EmptyChain()
         self._spans: Chain[LocatedSpan] = EmptyChain()
+        self._functions: Mapping[str, ProgramFunction] = {}
 
     def instructions(self) -> tuple[InstructionBase, ...]:
         located = {
@@ -62,6 +65,12 @@ class HlasmEmitter:
             )
             for index, inst in enumerate(flattened(self._instructions))
         )
+
+    def use_function(self, function: ProgramFunction) -> None:
+        self._functions = {**self._functions, function.name: function}
+
+    def used_functions(self) -> tuple[ProgramFunction, ...]:
+        return tuple(self._functions.values())
 
     def emitted_count(self) -> int:
         return self._instructions.length
