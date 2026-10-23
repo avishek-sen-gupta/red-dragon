@@ -11,6 +11,7 @@ from hlasm_asg.program.mask_operand import MaskOperand
 from hlasm_asg.program.open_code_origin import OpenCodeOrigin
 from hlasm_asg.program.operand import Operand
 from hlasm_asg.program.reg_operand import RegOperand
+from hlasm_asg.program.storage_length_operand import StorageLengthOperand
 from hlasm_asg.program.storage_operand import StorageOperand
 from interpreter.instructions import (
     Binop,
@@ -60,6 +61,15 @@ def storage_operand(displacement: int) -> StorageOperand:
         index=0,
         base=BASE_REGISTER,
         written=AbsAddress(kind="ABS", value=displacement),
+    )
+
+
+def storage_length_operand(displacement: int, length: int) -> StorageLengthOperand:
+    return StorageLengthOperand(
+        kind="STORAGE_LENGTH",
+        displacement=displacement,
+        length=length,
+        base=BASE_REGISTER,
     )
 
 
