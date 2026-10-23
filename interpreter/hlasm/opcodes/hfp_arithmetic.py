@@ -37,7 +37,7 @@ from interpreter.hlasm.opcodes.fpr_images import (
 from interpreter.hlasm.opcodes.hfp_ir import (
     LowCharacteristic,
     emit_program_mask_ladder,
-    fields_list,
+    field_sources,
     image_cc,
     result_image,
     true_zero_low,
@@ -71,10 +71,6 @@ RAISES: Mapping[HfpOperation, int] = {
     HfpOperation.LOAD_FP_INTEGER: 0,
     HfpOperation.MULTIPLY_UNNORMALIZED: 0,
     HfpOperation.MULTIPLY_ADD_UNNORMALIZED: 0,
-    HfpOperation.TO_FIXED_32: 0,
-    HfpOperation.TO_FIXED_64: 0,
-    HfpOperation.TO_BFP_SHORT: 0,
-    HfpOperation.TO_BFP_LONG: 0,
 }
 
 SHORT_REGISTER: Form = (SHORT_HFP, fpr)
@@ -99,16 +95,6 @@ def _forms(
     return {
         name: lowering(*form) for name, form in zip(names.split(), forms, strict=True)
     }
-
-
-def _fields(image: Source, layout: HfpLayout) -> Source:
-    return lambda emitter, statement: fields_list(
-        emitter, image(emitter, statement), layout
-    )
-
-
-def field_sources(layout: HfpLayout, sources: Sequence[Source]) -> tuple[Source, ...]:
-    return tuple(_fields(source, layout) for source in sources)
 
 
 def _paired(

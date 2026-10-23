@@ -985,8 +985,8 @@ TBEDR, THDER, THDR. Ruling R47.
   of -0 is -0 in both halves), else the usual low-order part.
 - LOAD ROUNDED is IR: add one at the first dropped bit, shift right a digit on a carry, no
   normalization. A characteristic past 127 is stored modulo 128, then `S0CC`. Short results
-  replace bits 0-31; LDXR and LRDR write one FPR. Pairs: R1 of LXxR/LXx, R2 of LDXR, LRDR and
-  LEXR.
+  replace bits 0-31; LDXR and LRDR write one FPR. Pairs: R1 of LXxR/LXx, CXFR and CXGR, R2 of
+  LDXR, LRDR and LEXR.
 - z390 sets the to-fixed CC from the result, wraps out-of-range sources, writes X'F4F4F4F4'
   into bits 32-63 of TBEDR results, flushes tiny TBEDR values to +0 with CC 0, gives CC 2 on
   overflow and garbles TBDR. It rounds CEFR and CDGR, converts BFP to HFP through host floating
