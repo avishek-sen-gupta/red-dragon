@@ -5,9 +5,11 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
+from hlasm_asg.program.amode_setting import AmodeSetting
 from hlasm_asg.program.diagnostic import Diagnostic
 from hlasm_asg.program.entry import Entry
 from hlasm_asg.program.literal_pool import LiteralPool
+from hlasm_asg.program.rmode_setting import RmodeSetting
 from hlasm_asg.program.section import Section
 from hlasm_asg.program.statement import Statement
 from hlasm_asg.program.symbol import Symbol
@@ -23,4 +25,6 @@ class HlasmProgram(BaseModel):
     externals: tuple[str, ...]
     statements: tuple[Statement, ...]
     literals: tuple[LiteralPool, ...]
+    amodes: tuple[AmodeSetting, ...]
+    rmodes: tuple[RmodeSetting, ...]
     diagnostics: tuple[Diagnostic, ...]

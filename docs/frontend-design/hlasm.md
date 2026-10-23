@@ -48,7 +48,7 @@ addresses.
 | `hlasm_asg/hlasm_bridge_parser.py` | `make_hlasm_parser(syslib)`, `HlasmBridgeParser`; exit 2 → `HlasmParseError`, other failures → `HlasmBridgeFailure` |
 | `interpreter/frontends/__init__.py` | `get_hlasm_parser(syslib)`: the bridge parser with `hlasm-bridge/maclib/` first on SYSLIB |
 | `hlasm-bridge/maclib/` | Our macros: `WTO`, `ABEND` |
-| `hlasm_asg/program/` | The bridge JSON models, one class per file. A D(X,B) storage operand also carries its address as written (`written`): the section and offset of an implicit address, before USING resolution, or the absolute displacement |
+| `hlasm_asg/program/` | The bridge JSON models, one class per file. A D(X,B) storage operand also carries its address as written (`written`): the section and offset of an implicit address, before USING resolution, or the absolute displacement. Each DC/DS operand carries its offset and bit offset from che4z's location counter, its length unit (bytes, or bits for `L.n`), scale and exponent. `*` in a DC operand is that operand's address. An S-constant is a base and displacement resolved through USING. `DC 0F` has an `OMITTED` nominal. CCW, CCW0 and CCW1 are statements with their command code, address, flags and count. The program lists AMODE and RMODE statements, and each diagnostic its macro call stack (`related`) |
 | `interpreter/hlasm/hlasm_frontend.py` | `HlasmFrontend(program)`: `lower()`, `start_up_ir()`, `entry_name`, `entry_label` |
 | `interpreter/hlasm/machine.py` | GPR region (`__hlasm_gprs`, 8 bytes per register), `__hlasm_cc`, `__hlasm_pm`, `__hlasm_tod_last` (the last STCK value); the access-register region (`__hlasm_ars`, 4 bytes per register, all 0); the vector-register region (`__hlasm_vrs`, 16 bytes per register, all 0) and `__hlasm_fpc`, allocated after the sections so their addresses do not move |
 | `interpreter/hlasm/storage_layout.py` | One region per section (`__hlasm_sect_<NAME>`) and its DC images; DC registers carry a per-piece index. Section bases are doubleword aligned: regions are allocated in order from address 4096, the 128-byte GPR region first, and each section is sized up to a doubleword multiple |
@@ -1138,7 +1138,8 @@ layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.
 
 - Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, miscellaneous, packed-decimal arithmetic, packed-decimal compare and test, decimal conversion, edit, floating-point-support, BFP arithmetic, BFP conversion, HFP arithmetic, HFP conversion and DFP arithmetic units, DFP conversion and PFPO, are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
 - Floating-point arithmetic is the leaf `zarch_float` ([zarch-float.md](zarch-float.md)); `bfp_builtins.py`, `hfp_builtins.py`, `dfp_builtins.py` and `pfpo_builtins.py` reach it (red-dragon-6uyp.51, .53 to .56).
-- DC types beyond C, X, B, F, H, P, Z, A, Y and V, and any type extension, raise `UnsupportedDataType` (red-dragon-6uyp.63; floating point E, D, L: red-dragon-6uyp.21).
+- DC types beyond C, X, B, F, H, P, Z, A, Y and V, and any type extension, raise `UnsupportedDataType` (red-dragon-6uyp.63; floating point E, D, L: red-dragon-6uyp.21). Bit-length operands (`L.n`) raise it too (red-dragon-6uyp.93).
+- Exported but not yet used (red-dragon-6uyp.93): operand offsets (Python still aligns operands itself), scale and exponent (`FE1'100'` encodes as 100), S-constant images, and CCW bytes, which are not written to storage. AMODE/RMODE are not read; warnings and their call stacks are not reported (red-dragon-6uyp.95).
 - Falling through into DC/DS data or past a CSECT's end skips the data instead of executing it, and a branch into data abends `S0C1` (red-dragon-6uyp.64).
 - Every branch, even to a static relative target, walks the dispatch chain (red-dragon-6uyp.80).
 - Compile time is linear in IR size but about 0.17 ms per IR instruction, nearly all in the linker
@@ -1153,7 +1154,7 @@ layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.
   an opcode position abends `S0C1`, even one the opcode already has; byte-1 shapes not in the
   table (SS-d, the vector formats) count as opcode (red-dragon-6uyp.78).
 - che4z encodes LHHR and LLHFR without the Z bit, where the Principles of Operation (Figure 7-397) define RISBHGZ and RISBLGZ; the range is the whole word, so the result is the same.
-- Bridge gaps: `*` in a later DC operand takes the statement address (red-dragon-6uyp.65); bit-length data reports byte length (red-dragon-6uyp.66); S-type constants are not USING-resolved (red-dragon-6uyp.67); complex-relocatable constants refuse the assembly (red-dragon-6uyp.68).
+- Bridge gaps: complex-relocatable constants refuse the assembly (red-dragon-6uyp.68).
 - AMODE 24 and 64 are not modelled: SAM24, SAM64 and BASSM or BSM into those modes
   abend `S0C1` (red-dragon-6uyp.75). A BASSM or BSM to the return address returns
   whatever mode it selects.
@@ -1235,8 +1236,8 @@ layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.
 | `tests/integration/hlasm/test_translate.py` | Every translate mnemonic on the VM: storage, registers, CC; TR overlap and lengths, TRT and TRTR CC 0-2 and bit 32, TRE found, ended and length 0, the test character and its control, ignored table bits, each TRTE and TRTRE control; odd lengths abend `S0C6` |
 | `tests/unit/hlasm/test_execute_lowering.py` | Execute IR: byte 1 decoded per format, R1 = 0 or an unlowered target lowers one copy at the EX, a register field one copy per reachable value under a tree, a data field (MVC, CLI, SVC) one lowering with byte 1 from R1 and one-byte region accesses, the opcode-bit guard, `S0C3` and `S0C6` before any copy, unresolved targets abend `S0C1` with a warning |
 | `tests/integration/hlasm/test_execute.py` | EX and EXRL on the VM: MVC length codes 0, 4, 7 and 255 and a destructive MVC, CLC, NC, OC, XC, TR, TRT, TRTR, MVN, MVZ, MVCIN and MVO lengths, CLI, CLIY, MVI, MVIY, TM, NI, NIY, OI, XI, ASI, AGSI and ALSI immediates (negative ones sign-extended after the OR), an SVC number, BAL, BRAS, AR and LHI fields, a BC mask and index, a branch mask from R1, and EXRL of CIJ with its M3 from R1; links after the execute instruction; CC kept; `S0C3`, `S0C6`; indexed targets and opcode modification xfailed (red-dragon-6uyp.77, red-dragon-6uyp.78) |
-| `tests/integration/hlasm/test_bridge_parser.py` | The real bridge: macro origins, refused assemblies |
-| `tests/integration/hlasm/test_storage_layout.py` | Section regions and address constants |
+| `tests/integration/hlasm/test_bridge_parser.py` | The real bridge: macro origins, refused assemblies; operand placement, modifiers, S-constants, CCW, AMODE/RMODE and diagnostic call stacks |
+| `tests/integration/hlasm/test_storage_layout.py` | Section regions and address constants; `*` in a later operand after `DC 0F` |
 | `tests/integration/hlasm/test_svc.py` | `WTO`, `ABEND` user and system codes, unlowered SVCs, `run()` with our maclib then `copybook_dirs`, call-site spans |
 | `tests/integration/hlasm/test_hlasm_compile.py` | Unit files, reuse, SYSLIB invalidation, `run()`, return code, default entry, BALR/BR, wild branch |
 | `tests/integration/hlasm/test_instruction_table.py`, `test_opcode_unit_coverage.py` | Instruction table and opcode-unit coverage |

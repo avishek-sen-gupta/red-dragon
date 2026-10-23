@@ -19,7 +19,7 @@ from tests.covers import NotLanguageFeature, covers
 
 REFUSAL = (
     '{"diagnostics":[{"code":"E049","file":"src/a.asm","line":3,'
-    '"message":"Operation code not found - X","severity":"ERROR"}]}'
+    '"message":"Operation code not found - X","related":[],"severity":"ERROR"}]}'
 )
 
 
@@ -52,6 +52,7 @@ class TestBridgeExitCodes:
                 message="Operation code not found - X",
                 file="src/a.asm",
                 line=3,
+                related=(),
             ),
         )
         assert (failure.value.returncode, failure.value.stderr) == (

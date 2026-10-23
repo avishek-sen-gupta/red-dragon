@@ -8,6 +8,9 @@ from typing import Annotated
 from pydantic import Field
 
 from hlasm_asg.program.addresses_nominal import AddressesNominal
+from hlasm_asg.program.omitted_nominal import OmittedNominal
 from hlasm_asg.program.string_nominal import StringNominal
 
-Nominal = Annotated[StringNominal | AddressesNominal, Field(discriminator="kind")]
+Nominal = Annotated[
+    StringNominal | AddressesNominal | OmittedNominal, Field(discriminator="kind")
+]

@@ -51,6 +51,14 @@ TEST     CSECT
          END   TEST
 """
 
+LOCATION_COUNTER_SOURCE = b"""\
+TEST     CSECT
+         BR    14
+         DC    0F
+         DC    A(0),A(*)
+         END   TEST
+"""
+
 
 def _assemble(source: bytes, tmp_path: Path) -> HlasmProgram:
     parser = make_hlasm_parser()
@@ -97,6 +105,17 @@ def test_address_constant_holds_runtime_address(tmp_path: Path):
         *[0, 0, 0, 5],
     ]
     assert section_var("WORK") not in vm.current_frame.local_vars
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_star_in_a_later_operand_is_that_operands_address_after_an_empty_fullword(
+    tmp_path: Path,
+):
+    program = _assemble(LOCATION_COUNTER_SOURCE, tmp_path)
+    vm = _start(program)
+    base = _base(vm, "TEST")
+
+    assert vm.load(base + 4, 8) == [0, 0, 0, 0, *(base + 8).to_bytes(4, "big")]
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

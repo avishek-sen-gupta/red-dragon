@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TypedDict
 
 import pytest
 from pydantic import ValidationError
@@ -11,26 +12,37 @@ from pydantic import ValidationError
 from hlasm_asg.program.abs_address import AbsAddress
 from hlasm_asg.program.abs_symbol import AbsSymbol
 from hlasm_asg.program.addresses_nominal import AddressesNominal
+from hlasm_asg.program.addressing_mode import AddressingMode
+from hlasm_asg.program.amode_setting import AmodeSetting
+from hlasm_asg.program.base_displacement_address import BaseDisplacementAddress
+from hlasm_asg.program.ccw_statement import CcwStatement
 from hlasm_asg.program.dc_item import DcItem
 from hlasm_asg.program.dc_statement import DcStatement
 from hlasm_asg.program.default_entry import DefaultEntry
+from hlasm_asg.program.diagnostic import Diagnostic
 from hlasm_asg.program.ds_item import DsItem
 from hlasm_asg.program.ds_statement import DsStatement
 from hlasm_asg.program.external_address import ExternalAddress
 from hlasm_asg.program.hlasm_program import HlasmProgram
 from hlasm_asg.program.imm_operand import ImmOperand
+from hlasm_asg.program.length_unit import LengthUnit
 from hlasm_asg.program.literal_pool import LiteralPool
 from hlasm_asg.program.machine_statement import MachineStatement
 from hlasm_asg.program.macro_origin import MacroOrigin
 from hlasm_asg.program.mask_operand import MaskOperand
 from hlasm_asg.program.named_entry import NamedEntry
+from hlasm_asg.program.omitted_nominal import OmittedNominal
 from hlasm_asg.program.open_code_origin import OpenCodeOrigin
 from hlasm_asg.program.reg_operand import RegOperand
+from hlasm_asg.program.related_location import RelatedLocation
 from hlasm_asg.program.reloc_address import RelocAddress
 from hlasm_asg.program.reloc_imm_operand import RelocImmOperand
 from hlasm_asg.program.reloc_symbol import RelocSymbol
+from hlasm_asg.program.residency_mode import ResidencyMode
+from hlasm_asg.program.rmode_setting import RmodeSetting
 from hlasm_asg.program.section import Section
 from hlasm_asg.program.section_kind import SectionKind
+from hlasm_asg.program.severity import Severity
 from hlasm_asg.program.storage_length_operand import StorageLengthOperand
 from hlasm_asg.program.storage_operand import StorageOperand
 from hlasm_asg.program.string_nominal import StringNominal
@@ -38,6 +50,8 @@ from tests.covers import NotLanguageFeature, covers
 
 FIXTURE = Path(__file__).parent / "fixtures" / "hello_program.json"
 LOOP_FIXTURE = Path(__file__).parent / "fixtures" / "loop_program.json"
+WAVE4_FIXTURE = Path(__file__).parent / "fixtures" / "wave4_exports.json"
+WAVE4_SOURCE = "src/wave4.asm"
 SOURCE = "file:///work/hello.asm"
 
 
@@ -90,6 +104,20 @@ def _storage(
         index=0,
         base=base,
         written=written,
+    )
+
+
+class _Placement(TypedDict):
+    length_unit: LengthUnit
+    scale: int
+    exponent: int
+    offset: int
+    bit_offset: int
+
+
+def _placed(offset: int) -> _Placement:
+    return _Placement(
+        length_unit=LengthUnit.BYTE, scale=0, exponent=0, offset=offset, bit_offset=0
     )
 
 
@@ -177,6 +205,7 @@ EXPECTED = HlasmProgram(
                     length=5,
                     explicit_length=False,
                     nominal=StringNominal(kind="STRING", value="HELLO"),
+                    **_placed(20),
                 ),
             ),
             origin=_open(8),
@@ -194,6 +223,7 @@ EXPECTED = HlasmProgram(
                     duplication=1,
                     length=5,
                     explicit_length=True,
+                    **_placed(25),
                 ),
             ),
             origin=_open(9),
@@ -219,6 +249,7 @@ EXPECTED = HlasmProgram(
                             ExternalAddress(kind="EXTERNAL", name="EXTR"),
                         ),
                     ),
+                    **_placed(32),
                 ),
             ),
             origin=_open(10),
@@ -235,9 +266,12 @@ EXPECTED = HlasmProgram(
                 length=4,
                 explicit_length=False,
                 nominal=StringNominal(kind="STRING", value="7"),
+                **_placed(48),
             ),
         ),
     ),
+    amodes=(),
+    rmodes=(),
     diagnostics=(),
 )
 
@@ -289,11 +323,143 @@ LOOP_EXPECTED = HlasmProgram(
         ),
     ),
     literals=(),
+    amodes=(),
+    rmodes=(),
     diagnostics=(),
 )
 
 
+def _wave4_dc(
+    offset: int, label: str, line: int, items: tuple[DcItem, ...]
+) -> DcStatement:
+    return DcStatement(
+        kind="DC",
+        section="T",
+        offset=offset,
+        label=label,
+        mnemonic="DC",
+        items=items,
+        origin=OpenCodeOrigin(kind="OPEN_CODE", file=WAVE4_SOURCE, line=line),
+    )
+
+
+WAVE4_STATEMENTS = (
+    _wave4_dc(
+        0,
+        "",
+        10,
+        (
+            DcItem(
+                type="F",
+                extension="",
+                duplication=0,
+                length=4,
+                length_unit=LengthUnit.BYTE,
+                explicit_length=False,
+                scale=0,
+                exponent=0,
+                offset=0,
+                bit_offset=0,
+                nominal=OmittedNominal(kind="OMITTED"),
+            ),
+        ),
+    ),
+    _wave4_dc(
+        0,
+        "",
+        11,
+        (
+            DcItem(
+                type="B",
+                extension="",
+                duplication=1,
+                length=4,
+                length_unit=LengthUnit.BIT,
+                explicit_length=True,
+                scale=0,
+                exponent=0,
+                offset=0,
+                bit_offset=0,
+                nominal=StringNominal(kind="STRING", value="1010"),
+            ),
+            DcItem(
+                type="S",
+                extension="",
+                duplication=1,
+                length=2,
+                length_unit=LengthUnit.BYTE,
+                explicit_length=False,
+                scale=0,
+                exponent=0,
+                offset=2,
+                bit_offset=0,
+                nominal=AddressesNominal(
+                    kind="ADDRESSES",
+                    values=(
+                        BaseDisplacementAddress(
+                            kind="BASE_DISPLACEMENT", base=12, displacement=16
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    ),
+    CcwStatement(
+        kind="CCW",
+        section="T",
+        offset=8,
+        label="READ",
+        mnemonic="CCW",
+        command_code=2,
+        address=RelocAddress(kind="RELOC", section="T", offset=16),
+        flags=32,
+        count=4,
+        origin=OpenCodeOrigin(kind="OPEN_CODE", file=WAVE4_SOURCE, line=12),
+    ),
+    _wave4_dc(
+        16,
+        "FIELD",
+        13,
+        (
+            DcItem(
+                type="F",
+                extension="",
+                duplication=1,
+                length=4,
+                length_unit=LengthUnit.BYTE,
+                explicit_length=False,
+                scale=0,
+                exponent=1,
+                offset=16,
+                bit_offset=0,
+                nominal=StringNominal(kind="STRING", value="1"),
+            ),
+        ),
+    ),
+)
+
+
 class TestProgramModel:
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_operand_placement_modifiers_s_constants_ccw_modes_and_call_stacks_parse(
+        self,
+    ):
+        parsed = HlasmProgram.model_validate_json(WAVE4_FIXTURE.read_text())
+
+        assert parsed.statements == WAVE4_STATEMENTS
+        assert parsed.amodes == (AmodeSetting(name="T", mode=AddressingMode.AMODE_31),)
+        assert parsed.rmodes == (RmodeSetting(name="T", mode=ResidencyMode.ANY),)
+        assert parsed.diagnostics == (
+            Diagnostic(
+                code="MNOTE",
+                severity=Severity.WARNING,
+                message="CAREFUL",
+                file=WAVE4_SOURCE,
+                line=3,
+                related=(RelatedLocation(file=WAVE4_SOURCE, line=9),),
+            ),
+        )
+
     @covers(NotLanguageFeature.INFRASTRUCTURE)
     def test_program_json_parses_into_models(self):
         parsed = HlasmProgram.model_validate_json(FIXTURE.read_text())
