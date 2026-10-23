@@ -12,12 +12,7 @@ from hlasm_asg.program.section import Section
 from hlasm_asg.program.section_kind import SectionKind
 from interpreter.hlasm.address_slot import AddressSlot
 from interpreter.hlasm.constant_image import ConstantImage
-from interpreter.hlasm.dc_encoding import (
-    ENCODING_ISSUE,
-    DcPiece,
-    dc_alignment,
-    encode_dc,
-)
+from interpreter.hlasm.dc_encoding import ENCODING_ISSUE, DcPiece, encode_dc
 from interpreter.hlasm.hlasm_constants import (
     BITS_PER_BYTE,
     DOUBLEWORD_BYTES,
@@ -76,28 +71,22 @@ def _place_pieces(
     )
 
 
-def _place_items(
-    section: str, offset: int, items: Sequence[DcItem]
-) -> tuple[PlacedPiece, ...]:
-    if not items:
-        return ()
-    start = _align(offset, dc_alignment(items[0]))
-    pieces = encode_dc(items[0])
-    end = start + sum(piece.width for piece in pieces)
-    return (
-        *_place_pieces(section, start, pieces),
-        *_place_items(section, end, items[1:]),
+def _place_items(section: str, items: Sequence[DcItem]) -> tuple[PlacedPiece, ...]:
+    return tuple(
+        chain.from_iterable(
+            _place_pieces(section, item.offset, encode_dc(item)) for item in items
+        )
     )
 
 
 def _placed(program: HlasmProgram, sections: frozenset[str]) -> tuple[PlacedPiece, ...]:
     statements = (
-        _place_items(s.section, s.offset, s.items)
+        _place_items(s.section, s.items)
         for s in program.statements
         if isinstance(s, DcStatement) and s.section in sections
     )
     literals = (
-        _place_items(literal.section, literal.offset, (literal.item,))
+        _place_items(literal.section, (literal.item,))
         for literal in program.literals
         if literal.section in sections
     )

@@ -1,5 +1,5 @@
 # pyright: standard
-"""DC operands encode to their byte images, or to slots for relocated addresses."""
+"""DC operands encode to byte images or relocated-address slots; images z390 assembles are checked in tests/z390/test_dc_image_differential.py, the rest follow the HLASM Language Reference examples: CU'UNICODE' is X'0055004E00490043004F00440045'."""
 
 from __future__ import annotations
 
@@ -158,14 +158,63 @@ def test_address_constants_are_absolute_relocated_or_external():
     ]
 
 
+def _based(base: int, displacement: int) -> BaseDisplacementAddress:
+    return BaseDisplacementAddress(
+        kind="BASE_DISPLACEMENT", base=base, displacement=displacement
+    )
+
+
+def test_doubleword_character_set_and_base_displacement_types():
+    items = (
+        _item("F", "-2", 8, extension="D"),
+        _item("C", "AB", 2, extension="A"),
+        _item("C", "AB", 5, explicit_length=True, extension="A"),
+        _item("C", "A", 1, extension="E"),
+        _item("C", "UNICODE", 14, extension="U"),
+        _item("C", "A", 6, explicit_length=True, extension="U"),
+        _address_item("A", (AbsAddress(kind="ABS", value=8),), 8).model_copy(
+            update={"extension": "D"}
+        ),
+        _address_item("S", (_based(12, 8), _based(0, 100)), 2),
+        _address_item("S", (_based(12, 8), _based(9, -2)), 3).model_copy(
+            update={"extension": "Y"}
+        ),
+    )
+    assert [_image(item) for item in items] == [
+        [0xFF] * 7 + [0xFE],
+        [0x41, 0x42],
+        [0x41, 0x42, 0x20, 0x20, 0x20],
+        [0xC1],
+        list(bytes.fromhex("0055004E00490043004F00440045")),
+        [0x00, 0x41, 0x00, 0x20, 0x00, 0x20],
+        [0, 0, 0, 0, 0, 0, 0, 8],
+        [0xC0, 0x08, 0x00, 0x64],
+        [0xC0, 0x08, 0x00, 0x9F, 0xFE, 0xFF],
+    ]
+    assert encode_dc(
+        _address_item("A", (FIELD,), 8).model_copy(update={"extension": "D"})
+    ) == (
+        AddressSlot(FIELD, 8),
+    )
+    assert encode_dc(
+        _address_item(
+            "V", (ExternalAddress(kind="EXTERNAL", name="EXTRN"),), 8
+        ).model_copy(update={"extension": "D"})
+    ) == (ConstantImage((0,) * 8),)
+
+
 @pytest.mark.parametrize(
     ("type_", "extension", "message"),
     [
-        ("E", "", "DC type E is not supported yet — red-dragon-6uyp.21"),
-        ("D", "", "DC type D is not supported yet — red-dragon-6uyp.21"),
-        ("L", "", "DC type L is not supported yet — red-dragon-6uyp.21"),
-        ("E", "H", "DC type EH is not supported yet — red-dragon-6uyp.21"),
-        ("C", "A", "DC type CA is not supported yet — red-dragon-6uyp.63"),
+        ("E", "", "DC type E is not supported yet — red-dragon-6uyp.94"),
+        ("D", "", "DC type D is not supported yet — red-dragon-6uyp.94"),
+        ("L", "", "DC type L is not supported yet — red-dragon-6uyp.94"),
+        ("E", "H", "DC type EH is not supported yet — red-dragon-6uyp.94"),
+        ("Q", "", "DC type Q is not supported yet — red-dragon-6uyp.96"),
+        ("J", "", "DC type J is not supported yet — red-dragon-6uyp.96"),
+        ("G", "", "DC type G is not supported yet — red-dragon-6uyp.63"),
+        ("R", "", "DC type R is not supported yet — red-dragon-6uyp.63"),
+        ("X", "A", "DC type XA is not supported yet — red-dragon-6uyp.63"),
     ],
 )
 def test_rejects_types_without_an_encoding(type_: str, extension: str, message: str):
@@ -188,18 +237,6 @@ def test_rejects_types_without_an_encoding(type_: str, extension: str, message: 
         (
             _item("H", "100", 2).model_copy(update={"exponent": 1}),
             "DC type H with a scale or exponent modifier is not supported yet — red-dragon-6uyp.93",
-        ),
-        (
-            _address_item(
-                "S",
-                (
-                    BaseDisplacementAddress(
-                        kind="BASE_DISPLACEMENT", base=12, displacement=4
-                    ),
-                ),
-                2,
-            ),
-            "DC type S is not supported yet — red-dragon-6uyp.93",
         ),
     ],
 )

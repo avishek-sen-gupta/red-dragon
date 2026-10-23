@@ -22,19 +22,23 @@ from interpreter.hlasm.hlasm_constants import BITS_PER_BYTE
 from interpreter.hlasm.unsupported_data_type import UnsupportedDataType
 
 type DcPiece = ConstantImage | AddressSlot
-type Encoder = Callable[[str, int], tuple[int, ...]]
+type Encoder = Callable[[str, int], int]
 
-FLOATING_POINT_ISSUE = "red-dragon-6uyp.21"
+FLOATING_POINT_ISSUE = "red-dragon-6uyp.94"
+LINKER_TYPES_ISSUE = "red-dragon-6uyp.96"
 OTHER_TYPES_ISSUE = "red-dragon-6uyp.63"
 ENCODING_ISSUE = "red-dragon-6uyp.93"
 
 _FLOATING_POINT_TYPES = frozenset({"E", "D", "L"})
+_LINKER_TYPES = frozenset({"Q", "J"})
 _UNSPLIT_TYPES = frozenset({"C"})
 _NOMINAL_SEPARATOR = ","
 _DECIMAL_POINT = "."
 _MINUS = "-"
 _SIGNS = "+-"
-_EBCDIC_SPACE = 0x40
+_EBCDIC_SPACE = (0x40,)
+_ASCII_SPACE = (0x20,)
+_UNICODE_SPACE = (0x00, 0x20)
 _ZONE_NIBBLE = 0xF
 _POSITIVE_SIGN = 0xC
 _NEGATIVE_SIGN = 0xD
@@ -42,27 +46,54 @@ _NIBBLE_BITS = 4
 _HEX_DIGITS_PER_BYTE = 2
 _HEX_RADIX = 16
 _BINARY_RADIX = 2
+_BASE_SHIFT = 12
+_LONG_BASE_SHIFT = 20
+_LOW_DISPLACEMENT_MASK = 0xFFF
+_HIGH_DISPLACEMENT_MASK = 0xFF
+_LOW_DISPLACEMENT_SHIFT = 8
 
 
-def _binary(value: int, length: int) -> tuple[int, ...]:
-    return tuple((value % (1 << (BITS_PER_BYTE * length))).to_bytes(length, "big"))
+def _bytes_of(bits: int) -> int:
+    return -(-bits // BITS_PER_BYTE)
 
 
-def _character(text: str, length: int) -> tuple[int, ...]:
-    ebcdic = tuple(EbcdicTable.ASCII_TO_EBCDIC[ord(char)] for char in text)
-    return (ebcdic + (_EBCDIC_SPACE,) * length)[:length]
+def _truncated(value: int, bits: int) -> int:
+    return value % (1 << bits)
 
 
-def _hex(text: str, length: int) -> tuple[int, ...]:
-    return _binary(int(text, _HEX_RADIX), length)
+def _ebcdic(text: str) -> tuple[int, ...]:
+    return tuple(EbcdicTable.ASCII_TO_EBCDIC[ord(char)] for char in text)
 
 
-def _bits(text: str, length: int) -> tuple[int, ...]:
-    return _binary(int(text, _BINARY_RADIX), length)
+def _ascii(text: str) -> tuple[int, ...]:
+    return tuple(ord(char) for char in text)
 
 
-def _fixed(text: str, length: int) -> tuple[int, ...]:
-    return _binary(int(text), length)
+def _unicode(text: str) -> tuple[int, ...]:
+    return tuple(text.encode("utf-16-be"))
+
+
+def _characters(
+    code: Callable[[str], tuple[int, ...]], space: tuple[int, ...]
+) -> Encoder:
+    def encode(text: str, bits: int) -> int:
+        size = _bytes_of(bits)
+        image = (code(text) + space * size)[:size]
+        return int.from_bytes(bytes(image), "big") >> (size * BITS_PER_BYTE - bits)
+
+    return encode
+
+
+def _hex(text: str, bits: int) -> int:
+    return _truncated(int(text, _HEX_RADIX), bits)
+
+
+def _binary(text: str, bits: int) -> int:
+    return _truncated(int(text, _BINARY_RADIX), bits)
+
+
+def _fixed(text: str, bits: int) -> int:
+    return _truncated(int(text), bits)
 
 
 def _digits(text: str) -> str:
@@ -73,70 +104,70 @@ def _sign(text: str) -> int:
     return _NEGATIVE_SIGN if text.startswith(_MINUS) else _POSITIVE_SIGN
 
 
-def _packed(text: str, length: int) -> tuple[int, ...]:
-    return _binary(
-        (int(_digits(text), _HEX_RADIX) << _NIBBLE_BITS) | _sign(text), length
+def _packed(text: str, bits: int) -> int:
+    return _truncated(
+        (int(_digits(text), _HEX_RADIX) << _NIBBLE_BITS) | _sign(text), bits
     )
 
 
-def _zoned(text: str, length: int) -> tuple[int, ...]:
-    digits = _digits(text).rjust(length, "0")[-length:]
-    zones = (_ZONE_NIBBLE,) * (length - 1) + (_sign(text),)
-    return tuple(
+def _zoned(text: str, bits: int) -> int:
+    size = _bytes_of(bits)
+    digits = _digits(text).rjust(size, "0")[-size:]
+    zones = (_ZONE_NIBBLE,) * (size - 1) + (_sign(text),)
+    image = bytes(
         (zone << _NIBBLE_BITS) | int(digit)
         for zone, digit in zip(zones, digits, strict=True)
     )
+    return _truncated(int.from_bytes(image, "big"), bits)
 
 
 def _bytes_for(units_per_byte: int) -> Callable[[str], int]:
     return lambda text: -(-len(text) // units_per_byte)
 
 
-def _fixed_width(width: int) -> Callable[[str], int]:
-    return lambda _text: width
-
-
 _STRING_ENCODERS: Mapping[str, Encoder] = {
-    "C": _character,
+    "C": _characters(_ebcdic, _EBCDIC_SPACE),
+    "CE": _characters(_ebcdic, _EBCDIC_SPACE),
+    "CA": _characters(_ascii, _ASCII_SPACE),
+    "CU": _characters(_unicode, _UNICODE_SPACE),
     "X": _hex,
-    "B": _bits,
+    "B": _binary,
     "F": _fixed,
+    "FD": _fixed,
     "H": _fixed,
     "P": _packed,
     "Z": _zoned,
 }
 
-_IMPLICIT_LENGTHS: Mapping[str, Callable[[str], int]] = {
-    "C": len,
+_VALUE_LENGTHS: Mapping[str, Callable[[str], int]] = {
     "X": _bytes_for(_HEX_DIGITS_PER_BYTE),
     "B": _bytes_for(BITS_PER_BYTE),
-    "F": _fixed_width(4),
-    "H": _fixed_width(2),
     "P": lambda text: len(_digits(text)) // 2 + 1,
     "Z": lambda text: len(_digits(text)),
 }
 
-_ADDRESS_TYPES = frozenset({"A", "Y", "V", "S"})
+_ADDRESS_TYPES = frozenset({"A", "AD", "Y", "V", "VD", "S", "SY"})
 _FIXED_POINT_TYPES = frozenset({"F", "H"})
 
-_ALIGNMENTS: Mapping[str, int] = {"F": 4, "H": 2, "A": 4, "Y": 2, "V": 4}
+
+def _code(item: DcItem) -> str:
+    return item.type + item.extension
+
+
+def _issue(item: DcItem) -> str:
+    if item.type in _FLOATING_POINT_TYPES:
+        return FLOATING_POINT_ISSUE
+    if item.type in _LINKER_TYPES:
+        return LINKER_TYPES_ISSUE
+    return OTHER_TYPES_ISSUE
 
 
 def _check_supported(item: DcItem) -> None:
     if item.length_unit == LengthUnit.BIT:
-        raise UnsupportedDataType(
-            f"{item.type}{item.extension}L.{item.length}", ENCODING_ISSUE
-        )
-    if item.extension == "" and (
-        item.type in _STRING_ENCODERS or item.type in _ADDRESS_TYPES
-    ):
+        raise UnsupportedDataType(f"{_code(item)}L.{item.length}", ENCODING_ISSUE)
+    if _code(item) in _STRING_ENCODERS or _code(item) in _ADDRESS_TYPES:
         return
-    issue = (
-        FLOATING_POINT_ISSUE
-        if item.type in _FLOATING_POINT_TYPES
-        else OTHER_TYPES_ISSUE
-    )
-    raise UnsupportedDataType(item.type + item.extension, issue)
+    raise UnsupportedDataType(_code(item), _issue(item))
 
 
 def _check_modifiers(item: DcItem) -> None:
@@ -152,29 +183,48 @@ def _values(item: DcItem, text: str) -> tuple[str, ...]:
     return tuple(text.split(_NOMINAL_SEPARATOR))
 
 
+def _image(value: int, length: int) -> ConstantImage:
+    return ConstantImage(tuple(value.to_bytes(length, "big")))
+
+
 def _string_piece(item: DcItem, text: str) -> ConstantImage:
-    length = item.length if item.explicit_length else _IMPLICIT_LENGTHS[item.type](text)
-    return ConstantImage(_STRING_ENCODERS[item.type](text, length))
+    code = _code(item)
+    length = (
+        _VALUE_LENGTHS[code](text)
+        if code in _VALUE_LENGTHS and not item.explicit_length
+        else item.length
+    )
+    return _image(_STRING_ENCODERS[code](text, length * BITS_PER_BYTE), length)
 
 
-def _assembled_address(value: AbsAddress | ExternalAddress) -> int:
+def _base_displacement(item: DcItem, base: int, displacement: int) -> int:
+    if item.extension == "":
+        return (base << _BASE_SHIFT) | displacement
+    low = displacement & _LOW_DISPLACEMENT_MASK
+    high = (displacement >> _BASE_SHIFT) & _HIGH_DISPLACEMENT_MASK
+    return (base << _LONG_BASE_SHIFT) | (low << _LOW_DISPLACEMENT_SHIFT) | high
+
+
+def _assembled_address(
+    item: DcItem, value: AbsAddress | BaseDisplacementAddress
+) -> int:
     match value:
         case AbsAddress(value=number):
-            return number
-        case ExternalAddress():
-            return 0
+            return _truncated(number, item.length * BITS_PER_BYTE)
+        case BaseDisplacementAddress(base=base, displacement=displacement):
+            return _base_displacement(item, base, displacement)
 
 
-def _address_piece(value: Address, width: int) -> DcPiece:
-    if isinstance(value, BaseDisplacementAddress):
-        raise UnsupportedDataType("S", ENCODING_ISSUE)
+def _address_piece(item: DcItem, value: Address) -> DcPiece:
     if isinstance(value, RelocAddress):
-        return AddressSlot(value, width)
-    return ConstantImage(_binary(_assembled_address(value), width))
+        return AddressSlot(value, item.length)
+    if isinstance(value, ExternalAddress):
+        return _image(0, item.length)
+    return _image(_assembled_address(item, value), item.length)
 
 
 def _address_pieces(item: DcItem, values: Sequence[Address]) -> tuple[DcPiece, ...]:
-    return tuple(_address_piece(value, item.length) for value in values)
+    return tuple(_address_piece(item, value) for value in values)
 
 
 def _operand(
@@ -205,9 +255,3 @@ def encode_dc(item: DcItem) -> tuple[DcPiece, ...]:
     if isinstance(item.nominal, OmittedNominal):
         return ()
     return _copies(item, item.nominal)
-
-
-def dc_alignment(item: DcItem) -> int:
-    if item.explicit_length:
-        return 1
-    return _ALIGNMENTS.get(item.type, 1)
