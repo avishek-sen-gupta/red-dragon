@@ -8,15 +8,14 @@ from interpreter.hlasm.bfp_slots import INEXACT_BIT, QUANTUM_BIT
 from interpreter.hlasm.data_movement import Source, keep
 from interpreter.hlasm.dfp_fields import INFINITY, QUIET_NAN
 from interpreter.hlasm.dfp_layout import DfpLayout
-from interpreter.hlasm.hlasm_constants import BYTE_MASK, FPC_VAR
+from interpreter.hlasm.hlasm_constants import BYTE_MASK
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.ieee_outcome import IeeeOutcome
 from interpreter.hlasm.opcodes.bfp_forms import Deliver, SuppressedBits
-from interpreter.hlasm.opcodes.bfp_ir import enabled_traps, field_at
+from interpreter.hlasm.opcodes.bfp_ir import enabled_traps, field_at, fpc_mode_code
 from interpreter.hlasm.opcodes.dfp_codec import DECODERS, ENCODERS
 from interpreter.hlasm.opcodes.floating_point_support import (
     DFP_MODE_SHIFT,
-    MODE_FIELD,
 )
 from interpreter.hlasm.opcodes.fpr_images import list_item, pick, store_image
 from interpreter.hlasm.operands import optional_mask_operand, reg_operand
@@ -26,7 +25,8 @@ from interpreter.register import Register
 type Fields = tuple[Register, Register, Register]
 type AfterStore = Callable[[HlasmEmitter, Fields], None]
 
-FPC_TO_MODIFIER = 8
+DFP_FPC_TO_MODIFIER = 8
+MODIFIER_CODES = 0b1111
 QUANTUM_DXC = 0x04
 CURRENT_MODE_CODES = frozenset({0, 2})
 FIRST_SUPPRESSING_CODE = 8
@@ -49,11 +49,7 @@ def fields_of(emitter: HlasmEmitter, decoded_fields: Register) -> Fields:
 
 
 def current_dfp_mode(emitter: HlasmEmitter) -> Register:
-    fpc = emitter.load_var(FPC_VAR)
-    mode = keep(MODE_FIELD)(
-        emitter, emitter.binop(BinopKind.RSHIFT, fpc, emitter.int_(DFP_MODE_SHIFT))
-    )
-    return emitter.binop(BinopKind.ADD, mode, emitter.int_(FPC_TO_MODIFIER))
+    return fpc_mode_code(emitter, DFP_MODE_SHIFT, DFP_FPC_TO_MODIFIER, MODIFIER_CODES)
 
 
 def _code(statement: MachineStatement, index: int) -> int:

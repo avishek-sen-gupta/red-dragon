@@ -14,7 +14,7 @@ from interpreter.hlasm.dfp_layout import (
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.opcodes.dfp_ir import Fields, decoded, fields_of
 from interpreter.hlasm.opcodes.floating_point_support import pairs
-from interpreter.hlasm.opcodes.fpr_images import FIRST, SECOND, fpr, pick
+from interpreter.hlasm.opcodes.fpr_images import FIRST, SECOND, compared, fpr, pick
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
@@ -30,19 +30,13 @@ SAFE_NONZERO_GROUP = 3
 EXTREME_NONZERO_GROUP = 2
 
 
-def _compared(
-    emitter: HlasmEmitter, operator: BinopKind, value: Register, against: int
-) -> Register:
-    return emitter.binop(operator, value, emitter.int_(against))
-
-
 def _subnormal(emitter: HlasmEmitter, fields: Fields, layout: DfpLayout) -> Register:
     _, exponent, significand = fields
     below = emitter.binop(
         BinopKind.SUB, emitter.int_(layout.bias + layout.format.emin), exponent
     )
     places = emitter.binop(
-        BinopKind.MUL, below, _compared(emitter, BinopKind.GT, below, 0)
+        BinopKind.MUL, below, compared(emitter, BinopKind.GT, below, 0)
     )
     threshold = emitter.binop(BinopKind.POWER, emitter.int_(10), places)
     return emitter.binop(BinopKind.LT, significand, threshold)
@@ -50,7 +44,7 @@ def _subnormal(emitter: HlasmEmitter, fields: Fields, layout: DfpLayout) -> Regi
 
 def _data_class(emitter: HlasmEmitter, fields: Fields, layout: DfpLayout) -> Register:
     _, exponent, significand = fields
-    nonzero = _compared(emitter, BinopKind.NE, significand, 0)
+    nonzero = compared(emitter, BinopKind.NE, significand, 0)
     normal_or_not = emitter.binop(
         BinopKind.SUB,
         emitter.int_(NORMAL_CLASS),
@@ -58,7 +52,7 @@ def _data_class(emitter: HlasmEmitter, fields: Fields, layout: DfpLayout) -> Reg
     )
     finite_class = emitter.binop(BinopKind.MUL, nonzero, normal_or_not)
     special_class = emitter.binop(BinopKind.SUB, emitter.int_(NAN_CLASS_BASE), exponent)
-    finite = _compared(emitter, BinopKind.GE, exponent, 0)
+    finite = compared(emitter, BinopKind.GE, exponent, 0)
     return pick(emitter, finite, finite_class, special_class)
 
 
@@ -66,15 +60,15 @@ def _data_group(emitter: HlasmEmitter, fields: Fields, layout: DfpLayout) -> Reg
     _, exponent, significand = fields
     extreme = emitter.binop(
         BinopKind.BIT_OR,
-        _compared(emitter, BinopKind.EQ, exponent, 0),
-        _compared(emitter, BinopKind.EQ, exponent, layout.max_biased_exponent),
+        compared(emitter, BinopKind.EQ, exponent, 0),
+        compared(emitter, BinopKind.EQ, exponent, layout.max_biased_exponent),
     )
-    leftmost = _compared(emitter, BinopKind.GE, significand, 10**layout.trailing_digits)
+    leftmost = compared(emitter, BinopKind.GE, significand, 10**layout.trailing_digits)
     safe = emitter.binop(BinopKind.ADD, emitter.int_(SAFE_NONZERO_GROUP), leftmost)
     nonzero_group = pick(emitter, extreme, emitter.int_(EXTREME_NONZERO_GROUP), safe)
-    nonzero = _compared(emitter, BinopKind.NE, significand, 0)
+    nonzero = compared(emitter, BinopKind.NE, significand, 0)
     finite_group = pick(emitter, nonzero, nonzero_group, extreme)
-    finite = _compared(emitter, BinopKind.GE, exponent, 0)
+    finite = compared(emitter, BinopKind.GE, exponent, 0)
     return pick(emitter, finite, finite_group, emitter.int_(SPECIAL_GROUP))
 
 

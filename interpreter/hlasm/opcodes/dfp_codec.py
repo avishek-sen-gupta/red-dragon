@@ -14,7 +14,7 @@ from interpreter.hlasm.dfp_layout import (
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.ir_function import Body, IrFunction
 from interpreter.hlasm.opcodes.dpd_lanes import declets_to_integer, integer_to_declets
-from interpreter.hlasm.opcodes.fpr_images import list_of, pick
+from interpreter.hlasm.opcodes.fpr_images import compared, list_of, pick
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
 
@@ -43,12 +43,6 @@ def _or(emitter: HlasmEmitter, *values: Register) -> Register:
     )
 
 
-def _compared(
-    emitter: HlasmEmitter, operator: BinopKind, value: Register, against: int
-) -> Register:
-    return emitter.binop(operator, value, emitter.int_(against))
-
-
 def _finite_exponent(
     emitter: HlasmEmitter, top: Register, big: Register, layout: DfpLayout
 ) -> Register:
@@ -74,7 +68,7 @@ def _special_code(
     signaling = _shifted(emitter, continuation, layout.continuation_bits - 1)
     return pick(
         emitter,
-        _compared(emitter, BinopKind.EQ, top, INFINITY_TOP),
+        compared(emitter, BinopKind.EQ, top, INFINITY_TOP),
         emitter.int_(INFINITY),
         emitter.binop(BinopKind.SUB, emitter.int_(QUIET_NAN), signaling),
     )
@@ -91,11 +85,11 @@ def _decoded(
     continuation = keep((1 << layout.continuation_bits) - 1)(
         emitter, _shifted(emitter, image, layout.continuation_shift)
     )
-    big = _compared(emitter, BinopKind.GE, top, BIG_DIGIT_TOP)
+    big = compared(emitter, BinopKind.GE, top, BIG_DIGIT_TOP)
     biased = emitter.binop(
         BinopKind.BIT_OR, _finite_exponent(emitter, top, big, layout), continuation
     )
-    finite = _compared(emitter, BinopKind.LT, top, INFINITY_TOP)
+    finite = compared(emitter, BinopKind.LT, top, INFINITY_TOP)
     weight = emitter.int_(10**layout.trailing_digits)
     leading = emitter.binop(BinopKind.MUL, _leftmost(emitter, top, big), weight)
     significand = emitter.binop(
@@ -121,7 +115,7 @@ def _top(
     emitter: HlasmEmitter, exponent: Register, leftmost: Register, layout: DfpLayout
 ) -> Register:
     high = _shifted(emitter, exponent, layout.continuation_bits)
-    big = _compared(emitter, BinopKind.GE, leftmost, BIG_DIGIT)
+    big = compared(emitter, BinopKind.GE, leftmost, BIG_DIGIT)
     big_top = _or(
         emitter,
         emitter.int_(BIG_DIGIT_TOP),
@@ -137,7 +131,7 @@ def _top(
 def _special_top(emitter: HlasmEmitter, exponent: Register) -> Register:
     return pick(
         emitter,
-        _compared(emitter, BinopKind.EQ, exponent, INFINITY),
+        compared(emitter, BinopKind.EQ, exponent, INFINITY),
         emitter.int_(INFINITY_TOP),
         emitter.int_(NAN_TOP),
     )
@@ -148,7 +142,7 @@ def _continuation(
 ) -> Register:
     signaling = _placed(
         emitter,
-        _compared(emitter, BinopKind.EQ, exponent, SIGNALING_NAN),
+        compared(emitter, BinopKind.EQ, exponent, SIGNALING_NAN),
         layout.continuation_bits - 1,
     )
     biased = emitter.binop(BinopKind.MUL, exponent, finite)
@@ -159,7 +153,7 @@ def _continuation(
 def _combination(
     emitter: HlasmEmitter, exponent: Register, significand: Register, layout: DfpLayout
 ) -> Register:
-    finite = _compared(emitter, BinopKind.GE, exponent, 0)
+    finite = compared(emitter, BinopKind.GE, exponent, 0)
     weight = emitter.int_(10**layout.trailing_digits)
     leftmost = emitter.binop(BinopKind.FLOOR_DIV, significand, weight)
     biased = emitter.binop(BinopKind.MUL, exponent, finite)

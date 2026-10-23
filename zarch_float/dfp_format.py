@@ -18,6 +18,10 @@ class DfpFormat:
         return self.emin - self.precision + 1
 
     @property
+    def bias(self) -> int:
+        return -self.quantum_min
+
+    @property
     def quantum_max(self) -> int:
         return self.emax - self.precision + 1
 

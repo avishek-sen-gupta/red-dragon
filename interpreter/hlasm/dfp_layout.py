@@ -20,7 +20,7 @@ class DfpLayout(FprLayout):
 
     @property
     def bias(self) -> int:
-        return -self.format.quantum_min
+        return self.format.bias
 
     @property
     def max_biased_exponent(self) -> int:
