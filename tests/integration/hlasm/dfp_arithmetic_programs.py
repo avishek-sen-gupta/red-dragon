@@ -56,6 +56,9 @@ DATA = (
     "D1P0     DC    X'2234000000000010'\n"
     "DINFX    DC    X'79FC000000000005'\n"
     "DNONC    DC    X'223800000000016E'\n"
+    "D2P5     DC    X'2234000000000025'\n"
+    "DM2P5    DC    X'A2340000',X'00000025'\n"
+    "DQ16     DC    X'21F8000000000001'\n"
     "X1       DC    X'22080000000000000000000000000001'\n"
     "X2       DC    X'22080000000000000000000000000002'\n"
     "X3       DC    X'22080000000000000000000000000003'\n"
@@ -265,7 +268,44 @@ COMPARE_EXPONENT: Mapping[str, Case] = {
     ),
 }
 
-CASES: Mapping[str, Case] = {**ARITHMETIC, **COMPARE_EXPONENT}
+ROUNDING: Mapping[str, Case] = {
+    "FIDTR FIXTR": case_of(
+        lines("LD 1,D2P5", "FIDTR 3,0,1,0", "LD 1,DM2P5", "FIDTR 4,5,1,4")
+        + extended_from(8, "XP0")
+        + lines("FIXTR 12,0,8,0", "LGDR 2,3", "LGDR 3,4", "LGDR 4,12", "LGDR 5,14"),
+        {2: TWO, 3: 0xA2380000_00000002, 4: EXTENDED_ONE, 5: 1},
+        PRESET_CC,
+        INEXACT_FLAG | QUANTUM_FLAG,
+    ),
+    "QADTR QAXTR": case_of(
+        lines("LD 1,D1P23", "LD 2,D1P0", "QADTR 3,1,2,0", "LD 5,D1", "QADTR 4,1,5,1")
+        + lines("LD 7,DQ16", "QADTR 6,1,7,0")
+        + extended_from(8, "X3")
+        + extended_from(12, "XP0")
+        + lines("QAXTR 0,8,12,0", "LGDR 2,3", "LGDR 3,4", "LGDR 4,6")
+        + lines("LGDR 5,0", "LGDR 6,2"),
+        {
+            2: 0x22340000_00000012,
+            3: ONE,
+            4: 0x7C000000_00000000,
+            5: 0x2207C000_00000000,
+            6: 0x30,
+        },
+        PRESET_CC,
+        0x00800000 | INEXACT_FLAG | QUANTUM_FLAG,
+    ),
+    "RRDTR RRXTR": case_of(
+        lines("LD 1,D1P23", "LGHI 2,66", "RRDTR 3,1,2,0", "LGHI 2,0", "RRDTR 4,1,2,0")
+        + extended_from(8, "X3")
+        + lines("LGHI 2,5", "RRXTR 12,8,2,0", "LGDR 4,3", "LGDR 5,4")
+        + lines("LGDR 6,12", "LGDR 7,14"),
+        {4: 0x22340000_00000012, 5: 0x22300000_000000A3, 6: EXTENDED_ONE, 7: 3},
+        PRESET_CC,
+        INEXACT_FLAG,
+    ),
+}
+
+CASES: Mapping[str, Case] = {**ARITHMETIC, **COMPARE_EXPONENT, **ROUNDING}
 
 TRAPS: Mapping[str, Trap] = {
     "compare suppresses on an SNaN and leaves the CC": trap_of(
@@ -273,6 +313,17 @@ TRAPS: Mapping[str, Trap] = {
     ),
     "compare and signal traps on a QNaN": trap_of(
         lines("LD 1,D1", "LD 2,DQNAN", "KDTR 1,2"), {}, 0x80008000
+    ),
+    "load FP integer traps inexact": trap_of(
+        lines("LD 1,D2P5", "FIDTR 3,0,1,0"), {3: TWO}, 0x08000800
+    ),
+    "load FP integer with XxC traps the quantum": trap_of(
+        lines("LD 1,D2P5", "FIDTR 3,5,1,4"), {3: TWO}, 0x04000400
+    ),
+    "quantize invalid suppresses": trap_of(
+        lines("LD 3,D2", "LD 1,D1P23", "LD 7,DQ16", "QADTR 3,1,7,0"),
+        {3: TWO},
+        0x80008000,
     ),
     "load and test suppresses on an SNaN": trap_of(
         lines("LD 3,D2", "LD 1,DSNAN", "LTDTR 3,1"), {3: TWO}, 0x80008000
