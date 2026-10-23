@@ -1,5 +1,5 @@
 # pyright: standard
-"""An IR function the lowering emits once per program and calls by name: its body, parameters, definition and declaration."""
+"""An IR function the lowering emits once per program and calls by name: its body, parameters, definition and declaration; and the definition of every function called, those called from other function bodies included."""
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -53,3 +53,14 @@ class IrFunction(ProgramFunction):
     def call(self, emitter: HlasmEmitter, arguments: Sequence[Register]) -> Register:
         emitter.use_function(self)
         return emitter.call(FuncName(self.name), tuple(arguments))
+
+
+def define_called(
+    emitter: HlasmEmitter, defined: tuple[ProgramFunction, ...] = ()
+) -> tuple[ProgramFunction, ...]:
+    names = {function.name for function in defined}
+    pending = tuple(f for f in emitter.used_functions() if f.name not in names)
+    if not pending:
+        return defined
+    _ = [function.define(emitter) for function in pending]
+    return define_called(emitter, (*defined, *pending))

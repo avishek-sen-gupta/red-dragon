@@ -26,7 +26,6 @@ type Fields = tuple[Register, Register, Register]
 type AfterStore = Callable[[HlasmEmitter, Fields], None]
 
 DFP_FPC_TO_MODIFIER = 8
-MODIFIER_CODES = 0b1111
 QUANTUM_DXC = 0x04
 CURRENT_MODE_CODES = frozenset({0, 2})
 FIRST_SUPPRESSING_CODE = 8
@@ -49,7 +48,7 @@ def fields_of(emitter: HlasmEmitter, decoded_fields: Register) -> Fields:
 
 
 def current_dfp_mode(emitter: HlasmEmitter) -> Register:
-    return fpc_mode_code(emitter, DFP_MODE_SHIFT, DFP_FPC_TO_MODIFIER, MODIFIER_CODES)
+    return fpc_mode_code(emitter, DFP_MODE_SHIFT, DFP_FPC_TO_MODIFIER)
 
 
 def _code(statement: MachineStatement, index: int) -> int:

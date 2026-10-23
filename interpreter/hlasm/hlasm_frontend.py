@@ -16,6 +16,7 @@ from interpreter.hlasm.branch_dispatch import (
 from interpreter.hlasm.entry_state import entry_address, entry_state, resolve_entry
 from interpreter.hlasm.hlasm_constants import OPERATION_EXCEPTION_ABEND
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
+from interpreter.hlasm.ir_function import define_called
 from interpreter.hlasm.lower_statement import lower_statement
 from interpreter.hlasm.machine import (
     access_register_allocation,
@@ -81,8 +82,7 @@ class HlasmFrontend(Frontend):
     ) -> tuple[tuple[InstructionBase, ...], tuple[ProgramFunction, ...]]:
         emitter = HlasmEmitter()
         self._lower_entry(emitter)
-        functions = emitter.used_functions()
-        _ = [function.define(emitter) for function in functions]
+        functions = define_called(emitter)
         return emitter.instructions(), functions
 
     def _lower_entry(self, emitter: HlasmEmitter) -> None:
