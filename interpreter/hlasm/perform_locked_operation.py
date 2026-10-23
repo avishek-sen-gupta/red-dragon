@@ -16,7 +16,11 @@ from interpreter.hlasm.data_movement import storage_address_at
 from interpreter.hlasm.hlasm_constants import BYTE_MASK, NIBBLE_BITS
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.locked_operation import LockedOperation, Spot
-from interpreter.hlasm.locked_operations import LOCKED_OPERATIONS
+from interpreter.hlasm.locked_operations import (
+    FIRST_REGISTER,
+    LOCKED_OPERATIONS,
+    THIRD_REGISTER,
+)
 from interpreter.hlasm.operands import statement_place
 from interpreter.hlasm.places import held_address
 from interpreter.hlasm.plo_frame import PloFrame
@@ -28,8 +32,6 @@ from interpreter.register import Register
 FUNCTION_REGISTER = 0
 SECOND_OPERAND = 1
 FOURTH_OPERAND = 3
-FIRST_REGISTER = 0
-THIRD_REGISTER = 2
 HIGH_NIBBLE = 4
 RESERVED_SHIFT = 9
 TEST_BIT_SHIFT = 8

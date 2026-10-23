@@ -662,17 +662,17 @@ CSST; LAA, LAAG, LAAL, LAALG, LAN, LANG, LAO, LAOG, LAX, LAXG; LPD, LPDG, LPQ, S
   or from the R1 pair; CC unchanged. TS sets CC from bit 0 of the byte, then stores X'FF'.
 - PLO: GR0 bits 32-54 nonzero abend `S0C6`. With the test bit (55) on, CC 0 for function codes
   0-61 and 3 otherwise, and nothing else happens. Otherwise a code over 61 abends `S0C6`, and a
-  tree of `<` tests picks one block per code. The PLO-extension facility (z17) makes 0-61 valid and
-  leaves GR1 unused. Each block comes from a row of `LOCKED_OPERATIONS`, one per code from Figure
-  7-380: width, compares, stores in order, boundary checks, even registers and the list offsets of
-  its operand addresses. R1 and R3 are register numbers at run time, so EX of PLO lowers once. A
-  register form with an odd R1 (codes 4-22) or R3 (8, 10) abends `S0C6`. D2 (codes 0-29), D4 as an
-  operand, the parameter list (a doubleword) and every address held in the list (bits 33-63) are
-  checked before any compare or store, so an `S0C6` changes nothing. Compares are unsigned and run in order. The
-  first unequal one replaces its comparison value with the operand and sets CC 1, CC 2 for DCS's
-  second, or CC 2 with the unequal-results byte (list byte 48) set to its number for codes 30-37.
-  All equal: the stores run in the Principles of Operation order and CC 0. Codes 38-61 only load
-  or store and leave the CC.
+  tree of `<` tests picks one block per code. The PLO-extension facility (z17) makes 0-61 valid
+  and leaves GR1 unused. Each block comes from a row of `LOCKED_OPERATIONS`, one per code from
+  Figure 7-380: width, compares, stores in order, boundary checks, even registers and the list
+  offsets of its operand addresses. R1 and R3 are register numbers at run time, so EX of PLO
+  lowers once. A register form with an odd R1 (codes 4-22) or R3 (8, 10) abends `S0C6`. D2 (codes
+  0-29), D4 as an operand, the parameter list (a doubleword) and every address held in the list
+  (bits 33-63) are checked before any compare or store, so an `S0C6` changes nothing. Compares are
+  unsigned and run in order. The first unequal one replaces its comparison value with the operand
+  and sets CC 1, CC 2 for DCS's second, or CC 2 with the unequal-results byte (list byte 48) set
+  to its number for codes 30-37. All equal: the stores run in the Principles of Operation order
+  and CC 0. Codes 38-61 only load or store and leave the CC.
 - PLO lowers to about 7,300 IR instructions per statement and compiles in about 1.2 s
   (red-dragon-6uyp.83).
 - z390 does not execute CAL, CALGF, CALG, CSST or PLO (`S0C1`; one CSST case `S0C5`), checks no
