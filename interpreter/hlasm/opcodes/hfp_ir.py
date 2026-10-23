@@ -7,21 +7,26 @@ from interpreter.hlasm.abend import emit_abend
 from interpreter.hlasm.conditional import emit_when
 from interpreter.hlasm.data_movement import keep
 from interpreter.hlasm.hfp_layout import (
-    CHARACTERISTIC_BITS,
+    CHARACTERISTIC_MASK,
     PART_FRACTION_BITS,
     PART_WIDTH,
     HfpLayout,
 )
 from interpreter.hlasm.hfp_slots import (
+    CONDITIONS_SLOT,
+    DIVIDE_BIT,
     MASKABLE_BITS,
     OVERFLOW_BIT,
     SIGNIFICANCE_BIT,
+    SQUARE_ROOT_BIT,
     UNDERFLOW_BIT,
 )
 from interpreter.hlasm.hlasm_constants import (
+    HFP_DIVIDE_ABEND,
     HFP_EXPONENT_OVERFLOW_ABEND,
     HFP_EXPONENT_UNDERFLOW_ABEND,
     HFP_SIGNIFICANCE_ABEND,
+    HFP_SQUARE_ROOT_ABEND,
     PROGRAM_MASK_VAR,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
@@ -33,12 +38,16 @@ type LowCharacteristic = Callable[[HlasmEmitter, Register, Register], Register]
 type Deliver = Callable[[Register], None]
 type Exceptions = Sequence[tuple[int, str]]
 
-CHARACTERISTIC_MASK = (1 << CHARACTERISTIC_BITS) - 1
 PART_MASK = (1 << PART_WIDTH) - 1
 PART_FRACTION_MASK = (1 << PART_FRACTION_BITS) - 1
 LOW_CHARACTERISTIC_OFFSET = 128 - 14
 POSITIVE_CC = 2
 SIGN, CHARACTERISTIC, FRACTION = 0, 1, 2
+SUPPRESSING: Exceptions = (
+    (DIVIDE_BIT, HFP_DIVIDE_ABEND),
+    (SQUARE_ROOT_BIT, HFP_SQUARE_ROOT_ABEND),
+)
+COMPLETING_BITS = OVERFLOW_BIT | UNDERFLOW_BIT | SIGNIFICANCE_BIT
 COMPLETING: Exceptions = (
     (OVERFLOW_BIT, HFP_EXPONENT_OVERFLOW_ABEND),
     (UNDERFLOW_BIT, HFP_EXPONENT_UNDERFLOW_ABEND),
@@ -180,19 +189,41 @@ def _abend_on(emitter: HlasmEmitter, raised: Register, exceptions: Exceptions) -
     ]
 
 
-def emit_program_mask_ladder(
-    emitter: HlasmEmitter,
-    conditions: Register,
-    suppressing: Exceptions,
-    deliver: Deliver,
-) -> None:
-    _abend_on(emitter, conditions, suppressing)
-    mask = emitter.load_var(PROGRAM_MASK_VAR)
+def _only(exceptions: Exceptions, raisable: int) -> Exceptions:
+    return tuple((bit, code) for bit, code in exceptions if bit & raisable)
+
+
+def _zeroed(
+    emitter: HlasmEmitter, conditions: Register, mask: Register, raisable: int
+) -> Register:
+    if not raisable & MASKABLE_BITS:
+        return emitter.int_(0)
     unmasked = emitter.binop(BinopKind.BIT_XOR, mask, emitter.int_(MASKABLE_BITS))
     zeroed = emitter.binop(
         BinopKind.BIT_AND, keep(MASKABLE_BITS)(emitter, conditions), unmasked
     )
-    deliver(emitter.binop(BinopKind.NE, zeroed, emitter.int_(0)))
+    return emitter.binop(BinopKind.NE, zeroed, emitter.int_(0))
+
+
+def _completed(
+    emitter: HlasmEmitter, conditions: Register, raisable: int, deliver: Deliver
+) -> None:
+    mask = emitter.load_var(PROGRAM_MASK_VAR)
+    deliver(_zeroed(emitter, conditions, mask, raisable))
     enabled = emitter.binop(BinopKind.BIT_OR, mask, emitter.int_(OVERFLOW_BIT))
     taken = emitter.binop(BinopKind.BIT_AND, conditions, enabled)
-    _abend_on(emitter, taken, COMPLETING)
+    _abend_on(emitter, taken, _only(COMPLETING, raisable))
+
+
+def emit_program_mask_ladder(
+    emitter: HlasmEmitter, result: Register, raisable: int, deliver: Deliver
+) -> None:
+    if not raisable:
+        deliver(emitter.int_(0))
+        return
+    conditions = list_item(emitter, result, CONDITIONS_SLOT)
+    _abend_on(emitter, conditions, _only(SUPPRESSING, raisable))
+    if not raisable & COMPLETING_BITS:
+        deliver(emitter.int_(0))
+        return
+    _completed(emitter, conditions, raisable, deliver)

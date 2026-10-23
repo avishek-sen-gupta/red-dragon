@@ -5,6 +5,8 @@ from collections.abc import Callable, Mapping, Sequence
 
 from interpreter.func_name import FuncName
 from interpreter.hlasm.hfp_layout import (
+    CHARACTERISTIC_MASK,
+    EXCESS,
     EXTENDED_HFP,
     LONG_HFP,
     SHORT_HFP,
@@ -40,12 +42,9 @@ from zarch_float.hfp_arithmetic import (
 from zarch_float.hfp_result import HfpResult
 from zarch_float.hfp_value import HfpValue
 
-type _Unary = Callable[[HfpValue], HfpResult]
+type _Rule = Callable[..., HfpResult]
 type _Binary = Callable[[HfpValue, HfpValue], HfpResult]
-type _Fused = Callable[[HfpValue, HfpValue, HfpValue], HfpResult]
 
-EXCESS = 64
-CHARACTERISTIC_MASK = 0x7F
 
 _BITS: Mapping[Condition, int] = {
     Condition.HFP_SIGNIFICANCE: SIGNIFICANCE_BIT,
@@ -73,26 +72,10 @@ def _outcome(result: HfpResult) -> list[int]:
     ]
 
 
-def _unary(rule: _Unary, layout: HfpLayout) -> Builtin:
+def _apply(rule: _Rule, layout: HfpLayout) -> Builtin:
     def call(args: Sequence[TypedValue], vm: VMState) -> BuiltinResult:
-        (a,) = args
-        return BuiltinResult(value=_outcome(rule(_operand(a, layout))))
-
-    return call
-
-
-def _binary(rule: _Binary, layout: HfpLayout) -> Builtin:
-    def call(args: Sequence[TypedValue], vm: VMState) -> BuiltinResult:
-        a, b = (_operand(arg, layout) for arg in args)
-        return BuiltinResult(value=_outcome(rule(a, b)))
-
-    return call
-
-
-def _fused(rule: _Fused, layout: HfpLayout) -> Builtin:
-    def call(args: Sequence[TypedValue], vm: VMState) -> BuiltinResult:
-        a, b, c = (_operand(arg, layout) for arg in args)
-        return BuiltinResult(value=_outcome(rule(a, b, c)))
+        operands = (_operand(arg, layout) for arg in args)
+        return BuiltinResult(value=_outcome(rule(*operands)))
 
     return call
 
@@ -118,7 +101,7 @@ def _into(target: HfpLayout) -> _Binary:
 _ALL = (SHORT_HFP, LONG_HFP, EXTENDED_HFP)
 _SHORT_AND_LONG = (SHORT_HFP, LONG_HFP)
 
-_BINARIES: Mapping[HfpOperation, tuple[_Binary, tuple[HfpLayout, ...]]] = {
+_RULES: Mapping[HfpOperation, tuple[_Rule, tuple[HfpLayout, ...]]] = {
     HfpOperation.ADD: (_normalized(True, hfp_add), _ALL),
     HfpOperation.SUBTRACT: (_normalized(True, hfp_subtract), _ALL),
     HfpOperation.ADD_UNNORMALIZED: (_normalized(False, hfp_add), _SHORT_AND_LONG),
@@ -128,13 +111,9 @@ _BINARIES: Mapping[HfpOperation, tuple[_Binary, tuple[HfpLayout, ...]]] = {
     ),
     HfpOperation.DIVIDE: (hfp_divide, _ALL),
     HfpOperation.MULTIPLY_UNNORMALIZED: (hfp_multiply_unnormalized, (LONG_HFP,)),
-}
-_UNARIES: Mapping[HfpOperation, tuple[_Unary, tuple[HfpLayout, ...]]] = {
     HfpOperation.HALVE: (hfp_halve, _SHORT_AND_LONG),
     HfpOperation.SQUARE_ROOT: (hfp_square_root, _ALL),
     HfpOperation.LOAD_FP_INTEGER: (hfp_load_fp_integer, _ALL),
-}
-_FUSEDS: Mapping[HfpOperation, tuple[_Fused, tuple[HfpLayout, ...]]] = {
     HfpOperation.MULTIPLY_ADD: (hfp_multiply_add, _SHORT_AND_LONG),
     HfpOperation.MULTIPLY_SUBTRACT: (hfp_multiply_subtract, _SHORT_AND_LONG),
     HfpOperation.MULTIPLY_ADD_UNNORMALIZED: (
@@ -154,22 +133,12 @@ _MULTIPLIES = (
 def hfp_builtins() -> Mapping[FuncName, Builtin]:
     return {
         **{
-            hfp_builtin_name(op, layout): _binary(rule, layout)
-            for op, (rule, layouts) in _BINARIES.items()
+            hfp_builtin_name(op, layout): _apply(rule, layout)
+            for op, (rule, layouts) in _RULES.items()
             for layout in layouts
         },
         **{
-            hfp_builtin_name(op, layout): _unary(rule, layout)
-            for op, (rule, layouts) in _UNARIES.items()
-            for layout in layouts
-        },
-        **{
-            hfp_builtin_name(op, layout): _fused(rule, layout)
-            for op, (rule, layouts) in _FUSEDS.items()
-            for layout in layouts
-        },
-        **{
-            hfp_builtin_name(op, source): _binary(_into(target), source)
+            hfp_builtin_name(op, source): _apply(_into(target), source)
             for op, source, target in _MULTIPLIES
         },
         **{

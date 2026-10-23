@@ -1,5 +1,5 @@
 # pyright: standard
-"""HFP arithmetic lowerings: operands read in builtin-argument order, one builtin call, then the program-mask ladder (suppressing abends, the store, the CC, the completing abends); the sign forms are IR alone; invalid pairs abend before any access."""
+"""HFP arithmetic lowerings: operands read in builtin-argument order, one builtin call, then the program-mask ladder (suppressing abends, the store, the CC, the completing abends), holding only the checks the operation can raise; the sign forms are IR alone; invalid pairs abend before any access."""
 
 from collections.abc import Mapping
 
@@ -18,15 +18,16 @@ from tests.unit.hlasm.bfp_trace import (
 )
 from tests.unit.hlasm.lowering_helpers import reg_operand
 
-COMPLETING = [
-    "StoreVar __hlasm_abend S0CC",
-    "StoreVar __hlasm_abend S0CD",
-    "StoreVar __hlasm_abend S0CE",
-]
+OVERFLOW, UNDERFLOW, SIGNIFICANCE = (
+    f"StoreVar __hlasm_abend {code}" for code in ("S0CC", "S0CD", "S0CE")
+)
+NORMALIZED = (OVERFLOW, UNDERFLOW, SIGNIFICANCE)
+UNNORMALIZED = (OVERFLOW, SIGNIFICANCE)
+PRODUCT = (OVERFLOW, UNDERFLOW)
 
 
-def _ladder(*deliver: str) -> list[str]:
-    return [READ_PM, *deliver, *COMPLETING]
+def _ladder(completing: tuple[str, ...], *deliver: str) -> list[str]:
+    return [READ_PM, *deliver, *completing]
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
@@ -41,6 +42,8 @@ def test_builtin_forms_read_operands_then_call_then_run_the_program_mask_ladder(
         "MXD": trace("MXD", (reg_operand(4), D8)),
         "DDR": trace("DDR", registers(1, 2)),
         "SQER": trace("SQER", registers(1, 2)),
+        "HDR": trace("HDR", registers(1, 2)),
+        "FIDR": trace("FIDR", registers(1, 2)),
         "MAER": trace("MAER", registers(1, 3, 2)),
         "MSD": trace("MSD", (reg_operand(1), reg_operand(3), D8)),
         "MYR": trace("MYR", registers(4, 3, 2)),
@@ -53,14 +56,14 @@ def test_builtin_forms_read_operands_then_call_then_run_the_program_mask_ladder(
             "read fpr 16+8",
             "read fpr 32+8",
             "call hfp add_long",
-            *_ladder("write fpr 16+8", CC),
+            *_ladder(NORMALIZED, "write fpr 16+8", CC),
         ],
         "AU": [
             "read fpr 8+4",
             ADDRESS,
             "read storage +4",
             "call hfp add_unnormalized_short",
-            *_ladder("write fpr 8+4", CC),
+            *_ladder(UNNORMALIZED, "write fpr 8+4", CC),
         ],
         "AXR": [
             "read fpr 0+8",
@@ -68,7 +71,7 @@ def test_builtin_forms_read_operands_then_call_then_run_the_program_mask_ladder(
             "read fpr 32+8",
             "read fpr 48+8",
             "call hfp add_extended",
-            *_ladder("write fpr 0+8", "write fpr 16+8", CC),
+            *_ladder(NORMALIZED, "write fpr 0+8", "write fpr 16+8", CC),
         ],
         "CDR": ["read fpr 8+8", "read fpr 16+8", "call hfp compare_long", CC],
         "CE": [
@@ -82,34 +85,40 @@ def test_builtin_forms_read_operands_then_call_then_run_the_program_mask_ladder(
             "read fpr 8+4",
             "read fpr 16+4",
             "call hfp multiply_lengthened_short",
-            *_ladder("write fpr 8+8"),
+            *_ladder(PRODUCT, "write fpr 8+8"),
         ],
         "MXD": [
             "read fpr 32+8",
             ADDRESS,
             "read storage +8",
             "call hfp multiply_lengthened_long",
-            *_ladder("write fpr 32+8", "write fpr 48+8"),
+            *_ladder(PRODUCT, "write fpr 32+8", "write fpr 48+8"),
         ],
         "DDR": [
             "read fpr 8+8",
             "read fpr 16+8",
             "call hfp divide_long",
             "StoreVar __hlasm_abend S0CF",
-            *_ladder("write fpr 8+8"),
+            *_ladder(PRODUCT, "write fpr 8+8"),
         ],
         "SQER": [
             "read fpr 16+4",
             "call hfp square_root_short",
             "StoreVar __hlasm_abend S0DD",
-            *_ladder("write fpr 8+4"),
+            "write fpr 8+4",
         ],
+        "HDR": [
+            "read fpr 16+8",
+            "call hfp halve_long",
+            *_ladder((UNDERFLOW,), "write fpr 8+8"),
+        ],
+        "FIDR": ["read fpr 16+8", "call hfp load_fp_integer_long", "write fpr 8+8"],
         "MAER": [
             "read fpr 24+4",
             "read fpr 16+4",
             "read fpr 8+4",
             "call hfp multiply_add_short",
-            *_ladder("write fpr 8+4"),
+            *_ladder(PRODUCT, "write fpr 8+4"),
         ],
         "MSD": [
             "read fpr 24+8",
@@ -117,20 +126,22 @@ def test_builtin_forms_read_operands_then_call_then_run_the_program_mask_ladder(
             "read storage +8",
             "read fpr 8+8",
             "call hfp multiply_subtract_long",
-            *_ladder("write fpr 8+8"),
+            *_ladder(PRODUCT, "write fpr 8+8"),
         ],
         "MYR": [
             "read fpr 24+8",
             "read fpr 16+8",
             "call hfp multiply_unnormalized_long",
-            *_ladder("write fpr 32+8", "write fpr 48+8"),
+            "write fpr 32+8",
+            "write fpr 48+8",
         ],
         "MAYR": [
             "read fpr 24+8",
             "read fpr 16+8",
             "read fpr 48+8",
             "call hfp multiply_add_unnormalized_long",
-            *_ladder("write fpr 32+8", "write fpr 48+8"),
+            "write fpr 32+8",
+            "write fpr 48+8",
         ],
         "MAYL": [
             "read fpr 24+8",
@@ -138,7 +149,7 @@ def test_builtin_forms_read_operands_then_call_then_run_the_program_mask_ladder(
             "read storage +8",
             "read fpr 40+8",
             "call hfp multiply_add_unnormalized_long",
-            *_ladder("write fpr 40+8"),
+            "write fpr 40+8",
         ],
     }
 

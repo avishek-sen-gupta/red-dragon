@@ -942,7 +942,8 @@ SW, SWR, SXR. Rulings R34, R39, R41, R46.
   (PIC 001D), both with nothing stored. Otherwise the result is stored with its
   characteristic modulo 128, or a true zero when underflow or significance is raised with
   its mask bit (0010, 0001) off. Then overflow abends `S0CC`, and underflow and
-  significance abend `S0CD` and `S0CE` when their mask bits are on.
+  significance abend `S0CD` and `S0CE` when their mask bits are on. Each operation emits only
+  the checks it can raise (`RAISES`), so MY, MAY and FIxR call and store with no ladder.
 - Extended results set the low-order sign to the high-order sign and its characteristic to
   the high one minus 14 modulo 128, or 0 for a true zero. MY and MAY wrap both
   characteristics even for a zero fraction.
