@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from interpreter.hlasm.field_lowering import FieldLowering
 from interpreter.hlasm.opcodes.bfp_arithmetic import BFP_ARITHMETIC_LOWERINGS
 from interpreter.hlasm.opcodes.bfp_class import BFP_CLASS_LOWERINGS
+from interpreter.hlasm.opcodes.bfp_conversion import BFP_CONVERSION_LOWERINGS
 from interpreter.hlasm.opcodes.bfp_sign import BFP_SIGN_LOWERINGS
 from interpreter.hlasm.opcodes.boolean import (
     BOOLEAN_FIELD_LOWERINGS,
@@ -119,6 +120,7 @@ OPCODE_LOWERINGS: Mapping[str, StatementLowering] = {
     **FLOATING_POINT_SUPPORT_LOWERINGS,
     **BFP_ARITHMETIC_LOWERINGS,
     **BFP_CLASS_LOWERINGS,
+    **BFP_CONVERSION_LOWERINGS,
     **BFP_SIGN_LOWERINGS,
 }
 
