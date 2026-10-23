@@ -2,7 +2,11 @@
 """HFP arithmetic: guard digit, truncation, rounding and exponent conditions per the PoO."""
 
 from tests.covers import NotLanguageFeature, covers
+from tests.unit.zarch_float.bfp_bits import to_bits
 from tests.unit.zarch_float.hfp_bits import image, long, short
+from zarch_float.bfp_format import LONG as BFP_LONG
+from zarch_float.bfp_format import SHORT as BFP_SHORT
+from zarch_float.bfp_format import BfpFormat
 from zarch_float.comparison import Comparison
 from zarch_float.comparison_result import ComparisonResult
 from zarch_float.condition import Condition
@@ -24,6 +28,7 @@ from zarch_float.hfp_convert import (
     hfp_from_integer,
     hfp_load_lengthened,
     hfp_load_rounded,
+    hfp_to_bfp,
     hfp_to_integer,
 )
 from zarch_float.hfp_format import EXTENDED, LONG, SHORT
@@ -31,7 +36,7 @@ from zarch_float.hfp_result import HfpResult
 from zarch_float.hfp_value import HfpValue
 from zarch_float.integer_format import SIGNED_32
 from zarch_float.integer_result import IntegerResult
-from zarch_float.rounding_mode import RoundingMode
+from zarch_float.rounding_mode import HFP_TO_BFP_MODIFIER_MODES, RoundingMode
 
 NONE: frozenset[Condition] = frozenset()
 OVERFLOW = frozenset({Condition.HFP_EXPONENT_OVERFLOW})
@@ -248,4 +253,52 @@ def test_unnormalized_multiplies_keep_the_28_digit_window_unwrapped():
         HfpValue(EXTENDED, False, top - 1, 2),
         HfpValue(EXTENDED, False, 0, 2),
         HfpValue(EXTENDED, True, 1 << 104, 2),
+    ]
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_hfp_to_bfp_rounds_by_the_modifier_denormalizes_and_overflows_per_figure_9_20():
+    modes = HFP_TO_BFP_MODIFIER_MODES
+
+    def converted(bits: int, target: BfpFormat, m3: int) -> tuple[int, bool]:
+        result = hfp_to_bfp(long(bits), target, modes[m3])
+        return to_bits(result.value), Condition.OVERFLOW in result.conditions
+
+    assert sorted(modes) == [0, 1, 3, 4, 5, 6, 7]
+    assert [
+        converted(0x4110000000000000, BFP_SHORT, 4),
+        converted(0x4055555555555555, BFP_SHORT, 4),
+        converted(0x4055555555555555, BFP_SHORT, 0),
+        converted(0x4055555555555555, BFP_SHORT, 3),
+        converted(0x8000000000000000, BFP_SHORT, 4),
+        converted(0xC500000000000000, BFP_LONG, 1),
+        converted(0x1E10000000000000, BFP_SHORT, 4),
+        converted(0x1910000000000000, BFP_SHORT, 4),
+        converted(0x9910000000000000, BFP_SHORT, 7),
+        converted(0x7F10000000000000, BFP_SHORT, 1),
+        converted(0x7F10000000000000, BFP_SHORT, 5),
+        converted(0x7F10000000000000, BFP_SHORT, 3),
+        converted(0xFF10000000000000, BFP_SHORT, 6),
+        converted(0xFF10000000000000, BFP_SHORT, 7),
+        converted(0x41FFFFFFFFFFFFFF, BFP_LONG, 4),
+        converted(0x41FFFFFFFFFFFFFF, BFP_LONG, 5),
+        converted(0x7FFFFFFFFFFFFFFF, BFP_LONG, 4),
+    ] == [
+        (0x3F800000, False),
+        (0x3EAAAAAB, False),
+        (0x3EAAAAAA, False),
+        (0x3EAAAAAB, False),
+        (0x80000000, False),
+        (0x8000000000000000, False),
+        (0x00000200, False),
+        (0x00000000, False),
+        (0x80000001, False),
+        (0x7F800000, True),
+        (0x7F7FFFFF, True),
+        (0x7F7FFFFF, True),
+        (0xFF7FFFFF, True),
+        (0xFF800000, True),
+        (0x4030000000000000, False),
+        (0x402FFFFFFFFFFFFF, False),
+        (0x4FB0000000000000, False),
     ]
