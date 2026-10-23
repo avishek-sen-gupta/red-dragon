@@ -21,6 +21,7 @@ Z390_MACHINE: Mapping[str, HlasmMachine] = {
         programs.ABENDED, 1, {programs.RESULT: 0x1234D}
     ),
     "SRP invalid rounding digit": HlasmMachine(programs.ABENDED, 2, {}),
+    "EX of SRP with an invalid rounding digit": HlasmMachine(programs.ABENDED, 2, {}),
     "MP negative zero": HlasmMachine(programs.ABENDED, 1, {programs.RESULT: 0xC}),
     "DP zero remainder keeps the dividend sign": HlasmMachine(
         programs.ABENDED, 1, {programs.RESULT: 0x2D000C}

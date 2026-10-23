@@ -385,6 +385,11 @@ DATA_EXCEPTIONS: Mapping[str, Case] = {
         {},
         CC_SET_BY_ZAP,
     ),
+    "EX of SRP with an invalid rounding digit": (
+        _zap("P1") + _line("LA", "1,X'7A'") + _line("EX", "1,SRPX"),
+        {},
+        CC_SET_BY_ZAP,
+    ),
     "SRP invalid operand without a shift": (
         SET_CC + _line("SRP", "OUTF(8),0,0"),
         {},
@@ -436,7 +441,12 @@ DIVIDE_EXCEPTIONS: Mapping[str, Case] = {
 
 
 def _executed(lengths: str, target: str) -> str:
-    return SET_CC + _line("LA", f"1,X'{lengths}'") + _line("EX", f"1,{target}")
+    return (
+        _zap("P1")
+        + SET_CC
+        + _line("LA", f"1,X'{lengths}'")
+        + _line("EX", f"1,{target}")
+    )
 
 
 SPECIFICATION_EXCEPTIONS: Mapping[str, Case] = {
@@ -463,4 +473,12 @@ STORAGE_AFTER_ABEND: Mapping[str, tuple[Span, bytes]] = {
     "MP too few leading zeros": (V3_SPAN, bytes.fromhex("12345C")),
     "DP zero divisor": (W_SPAN, bytes.fromhex("000000000012345C")),
     "DP quotient too large": (V3_SPAN, bytes.fromhex("09000C")),
+    "EX of SRP with an invalid rounding digit": (
+        W_SPAN,
+        bytes.fromhex("000000000012345C"),
+    ),
+    **{
+        name: (W_SPAN, bytes.fromhex("000000000012345C"))
+        for name in SPECIFICATION_EXCEPTIONS
+    },
 }
