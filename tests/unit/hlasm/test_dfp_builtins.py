@@ -87,3 +87,28 @@ def test_builtins_return_value_scaled_value_trap_flags_and_dxcs():
         "reround": [0, 401, 123, 0, 401, 123, 0x0C, 0x0C, 0, 0x08, 0],
         "integral": [1, 6176, 2, 1, 6176, 2, 0x0C, 0x0C, 0, 0x08, 0],
     }
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_fixed_point_builtins_report_the_value_or_the_integer_image_and_cc():
+    assert {
+        "from fixed": _call("from_fixed_long", [NEAREST_EVEN, 12345678901234567]),
+        "exact from fixed": _call("from_fixed_extended", [NEAREST_EVEN, -7]),
+        "to fixed": _call("to_fixed_32_long", [NEAREST_EVEN, [1, 397, 25]]),
+        "nan to logical": _call("to_logical_64_extended", [NEAREST_EVEN, [0, -2, 5]]),
+        "zero to fixed": _call("to_fixed_64_long", [TOWARD_ZERO, [1, 0, 0]]),
+    } == {
+        "from fixed": [
+            *[0, 399, 1234567890123457],
+            *[0, 399, 1234567890123457],
+            0x0C,
+            0x0C,
+            0,
+            0x0C,
+            0,
+        ],
+        "exact from fixed": [1, 6176, 7, 1, 6176, 7, 0, 0, 0, 0, 0],
+        "to fixed": [0xFFFFFFFE, 0, 0, 0, 0, 0, 0x08, 0x08, 0, 0x08, 1],
+        "nan to logical": [0, 0, 0, 0, 0, 0, 0x80, 0x80, 0, 0, 3],
+        "zero to fixed": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    }
