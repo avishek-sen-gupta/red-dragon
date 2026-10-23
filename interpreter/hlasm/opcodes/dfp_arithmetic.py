@@ -12,6 +12,7 @@ from interpreter.hlasm.opcodes.dfp_ir import (
     dfp_modifier,
     no_cc,
     quantum_control,
+    quantum_yields,
     set_fields_cc,
     stored,
 )
@@ -32,6 +33,7 @@ def _arithmetic(
         ),
         stored(FIRST, layout, after),
         quantum_control(FOURTH),
+        quantum_yields,
     )
 
 

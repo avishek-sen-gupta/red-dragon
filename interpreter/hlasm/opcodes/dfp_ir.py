@@ -4,14 +4,15 @@
 from collections.abc import Callable
 
 from hlasm_asg.program.machine_statement import MachineStatement
-from interpreter.hlasm.bfp_slots import QUANTUM_BIT
+from interpreter.hlasm.bfp_slots import INEXACT_BIT, QUANTUM_BIT
 from interpreter.hlasm.data_movement import Source, keep
 from interpreter.hlasm.dfp_fields import INFINITY, QUIET_NAN
 from interpreter.hlasm.dfp_layout import DfpLayout
-from interpreter.hlasm.hlasm_constants import FPC_VAR
+from interpreter.hlasm.hlasm_constants import BYTE_MASK, FPC_VAR
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
+from interpreter.hlasm.ieee_outcome import IeeeOutcome
 from interpreter.hlasm.opcodes.bfp_forms import Deliver, SuppressedBits
-from interpreter.hlasm.opcodes.bfp_ir import field_at
+from interpreter.hlasm.opcodes.bfp_ir import enabled_traps, field_at
 from interpreter.hlasm.opcodes.dfp_codec import DECODERS, ENCODERS
 from interpreter.hlasm.opcodes.floating_point_support import (
     DFP_MODE_SHIFT,
@@ -26,6 +27,7 @@ type Fields = tuple[Register, Register, Register]
 type AfterStore = Callable[[HlasmEmitter, Fields], None]
 
 FPC_TO_MODIFIER = 8
+QUANTUM_DXC = 0x04
 CURRENT_MODE_CODES = frozenset({0, 2})
 FIRST_SUPPRESSING_CODE = 8
 NAN_CC = 3
@@ -74,6 +76,23 @@ def quantum_control(index: int) -> SuppressedBits:
         return QUANTUM_BIT * (code == 0 or code >= FIRST_SUPPRESSING_CODE)
 
     return suppressed
+
+
+def quantum_yields(
+    emitter: HlasmEmitter, fpc: Register, outcome: IeeeOutcome
+) -> IeeeOutcome:
+    enabled = enabled_traps(emitter, fpc, outcome.trap)
+    taken = emitter.binop(
+        BinopKind.NE, keep(INEXACT_BIT)(emitter, enabled), emitter.int_(0)
+    )
+    unrecognized = emitter.binop(BinopKind.MUL, taken, emitter.int_(QUANTUM_BIT))
+    kept = emitter.binop(BinopKind.BIT_XOR, unrecognized, emitter.int_(BYTE_MASK))
+    return IeeeOutcome(
+        emitter.binop(BinopKind.BIT_AND, outcome.trap, kept),
+        emitter.binop(BinopKind.BIT_AND, outcome.flags, kept),
+        outcome.scaled_dxc,
+        pick(emitter, taken, outcome.inexact_dxc, emitter.int_(QUANTUM_DXC)),
+    )
 
 
 def and_inexact_control(

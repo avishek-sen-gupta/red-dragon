@@ -13,6 +13,7 @@ from interpreter.hlasm.opcodes.dfp_ir import (
     dfp_modifier,
     no_cc,
     quantum_control,
+    quantum_yields,
     stored,
 )
 from interpreter.hlasm.opcodes.floating_point_support import pairs
@@ -28,6 +29,7 @@ def _integral(layout: DfpLayout) -> StatementLowering:
         (dfp_modifier(SECOND), decoded(fpr(THIRD, layout), layout)),
         stored(FIRST, layout, no_cc),
         and_inexact_control(quantum_control(SECOND), inexact_control),
+        quantum_yields,
     )
 
 
@@ -41,6 +43,7 @@ def _quantize(layout: DfpLayout) -> StatementLowering:
         ),
         stored(FIRST, layout, no_cc),
         quantum_control(FOURTH),
+        quantum_yields,
     )
 
 
@@ -56,6 +59,7 @@ def _reround(layout: DfpLayout) -> StatementLowering:
         ),
         stored(FIRST, layout, no_cc),
         quantum_control(FOURTH),
+        quantum_yields,
     )
 
 
