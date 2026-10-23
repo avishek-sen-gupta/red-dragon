@@ -109,6 +109,8 @@ addresses.
 | `interpreter/hlasm/opcodes/hfp_sign.py` | HFP LOAD AND TEST and the sign forms, in IR |
 | `interpreter/hlasm/opcodes/hfp_ir.py` | HFP image IR: field lists, normalized fields of a binary value, encoding with the extended low-order part, an image's CC, and the program-mask ladder |
 | `interpreter/hlasm/opcodes/hfp_conversion.py` | HFP conversions: to fixed and to BFP through builtins; from fixed, from BFP, load lengthened and load rounded in IR (red-dragon-6uyp.54) |
+| `interpreter/hlasm/opcodes/dfp_codec.py`, `dpd_lanes.py`, `interpreter/hlasm/dfp_layout.py` | DFP images to `[negative, e, significand]` and back as IR functions, one per format (ruling R49); `e` is the biased exponent or -1/-2/-3 for infinity, QNaN, SNaN. All declets decode or encode at once, ten bits per lane |
+| `interpreter/hlasm/ir_function.py` | An IR function defined once per program after the entry function and called by name |
 | `interpreter/hlasm/opcodes/fpr_images.py`, `interpreter/hlasm/fpr_layout.py` | Floating-point images of any radix: FPR access by width (short high word, long, pair), FPR and storage operand sources, result-list items, an arithmetic select |
 | `interpreter/hlasm/program_status.py` | SPM, IPM, EPSW |
 | `interpreter/hlasm/checksum.py` | CKSM |
@@ -1168,4 +1170,5 @@ TBEDR, THDER, THDR. Ruling R47.
 | `tests/unit/hlasm/test_hfp_conversion_lowering.py` | HFP conversion IR: rounding forms read M3 and the operand, call, store and set the CC; IR forms call nothing; static `S0C6` before any access; no SYMBOLIC |
 | `tests/integration/hlasm/test_hfp_conversion.py` | Every HFP conversion mnemonic on the VM: GR or FPR results and CC; LOAD ROUNDED overflow stores, then `S0CC` |
 | `tests/z390/test_hfp_conversion_differential.py` | Every HFP conversion case against z390; its faults pinned (`-m z390`) |
+| `tests/unit/hlasm/test_dpd_codec.py` | DPD codec IR: all 1000 declets against figures 20-32 and 20-33, the 24 noncanonical declets, each format's fields and canonical encoding |
 | `tests/z390/test_conditional_select_count_differential.py` | Every conditional, select and count case against z390; the instructions z390 does not execute and its whole-register SELFHR pinned (`-m z390`) |
