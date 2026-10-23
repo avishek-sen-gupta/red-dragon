@@ -28,6 +28,7 @@ from interpreter.hlasm.hlasm_constants import (
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.ieee_outcome import IeeeOutcome
 from interpreter.hlasm.opcodes.floating_point_support import (
+    BFP_MODE_SHIFT,
     FLAG_SHIFT,
     IEEE_BITS,
     MASK_SHIFT,
@@ -42,7 +43,7 @@ from interpreter.register import Register
 type Deliver = Callable[[Register], None]
 type OutcomeStep = Callable[[HlasmEmitter, Register, IeeeOutcome], IeeeOutcome]
 
-FPC_TO_MODIFIER = 4
+BFP_FPC_TO_MODIFIER = 4
 NAN_CC = 3
 POSITIVE_CC = 2
 
@@ -157,10 +158,18 @@ def signaling_nan_of(
     return emitter.binop(BinopKind.MUL, nan_of(emitter, image, layout), loud)
 
 
+def fpc_mode_code(
+    emitter: HlasmEmitter, shift: int, offset: int, codes: int
+) -> Register:
+    fpc = emitter.load_var(FPC_VAR)
+    moved = emitter.binop(BinopKind.RSHIFT, fpc, emitter.int_(shift)) if shift else fpc
+    mode = keep(MODE_FIELD)(emitter, moved)
+    shifted = emitter.binop(BinopKind.ADD, mode, emitter.int_(offset))
+    return keep(codes)(emitter, shifted)
+
+
 def current_mode(emitter: HlasmEmitter) -> Register:
-    mode = keep(MODE_FIELD)(emitter, emitter.load_var(FPC_VAR))
-    shifted = emitter.binop(BinopKind.ADD, mode, emitter.int_(FPC_TO_MODIFIER))
-    return keep(MODE_FIELD)(emitter, shifted)
+    return fpc_mode_code(emitter, BFP_MODE_SHIFT, BFP_FPC_TO_MODIFIER, MODE_FIELD)
 
 
 def outcome_of(emitter: HlasmEmitter, result: Register) -> IeeeOutcome:

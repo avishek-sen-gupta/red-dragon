@@ -29,6 +29,7 @@ from interpreter.hlasm.opcodes.floating_point_support import pairs
 from interpreter.hlasm.opcodes.fpr_images import (
     FIRST,
     SECOND,
+    compared,
     fpr,
     pick,
     storage,
@@ -127,25 +128,19 @@ def _compare_forms(
     }
 
 
-def _compare_bits(
-    emitter: HlasmEmitter, operator: BinopKind, value: Register, against: int
-) -> Register:
-    return emitter.binop(operator, value, emitter.int_(against))
-
-
 def _data_class(emitter: HlasmEmitter, image: Register, layout: BfpLayout) -> Register:
     magnitude = magnitude_of(emitter, image, layout)
     smallest = 1 << layout.fraction_bits
-    nonzero = _compare_bits(emitter, BinopKind.NE, magnitude, 0)
-    below = _compare_bits(emitter, BinopKind.LT, magnitude, smallest)
-    finite = _compare_bits(emitter, BinopKind.LT, magnitude, layout.infinity)
+    nonzero = compared(emitter, BinopKind.NE, magnitude, 0)
+    below = compared(emitter, BinopKind.LT, magnitude, smallest)
+    finite = compared(emitter, BinopKind.LT, magnitude, layout.infinity)
     normal = emitter.binop(
         BinopKind.MUL,
-        _compare_bits(emitter, BinopKind.GE, magnitude, smallest),
+        compared(emitter, BinopKind.GE, magnitude, smallest),
         finite,
     )
     subnormal = emitter.binop(BinopKind.MUL, nonzero, below)
-    infinite = _compare_bits(emitter, BinopKind.EQ, magnitude, layout.infinity)
+    infinite = compared(emitter, BinopKind.EQ, magnitude, layout.infinity)
     nan_class = emitter.binop(
         BinopKind.SUB, emitter.int_(SIGNALING_CLASS), quiet_of(emitter, image, layout)
     )

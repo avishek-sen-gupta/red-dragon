@@ -18,13 +18,9 @@ _SPECIALS: Mapping[int, FloatKind] = {
 }
 
 
-def _bias(fmt: DfpFormat) -> int:
-    return -fmt.quantum_min
-
-
 def _finite(negative: bool, e: int, significand: int, fmt: DfpFormat) -> DfpValue:
     kind = FloatKind.FINITE if significand else FloatKind.ZERO
-    return DfpValue(fmt, negative, kind, significand, e - _bias(fmt))
+    return DfpValue(fmt, negative, kind, significand, e - fmt.bias)
 
 
 def _special(negative: bool, e: int, significand: int, fmt: DfpFormat) -> DfpValue:
@@ -40,10 +36,10 @@ def dfp_value_of(fields: Sequence[int], fmt: DfpFormat) -> DfpValue:
 
 
 _FIELDS: Mapping[FloatKind, Callable[[DfpValue], list[int]]] = {
-    FloatKind.ZERO: lambda v: [int(v.negative), v.exponent + _bias(v.format), 0],
+    FloatKind.ZERO: lambda v: [int(v.negative), v.exponent + v.format.bias, 0],
     FloatKind.FINITE: lambda v: [
         int(v.negative),
-        v.exponent + _bias(v.format),
+        v.exponent + v.format.bias,
         v.significand,
     ],
     FloatKind.INFINITY: lambda v: [int(v.negative), INFINITY, 0],
