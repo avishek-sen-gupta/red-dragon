@@ -80,6 +80,9 @@ Z390_PINNED: Mapping[str, HlasmMachine] = {
     "MYHR MYH": _z390(2, {4: 0x42010000_00000000, 5: 0x42020000_00000000}),
     "MYLR MYL": _z390(2, {4: 0x34200000_00000001, 5: 0x34100000_00000000}),
     "MAYR MAY": _z390(2, {r: FILL for r in range(4, 8)}, "S0C6"),
+    "MAY MAYL with a zero window keep the sum's sign": _z390(
+        2, {r: FILL for r in range(4, 7)}, "S0C6"
+    ),
     "MAYHR MAYH": _z390(2, {4: 0x4F000000_00000000, 5: 0}),
     "MAYLR MAYL": _z390(2, {4: 0x34100000_00000000, 5: 0x34000000_00000000}),
     "LTER LTDR LTXR": _z390(

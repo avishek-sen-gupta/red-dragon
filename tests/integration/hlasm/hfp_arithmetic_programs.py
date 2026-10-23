@@ -44,6 +44,7 @@ DATA = (
     "E25      DC    X'42190000'\n"
     "EODD     DC    X'41800000'\n"
     "ENEXT    DC    X'41100001'\n"
+    "EZ41     DC    X'41000000'\n"
     "EMAX     DC    X'7FFFFFFF'\n"
     "ETINY    DC    X'01100000'\n"
     "         DS    0D\n"
@@ -68,12 +69,14 @@ DATA = (
     "DBIG     DC    X'7F100000',X'00000000'\n"
     "DLOWBIT  DC    X'34100000',X'00000000'\n"
     "DMTINY   DC    X'A1100000',X'00000000'\n"
+    "DM254    DC    X'C2FE0000',X'00000000'\n"
     "DPAT     DC    X'41100000',X'12345678'\n"
     "X1       DC    X'41100000',X'00000000',X'33100000',X'00000000'\n"
     "X2       DC    X'41200000',X'00000000',X'33000000',X'00000000'\n"
     "X3       DC    X'41300000',X'00000000',X'33000000',X'00000000'\n"
     "X4       DC    X'41400000',X'00000000',X'33000000',X'00000000'\n"
     "X2P5     DC    X'41280000',X'00000000',X'33000000',X'00000001'\n"
+    "XM1      DC    X'C1100000',X'00000000',X'B3100000',X'00000000'\n"
     "XMZ      DC    X'C1000000',X'00000000',X'33000000',X'00000000'\n"
     "XODD     DC    X'41100000',X'00000000',X'80000000',X'00000001'\n"
     "XMAX     DC    X'7FFFFFFF',X'FFFFFFFF',X'71FFFFFF',X'FFFFFFFF'\n"
@@ -381,6 +384,12 @@ UNNORMALIZED_MULTIPLIES: Mapping[str, Case] = {
         {4: 0x42050000_00000000, 5: 0x42070000_00000000},
         PRESET_CC,
     ),
+    "MAY MAYL with a zero window keep the sum's sign": case_of(
+        lines("LD 2,DM1", "LD 3,D2", "LD 6,DM254", "MAYR 6,3,2", "LGDR 4,4")
+        + lines("LGDR 5,6", "LD 7,DM254", "MAYL 7,3,DM1", "LGDR 6,7"),
+        {4: 0xC2000000_00000000, 5: 0xB4000000_00000000, 6: 0xB4000000_00000000},
+        PRESET_CC,
+    ),
     "MAYLR MAYL": case_of(
         lines("LD 2,D1", "LD 3,D2", "LD 8,DLOWBIT", "MAYLR 8,3,2", "LGDR 4,8")
         + lines("LD 9,DMTINY", "MAYL 9,3,D1", "LGDR 5,9"),
@@ -528,6 +537,27 @@ TRAPS: Mapping[str, Trap] = {
         {1: high_word(0x41000000)},
         0,
         SIGNIFICANCE,
+    ),
+    "extended significance with the mask on keeps both characteristics": trap_of(
+        program_mask(1)
+        + extended_from(1, "X1")
+        + extended_from(4, "XM1")
+        + lines("AXR 1,4"),
+        {1: 0x41000000_00000000, 3: 0x33000000_00000000},
+        0,
+        SIGNIFICANCE,
+    ),
+    "short HFP divide suppresses": trap_of(
+        zeroed_short(1, 2) + lines("LE 1,E1", "LE 2,EZ41", "DER 1,2"),
+        {1: high_word(0x41100000)},
+        PRESET_CC,
+        HFP_DIVIDE,
+    ),
+    "extended HFP divide suppresses": trap_of(
+        extended_from(1, "X1") + extended_from(4, "XMZ") + lines("DXR 1,4"),
+        {1: 0x41100000_00000000, 3: 0x33100000_00000000},
+        PRESET_CC,
+        HFP_DIVIDE,
     ),
     "HFP divide suppresses": trap_of(
         lines("LD 1,D1", "LD 2,DZERO1", "DDR 1,2"),
