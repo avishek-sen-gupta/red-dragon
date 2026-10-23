@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
+from hlasm_asg.program.related_location import RelatedLocation
 from hlasm_asg.program.severity import Severity
 
 
@@ -16,3 +17,4 @@ class Diagnostic(BaseModel):
     message: str
     file: str
     line: int
+    related: tuple[RelatedLocation, ...]

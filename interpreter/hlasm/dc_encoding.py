@@ -4,9 +4,13 @@
 from collections.abc import Callable, Mapping
 
 from hlasm_asg.program.abs_address import AbsAddress
+from hlasm_asg.program.address import Address
 from hlasm_asg.program.addresses_nominal import AddressesNominal
+from hlasm_asg.program.base_displacement_address import BaseDisplacementAddress
 from hlasm_asg.program.dc_item import DcItem
 from hlasm_asg.program.external_address import ExternalAddress
+from hlasm_asg.program.length_unit import LengthUnit
+from hlasm_asg.program.omitted_nominal import OmittedNominal
 from hlasm_asg.program.reloc_address import RelocAddress
 from hlasm_asg.program.string_nominal import StringNominal
 from interpreter.encoding.ebcdic_table import EbcdicTable
@@ -20,6 +24,7 @@ type Encoder = Callable[[str, int], tuple[int, ...]]
 
 FLOATING_POINT_ISSUE = "red-dragon-6uyp.21"
 OTHER_TYPES_ISSUE = "red-dragon-6uyp.63"
+ENCODING_ISSUE = "red-dragon-6uyp.93"
 
 _FLOATING_POINT_TYPES = frozenset({"E", "D", "L"})
 _UNSPLIT_TYPES = frozenset({"C"})
@@ -115,6 +120,10 @@ _ALIGNMENTS: Mapping[str, int] = {"F": 4, "H": 2, "A": 4, "Y": 2, "V": 4}
 
 
 def _check_supported(item: DcItem) -> None:
+    if item.length_unit == LengthUnit.BIT:
+        raise UnsupportedDataType(
+            f"{item.type}{item.extension}L.{item.length}", ENCODING_ISSUE
+        )
     if item.extension == "" and (
         item.type in _STRING_ENCODERS or item.type in _ADDRESS_TYPES
     ):
@@ -146,16 +155,18 @@ def _assembled_address(value: AbsAddress | ExternalAddress) -> int:
             return 0
 
 
-def _address_piece(
-    value: AbsAddress | RelocAddress | ExternalAddress, width: int
-) -> DcPiece:
+def _address_piece(value: Address, width: int) -> DcPiece:
+    if isinstance(value, BaseDisplacementAddress):
+        raise UnsupportedDataType("S", ENCODING_ISSUE)
     if isinstance(value, RelocAddress):
         return AddressSlot(value, width)
     return ConstantImage(_binary(_assembled_address(value), width))
 
 
-def _operand(item: DcItem) -> tuple[DcPiece, ...]:
-    match item.nominal:
+def _operand(
+    item: DcItem, nominal: StringNominal | AddressesNominal
+) -> tuple[DcPiece, ...]:
+    match nominal:
         case StringNominal(value=text):
             return tuple(_string_piece(item, value) for value in _values(item, text))
         case AddressesNominal(values=values):
@@ -164,7 +175,9 @@ def _operand(item: DcItem) -> tuple[DcPiece, ...]:
 
 def encode_dc(item: DcItem) -> tuple[DcPiece, ...]:
     _check_supported(item)
-    return _operand(item) * item.duplication
+    if isinstance(item.nominal, OmittedNominal):
+        return ()
+    return _operand(item, item.nominal) * item.duplication
 
 
 def dc_alignment(item: DcItem) -> int:
