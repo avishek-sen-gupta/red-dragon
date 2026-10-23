@@ -15,7 +15,7 @@ from tests.unit.hlasm.fp_trace import (
     registers,
     trace,
 )
-from tests.unit.hlasm.lowering_helpers import mask_operand
+from tests.unit.hlasm.lowering_helpers import mask_operand, reg_operand
 
 DECODE_LONG = "call dfp decode_long"
 DECODE_EXTENDED = "call dfp decode_extended"
@@ -31,6 +31,7 @@ def test_builtin_forms_decode_in_argument_order_then_call_then_trap_and_encode()
         "SXTR": trace("SXTR", registers(0, 4, 8)),
         "DDTRA": trace("DDTRA", (*registers(1, 2, 3), mask_operand(0))),
         "CDTR": trace("CDTR", registers(1, 2)),
+        "RRDTR": trace("RRDTR", (*registers(1, 3, 2), mask_operand(0))),
     }
 
     assert traces == {
@@ -79,6 +80,14 @@ def test_builtin_forms_decode_in_argument_order_then_call_then_trap_and_encode()
             "call dfp compare_long",
             *ladder(CC),
         ],
+        "RRDTR": [
+            READ_FPC,
+            "read fpr 24+8",
+            DECODE_LONG,
+            "read gpr 16+8",
+            "call dfp reround_long",
+            *ladder(ENCODE_LONG, "write fpr 8+8"),
+        ],
     }
 
 
@@ -121,9 +130,14 @@ def test_invalid_pairs_abend_before_any_access():
         trace("LTXTR", registers(0, 6)),
         trace("EEXTR", registers(2, 2)),
         trace("IEXTR", registers(2, 1, 4)),
+        trace(
+            "FIXTR", (reg_operand(0), mask_operand(0), reg_operand(6), mask_operand(0))
+        ),
+        trace("QAXTR", (*registers(0, 4, 10), mask_operand(0))),
+        trace("RRXTR", (*registers(4, 2, 1), mask_operand(0))),
     ]
 
-    assert traces == [[SPECIFICATION]] * 7
+    assert traces == [[SPECIFICATION]] * 10
 
 
 FAMILIES: Mapping[str, tuple[Operand, ...]] = {
@@ -135,6 +149,8 @@ FAMILIES: Mapping[str, tuple[Operand, ...]] = {
     "CDTR CXTR KDTR KXTR CEDTR CEXTR LTDTR LTXTR": registers(0, 4),
     "EEDTR EEXTR ESDTR ESXTR": registers(2, 4),
     "IEDTR IEXTR": registers(0, 4, 2),
+    "FIDTR FIXTR": (reg_operand(0), mask_operand(1), reg_operand(4), mask_operand(4)),
+    "QADTR QAXTR RRDTR RRXTR": (*registers(0, 4, 1), mask_operand(3)),
 }
 
 
@@ -146,7 +162,7 @@ def test_every_mnemonic_lowers_without_symbolic():
         for m in names.split()
     }
 
-    assert len(lowered) == 30
+    assert len(lowered) == 36
     assert [
         m for m, ir in lowered.items() if any(isinstance(i, Symbolic) for i in ir)
     ] == []

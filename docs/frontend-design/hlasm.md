@@ -1000,8 +1000,9 @@ TBEDR, THDER, THDR. Ruling R47.
   LOAD ROUNDED overflow. The z390 test pins each (red-dragon-6uyp.74).
 
 **DFP arithmetic (red-dragon-6uyp.55).** ADTR, ADTRA, AXTR, AXTRA, CDTR, CEDTR, CEXTR, CXTR,
-DDTR, DDTRA, DXTR, DXTRA, EEDTR, EEXTR, ESDTR, ESXTR, IEDTR, IEXTR, KDTR, KXTR, LTDTR,
-LTXTR, MDTR, MDTRA, MXTR, MXTRA, SDTR, SDTRA, SXTR, SXTRA. Rulings R34, R41, R43, R44, R49.
+DDTR, DDTRA, DXTR, DXTRA, EEDTR, EEXTR, ESDTR, ESXTR, FIDTR, FIXTR, IEDTR, IEXTR, KDTR,
+KXTR, LTDTR, LTXTR, MDTR, MDTRA, MXTR, MXTRA, QADTR, QAXTR, RRDTR, RRXTR, SDTR, SDTRA, SXTR,
+SXTRA. Rulings R34, R41, R43, R44, R49.
 
 - Each operand goes through the format's decode IR function to `[negative, e, significand]`
   (`e` the biased exponent, or -1 infinity, -2 QNaN, -3 SNaN); a `dfp_builtins()` builtin
@@ -1011,6 +1012,10 @@ LTXTR, MDTR, MDTRA, MXTR, MXTRA, SDTR, SDTRA, SXTR, SXTRA. Rulings R34, R41, R43
 - The trap ladder is the BFP one. The quantum exception (mask and flag X'04', DXC 04)
   completes after the store, and is not recognized when an inexact trap is taken.
 - CC: add and subtract per figure 20-10, 3 for a NaN; multiply and divide leave it.
+- FIxTR, QAxTR and RRxTR call builtins. FIxTR rounds and sets XqC by M3; M4 bit 1 (X'4')
+  suppresses inexact. QAxTR takes the quantum from R2 and the value from R3; RRxTR the
+  significance from GR R2 bits 58-63. Their quantum exception compares the result's quantum
+  with the third operand's.
 - CxTR and KxTR call a compare builtin (alignment across exponents): CxTR signals on an
   SNaN, KxTR on any NaN.
 - IR on the decoded fields (R44): CExTR compares `e` for finite operands, infinities equal,
