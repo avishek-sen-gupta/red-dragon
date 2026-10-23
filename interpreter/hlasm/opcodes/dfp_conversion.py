@@ -21,17 +21,15 @@ from interpreter.hlasm.opcodes.bfp_forms import (
     ieee_call,
     inexact_control,
 )
-from interpreter.hlasm.opcodes.bfp_ir import emit_ieee_ladder, field_at
-from interpreter.hlasm.opcodes.dfp_codec import ENCODERS
+from interpreter.hlasm.opcodes.bfp_ir import emit_ieee_ladder
 from interpreter.hlasm.opcodes.dfp_ir import (
     EXPONENT,
-    SIGN,
-    SIGNIFICAND,
     Fields,
     and_inexact_control,
     current_dfp_mode,
     decoded,
     dfp_modifier,
+    encoded_at,
     fields_of,
     no_cc,
     quantum_control,
@@ -194,16 +192,6 @@ def _lengthen(source: DfpLayout, target: DfpLayout) -> StatementLowering:
     return lower
 
 
-def _encoded_at(
-    emitter: HlasmEmitter, result: Register, slot: Register, layout: DfpLayout
-) -> Register:
-    fields = (
-        field_at(emitter, result, slot, at) for at in (SIGN, EXPONENT, SIGNIFICAND)
-    )
-    sign, exponent, significand = fields
-    return ENCODERS[layout].call(emitter, (sign, exponent, significand))
-
-
 def _round(source: DfpLayout, target: DfpLayout) -> StatementLowering:
     keeps = _keeps_specials(FOURTH)
     return ieee_call(
@@ -213,7 +201,7 @@ def _round(source: DfpLayout, target: DfpLayout) -> StatementLowering:
             decoded(fpr(THIRD, source), source),
             lambda emitter, statement: emitter.int_(int(keeps(statement))),
         ),
-        rounded_stored(source, target, _encoded_at),
+        rounded_stored(source, target, encoded_at),
         and_inexact_control(quantum_control(SECOND), inexact_control),
         quantum_yields,
     )

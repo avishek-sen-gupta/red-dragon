@@ -124,6 +124,19 @@ def store_fields(
     store_image(emitter, r, layout, ENCODERS[layout].call(emitter, fields))
 
 
+def fields_at(emitter: HlasmEmitter, result: Register, slot: Register) -> Fields:
+    sign, exponent, significand = (
+        field_at(emitter, result, slot, at) for at in (SIGN, EXPONENT, SIGNIFICAND)
+    )
+    return sign, exponent, significand
+
+
+def encoded_at(
+    emitter: HlasmEmitter, result: Register, slot: Register, layout: DfpLayout
+) -> Register:
+    return ENCODERS[layout].call(emitter, fields_at(emitter, result, slot))
+
+
 def stored(index: int, layout: DfpLayout, after: AfterStore) -> Deliver:
     def deliver(
         emitter: HlasmEmitter,
@@ -131,10 +144,7 @@ def stored(index: int, layout: DfpLayout, after: AfterStore) -> Deliver:
         result: Register,
         slot: Register,
     ) -> None:
-        sign, exponent, significand = (
-            field_at(emitter, result, slot, at) for at in (SIGN, EXPONENT, SIGNIFICAND)
-        )
-        fields = (sign, exponent, significand)
+        fields = fields_at(emitter, result, slot)
         store_fields(emitter, reg_operand(statement, index), layout, fields)
         after(emitter, fields)
 

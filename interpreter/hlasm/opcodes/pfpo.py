@@ -1,42 +1,32 @@
 # pyright: standard
 """PERFORM FLOATING-POINT OPERATION (ruling R52d, PoO 9-35 to 9-46): GR0's function word is decoded and checked in IR; the source in FPR 4 (6) is decoded by its family's IR, one builtin converts the radix, and the delivered value is encoded into FPR 0 (2) with the return code in GR1, alternate exception action included."""
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping, Sequence
 
 from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.hlasm.abend import emit_abend
-from interpreter.hlasm.bfp_layout import BfpLayout
 from interpreter.hlasm.conditional import emit_either, emit_when
 from interpreter.hlasm.data_movement import keep
-from interpreter.hlasm.dfp_layout import DfpLayout
-from interpreter.hlasm.hfp_layout import HfpLayout
 from interpreter.hlasm.hlasm_constants import (
-    BYTE_MASK,
     FPC_VAR,
     LOW_WORD_MASK,
-    PFPO_SOURCE_VAR,
     SPECIFICATION_EXCEPTION_ABEND,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
+from interpreter.hlasm.ir_function import IrFunction
 from interpreter.hlasm.ladder_end import LadderEnd, ScaledTrap
-from interpreter.hlasm.opcodes import hfp_ir
 from interpreter.hlasm.opcodes.bfp_ir import (
-    current_mode,
+    bfp_mode_of,
     emit_ieee_ladder,
-    field_at,
-    fields_list,
-    image_at,
+    mode_code_of,
     outcome_of,
 )
-from interpreter.hlasm.opcodes.dfp_codec import DECODERS, ENCODERS
 from interpreter.hlasm.opcodes.dfp_ir import (
-    EXPONENT,
-    SIGN,
-    SIGNIFICAND,
-    current_dfp_mode,
+    DFP_FPC_TO_MODIFIER,
     quantum_yields,
 )
 from interpreter.hlasm.opcodes.floating_point_support import (
+    DFP_MODE_SHIFT,
     DXC_FIELD,
     DXC_SHIFT,
     emit_data_exception,
@@ -48,10 +38,17 @@ from interpreter.hlasm.opcodes.fpr_images import (
     pick,
     store_image,
 )
+from interpreter.hlasm.opcodes.pfpo_codec import (
+    FPR_PAIR,
+    PFPO_DECODE,
+    PFPO_ENCODE,
+    SOURCE_SHIFT,
+    TARGET_SHIFT,
+    format_code,
+)
 from interpreter.hlasm.packed_decimal import table_bit
-from interpreter.hlasm.pfpo_formats import LAYOUTS, PFPO_BUILTIN, PfpoLayout
+from interpreter.hlasm.pfpo_formats import LAYOUTS, PFPO_BUILTIN
 from interpreter.hlasm.statement_lowering import StatementLowering
-from interpreter.hlasm.value_tree import emit_value_switch
 from interpreter.instructions import Branch, Label_, StoreVar
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import BinopKind
@@ -65,8 +62,6 @@ TEST_SHIFT = 31
 OPERATION_SHIFT = 24
 OPERATION_MASK = 0x7F
 CONVERT_RADIX = 0x01
-TARGET_SHIFT = 16
-SOURCE_SHIFT = 8
 CONTROLS_SHIFT = 4
 CONTROLS_MASK = 0b11
 ALTERNATE_BIT = 0x40
@@ -82,7 +77,6 @@ INVALID_FUNCTION_CC = 3
 NONTRAP_CC = 1
 ALTERNATE_CC = 2
 SCALING_SLOT = 10
-FORMAT_CODES = tuple(sorted(LAYOUTS))
 
 
 def _field(emitter: HlasmEmitter, word: Register, shift: int, mask: int) -> Register:
@@ -105,9 +99,10 @@ def _all(emitter: HlasmEmitter, *bits: Register) -> Register:
     )
 
 
-def _valid(emitter: HlasmEmitter, word: Register) -> Register:
-    target = _field(emitter, word, TARGET_SHIFT, BYTE_MASK)
-    source = _field(emitter, word, SOURCE_SHIFT, BYTE_MASK)
+def _valid(emitter: HlasmEmitter, parameters: Sequence[Register]) -> Register:
+    (word,) = parameters
+    target = format_code(emitter, word, TARGET_SHIFT)
+    source = format_code(emitter, word, SOURCE_SHIFT)
     operation = _field(emitter, word, OPERATION_SHIFT, OPERATION_MASK)
     controls = _field(emitter, word, CONTROLS_SHIFT, CONTROLS_MASK)
     target_radix = _radix(emitter, target)
@@ -142,92 +137,25 @@ def _tested(emitter: HlasmEmitter, valid: Register) -> None:
     _set_return_code(emitter, emitter.int_(0))
 
 
-def _ieee_fields(
-    emitter: HlasmEmitter, image: Register, layout: BfpLayout | DfpLayout
-) -> Register:
-    match layout:
-        case BfpLayout():
-            return fields_list(emitter, image, layout)
-        case DfpLayout():
-            return DECODERS[layout].call(emitter, (image,))
-
-
-def _source_fields(emitter: HlasmEmitter, layout: PfpoLayout) -> Register:
-    image = load_image(emitter, SOURCE_FPR, layout)
-    if isinstance(layout, HfpLayout):
-        return hfp_ir.fields_list(emitter, image, layout)
-    return _ieee_fields(emitter, image, layout)
-
-
-def _decoded_source(emitter: HlasmEmitter, word: Register) -> Register:
-    code = _field(emitter, word, SOURCE_SHIFT, BYTE_MASK)
-
-    def leaf(selected: int) -> None:
-        fields = _source_fields(emitter, LAYOUTS[selected])
-        emitter.emit_inst(StoreVar(name=PFPO_SOURCE_VAR, value_reg=fields))
-
-    emit_value_switch(emitter, code, FORMAT_CODES, leaf)
-    return emitter.load_var(PFPO_SOURCE_VAR)
-
-
-def _method(emitter: HlasmEmitter, word: Register) -> Register:
+def _method(emitter: HlasmEmitter, parameters: Sequence[Register]) -> Register:
+    word, fpc = parameters
     method = keep(METHOD_MASK)(emitter, word)
+    dfp_mode = mode_code_of(emitter, fpc, DFP_MODE_SHIFT, DFP_FPC_TO_MODIFIER)
     return pick(
         emitter,
         compared(emitter, BinopKind.EQ, method, DFP_METHOD),
-        current_dfp_mode(emitter),
+        dfp_mode,
         pick(
             emitter,
             compared(emitter, BinopKind.EQ, method, BFP_METHOD),
-            current_mode(emitter),
+            bfp_mode_of(emitter, fpc),
             method,
         ),
     )
 
 
-def _ieee_image(
-    emitter: HlasmEmitter,
-    result: Register,
-    slot: Register,
-    layout: BfpLayout | DfpLayout,
-) -> Register:
-    match layout:
-        case BfpLayout():
-            return image_at(emitter, result, slot, layout)
-        case DfpLayout():
-            return ENCODERS[layout].call(emitter, _fields_at(emitter, result, slot))
-
-
-def _target_image(
-    emitter: HlasmEmitter, result: Register, slot: Register, layout: PfpoLayout
-) -> Register:
-    if isinstance(layout, HfpLayout):
-        fields = _fields_at(emitter, result, slot)
-        return hfp_ir.image_of(emitter, fields, layout, hfp_ir.true_zero_low)
-    return _ieee_image(emitter, result, slot, layout)
-
-
-def _fields_at(
-    emitter: HlasmEmitter, result: Register, slot: Register
-) -> tuple[Register, Register, Register]:
-    first, second, third = (
-        field_at(emitter, result, slot, at) for at in (SIGN, EXPONENT, SIGNIFICAND)
-    )
-    return first, second, third
-
-
-def _deliver(
-    emitter: HlasmEmitter, word: Register, result: Register, slot: Register
-) -> None:
-    code = _field(emitter, word, TARGET_SHIFT, BYTE_MASK)
-
-    def leaf(selected: int) -> None:
-        layout = LAYOUTS[selected]
-        store_image(
-            emitter, TARGET_FPR, layout, _target_image(emitter, result, slot, layout)
-        )
-
-    emit_value_switch(emitter, code, FORMAT_CODES, leaf)
+PFPO_VALID = IrFunction("__hlasm_pfpo_valid", 1, _valid)
+PFPO_METHOD = IrFunction("__hlasm_pfpo_method", 2, _method)
 
 
 def _alternate_or_trap(word: Register, done: CodeLabel) -> ScaledTrap:
@@ -259,21 +187,30 @@ def _nontrap_cc(emitter: HlasmEmitter, raised: Register) -> None:
     emitter.set_cc(emitter.binop(BinopKind.MUL, nonzero, emitter.int_(NONTRAP_CC)))
 
 
-def _converted(emitter: HlasmEmitter, word: Register) -> None:
-    fields = _decoded_source(emitter, word)
-    result = emitter.call(PFPO_BUILTIN, (word, _method(emitter, word), fields))
-    done = emitter.fresh_label("hl_pfpo_done")
-
+def _delivered(
+    emitter: HlasmEmitter, word: Register, result: Register
+) -> Callable[[Register], None]:
     def deliver(slot: Register) -> None:
-        _deliver(emitter, word, result, slot)
+        old = load_image(emitter, TARGET_FPR, FPR_PAIR)
+        image = PFPO_ENCODE.call(emitter, (word, result, slot, old))
+        store_image(emitter, TARGET_FPR, FPR_PAIR, image)
         exponent = list_item(emitter, result, SCALING_SLOT)
         scaled = emitter.binop(BinopKind.NE, slot, emitter.int_(0))
         _set_return_code(emitter, emitter.binop(BinopKind.MUL, scaled, exponent))
 
+    return deliver
+
+
+def _converted(emitter: HlasmEmitter, word: Register) -> None:
+    source = load_image(emitter, SOURCE_FPR, FPR_PAIR)
+    fields = PFPO_DECODE.call(emitter, (word, source))
+    method = PFPO_METHOD.call(emitter, (word, emitter.load_var(FPC_VAR)))
+    result = emitter.call(PFPO_BUILTIN, (word, method, fields))
+    done = emitter.fresh_label("hl_pfpo_done")
     emit_ieee_ladder(
         emitter,
         outcome_of(emitter, result),
-        deliver,
+        _delivered(emitter, word, result),
         quantum_yields,
         LadderEnd(_alternate_or_trap(word, done), _nontrap_cc),
     )
@@ -282,7 +219,7 @@ def _converted(emitter: HlasmEmitter, word: Register) -> None:
 
 def _lower_pfpo(emitter: HlasmEmitter, statement: MachineStatement) -> None:
     word = emitter.load_gr32(FUNCTION_REGISTER)
-    valid = _valid(emitter, word)
+    valid = PFPO_VALID.call(emitter, (word,))
     testing = _field(emitter, word, TEST_SHIFT, 1)
 
     def performed() -> None:

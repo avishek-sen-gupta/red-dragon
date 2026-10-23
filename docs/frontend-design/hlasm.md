@@ -111,7 +111,7 @@ addresses.
 | `interpreter/hlasm/opcodes/hfp_ir.py` | HFP image IR: field lists, normalized fields of a binary value, encoding with the extended low-order part, an image's CC, and the program-mask ladder |
 | `interpreter/hlasm/opcodes/hfp_conversion.py` | HFP conversions: to fixed and to BFP through builtins; from fixed, from BFP, load lengthened and load rounded in IR (red-dragon-6uyp.54) |
 | `interpreter/hlasm/opcodes/dfp_codec.py`, `dpd_lanes.py`, `interpreter/hlasm/dfp_layout.py` | DFP images to `[negative, e, significand]` and back as IR functions, one per format (ruling R49); `e` is the biased exponent or -1/-2/-3 for infinity, QNaN, SNaN. All declets decode or encode at once, ten bits per lane |
-| `interpreter/hlasm/opcodes/pfpo.py`, `interpreter/hlasm/pfpo_builtins.py`, `pfpo_formats.py` | PFPO: GR0 decoded and checked, format dispatches around the `__hlasm_pfpo` builtin, the return code and alternate action (red-dragon-6uyp.56) |
+| `interpreter/hlasm/opcodes/pfpo.py`, `pfpo_codec.py`, `interpreter/hlasm/pfpo_builtins.py`, `pfpo_formats.py` | PFPO: GR0 decoded and checked, format dispatches around the `__hlasm_pfpo` builtin, the return code and alternate action (red-dragon-6uyp.56) |
 | `interpreter/hlasm/opcodes/dfp_decimal.py`, `decimal_lanes.py` | DFP to and from signed packed, unsigned packed and zoned decimal in IR, over decimal lanes (red-dragon-6uyp.56) |
 | `interpreter/hlasm/opcodes/dfp_conversion.py` | DFP conversions: to and from fixed and logical and LOAD ROUNDED through builtins; LOAD LENGTHENED in IR (red-dragon-6uyp.56) |
 | `interpreter/hlasm/ir_function.py`, `program_function.py` | An IR function called by name; the call records it on the emitter, and the frontend defines each recorded function once after the entry function, repeating until no body calls an undefined one |
@@ -1085,10 +1085,13 @@ Rulings R43, R45, R48, R52.
   format codes are in figure 9-25, their radixes differ, the method is 0, 1 or 8-15, and a BFP
   target has bits 58-59 zero. The test bit sets CC 0 or 3 and a zero return code; otherwise an
   invalid function is `S0C6`.
-- A dispatch on the source format decodes FPR 4 (or 4 and 6) with the family's IR (BFP and HFP
-  field lists, the DPD decoder). `pfpo_builtins()` has one builtin, `__hlasm_pfpo(word, method,
-  fields)`, over `zarch_float.convert_radix`; method 0 and 1 are the FPC DFP and BFP modes. A
-  dispatch on the target format encodes the delivered value into FPR 0 (or 0 and 2).
+- Four IR functions, defined once per program (ruling R51), keep the statement small (213
+  instructions): `__hlasm_pfpo_valid` checks the word, `__hlasm_pfpo_method` resolves the method
+  against the FPC, and `pfpo_codec.py`'s `__hlasm_pfpo_decode` and `__hlasm_pfpo_encode` hold the
+  format dispatches: the FPR 4/6 image to the family's field list (BFP and HFP field IR, the DPD
+  decoder) and the delivered value merged into the FPR 0/2 image. `pfpo_builtins()` has one
+  builtin, `__hlasm_pfpo(word, method, fields)`, over `zarch_float.convert_radix`; method 0 and
+  1 are the FPC DFP and BFP modes.
 - GR1 bits 32-63 take 0, or the scaling exponent when a trapped overflow or underflow delivers
   the scaled value (1 <= |z| < radix). With bit 57 (alternate action) that trap sets the DXC
   and CC 2 and does not interrupt. PFPO runs the shared BFP ladder, giving it a `LadderEnd`
