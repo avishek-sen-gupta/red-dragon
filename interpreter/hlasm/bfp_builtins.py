@@ -62,6 +62,7 @@ type _Unary = Callable[[BfpValue, RoundingMode], BfpResult]
 type _Bits = Mapping[Condition, int]
 
 INVALID_CC = 3
+UNREACHABLE_SCALED = (0, 0, 0)
 
 _TRAPS: _Bits = {
     Condition.INVALID: INVALID_BIT,
@@ -155,10 +156,11 @@ def _integer_cc(a: BfpValue, result: IntegerResult) -> int:
 
 
 def _integer_outcome(a: BfpValue, result: IntegerResult, image: int) -> list[int]:
-    fields = [image, 0, 0]
     return [
-        *fields,
-        *fields,
+        image,
+        0,
+        0,
+        *UNREACHABLE_SCALED,
         _bits(result.conditions, _TRAPS),
         _bits(result.conditions, _FLAGS),
         0,
