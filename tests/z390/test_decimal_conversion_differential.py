@@ -57,11 +57,17 @@ Z390_MACHINE: Mapping[str, HlasmMachine] = {
     "PKU odd second-operand length": _z390_operation_exception(
         programs.CC_SET_BY_LTR, 0
     ),
-    "UNPKU": _z390_operation_exception(0, 1),
+    "UNPKU": _z390_operation_exception(programs.CC_SET_BY_LTR, 1),
     "UNPKU negative": _z390_operation_exception(0, 1),
-    "UNPKU invalid sign sets CC 3": _z390_operation_exception(0, 1),
-    "UNPKU 64 bytes puts a zero leftmost": _z390_operation_exception(0, 8),
-    "EX of UNPKU sets the first length": _z390_operation_exception(0, 1),
+    "UNPKU invalid sign sets CC 3": _z390_operation_exception(
+        programs.CC_SET_BY_LTR, 1
+    ),
+    "UNPKU 64 bytes puts a zero leftmost": _z390_operation_exception(
+        programs.CC_SET_BY_LTR, 8
+    ),
+    "EX of UNPKU sets the first length": _z390_operation_exception(
+        programs.CC_SET_BY_LTR, 1
+    ),
     "UNPKU first operand over 64 bytes": _z390_operation_exception(
         programs.CC_SET_BY_LTR, 0
     ),

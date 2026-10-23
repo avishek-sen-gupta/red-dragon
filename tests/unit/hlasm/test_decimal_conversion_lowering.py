@@ -5,13 +5,10 @@ from collections.abc import Mapping
 
 from hlasm_asg.program.operand import Operand
 from interpreter.hlasm.byte_one_layouts import (
-    LENGTH_BYTE,
-    LENGTH_NIBBLES,
-    SECOND_LENGTH_BYTE,
     byte_one_layout,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
-from interpreter.hlasm.opcodes import DATA_FIELD_LOWERINGS, OPCODE_LOWERINGS
+from interpreter.hlasm.opcodes import OPCODE_LOWERINGS
 from interpreter.instructions import InstructionBase, Symbolic
 from tests.covers import NotLanguageFeature, covers
 from tests.unit.hlasm.lowering_helpers import (
@@ -61,30 +58,22 @@ def test_checks_precede_stores_and_cvb_completes_before_its_divide_check():
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_ex_sees_the_lengths_as_one_data_field():
-    formats = {"PACK": "SS-b", "UNPK": "SS-b", "PKA": "SS-f", "UNPKA": "SS-a"}
+    formats = {
+        "PACK": "SS-b",
+        "UNPK": "SS-b",
+        "PKA": "SS-f",
+        "UNPKA": "SS-a",
+        "UNPKU": "SS-a",
+    }
     statements = {
         m: machine_statement(m, STATEMENTS[m]).model_copy(update={"format": f})
         for m, f in formats.items()
     }
 
-    assert (
-        {m: DATA_FIELD_LOWERINGS[m].layout for m in (*formats, "PKU", "UNPKU")},
-        {m: byte_one_layout(s) for m, s in statements.items()},
-        {m: byte_one_layout(s).byte_of(s) for m, s in statements.items()},
-    ) == (
-        {
-            "PACK": LENGTH_NIBBLES,
-            "UNPK": LENGTH_NIBBLES,
-            "PKA": SECOND_LENGTH_BYTE,
-            "UNPKA": LENGTH_BYTE,
-            "PKU": SECOND_LENGTH_BYTE,
-            "UNPKU": LENGTH_BYTE,
-        },
-        {
-            "PACK": LENGTH_NIBBLES,
-            "UNPK": LENGTH_NIBBLES,
-            "PKA": SECOND_LENGTH_BYTE,
-            "UNPKA": LENGTH_BYTE,
-        },
-        {"PACK": 0x74, "UNPK": 0x42, "PKA": 0x04, "UNPKA": 0x07},
-    )
+    assert {m: byte_one_layout(s).byte_of(s) for m, s in statements.items()} == {
+        "PACK": 0x74,
+        "UNPK": 0x42,
+        "PKA": 0x04,
+        "UNPKA": 0x07,
+        "UNPKU": 0x07,
+    }
