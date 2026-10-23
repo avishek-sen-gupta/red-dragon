@@ -14,7 +14,11 @@ from tests.integration.hlasm.bfp_arithmetic_programs import (
     lines,
     zeroed_short,
 )
-from tests.integration.hlasm.hfp_arithmetic_programs import DATA, Case
+from tests.integration.hlasm.hfp_arithmetic_programs import (
+    DATA,
+    EXPONENT_OVERFLOW,
+    Case,
+)
 from tests.integration.hlasm.hlasm_machine import HlasmMachine
 from tests.integration.hlasm.hlasm_run import HlasmRun
 from tests.integration.hlasm.load_store_programs import ABEND, HIGH_FILL, based_program
@@ -30,6 +34,12 @@ CONVERSION_DATA = (
     "BDOVER   DC    X'4FB0000000000000'\n"
     "BDHMIN   DC    X'2FB0000000000000'\n"
     "BDUNDER  DC    X'AFA0000000000000'\n"
+    "DRND     DC    X'4110000080000000'\n"
+    "DCARRY   DC    X'C1FFFFFF80000000'\n"
+    "DMAXR    DC    X'7FFFFFFF80000000'\n"
+    "XRND     DC    X'41100000000000003380000000000000'\n"
+    "XCARRY   DC    X'41FFFFFFFFFFFFFF3380000000000000'\n"
+    "XRNDE    DC    X'41100000800000003300000000000000'\n"
 )
 
 
@@ -205,7 +215,78 @@ FROM_BFP: Mapping[str, Case] = {
     ),
 }
 
-CASES: Mapping[str, Case] = {**TO_FIXED, **TO_BFP, **FROM_FIXED, **FROM_BFP}
+LENGTHENED: Mapping[str, Case] = {
+    "LDER LDE": case_of(
+        lines("LE 2,EM2", "LD 1,DPAT", "LDER 1,2", "LGDR 3,1")
+        + lines("LD 1,DPAT", "LDE 1,EZ41", "LGDR 4,1"),
+        {3: 0xC1200000_00000000, 4: 0x41000000_00000000},
+        PRESET_CC,
+    ),
+    "LXDR LXD": case_of(
+        lines("LD 1,DMZERO", "LXDR 4,1", "LGDR 2,4", "LGDR 3,6")
+        + lines("LXD 8,DPAT", "LGDR 5,8", "LGDR 6,10")
+        + lines("LXD 8,DZ42", "LGDR 7,8", "LGDR 8,10"),
+        {
+            2: 0x80000000_00000000,
+            3: 0x80000000_00000000,
+            5: 0x41100000_12345678,
+            6: 0x33000000_00000000,
+            7: 0,
+            8: 0,
+        },
+        PRESET_CC,
+    ),
+    "LXER LXE": case_of(
+        lines("LE 1,EM1", "LXER 4,1", "LGDR 2,4", "LGDR 3,6")
+        + lines("LXE 8,EZ41", "LGDR 5,8", "LGDR 6,10"),
+        {2: 0xC1100000_00000000, 3: 0xB3000000_00000000, 5: 0, 6: 0},
+        PRESET_CC,
+    ),
+}
+
+ROUNDED: Mapping[str, Case] = {
+    "LEDR LRER": case_of(
+        lines("LD 1,DRND", "LD 2,DPAT", "LEDR 2,1", "LGDR 3,2")
+        + lines("LD 1,DCARRY", "LD 2,DPAT", "LRER 2,1", "LGDR 4,2"),
+        {3: 0x41100001_12345678, 4: 0xC2100000_12345678},
+        PRESET_CC,
+    ),
+    "LDXR LRDR": case_of(
+        extended_from(4, "XRND")
+        + lines("LDXR 1,4", "LGDR 2,1")
+        + extended_from(8, "XCARRY")
+        + lines("LRDR 3,8", "LGDR 3,3"),
+        {2: 0x41100000_00000001, 3: 0x42100000_00000000},
+        PRESET_CC,
+    ),
+    "LEXR": case_of(
+        extended_from(4, "XRNDE") + lines("LD 1,DPAT", "LEXR 1,4", "LGDR 2,1"),
+        {2: 0x41100001_12345678},
+        PRESET_CC,
+    ),
+}
+
+CASES: Mapping[str, Case] = {
+    **TO_FIXED,
+    **TO_BFP,
+    **FROM_FIXED,
+    **FROM_BFP,
+    **LENGTHENED,
+    **ROUNDED,
+}
+
+TRAPS: Mapping[str, Case] = {
+    "LEDR exponent overflow stores the wrapped characteristic": (
+        PRESET + zeroed_short(2) + lines("LD 1,DMAXR", "LEDR 2,1"),
+        {2: high_word(0x00100000)},
+        PRESET_CC,
+    ),
+}
+
+
+def expected_trap(case: str) -> tuple[HlasmRun, int, Mapping[int, int]]:
+    fprs, cc = TRAPS[case][1:]
+    return HlasmRun(return_code=0, abend=EXPONENT_OVERFLOW, stdout=""), cc, fprs
 
 
 def expected(case: str) -> HlasmMachine:

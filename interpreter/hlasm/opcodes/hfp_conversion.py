@@ -1,12 +1,14 @@
 # pyright: standard
-"""HFP conversions: rounding to fixed point and to BFP through a zarch_float builtin; the exact and truncating forms in IR (ruling R47)."""
+"""HFP conversions: rounding to fixed point and to BFP through a zarch_float builtin; the exact, truncating, lengthening and LOAD ROUNDED forms in IR (ruling R47)."""
 
 from collections.abc import Callable, Mapping
 
 from hlasm_asg.program.machine_statement import MachineStatement
+from interpreter.hlasm.abend import emit_abend
 from interpreter.hlasm.bfp_layout import LONG_LAYOUT as LONG_BFP
 from interpreter.hlasm.bfp_layout import SHORT_LAYOUT as SHORT_BFP
 from interpreter.hlasm.bfp_layout import BfpLayout
+from interpreter.hlasm.conditional import emit_when
 from interpreter.hlasm.data_movement import (
     Source,
     from_gr32,
@@ -14,8 +16,15 @@ from interpreter.hlasm.data_movement import (
     keep,
     sign_extended,
 )
-from interpreter.hlasm.hfp_layout import EXTENDED_HFP, LONG_HFP, SHORT_HFP, HfpLayout
+from interpreter.hlasm.hfp_layout import (
+    CHARACTERISTIC_MASK,
+    EXTENDED_HFP,
+    LONG_HFP,
+    SHORT_HFP,
+    HfpLayout,
+)
 from interpreter.hlasm.hfp_operation import HfpOperation
+from interpreter.hlasm.hlasm_constants import HFP_EXPONENT_OVERFLOW_ABEND
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.opcodes.bfp_forms import checked
 from interpreter.hlasm.opcodes.bfp_ir import image_at, nan_of, significand_of
@@ -28,10 +37,16 @@ from interpreter.hlasm.opcodes.fpr_images import (
     list_item,
     pick,
     signed_magnitude,
+    storage,
     store_image,
 )
 from interpreter.hlasm.opcodes.hfp_arithmetic import Deliver, field_sources, hfp_call
-from interpreter.hlasm.opcodes.hfp_ir import image_of, normalized_fields, true_zero_low
+from interpreter.hlasm.opcodes.hfp_ir import (
+    fields_of,
+    image_of,
+    normalized_fields,
+    true_zero_low,
+)
 from interpreter.hlasm.operands import mask_operand, reg_operand
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.operator_kind import BinopKind
@@ -239,9 +254,100 @@ FROM_BFP: Mapping[str, StatementLowering] = {
     "THDR": _from_bfp(LONG_BFP),
 }
 
+
+def _widened(widening: int) -> Callable[[HlasmEmitter, Register], Register]:
+    return lambda emitter, fraction: emitter.binop(
+        BinopKind.LSHIFT, fraction, emitter.int_(4 * widening)
+    )
+
+
+def _lengthen(
+    source: HfpLayout, target: HfpLayout, operand: Source
+) -> StatementLowering:
+    widen = _widened(target.format.digits - source.format.digits)
+
+    def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
+        sign, characteristic, fraction = fields_of(
+            emitter, operand(emitter, statement), source
+        )
+        nonzero = emitter.binop(BinopKind.NE, fraction, emitter.int_(0))
+        kept = (
+            emitter.binop(BinopKind.MUL, nonzero, characteristic)
+            if target is EXTENDED_HFP
+            else characteristic
+        )
+        fields = (sign, kept, widen(emitter, fraction))
+        image = image_of(emitter, fields, target, true_zero_low)
+        store_image(emitter, reg_operand(statement, FIRST), target, image)
+
+    return pairs((FIRST,), lower) if target is EXTENDED_HFP else lower
+
+
+_LENGTHENINGS: Mapping[str, tuple[HfpLayout, HfpLayout]] = {
+    "LDE": (SHORT_HFP, LONG_HFP),
+    "LXD": (LONG_HFP, EXTENDED_HFP),
+    "LXE": (SHORT_HFP, EXTENDED_HFP),
+}
+
+LENGTHENED: Mapping[str, StatementLowering] = {
+    **{
+        f"{name}R": _lengthen(source, target, fpr(SECOND, source))
+        for name, (source, target) in _LENGTHENINGS.items()
+    },
+    **{
+        name: _lengthen(source, target, storage(SECOND, source))
+        for name, (source, target) in _LENGTHENINGS.items()
+    },
+}
+
+
+def _rounded_fraction(
+    emitter: HlasmEmitter, fraction: Register, dropped: int, target: HfpLayout
+) -> tuple[Register, Register]:
+    half = emitter.binop(BinopKind.ADD, fraction, emitter.int_(1 << (dropped - 1)))
+    rounded = emitter.binop(BinopKind.RSHIFT, half, emitter.int_(dropped))
+    carry = emitter.binop(BinopKind.RSHIFT, rounded, emitter.int_(target.fraction_bits))
+    digit = emitter.binop(BinopKind.MUL, carry, emitter.int_(4))
+    return emitter.binop(BinopKind.RSHIFT, rounded, digit), carry
+
+
+def _round(source: HfpLayout, target: HfpLayout) -> StatementLowering:
+    dropped = source.fraction_bits - target.fraction_bits
+
+    def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
+        sign, characteristic, fraction = fields_of(
+            emitter, fpr(SECOND, source)(emitter, statement), source
+        )
+        rounded, carry = _rounded_fraction(emitter, fraction, dropped, target)
+        raised = emitter.binop(BinopKind.ADD, characteristic, carry)
+        fields = (sign, keep(CHARACTERISTIC_MASK)(emitter, raised), rounded)
+        image = image_of(emitter, fields, target, true_zero_low)
+        store_image(emitter, reg_operand(statement, FIRST), target, image)
+        overflow = emitter.binop(BinopKind.GT, raised, emitter.int_(MAX_CHARACTERISTIC))
+        emit_when(
+            emitter,
+            overflow,
+            lambda: emit_abend(emitter, HFP_EXPONENT_OVERFLOW_ABEND),
+        )
+
+    return pairs((SECOND,), lower) if source is EXTENDED_HFP else lower
+
+
+ROUNDED: Mapping[str, StatementLowering] = {
+    name: _round(source, target)
+    for names, source, target in (
+        ("LEDR LRER", LONG_HFP, SHORT_HFP),
+        ("LDXR LRDR", EXTENDED_HFP, LONG_HFP),
+        ("LEXR", EXTENDED_HFP, SHORT_HFP),
+    )
+    for name in names.split()
+}
+
 HFP_CONVERSION_LOWERINGS: Mapping[str, StatementLowering] = {
     **TO_FIXED,
     **TO_BFP,
     **FROM_FIXED,
     **FROM_BFP,
+    **LENGTHENED,
+    **ROUNDED,
 }

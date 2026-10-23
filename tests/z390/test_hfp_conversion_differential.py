@@ -1,5 +1,5 @@
 # pyright: standard
-"""HFP conversion programs leave the same declared registers, CC and abend in RedDragon and in z390, bar z390's faults below; those expectations come from the Principles of Operation (18-11, 18-15, 18-17 and figures 9-18 and 9-20). Converting to fixed, z390 sets the CC from the result rather than the source (0.33 rounded to 0 gives CC 0) and wraps an out-of-range source instead of delivering the maximum with CC 3. Converting HFP to BFP, it writes X'F4F4F4F4' into bits 32-63 of short results, flushes a tiny value to +0 with CC 0 instead of denormalizing it with CC 1, gives CC 2 instead of 3 on overflow, and garbles TBDR (1/3 becomes 1.0, -0 becomes +0). Converting from fixed, it rounds where HFP truncates (CEFR, CDGR) and writes X'F4F4F4F4' into bits 32-63 of short results. Converting BFP to HFP, it goes through host floating point, so THDER of a subnormal and THDR of 2^251 lose low bits, THDR overflow gives X'7FFFFFFFFFFFFFFE' with CC 2 instead of all ones with CC 3, an underflow or -0 becomes +0, and THDER of an infinity abends S0C5."""
+"""HFP conversion programs leave the same declared registers, CC and abend in RedDragon and in z390, bar z390's faults below; those expectations come from the Principles of Operation (18-11, 18-15, 18-17 and figures 9-18 and 9-20). Converting to fixed, z390 sets the CC from the result rather than the source (0.33 rounded to 0 gives CC 0) and wraps an out-of-range source instead of delivering the maximum with CC 3. Converting HFP to BFP, it writes X'F4F4F4F4' into bits 32-63 of short results, flushes a tiny value to +0 with CC 0 instead of denormalizing it with CC 1, gives CC 2 instead of 3 on overflow, and garbles TBDR (1/3 becomes 1.0, -0 becomes +0). Converting from fixed, it rounds where HFP truncates (CEFR, CDGR) and writes X'F4F4F4F4' into bits 32-63 of short results. Converting BFP to HFP, it goes through host floating point, so THDER of a subnormal and THDR of 2^251 lose low bits, THDR overflow gives X'7FFFFFFFFFFFFFFE' with CC 2 instead of all ones with CC 3, an underflow or -0 becomes +0, and THDER of an infinity abends S0C5. Lengthening, it drops the sign of LXDR -0, sets the low-order characteristic of LXD to 0, and keeps the characteristic of an extended zero fraction instead of making a true zero. LOAD ROUNDED truncates in LEDR, LRER and LDXR instead of adding one at the first dropped bit, and takes no exponent-overflow interruption."""
 
 from collections.abc import Mapping
 from pathlib import Path
@@ -82,8 +82,29 @@ Z390_PINNED: Mapping[str, HlasmMachine] = {
             11: 0,
         },
     ),
+    "LXDR LXD": _z390(
+        2,
+        {
+            2: 0,
+            3: 0,
+            5: 0x41100000_12345678,
+            6: 0,
+            7: 0x42000000_00000000,
+            8: 0,
+        },
+    ),
+    "LXER LXE": _z390(
+        2,
+        {2: 0xC1100000_00000000, 3: 0xB3000000_00000000, 5: 0x41000000_00000000, 6: 0},
+    ),
+    "LEDR LRER": _z390(2, {3: 0x41100000_12345678, 4: 0xC1FFFFFF_12345678}),
+    "LDXR LRDR": _z390(2, {2: 0x41100000_00000000, 3: 0x42100000_00000000}),
 }
 AGREED = [case for case in programs.CASES if case not in Z390_PINNED]
+
+Z390_TRAPS: Mapping[str, tuple[str, int]] = {
+    "LEDR exponent overflow stores the wrapped characteristic": (COMPLETED, 2),
+}
 
 
 def _both(
@@ -115,3 +136,20 @@ def test_case_follows_the_principles_of_operation_where_z390_differs(
         programs.expected(case),
         Z390_PINNED[case],
     )
+
+
+def _trap_ends(z390: Z390Runner, tmp_path: Path, case: str) -> list[tuple[str, int]]:
+    source = programs.program(programs.TRAPS[case][0])
+    machines = (run_hlasm_machine(source), z390.run_machine(source, tmp_path))
+    return [(machine.run.abend, machine.cc) for machine in machines]
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+@pytest.mark.parametrize("case", list(programs.TRAPS))
+def test_exception_ends_the_run_as_in_z390_or_as_pinned(
+    z390: Z390Runner, tmp_path: Path, case: str
+):
+    run, cc = programs.expected_trap(case)[:2]
+    ours = (run.abend, cc)
+
+    assert _trap_ends(z390, tmp_path, case) == [ours, Z390_TRAPS.get(case, ours)]
