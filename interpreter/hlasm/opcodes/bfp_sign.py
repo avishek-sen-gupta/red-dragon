@@ -17,11 +17,13 @@ from interpreter.hlasm.ieee_outcome import IeeeOutcome
 from interpreter.hlasm.opcodes.bfp_ir import (
     emit_ieee_ladder,
     image_cc,
-    load_image,
     signaling_nan_of,
-    store_image,
 )
 from interpreter.hlasm.opcodes.floating_point_support import pairs
+from interpreter.hlasm.opcodes.fpr_images import (
+    load_image,
+    store_image,
+)
 from interpreter.hlasm.operands import reg_operand
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.operator_kind import BinopKind

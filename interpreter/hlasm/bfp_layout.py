@@ -3,11 +3,12 @@
 
 from dataclasses import dataclass
 
+from interpreter.hlasm.fpr_layout import FprLayout
 from zarch_float.bfp_format import EXTENDED, LONG, SHORT, BfpFormat
 
 
 @dataclass(frozen=True)
-class BfpLayout:
+class BfpLayout(FprLayout):
     format: BfpFormat
     width: int
     suffix: str

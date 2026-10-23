@@ -22,35 +22,37 @@ from interpreter.hlasm.data_movement import (
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.ieee_outcome import IeeeOutcome
 from interpreter.hlasm.opcodes.bfp_forms import (
-    FIRST,
-    SECOND,
-    THIRD,
     Deliver,
     SuppressedBits,
     checked,
     current,
     fields,
-    fpr,
     ieee,
     inexact_control,
     invalid_modifier,
     modifier,
     no_cc,
     signals_all,
-    storage,
     stored,
 )
 from interpreter.hlasm.opcodes.bfp_ir import (
     emit_ieee_ladder,
     exact_image,
     image_at,
+    signaling_nan_of,
+)
+from interpreter.hlasm.opcodes.floating_point_support import pairs
+from interpreter.hlasm.opcodes.fpr_images import (
+    FIRST,
+    SECOND,
+    THIRD,
+    fpr,
     list_item,
     load_image,
     pick,
-    signaling_nan_of,
+    storage,
     store_image,
 )
-from interpreter.hlasm.opcodes.floating_point_support import pairs
 from interpreter.hlasm.operands import reg_operand
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.operator_kind import BinopKind

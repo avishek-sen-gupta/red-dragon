@@ -103,8 +103,9 @@ addresses.
 | `interpreter/hlasm/opcodes/bfp_class.py` | BFP COMPARE, COMPARE AND SIGNAL and TEST DATA CLASS, in IR (ruling R44) |
 | `interpreter/hlasm/opcodes/bfp_sign.py` | BFP LOAD AND TEST and the sign forms, in IR |
 | `interpreter/hlasm/opcodes/bfp_conversion.py` | BFP conversions: to fixed and logical, rounding from fixed and LOAD ROUNDED through builtins; exact from fixed and lengthening in IR (red-dragon-6uyp.52) |
-| `interpreter/hlasm/opcodes/bfp_forms.py` | Statement-level BFP parts shared by the BFP units: operand sources, the M3 modifier and its check, stores after delivery, one builtin call through the ladder |
-| `interpreter/hlasm/opcodes/bfp_ir.py`, `interpreter/hlasm/ieee_outcome.py` | BFP image IR: field lists, encoding, FPR access by format, an image's CC, and the IEEE trap ladder over an `IeeeOutcome` |
+| `interpreter/hlasm/opcodes/bfp_forms.py` | Statement-level BFP parts shared by the BFP units: the M3 modifier and its check, stores after delivery, one builtin call through the ladder |
+| `interpreter/hlasm/opcodes/bfp_ir.py`, `interpreter/hlasm/ieee_outcome.py` | BFP image IR: field lists, encoding, an image's CC, and the IEEE trap ladder over an `IeeeOutcome` |
+| `interpreter/hlasm/opcodes/fpr_images.py`, `interpreter/hlasm/fpr_layout.py` | Floating-point images of any radix: FPR access by width (short high word, long, pair), FPR and storage operand sources, result-list items, an arithmetic select |
 | `interpreter/hlasm/program_status.py` | SPM, IPM, EPSW |
 | `interpreter/hlasm/checksum.py` | CKSM |
 | `interpreter/hlasm/clock_instructions.py` | STCK, STCKF, STCKE, ECTG |

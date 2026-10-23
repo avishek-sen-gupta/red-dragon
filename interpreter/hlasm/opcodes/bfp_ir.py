@@ -1,18 +1,13 @@
 # pyright: standard
-"""IR for BFP images: field lists for the builtins, images from result fields or from an exact magnitude, FPR access by layout, an image's condition code, and the IEEE trap ladder (ruling R43)."""
+"""IR for BFP images: field lists for the builtins, images from result fields or from an exact magnitude, an image's condition code, and the IEEE trap ladder (ruling R43)."""
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from dataclasses import replace
-from functools import reduce
 
 from interpreter.hlasm.bfp_layout import (
-    EXTENDED_LAYOUT,
-    LONG_LAYOUT,
-    SHORT_LAYOUT,
     BfpLayout,
 )
 from interpreter.hlasm.bfp_slots import (
-    FIELD_COUNT,
     FLAGS_SLOT,
     INEXACT_DXC_SLOT,
     SCALED_DXC_SLOT,
@@ -29,9 +24,6 @@ from interpreter.hlasm.hlasm_constants import (
     DOUBLEWORD_BITS,
     FPC_VAR,
     LIST_GET,
-    LIST_SET,
-    MAKE_LIST,
-    REGISTER_MASK,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.ieee_outcome import IeeeOutcome
@@ -40,9 +32,9 @@ from interpreter.hlasm.opcodes.floating_point_support import (
     IEEE_BITS,
     MASK_SHIFT,
     MODE_FIELD,
-    PAIR_PARTNER,
     emit_data_exception,
 )
+from interpreter.hlasm.opcodes.fpr_images import list_item, list_of, pick
 from interpreter.instructions import StoreVar
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
@@ -54,41 +46,6 @@ NAN_CC = 3
 POSITIVE_CC = 2
 
 
-def _load_pair(emitter: HlasmEmitter, r: int) -> Register:
-    high = emitter.binop(
-        BinopKind.LSHIFT, emitter.load_fpr(r), emitter.int_(DOUBLEWORD_BITS)
-    )
-    return emitter.binop(BinopKind.BIT_OR, high, emitter.load_fpr(r + PAIR_PARTNER))
-
-
-def _store_pair(emitter: HlasmEmitter, r: int, image: Register) -> None:
-    high = emitter.binop(BinopKind.RSHIFT, image, emitter.int_(DOUBLEWORD_BITS))
-    emitter.store_fpr(r, high)
-    emitter.store_fpr(r + PAIR_PARTNER, keep(REGISTER_MASK)(emitter, image))
-
-
-_LOADS: Mapping[BfpLayout, Callable[[HlasmEmitter, int], Register]] = {
-    SHORT_LAYOUT: lambda emitter, r: emitter.load_fpr_high32(r),
-    LONG_LAYOUT: lambda emitter, r: emitter.load_fpr(r),
-    EXTENDED_LAYOUT: _load_pair,
-}
-_STORES: Mapping[BfpLayout, Callable[[HlasmEmitter, int, Register], None]] = {
-    SHORT_LAYOUT: lambda emitter, r, image: emitter.store_fpr_high32(r, image),
-    LONG_LAYOUT: lambda emitter, r, image: emitter.store_fpr(r, image),
-    EXTENDED_LAYOUT: _store_pair,
-}
-
-
-def load_image(emitter: HlasmEmitter, r: int, layout: BfpLayout) -> Register:
-    return _LOADS[layout](emitter, r)
-
-
-def store_image(
-    emitter: HlasmEmitter, r: int, layout: BfpLayout, image: Register
-) -> None:
-    _STORES[layout](emitter, r, image)
-
-
 def fields_list(emitter: HlasmEmitter, image: Register, layout: BfpLayout) -> Register:
     sign = emitter.binop(BinopKind.RSHIFT, image, emitter.int_(layout.sign_shift))
     biased = keep(layout.exponent_mask)(
@@ -96,18 +53,7 @@ def fields_list(emitter: HlasmEmitter, image: Register, layout: BfpLayout) -> Re
         emitter.binop(BinopKind.RSHIFT, image, emitter.int_(layout.fraction_bits)),
     )
     fraction = keep((1 << layout.fraction_bits) - 1)(emitter, image)
-    empty = emitter.call(MAKE_LIST, (emitter.int_(FIELD_COUNT), emitter.int_(0)))
-    return reduce(
-        lambda items, field: emitter.call(
-            LIST_SET, (items, emitter.int_(field[0]), field[1])
-        ),
-        enumerate((sign, biased, fraction)),
-        empty,
-    )
-
-
-def list_item(emitter: HlasmEmitter, items: Register, slot: int) -> Register:
-    return emitter.call(LIST_GET, (items, emitter.int_(slot)))
+    return list_of(emitter, (sign, biased, fraction))
 
 
 def _field_at(
@@ -156,14 +102,6 @@ def exact_image(
     return emitter.binop(
         BinopKind.BIT_OR, sign, emitter.binop(BinopKind.MUL, nonzero, finite)
     )
-
-
-def pick(
-    emitter: HlasmEmitter, chosen: Register, then: Register, otherwise: Register
-) -> Register:
-    difference = emitter.binop(BinopKind.SUB, then, otherwise)
-    taken = emitter.binop(BinopKind.MUL, chosen, difference)
-    return emitter.binop(BinopKind.ADD, otherwise, taken)
 
 
 def image_cc(emitter: HlasmEmitter, image: Register, layout: BfpLayout) -> Register:
