@@ -59,6 +59,11 @@ DATA = (
     "D2P5     DC    X'2234000000000025'\n"
     "DM2P5    DC    X'A2340000',X'00000025'\n"
     "DQ16     DC    X'21F8000000000001'\n"
+    "DSUB     DC    X'0000000000000001'\n"
+    "DNMIN    DC    X'003C000000000001'\n"
+    "DBELOW   DC    X'0038000000000001'\n"
+    "DZEXT    DC    X'0000000000000000'\n"
+    "S1       DC    X'22500001'\n"
     "X1       DC    X'22080000000000000000000000000001'\n"
     "X2       DC    X'22080000000000000000000000000002'\n"
     "X3       DC    X'22080000000000000000000000000003'\n"
@@ -305,7 +310,99 @@ ROUNDING: Mapping[str, Case] = {
     ),
 }
 
-CASES: Mapping[str, Case] = {**ARITHMETIC, **COMPARE_EXPONENT, **ROUNDING}
+
+def _tests(mnemonic: str, tests: tuple[tuple[str, str, int], ...]) -> str:
+    return "".join(
+        lines(f"{load} 1,{label}", f"{mnemonic} 1,X'{mask:03X}'") + cc_into(2 + at)
+        for at, (load, label, mask) in enumerate(tests)
+    )
+
+
+DIGITS: Mapping[str, Case] = {
+    "SLDT SLXT": case_of(
+        lines("LD 1,D1P23", "SLDT 3,1,66", "LGDR 2,3", "SLDT 3,1,15", "LGDR 3,3")
+        + lines("LD 1,DQNAN", "SLDT 3,1,1", "LGDR 4,3")
+        + lines("LD 1,DINFX", "SLDT 3,1,2", "LGDR 5,3")
+        + extended_from(8, "X3")
+        + lines("SLXT 12,8,33", "LGDR 6,12", "LGDR 7,14"),
+        {
+            2: 0x22300000_00004980,
+            3: 0x2E300000_00000000,
+            4: 0x7C000000_00000050,
+            5: 0x78000000_00000280,
+            6: 0x2E080000_00000000,
+            7: 0,
+        },
+        PRESET_CC,
+    ),
+    "SRDT SRXT": case_of(
+        lines("LD 1,D1P23", "SRDT 3,1,1", "LGDR 2,3", "SRDT 3,1,66", "LGDR 3,3")
+        + lines("LD 1,DQNAN", "SRDT 3,1,1", "LGDR 4,3")
+        + extended_from(8, "X3")
+        + lines("SRXT 12,8,1", "LGDR 5,12", "LGDR 6,14"),
+        {
+            2: 0x22300000_00000012,
+            3: 0x22300000_00000001,
+            4: 0x7C000000_00000000,
+            5: EXTENDED_ZERO,
+            6: 0,
+        },
+        PRESET_CC,
+    ),
+    "TDCDT TDCET TDCXT": case_of(
+        _tests(
+            "TDCDT",
+            (
+                ("LD", "D1", 0x080),
+                ("LD", "DM1", 0x080),
+                ("LD", "DSUB", 0x200),
+                ("LD", "DSNAN", 0x002),
+                ("LD", "DQNAN", 0xFF7),
+                ("LD", "DINF", 0x020),
+                ("LD", "DNMIN", 0x080),
+                ("LD", "DBELOW", 0x200),
+            ),
+        )
+        + lines("LE 1,S1", "TDCET 1,X'080'")
+        + cc_into(10)
+        + extended_from(4, "XM1")
+        + lines("TDCXT 4,X'040'"),
+        {
+            2: cc_word(1),
+            3: cc_word(0),
+            4: cc_word(1),
+            5: cc_word(1),
+            6: cc_word(0),
+            7: cc_word(1),
+            8: cc_word(1),
+            9: cc_word(1),
+            10: cc_word(1),
+        },
+        1,
+    ),
+    "TDGDT TDGET TDGXT": case_of(
+        _tests(
+            "TDGDT",
+            (
+                ("LD", "D0", 0x800),
+                ("LD", "DZEXT", 0x200),
+                ("LD", "DSUB", 0x080),
+                ("LD", "D1", 0x020),
+                ("LD", "DNINES", 0x008),
+                ("LD", "DINF", 0x002),
+                ("LD", "DMAX", 0x080),
+            ),
+        )
+        + lines("LE 1,S1", "TDGET 1,X'020'")
+        + cc_into(9)
+        + extended_from(4, "XM1")
+        + lines("TDGXT 4,X'010'"),
+        {r: cc_word(1) for r in range(2, 10)},
+        1,
+    ),
+}
+
+CASES: Mapping[str, Case] = {**ARITHMETIC, **COMPARE_EXPONENT, **ROUNDING, **DIGITS}
 
 TRAPS: Mapping[str, Trap] = {
     "compare suppresses on an SNaN and leaves the CC": trap_of(
