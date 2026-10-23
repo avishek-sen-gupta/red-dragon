@@ -14,6 +14,7 @@ from interpreter.ir import SourceLocation
 from interpreter.run import run
 from tests.covers import NotLanguageFeature, covers
 from tests.integration.hlasm.hlasm_helpers import (
+    BARE_ASSEMBLY,
     MAX_STEPS,
     HlasmRun,
     hlasm_run_of,
@@ -123,7 +124,9 @@ def test_svc_without_a_lowering_abends_s0c1(caplog: pytest.LogCaptureFixture):
 def test_wto_from_macro_keeps_call_site_span(tmp_path: Path):
     parser = get_hlasm_parser()
     program = parser.read(
-        parser.parse_to_file(HELLO.encode("utf-8"), "hello.asm", tmp_path / "p.json")
+        parser.parse_to_file(
+            HELLO.encode("utf-8"), "hello.asm", tmp_path / "p.json", BARE_ASSEMBLY
+        )
     )
 
     ir = get_hlasm_frontend(program).lower(b"")

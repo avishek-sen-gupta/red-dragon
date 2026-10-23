@@ -45,7 +45,9 @@ addresses.
 
 | Module | Purpose |
 |---|---|
-| `hlasm_asg/hlasm_bridge_parser.py` | `make_hlasm_parser(syslib)`, `HlasmBridgeParser`; exit 2 → `HlasmParseError`, other failures → `HlasmBridgeFailure`. The default bridge path is resolved from the package, not the working directory; `HLASM_AST_BRIDGE` overrides it |
+| `hlasm_asg/hlasm_bridge_parser.py` | `make_hlasm_parser(syslib)`, `HlasmBridgeParser`; exit 2 → `HlasmParseError`, other failures → `HlasmBridgeFailure`. The default bridge path is resolved from the package, not the working directory; `HLASM_AST_BRIDGE` overrides it. `identity` is the SHA-256 of the bridge binary |
+| `hlasm_asg/assembly_input.py`, `assembly_inputs.py` | `AssemblyInput` (SYSPARM, SYSJOB, SYSSTEP, SYSIN_DSN, SYSIN_MEMBER); `AssemblyInputs`: the values one assembly is given and the instant it reads |
+| `interpreter/project/hlasm_compile_options.py` | `HlasmCompileOptions(names, clock)`: the inputs `compile_hlasm` takes; `clock` is an `AssemblyClock` (`hlasm_asg/assembly_clock.py`; COBOL's `CompileClock`, which the import contracts keep from `interpreter.project`), `SystemAssemblyClock` by default |
 | `interpreter/frontends/__init__.py` | `get_hlasm_parser(syslib)`: the bridge parser with `hlasm-bridge/maclib/` first on SYSLIB |
 | `hlasm-bridge/maclib/` | Our macros: `WTO`, `ABEND` |
 | `hlasm_asg/program/` | The bridge JSON models, one class per file. A D(X,B) storage operand also carries its address as written (`written`): the section and offset of an implicit address, before USING resolution, or the absolute displacement. Each DC/DS operand carries its offset and bit offset from che4z's location counter, its length unit (bytes, or bits for `L.n`), scale and exponent. `*` is the address of each constant: an address operand that names the location counter is exported per duplication copy (`ADDRESSES_PER_COPY`), each value evaluated at its own address. An S-constant is a base and displacement resolved through USING. `DC 0F` has an `OMITTED` nominal. CCW, CCW0 and CCW1 are statements with their command code, address, flags and count. The program lists AMODE and RMODE statements, and each diagnostic its macro call stack (`related`) |
@@ -182,7 +184,7 @@ addresses.
 
 ## Compilation Units
 
-One assembly is one unit. `compile_hlasm(source, *, parser, work_dir)` writes
+One assembly is one unit. `compile_hlasm(source, *, parser, options, work_dir)` writes
 three files to the work directory, each skipped when it already exists:
 
 | File | Holds |
@@ -191,9 +193,34 @@ three files to the work directory, each skipped when it already exists:
 | `__main__-<digest>.unit.json` | The lowered `ModuleUnit`; `program` is the entry name |
 | `image-<digest>.linked.json` | The image: start-up module, then the unit |
 
-`<digest>` covers the source bytes and the SYSLIB directories
-(`HlasmLoweringSettings`), so a different SYSLIB gets new files. `lower_hlasm_program`
-stops after the unit file.
+`<digest>` (`HlasmLoweringSettings`) covers the source bytes, the SYSLIB directories,
+the contents of every file in them, the bridge binary's hash and the supplied
+`names`. Editing a macro or rebuilding the bridge therefore gets new files. The clock
+is not in the digest: a reused unit keeps the time it was assembled at, as COBOL's
+`WHEN-COMPILED` does. `lower_hlasm_program` stops after the unit file.
+
+## Assembly Inputs
+
+`HlasmCompileOptions.names` maps an `AssemblyInput` to its value, and the bridge gets
+each one as an option (`--sysparm`, `--sysjob`, `--sysstep`, `--sysin-dsn`,
+`--sysin-member`). Nothing is defaulted: a variable that was not given is undefined,
+and reading it refuses the assembly with `E010 Unknown variable: <name>` at its line
+(`HlasmParseError`). This includes `&SYSPARM`, which HLASM sets to the null string when
+the SYSPARM option is absent; supply the empty string for that. `&SYSJOB`, `&SYSSTEP` and
+`&SYSPARM` are global; `&SYSIN_DSN` and `&SYSIN_MEMBER` exist only inside macros, as
+che4z defines them. No CLI flag supplies them yet.
+
+The clock is read once per assembly, when the bridge runs, and passed as an ISO
+instant with its UTC offset (`--clock`). `&SYSDATE`, `&SYSDATC`, `&SYSTIME` and
+`AREAD CLOCKB`/`CLOCKD` use its local time. `&SYSCLOCK` uses its UTC time, so every
+macro call sees the same `&SYSCLOCK`; HLASM takes a new reading per call.
+
+`&SYSSEQF` is columns 73-80 of the open-code statement that called the macro,
+directly or through other macros, padded to 8 with blanks. che4z ignores ICTL and
+ISEQ for this, as it does for line layout.
+
+che4z has no other data-set variables (`&SYSIN_VOLUME`, `&SYSLIB_*`, `&SYSPRINT_*`,
+`&SYSPUNCH_*`, `&SYSTERM_*`, `&SYSADATA_*`, `&SYSLIN_*`); they stay `E010`.
 
 The entry is the symbol `END` names, or the first CSECT at offset 0 when `END`
 names none. The entry function is `func_<entry>_0`. It returns GR15's low word
@@ -1239,7 +1266,8 @@ layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.
 | `tests/integration/hlasm/test_bridge_parser.py` | The real bridge: macro origins, refused assemblies; operand placement, modifiers, S-constants, CCW, AMODE/RMODE and diagnostic call stacks |
 | `tests/integration/hlasm/test_storage_layout.py` | Section regions and address constants; `*` in each constant after `DC 0F` |
 | `tests/integration/hlasm/test_svc.py` | `WTO`, `ABEND` user and system codes, unlowered SVCs, `run()` with our maclib then `copybook_dirs`, call-site spans |
-| `tests/integration/hlasm/test_hlasm_compile.py` | Unit files, reuse, SYSLIB invalidation, the bridge found from another working directory, `run()`, return code, default entry, BALR/BR, wild branch |
+| `tests/integration/hlasm/test_hlasm_compile.py` | Unit files; reuse that follows the inputs, SYSLIB member contents and the bridge, not the clock; assembly inputs, clock and `&SYSSEQF` printed through WTO; an input not given refused; the bridge found from another working directory; `run()`, return code, default entry, BALR/BR, wild branch |
+| `tests/unit/hlasm/test_bridge_command.py` | The bridge command carries each supplied input and the clock as options |
 | `tests/integration/hlasm/test_instruction_table.py`, `test_opcode_unit_coverage.py` | Instruction table and opcode-unit coverage |
 | `tests/z390/test_foundation_differential.py` | Return code, WTO, user abend and assembly failure against z390 (`-m z390`) |
 | `tests/z390/test_z390_log.py` | Registers and CC from a z390 abend dump (default run) |

@@ -3,12 +3,14 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import tempfile
 from collections.abc import Sequence
 from pathlib import Path
 
+from hlasm_asg.assembly_inputs import AssemblyInputs
 from hlasm_asg.diagnostic_report import DiagnosticReport
 from hlasm_asg.hlasm_ast_parser import HlasmAstParser
 from hlasm_asg.hlasm_bridge_failure import HlasmBridgeFailure
@@ -44,24 +46,36 @@ class HlasmBridgeParser(HlasmAstParser):
     def syslib(self) -> tuple[Path, ...]:
         return self._syslib
 
-    def _command(self, source_path: Path, source_name: str) -> list[str]:
+    @property
+    def identity(self) -> str:
+        return hashlib.sha256(Path(self._bridge).read_bytes()).hexdigest()
+
+    def _command(
+        self, source_path: Path, source_name: str, inputs: AssemblyInputs
+    ) -> list[str]:
         libraries = [arg for d in self._syslib for arg in ("--syslib", str(d))]
+        names = [
+            arg for name, value in inputs.names.items() for arg in (name.value, value)
+        ]
         return [
             self._bridge,
             str(source_path),
             "--source-name",
             source_name,
             *libraries,
+            *names,
+            "--clock",
+            inputs.clock.isoformat(timespec="microseconds"),
         ]
 
-    def _run(self, source: bytes, source_name: str) -> str:
+    def _run(self, source: bytes, source_name: str, inputs: AssemblyInputs) -> str:
         with tempfile.TemporaryDirectory() as directory:
             source_path = Path(directory) / SOURCE_FILE_NAME
             source_path.write_bytes(source)
             logger.debug(
                 "Assembling %d bytes of HLASM via %s", len(source), self._bridge
             )
-            result = self._runner.run(self._command(source_path, source_name))
+            result = self._runner.run(self._command(source_path, source_name, inputs))
         if result.returncode == 0:
             return result.stdout
         if result.returncode == REFUSED_EXIT_CODE:
@@ -70,8 +84,10 @@ class HlasmBridgeParser(HlasmAstParser):
             )
         raise HlasmBridgeFailure(result.returncode, result.stderr)
 
-    def parse_to_file(self, source: bytes, source_name: str, out_path: Path) -> Path:
-        out_path.write_text(self._run(source, source_name), encoding="utf-8")
+    def parse_to_file(
+        self, source: bytes, source_name: str, out_path: Path, inputs: AssemblyInputs
+    ) -> Path:
+        out_path.write_text(self._run(source, source_name, inputs), encoding="utf-8")
         return out_path
 
     def read(self, path: Path) -> HlasmProgram:

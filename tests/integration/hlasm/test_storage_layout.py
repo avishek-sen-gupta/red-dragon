@@ -15,6 +15,7 @@ from interpreter.hlasm.storage_layout import section_allocation, section_var
 from interpreter.hlasm.unsupported_statement import UnsupportedStatement
 from interpreter.vm.vm_types import VMState
 from tests.covers import NotLanguageFeature, covers
+from tests.integration.hlasm.hlasm_helpers import BARE_ASSEMBLY
 from tests.unit.hlasm.straight_line_vm import run_straight_line
 
 CONSTANTS_SOURCE = b"""\
@@ -73,7 +74,9 @@ FIELD    DC    F'0'
 def _assemble(source: bytes, tmp_path: Path) -> HlasmProgram:
     parser = make_hlasm_parser()
     return parser.read(
-        parser.parse_to_file(source, "src/hello.asm", tmp_path / "program.json")
+        parser.parse_to_file(
+            source, "src/hello.asm", tmp_path / "program.json", BARE_ASSEMBLY
+        )
     )
 
 
