@@ -5,7 +5,6 @@ from collections.abc import Mapping
 
 from interpreter.hlasm.dfp_layout import EXTENDED_DFP, LONG_DFP, DfpLayout
 from interpreter.hlasm.dfp_operation import DfpOperation, dfp_builtin_name
-from interpreter.hlasm.opcodes.bfp_forms import ieee_call
 from interpreter.hlasm.opcodes.dfp_ir import (
     AfterStore,
     decoded,
@@ -17,6 +16,7 @@ from interpreter.hlasm.opcodes.dfp_ir import (
     stored,
 )
 from interpreter.hlasm.opcodes.floating_point_support import pairs
+from interpreter.hlasm.opcodes.fp_forms import ieee_call
 from interpreter.hlasm.opcodes.fpr_images import FIRST, FOURTH, SECOND, THIRD, fpr
 from interpreter.hlasm.statement_lowering import StatementLowering
 

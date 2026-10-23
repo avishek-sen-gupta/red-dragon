@@ -10,16 +10,13 @@ from interpreter.hlasm.bfp_layout import (
     SHORT_LAYOUT,
     BfpLayout,
 )
-from interpreter.hlasm.bfp_slots import INVALID_BIT
 from interpreter.hlasm.data_movement import keep
+from interpreter.hlasm.fp_slots import INVALID_BIT
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.ieee_outcome import IeeeOutcome
-from interpreter.hlasm.opcodes.bfp_ir import (
-    emit_ieee_ladder,
-    image_cc,
-    signaling_nan_of,
-)
+from interpreter.hlasm.opcodes.bfp_ir import image_cc, signaling_nan_of
 from interpreter.hlasm.opcodes.floating_point_support import pairs
+from interpreter.hlasm.opcodes.fp_ir import emit_ieee_ladder
 from interpreter.hlasm.opcodes.fpr_images import (
     load_image,
     store_image,

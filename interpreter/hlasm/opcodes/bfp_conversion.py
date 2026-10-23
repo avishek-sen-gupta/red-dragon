@@ -11,7 +11,6 @@ from interpreter.hlasm.bfp_layout import (
     BfpLayout,
 )
 from interpreter.hlasm.bfp_operation import BfpOperation
-from interpreter.hlasm.bfp_slots import CC_SLOT, INVALID_BIT
 from interpreter.hlasm.data_movement import (
     Source,
     from_gr32,
@@ -19,38 +18,40 @@ from interpreter.hlasm.data_movement import (
     keep,
     sign_extended,
 )
-from interpreter.hlasm.fpr_layout import FprLayout
+from interpreter.hlasm.fp_slots import INVALID_BIT
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.ieee_outcome import IeeeOutcome
 from interpreter.hlasm.opcodes.bfp_forms import (
-    Deliver,
-    SuppressedBits,
-    checked,
     current,
     fields,
     ieee,
-    inexact_control,
     invalid_modifier,
     modifier,
     no_cc,
-    signals_all,
     stored,
 )
 from interpreter.hlasm.opcodes.bfp_ir import (
-    emit_ieee_ladder,
     exact_image,
     image_at,
     signaling_nan_of,
     significand_of,
 )
 from interpreter.hlasm.opcodes.floating_point_support import pairs
+from interpreter.hlasm.opcodes.fp_forms import (
+    GrStore,
+    SuppressedBits,
+    checked,
+    inexact_control,
+    integer_stored,
+    rounded_stored,
+    signals_all,
+)
+from interpreter.hlasm.opcodes.fp_ir import emit_ieee_ladder
 from interpreter.hlasm.opcodes.fpr_images import (
     FIRST,
     SECOND,
     THIRD,
     fpr,
-    list_item,
-    load_image,
     pick,
     signed_magnitude,
     storage,
@@ -61,28 +62,13 @@ from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
 
-type GrStore = Callable[[HlasmEmitter, int, Register], None]
 type GrRead = Callable[[int], Source]
-type ImageAt[L: FprLayout] = Callable[[HlasmEmitter, Register, Register, L], Register]
 
 LAYOUTS: Mapping[str, BfpLayout] = {
     "E": SHORT_LAYOUT,
     "D": LONG_LAYOUT,
     "X": EXTENDED_LAYOUT,
 }
-
-
-def integer_stored(store: GrStore) -> Deliver:
-    def deliver(
-        emitter: HlasmEmitter,
-        statement: MachineStatement,
-        result: Register,
-        slot: Register,
-    ) -> None:
-        store(emitter, reg_operand(statement, FIRST), list_item(emitter, result, 0))
-        emitter.set_cc(list_item(emitter, result, CC_SLOT))
-
-    return deliver
 
 
 def _with_pair(
@@ -248,27 +234,6 @@ def _lengthen(
         )
 
     return _with_pair(target, (FIRST,), lower)
-
-
-def rounded_stored[L: FprLayout](source: L, target: L, image: ImageAt[L]) -> Deliver:
-    narrowing = source.width - target.width
-
-    def deliver(
-        emitter: HlasmEmitter,
-        statement: MachineStatement,
-        result: Register,
-        slot: Register,
-    ) -> None:
-        r1 = reg_operand(statement, FIRST)
-        rounded = image(emitter, result, slot, target)
-        scaled = image(emitter, result, slot, source)
-        kept = keep((1 << narrowing) - 1)(emitter, load_image(emitter, r1, source))
-        placed = emitter.binop(BinopKind.LSHIFT, rounded, emitter.int_(narrowing))
-        merged = emitter.binop(BinopKind.BIT_OR, placed, kept)
-        trapped = emitter.binop(BinopKind.NE, slot, emitter.int_(0))
-        store_image(emitter, r1, source, pick(emitter, trapped, scaled, merged))
-
-    return deliver
 
 
 def _round(

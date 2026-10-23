@@ -19,7 +19,6 @@ from interpreter.hlasm.dfp_layout import EXTENDED_DFP, LONG_DFP, DfpLayout
 from interpreter.hlasm.effective_address import length_operand_address
 from interpreter.hlasm.hlasm_constants import FPC_VAR
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
-from interpreter.hlasm.opcodes.bfp_forms import checked
 from interpreter.hlasm.opcodes.decimal_lanes import (
     combined_digits,
     invalid_digits,
@@ -38,6 +37,7 @@ from interpreter.hlasm.opcodes.floating_point_support import (
     emit_data_exception,
     pairs,
 )
+from interpreter.hlasm.opcodes.fp_forms import checked
 from interpreter.hlasm.opcodes.fpr_images import FIRST, SECOND, THIRD, fpr, pick
 from interpreter.hlasm.operands import (
     mask_operand,

@@ -4,24 +4,13 @@
 from collections.abc import Callable, Mapping
 
 from hlasm_asg.program.machine_statement import MachineStatement
-from interpreter.hlasm.bfp_slots import INVALID_BIT, QUANTUM_BIT
 from interpreter.hlasm.data_movement import Source, from_gr32, from_gr64, sign_extended
 from interpreter.hlasm.dfp_fields import INFINITY, SIGNALING_NAN
 from interpreter.hlasm.dfp_layout import EXTENDED_DFP, LONG_DFP, SHORT_DFP, DfpLayout
 from interpreter.hlasm.dfp_operation import DfpOperation, dfp_builtin_name
+from interpreter.hlasm.fp_slots import INVALID_BIT, QUANTUM_BIT
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.ieee_outcome import IeeeOutcome
-from interpreter.hlasm.opcodes.bfp_conversion import (
-    GrStore,
-    integer_stored,
-    rounded_stored,
-)
-from interpreter.hlasm.opcodes.bfp_forms import (
-    SuppressedBits,
-    ieee_call,
-    inexact_control,
-)
-from interpreter.hlasm.opcodes.bfp_ir import emit_ieee_ladder
 from interpreter.hlasm.opcodes.dfp_ir import (
     EXPONENT,
     Fields,
@@ -38,6 +27,15 @@ from interpreter.hlasm.opcodes.dfp_ir import (
     stored,
 )
 from interpreter.hlasm.opcodes.floating_point_support import pairs
+from interpreter.hlasm.opcodes.fp_forms import (
+    GrStore,
+    SuppressedBits,
+    ieee_call,
+    inexact_control,
+    integer_stored,
+    rounded_stored,
+)
+from interpreter.hlasm.opcodes.fp_ir import emit_ieee_ladder
 from interpreter.hlasm.opcodes.fpr_images import (
     FIRST,
     FOURTH,

@@ -11,27 +11,29 @@ from interpreter.hlasm.bfp_layout import (
     BfpLayout,
 )
 from interpreter.hlasm.bfp_operation import BfpOperation
-from interpreter.hlasm.bfp_slots import QUOTIENT_SLOT
 from interpreter.hlasm.data_movement import Source
+from interpreter.hlasm.fp_slots import QUOTIENT_SLOT
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.opcodes.bfp_forms import (
     AfterStore,
-    Deliver,
-    SuppressedBits,
     cc_of,
-    checked,
     current,
     fields,
     ieee,
-    inexact_control,
     invalid_modifier,
     modifier,
     no_cc,
-    result_cc,
-    signals_all,
     stored,
 )
 from interpreter.hlasm.opcodes.floating_point_support import pairs
+from interpreter.hlasm.opcodes.fp_forms import (
+    Deliver,
+    SuppressedBits,
+    checked,
+    inexact_control,
+    result_cc,
+    signals_all,
+)
 from interpreter.hlasm.opcodes.fpr_images import (
     FIRST,
     FOURTH,
