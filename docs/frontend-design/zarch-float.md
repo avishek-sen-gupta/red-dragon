@@ -20,7 +20,7 @@ the builtins in `interpreter/hlasm/bfp_builtins.py` (red-dragon-6uyp.51).
 
 | Module | Purpose |
 |---|---|
-| `rounding_mode.py` | `RoundingMode` (eight methods); `BFP_FPC_MODES`, `BFP_MODIFIER_MODES` and the DFP and HFP tables map FPC and M-field codes to methods |
+| `rounding_mode.py` | `RoundingMode` (eight methods); `BFP_FPC_MODES`, `BFP_MODIFIER_MODES`, the DFP and HFP tables and `HFP_TO_BFP_MODIFIER_MODES` (M3 0 truncates) map FPC and M-field codes to methods |
 | `condition.py` | `Condition`; `raised(...)` builds a condition set |
 | `float_kind.py` | `FloatKind`: ZERO, FINITE, INFINITY, QNAN, SNAN |
 | `comparison.py`, `comparison_result.py` | `Comparison` (value = CC) with its conditions |
@@ -83,6 +83,7 @@ the operation is suppressed.
 | `hfp_multiply_unnormalized`, `hfp_multiply_add_unnormalized` | Long operands: the 28-digit product, or the 28 digits of product + c aligned with it, unnormalized, the exponent unwrapped and no conditions (MY, MAY). A zero sum is positive; a zero product keeps the sign |
 | `hfp_load_rounded`, `hfp_load_lengthened` | LOAD ROUNDED adds a half at the first dropped bit; a carry shifts right |
 | `hfp_from_integer`, `hfp_to_integer` | From: normalized, truncated. To: under the M3 method; out of range gives an end of the range with OUT_OF_RANGE (CC 3) |
+| `hfp_to_bfp` | `(a, target, mode)`: TBEDR, TBDR. A zero keeps its sign; otherwise the BFP rounding, so tiny values are denormalized and overflow gives infinity or Nmax by method (figure 9-20). The caller ignores the IEEE conditions bar OVERFLOW (CC 3) |
 
 Zero fractions give a positive true zero from multiply, multiply and add, divide, halve,
 square root, load FP integer and CONVERT FROM FIXED, as figure 18-1 states.

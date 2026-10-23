@@ -69,3 +69,8 @@ HFP_MODIFIER_MODES: Mapping[int, RoundingMode] = {
     6: RoundingMode.TOWARD_POSITIVE,
     7: RoundingMode.TOWARD_NEGATIVE,
 }
+
+HFP_TO_BFP_MODIFIER_MODES: Mapping[int, RoundingMode] = {
+    0: RoundingMode.TOWARD_ZERO,
+    **BFP_MODIFIER_MODES,
+}
