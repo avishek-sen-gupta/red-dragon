@@ -45,6 +45,9 @@ CONVERSION_DATA = (
     "SM2P63   DC    X'DF000000'\n"
     "S2P64    DC    X'5F800000'\n"
     "SMHALF   DC    X'BF000000'\n"
+    "SSNAN    DC    X'7F800001'\n"
+    "         DS    0D\n"
+    "XTINY    DC    X'3BE50000000000000000000000000000'\n"
 )
 
 
@@ -259,13 +262,76 @@ FROM_FIXED: Mapping[str, Case] = {
     ),
 }
 
-CASES: Mapping[str, Case] = {**TO_FIXED, **FROM_FIXED}
+LENGTHEN_ROUND: Mapping[str, Case] = {
+    "LDEBR LDEB": case_of(
+        lines("LE 2,SM1P5", "LDEBR 1,2", "LGDR 2,1", "LDEB 3,STINY3", "LGDR 3,3")
+        + lines("LDEB 4,SQNAN", "LGDR 4,4"),
+        {2: 0xBFF80000_00000000, 3: 0x36B80000_00000000, 4: 0x7FF80000_00000000},
+        PRESET_CC,
+    ),
+    "LDEBR quiets a masked SNaN": case_of(
+        lines("LE 2,SSNAN", "LDEBR 1,2", "LGDR 2,1"),
+        {2: 0x7FF80000_20000000},
+        PRESET_CC,
+        INVALID_FLAG,
+    ),
+    "LXDBR LXDB": case_of(
+        lines("LD 2,DSUB", "LXDBR 4,2", "LGDR 2,4", "LGDR 3,6")
+        + lines("LXDB 8,DMINF", "LGDR 4,8", "LGDR 5,10"),
+        {2: 0x3BCD0000_00000000, 3: 0, 4: 0xFFFF0000_00000000, 5: 0},
+        PRESET_CC,
+    ),
+    "LXEBR LXEB": case_of(
+        lines("LE 2,SM8", "LXEBR 4,2", "LGDR 2,4", "LGDR 3,6")
+        + lines("LXEB 8,SQNAN", "LGDR 4,8", "LGDR 5,10"),
+        {2: 0xC0020000_00000000, 3: 0, 4: 0x7FFF8000_00000000, 5: 0},
+        PRESET_CC,
+    ),
+    "LEDBR LEDBRA": case_of(
+        lines("LD 1,DTHIRD", "LEDBR 1,1", "LGDR 2,1")
+        + lines("LD 3,DTHIRD", "LEDBRA 3,5,3,0", "LGDR 3,3")
+        + lines("LD 4,DMAX", "LEDBR 4,4", "LGDR 4,4"),
+        {2: 0x3EAAAAAB_55555555, 3: 0x3EAAAAAA_55555555, 4: 0x7F800000_FFFFFFFF},
+        PRESET_CC,
+        0x00280000,
+    ),
+    "LDXBR LDXBRA": case_of(
+        extended_from(4, "X1")
+        + lines("LDXBR 4,4", "LGDR 2,4", "LGDR 3,6")
+        + extended_from(8, "X1")
+        + lines("LDXBRA 8,6,8,0", "LGDR 4,8"),
+        {2: 0x3FF00000_00000000, 3: 0x1000, 4: 0x3FF00000_00000001},
+        PRESET_CC,
+        INEXACT_FLAG,
+    ),
+    "LEXBR LEXBRA": case_of(
+        extended_from(4, "XM2P5")
+        + lines("LEXBR 4,4", "LGDR 2,4", "LGDR 3,6")
+        + extended_from(8, "X1")
+        + lines("LEXBRA 8,7,8,4", "LGDR 4,8", "LGDR 5,10"),
+        {2: 0xC0200000_00000000, 3: 0, 4: 0x3F800000_00000000, 5: 0x1000},
+        PRESET_CC,
+    ),
+}
+
+CASES: Mapping[str, Case] = {**TO_FIXED, **FROM_FIXED, **LENGTHEN_ROUND}
 
 TRAPS: Mapping[str, Trap] = {
     "CEFBR inexact traps after the store": trap_of(
         zeroed_short(1) + lines("IILF 2,X'01000001'", "CEFBR 1,2"),
         {1: high_word(0x4B800000)},
         0x08000800,
+    ),
+    "LXDBR invalid suppresses": trap_of(
+        lines("LD 2,DSNAN", "LXDBR 4,2"), {4: 0, 6: 0}, 0x80008000
+    ),
+    "LEDBR overflow delivers the scaled long result": trap_of(
+        lines("LD 1,DMAX", "LEDBR 1,1"), {1: 0x5FF00000_00000000}, 0x20002C00
+    ),
+    "LDXBR underflow delivers the scaled extended result": trap_of(
+        extended_from(4, "XTINY") + lines("LDXBR 4,4"),
+        {4: 0x5BE50000_00000000, 6: 0},
+        0x10001000,
     ),
 }
 

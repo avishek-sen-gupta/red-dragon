@@ -102,7 +102,7 @@ addresses.
 | `interpreter/hlasm/opcodes/bfp_arithmetic.py` | The BFP arithmetic unit's builtin forms: add, subtract, multiply, divide, square root, fused, load FP integer, divide to integer |
 | `interpreter/hlasm/opcodes/bfp_class.py` | BFP COMPARE, COMPARE AND SIGNAL and TEST DATA CLASS, in IR (ruling R44) |
 | `interpreter/hlasm/opcodes/bfp_sign.py` | BFP LOAD AND TEST and the sign forms, in IR |
-| `interpreter/hlasm/opcodes/bfp_conversion.py` | BFP conversions: to fixed and logical, and rounding from fixed, through builtins; exact from fixed in IR (red-dragon-6uyp.52) |
+| `interpreter/hlasm/opcodes/bfp_conversion.py` | BFP conversions: to fixed and logical, rounding from fixed and LOAD ROUNDED through builtins; exact from fixed and lengthening in IR (red-dragon-6uyp.52) |
 | `interpreter/hlasm/opcodes/bfp_forms.py` | Statement-level BFP parts shared by the BFP units: operand sources, the M3 modifier and its check, stores after delivery, one builtin call through the ladder |
 | `interpreter/hlasm/opcodes/bfp_ir.py`, `interpreter/hlasm/ieee_outcome.py` | BFP image IR: field lists, encoding, FPR access by format, an image's CC, and the IEEE trap ladder over an `IeeeOutcome` |
 | `interpreter/hlasm/program_status.py` | SPM, IPM, EPSW |
@@ -892,7 +892,8 @@ SQXBR, SXBR, TCDB, TCEB, TCXB. Rulings R34, R41, R43.
 **BFP conversions (red-dragon-6uyp.52).** CDFBR, CDFBRA, CDGBR, CDGBRA, CDLFBR, CDLGBR,
 CEFBR, CEFBRA, CEGBR, CEGBRA, CELFBR, CELGBR, CFDBR, CFDBRA, CFEBR, CFEBRA, CFXBR, CFXBRA,
 CGDBR, CGDBRA, CGEBR, CGEBRA, CGXBR, CGXBRA, CLFDBR, CLFEBR, CLFXBR, CLGDBR, CLGEBR,
-CLGXBR, CXFBR, CXFBRA, CXGBR, CXGBRA, CXLFBR, CXLGBR. Rulings R43-R45.
+CLGXBR, CXFBR, CXFBRA, CXGBR, CXGBRA, CXLFBR, CXLGBR, LDEB, LDEBR, LDXBR, LDXBRA, LEDBR,
+LEDBRA, LEXBR, LEXBRA, LXDB, LXDBR, LXEB, LXEBR. Rulings R43-R45.
 
 - To fixed and to logical round through a `to_fixed_32/64` or `to_logical_32/64` builtin and
   the .51 ladder. The builtin returns the integer's image and the CC: 3 when invalid, else
@@ -905,18 +906,27 @@ CLGXBR, CXFBR, CXFBRA, CXGBR, CXGBRA, CXLFBR, CXLGBR. Rulings R43-R45.
   integer (short from either width, long from 64 bits); otherwise it is exact and IR
   (ruling R45): sign, the leading one from `bit_counts.leading_zeros`, a rebased exponent
   and the left-justified fraction. A 32-bit source is bits 32-63 of R2.
+- LDEB(R), LXDB(R) and LXEB(R) are exact and IR: a finite source goes through the same
+  exact encoding, so a subnormal becomes normal; infinities and NaNs keep the fraction
+  shifted left. An SNaN raises invalid through the ladder: suppressed, or quieted.
+- LEDBR, LDXBR and LEXBR (and the A forms) round through a `rounded_to_short/long`
+  builtin. The nontrap result replaces only the target's bits of R1; an enabled overflow or
+  underflow stores the scaled result in the source format (Figure 19-9), so the lowering
+  always writes the source-format image, the rounded one merged over R1's old bits.
 - M3 of 2 or 8-15, or an extended operand that is not a pair, abends `S0C6`. M4 bit 1
   suppresses inexact on the A forms and the logical forms.
 - z390 rejects a nonzero M4, ignores the FPC mode, wraps or loses bits out of range, gives
   CC 0 for -0.5 to 0 and for -infinity, converts -1 to logical 1, abends `S0C5` on a NaN
   and takes no inexact trap. From fixed it ignores M3, writes X'F4F4F4F4' into bits 32-63 of
-  short results and garbles logical sources and extended low halves. The z390 test pins each
+  short results and garbles logical sources and extended low halves. Between formats it
+  ignores M3, loses bits lengthening a subnormal, abends `S0C5` lengthening an infinity or
+  NaN to extended and takes no LOAD ROUNDED trap. The z390 test pins each
   (red-dragon-6uyp.74).
 
 ## Known Gaps
 
-- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, miscellaneous, packed-decimal arithmetic, packed-decimal compare and test, decimal conversion, edit, floating-point-support, BFP arithmetic and BFP fixed-point conversion units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
-- BFP lengthening and rounding between formats, HFP, DFP and PFPO are not lowered. Their arithmetic is the leaf `zarch_float` ([zarch-float.md](zarch-float.md)); `bfp_builtins.py` reaches it for BFP (red-dragon-6uyp.51), and the later floating-point units add their builtins.
+- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, miscellaneous, packed-decimal arithmetic, packed-decimal compare and test, decimal conversion, edit, floating-point-support, BFP arithmetic and BFP conversion units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
+- HFP, DFP and PFPO are not lowered. Their arithmetic is the leaf `zarch_float` ([zarch-float.md](zarch-float.md)); `bfp_builtins.py` reaches it for BFP (red-dragon-6uyp.51), and the later floating-point units add their builtins.
 - DC types beyond C, X, B, F, H, P, Z, A, Y and V, and any type extension, raise `UnsupportedDataType` (red-dragon-6uyp.63; floating point E, D, L: red-dragon-6uyp.21).
 - Falling through into DC/DS data or past a CSECT's end skips the data instead of executing it, and a branch into data abends `S0C1` (red-dragon-6uyp.64).
 - Every branch, even to a static relative target, walks the dispatch chain (red-dragon-6uyp.80).
