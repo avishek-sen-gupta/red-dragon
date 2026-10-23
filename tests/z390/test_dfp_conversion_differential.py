@@ -139,8 +139,11 @@ Z390_PINNED: Mapping[str, HlasmMachine] = {
         0, {2: 0xA5A5A5A5_A5A5A5A5, 3: 0xA5A5A5A5_A5A5A5A5}, "S0CC"
     ),
     "PFPO with an invalid function abends S0C6": _z390(0, {}),
-    "PFPO reports HFP overflow as invalid or as overflow by bit 58": _z390(
-        0, {2: 0x8335F9DF_F4F4F4F4, 3: 0x8335F9DF_F4F4F4F4}
+    "PFPO reports HFP overflow as invalid without bit 58": _z390(
+        0, {2: 0x8335F9DF_F4F4F4F4}
+    ),
+    "PFPO reports HFP overflow as overflow under bit 58": _z390(
+        0, {2: 0x8335F9DF_F4F4F4F4}
     ),
     "PFPO gives HFP underflow a signed true zero, unreported without bit 59": _z390(
         0, {2: 0xFE4BE2B0_F4F4F4F4}

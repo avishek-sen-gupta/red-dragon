@@ -425,14 +425,17 @@ PFPO: Mapping[str, Case] = {
         {2: 0x22380000_00000001},
         0,
     ),
-    "PFPO reports HFP overflow as invalid or as overflow by bit 58": case_of(
-        _pfpo(0x01000900, "LD 4,D1E80")
-        + lines("LGDR 2,0")
-        + _pfpo(0x01000920, "LD 4,D1E80")
-        + lines("LGDR 3,0"),
-        {2: 0x7FFFFFFF_00000000, 3: 0x7FFFFFFF_00000000},
+    "PFPO reports HFP overflow as invalid without bit 58": case_of(
+        _pfpo(0x01000900, "LD 4,D1E80") + lines("LGDR 2,0"),
+        {2: 0x7FFFFFFF_00000000},
         1,
-        INVALID_FLAG | OVERFLOW_FLAG | INEXACT_FLAG,
+        INVALID_FLAG,
+    ),
+    "PFPO reports HFP overflow as overflow under bit 58": case_of(
+        _pfpo(0x01000920, "LD 4,D1E80") + lines("LGDR 2,0"),
+        {2: 0x7FFFFFFF_00000000},
+        1,
+        OVERFLOW_FLAG | INEXACT_FLAG,
     ),
     "PFPO gives HFP underflow a signed true zero, unreported without bit 59": case_of(
         _pfpo(0x01000900, "LD 4,DM1EM80") + lines("LGDR 2,0"),
