@@ -53,10 +53,14 @@ DATA = (
     "DTINY    DC    X'6400FF3FCFF3FCFF'\n"
     "DNINES   DC    X'6E38FF3FCFF3FCFF'\n"
     "DTIE     DC    X'21F8000000000005'\n"
+    "D1P0     DC    X'2234000000000010'\n"
+    "DINFX    DC    X'79FC000000000005'\n"
+    "DNONC    DC    X'223800000000016E'\n"
     "X1       DC    X'22080000000000000000000000000001'\n"
     "X2       DC    X'22080000000000000000000000000002'\n"
     "X3       DC    X'22080000000000000000000000000003'\n"
     "XM1      DC    X'A2080000000000000000000000000001'\n"
+    "XP0      DC    X'2207C000000000000000000000000010'\n"
 )
 
 
@@ -165,9 +169,114 @@ ARITHMETIC: Mapping[str, Case] = {
     ),
 }
 
-CASES: Mapping[str, Case] = {**ARITHMETIC}
+GR_MODULUS = 1 << 64
+
+COMPARE_EXPONENT: Mapping[str, Case] = {
+    "CDTR KDTR": case_of(
+        lines("LD 1,D1", "LD 2,D2", "CDTR 1,2")
+        + cc_into(8)
+        + lines("LD 2,D1P0", "CDTR 1,2")
+        + cc_into(9)
+        + lines("LD 2,DQNAN", "CDTR 1,2")
+        + cc_into(10)
+        + lines("KDTR 1,2"),
+        {8: cc_word(1), 9: cc_word(0), 10: cc_word(3)},
+        3,
+        0x00800000,
+    ),
+    "CXTR KXTR": case_of(
+        extended_from(1, "X2")
+        + extended_from(4, "X1")
+        + lines("CXTR 1,4")
+        + cc_into(8)
+        + lines("KXTR 4,1"),
+        {8: cc_word(2)},
+        1,
+    ),
+    "CEDTR CEXTR": case_of(
+        lines("LD 1,D1", "LD 2,D1P0", "CEDTR 1,2")
+        + cc_into(8)
+        + lines("LD 1,DINF", "CEDTR 1,1")
+        + cc_into(9)
+        + lines("LD 1,DQNAN", "LD 2,DSNAN", "CEDTR 1,2")
+        + cc_into(10)
+        + lines("LD 1,D1", "LD 2,DINF", "CEDTR 1,2")
+        + cc_into(11)
+        + extended_from(4, "XP0")
+        + extended_from(1, "X1")
+        + lines("CEXTR 4,1"),
+        {8: cc_word(2), 9: cc_word(0), 10: cc_word(0), 11: cc_word(3)},
+        1,
+    ),
+    "LTDTR LTXTR": case_of(
+        lines("LD 1,DINFX", "LTDTR 3,1", "LGDR 2,3")
+        + cc_into(8)
+        + lines("LD 1,DNONC", "LTDTR 3,1", "LGDR 3,3")
+        + cc_into(9)
+        + extended_from(4, "XM1")
+        + lines("LTXTR 8,4", "LGDR 4,8", "LGDR 5,10")
+        + cc_into(10)
+        + lines("LD 1,DSNAN", "LTDTR 3,1", "LGDR 6,3"),
+        {
+            2: 0x78000000_00000000,
+            8: cc_word(2),
+            3: 0x22380000_0000006E,
+            9: cc_word(2),
+            4: 0xA2080000_00000000,
+            5: 1,
+            10: cc_word(1),
+            6: 0x7C000000_00000009,
+        },
+        3,
+        0x00800000,
+    ),
+    "EEDTR EEXTR": case_of(
+        lines("LD 1,D1", "EEDTR 2,1", "LD 1,DSNAN", "EEDTR 3,1")
+        + lines("LD 1,DINF", "EEDTR 4,1")
+        + extended_from(8, "X1")
+        + lines("EEXTR 5,8"),
+        {2: 398, 3: GR_MODULUS - 3, 4: GR_MODULUS - 1, 5: 6176},
+        PRESET_CC,
+    ),
+    "ESDTR ESXTR": case_of(
+        lines("LD 1,D1P23", "ESDTR 2,1", "LD 1,D0", "ESDTR 3,1")
+        + lines("LD 1,DQNAN", "ESDTR 4,1", "LD 1,DNINES", "ESDTR 5,1")
+        + extended_from(8, "X3")
+        + lines("ESXTR 6,8"),
+        {2: 3, 3: 0, 4: GR_MODULUS - 2, 5: 16, 6: 1},
+        PRESET_CC,
+    ),
+    "IEDTR IEXTR": case_of(
+        lines("LD 1,D1P23", "LGHI 2,397", "IEDTR 3,1,2", "LGDR 4,3")
+        + lines("LGHI 2,-1", "IEDTR 3,1,2", "LGDR 5,3")
+        + lines("LGHI 2,-3", "IEDTR 3,1,2", "LGDR 6,3")
+        + lines("LGHI 2,768", "IEDTR 3,1,2", "LGDR 7,3")
+        + extended_from(8, "X3")
+        + lines("LGHI 2,6175", "IEXTR 12,8,2", "LGDR 8,12", "LGDR 9,14"),
+        {
+            4: 0x22340000_000000A3,
+            5: 0x78000000_000000A3,
+            6: 0x7E000000_000000A3,
+            7: 0x7C000000_000000A3,
+            8: 0x2207C000_00000000,
+            9: 3,
+        },
+        PRESET_CC,
+    ),
+}
+
+CASES: Mapping[str, Case] = {**ARITHMETIC, **COMPARE_EXPONENT}
 
 TRAPS: Mapping[str, Trap] = {
+    "compare suppresses on an SNaN and leaves the CC": trap_of(
+        lines("LD 1,D1", "LD 2,DSNAN", "CDTR 1,2"), {}, 0x80008000
+    ),
+    "compare and signal traps on a QNaN": trap_of(
+        lines("LD 1,D1", "LD 2,DQNAN", "KDTR 1,2"), {}, 0x80008000
+    ),
+    "load and test suppresses on an SNaN": trap_of(
+        lines("LD 3,D2", "LD 1,DSNAN", "LTDTR 3,1"), {3: TWO}, 0x80008000
+    ),
     "invalid suppresses": trap_of(
         lines("LD 1,DSNAN", "LD 2,D1", "LD 3,D2", "ADTR 3,1,2"), {3: TWO}, 0x80008000
     ),

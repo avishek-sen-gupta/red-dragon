@@ -11,7 +11,7 @@ from interpreter.hlasm.bfp_layout import (
     BfpLayout,
 )
 from interpreter.hlasm.bfp_operation import BfpOperation
-from interpreter.hlasm.bfp_slots import CC_SLOT, QUOTIENT_SLOT
+from interpreter.hlasm.bfp_slots import QUOTIENT_SLOT
 from interpreter.hlasm.data_movement import Source
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.opcodes.bfp_forms import (
@@ -27,6 +27,7 @@ from interpreter.hlasm.opcodes.bfp_forms import (
     invalid_modifier,
     modifier,
     no_cc,
+    result_cc,
     signals_all,
     stored,
 )
@@ -37,18 +38,11 @@ from interpreter.hlasm.opcodes.fpr_images import (
     SECOND,
     THIRD,
     fpr,
-    list_item,
     storage,
 )
 from interpreter.hlasm.operands import reg_operand
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.register import Register
-
-
-def _result_cc(
-    emitter: HlasmEmitter, statement: MachineStatement, result: Register, slot: Register
-) -> None:
-    emitter.set_cc(list_item(emitter, result, CC_SLOT))
 
 
 def _divided(layout: BfpLayout) -> Deliver:
@@ -63,7 +57,7 @@ def _divided(layout: BfpLayout) -> Deliver:
     ) -> None:
         remainder(emitter, statement, result, slot)
         quotient(emitter, statement, result, emitter.int_(QUOTIENT_SLOT))
-        _result_cc(emitter, statement, result, slot)
+        result_cc(emitter, statement, result, slot)
 
     return deliver
 
