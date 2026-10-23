@@ -1,5 +1,5 @@
 # pyright: standard
-"""Traces of HLASM lowerings as the region accesses, FPC, program-mask and CC accesses, abends and floating-point builtin calls they emit, for BFP and HFP lowering tests."""
+"""Traces of HLASM lowerings as the region accesses, FPC, program-mask and CC accesses, abends and floating-point builtin calls they emit, for BFP, HFP and DFP lowering tests."""
 
 from collections.abc import Mapping, Sequence
 from functools import singledispatch
@@ -36,6 +36,7 @@ WRITE_FPC = f"StoreVar {FPC} reg"
 CC = "StoreVar __hlasm_cc reg"
 BFP = "__hlasm_bfp_"
 HFP = "__hlasm_hfp_"
+DFP = "__hlasm_dfp_"
 
 type Regions = Mapping[Register, str]
 type Consts = Mapping[Register, int | str]
@@ -85,7 +86,7 @@ def _shown_load(i: LoadVar, regions: Regions, consts: Consts) -> str:
 @_shown.register
 def _shown_call(i: CallFunction, regions: Regions, consts: Consts) -> str:
     name = str(i.func_name)
-    shown = {BFP: "call ", HFP: "call hfp "}
+    shown = {BFP: "call ", HFP: "call hfp ", DFP: "call dfp "}
     return next((f"{shown[p]}{name[len(p):]}" for p in shown if name.startswith(p)), "")
 
 

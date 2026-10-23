@@ -30,7 +30,8 @@ HlasmFrontend
   │  start_up_ir(): GPR region, CC, program mask; one region per section with its
   │                 DC images; entry registers; access registers;
   │                 FPRs and FPC
-  │  lower():       one IR function for the whole assembly, entered by dispatch
+  │  lower():       one IR function for the whole assembly, entered by dispatch,
+  │                 then the IR functions its statements call (the DPD codec)
   ▼
 compile_hlasm (interpreter/project/hlasm_compile.py)
      AST file → unit file → linked image, run with ProgramEntry(<entry name>)
@@ -998,10 +999,22 @@ TBEDR, THDER, THDR. Ruling R47.
   characteristic of an extended zero fraction, truncates LEDR, LRER and LDXR, and takes no
   LOAD ROUNDED overflow. The z390 test pins each (red-dragon-6uyp.74).
 
+**DFP arithmetic (red-dragon-6uyp.55).** ADTR, ADTRA, AXTR, AXTRA, DDTR, DDTRA, DXTR, DXTRA,
+MDTR, MDTRA, MXTR, MXTRA, SDTR, SDTRA, SXTR, SXTRA. Rulings R34, R41, R43, R49.
+
+- Each operand goes through the format's decode IR function to `[negative, e, significand]`
+  (`e` the biased exponent, or -1 infinity, -2 QNaN, -3 SNaN); a `dfp_builtins()` builtin
+  rounds; the encode IR function builds the canonical result image after delivery.
+- Rounding: M4 0 or 2 (and the non-A forms) take the FPC DFP mode, bits 25-27, as code
+  `mode + 8`; 1 and 3-15 are the modifier. M4 0 or 8-15 suppress the quantum exception.
+- The trap ladder is the BFP one. The quantum exception (mask and flag X'04', DXC 04)
+  completes after the store, and is not recognized when an inexact trap is taken.
+- CC: add and subtract per figure 20-10, 3 for a NaN; multiply and divide leave it.
+
 ## Known Gaps
 
-- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, miscellaneous, packed-decimal arithmetic, packed-decimal compare and test, decimal conversion, edit, floating-point-support, BFP arithmetic, BFP conversion, HFP arithmetic and HFP conversion units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
-- DFP and PFPO are not lowered. Their arithmetic is the leaf `zarch_float` ([zarch-float.md](zarch-float.md)); `bfp_builtins.py` and `hfp_builtins.py` reach it (red-dragon-6uyp.51, .53, .54), and the later floating-point units add their builtins.
+- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, miscellaneous, packed-decimal arithmetic, packed-decimal compare and test, decimal conversion, edit, floating-point-support, BFP arithmetic, BFP conversion, HFP arithmetic, HFP conversion and DFP arithmetic units are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
+- DFP conversions and PFPO are not lowered. Floating-point arithmetic is the leaf `zarch_float` ([zarch-float.md](zarch-float.md)); `bfp_builtins.py`, `hfp_builtins.py` and `dfp_builtins.py` reach it (red-dragon-6uyp.51, .53, .54, .55), and the later floating-point units add their builtins.
 - DC types beyond C, X, B, F, H, P, Z, A, Y and V, and any type extension, raise `UnsupportedDataType` (red-dragon-6uyp.63; floating point E, D, L: red-dragon-6uyp.21).
 - Falling through into DC/DS data or past a CSECT's end skips the data instead of executing it, and a branch into data abends `S0C1` (red-dragon-6uyp.64).
 - Every branch, even to a static relative target, walks the dispatch chain (red-dragon-6uyp.80).
@@ -1173,4 +1186,6 @@ TBEDR, THDER, THDR. Ruling R47.
 | `tests/z390/test_hfp_conversion_differential.py` | Every HFP conversion case against z390; its faults pinned (`-m z390`) |
 | `tests/unit/hlasm/test_dpd_codec.py` | DPD codec IR: all 1000 declets against figures 20-32 and 20-33, the 24 noncanonical declets, each format's fields and canonical encoding |
 | `tests/unit/hlasm/test_dfp_builtins.py` | DFP builtins: fields to values and back for every kind; each family's value, scaled value, trap, flags, DXCs and CC |
+| `tests/unit/hlasm/test_dfp_arithmetic_lowering.py` | DFP IR: operands decoded in argument order, one builtin call, the ladder, then encode and store; the A forms' modifier replaces the FPC read; invalid pairs abend `S0C6` before any access; no SYMBOLIC |
+| `tests/integration/hlasm/test_dfp_arithmetic.py` | Every DFP arithmetic mnemonic on the VM: images, CC and FPC flags; the FPC DFP mode; the tininess edge; each trap's delivered value, DXC and `S0C7`, quantum traps included |
 | `tests/z390/test_conditional_select_count_differential.py` | Every conditional, select and count case against z390; the instructions z390 does not execute and its whole-register SELFHR pinned (`-m z390`) |
