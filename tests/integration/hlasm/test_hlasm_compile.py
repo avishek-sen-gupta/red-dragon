@@ -4,6 +4,7 @@
 import os
 import subprocess
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -12,13 +13,16 @@ import pytest
 
 from hlasm_asg.assembly_clock import AssemblyClock
 from hlasm_asg.assembly_input import AssemblyInput
+from hlasm_asg.hlasm_bridge_not_found import HlasmBridgeNotFound
 from hlasm_asg.hlasm_bridge_parser import (
     BRIDGE_ENV_VAR,
     HlasmBridgeParser,
     bridge_executable,
     make_hlasm_parser,
+    resolve_bridge,
 )
 from hlasm_asg.hlasm_parse_error import HlasmParseError
+from hlasm_asg.missing_syslib_directory import MissingSyslibDirectory
 from hlasm_asg.real_subprocess_runner import RealSubprocessRunner
 from interpreter.constants import Language
 from interpreter.project.hlasm_compile import compile_hlasm, lower_hlasm_program
@@ -199,16 +203,45 @@ def test_an_assembly_input_not_given_is_refused():
     ]
 
 
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_an_unsupplied_sysparm_is_the_null_string():
+    source = (
+        "MAIN     CSECT\n"
+        "         WTO   'P=&SYSPARM'\n"
+        "         SR    15,15\n"
+        "         BR    14\n"
+        "         END   MAIN\n"
+    )
+
+    assert run_hlasm(source) == HlasmRun(0, "", "P=\n")
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_a_missing_syslib_directory_is_refused(tmp_path: Path):
+    missing = tmp_path / "no-such-lib"
+
+    with pytest.raises(MissingSyslibDirectory) as from_compile:
+        compile_hlasm(SEVEN, parser=make_hlasm_parser([missing]))
+    with pytest.raises(MissingSyslibDirectory) as from_run:
+        run(RETURNS_SEVEN, language=Language.HLASM, copybook_dirs=[missing])
+
+    assert (from_compile.value.directory, from_run.value.directory) == (
+        missing,
+        missing,
+    )
+    assert str(from_run.value) == f"SYSLIB directory {missing} does not exist"
+
+
 def _units(work_dir: Path) -> int:
     return sum(1 for p in work_dir.iterdir() if p.name.endswith(".unit.json"))
 
 
 @pytest.fixture
-def wrapped_bridge(tmp_path: Path) -> HlasmBridgeParser:
+def wrapped_bridge(tmp_path: Path, syslib: Path) -> HlasmBridgeParser:
     wrapper = tmp_path / "bridge"
     wrapper.write_text(f'#!/bin/sh\nexec "{bridge_executable()}" "$@"\n')
     wrapper.chmod(0o755)
-    return HlasmBridgeParser(RealSubprocessRunner(), str(wrapper), [tmp_path / "lib"])
+    return HlasmBridgeParser(RealSubprocessRunner(), str(wrapper), [syslib])
 
 
 def _units_after(
@@ -246,8 +279,7 @@ def test_unit_reuse_follows_inputs_syslib_members_and_bridge_but_not_the_clock(
     assert before_edit + after_edit == (1, 1, 2, 3, 4)
 
 
-@covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_the_bridge_is_found_from_any_working_directory(tmp_path: Path):
+def _assemble_elsewhere(tmp_path: Path, bridge: Mapping[str, str]) -> int:
     script = tmp_path / "assemble.py"
     script.write_text(
         "from pathlib import Path\n"
@@ -258,6 +290,7 @@ def test_the_bridge_is_found_from_any_working_directory(tmp_path: Path):
     env = {
         **{k: v for k, v in os.environ.items() if k != BRIDGE_ENV_VAR},
         "PYTHONPATH": str(REPO_ROOT),
+        **bridge,
     }
 
     ran = subprocess.run(
@@ -265,4 +298,24 @@ def test_the_bridge_is_found_from_any_working_directory(tmp_path: Path):
     )
 
     assert (ran.returncode, ran.stderr) == (0, b"")
-    assert _units(tmp_path / "work") == 1
+    return _units(tmp_path / "work")
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_the_bridge_is_found_from_any_working_directory(tmp_path: Path):
+    assert _assemble_elsewhere(tmp_path, {}) == 1
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_a_bridge_named_without_a_path_is_found_on_path(tmp_path: Path):
+    bridge = Path(bridge_executable())
+    on_path = {
+        BRIDGE_ENV_VAR: bridge.name,
+        "PATH": f"{bridge.parent}{os.pathsep}{os.environ['PATH']}",
+    }
+
+    with pytest.raises(HlasmBridgeNotFound) as missing:
+        resolve_bridge("no-such-hlasm-bridge")
+
+    assert _assemble_elsewhere(tmp_path, on_path) == 1
+    assert str(missing.value) == "hlasm_ast_bridge not found: no-such-hlasm-bridge"
