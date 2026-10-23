@@ -13,6 +13,7 @@ from hlasm_asg.program.storage_length_operand import StorageLengthOperand
 from hlasm_asg.program.storage_operand import StorageOperand
 from hlasm_asg.program.vec_reg_operand import VecRegOperand
 from interpreter.hlasm.hlasm_lowering_error import HlasmLoweringError
+from interpreter.hlasm.vector_indexed_operand import VectorIndexedOperand
 
 
 def statement_place(statement: MachineStatement) -> str:
@@ -122,3 +123,13 @@ def vec_reg_operand(statement: MachineStatement, index: int) -> int:
             return value
         case _:
             raise _mismatch(statement, index, "a vector register")
+
+
+def vector_indexed_operand(
+    statement: MachineStatement, index: int
+) -> VectorIndexedOperand:
+    match _at(statement, index):
+        case [StorageOperand(displacement=displacement, index=vector, base=base)]:
+            return VectorIndexedOperand(displacement, vector, base)
+        case _:
+            raise _mismatch(statement, index, "a vector-indexed storage operand")
