@@ -17,5 +17,8 @@ class HfpValue:
     def magnitude(self) -> Fraction:
         return self.fraction * Fraction(16) ** (self.exponent - self.format.digits)
 
+    def signed(self) -> Fraction:
+        return -self.magnitude() if self.negative else self.magnitude()
+
     def negated(self) -> "HfpValue":
         return replace(self, negative=not self.negative)

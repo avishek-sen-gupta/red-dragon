@@ -78,11 +78,14 @@ the operation is suppressed.
 | `hfp_multiply` | `(a, b, target)`: the exact product truncated; `target` LONG from SHORT operands gives MDER, EXTENDED from LONG gives MXDR |
 | `hfp_divide`, `hfp_halve` | Exact quotient, normalized and truncated |
 | `hfp_square_root` | Truncated to one guard digit, then a half is added at it (SQER, SQDR, SQXR) |
+| `hfp_load_fp_integer` | FIER, FIDR, FIXR: truncated to an integer and normalized |
+| `hfp_multiply_add`, `hfp_multiply_subtract` | `(a, b, c)` = a × b ± c exact, normalized and truncated once to c's format; no significance (MAE, MAD, MSE, MSD) |
+| `hfp_multiply_unnormalized`, `hfp_multiply_add_unnormalized` | Long operands: the 28-digit product, or the 28 digits of product + c aligned with it, unnormalized, the exponent unwrapped and no conditions (MY, MAY). A zero sum is positive; a zero product keeps the sign |
 | `hfp_load_rounded`, `hfp_load_lengthened` | LOAD ROUNDED adds a half at the first dropped bit; a carry shifts right |
 | `hfp_from_integer`, `hfp_to_integer` | From: normalized, truncated. To: under the M3 method; out of range gives an end of the range with OUT_OF_RANGE (CC 3) |
 
-Zero fractions give a positive true zero from multiply, divide, halve, square root and
-CONVERT FROM FIXED, as figure 18-1 states.
+Zero fractions give a positive true zero from multiply, multiply and add, divide, halve,
+square root, load FP integer and CONVERT FROM FIXED, as figure 18-1 states.
 
 ## DFP
 

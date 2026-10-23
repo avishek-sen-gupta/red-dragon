@@ -11,7 +11,12 @@ from zarch_float.hfp_arithmetic import (
     hfp_compare,
     hfp_divide,
     hfp_halve,
+    hfp_load_fp_integer,
     hfp_multiply,
+    hfp_multiply_add,
+    hfp_multiply_add_unnormalized,
+    hfp_multiply_subtract,
+    hfp_multiply_unnormalized,
     hfp_square_root,
     hfp_subtract,
 )
@@ -162,4 +167,85 @@ def test_conversions_round_or_truncate_as_each_instruction_states():
         IntegerResult(-3, NONE),
         IntegerResult(1, NONE),
         IntegerResult(-(2**31), frozenset({Condition.OUT_OF_RANGE})),
+    ]
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_load_fp_integer_truncates_normalizes_and_makes_zero_positive():
+    two_and_a_half_and_a_little = (0x28 << 104) | 1
+
+    assert [
+        _out(hfp_load_fp_integer(short(x)))
+        for x in (
+            0x41180000,
+            0xC1280000,
+            0x40800000,
+            0xC0800000,
+            0x43001000,
+            0x47123456,
+        )
+    ] == [
+        (0x41100000, NONE),
+        (0xC1200000, NONE),
+        (0x00000000, NONE),
+        (0x00000000, NONE),
+        (0x41100000, NONE),
+        (0x47123456, NONE),
+    ]
+    assert hfp_load_fp_integer(
+        HfpValue(EXTENDED, False, two_and_a_half_and_a_little, 1)
+    ) == HfpResult(HfpValue(EXTENDED, False, 0x2 << 108, 1), NONE)
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_multiply_add_keeps_the_exact_product_and_truncates_once():
+    below_one = short(0x40FFFFFF)
+
+    assert [
+        _out(hfp_multiply_add(short(0x41200000), short(0x41300000), short(0x41100000))),
+        _out(hfp_multiply_subtract(below_one, below_one, short(0x40FFFFFE))),
+        _out(hfp_multiply_add(short(0x41200000), short(0x41300000), short(0xC1600000))),
+        _out(hfp_multiply_add(short(0x7F100000), short(0x7F100000), short(0))),
+        _out(hfp_multiply_subtract(short(0x01100000), short(0x01100000), short(0))),
+    ] == [
+        (0x41700000, NONE),
+        (0x35100000, NONE),
+        (0x00000000, NONE),
+        (0x3D100000, OVERFLOW),
+        (0x41100000, UNDERFLOW),
+    ]
+    assert hfp_multiply_add(
+        long(0x41200000_00000000), long(0x41300000_00000000), long(0xC1100000_00000000)
+    ) == HfpResult(long(0x41500000_00000000), NONE)
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_unnormalized_multiplies_keep_the_28_digit_window_unwrapped():
+    one, two = long(0x4110000000000000), long(0x4120000000000000)
+    top = 2 << 104
+
+    assert [
+        hfp_multiply_unnormalized(one, two),
+        hfp_multiply_unnormalized(long(0xC100000000000000), two),
+        hfp_multiply_unnormalized(long(0x7F10000000000000), long(0x7F10000000000000)),
+    ] == [
+        HfpResult(HfpValue(EXTENDED, False, top, 2), NONE),
+        HfpResult(HfpValue(EXTENDED, True, 0, 2), NONE),
+        HfpResult(HfpValue(EXTENDED, False, 1 << 104, 126), NONE),
+    ]
+    assert [
+        hfp_multiply_add_unnormalized(one, two, long(c)).value
+        for c in (
+            0x4130000000000000,
+            0x4810000000000000,
+            0xA110000000000000,
+            0xC120000000000000,
+            0xC130000000000000,
+        )
+    ] == [
+        HfpValue(EXTENDED, False, 5 << 104, 2),
+        HfpValue(EXTENDED, False, top, 2),
+        HfpValue(EXTENDED, False, top - 1, 2),
+        HfpValue(EXTENDED, False, 0, 2),
+        HfpValue(EXTENDED, True, 1 << 104, 2),
     ]
