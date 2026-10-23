@@ -1,5 +1,5 @@
 # pyright: standard
-"""HFP conversion lowerings: the rounding forms read M3 and the operand, call one builtin, store and set the CC with no program-mask ladder; the exact and truncating forms are IR alone; static checks abend before any access."""
+"""HFP conversion lowerings: the rounding forms read M3 and the operand, call one builtin, store and set the CC with no program-mask ladder; the exact, truncating, lengthening and rounding forms are IR alone, LOAD ROUNDED abending S0CC after its store; static checks abend before any access."""
 
 from collections.abc import Mapping
 
@@ -7,7 +7,9 @@ from hlasm_asg.program.operand import Operand
 from interpreter.instructions import Symbolic
 from tests.covers import NotLanguageFeature, covers
 from tests.unit.hlasm.fp_trace import (
+    ADDRESS,
     CC,
+    D8,
     SPECIFICATION,
     lowered_ir,
     registers,
@@ -57,6 +59,23 @@ def test_from_fixed_and_bfp_to_hfp_are_ir_without_a_call():
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_lengthening_is_ir_and_rounding_stores_before_the_overflow_abend():
+    overflow = "StoreVar __hlasm_abend S0CC"
+
+    assert {
+        "LDER": trace("LDER", registers(1, 2)),
+        "LXD": trace("LXD", (reg_operand(4), D8)),
+        "LEDR": trace("LEDR", registers(1, 2)),
+        "LEXR": trace("LEXR", registers(1, 4)),
+    } == {
+        "LDER": ["read fpr 16+4", "write fpr 8+8"],
+        "LXD": [ADDRESS, "read storage +8", "write fpr 32+8", "write fpr 48+8"],
+        "LEDR": ["read fpr 16+8", "write fpr 8+4", overflow],
+        "LEXR": ["read fpr 32+8", "read fpr 48+8", "write fpr 8+4", overflow],
+    }
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_invalid_pairs_and_modifiers_abend_before_any_access():
     traces = [
         trace("CFER", _rrf(2, 3, 1)),
@@ -68,6 +87,13 @@ def test_invalid_pairs_and_modifiers_abend_before_any_access():
         trace("TBDR", _rrf(1, 8, 2)),
         trace("CXFR", registers(2, 1)),
         trace("CXGR", registers(7, 1)),
+        trace("LXDR", registers(2, 1)),
+        trace("LXD", (reg_operand(3), D8)),
+        trace("LXER", registers(6, 0)),
+        trace("LXE", (reg_operand(2), D8)),
+        trace("LDXR", registers(1, 2)),
+        trace("LRDR", registers(1, 6)),
+        trace("LEXR", registers(0, 3)),
     ]
 
     assert traces == [[SPECIFICATION]] * len(traces)
@@ -77,6 +103,8 @@ FAMILIES: Mapping[str, tuple[Operand, ...]] = {
     "CFER CFDR CFXR CGER CGDR CGXR": _rrf(1, 4, 4),
     "TBEDR TBDR": _rrf(1, 1, 4),
     "CEFR CDFR CXFR CEGR CDGR CXGR THDER THDR": registers(4, 2),
+    "LDER LXDR LXER LEDR LRER LDXR LRDR LEXR": registers(4, 8),
+    "LDE LXD LXE": (reg_operand(4), D8),
 }
 
 
@@ -88,7 +116,7 @@ def test_every_mnemonic_lowers_without_symbolic():
         for m in names.split()
     }
 
-    assert len(lowered) == 16
+    assert len(lowered) == 27
     assert [
         m for m, ir in lowered.items() if any(isinstance(i, Symbolic) for i in ir)
     ] == []

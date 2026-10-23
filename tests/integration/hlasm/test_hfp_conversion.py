@@ -1,11 +1,11 @@
 # pyright: standard
-"""HFP conversion instructions run on the VM: every mnemonic's GR or FPR result and CC."""
+"""HFP conversion instructions run on the VM: every mnemonic's GR or FPR result and CC, and LOAD ROUNDED's exponent overflow storing before it abends."""
 
 import pytest
 
 from tests.covers import NotLanguageFeature, covers
 from tests.integration.hlasm import hfp_conversion_programs as programs
-from tests.integration.hlasm.hlasm_helpers import run_hlasm_machine
+from tests.integration.hlasm.hlasm_helpers import run_hlasm_float, run_hlasm_machine
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
@@ -15,3 +15,14 @@ def test_hfp_conversion_leaves_the_registers_and_cc(case: str):
     machine = run_hlasm_machine(programs.program(body))
 
     assert machine.restricted_to(registers) == programs.expected(case)
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+@pytest.mark.parametrize("case", list(programs.TRAPS))
+def test_load_rounded_overflow_stores_then_abends(case: str):
+    body, fprs = programs.TRAPS[case][:2]
+    machine, fpr_images, _ = run_hlasm_float(programs.program(body))
+
+    assert (machine.run, machine.cc, {r: fpr_images[r] for r in fprs}) == (
+        programs.expected_trap(case)
+    )
