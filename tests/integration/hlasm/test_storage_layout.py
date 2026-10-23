@@ -12,7 +12,7 @@ from hlasm_asg.program.hlasm_program import HlasmProgram
 from hlasm_asg.program.reloc_symbol import RelocSymbol
 from interpreter.hlasm.machine import machine_allocation
 from interpreter.hlasm.storage_layout import section_allocation, section_var
-from interpreter.hlasm.unsupported_data_type import UnsupportedDataType
+from interpreter.hlasm.unsupported_statement import UnsupportedStatement
 from interpreter.vm.vm_types import VMState
 from tests.covers import NotLanguageFeature, covers
 from tests.unit.hlasm.straight_line_vm import run_straight_line
@@ -137,11 +137,11 @@ def test_star_is_the_address_of_each_constant_after_an_empty_fullword(
 def test_channel_command_words_refuse_until_they_are_encoded(tmp_path: Path):
     program = _assemble(CHANNEL_COMMAND_SOURCE, tmp_path)
 
-    with pytest.raises(UnsupportedDataType) as refused:
+    with pytest.raises(UnsupportedStatement) as refused:
         section_allocation(program)
 
     assert str(refused.value) == (
-        "DC type CCW1 is not supported yet — red-dragon-6uyp.93"
+        "CCW1 statements are not supported yet — red-dragon-6uyp.93"
     )
 
 

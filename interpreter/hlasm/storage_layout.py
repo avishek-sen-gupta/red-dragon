@@ -25,7 +25,7 @@ from interpreter.hlasm.hlasm_constants import (
     SECTION_VAR_PREFIX,
 )
 from interpreter.hlasm.placed_piece import PlacedPiece
-from interpreter.hlasm.unsupported_data_type import UnsupportedDataType
+from interpreter.hlasm.unsupported_statement import UnsupportedStatement
 from interpreter.instructions import (
     AllocRegion,
     Binop,
@@ -159,7 +159,7 @@ def _write(index: int, placed: PlacedPiece) -> tuple[InstructionBase, ...]:
 def _refuse_channel_commands(program: HlasmProgram) -> None:
     commands = [s.mnemonic for s in program.statements if isinstance(s, CcwStatement)]
     if commands:
-        raise UnsupportedDataType(commands[0], ENCODING_ISSUE)
+        raise UnsupportedStatement(commands[0], ENCODING_ISSUE)
 
 
 def section_allocation(program: HlasmProgram) -> tuple[InstructionBase, ...]:
