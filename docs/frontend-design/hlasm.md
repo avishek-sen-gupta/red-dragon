@@ -45,7 +45,7 @@ addresses.
 
 | Module | Purpose |
 |---|---|
-| `hlasm_asg/hlasm_bridge_parser.py` | `make_hlasm_parser(syslib)`, `HlasmBridgeParser`; exit 2 → `HlasmParseError`, other failures → `HlasmBridgeFailure` |
+| `hlasm_asg/hlasm_bridge_parser.py` | `make_hlasm_parser(syslib)`, `HlasmBridgeParser`; exit 2 → `HlasmParseError`, other failures → `HlasmBridgeFailure`. The default bridge path is resolved from the package, not the working directory; `HLASM_AST_BRIDGE` overrides it |
 | `interpreter/frontends/__init__.py` | `get_hlasm_parser(syslib)`: the bridge parser with `hlasm-bridge/maclib/` first on SYSLIB |
 | `hlasm-bridge/maclib/` | Our macros: `WTO`, `ABEND` |
 | `hlasm_asg/program/` | The bridge JSON models, one class per file. A D(X,B) storage operand also carries its address as written (`written`): the section and offset of an implicit address, before USING resolution, or the absolute displacement. Each DC/DS operand carries its offset and bit offset from che4z's location counter, its length unit (bytes, or bits for `L.n`), scale and exponent. `*` is the address of each constant: an address operand that names the location counter is exported per duplication copy (`ADDRESSES_PER_COPY`), each value evaluated at its own address. An S-constant is a base and displacement resolved through USING. `DC 0F` has an `OMITTED` nominal. CCW, CCW0 and CCW1 are statements with their command code, address, flags and count. The program lists AMODE and RMODE statements, and each diagnostic its macro call stack (`related`) |
@@ -1239,7 +1239,7 @@ layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.
 | `tests/integration/hlasm/test_bridge_parser.py` | The real bridge: macro origins, refused assemblies; operand placement, modifiers, S-constants, CCW, AMODE/RMODE and diagnostic call stacks |
 | `tests/integration/hlasm/test_storage_layout.py` | Section regions and address constants; `*` in each constant after `DC 0F` |
 | `tests/integration/hlasm/test_svc.py` | `WTO`, `ABEND` user and system codes, unlowered SVCs, `run()` with our maclib then `copybook_dirs`, call-site spans |
-| `tests/integration/hlasm/test_hlasm_compile.py` | Unit files, reuse, SYSLIB invalidation, `run()`, return code, default entry, BALR/BR, wild branch |
+| `tests/integration/hlasm/test_hlasm_compile.py` | Unit files, reuse, SYSLIB invalidation, the bridge found from another working directory, `run()`, return code, default entry, BALR/BR, wild branch |
 | `tests/integration/hlasm/test_instruction_table.py`, `test_opcode_unit_coverage.py` | Instruction table and opcode-unit coverage |
 | `tests/z390/test_foundation_differential.py` | Return code, WTO, user abend and assembly failure against z390 (`-m z390`) |
 | `tests/z390/test_z390_log.py` | Registers and CC from a z390 abend dump (default run) |
