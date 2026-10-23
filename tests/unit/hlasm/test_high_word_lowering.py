@@ -239,6 +239,11 @@ def test_brcth_takes_the_target_then_counts_down_the_high_word_and_lfhat_traps_a
         "WriteRegion 16+4",
         "== 0",
         "BranchIf",
+        "LoadVar __hlasm_fpc",
+        "<< 8",
+        "& 4294902015",
+        "| reg",
+        "StoreVar __hlasm_fpc reg",
         "StoreVar __hlasm_abend S0C7",
         "Halt_",
     ]

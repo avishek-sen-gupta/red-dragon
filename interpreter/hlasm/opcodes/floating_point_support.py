@@ -65,6 +65,8 @@ IEEE_BITS = 0xFC
 OVERFLOW_UNDERFLOW_BITS = 0x30
 INEXACT_BIT = 0x08
 SIMULATED_IEEE_DXC = 0b11
+GENERAL_OPERAND_DXC = 0x00
+COMPARE_AND_TRAP_DXC = 0xFF
 SMEAR_SHIFTS = (1, 2, 4)
 
 
@@ -206,6 +208,10 @@ def store_dxc(emitter: HlasmEmitter, fpc: Register, dxc: Register) -> None:
 def emit_data_exception(emitter: HlasmEmitter, fpc: Register, dxc: Register) -> None:
     store_dxc(emitter, fpc, dxc)
     emit_abend(emitter, DATA_EXCEPTION_ABEND)
+
+
+def emit_coded_data_exception(emitter: HlasmEmitter, dxc: int) -> None:
+    emit_data_exception(emitter, emitter.load_var(FPC_VAR), emitter.int_(dxc))
 
 
 def _trap(

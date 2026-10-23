@@ -4,7 +4,6 @@
 from collections.abc import Callable, Mapping
 
 from hlasm_asg.program.machine_statement import MachineStatement
-from interpreter.hlasm.conditional import emit_when
 from interpreter.hlasm.data_movement import (
     Sink,
     Source,
@@ -14,10 +13,12 @@ from interpreter.hlasm.data_movement import (
     to_doubleword_pair,
     to_gr64,
 )
-from interpreter.hlasm.decimal_exceptions import emit_decimal_overflow_check
+from interpreter.hlasm.decimal_exceptions import (
+    emit_data_check,
+    emit_decimal_overflow_check,
+)
 from interpreter.hlasm.dfp_layout import EXTENDED_DFP, LONG_DFP, DfpLayout
 from interpreter.hlasm.effective_address import length_operand_address
-from interpreter.hlasm.hlasm_constants import FPC_VAR
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.opcodes.decimal_lanes import (
     combined_digits,
@@ -34,7 +35,6 @@ from interpreter.hlasm.opcodes.dfp_ir import (
     store_fields,
 )
 from interpreter.hlasm.opcodes.floating_point_support import (
-    emit_data_exception,
     pairs,
 )
 from interpreter.hlasm.opcodes.fp_forms import checked
@@ -56,23 +56,12 @@ MINUS_CODE = 0xD
 PLUS_CODE = 0xC
 PREFERRED_PLUS = 0xF
 PLUS_SELECTION = 0b0001
-GENERAL_OPERAND_DXC = 0
 
 type SignedDigits = tuple[Register, Register, Register]
 
 
 def packed_count(layout: DfpLayout) -> int:
     return layout.format.precision + 2
-
-
-def emit_general_operand_check(emitter: HlasmEmitter, bad: Register) -> None:
-    emit_when(
-        emitter,
-        bad,
-        lambda: emit_data_exception(
-            emitter, emitter.load_var(FPC_VAR), emitter.int_(GENERAL_OPERAND_DXC)
-        ),
-    )
 
 
 def signed_nibbles(emitter: HlasmEmitter, image: Register) -> SignedDigits:
@@ -107,9 +96,7 @@ def _from_register(
     def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
         digits, negative, bad_sign = split(emitter, read(emitter, statement))
         bad_digits = invalid_digits(emitter, digits, PACKED_LANE, count)
-        emit_general_operand_check(
-            emitter, emitter.binop(BinopKind.BIT_OR, bad_digits, bad_sign)
-        )
+        emit_data_check(emitter, emitter.binop(BinopKind.BIT_OR, bad_digits, bad_sign))
         function = combined_digits(PACKED_LANE, packed_count(layout))
         value = function.call(emitter, (digits,))
         fields = converted(emitter, value, negative, layout)
@@ -276,7 +263,7 @@ def _packed_value(
 def _from_packed(layout: DfpLayout) -> StatementLowering:
     def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
         value, negative, bad = _packed_value(emitter, statement, layout)
-        emit_general_operand_check(emitter, bad)
+        emit_data_check(emitter, bad)
         fields = converted(emitter, value, negative, layout)
         store_fields(emitter, reg_operand(statement, FIRST), layout, fields)
 
@@ -304,7 +291,7 @@ def _from_zoned(layout: DfpLayout) -> StatementLowering:
             invalid_digits(emitter, image, ZONED_LANE, length),
             bad_sign,
         )
-        emit_general_operand_check(emitter, bad)
+        emit_data_check(emitter, bad)
         function = combined_digits(ZONED_LANE, layout.format.precision)
         value = function.call(emitter, (image,))
         fields = converted(emitter, value, negative, layout)
