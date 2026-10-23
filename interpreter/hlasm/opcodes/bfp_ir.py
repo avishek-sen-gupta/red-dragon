@@ -104,6 +104,25 @@ def exact_image(
     )
 
 
+def significand_of(
+    emitter: HlasmEmitter, image: Register, biased: Register, source: BfpLayout
+) -> tuple[Register, Register]:
+    normal = emitter.binop(BinopKind.NE, biased, emitter.int_(0))
+    implied = emitter.binop(
+        BinopKind.LSHIFT, normal, emitter.int_(source.fraction_bits)
+    )
+    fraction = keep((1 << source.fraction_bits) - 1)(emitter, image)
+    magnitude = emitter.binop(BinopKind.BIT_OR, fraction, implied)
+    floor = emitter.binop(BinopKind.SUB, emitter.int_(1), normal)
+    unbiased = emitter.binop(BinopKind.ADD, biased, floor)
+    exponent = emitter.binop(
+        BinopKind.SUB,
+        unbiased,
+        emitter.int_(source.format.emax + source.fraction_bits),
+    )
+    return magnitude, exponent
+
+
 def image_cc(emitter: HlasmEmitter, image: Register, layout: BfpLayout) -> Register:
     magnitude = keep(layout.magnitude_mask)(emitter, image)
     sign = emitter.binop(BinopKind.RSHIFT, image, emitter.int_(layout.sign_shift))

@@ -108,7 +108,7 @@ addresses.
 | `interpreter/hlasm/opcodes/hfp_arithmetic.py` | The HFP arithmetic unit's builtin forms: add, subtract, compare, multiply, divide, halve, square root, load FP integer, the multiply-and-add forms (red-dragon-6uyp.53) |
 | `interpreter/hlasm/opcodes/hfp_sign.py` | HFP LOAD AND TEST and the sign forms, in IR |
 | `interpreter/hlasm/opcodes/hfp_ir.py` | HFP image IR: field lists, encoding with the extended low-order part, an image's CC, and the program-mask ladder |
-| `interpreter/hlasm/opcodes/hfp_conversion.py` | HFP conversions: to fixed and to BFP through builtins (red-dragon-6uyp.54) |
+| `interpreter/hlasm/opcodes/hfp_conversion.py` | HFP conversions: to fixed and to BFP through builtins, from fixed and from BFP in IR (red-dragon-6uyp.54) |
 | `interpreter/hlasm/opcodes/fpr_images.py`, `interpreter/hlasm/fpr_layout.py` | Floating-point images of any radix: FPR access by width (short high word, long, pair), FPR and storage operand sources, result-list items, an arithmetic select |
 | `interpreter/hlasm/program_status.py` | SPM, IPM, EPSW |
 | `interpreter/hlasm/checksum.py` | CKSM |
@@ -962,8 +962,8 @@ SW, SWR, SXR. Rulings R34, R39, R41, R46.
   MAYL, stores a nonzero value for a masked underflow, and abends `S0C7` for a negative
   square root. The z390 test pins each (red-dragon-6uyp.74).
 
-**HFP conversions (red-dragon-6uyp.54).** CFDR, CFER, CFXR, CGDR, CGER, CGXR, TBDR, TBEDR.
-Ruling R47.
+**HFP conversions (red-dragon-6uyp.54).** CDFR, CDGR, CEFR, CEGR, CFDR, CFER, CFXR, CGDR,
+CGER, CGXR, CXFR, CXGR, TBDR, TBEDR, THDER, THDR. Ruling R47.
 
 - To fixed and to BFP round by M3 through a `to_fixed_32/64` or `to_bfp_short/long`
   builtin. There is no ladder: neither raises a program check. M3 0 truncates; the FPC mode
@@ -973,9 +973,17 @@ Ruling R47.
   to 0 gives CC 2. CC 3 means out of range (to fixed: the maximum of the source's sign) or
   overflow (to BFP: infinity or Nmax by method, figure 9-20). A tiny TBEDR source is
   denormalized and keeps CC 1 or 2.
+- From fixed and BFP to HFP are IR (no rounding method): `hfp_ir.normalized_fields` takes a
+  sign, a magnitude and a binary exponent, counts leading zeros and gives the characteristic
+  and the hex-normalized fraction, truncated. From fixed leaves the CC; zero is a positive
+  true zero. THDxR is exact; a zero keeps its sign (CC 0); a characteristic below 0 gives a
+  zero of the source's sign (CC 1 or 2); above 127, or an infinity, gives all ones with the
+  source's sign, and a NaN gives +all ones (CC 3, figure 9-18).
 - z390 sets the to-fixed CC from the result, wraps out-of-range sources, writes X'F4F4F4F4'
   into bits 32-63 of TBEDR results, flushes tiny TBEDR values to +0 with CC 0, gives CC 2 on
-  overflow and garbles TBDR. The z390 test pins each (red-dragon-6uyp.74).
+  overflow and garbles TBDR. It rounds CEFR and CDGR, converts BFP to HFP through host floating
+  point (losing low bits, a signed zero and the THDR overflow result) and abends `S0C5` for
+  THDER of an infinity. The z390 test pins each (red-dragon-6uyp.74).
 
 ## Known Gaps
 
@@ -1147,7 +1155,7 @@ Ruling R47.
 | `tests/unit/hlasm/test_hfp_arithmetic_lowering.py` | HFP IR: operands in argument order, one call, then the program-mask ladder; sign forms without a call; invalid pairs abend `S0C6` before any access; no SYMBOLIC in all 81 |
 | `tests/integration/hlasm/test_hfp_arithmetic.py` | Every HFP arithmetic mnemonic on the VM: result images and CC; each exception's stored or suppressed result and abend, with its mask bit on and off |
 | `tests/z390/test_hfp_arithmetic_differential.py` | Every HFP arithmetic case against z390; its faults pinned (`-m z390`) |
-| `tests/unit/hlasm/test_hfp_conversion_lowering.py` | HFP conversion IR: rounding forms read M3 and the operand, call, store and set the CC; static `S0C6` before any access; no SYMBOLIC |
+| `tests/unit/hlasm/test_hfp_conversion_lowering.py` | HFP conversion IR: rounding forms read M3 and the operand, call, store and set the CC; IR forms call nothing; static `S0C6` before any access; no SYMBOLIC |
 | `tests/integration/hlasm/test_hfp_conversion.py` | Every HFP conversion mnemonic on the VM: GR or FPR results and CC |
 | `tests/z390/test_hfp_conversion_differential.py` | Every HFP conversion case against z390; its faults pinned (`-m z390`) |
 | `tests/z390/test_conditional_select_count_differential.py` | Every conditional, select and count case against z390; the instructions z390 does not execute and its whole-register SELFHR pinned (`-m z390`) |

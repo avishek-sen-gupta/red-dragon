@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from tests.integration.hlasm.bfp_arithmetic_programs import (
     COMPLETED,
     PRESET,
+    PRESET_CC,
     cc_into,
     cc_word,
     extended_from,
@@ -18,9 +19,22 @@ from tests.integration.hlasm.hlasm_machine import HlasmMachine
 from tests.integration.hlasm.hlasm_run import HlasmRun
 from tests.integration.hlasm.load_store_programs import ABEND, HIGH_FILL, based_program
 
+CONVERSION_DATA = (
+    "         DS    0D\n"
+    "BS1      DC    X'3F800000'\n"
+    "BSMIN    DC    X'80000001'\n"
+    "BSNAN    DC    X'FFC00000'\n"
+    "BSMINF   DC    X'FF800000'\n"
+    "BDTENTH  DC    X'3FB999999999999A'\n"
+    "BDHMAX   DC    X'4FA0000000000000'\n"
+    "BDOVER   DC    X'4FB0000000000000'\n"
+    "BDHMIN   DC    X'2FB0000000000000'\n"
+    "BDUNDER  DC    X'AFA0000000000000'\n"
+)
+
 
 def program(body: str) -> str:
-    return based_program(body, ABEND + DATA)
+    return based_program(body, ABEND + DATA + CONVERSION_DATA)
 
 
 def case_of(body: str, registers: Mapping[int, int], cc: int) -> Case:
@@ -88,7 +102,110 @@ TO_BFP: Mapping[str, Case] = {
     ),
 }
 
-CASES: Mapping[str, Case] = {**TO_FIXED, **TO_BFP}
+FROM_FIXED: Mapping[str, Case] = {
+    "CEFR CEGR": case_of(
+        zeroed_short(1)
+        + lines(
+            "IILF 2,X'7FFFFFFF'",
+            "CEFR 1,2",
+            "LGDR 3,1",
+            "LLIHF 2,X'80000000'",
+            "CEGR 1,2",
+            "LGDR 4,1",
+        ),
+        {3: high_word(0x487FFFFF), 4: high_word(0xD0800000)},
+        PRESET_CC,
+    ),
+    "CDFR CDGR": case_of(
+        lines(
+            "IILF 2,X'FFFFFFFF'",
+            "CDFR 1,2",
+            "LGDR 3,1",
+            "LLIHF 2,X'7FFFFFFF'",
+            "IILF 2,X'FFFFFFFF'",
+            "CDGR 1,2",
+            "LGDR 4,1",
+            "LGHI 2,0",
+            "CDGR 1,2",
+            "LGDR 5,1",
+        ),
+        {3: 0xC1100000_00000000, 4: 0x507FFFFF_FFFFFFFF, 5: 0},
+        PRESET_CC,
+    ),
+    "CXFR CXGR": case_of(
+        lines(
+            "IILF 2,X'00000100'",
+            "CXFR 4,2",
+            "LGDR 3,4",
+            "LGDR 5,6",
+            "LLIHF 2,X'80000000'",
+            "IILF 2,X'00000001'",
+            "CXGR 4,2",
+            "LGDR 7,4",
+            "LGDR 8,6",
+            "LGHI 2,0",
+            "CXGR 4,2",
+            "LGDR 9,4",
+            "LGDR 10,6",
+        ),
+        {
+            3: 0x43100000_00000000,
+            5: 0x35000000_00000000,
+            7: 0xD07FFFFF_FFFFFFFF,
+            8: 0xC2FF0000_00000000,
+            9: 0,
+            10: 0,
+        },
+        PRESET_CC,
+    ),
+}
+
+FROM_BFP: Mapping[str, Case] = {
+    "THDER": case_of(
+        lines("LE 1,BS1", "THDER 2,1", "LGDR 3,2")
+        + cc_into(8)
+        + lines("LE 1,BSMIN", "THDER 2,1", "LGDR 4,2")
+        + cc_into(9)
+        + lines("LE 1,BSMINF", "THDER 2,1", "LGDR 5,2")
+        + cc_into(10)
+        + lines("LE 1,BSNAN", "THDER 2,1", "LGDR 6,2"),
+        {
+            3: 0x41100000_00000000,
+            8: cc_word(2),
+            4: 0x9B800000_00000000,
+            9: cc_word(1),
+            5: 0xFFFFFFFF_FFFFFFFF,
+            10: cc_word(3),
+            6: 0x7FFFFFFF_FFFFFFFF,
+        },
+        3,
+    ),
+    "THDR": case_of(
+        lines("LD 1,BDTENTH", "THDR 2,1", "LGDR 3,2")
+        + cc_into(8)
+        + lines("LD 1,BDHMAX", "THDR 2,1", "LGDR 4,2")
+        + lines("LD 1,BDOVER", "THDR 2,1", "LGDR 5,2")
+        + cc_into(9)
+        + lines("LD 1,BDHMIN", "THDR 2,1", "LGDR 6,2")
+        + lines("LD 1,BDUNDER", "THDR 2,1", "LGDR 7,2")
+        + cc_into(10)
+        + lines("LD 1,DMZERO", "THDR 2,1", "LGDR 11,2"),
+        {
+            3: 0x40199999_9999999A,
+            8: cc_word(2),
+            4: 0x7F800000_00000000,
+            5: 0x7FFFFFFF_FFFFFFFF,
+            9: cc_word(3),
+            6: 0x00100000_00000000,
+            7: 0x80000000_00000000,
+            10: cc_word(1),
+            11: 0x80000000_00000000,
+        },
+        0,
+    ),
+}
+
+CASES: Mapping[str, Case] = {**TO_FIXED, **TO_BFP, **FROM_FIXED, **FROM_BFP}
 
 
 def expected(case: str) -> HlasmMachine:

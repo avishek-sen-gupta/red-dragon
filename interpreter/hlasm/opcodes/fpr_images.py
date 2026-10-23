@@ -1,5 +1,5 @@
 # pyright: standard
-"""Floating-point images in IR, whatever the radix: FPR access by width, operand sources, result-list items and an arithmetic select."""
+"""Floating-point images in IR, whatever the radix: FPR access by width, operand sources, result-list items, an arithmetic select and an integer's sign and magnitude."""
 
 from collections.abc import Callable, Mapping, Sequence
 from functools import reduce
@@ -92,3 +92,12 @@ def pick(
     difference = emitter.binop(BinopKind.SUB, then, otherwise)
     taken = emitter.binop(BinopKind.MUL, chosen, difference)
     return emitter.binop(BinopKind.ADD, otherwise, taken)
+
+
+def signed_magnitude(
+    emitter: HlasmEmitter, value: Register
+) -> tuple[Register, Register]:
+    negative = emitter.binop(BinopKind.LT, value, emitter.int_(0))
+    doubled = emitter.binop(BinopKind.MUL, negative, emitter.int_(2))
+    flipped = emitter.binop(BinopKind.MUL, doubled, value)
+    return negative, emitter.binop(BinopKind.SUB, value, flipped)
