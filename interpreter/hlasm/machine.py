@@ -1,12 +1,10 @@
 # pyright: standard
-"""Run-unit start-up IR for the z/Architecture machine state: GPRs, CC, program mask, the last stored clock value, the access registers, the floating-point registers and the FPC."""
+"""Run-unit start-up IR for the z/Architecture machine state: GPRs, CC, program mask, the last stored clock value, the access registers, the vector registers (whose left halves are the floating-point registers) and the FPC."""
 
 from interpreter.hlasm.hlasm_constants import (
     ACCESS_REGISTER_BYTES,
     ACCESS_REGISTERS_VAR,
     CC_VAR,
-    FLOATING_POINT_REGISTER_BYTES,
-    FLOATING_POINT_REGISTERS_VAR,
     FPC_VAR,
     GPR_BYTES,
     GPR_COUNT,
@@ -16,6 +14,9 @@ from interpreter.hlasm.hlasm_constants import (
     INITIAL_PROGRAM_MASK,
     PROGRAM_MASK_VAR,
     TOD_LAST_VAR,
+    VECTOR_REGISTER_BYTES,
+    VECTOR_REGISTER_COUNT,
+    VECTOR_REGISTERS_VAR,
 )
 from interpreter.instructions import AllocRegion, Const, InstructionBase, StoreVar
 from interpreter.register import Register
@@ -27,8 +28,8 @@ _PROGRAM_MASK = Register("%hlasm_machine_pm")
 _TOD_LAST = Register("%hlasm_machine_tod_last")
 _ARS_SIZE = Register("%hlasm_machine_ars_size")
 _ARS = Register("%hlasm_machine_ars")
-_FPRS_SIZE = Register("%hlasm_machine_fprs_size")
-_FPRS = Register("%hlasm_machine_fprs")
+_VRS_SIZE = Register("%hlasm_machine_vrs_size")
+_VRS = Register("%hlasm_machine_vrs")
 _FPC = Register("%hlasm_machine_fpc")
 
 
@@ -56,9 +57,9 @@ def access_register_allocation() -> tuple[InstructionBase, ...]:
 
 def floating_point_allocation() -> tuple[InstructionBase, ...]:
     return (
-        Const.int_(_FPRS_SIZE, GPR_COUNT * FLOATING_POINT_REGISTER_BYTES),
-        AllocRegion(result_reg=_FPRS, size_reg=_FPRS_SIZE),
-        StoreVar(name=FLOATING_POINT_REGISTERS_VAR, value_reg=_FPRS),
+        Const.int_(_VRS_SIZE, VECTOR_REGISTER_COUNT * VECTOR_REGISTER_BYTES),
+        AllocRegion(result_reg=_VRS, size_reg=_VRS_SIZE),
+        StoreVar(name=VECTOR_REGISTERS_VAR, value_reg=_VRS),
         Const.int_(_FPC, INITIAL_FPC),
         StoreVar(name=FPC_VAR, value_reg=_FPC),
     )

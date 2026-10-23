@@ -1,5 +1,5 @@
 # pyright: standard
-"""The GPR, access-register and floating-point-register regions, the FPC, condition code and program mask, read and written through the VM."""
+"""The GPR, access-register and vector-register regions (floating-point registers on the vector registers' left halves), the FPC, condition code and program mask, read and written through the VM."""
 
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.machine import (
@@ -81,7 +81,7 @@ def test_access_registers_are_sixteen_zero_words_in_their_own_region():
     ]
 
 
-def test_floating_point_registers_are_sixteen_zero_doublewords_and_short_forms_use_the_high_word():
+def test_floating_point_registers_are_the_left_halves_of_thirty_two_zero_vector_registers():
     emitter = HlasmEmitter()
     emitter.store_fpr(15, _const(emitter, 0x1_0123_4567_89AB_CDEF))
     emitter.store_fpr_high32(15, _const(emitter, 0xFEDC_BA98))
@@ -91,6 +91,7 @@ def test_floating_point_registers_are_sixteen_zero_doublewords_and_short_forms_u
         {},
     )
     frame_vars = vm.current_frame.local_vars
+    vrs = frame_vars[VarName("__hlasm_vrs")].value
 
     assert [register_value(vm, reg).value for reg in loads] == [
         0xFEDCBA98_89ABCDEF,
@@ -98,7 +99,15 @@ def test_floating_point_registers_are_sixteen_zero_doublewords_and_short_forms_u
         0,
     ]
     assert [
-        vm.load(frame_vars[VarName("__hlasm_fprs")].value, 120),
+        vm.load(vrs, 240),
+        vm.load(vrs + 240, 16),
+        vm.load(vrs + 256, 256),
         vm.load(frame_vars[VarName("__hlasm_gprs")].value, 128),
         frame_vars[VarName("__hlasm_fpc")].value,
-    ] == [[0] * 120, [0] * 128, 0]
+    ] == [
+        [0] * 240,
+        [0xFE, 0xDC, 0xBA, 0x98, 0x89, 0xAB, 0xCD, 0xEF] + [0] * 8,
+        [0] * 256,
+        [0] * 128,
+        0,
+    ]

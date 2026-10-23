@@ -50,7 +50,7 @@ addresses.
 | `hlasm-bridge/maclib/` | Our macros: `WTO`, `ABEND` |
 | `hlasm_asg/program/` | The bridge JSON models, one class per file. A D(X,B) storage operand also carries its address as written (`written`): the section and offset of an implicit address, before USING resolution, or the absolute displacement |
 | `interpreter/hlasm/hlasm_frontend.py` | `HlasmFrontend(program)`: `lower()`, `start_up_ir()`, `entry_name`, `entry_label` |
-| `interpreter/hlasm/machine.py` | GPR region (`__hlasm_gprs`, 8 bytes per register), `__hlasm_cc`, `__hlasm_pm`, `__hlasm_tod_last` (the last STCK value); the access-register region (`__hlasm_ars`, 4 bytes per register, all 0), allocated after the sections so their addresses do not move |
+| `interpreter/hlasm/machine.py` | GPR region (`__hlasm_gprs`, 8 bytes per register), `__hlasm_cc`, `__hlasm_pm`, `__hlasm_tod_last` (the last STCK value); the access-register region (`__hlasm_ars`, 4 bytes per register, all 0); the vector-register region (`__hlasm_vrs`, 16 bytes per register, all 0) and `__hlasm_fpc`, allocated after the sections so their addresses do not move |
 | `interpreter/hlasm/storage_layout.py` | One region per section (`__hlasm_sect_<NAME>`) and its DC images; DC registers carry a per-piece index. Section bases are doubleword aligned: regions are allocated in order from address 4096, the 128-byte GPR region first, and each section is sized up to a doubleword multiple |
 | `interpreter/hlasm/dc_encoding.py` | DC images: C, X, B, F, H, P, Z, A, Y |
 | `interpreter/hlasm/entry_state.py` | Entry resolution and entry registers (R14 = `0xFF0` return sentinel, R13 = 72-byte save area, R15 = entry address) |
@@ -857,8 +857,9 @@ UNPK, UNPKA, UNPKU. Rulings R1, R29, R31, R34, R39.
 LER, LEY, LFAS, LFPC, LGDR, LNDFR, LPDFR, LXR, LZDR, LZER, LZXR, SFASR, SFPC, SRNM, SRNMB,
 SRNMT, STD, STDY, STE, STEY, STFPC. PFPO is in .56 (ruling R42). Rulings R34, R37, R41.
 
-- `__hlasm_fprs` holds 16 FPRs of 8 bytes, `__hlasm_fpc` the FPC; both start at 0. AFP
-  control is on, so every FPR is usable. All forms are bit moves in IR; none sets the CC.
+- FPR f is bytes 0-7 of vector register f in `__hlasm_vrs`; `__hlasm_fpc` is the FPC. Both
+  start at 0. AFP control is on, so every FPR is usable. All forms are bit moves in IR; none
+  sets the CC.
 - Short forms (LE, LEY, LER, LZER, STE, STEY) use FPR bits 0-31 and leave bits 32-63 alone.
   LXR and LZXR use pairs (r, r+2); an R with bit value 2 set abends `S0C6`.
 - LCDFR, LNDFR and LPDFR flip, set and clear bit 0; CPSDR R1,R3,R2 takes R2 with R3's sign.
@@ -1111,6 +1112,9 @@ Rulings R43, R45, R48, R52.
 **Vector registers (red-dragon-6uyp.90).** No vector opcode is lowered yet; this is the
 layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.md`, ruling R53).
 
+- `__hlasm_vrs` holds 32 vector registers of 16 bytes, VR v at offset 16v, big-endian. FPR f is
+  bytes 0-7 of VR f. Scalar FP writes and pair reads leave bytes 8-15 unchanged, one of the
+  outcomes PoO 2-6 permits.
 - Our che4z fork exports `VZERO v` as `VGBM v,0`. Upstream che4z gives `VGBM 1,v`.
 
 ## Known Gaps
@@ -1267,7 +1271,7 @@ layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.
 | `tests/unit/hlasm/test_edit_lowering.py` | Edit IR: the source read and `S0C7` before the first store, the CC after, EDMK's GR1 last; EX layout; no SYMBOLIC |
 | `tests/integration/hlasm/test_edit.py` | ED and EDMK on the VM: amount mask with CR, zero suppression, field separators, CC from the last field, alternate signs, a fill byte that is X'20' or X'21', a pending digit across X'22', a first digit with a plus code, GR1 marked or kept; EX length; `S0C7` with the pattern, CC and GR1 unchanged |
 | `tests/z390/test_edit_differential.py` | Every edit case against z390 (`-m z390`) |
-| `tests/unit/hlasm/test_floating_point_support_lowering.py` | Floating-point-support IR: FPR region offsets and widths, short forms on 4 bytes; invalid pairs abend before any access; FPC checks before the FPC store, the LFAS/SFASR trap after it; no SYMBOLIC |
+| `tests/unit/hlasm/test_floating_point_support_lowering.py` | Floating-point-support IR: FPR offsets (stride 16) and widths, short forms on 4 bytes; invalid pairs abend before any access; FPC checks before the FPC store, the LFAS/SFASR trap after it; no SYMBOLIC |
 | `tests/integration/hlasm/test_floating_point_support.py` | Every floating-point-support mnemonic on the VM through GRs: moves, low word kept, sign forms, FPC loads and rounding modes, `S0C6` with the FPC unchanged, each Figure 9-21 DXC with `S0C7`; EX of LER |
 | `tests/z390/test_floating_point_support_differential.py` | Every floating-point-support case against z390; its initial FPC, short loads, HFP sign forms, missing checks and signaling pinned (`-m z390`) |
 | `tests/unit/hlasm/test_bfp_builtins.py` | BFP builtins: fields to values and back for every class; each builtin family's value, scaled value, trap, flags, DXCs and CC |

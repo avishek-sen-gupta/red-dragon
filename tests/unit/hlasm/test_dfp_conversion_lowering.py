@@ -50,14 +50,14 @@ def test_fixed_point_forms_call_the_builtin_then_store_through_the_ladder():
     } == {
         "CGDTR": [
             READ_FPC,
-            "read fpr 8+8",
+            "read fpr 16+8",
             DECODE_LONG,
             "call dfp to_fixed_64_long",
             *ladder("write gpr 16+8", CC),
         ],
         "CLFXTR": [
-            "read fpr 32+8",
-            "read fpr 48+8",
+            "read fpr 64+8",
+            "read fpr 96+8",
             DECODE_EXTENDED,
             "call dfp to_logical_32_extended",
             *ladder("write gpr 20+4", CC),
@@ -66,18 +66,18 @@ def test_fixed_point_forms_call_the_builtin_then_store_through_the_ladder():
             READ_FPC,
             "read gpr 16+8",
             "call dfp from_fixed_long",
-            *ladder(ENCODE_LONG, "write fpr 8+8"),
+            *ladder(ENCODE_LONG, "write fpr 16+8"),
         ],
         "CXLFTR": [
             READ_FPC,
             "read gpr 20+4",
             "call dfp from_fixed_extended",
-            *ladder(ENCODE_EXTENDED, "write fpr 32+8", "write fpr 48+8"),
+            *ladder(ENCODE_EXTENDED, "write fpr 64+8", "write fpr 96+8"),
         ],
         "CDLGTR": [
             "read gpr 16+8",
             "call dfp from_fixed_long",
-            *ladder(ENCODE_LONG, "write fpr 8+8"),
+            *ladder(ENCODE_LONG, "write fpr 16+8"),
         ],
     }
 
@@ -90,22 +90,22 @@ def test_lengthening_is_ir_and_rounding_merges_into_the_source_format_register()
         "LEDTR": trace("LEDTR", _rrfe(1, 0, 2, 0)),
     } == {
         "LDETR": [
-            "read fpr 16+4",
+            "read fpr 32+4",
             "call dfp decode_short",
-            *ladder(ENCODE_LONG, "write fpr 8+8"),
+            *ladder(ENCODE_LONG, "write fpr 16+8"),
         ],
         "LXDTR": [
-            "read fpr 8+8",
+            "read fpr 16+8",
             DECODE_LONG,
-            *ladder(ENCODE_EXTENDED, "write fpr 32+8", "write fpr 48+8"),
+            *ladder(ENCODE_EXTENDED, "write fpr 64+8", "write fpr 96+8"),
         ],
         "LEDTR": [
             READ_FPC,
-            "read fpr 16+8",
+            "read fpr 32+8",
             DECODE_LONG,
             "call dfp load_rounded_long",
             *ladder(
-                "call dfp encode_short", ENCODE_LONG, "read fpr 8+8", "write fpr 8+8"
+                "call dfp encode_short", ENCODE_LONG, "read fpr 16+8", "write fpr 16+8"
             ),
         ],
     }
@@ -126,7 +126,7 @@ def test_register_decimal_forms_check_then_combine_or_spread_the_digits():
             DATA,
             "call decimal value_4_18",
             ENCODE_LONG,
-            "write fpr 8+8",
+            "write fpr 16+8",
         ],
         "CXUTR": [
             "read gpr 48+8",
@@ -136,18 +136,18 @@ def test_register_decimal_forms_check_then_combine_or_spread_the_digits():
             DATA,
             "call decimal value_4_36",
             ENCODE_EXTENDED,
-            "write fpr 32+8",
-            "write fpr 48+8",
+            "write fpr 64+8",
+            "write fpr 96+8",
         ],
         "CSDTR": [
-            "read fpr 8+8",
+            "read fpr 16+8",
             DECODE_LONG,
             "call decimal lanes_4_16",
             "write gpr 16+8",
         ],
         "CUXTR": [
-            "read fpr 32+8",
-            "read fpr 48+8",
+            "read fpr 64+8",
+            "read fpr 96+8",
             DECODE_EXTENDED,
             "call decimal lanes_4_34",
             "write gpr 48+8",
@@ -176,7 +176,7 @@ def test_storage_decimal_forms_read_or_write_the_field_at_its_length():
             WRITE_FPC,
             DATA,
             ENCODE_LONG,
-            "write fpr 8+8",
+            "write fpr 16+8",
         ],
         "CXZT": [
             ADDRESS,
@@ -186,11 +186,11 @@ def test_storage_decimal_forms_read_or_write_the_field_at_its_length():
             DATA,
             "call decimal value_8_34",
             ENCODE_EXTENDED,
-            "write fpr 32+8",
-            "write fpr 48+8",
+            "write fpr 64+8",
+            "write fpr 96+8",
         ],
         "CPDT": [
-            "read fpr 8+8",
+            "read fpr 16+8",
             DECODE_LONG,
             "call decimal lanes_4_16",
             ADDRESS,
@@ -200,8 +200,8 @@ def test_storage_decimal_forms_read_or_write_the_field_at_its_length():
             "StoreVar __hlasm_abend S0CA",
         ],
         "CZXT": [
-            "read fpr 32+8",
-            "read fpr 48+8",
+            "read fpr 64+8",
+            "read fpr 96+8",
             DECODE_EXTENDED,
             "call decimal lanes_8_34",
             ADDRESS,

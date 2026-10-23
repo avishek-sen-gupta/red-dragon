@@ -1,5 +1,5 @@
 # pyright: standard
-"""Accumulates HLASM lowering IR and emits reads and writes of the machine state: general, access and floating-point registers, CC and storage."""
+"""Accumulates HLASM lowering IR and emits reads and writes of the machine state: general, access and vector registers (the floating-point registers are their left halves), CC and storage."""
 
 import dataclasses
 from collections.abc import Mapping
@@ -14,12 +14,13 @@ from interpreter.hlasm.hlasm_constants import (
     BINARY_BYTES_TO_INT,
     BITS_PER_BYTE,
     CC_VAR,
-    FLOATING_POINT_REGISTER_BYTES,
-    FLOATING_POINT_REGISTERS_VAR,
+    DOUBLEWORD_BYTES,
     GPR_BYTES,
     GPRS_VAR,
     INT_TO_BINARY_BYTES,
     LOW_WORD_OFFSET,
+    VECTOR_REGISTER_BYTES,
+    VECTOR_REGISTERS_VAR,
     WORD_BYTES,
 )
 from interpreter.hlasm.located_span import LocatedSpan
@@ -119,10 +120,10 @@ class HlasmEmitter:
         )
 
     def load_fpr(self, r: int) -> Register:
-        return self._load_fpr(r, FLOATING_POINT_REGISTER_BYTES)
+        return self._load_fpr(r, DOUBLEWORD_BYTES)
 
     def store_fpr(self, r: int, value: Register) -> None:
-        self._store_fpr(r, FLOATING_POINT_REGISTER_BYTES, value)
+        self._store_fpr(r, DOUBLEWORD_BYTES, value)
 
     def load_fpr_high32(self, r: int) -> Register:
         return self._load_fpr(r, WORD_BYTES)
@@ -132,15 +133,15 @@ class HlasmEmitter:
 
     def _load_fpr(self, r: int, width: int) -> Register:
         return self.load_storage(
-            self.load_var(FLOATING_POINT_REGISTERS_VAR),
-            FLOATING_POINT_REGISTER_BYTES * r,
+            self.load_var(VECTOR_REGISTERS_VAR),
+            VECTOR_REGISTER_BYTES * r,
             width,
         )
 
     def _store_fpr(self, r: int, width: int, value: Register) -> None:
         self.store_storage(
-            self.load_var(FLOATING_POINT_REGISTERS_VAR),
-            FLOATING_POINT_REGISTER_BYTES * r,
+            self.load_var(VECTOR_REGISTERS_VAR),
+            VECTOR_REGISTER_BYTES * r,
             width,
             value,
         )
