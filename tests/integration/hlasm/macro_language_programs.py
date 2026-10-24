@@ -79,6 +79,13 @@ LIBRARY: Mapping[str, str] = {
         "         WTO   'FROM COPY'\n"
     ),
     "SEQMEM": "         SEQ" + " " * 60 + "SEQ00500\n",
+    "LSEQ": (
+        "         MACRO\n"
+        "         LSEQ\n"
+        "         GBLC  &SEQS\n"
+        "&SEQS    SETC  '&SEQS L/&SYSSTMT'\n"
+        "         MEND\n"
+    ),
 }
 STDOUT_PROGRAMS: Mapping[str, tuple[str, str]] = {
     "SYSECT and SYSLOC": (
@@ -116,12 +123,13 @@ STDOUT_PROGRAMS: Mapping[str, tuple[str, str]] = {
         "         AIF   (T'LATER EQ 'F').GO                                      SEQ00300\n"
         ".GO      ANOP                                                           SEQ00400\n"
         "         SEQ                                                            SEQ00600\n"
+        "         LSEQ\n"
         "         WTO   'SEQ&SEQS'\n"
         "         SR    15,15\n"
         "         BR    14\n"
         "LATER    DC    F'1'\n"
         "         END   MAIN\n",
-        "SEQ SEQ00100/00000010 SEQ00500/00000015 SEQ00600/00000021\n",
+        "SEQ SEQ00100/00000011 SEQ00500/00000016 SEQ00600/00000022 L/00000026\n",
     ),
     "nested and inline macros with SYSNDX labels": (
         "         MACRO\n"
@@ -402,16 +410,24 @@ STDOUT_PROGRAMS: Mapping[str, tuple[str, str]] = {
         "XX T=X\nAD T=A\nMAIN T=J\nLAB T=I\nEQ T=U\nN12 T=N\nQUOTED T=U\n"
         "NOPE T=U\nDS1 T=C\nOMITTED T=O\nLR O=O\nWTO O=M\nDC O=A\nNOPE O=U\n",
     ),
-    "type attribute of literals": (
+    "type and defined attributes of literals": (
         "         MACRO\n"
         "         TYPE  &S,&N\n"
         "         LCLC  &T\n"
+        "         LCLB  &D\n"
         "&T       SETC  T'&S\n"
-        "         WTO   '&N T=&T'\n"
+        "&D       SETB  (D'&S)\n"
+        "         WTO   '&N T=&T D=&D'\n"
+        "         MEND\n"
+        "         MACRO\n"
+        "         LCLC  &T\n"
+        "&T       SETC  T'=F'9'\n"
+        "         WTO   'BODY T=&T'\n"
         "         MEND\n"
         "MAIN     CSECT\n"
         "         BASR  12,0\n"
         "         USING *,12\n"
+        "         TYPE  =F'7',BEFORE\n"
         "         L     2,=F'7'\n"
         "         TYPE  =F'7',USED\n"
         "         TYPE  =F'8',UNUSED\n"
@@ -422,7 +438,21 @@ STDOUT_PROGRAMS: Mapping[str, tuple[str, str]] = {
         "         BR    14\n"
         "         LTORG\n"
         "         END   MAIN\n",
-        "USED T=F\nUNUSED T=U\nUNUSEDC T=U\nLATER T=F\n",
+        "BEFORE T=U D=0\nUSED T=F D=1\nUNUSED T=U D=0\nUNUSEDC T=U D=0\nLATER T=F D=1\n",
+    ),
+    "type attribute of a literal written in a macro body": (
+        "         MACRO\n"
+        "         BODY\n"
+        "         LCLC  &T\n"
+        "&T       SETC  T'=F'9'\n"
+        "         WTO   'BODY T=&T'\n"
+        "         MEND\n"
+        "MAIN     CSECT\n"
+        "         BODY\n"
+        "         SR    15,15\n"
+        "         BR    14\n"
+        "         END   MAIN\n",
+        "BODY T=F\n",
     ),
 }
 Z390_STDOUT: Mapping[str, str] = {
@@ -435,14 +465,35 @@ Z390_STDOUT: Mapping[str, str] = {
         "FL T=D L=8 S=0 I=0 D=0\n"
     ),
     "SYSSEQF and SYSSTMT from open code, a COPY member and after lookahead": (
-        "SEQ /00000008 /00000011 /00000013\n"
+        "SEQ /00000008 /00000011 /00000013 L/00000015\n"
     ),
-    "type attribute of literals": "USED T=U\nUNUSED T=U\nUNUSEDC T=U\nLATER T=U\n",
+    "type and defined attributes of literals": (
+        "BEFORE T=U D=0\nUSED T=U D=0\nUNUSED T=U D=0\nUNUSEDC T=U D=0\nLATER T=U D=0\n"
+    ),
 }
 
 
 def low_words(machine: HlasmMachine, registers: Mapping[int, int]) -> Mapping[int, int]:
     return {r: machine.gprs[r] & LOW_WORD for r in registers}
+
+
+Z390_REFUSES = frozenset({"type attribute of a literal written in a macro body"})
+ACTR_PROGRAM = (
+    "         MACRO\n"
+    "         SPIN\n"
+    "         LCLA  &I\n"
+    "         ACTR  3\n"
+    ".TOP     ANOP\n"
+    "&I       SETA  &I+1\n"
+    "         AGO   .TOP\n"
+    "         MEND\n"
+    "MAIN     CSECT\n"
+    "         SPIN\n"
+    "         SR    15,15\n"
+    "         BR    14\n"
+    "         END   MAIN\n"
+)
+ACTR_REFUSAL = [("E056", 5, "ACTR counter exceeded")]
 
 
 def library_in(directory: Path, suffix: str) -> Path:

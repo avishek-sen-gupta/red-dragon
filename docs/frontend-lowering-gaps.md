@@ -1,10 +1,10 @@
 # Frontend Feature Coverage Gaps
 
-**Generated**: 2026-10-11
-**Method**: Scans `interpreter/frontends/*/features.py` and `interpreter/cobol/features.py` for `XxxFeature` enum members, then cross-references with `@covers(XxxFeature.X)` decorators in `tests/unit/` and `tests/integration/`. Uncovered members = features the frontend handles but no test annotates.
+**Generated**: 2026-10-24
+**Method**: Scans `interpreter/frontends/*/features.py`, `interpreter/cobol/features.py` and `interpreter/hlasm/features.py` for `XxxFeature` enum members, then cross-references with `@covers(XxxFeature.X)` decorators in `tests/unit/` and `tests/integration/`. Uncovered members = features the frontend handles but no test annotates.
 **Regenerate**: `uv run python scripts/feature_coverage_audit.py --gaps-doc docs/frontend-lowering-gaps.md`
 
-**Totals**: 988 features across 16 languages — 823 covered, 165 uncovered
+**Totals**: 1013 features across 17 languages — 849 covered, 164 uncovered
 
 ---
 
@@ -13,10 +13,11 @@
 | Language | Total | Covered | Uncovered | % Covered |
 |----------|-------|---------|-----------|-----------|
 | c | 51 | 36 | 15 ⚠ | 70% |
-| cobol | 139 | 137 | 2 ⚠ | 98% |
+| cobol | 153 | 152 | 1 ⚠ | 99% |
 | cpp | 84 | 45 | 39 ⚠ | 53% |
 | csharp | 94 | 73 | 21 ⚠ | 77% |
 | go | 44 | 41 | 3 ⚠ | 93% |
+| hlasm | 11 | 11 | 0 | 100% |
 | java | 72 | 72 | 0 | 100% |
 | javascript | 40 | 38 | 2 ⚠ | 95% |
 | kotlin | 59 | 51 | 8 ⚠ | 86% |
@@ -54,7 +55,6 @@
 ### cobol
 
 - `EXTERNAL_FLOATING_POINT` — External floating-point PIC (mantissa E exponent) display-form floating-point data items
-- `SEARCH_BINARY` — SEARCH ALL table WHEN cond binary table search statements
 
 ### cpp
 

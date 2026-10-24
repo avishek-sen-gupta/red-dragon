@@ -79,6 +79,9 @@ def _enum_classes_in_module(module: object, module_path: str) -> list[type[Enum]
     ]
 
 
+FEATURE_PACKAGES = ("cobol", "hlasm")
+
+
 def _load_feature_module(path: Path, module_path: str) -> FeatureModule:
     """Load a FeatureModule from a features.py file."""
     language = path.parent.name
@@ -99,22 +102,20 @@ def _load_feature_module(path: Path, module_path: str) -> FeatureModule:
 
 
 def discover_feature_modules(project_root: Path) -> tuple[FeatureModule, ...]:
-    """Return all FeatureModules found under interpreter/frontends/*/features.py and interpreter/cobol/features.py."""
-    modules = []
-
-    # Load from interpreter/frontends/*/features.py
-    feature_paths = sorted(project_root.glob("interpreter/frontends/*/features.py"))
-    for path in feature_paths:
-        language = path.parent.name
-        module_path = f"interpreter.frontends.{language}.features"
-        modules.append(_load_feature_module(path, module_path))
-
-    # Load from interpreter/cobol/features.py
-    cobol_path = project_root / "interpreter" / "cobol" / "features.py"
-    if cobol_path.exists():
-        modules.append(_load_feature_module(cobol_path, "interpreter.cobol.features"))
-
-    return tuple(sorted(modules, key=lambda m: m.language))
+    """Return all FeatureModules found under interpreter/frontends/*/features.py, interpreter/cobol/features.py and interpreter/hlasm/features.py."""
+    frontends = tuple(
+        _load_feature_module(path, f"interpreter.frontends.{path.parent.name}.features")
+        for path in sorted(project_root.glob("interpreter/frontends/*/features.py"))
+    )
+    packages = tuple(
+        _load_feature_module(
+            project_root / "interpreter" / package / "features.py",
+            f"interpreter.{package}.features",
+        )
+        for package in FEATURE_PACKAGES
+    )
+    by_language = sorted((m.language, m) for m in (*frontends, *packages))
+    return tuple(m for _, m in by_language)
 
 
 # ---------------------------------------------------------------------------
@@ -210,8 +211,9 @@ def generate_gaps_doc(results: Sequence[LanguageCoverageResult]) -> str:
     lines.append("")
     lines.append(f"**Generated**: {date.today()}")
     lines.append(
-        "**Method**: Scans `interpreter/frontends/*/features.py` and "
-        "`interpreter/cobol/features.py` for `XxxFeature` enum members, then "
+        "**Method**: Scans `interpreter/frontends/*/features.py`, "
+        "`interpreter/cobol/features.py` and `interpreter/hlasm/features.py` "
+        "for `XxxFeature` enum members, then "
         "cross-references with `@covers(XxxFeature.X)` decorators in "
         "`tests/unit/` and `tests/integration/`. "
         "Uncovered members = features the frontend handles but no test annotates."
