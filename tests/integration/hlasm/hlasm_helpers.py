@@ -14,6 +14,7 @@ from interpreter.hlasm.bfp_builtins import bfp_builtins
 from interpreter.hlasm.dfp_builtins import dfp_builtins
 from interpreter.hlasm.hfp_builtins import hfp_builtins
 from interpreter.hlasm.pfpo_builtins import pfpo_builtins
+from interpreter.hlasm_run_inputs.dd_builtins import NO_DDS
 from interpreter.hlasm_run_inputs.job_parm_builtins import NO_PARM
 from interpreter.hlasm_run_inputs.run_input_builtins import run_input_builtins
 from interpreter.project.entry_point import EntryPoint
@@ -93,7 +94,7 @@ def _run_vm(
             initial_vm=initial_vm_state(),
             builtins=compose_builtins(
                 core_builtins(),
-                run_input_builtins(FixedMachineClock(), NO_PARM),
+                run_input_builtins(FixedMachineClock(), NO_PARM, NO_DDS),
                 bfp_builtins(),
                 hfp_builtins(),
                 dfp_builtins(),

@@ -1,0 +1,30 @@
+         MACRO
+         DCBD  &DSORG=,&DEVD=
+IHADCB   DSECT
+         DS    XL26
+DCBDSORG DS    XL2
+         DS    XL4
+DCBEODAD DS    0A
+         DS    X
+DCBEODA  DS    AL3
+DCBRECFM DS    X
+DCBEXLSA DS    AL3
+DCBDDNAM DS    CL8
+DCBOFLGS DS    X
+         DS    X
+DCBMACRF DS    XL2
+         DS    XL4
+DCBSYNAD DS    0A
+         DS    X
+DCBSYNA  DS    AL3
+         DS    XL2
+DCBBLKSI DS    H
+         DS    XL18
+DCBLRECL DS    H
+         DS    XL12
+DCBDSGPS EQU   X'40'
+DCBRECF  EQU   X'80'
+DCBRECV  EQU   X'40'
+DCBRECBR EQU   X'10'
+DCBOFOPN EQU   X'10'
+         MEND

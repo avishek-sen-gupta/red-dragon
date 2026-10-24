@@ -1,0 +1,78 @@
+         MACRO
+&NAME    DCB   &DSORG=,&MACRF=,&RECFM=,&LRECL=0,&BLKSIZE=0,&DDNAME=,   X
+               &EODAD=1,&SYNAD=1
+         LCLA  &I,&MAC,&FORM,&ORG
+         LCLC  &EXIT
+         AIF   ('&DSORG' EQ '').ORGOK
+         AIF   ('&DSORG' NE 'PS').BADORG
+&ORG     SETA  64
+.ORGOK   ANOP
+.MACRF   ANOP
+&I       SETA  &I+1
+         AIF   (&I GT N'&MACRF).FORM
+         AIF   ('&MACRF(&I)' EQ 'GM').GM
+         AIF   ('&MACRF(&I)' EQ 'GL').GL
+         AIF   ('&MACRF(&I)' EQ 'PM').PM
+         AIF   ('&MACRF(&I)' EQ 'PL').PL
+         MNOTE 8,'DCB: MACRF MUST BE GM, GL, PM OR PL'
+         MEXIT
+.GM      ANOP
+&MAC     SETA  &MAC+X'5000'
+         AGO   .MACRF
+.GL      ANOP
+&MAC     SETA  &MAC+X'4800'
+         AGO   .MACRF
+.PM      ANOP
+&MAC     SETA  &MAC+X'0050'
+         AGO   .MACRF
+.PL      ANOP
+&MAC     SETA  &MAC+X'0048'
+         AGO   .MACRF
+.FORM    AIF   ('&RECFM' EQ '').EXITS
+         AIF   ('&RECFM' EQ 'F').F
+         AIF   ('&RECFM' EQ 'FB').FB
+         AIF   ('&RECFM' EQ 'V').V
+         AIF   ('&RECFM' EQ 'VB').VB
+         MNOTE 8,'DCB: RECFM MUST BE F, FB, V OR VB'
+         MEXIT
+.F       ANOP
+&FORM    SETA  X'80'
+         AGO   .EXITS
+.FB      ANOP
+&FORM    SETA  X'90'
+         AGO   .EXITS
+.V       ANOP
+&FORM    SETA  X'40'
+         AGO   .EXITS
+.VB      ANOP
+&FORM    SETA  X'50'
+.EXITS   ANOP
+&EXIT    SETC  'EODAD'
+         AIF   (T'&EODAD NE 'N').SYNAD
+         AIF   (&EODAD GE X'1000000').BELOW
+.SYNAD   ANOP
+&EXIT    SETC  'SYNAD'
+         AIF   (T'&SYNAD NE 'N').BUILD
+         AIF   (&SYNAD GE X'1000000').BELOW
+.BUILD   ANOP
+&NAME    DS    0F
+         DC    XL26'00'
+         DC    AL1(&ORG),AL1(0)
+         DC    XL4'00'
+         DC    AL1(0),AL3(&EODAD)
+         DC    AL1(&FORM),AL3(0)
+         DC    CL8'&DDNAME'
+         DC    XL2'00'
+         DC    AL2(&MAC)
+         DC    XL4'00'
+         DC    AL1(0),AL3(&SYNAD)
+         DC    XL2'00'
+         DC    AL2(&BLKSIZE)
+         DC    XL18'00'
+         DC    AL2(&LRECL)
+         DC    XL12'00'
+         MEXIT
+.BADORG  MNOTE 8,'DCB: DSORG MUST BE PS'
+         MEXIT
+.BELOW   MNOTE 8,'DCB: &EXIT MUST BE BELOW 16M'
+         MEND
