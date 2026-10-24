@@ -1,6 +1,10 @@
 # pyright: standard
-"""The object module of an assembly: ESD from its sections, ENTRY names, external symbols and external dummy sections, TXT and RLD from its placed constants (an address in a DSECT is its offset, with no RLD; Q, J and CXD are RLD alone), END from its entry point."""
+"""The object module of an assembly: ESD from its sections, ENTRY names, external symbols and external dummy sections, TXT and RLD from its placed constants (an address in a DSECT is its offset, with no RLD; Q, J and CXD are RLD alone; a complex-relocatable constant is one signed RLD per term outside a DSECT, the first carrying the absolute part), END from its entry point."""
 
+from collections.abc import Mapping
+from itertools import chain, repeat
+
+from hlasm_asg.program.complex_address import ComplexAddress
 from hlasm_asg.program.default_entry import DefaultEntry
 from hlasm_asg.program.external_dummy import ExternalDummy
 from hlasm_asg.program.external_kind import ExternalKind
@@ -10,8 +14,11 @@ from hlasm_asg.program.named_entry import NamedEntry
 from hlasm_asg.program.reloc_symbol import RelocSymbol
 from hlasm_asg.program.section import Section
 from hlasm_asg.program.section_kind import SectionKind
+from hlasm_asg.program.term_kind import TermKind
+from hlasm_asg.program.term_sign import TermSign
 from interpreter.hlasm.address_slot import AddressSlot
 from interpreter.hlasm.binder_slot import BinderSlot
+from interpreter.hlasm.complex_slot import ComplexSlot
 from interpreter.hlasm.constant_image import ConstantImage
 from interpreter.hlasm.entry_state import resolve_entry
 from interpreter.hlasm.external_slot import ExternalSlot
@@ -73,12 +80,44 @@ def _relocation(
     )
 
 
+_SIGNS: Mapping[TermSign, RelocationSign] = {
+    TermSign.PLUS: RelocationSign.PLUS,
+    TermSign.MINUS: RelocationSign.MINUS,
+}
+
+
+def _offset_image(offset: int, width: int) -> ConstantImage:
+    value = offset % (1 << (BITS_PER_BYTE * width))
+    return ConstantImage(tuple(value.to_bytes(width, "big")))
+
+
 def _in_dummy(placed: PlacedPiece, dummies: frozenset[str]) -> PlacedPiece:
     match placed.piece:
         case AddressSlot(address=address, width=width) if address.section in dummies:
-            value = address.offset % (1 << (BITS_PER_BYTE * width))
-            image = ConstantImage(tuple(value.to_bytes(width, "big")))
+            image = _offset_image(address.offset, width)
             return PlacedPiece(placed.section, placed.offset, image)
+        case _:
+            return placed
+
+
+def _undummied(
+    slot: ComplexSlot, dummies: frozenset[str]
+) -> ComplexSlot | ConstantImage:
+    address = slot.address
+    terms = tuple(
+        t for t in address.terms if t.kind == TermKind.EXTERNAL or t.name not in dummies
+    )
+    if not terms:
+        return _offset_image(address.offset, slot.width)
+    kept = ComplexAddress(kind="COMPLEX", terms=terms, offset=address.offset)
+    return ComplexSlot(kept, slot.width)
+
+
+def _complex_in_dummy(placed: PlacedPiece, dummies: frozenset[str]) -> PlacedPiece:
+    match placed.piece:
+        case ComplexSlot() as slot:
+            piece = _undummied(slot, dummies)
+            return PlacedPiece(placed.section, placed.offset, piece)
         case _:
             return placed
 
@@ -116,8 +155,32 @@ def _bound_relocations(placed: PlacedPiece) -> tuple[RelocationRecord, ...]:
             return ()
 
 
+def _complex_relocations(placed: PlacedPiece) -> tuple[RelocationRecord, ...]:
+    match placed.piece:
+        case ComplexSlot(address=address, width=width):
+            addends = chain((address.offset,), repeat(0))
+            return tuple(
+                RelocationRecord(
+                    placed.section,
+                    placed.offset,
+                    width,
+                    RelocationKind.ADDRESS,
+                    RelocationName(term.name),
+                    _SIGNS[term.sign],
+                    addend,
+                )
+                for term, addend in zip(address.terms, addends, strict=False)
+            )
+        case _:
+            return ()
+
+
 def _relocations(placed: PlacedPiece) -> tuple[RelocationRecord, ...]:
-    return (*_address_relocations(placed), *_bound_relocations(placed))
+    return (
+        *_address_relocations(placed),
+        *_complex_relocations(placed),
+        *_bound_relocations(placed),
+    )
 
 
 def _external_dummy(dummy: ExternalDummy) -> EsdRecord:
@@ -137,7 +200,7 @@ def object_module(program: HlasmProgram) -> ObjectModule:
     sections = tuple(s for s in program.sections if s.kind != SectionKind.DSECT)
     dummies = frozenset(s.name for s in program.sections) - {s.name for s in sections}
     pieces = tuple(
-        _in_dummy(placed, dummies)
+        _complex_in_dummy(_in_dummy(placed, dummies), dummies)
         for placed in placed_pieces(program, frozenset(s.name for s in sections))
     )
     return ObjectModule(

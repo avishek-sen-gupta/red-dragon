@@ -1,5 +1,5 @@
 # pyright: standard
-"""An assembly's object module: ESD in section order with private code, common sections, ENTRY labels, external references by strength and external dummy sections; TXT from its constants; an ADDRESS RLD for each relocatable or external address constant, a PR_OFFSET, CLASS_LENGTH or PR_TOTAL RLD for each Q, J or CXD; END at the named entry."""
+"""An assembly's object module: ESD in section order with private code, common sections, ENTRY labels, external references by strength and external dummy sections; TXT from its constants; an ADDRESS RLD for each relocatable or external address constant, a PR_OFFSET, CLASS_LENGTH or PR_TOTAL RLD for each Q, J or CXD, a signed ADDRESS RLD per term of a complex-relocatable constant outside a DSECT; END at the named entry."""
 
 from pathlib import Path
 
@@ -93,6 +93,52 @@ def test_object_module_records_external_dummies_and_their_q_j_and_cxd_fields():
             _record(4, 2, RelocationKind.PR_OFFSET, RelocationName("D")),
             _record(8, 4, RelocationKind.CLASS_LENGTH, RelocationName("PRA")),
             _record(12, 4, RelocationKind.PR_TOTAL, NoRelocationTarget()),
+        ),
+        end=NamedEnd("MAIN", "MAIN", 0),
+    )
+
+
+def _item(
+    offset: int, length: int, target: str, sign: RelocationSign, addend: int
+) -> RelocationRecord:
+    return RelocationRecord(
+        "B",
+        offset,
+        length,
+        RelocationKind.ADDRESS,
+        RelocationName(target),
+        sign,
+        addend,
+    )
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_object_module_records_a_signed_rld_item_per_complex_relocatable_term():
+    program = HlasmProgram.model_validate_json(
+        (FIXTURES / "complex_relocatable_program.json").read_text()
+    )
+    plus, minus = RelocationSign.PLUS, RelocationSign.MINUS
+
+    assert HlasmFrontend(program, "M").object_module == ObjectModule(
+        esd=(
+            ControlSection("MAIN", 8),
+            ControlSection("B", 20),
+            ExternalReference("E1", 10),
+        ),
+        text=(
+            TextRecord("MAIN", 0, bytes(4)),
+            TextRecord("MAIN", 4, bytes(4)),
+            TextRecord("B", 0, bytes(2)),
+            TextRecord("B", 16, b"\x00\x00\x00\x08"),
+        ),
+        relocations=(
+            _item(4, 4, "B", minus, 4),
+            _item(4, 4, "MAIN", plus, 0),
+            _item(8, 2, "B", minus, 12),
+            _item(8, 2, "MAIN", plus, 0),
+            _item(8, 2, "MAIN", plus, 0),
+            _item(12, 4, "E1", minus, 7),
+            _item(12, 4, "MAIN", plus, 0),
         ),
         end=NamedEnd("MAIN", "MAIN", 0),
     )

@@ -1,7 +1,9 @@
 # pyright: standard
-"""The image's start-up IR, run once: the machine state, a bit per module for the far branch, one doubleword-aligned region per module with its sections' variables, one region per common section, the stub range, every TXT record, every RLD (an address, a pseudo-register offset or length, or their total), and the names table LINK and LOAD read."""
+"""The image's start-up IR, run once: the machine state, a bit per module for the far branch, one doubleword-aligned region per module with its sections' variables, one region per common section, the stub range, every TXT record, every RLD (an address, a pseudo-register offset or length, or their total; the consecutive signed items at one field summed and stored once), and the names table LINK and LOAD read."""
 
 from collections.abc import Callable, Mapping, Sequence
+from functools import reduce
+from itertools import groupby
 
 from interpreter.hlasm.binder import Binder, aligned
 from interpreter.hlasm.bound_name import BoundName
@@ -175,19 +177,45 @@ def _target_value(
             return _named_value(emitter, binder, module, (record.kind, name))
 
 
-def _relocate(
+def _item_value(
     emitter: HlasmEmitter, binder: Binder, module: ImageModule, record: RelocationRecord
-) -> None:
+) -> Register:
     target = _target_value(emitter, binder, module, record)
-    value = emitter.binop(
+    return emitter.binop(
         BinopKind.ADD, _signed(emitter, record, target), emitter.int_(record.addend)
     )
+
+
+def _relocate(
+    emitter: HlasmEmitter,
+    binder: Binder,
+    module: ImageModule,
+    records: Sequence[RelocationRecord],
+) -> None:
+    value = reduce(
+        lambda total, record: emitter.binop(
+            BinopKind.ADD, total, _item_value(emitter, binder, module, record)
+        ),
+        records[1:],
+        _item_value(emitter, binder, module, records[0]),
+    )
+    field = records[0]
     emitter.store_storage(
-        emitter.load_var(section_var(module.name, record.section)),
-        record.offset,
-        record.length,
+        emitter.load_var(section_var(module.name, field.section)),
+        field.offset,
+        field.length,
         value,
     )
+
+
+def _fields(module: ImageModule) -> tuple[tuple[RelocationRecord, ...], ...]:
+    return tuple(
+        tuple(items) for _, items in groupby(module.object_module.relocations, _place)
+    )
+
+
+def _place(record: RelocationRecord) -> tuple[str, int]:
+    return record.section, record.offset
 
 
 def _machine_state(emitter: HlasmEmitter) -> None:
@@ -275,9 +303,9 @@ def _load(emitter: HlasmEmitter, binder: Binder) -> None:
             for record in module.object_module.text
         ],
         [
-            _relocate(emitter, binder, module, record)
+            _relocate(emitter, binder, module, records)
             for module in binder.modules
-            for record in module.object_module.relocations
+            for records in _fields(module)
         ],
     )
 

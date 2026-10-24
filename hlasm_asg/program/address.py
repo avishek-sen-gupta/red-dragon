@@ -9,10 +9,15 @@ from pydantic import Field
 
 from hlasm_asg.program.abs_address import AbsAddress
 from hlasm_asg.program.base_displacement_address import BaseDisplacementAddress
+from hlasm_asg.program.complex_address import ComplexAddress
 from hlasm_asg.program.external_address import ExternalAddress
 from hlasm_asg.program.reloc_address import RelocAddress
 
 Address = Annotated[
-    AbsAddress | RelocAddress | ExternalAddress | BaseDisplacementAddress,
+    AbsAddress
+    | RelocAddress
+    | ExternalAddress
+    | ComplexAddress
+    | BaseDisplacementAddress,
     Field(discriminator="kind"),
 ]

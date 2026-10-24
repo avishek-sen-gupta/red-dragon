@@ -233,14 +233,15 @@ The unit carries an `ObjectModule` (`interpreter/project/object_module.py`, buil
 | ESD ER, WX | `ExternalReference`, `WeakReference` | EXTRN and V-constant names; WXTRN |
 | ESD PR/XD | `ExternalDummySection` (name, length, alignment) | each DXD (DS-style length, strictest operand alignment) and each DSECT a Q-constant names (assembled length, doubleword) |
 | TXT | `TextRecord` (section, offset, bytes) | each placed constant image |
-| RLD | `RelocationRecord` (section, offset, length, kind, target, sign, addend) | each A, Y or V address naming a section or an external symbol (`ADDRESS`); each Q (`PR_OFFSET`), J (`CLASS_LENGTH`) and CXD (`PR_TOTAL`) |
+| RLD | `RelocationRecord` (section, offset, length, kind, target, sign, addend) | each A, Y or V address naming a section or an external symbol (`ADDRESS`); each Q (`PR_OFFSET`), J (`CLASS_LENGTH`) and CXD (`PR_TOTAL`); a complex-relocatable A or Y constant is one signed `ADDRESS` item per term at one field, the first carrying the absolute part, a DSECT term dropped (its offset is in the absolute part) |
 | END | `NamedEnd` (name, section, offset) or `DefaultEnd` (section) | END's operand, or the first CSECT |
 
 A target is `RelocationName(name)`, or `NoRelocationTarget()` for CXD. Q, J and CXD fields have
 no TXT. The bridge (program format 3) exports `entries`, `externals` as name, kind (`EXTRN` or
 `WXTRN`) and line (0 when it has none, as for `EXTRN PART(...)`), an external address's offset,
 `external_dummies` as name, length and alignment, and a `CXD` statement. A Q or J value is a
-`RELOC` naming the dummy section.
+`RELOC` naming the dummy section. A complex-relocatable value is `COMPLEX`: its terms (`SECTION`
+or `EXTERNAL`, name, `PLUS` or `MINUS`, one per count, sorted by name) and its absolute part.
 
 ### Binder
 
@@ -255,7 +256,7 @@ units' object modules once, at link. Start-up IR is not rebuilt from the AST.
   (`__hlasm_stubs_low` to `__hlasm_stubs_high`), the COBOL programs' first; each unresolved EXTRN is logged once as a warning
   (`UnresolvedExternal`, kept on the job-step module) at the open-code line of its EXTRN, else of
   its first use. An address in a DSECT is its offset, as TXT with no RLD (ruling R75). Every RLD is applied after every module is
-  laid out.
+  laid out. The signed items at one field are summed and stored once.
 - **Pseudo registers.** External dummy sections merge by name across the image at their largest
   length and strictest alignment, then sit in first appearance (module order, ESD order), each
   at the next offset aligned to its alignment, from 0 (IBM leaves the order to the binder). Q
@@ -1505,7 +1506,7 @@ layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.
   an opcode position abends `S0C1`, even one the opcode already has; byte-1 shapes not in the
   table (SS-d, the vector formats) count as opcode (red-dragon-6uyp.78).
 - che4z encodes LHHR and LLHFR without the Z bit, where the Principles of Operation (Figure 7-397) define RISBHGZ and RISBLGZ; the range is the whole word, so the result is the same.
-- Bridge gaps: complex-relocatable constants refuse the assembly (red-dragon-6uyp.68).
+- A complex-relocatable machine operand (e.g. `EX 2,MOVE+MOVE`) still refuses the assembly; only DC values export their terms.
 - AMODE 24 and 64 are not modelled: SAM24, SAM64 and BASSM or BSM into those modes
   abend `S0C1` (red-dragon-6uyp.75). A BASSM or BSM to the return address returns
   whatever mode it selects.
@@ -1620,12 +1621,12 @@ layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.
 | `tests/integration/hlasm/test_execute.py` | EX and EXRL on the VM: MVC length codes 0, 4, 7 and 255 and a destructive MVC, CLC, NC, OC, XC, TR, TRT, TRTR, MVN, MVZ, MVCIN and MVO lengths, CLI, CLIY, MVI, MVIY, TM, NI, NIY, OI, XI, ASI, AGSI and ALSI immediates (negative ones sign-extended after the OR), an SVC number, BAL, BRAS, AR and LHI fields, a BC mask and index, a branch mask from R1, and EXRL of CIJ with its M3 from R1; links after the execute instruction; CC kept; `S0C3`, `S0C6`; indexed targets and opcode modification xfailed (red-dragon-6uyp.77, red-dragon-6uyp.78) |
 | `tests/integration/hlasm/test_bridge_parser.py` | The real bridge: macro origins, refused assemblies; operand placement, modifiers, S-constants, CCW, AMODE/RMODE and diagnostic call stacks |
 | `tests/integration/hlasm/test_macro_language.py` | One program per macro-language feature on the VM: printed values and registers |
-| `tests/unit/hlasm/test_object_module.py` | ESD, TXT, RLD and END of an assembly with private code, a COM, ENTRY, EXTRN, WXTRN, A and V constants; XD records and the RLDs of Q, QL2, J and CXD |
+| `tests/unit/hlasm/test_object_module.py` | ESD, TXT, RLD and END of an assembly with private code, a COM, ENTRY, EXTRN, WXTRN, A and V constants; XD records and the RLDs of Q, QL2, J and CXD; signed items of A(X-Y), Y(X+X-Y+DF), A(X-E1+3) and the image of A(DF+DF) |
 | `tests/unit/hlasm/test_binder.py` | Layout offsets, CM merge, name resolution (local, image, COBOL stub, weak zero, stub), entry points, far-branch table, unresolved warning; duplicates in either language; XD merge and pseudo-register layout; a J naming no XD refused |
 | `tests/unit/hlasm/test_cobol_linkage.py` | The job step's `__entry_<NAME>` functions, the shared conversion, the far branch's COBOL call |
 | `tests/integration/hlasm/test_cobol_linkage.py` | Mixed image: start-up order, entry by name, PROGRAM-ID vs CSECT refused; COBOL → HLASM list with every mode, OMITTED middle and last, RETURN-CODE; HLASM → COBOL by signature, short VL list; nesting with register restore; abend under COBOL; CANCEL |
-| `tests/integration/hlasm/test_binder.py` | Two modules: a V-constant to a later module's ENTRY and its data; PARM supplied and empty; BALR to an unresolved EXTRN, permitted and refused; a CSECT in two units refused; two modules sharing DXDs through Q, J and CXD in a GETMAINed area |
-| `tests/z390/test_binder_differential.py` | The two-module V-constant program against z390's linker (SYSOBJ autolink) |
+| `tests/integration/hlasm/test_binder.py` | Two modules: a V-constant to a later module's ENTRY and its data; PARM supplied and empty; BALR to an unresolved EXTRN, permitted and refused; a CSECT in two units refused; two modules sharing DXDs through Q, J and CXD in a GETMAINed area; A(X-Y) and Y(X-Y) across sections and A(E1-E2) across modules |
+| `tests/z390/test_binder_differential.py` | The two-module V-constant program against z390's linker (SYSOBJ autolink); A(X-Y), Y(X-Y) and A(E1-E2), which z390's loader refuses (error 119, RC 16, pinned) |
 | `tests/integration/hlasm/test_storage_layout.py` | Section regions and address constants; `*` in each constant after `DC 0F`, and in a duplicated literal; out-of-range values refused with their line, a literal's included; CCW images with relocated addresses, a literal operand's included, and an unresolved external address holding its stub; V-constants to another section; an S-type literal resolved through the USING at its pool |
 | `tests/integration/hlasm/test_dc_images.py` | DC images loaded into registers on the VM, one family per type group (`dc_image_programs.py`); alignment bytes inside a DC are zero; bit-length and floating-point forms z390 misassembles (`PAST_Z390`) |
 | `tests/integration/hlasm/test_svc.py` | `WTO`, `ABEND` user and system codes, unlowered SVCs, `run()` with our maclib then `copybook_dirs`, call-site spans |

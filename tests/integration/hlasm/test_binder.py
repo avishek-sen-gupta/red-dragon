@@ -1,5 +1,5 @@
 # pyright: standard
-"""Images of several HLASM modules: a V-constant reaches a later module's ENTRY and its data, the first unit is entered at its own END though another module ends at the same label and two are private code alone, the job step hands the program its PARM, a linking branch to an unresolved EXTRN calls it by name, a CSECT named in two units is refused, run() hands the job step an empty PARM, and two modules share external dummy sections through Q, J and CXD in an area the program GETMAINs."""
+"""Images of several HLASM modules: a V-constant reaches a later module's ENTRY and its data, the first unit is entered at its own END though another module ends at the same label and two are private code alone, the job step hands the program its PARM, a linking branch to an unresolved EXTRN calls it by name, a CSECT named in two units is refused, run() hands the job step an empty PARM, two modules share external dummy sections through Q, J and CXD in an area the program GETMAINs, and complex-relocatable A and Y constants hold differences across sections and modules."""
 
 import logging
 from pathlib import Path
@@ -25,6 +25,7 @@ from interpreter.var_name import VarName
 from interpreter.vm.builtins import compose_builtins, core_builtins
 from interpreter.vm.vm_types import SymbolicValue, VMState
 from tests.covers import NotLanguageFeature, covers
+from tests.integration.hlasm import complex_relocatable_programs as spans
 from tests.integration.hlasm.hlasm_helpers import (
     MAX_STEPS,
     gpr,
@@ -268,3 +269,17 @@ def test_two_modules_share_external_dummy_sections_in_an_area_the_program_getmai
         16,
         0xAB,
     ]
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_complex_relocatable_constants_hold_differences_across_sections_and_modules():
+    machine = run_hlasm_machine(
+        spans.SPANS,
+        programs=(
+            SourceFile(Path("BMOD.asm"), spans.FIRST_ENTRY.encode("ascii")),
+            SourceFile(Path("CMOD.asm"), spans.SECOND_ENTRY.encode("ascii")),
+        ),
+    )
+
+    assert machine.run == HlasmRun(return_code=7, abend="", stdout="")
+    assert machine.gprs[2] & LOW_WORD == (56 - (96 + 4)) & LOW_WORD

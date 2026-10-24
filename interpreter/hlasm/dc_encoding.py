@@ -11,6 +11,7 @@ from hlasm_asg.program.address import Address
 from hlasm_asg.program.addresses_nominal import AddressesNominal
 from hlasm_asg.program.base_displacement_address import BaseDisplacementAddress
 from hlasm_asg.program.ccw_statement import CcwStatement
+from hlasm_asg.program.complex_address import ComplexAddress
 from hlasm_asg.program.dc_item import DcItem
 from hlasm_asg.program.external_address import ExternalAddress
 from hlasm_asg.program.length_unit import LengthUnit
@@ -23,6 +24,7 @@ from interpreter.encoding.ebcdic_table import EbcdicTable
 from interpreter.hlasm.address_slot import AddressSlot
 from interpreter.hlasm.binder_slot import BinderSlot
 from interpreter.hlasm.bit_length_image import BitLengthImage
+from interpreter.hlasm.complex_slot import ComplexSlot
 from interpreter.hlasm.constant_image import ConstantImage
 from interpreter.hlasm.dc_exponent_out_of_range import (
     NOMINAL_EXPONENT_RANGE,
@@ -38,7 +40,7 @@ from interpreter.hlasm.unsupported_data_type import UnsupportedDataType
 from interpreter.project.relocation_kind import RelocationKind
 from interpreter.project.relocation_name import RelocationName
 
-type DcPiece = ConstantImage | AddressSlot | ExternalSlot | BinderSlot
+type DcPiece = ConstantImage | AddressSlot | ExternalSlot | ComplexSlot | BinderSlot
 type Encoder = Callable[[str, int], int]
 
 LONG_DISPLACEMENT_OFFSET_ISSUE = "red-dragon-6uyp.103"
@@ -291,12 +293,22 @@ def _bound_piece(item: DcItem, value: Address) -> DcPiece:
             raise HlasmLoweringError(_code(item), "a DXD or DSECT name", value.kind)
 
 
+def _unplaced_piece(value: ExternalAddress | ComplexAddress, width: int) -> DcPiece:
+    match value:
+        case ExternalAddress():
+            return ExternalSlot(value, width)
+        case ComplexAddress():
+            return ComplexSlot(value, width)
+
+
 def _address_piece(item: DcItem, value: Address, origin: Origin) -> DcPiece:
-    if isinstance(value, RelocAddress):
-        return AddressSlot(value, item.length)
-    if isinstance(value, ExternalAddress):
-        return ExternalSlot(value, item.length)
-    return _image(_assembled_address(item, value, origin), item.length)
+    match value:
+        case AbsAddress() | BaseDisplacementAddress():
+            return _image(_assembled_address(item, value, origin), item.length)
+        case RelocAddress():
+            return AddressSlot(value, item.length)
+        case _:
+            return _unplaced_piece(value, item.length)
 
 
 def _absolute_ccw_address(value: Address, width: int) -> DcPiece:
