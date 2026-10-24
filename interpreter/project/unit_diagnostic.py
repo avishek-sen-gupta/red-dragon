@@ -12,6 +12,5 @@ from interpreter.project.diagnostic_severity import DiagnosticSeverity
 class UnitDiagnostic:
     severity: DiagnosticSeverity
     kind: DiagnosticKind
-    message: str
     place: DiagnosticPlace
     stack: tuple[DiagnosticPlace, ...] = ()

@@ -20,10 +20,13 @@ from interpreter.project.coded_diagnostic import CodedDiagnostic
 from interpreter.project.comment_mnote import CommentMnote
 from interpreter.project.compiler import build_export_table
 from interpreter.project.constant_diagnostic import ConstantDiagnostic
+from interpreter.project.constant_source import ConstantSource
 from interpreter.project.diagnostic_place import DiagnosticPlace
 from interpreter.project.fresh_work_dir import FRESH_WORK_DIR, FreshWorkDir
 from interpreter.project.hlasm_compile_options import HlasmCompileOptions
 from interpreter.project.hlasm_lowering_settings import HlasmLoweringSettings
+from interpreter.project.in_macro import InMacro
+from interpreter.project.in_open_code import InOpenCode
 from interpreter.project.ir_codec import IrCodec
 from interpreter.project.linked_codec import LinkedCodec
 from interpreter.project.linker import link_every_module, module_prefix
@@ -129,22 +132,30 @@ class _Assembly:
         )
 
 
-def _mnote_severity(kind: SeverityMnote | CommentMnote) -> str:
+def _mnote(kind: SeverityMnote | CommentMnote) -> str:
     match kind:
-        case SeverityMnote(level=level):
-            return str(level)
-        case CommentMnote():
-            return "*"
+        case SeverityMnote(level=level, text=noted):
+            return f"MNOTE {level},{noted}"
+        case CommentMnote(text=commented):
+            return f"MNOTE *,{commented}"
+
+
+def _written_in(source: ConstantSource) -> str:
+    match source:
+        case InMacro(name=name):
+            return f" in macro {name}"
+        case InOpenCode():
+            return ""
 
 
 def _headed(diagnostic: UnitDiagnostic) -> str:
     match diagnostic.kind:
-        case CodedDiagnostic(code=code):
-            return f"{code} {diagnostic.message}"
-        case ConstantDiagnostic():
-            return diagnostic.message
+        case CodedDiagnostic(code=code, text=text):
+            return f"{code} {text}"
+        case ConstantDiagnostic(constant=constant, warning=warning, source=source):
+            return f"{constant} {warning.value}{_written_in(source)}"
         case mnote:
-            return f"MNOTE {_mnote_severity(mnote)},{diagnostic.message}"
+            return _mnote(mnote)
 
 
 def _at(place: DiagnosticPlace) -> str:

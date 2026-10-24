@@ -17,7 +17,7 @@ from interpreter.hlasm.dc_exponent_out_of_range import DcExponentOutOfRange
 from interpreter.hlasm.dc_length_wrong import DcLengthWrong
 from interpreter.hlasm.dc_precision_lost import DcPrecisionLost
 from interpreter.hlasm.dc_warning import DcWarning
-from interpreter.hlasm.dc_warning_kind import DcWarningKind
+from interpreter.project.dc_warning_kind import DcWarningKind
 
 ORIGIN = MacroOrigin(kind="MACRO", file="src/t.asm", line=7, macro="GEN", depth=1)
 IMPLICIT_BYTES = {"E": 4, "D": 8, "L": 16}

@@ -14,12 +14,12 @@ from interpreter.hlasm.dc_exponent_out_of_range import (
 from interpreter.hlasm.dc_length_wrong import DcLengthWrong
 from interpreter.hlasm.dc_precision_lost import DcPrecisionLost
 from interpreter.hlasm.dc_warning import DcWarning
-from interpreter.hlasm.dc_warning_kind import DcWarningKind
 from interpreter.hlasm.encoded_value import EncodedValue
 from interpreter.hlasm.float_nominal import FloatNominal, parse_float_nominal
 from interpreter.hlasm.float_number import FloatNumber
 from interpreter.hlasm.float_special import FloatSpecial
 from interpreter.hlasm.float_special_value import FloatSpecialValue
+from interpreter.project.dc_warning_kind import DcWarningKind
 from zarch_float import bfp_format, dfp_format
 from zarch_float.bfp_format import BfpFormat
 from zarch_float.bfp_image import bfp_image

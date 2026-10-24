@@ -39,8 +39,11 @@ from interpreter.path_name import NO_PATH_NAME, NoPathName, PathName
 from interpreter.project.coded_diagnostic import CodedDiagnostic
 from interpreter.project.comment_mnote import CommentMnote
 from interpreter.project.constant_diagnostic import ConstantDiagnostic
+from interpreter.project.dc_warning_kind import DcWarningKind
 from interpreter.project.diagnostic_place import DiagnosticPlace
 from interpreter.project.diagnostic_severity import DiagnosticSeverity
+from interpreter.project.in_macro import InMacro
+from interpreter.project.in_open_code import InOpenCode
 from interpreter.project.severity_mnote import SeverityMnote
 from interpreter.project.types import ExportTable, ImportKind, ImportRef, ModuleUnit
 from interpreter.project.unit_diagnostic import UnitDiagnostic
@@ -91,6 +94,8 @@ _DATACLASSES: tuple[type, ...] = (
     SeverityMnote,
     CommentMnote,
     ConstantDiagnostic,
+    InMacro,
+    InOpenCode,
     FieldInfo,
     FunctionInfo,
     ClassInfo,
@@ -115,6 +120,7 @@ _ENUMS: tuple[type[enum.Enum], ...] = (
     ImportKind,
     Language,
     DiagnosticSeverity,
+    DcWarningKind,
 )
 _NATIVE = (bool, int, float, str)
 

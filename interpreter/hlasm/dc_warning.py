@@ -3,7 +3,7 @@
 
 from dataclasses import dataclass
 
-from interpreter.hlasm.dc_warning_kind import DcWarningKind
+from interpreter.project.dc_warning_kind import DcWarningKind
 
 
 @dataclass(frozen=True)
