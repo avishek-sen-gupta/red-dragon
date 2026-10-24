@@ -9,6 +9,7 @@ from hlasm_asg.program.section import Section
 from hlasm_asg.program.section_kind import SectionKind
 from interpreter.constants import PARAM_PREFIX
 from interpreter.func_name import FuncName
+from interpreter.hlasm.far_branch import FarBranch
 from interpreter.hlasm.hlasm_constants import (
     ADDRESS_MASK_31,
     BELOW_VAR,
@@ -129,15 +130,13 @@ def _set_linking(emitter: HlasmEmitter, linking: int) -> None:
 
 
 def _emit_far_branch(emitter: HlasmEmitter, module: str) -> None:
-    returning = emitter.call(
-        FuncName(FAR_BRANCH_FUNCTION),
-        (
-            _masked_target(emitter),
-            emitter.load_var(BELOW_VAR),
-            emitter.load_var(VarName(f"{MODULE_BIT_PREFIX}{module}")),
-            emitter.load_var(LINKING_VAR),
-        ),
+    request = FarBranch(
+        _masked_target(emitter),
+        emitter.load_var(BELOW_VAR),
+        emitter.load_var(VarName(f"{MODULE_BIT_PREFIX}{module}")),
+        emitter.load_var(LINKING_VAR),
     )
+    returning = emitter.call(FuncName(FAR_BRANCH_FUNCTION), request.arguments())
     emitter.emit_inst(
         BranchIf(cond_reg=returning, branch_targets=(RETURN_LABEL, DISPATCH_LABEL))
     )

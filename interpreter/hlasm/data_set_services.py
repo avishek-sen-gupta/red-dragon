@@ -10,7 +10,6 @@ from interpreter.hlasm.abend import emit_abend
 from interpreter.hlasm.branch_dispatch import emit_branch
 from interpreter.hlasm.byte_loop import emit_byte_loop
 from interpreter.hlasm.hlasm_constants import (
-    ADDRESS_MASK_31,
     BYTES_TO_STRING,
     DCB_BUFFERS_VAR,
     DOUBLEWORD_BYTES,
@@ -35,6 +34,7 @@ from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.program_services import blank_ended_name
 from interpreter.hlasm.storage_request import StorageRequest
 from interpreter.hlasm.storage_services import obtained
+from interpreter.hlasm_run_inputs.record_format import RecordFormat
 from interpreter.hlasm_run_inputs.run_input_names import (
     DD_BLKSIZE_FACT,
     DD_BUILTIN,
@@ -47,7 +47,6 @@ from interpreter.instructions import (
     Branch,
     BranchIf,
     Label_,
-    LoadField,
     LoadIndex,
     NewObject,
     StoreField,
@@ -81,7 +80,7 @@ BLKSIZE_OFFSET = 62
 LRECL_OFFSET = 82
 OPEN_FLAG = 0x10
 FORMAT_BITS = 0xC0
-VARIABLE_FORMAT = 0x40
+VARIABLE_FORMAT = RecordFormat.V.value
 GET_LOCATE = 0x0800
 PUT_LOCATE = 0x0008
 LIST_END = 0x80
@@ -102,10 +101,6 @@ OPEN_MODES: Mapping[int, OpenMode] = {
 }
 
 type EntryBody = Callable[[HlasmEmitter, Register, Register], None]
-
-
-def _masked(emitter: HlasmEmitter, address: Register) -> Register:
-    return emitter.binop(BinopKind.BIT_AND, address, emitter.int_(ADDRESS_MASK_31))
 
 
 def _has(emitter: HlasmEmitter, value: Register, bits: int) -> Register:
@@ -176,12 +171,6 @@ def _buffers_entry(emitter: HlasmEmitter, dcb: Register) -> Register:
     return entry
 
 
-def _field(emitter: HlasmEmitter, entry: Register, name: FieldName) -> Register:
-    value = emitter.fresh_reg()
-    emitter.emit_inst(LoadField(result_reg=value, obj_reg=entry, field_name=name))
-    return value
-
-
 def _set_pending(emitter: HlasmEmitter, entry: Register, pending: int) -> None:
     emitter.emit_inst(
         StoreField(
@@ -200,7 +189,7 @@ def _outcome_is(emitter: HlasmEmitter, raw: Register, position: int) -> Register
 
 
 def _each_entry(emitter: HlasmEmitter, body: EntryBody) -> None:
-    list_at = _masked(emitter, emitter.load_gr32(SVC_PARAMETER_REGISTER))
+    list_at = emitter.masked_address(emitter.load_gr32(SVC_PARAMETER_REGISTER))
     emitter.store_var(ENTRY_VAR, list_at)
     loop, done = (emitter.fresh_label(p) for p in ("hl_dcb_list", "hl_dcb_listed"))
     emitter.emit_inst(Label_(label=loop))
@@ -398,12 +387,12 @@ def _write(emitter: HlasmEmitter, dcb: Register, source: Register) -> None:
 
 def _write_pending(emitter: HlasmEmitter, dcb: Register, entry: Register) -> None:
     pending = emitter.binop(
-        BinopKind.NE, _field(emitter, entry, PENDING_FIELD), emitter.int_(0)
+        BinopKind.NE, emitter.load_field(entry, PENDING_FIELD), emitter.int_(0)
     )
     _when(
         emitter,
         pending,
-        lambda: _write(emitter, dcb, _field(emitter, entry, BUFFER_FIELD)),
+        lambda: _write(emitter, dcb, emitter.load_field(entry, BUFFER_FIELD)),
     )
 
 
@@ -418,13 +407,13 @@ def _required_open(emitter: HlasmEmitter, dcb: Register) -> None:
 
 
 def _opened_dcb(emitter: HlasmEmitter) -> Register:
-    dcb = _masked(emitter, emitter.load_gr32(SVC_PARAMETER_REGISTER))
+    dcb = emitter.masked_address(emitter.load_gr32(SVC_PARAMETER_REGISTER))
     _required_open(emitter, dcb)
     return dcb
 
 
 def _area(emitter: HlasmEmitter) -> Register:
-    return _masked(emitter, emitter.load_gr32(AREA_REGISTER))
+    return emitter.masked_address(emitter.load_gr32(AREA_REGISTER))
 
 
 def _end_of_data(emitter: HlasmEmitter, dcb: Register) -> None:
@@ -468,7 +457,7 @@ def _copy_byte(
 
 
 def _located(emitter: HlasmEmitter, dcb: Register) -> Register:
-    buffer = _field(emitter, _buffers_entry(emitter, dcb), BUFFER_FIELD)
+    buffer = emitter.load_field(_buffers_entry(emitter, dcb), BUFFER_FIELD)
     emitter.store_gr32(SVC_PARAMETER_REGISTER, buffer)
     return buffer
 
@@ -500,7 +489,7 @@ def _put_located(emitter: HlasmEmitter, dcb: Register) -> None:
     entry = _buffers_entry(emitter, dcb)
     _write_pending(emitter, dcb, entry)
     _set_pending(emitter, entry, 1)
-    emitter.store_gr32(SVC_PARAMETER_REGISTER, _field(emitter, entry, BUFFER_FIELD))
+    emitter.store_gr32(SVC_PARAMETER_REGISTER, emitter.load_field(entry, BUFFER_FIELD))
 
 
 def emit_put(emitter: HlasmEmitter) -> None:

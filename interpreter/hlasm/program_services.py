@@ -1,11 +1,10 @@
 # pyright: standard
 """SVC 6, 8 and 9 in IR: LINK calls the program R15's list names through the far branch and leaves the registers as it left them, LOAD answers its entry and length from the names table and counts the load, or abends 806 unless R1's high bit asks for a return; DELETE releases a counted load or answers 4."""
 
-from interpreter.field_name import FieldName
 from interpreter.func_name import FuncName
 from interpreter.hlasm.abend import emit_abend
+from interpreter.hlasm.far_branch import FarBranch
 from interpreter.hlasm.hlasm_constants import (
-    ADDRESS_MASK_31,
     AMODE_31_LINK_BIT,
     BYTES_TO_STRING,
     EBCDIC,
@@ -15,6 +14,7 @@ from interpreter.hlasm.hlasm_constants import (
     NAME_LENGTH_FIELD,
     NAME_LOADS_FIELD,
     NAMES_VAR,
+    NOTHING_BELOW,
     PROGRAM_ENTRY_PREFIX,
     PROGRAM_NAME_BYTES,
     PROGRAM_NOT_FOUND_ABEND,
@@ -34,7 +34,6 @@ from interpreter.instructions import (
     Branch,
     BranchIf,
     Label_,
-    LoadField,
     LoadIndex,
     StoreField,
 )
@@ -47,29 +46,18 @@ LENGTH_REGISTER = 1
 ERROR_RETURN_REGISTER = 1
 CONTROL_LIST_REGISTER = 15
 NOT_LOADED_CODE = 4
-NOTHING_BELOW = 0
 NO_MODULE = 0
 LINKING = 1
 NAME_END = " "
 
 
-def _masked(emitter: HlasmEmitter, address: Register) -> Register:
-    return emitter.binop(BinopKind.BIT_AND, address, emitter.int_(ADDRESS_MASK_31))
-
-
 def _name_at(emitter: HlasmEmitter) -> Register:
-    return _masked(emitter, emitter.load_gr32(NAME_REGISTER))
+    return emitter.masked_address(emitter.load_gr32(NAME_REGISTER))
 
 
 def _listed_name_at(emitter: HlasmEmitter) -> Register:
-    control = _masked(emitter, emitter.load_gr32(CONTROL_LIST_REGISTER))
-    return _masked(emitter, emitter.load_storage(control, 0, WORD_BYTES))
-
-
-def _field(emitter: HlasmEmitter, entry: Register, name: FieldName) -> Register:
-    value = emitter.fresh_reg()
-    emitter.emit_inst(LoadField(result_reg=value, obj_reg=entry, field_name=name))
-    return value
+    control = emitter.masked_address(emitter.load_gr32(CONTROL_LIST_REGISTER))
+    return emitter.masked_address(emitter.load_storage(control, 0, WORD_BYTES))
 
 
 def _named(
@@ -107,18 +95,16 @@ def _entry_name(emitter: HlasmEmitter, name_at: Register) -> Register:
 
 
 def _link_found(emitter: HlasmEmitter, entry: Register) -> None:
-    address = _field(emitter, entry, NAME_ADDRESS_FIELD)
+    address = emitter.load_field(entry, NAME_ADDRESS_FIELD)
     emitter.store_gr32(LINK_REGISTER, emitter.int_(RETURN_SENTINEL))
     emitter.store_gr32(RETURN_CODE_REGISTER, address)
-    emitter.call(
-        FuncName(FAR_BRANCH_FUNCTION),
-        (
-            address,
-            emitter.int_(NOTHING_BELOW),
-            emitter.int_(NO_MODULE),
-            emitter.int_(LINKING),
-        ),
+    request = FarBranch(
+        address,
+        emitter.int_(NOTHING_BELOW),
+        emitter.int_(NO_MODULE),
+        emitter.int_(LINKING),
     )
+    emitter.call(FuncName(FAR_BRANCH_FUNCTION), request.arguments())
 
 
 def emit_link(emitter: HlasmEmitter) -> None:
@@ -133,19 +119,19 @@ def emit_link(emitter: HlasmEmitter) -> None:
 
 
 def _load_found(emitter: HlasmEmitter, entry: Register) -> None:
-    address = _field(emitter, entry, NAME_ADDRESS_FIELD)
+    address = emitter.load_field(entry, NAME_ADDRESS_FIELD)
     emitter.store_gr32(
         NAME_REGISTER,
         emitter.binop(BinopKind.BIT_OR, address, emitter.int_(AMODE_31_LINK_BIT)),
     )
-    emitter.store_gr32(LENGTH_REGISTER, _field(emitter, entry, NAME_LENGTH_FIELD))
+    emitter.store_gr32(LENGTH_REGISTER, emitter.load_field(entry, NAME_LENGTH_FIELD))
     emitter.store_gr32(RETURN_CODE_REGISTER, emitter.int_(0))
     _count_loads(emitter, entry, 1)
 
 
 def _count_loads(emitter: HlasmEmitter, entry: Register, change: int) -> None:
     loads = emitter.binop(
-        BinopKind.ADD, _field(emitter, entry, NAME_LOADS_FIELD), emitter.int_(change)
+        BinopKind.ADD, emitter.load_field(entry, NAME_LOADS_FIELD), emitter.int_(change)
     )
     emitter.emit_inst(
         StoreField(obj_reg=entry, field_name=NAME_LOADS_FIELD, value_reg=loads)
@@ -181,7 +167,7 @@ def _delete_found(
 ) -> None:
     held = emitter.fresh_label("hl_delete_held")
     loaded = emitter.binop(
-        BinopKind.GT, _field(emitter, entry, NAME_LOADS_FIELD), emitter.int_(0)
+        BinopKind.GT, emitter.load_field(entry, NAME_LOADS_FIELD), emitter.int_(0)
     )
     emitter.emit_inst(BranchIf(cond_reg=loaded, branch_targets=(held, not_loaded)))
     emitter.emit_inst(Label_(label=held))

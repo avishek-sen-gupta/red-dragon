@@ -36,7 +36,6 @@ from interpreter.hlasm.section_variable import section_var
 from interpreter.hlasm.stub_name import StubName
 from interpreter.hlasm.weak_zero import WeakZero
 from interpreter.instructions import (
-    AllocRegion,
     Const,
     InstructionBase,
     NewObject,
@@ -62,19 +61,7 @@ _PSEUDO_REGISTER_FACTS: Mapping[RelocationKind, Callable[[PseudoRegister], int]]
 
 
 def aligned_region(emitter: HlasmEmitter, length: Register) -> Register:
-    slack = emitter.int_(DOUBLEWORD_BYTES - 1)
-    region = emitter.fresh_reg()
-    emitter.emit_inst(
-        AllocRegion(
-            result_reg=region, size_reg=emitter.binop(BinopKind.ADD, length, slack)
-        )
-    )
-    end = emitter.binop(BinopKind.ADD, region, slack)
-    return emitter.binop(
-        BinopKind.SUB,
-        end,
-        emitter.binop(BinopKind.MOD, end, emitter.int_(DOUBLEWORD_BYTES)),
-    )
+    return emitter.aligned_region(length, emitter.int_(DOUBLEWORD_BYTES))
 
 
 def _store_section(

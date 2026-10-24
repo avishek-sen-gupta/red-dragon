@@ -24,7 +24,7 @@ from interpreter.hlasm.hlasm_constants import (
     ONE_BYTE,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
-from interpreter.hlasm.long_registers import address_bits, store_address
+from interpreter.hlasm.long_registers import store_address
 from interpreter.hlasm.operands import storage_length_operand, storage_operand
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.hlasm.translate_and_test_extended import (
@@ -97,7 +97,7 @@ def _keep_bit_32(emitter: HlasmEmitter, r: int, address: Register) -> None:
         BinopKind.BIT_AND, emitter.load_gr32(r), emitter.int_(AMODE_31_LINK_BIT)
     )
     emitter.store_gr32(
-        r, emitter.binop(BinopKind.BIT_OR, kept, address_bits(emitter, address))
+        r, emitter.binop(BinopKind.BIT_OR, kept, emitter.masked_address(address))
     )
 
 

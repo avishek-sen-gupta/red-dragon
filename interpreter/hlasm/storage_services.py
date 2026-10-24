@@ -16,11 +16,9 @@ from interpreter.hlasm.hlasm_constants import (
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.storage_request import StorageRequest
 from interpreter.instructions import (
-    AllocRegion,
     Branch,
     BranchIf,
     Label_,
-    LoadField,
     LoadIndex,
     NewObject,
     StoreField,
@@ -57,22 +55,6 @@ def _rounded(emitter: HlasmEmitter, length: Register) -> Register:
     return emitter.binop(BinopKind.SUB, up, over)
 
 
-def _aligned_region(
-    emitter: HlasmEmitter, length: Register, alignment: Register
-) -> Register:
-    slack = emitter.binop(BinopKind.SUB, alignment, emitter.int_(1))
-    region = emitter.fresh_reg()
-    emitter.emit_inst(
-        AllocRegion(
-            result_reg=region, size_reg=emitter.binop(BinopKind.ADD, length, slack)
-        )
-    )
-    end = emitter.binop(BinopKind.ADD, region, slack)
-    return emitter.binop(
-        BinopKind.SUB, end, emitter.binop(BinopKind.MOD, end, alignment)
-    )
-
-
 def _record(
     emitter: HlasmEmitter, address: Register, length: Register, subpool: Register
 ) -> None:
@@ -95,7 +77,7 @@ def _record(
 
 def obtained(emitter: HlasmEmitter, request: StorageRequest) -> Register:
     rounded = _rounded(emitter, request.length)
-    address = _aligned_region(emitter, rounded, request.alignment)
+    address = emitter.aligned_region(rounded, request.alignment)
     _record(emitter, address, rounded, request.subpool)
     return address
 
@@ -104,22 +86,16 @@ def _obtain(emitter: HlasmEmitter, request: StorageRequest) -> None:
     emitter.store_gr32(SVC_PARAMETER_REGISTER, obtained(emitter, request))
 
 
-def _field(emitter: HlasmEmitter, entry: Register, name: FieldName) -> Register:
-    value = emitter.fresh_reg()
-    emitter.emit_inst(LoadField(result_reg=value, obj_reg=entry, field_name=name))
-    return value
-
-
 def _matches(
     emitter: HlasmEmitter, entry: Register, request: StorageRequest
 ) -> Register:
     same_length = emitter.binop(
         BinopKind.EQ,
-        _field(emitter, entry, LENGTH_FIELD),
+        emitter.load_field(entry, LENGTH_FIELD),
         _rounded(emitter, request.length),
     )
     same_subpool = emitter.binop(
-        BinopKind.EQ, _field(emitter, entry, SUBPOOL_FIELD), request.subpool
+        BinopKind.EQ, emitter.load_field(entry, SUBPOOL_FIELD), request.subpool
     )
     return emitter.binop(BinopKind.AND, same_length, same_subpool)
 

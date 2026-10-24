@@ -16,11 +16,13 @@ from interpreter.hlasm.hlasm_constants import (
     ENTRY_ADDRESS_REGISTER,
     ENTRY_PARAMETER_REGISTER,
     ENTRY_SAVE_AREA_REGISTER,
+    FAR_BRANCH_CALLED,
     HALFWORD_BYTES,
     LAST_PARAMETER_BIT,
     LINK_REGISTER,
     LOW_WORD_MASK,
     MODULE_FUNCTION_PREFIX,
+    NOTHING_BELOW,
     PROGRAM_ENTRY_PREFIX,
     RETURN_CODE_REGISTER,
     TARGET_VAR,
@@ -37,7 +39,6 @@ from interpreter.instructions import (
     Const,
     DeclVar,
     Label_,
-    LoadField,
     LoadIndex,
     NewArray,
     NewObject,
@@ -67,17 +68,9 @@ WALKED_VAR = VarName("__hlasm_walked")
 SAVED_REGISTERS = (14, 15, *range(13))
 SAVE_AREA_REGISTERS_AT = 12
 RIGHT_ALIGNED_LENGTHS = (1, 2, 4)
-NOTHING_BELOW = 0
-CALLED = 0
 SIGNED = True
 
 type Case = Callable[[], None]
-
-
-def _field(emitter: HlasmEmitter, obj: Register, field: FieldName) -> Register:
-    value = emitter.fresh_reg()
-    emitter.emit_inst(LoadField(result_reg=value, obj_reg=obj, field_name=field))
-    return value
 
 
 def _store(
@@ -152,13 +145,13 @@ def _copy_doubleword(
 def _value_slot(
     emitter: HlasmEmitter, plist: Register, slot: Register, element: Register
 ) -> None:
-    length = _field(emitter, element, LENGTH_FIELD)
+    length = emitter.load_field(element, LENGTH_FIELD)
     address = emitter.binop(
         BinopKind.ADD,
-        _field(emitter, element, REGION_FIELD),
-        _field(emitter, element, OFFSET_FIELD),
+        emitter.load_field(element, REGION_FIELD),
+        emitter.load_field(element, OFFSET_FIELD),
     )
-    source = (address, _field(emitter, element, SIGNED_FIELD))
+    source = (address, emitter.load_field(element, SIGNED_FIELD))
     _cases(
         emitter,
         (
@@ -183,8 +176,8 @@ def _address_slot(
 ) -> None:
     address = emitter.binop(
         BinopKind.ADD,
-        _field(emitter, element, REGION_FIELD),
-        _field(emitter, element, OFFSET_FIELD),
+        emitter.load_field(element, REGION_FIELD),
+        emitter.load_field(element, OFFSET_FIELD),
     )
     emitter.write_bytes(plist, slot, WORD_BYTES, emitter.image(address, WORD_BYTES))
     _advance(emitter, slot, WORD_BYTES)
@@ -195,7 +188,7 @@ def _list_slot(
 ) -> None:
     element = emitter.fresh_reg()
     emitter.emit_inst(LoadIndex(result_reg=element, arr_reg=arguments, index_reg=at))
-    mode = _field(emitter, element, MODE_FIELD)
+    mode = emitter.load_field(element, MODE_FIELD)
     slot = emitter.load_var(SLOT_VAR)
     emitter.emit_inst(StoreVar(name=LAST_MODE_VAR, value_reg=mode))
     emitter.emit_inst(StoreVar(name=LAST_SLOT_VAR, value_reg=slot))
@@ -245,7 +238,7 @@ def _declare(emitter: HlasmEmitter, name: VarName, value: Register) -> None:
 
 def _from_cobol_body(emitter: HlasmEmitter, parameters: Sequence[Register]) -> Register:
     arguments, entry = parameters
-    count = _field(emitter, arguments, COUNT_FIELD)
+    count = emitter.load_field(arguments, COUNT_FIELD)
     size = emitter.binop(BinopKind.MUL, count, emitter.int_(DOUBLEWORD_BYTES))
     plist = aligned_region(emitter, size)
     _ = [
@@ -264,7 +257,7 @@ def _from_cobol_body(emitter: HlasmEmitter, parameters: Sequence[Register]) -> R
     )
     _mark_last(emitter, plist, count)
     enter_registers(emitter, entry, plist)
-    return emitter.int_(CALLED)
+    return emitter.int_(FAR_BRANCH_CALLED)
 
 
 FROM_COBOL = IrFunction(FROM_COBOL_FUNCTION, 2, _from_cobol_body)
@@ -477,7 +470,7 @@ def emit_cobol_call(emitter: HlasmEmitter, program: CobolProgram) -> None:
     emitter.emit_inst(
         StoreVar(name=TARGET_VAR, value_reg=emitter.load_gr32(LINK_REGISTER))
     )
-    emitter.emit_inst(Return_(value_reg=emitter.int_(CALLED)))
+    emitter.emit_inst(Return_(value_reg=emitter.int_(FAR_BRANCH_CALLED)))
 
 
 def _flag(emitter: HlasmEmitter, value: bool) -> Register:

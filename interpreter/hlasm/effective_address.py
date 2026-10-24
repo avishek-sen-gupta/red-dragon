@@ -5,7 +5,6 @@ from hlasm_asg.program.reloc_imm_operand import RelocImmOperand
 from hlasm_asg.program.storage_length_operand import StorageLengthOperand
 from hlasm_asg.program.storage_operand import StorageOperand
 from interpreter.hlasm.element_size import ElementSize
-from interpreter.hlasm.hlasm_constants import ADDRESS_MASK_31
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.vector_elements import load_element
 from interpreter.hlasm.vector_indexed_operand import VectorIndexedOperand
@@ -30,7 +29,7 @@ def _address(
 ) -> Register:
     indexed = _plus_register(emitter, emitter.int_(displacement), index)
     based = _plus_register(emitter, _scaled(emitter, indexed, shift), base)
-    return emitter.binop(BinopKind.BIT_AND, based, emitter.int_(ADDRESS_MASK_31))
+    return emitter.masked_address(based)
 
 
 def indexed_address(
@@ -55,7 +54,7 @@ def vector_indexed_address(
         load_element(emitter, operand.vector_index, size, element),
     )
     based = _plus_register(emitter, indexed, operand.base)
-    return emitter.binop(BinopKind.BIT_AND, based, emitter.int_(ADDRESS_MASK_31))
+    return emitter.masked_address(based)
 
 
 def length_operand_address(
@@ -70,6 +69,4 @@ def relative_address(emitter: HlasmEmitter, operand: RelocImmOperand) -> Registe
 
 
 def register_address(emitter: HlasmEmitter, r: int) -> Register:
-    return emitter.binop(
-        BinopKind.BIT_AND, emitter.load_gr32(r), emitter.int_(ADDRESS_MASK_31)
-    )
+    return emitter.masked_address(emitter.load_gr32(r))

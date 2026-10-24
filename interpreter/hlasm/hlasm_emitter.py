@@ -5,12 +5,14 @@ import dataclasses
 from collections.abc import Mapping
 from itertools import count
 
+from interpreter.field_name import FieldName
 from interpreter.func_name import FuncName
 from interpreter.hlasm.chain_link import Chain, extended, flattened
 from interpreter.hlasm.empty_chain import EmptyChain
 from interpreter.hlasm.hlasm_constants import (
     ACCESS_REGISTER_BYTES,
     ACCESS_REGISTERS_VAR,
+    ADDRESS_MASK_31,
     BINARY_BYTES_TO_INT,
     BITS_PER_BYTE,
     CC_VAR,
@@ -27,10 +29,12 @@ from interpreter.hlasm.located_span import LocatedSpan
 from interpreter.hlasm.program_function import ProgramFunction
 from interpreter.hlasm.section_variable import section_var
 from interpreter.instructions import (
+    AllocRegion,
     Binop,
     CallFunction,
     Const,
     InstructionBase,
+    LoadField,
     LoadRegion,
     LoadVar,
     StoreVar,
@@ -184,6 +188,25 @@ class HlasmEmitter:
         reg = self.fresh_reg()
         self.emit_inst(Binop(result_reg=reg, operator=operator, left=left, right=right))
         return reg
+
+    def load_field(self, obj: Register, field: FieldName) -> Register:
+        value = self.fresh_reg()
+        self.emit_inst(LoadField(result_reg=value, obj_reg=obj, field_name=field))
+        return value
+
+    def masked_address(self, address: Register) -> Register:
+        return self.binop(BinopKind.BIT_AND, address, self.int_(ADDRESS_MASK_31))
+
+    def aligned_region(self, length: Register, alignment: Register) -> Register:
+        slack = self.binop(BinopKind.SUB, alignment, self.int_(1))
+        region = self.fresh_reg()
+        self.emit_inst(
+            AllocRegion(
+                result_reg=region, size_reg=self.binop(BinopKind.ADD, length, slack)
+            )
+        )
+        end = self.binop(BinopKind.ADD, region, slack)
+        return self.binop(BinopKind.SUB, end, self.binop(BinopKind.MOD, end, alignment))
 
     def load_var(self, name: VarName) -> Register:
         reg = self.fresh_reg()

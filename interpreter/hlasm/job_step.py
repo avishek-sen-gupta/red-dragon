@@ -2,6 +2,7 @@
 """The job-step module: per entry name, a function that builds the PARM list and enters the module as the system would, and a COBOL entry `__entry_<NAME>` that enters it from a COBOL CALL; and the far branch, which finds a target's owner in the far-branch table and calls it, or tells the activation to return."""
 
 from collections.abc import Sequence
+from dataclasses import fields
 
 from interpreter.func_name import FuncName
 from interpreter.hlasm.abend import emit_abend
@@ -16,12 +17,15 @@ from interpreter.hlasm.far_branch_entry import FarBranchEntry
 from interpreter.hlasm.hlasm_constants import (
     END_STEP_PREFIX,
     ENTRY_ADDRESS_REGISTER,
+    FAR_BRANCH_CALLED,
     FAR_BRANCH_FUNCTION,
+    FAR_BRANCH_RETURNING,
     JOB_STEP_PREFIX,
     LAST_PARAMETER_BIT,
     LINK_REGISTER,
     MODULE_BIT_PREFIX,
     MODULE_FUNCTION_PREFIX,
+    NOTHING_BELOW,
     OPERATION_EXCEPTION_ABEND,
     PARM_LIST_BYTES,
     PROGRAM_ENTRY_PREFIX,
@@ -53,10 +57,7 @@ from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
 from interpreter.var_name import VarName
 
-NOTHING_BELOW = 0
-CALLED = 0
-RETURNING = 1
-FAR_BRANCH_ARITY = 4
+FAR_BRANCH_ARITY = len(fields(FarBranch))
 
 
 def job_step_label(stem: str) -> CodeLabel:
@@ -104,7 +105,7 @@ def _call_by_name(emitter: HlasmEmitter, owner: UnresolvedOwner) -> None:
     emitter.emit_inst(
         StoreVar(name=TARGET_VAR, value_reg=emitter.load_gr32(LINK_REGISTER))
     )
-    emitter.emit_inst(Return_(value_reg=emitter.int_(CALLED)))
+    emitter.emit_inst(Return_(value_reg=emitter.int_(FAR_BRANCH_CALLED)))
 
 
 def _when(emitter: HlasmEmitter, condition: Register, prefix: str) -> CodeLabel:
@@ -130,11 +131,11 @@ def _call_module(emitter: HlasmEmitter, request: FarBranch, module: str) -> None
     )
     plain = emitter.binop(BinopKind.EQ, request.linking, emitter.int_(0))
     below = _when(emitter, emitter.binop(BinopKind.AND, held, plain), "hl_far_below")
-    emitter.emit_inst(Return_(value_reg=emitter.int_(RETURNING)))
+    emitter.emit_inst(Return_(value_reg=emitter.int_(FAR_BRANCH_RETURNING)))
     emitter.emit_inst(Label_(label=below))
     stack = emitter.binop(BinopKind.BIT_OR, request.below, request.me)
     emitter.call(FuncName(f"{MODULE_FUNCTION_PREFIX}{module}"), (request.target, stack))
-    emitter.emit_inst(Return_(value_reg=emitter.int_(CALLED)))
+    emitter.emit_inst(Return_(value_reg=emitter.int_(FAR_BRANCH_CALLED)))
 
 
 def _call_program(emitter: HlasmEmitter, owner: UnresolvedOwner | CobolOwner) -> None:
@@ -171,7 +172,7 @@ def _far_branch(binder: Binder) -> IrFunction:
         request = FarBranch(*parameters)
         _ = [_far_case(emitter, request, e) for e in binder.far_branch_table()]
         emit_abend(emitter, OPERATION_EXCEPTION_ABEND)
-        return emitter.int_(CALLED)
+        return emitter.int_(FAR_BRANCH_CALLED)
 
     return IrFunction(FAR_BRANCH_FUNCTION, FAR_BRANCH_ARITY, body)
 
