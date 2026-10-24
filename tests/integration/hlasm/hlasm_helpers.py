@@ -2,8 +2,10 @@
 """Compile an HLASM source through the unit-file pipeline and run it to its end."""
 
 import io
+from collections.abc import Sequence
 from contextlib import redirect_stdout
 from datetime import UTC, datetime
+from pathlib import Path
 
 from hlasm_asg.assembly_inputs import AssemblyInputs
 from interpreter.frontends import get_hlasm_parser
@@ -63,10 +65,12 @@ def _return_code(vm: VMState, abend: str) -> int:
 
 
 def _run_vm(
-    source: str, options: HlasmCompileOptions = NO_INPUTS
+    source: str,
+    options: HlasmCompileOptions = NO_INPUTS,
+    syslib: Sequence[Path] = (),
 ) -> tuple[VMState, str]:
     linked = compile_hlasm(
-        source.encode("utf-8"), parser=get_hlasm_parser(), options=options
+        source.encode("utf-8"), parser=get_hlasm_parser(syslib), options=options
     )
     (entry,) = linked.programs
     console = io.StringIO()
@@ -88,8 +92,12 @@ def _run_vm(
     return vm, console.getvalue()
 
 
-def run_hlasm(source: str, options: HlasmCompileOptions = NO_INPUTS) -> HlasmRun:
-    return hlasm_run_of(*_run_vm(source, options))
+def run_hlasm(
+    source: str,
+    options: HlasmCompileOptions = NO_INPUTS,
+    syslib: Sequence[Path] = (),
+) -> HlasmRun:
+    return hlasm_run_of(*_run_vm(source, options, syslib))
 
 
 def _machine(vm: VMState, stdout: str) -> HlasmMachine:

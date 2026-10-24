@@ -33,9 +33,14 @@ AGREED = [c for c in programs.STDOUT_PROGRAMS if c not in programs.Z390_STDOUT]
 @pytest.mark.parametrize("case", AGREED)
 def test_macro_programs_match(z390: Z390Runner, tmp_path: Path, case: str):
     source, stdout = programs.STDOUT_PROGRAMS[case]
+    syslib = programs.library_in(tmp_path / "lib", ".mac")
+    programs.library_in(tmp_path, ".CPY")
     expected = HlasmRun(0, "", stdout)
 
-    assert (run_hlasm(source), z390.run(source, tmp_path)) == (expected, expected)
+    assert (
+        run_hlasm(source, syslib=[syslib]),
+        z390.run(source, tmp_path),
+    ) == (expected, expected)
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
