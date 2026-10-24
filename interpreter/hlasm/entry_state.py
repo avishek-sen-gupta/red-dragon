@@ -1,5 +1,5 @@
 # pyright: standard
-"""The entry point and the register state a standalone run enters it with."""
+"""The entry point and the registers a module is entered with: R14 the return sentinel, R13 a fresh save area, R15 the entry address, R1 the parameter list."""
 
 from hlasm_asg.program.default_entry import DefaultEntry
 from hlasm_asg.program.hlasm_program import HlasmProgram
@@ -7,18 +7,16 @@ from hlasm_asg.program.named_entry import NamedEntry
 from hlasm_asg.program.reloc_symbol import RelocSymbol
 from hlasm_asg.program.section_kind import SectionKind
 from interpreter.hlasm.hlasm_constants import (
-    ABEND_VAR,
     ENTRY_ADDRESS_REGISTER,
     ENTRY_PARAMETER_REGISTER,
     ENTRY_RETURN_REGISTER,
     ENTRY_SAVE_AREA_REGISTER,
-    NO_ABEND,
     RETURN_SENTINEL,
     SAVE_AREA_BYTES,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.hlasm_entry import HlasmEntry
-from interpreter.instructions import AllocRegion, Const, InstructionBase, StoreVar
+from interpreter.instructions import AllocRegion, InstructionBase
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
 
@@ -50,14 +48,18 @@ def _save_area(emitter: HlasmEmitter) -> Register:
     return region
 
 
-def entry_state(program: HlasmProgram, module: str) -> tuple[InstructionBase, ...]:
-    emitter = HlasmEmitter("hlasm_entry.", module)
-    entry = resolve_entry(program)
-    abend = emitter.fresh_reg()
-    emitter.emit_inst(Const.string(abend, NO_ABEND))
-    emitter.emit_inst(StoreVar(name=ABEND_VAR, value_reg=abend))
+def enter_registers(
+    emitter: HlasmEmitter, entry: Register, parameters: Register
+) -> None:
     emitter.store_gr32(ENTRY_RETURN_REGISTER, emitter.int_(RETURN_SENTINEL))
     emitter.store_gr32(ENTRY_SAVE_AREA_REGISTER, _save_area(emitter))
-    emitter.store_gr32(ENTRY_ADDRESS_REGISTER, entry_address(emitter, entry))
-    emitter.store_gr32(ENTRY_PARAMETER_REGISTER, emitter.int_(0))
+    emitter.store_gr32(ENTRY_ADDRESS_REGISTER, entry)
+    emitter.store_gr32(ENTRY_PARAMETER_REGISTER, parameters)
+
+
+def entry_state(program: HlasmProgram, module: str) -> tuple[InstructionBase, ...]:
+    emitter = HlasmEmitter("hlasm_entry.", module)
+    enter_registers(
+        emitter, entry_address(emitter, resolve_entry(program)), emitter.int_(0)
+    )
     return emitter.instructions()

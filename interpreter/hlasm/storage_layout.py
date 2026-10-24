@@ -1,5 +1,5 @@
 # pyright: standard
-"""Run-unit start-up IR that allocates each section and writes its constants and literals."""
+"""Each section's constants and literals as pieces at their offsets: constant images and address slots."""
 
 from collections.abc import Iterable, Sequence
 from functools import reduce
@@ -11,54 +11,15 @@ from hlasm_asg.program.dc_item import DcItem
 from hlasm_asg.program.dc_statement import DcStatement
 from hlasm_asg.program.hlasm_program import HlasmProgram
 from hlasm_asg.program.origin import Origin
-from hlasm_asg.program.section import Section
-from hlasm_asg.program.section_kind import SectionKind
-from interpreter.hlasm.address_slot import AddressSlot
 from interpreter.hlasm.bit_length_image import BitLengthImage
 from interpreter.hlasm.constant_image import ConstantImage
 from interpreter.hlasm.dc_encoding import DcPiece, encode_ccw, encode_dc
-from interpreter.hlasm.external_slot import ExternalSlot
 from interpreter.hlasm.hlasm_constants import (
     BITS_PER_BYTE,
-    DOUBLEWORD_BYTES,
-    INT_TO_BINARY_BYTES,
 )
 from interpreter.hlasm.placed_piece import PlacedPiece
-from interpreter.hlasm.section_variable import section_var
-from interpreter.instructions import (
-    AllocRegion,
-    Binop,
-    CallFunction,
-    Const,
-    InstructionBase,
-    LoadVar,
-    StoreVar,
-    WriteRegion,
-)
-from interpreter.operator_kind import BinopKind
-from interpreter.register import Register
 
-type Fragment = tuple[Register, tuple[InstructionBase, ...]]
 type ByteAt = tuple[int, int]
-
-
-def _reg(prefix: str, role: str) -> Register:
-    return Register(f"%{prefix}.{role}")
-
-
-def _allocate(module: str, section: Section) -> tuple[InstructionBase, ...]:
-    prefix = f"hlasm.sect.{section.name}"
-    size = _reg(prefix, "size")
-    region = _reg(prefix, "region")
-    return (
-        Const.int_(size, _align(section.length, DOUBLEWORD_BYTES)),
-        AllocRegion(result_reg=region, size_reg=size),
-        StoreVar(name=section_var(module, section.name), value_reg=region),
-    )
-
-
-def _align(offset: int, boundary: int) -> int:
-    return -(-offset // boundary) * boundary
 
 
 def _place_pieces(
@@ -137,77 +98,3 @@ def placed_pieces(
         if isinstance(s, CcwStatement) and s.section in sections
     )
     return tuple(chain.from_iterable(chain(statements, literals, channel_commands)))
-
-
-def _assembled(piece: ConstantImage | ExternalSlot) -> int:
-    match piece:
-        case ConstantImage():
-            return int.from_bytes(bytes(piece.image), "big")
-        case ExternalSlot():
-            return 0
-
-
-def _constant_value(prefix: str, piece: ConstantImage | ExternalSlot) -> Fragment:
-    value = _reg(prefix, "value")
-    return value, (Const.int_(value, _assembled(piece)),)
-
-
-def _address_value(module: str, prefix: str, piece: AddressSlot) -> Fragment:
-    base, offset, address, modulus, value = (
-        _reg(prefix, role) for role in ("base", "offset", "address", "mod", "value")
-    )
-    return value, (
-        LoadVar(result_reg=base, name=section_var(module, piece.address.section)),
-        Const.int_(offset, piece.address.offset),
-        Binop(result_reg=address, operator=BinopKind.ADD, left=base, right=offset),
-        Const.int_(modulus, 1 << (BITS_PER_BYTE * piece.width)),
-        Binop(result_reg=value, operator=BinopKind.MOD, left=address, right=modulus),
-    )
-
-
-def _value(module: str, prefix: str, piece: DcPiece) -> Fragment:
-    match piece:
-        case AddressSlot():
-            return _address_value(module, prefix, piece)
-        case _:
-            return _constant_value(prefix, piece)
-
-
-def _write(module: str, index: int, placed: PlacedPiece) -> tuple[InstructionBase, ...]:
-    prefix = f"hlasm.dc.{placed.section}.{placed.offset}.{index}"
-    value, value_ir = _value(module, prefix, placed.piece)
-    width, unsigned, image, region, offset = (
-        _reg(prefix, role) for role in ("width", "unsigned", "image", "region", "at")
-    )
-    return (
-        *value_ir,
-        Const.int_(width, placed.piece.width),
-        Const.bool_(unsigned, False),
-        CallFunction(
-            result_reg=image,
-            func_name=INT_TO_BINARY_BYTES,
-            args=(value, width, unsigned),
-        ),
-        LoadVar(result_reg=region, name=section_var(module, placed.section)),
-        Const.int_(offset, placed.offset),
-        WriteRegion(
-            region_reg=region,
-            offset_reg=offset,
-            length=placed.piece.width,
-            value_reg=image,
-        ),
-    )
-
-
-def section_allocation(
-    program: HlasmProgram, module: str
-) -> tuple[InstructionBase, ...]:
-    sections = tuple(s for s in program.sections if s.kind != SectionKind.DSECT)
-    names = frozenset(section.name for section in sections)
-    return (
-        *chain.from_iterable(_allocate(module, section) for section in sections),
-        *chain.from_iterable(
-            _write(module, index, placed)
-            for index, placed in enumerate(placed_pieces(program, names))
-        ),
-    )

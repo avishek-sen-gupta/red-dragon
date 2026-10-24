@@ -1,5 +1,5 @@
 # pyright: standard
-"""An assembled program's sections hold its constants and literals after start-up."""
+"""An assembled program's sections hold its constants, literals and relocated addresses after the binder's start-up."""
 
 from __future__ import annotations
 
@@ -10,11 +10,14 @@ import pytest
 from hlasm_asg.hlasm_bridge_parser import make_hlasm_parser
 from hlasm_asg.program.hlasm_program import HlasmProgram
 from hlasm_asg.program.reloc_symbol import RelocSymbol
+from interpreter.hlasm.assembled_module import object_module
+from interpreter.hlasm.binder import Binder
+from interpreter.hlasm.binder_start_up import bound_start_up
 from interpreter.hlasm.dc_value_out_of_range import DcValueOutOfRange
-from interpreter.hlasm.machine import machine_allocation
+from interpreter.hlasm.hlasm_constants import STUBS_LOW_VAR
+from interpreter.hlasm.image_module import ImageModule
 from interpreter.hlasm.section_variable import section_var
-from interpreter.hlasm.storage_layout import section_allocation
-from interpreter.hlasm.unsupported_data_type import UnsupportedDataType
+from interpreter.instructions import InstructionBase
 from interpreter.vm.vm_types import VMState
 from tests.covers import NotLanguageFeature, covers
 from tests.integration.hlasm.hlasm_helpers import BARE_ASSEMBLY
@@ -128,10 +131,12 @@ def _assemble(source: bytes, tmp_path: Path) -> HlasmProgram:
     )
 
 
+def _start_up(program: HlasmProgram) -> tuple[InstructionBase, ...]:
+    return bound_start_up(Binder((ImageModule("M", "M", object_module(program)),)))
+
+
 def _start(program: HlasmProgram) -> VMState:
-    return run_straight_line(
-        (*machine_allocation(), *section_allocation(program, "M")), {}
-    )
+    return run_straight_line(_start_up(program), {})
 
 
 def _base(vm: VMState, section: str) -> int:
@@ -212,7 +217,7 @@ def test_org_overlay_pieces_get_distinct_registers_and_the_later_piece_wins(
     tmp_path: Path,
 ):
     program = _assemble(OVERLAY_SOURCE, tmp_path)
-    ir = section_allocation(program, "M")
+    ir = _start_up(program)
     results = [i.result_reg for i in ir if i.result_reg.is_present()]
     vm = _start(program)
 
@@ -220,10 +225,6 @@ def test_org_overlay_pieces_get_distinct_registers_and_the_later_piece_wins(
     assert vm.load(_base(vm, "TEST") + 4, 4) == [0, 0, 0, 2]
 
 
-@pytest.mark.xfail(
-    reason="V-type constants hold zero until the linkage unit resolves them — red-dragon-6uyp.8",
-    strict=True,
-)
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_v_type_constant_holds_the_named_section_address(tmp_path: Path):
     program = _assemble(EXTERNAL_SOURCE, tmp_path)
@@ -254,7 +255,7 @@ def test_a_value_outside_its_length_refuses_naming_the_statement(
     program = _assemble(source, tmp_path)
 
     with pytest.raises(DcValueOutOfRange) as refused:
-        section_allocation(program, "M")
+        object_module(program)
 
     assert str(refused.value) == message
 
@@ -271,15 +272,18 @@ def test_star_in_a_duplicated_literal_is_the_instruction_address_in_every_copy(
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_a_channel_command_word_naming_an_external_symbol_refuses(tmp_path: Path):
+def test_a_channel_command_word_naming_an_unresolved_symbol_holds_its_stub(
+    tmp_path: Path,
+):
     program = _assemble(EXTERNAL_CHANNEL_COMMAND_SOURCE, tmp_path)
+    vm = _start(program)
+    stub = vm.current_frame.local_vars[STUBS_LOW_VAR].value
 
-    with pytest.raises(UnsupportedDataType) as refused:
-        section_allocation(program, "M")
-
-    assert str(refused.value) == (
-        "DC type CCW with an external data address is not supported yet — red-dragon-6uyp.8"
-    )
+    assert vm.load(_base(vm, "TEST") + 8, 8) == [
+        0x02,
+        *(stub % (1 << 24)).to_bytes(3, "big"),
+        *[0x00, 0x00, 0x00, 0x04],
+    ]
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

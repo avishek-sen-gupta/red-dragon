@@ -10,31 +10,36 @@ from interpreter.func_name import FuncName
 from interpreter.hlasm.abend import emit_abend
 from interpreter.hlasm.assembled_module import object_module
 from interpreter.hlasm.assembly_diagnostics import assembly_diagnostics
+from interpreter.hlasm.binder import Binder
+from interpreter.hlasm.binder_start_up import bound_start_up
 from interpreter.hlasm.branch_dispatch import (
     emit_branch,
     emit_dispatch,
     statement_label,
 )
-from interpreter.hlasm.entry_state import entry_address, entry_state, resolve_entry
-from interpreter.hlasm.hlasm_constants import OPERATION_EXCEPTION_ABEND
+from interpreter.hlasm.entry_state import entry_state, resolve_entry
+from interpreter.hlasm.hlasm_constants import (
+    ENTRY_ADDRESS_REGISTER,
+    MODULE_FUNCTION_PREFIX,
+    OPERATION_EXCEPTION_ABEND,
+)
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
+from interpreter.hlasm.image_binding import bind_image
+from interpreter.hlasm.image_module import ImageModule
 from interpreter.hlasm.ir_function import define_called
 from interpreter.hlasm.lower_statement import lower_statement
-from interpreter.hlasm.machine import (
-    access_register_allocation,
-    floating_point_allocation,
-    machine_allocation,
-)
 from interpreter.hlasm.machine_statements import MachineStatements
 from interpreter.hlasm.program_function import ProgramFunction
 from interpreter.hlasm.statement_location import statement_location
-from interpreter.hlasm.storage_layout import section_allocation
-from interpreter.instructions import Branch, InstructionBase, Label_
+from interpreter.instructions import Branch, Const, DeclVar, InstructionBase, Label_
 from interpreter.ir import CodeLabel
 from interpreter.namespace_resolver import NamespaceResolver
 from interpreter.project.object_module import ObjectModule
 from interpreter.project.unit_diagnostic import UnitDiagnostic
 from interpreter.refs.func_ref import FuncRef
+from interpreter.var_name import VarName
+
+__all__ = ["HlasmFrontend", "bind_image"]
 
 
 class HlasmFrontend(Frontend):
@@ -74,12 +79,10 @@ class HlasmFrontend(Frontend):
         return object_module(self._program)
 
     def start_up_ir(self) -> tuple[InstructionBase, ...]:
+        alone = ImageModule(self._module, self._module, self.object_module)
         return (
-            *machine_allocation(),
-            *section_allocation(self._program, self._module),
+            *bound_start_up(Binder((alone,))),
             *entry_state(self._program, self._module),
-            *access_register_allocation(),
-            *floating_point_allocation(),
         )
 
     def lower(
@@ -103,7 +106,7 @@ class HlasmFrontend(Frontend):
         emitter.emit_inst(Label_(label=CodeLabel("entry")))
         emitter.emit_inst(Branch(label=end_label))
         emitter.emit_inst(Label_(label=self.entry_label))
-        emit_branch(emitter, entry_address(emitter, self._entry))
+        emit_branch(emitter, emitter.load_gr32(ENTRY_ADDRESS_REGISTER))
         _ = [
             self._lower_placed(emitter, statement, labelled)
             for statement, labelled in self._placed_statements()
@@ -111,6 +114,13 @@ class HlasmFrontend(Frontend):
         emit_abend(emitter, OPERATION_EXCEPTION_ABEND)
         emit_dispatch(emitter, self._program)
         emitter.emit_inst(Label_(label=end_label))
+        self._declare(emitter)
+
+    def _declare(self, emitter: HlasmEmitter) -> None:
+        reference = emitter.fresh_reg()
+        emitter.emit_inst(Const.func_ref(reference, self.entry_label))
+        name = VarName(f"{MODULE_FUNCTION_PREFIX}{self._module}")
+        emitter.emit_inst(DeclVar(name=name, value_reg=reference))
 
     def _placed_statements(self) -> tuple[tuple[Statement, bool], ...]:
         rank = {s.name: at for at, s in enumerate(self._program.sections)}

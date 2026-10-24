@@ -79,6 +79,7 @@ LINK_R5 = [
     "WriteRegion 44+4",
 ]
 DISPATCH = ["StoreVar __hlasm_target reg", "Branch hl_dispatch"]
+LINK_DISPATCH = ["StoreVar __hlasm_target reg", "Branch hl_link_dispatch"]
 ABEND_S0C1 = ["StoreVar __hlasm_abend S0C1", "Halt_"]
 MODE_TEST = [
     "& 2147483647",
@@ -99,7 +100,7 @@ SET_MODE_BIT_R5 = [
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_link_forms_compute_the_target_then_write_the_amode_31_link_then_branch():
+def test_link_forms_compute_the_target_then_write_the_amode_31_link_then_branch_through_the_link_dispatch():
     assert {
         "BAL": _shape("BAL", (reg_operand(LINK), storage_operand(16))),
         "BAS": _shape("BAS", (reg_operand(LINK), storage_operand(16))),
@@ -110,12 +111,12 @@ def test_link_forms_compute_the_target_then_write_the_amode_31_link_then_branch(
         "BALR 5,0": _shape("BALR", (reg_operand(LINK), reg_operand(0))),
         "BASR 5,0": _shape("BASR", (reg_operand(LINK), reg_operand(0))),
     } == {
-        "BAL": [*STORAGE_TARGET, *LINK_R5, *DISPATCH],
-        "BAS": [*STORAGE_TARGET, *LINK_R5, *DISPATCH],
-        "BALR": [*READ_R4, *LINK_R5, *DISPATCH],
-        "BASR": [*READ_R4, *LINK_R5, *DISPATCH],
-        "BRAS": [*RELATIVE_TARGET, *LINK_R5, *DISPATCH],
-        "BRASL": [*RELATIVE_TARGET, *LINK_R5, *DISPATCH],
+        "BAL": [*STORAGE_TARGET, *LINK_R5, *LINK_DISPATCH],
+        "BAS": [*STORAGE_TARGET, *LINK_R5, *LINK_DISPATCH],
+        "BALR": [*READ_R4, *LINK_R5, *LINK_DISPATCH],
+        "BASR": [*READ_R4, *LINK_R5, *LINK_DISPATCH],
+        "BRAS": [*RELATIVE_TARGET, *LINK_R5, *LINK_DISPATCH],
+        "BRASL": [*RELATIVE_TARGET, *LINK_R5, *LINK_DISPATCH],
         "BALR 5,0": LINK_R5,
         "BASR 5,0": LINK_R5,
     }
@@ -131,7 +132,7 @@ def test_set_mode_forms_branch_only_into_amode_31_and_abend_otherwise():
         "BSM 5,0": _shape("BSM", (reg_operand(LINK), reg_operand(0))),
         "BSM 0,0": _shape("BSM", (reg_operand(0), reg_operand(0))),
     } == {
-        "BASSM": [*READ_R4, *LINK_R5, *MODE_TEST, *ABEND_S0C1, *DISPATCH],
+        "BASSM": [*READ_R4, *LINK_R5, *MODE_TEST, *ABEND_S0C1, *LINK_DISPATCH],
         "BASSM 5,0": LINK_R5,
         "BSM": [*READ_R4, *SET_MODE_BIT_R5, *MODE_TEST, *ABEND_S0C1, *DISPATCH],
         "BSM 0,4": [*READ_R4, *MODE_TEST, *ABEND_S0C1, *DISPATCH],

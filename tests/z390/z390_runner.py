@@ -89,6 +89,12 @@ class Z390Runner:
     def run(self, source: str, tmp: Path, options: Sequence[str] = ()) -> HlasmRun:
         return hlasm_run_of_log(self._log(source, tmp, options))
 
+    def assemble_object(self, name: str, source: str, tmp: Path) -> Path:
+        program = tmp / name
+        program.with_suffix(".MLC").write_text(source, encoding="ascii")
+        self.runner.run([str(self.home / "bash" / "asm"), str(program)])
+        return program.with_suffix(".OBJ")
+
     def run_machine(self, source: str, tmp: Path) -> HlasmMachine:
         return hlasm_machine_of_log(self._log(source, tmp))
 

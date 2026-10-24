@@ -5,7 +5,7 @@ from collections.abc import Callable, Mapping
 
 from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.hlasm.abend import emit_abend
-from interpreter.hlasm.branch_dispatch import emit_branch
+from interpreter.hlasm.branch_dispatch import emit_branch, emit_link_branch
 from interpreter.hlasm.data_movement import relative_target, storage_address
 from interpreter.hlasm.hlasm_constants import (
     ADDRESS_MASK_31,
@@ -76,7 +76,13 @@ def _branch_when(
     emitter.emit_inst(Label_(label=fall))
 
 
-def _set_mode_and_branch(emitter: HlasmEmitter, target: Register) -> None:
+def _set_mode_and(branch: BranchTo) -> BranchTo:
+    return lambda emitter, target: _set_mode_and_branch(emitter, target, branch)
+
+
+def _set_mode_and_branch(
+    emitter: HlasmEmitter, target: Register, branch: BranchTo
+) -> None:
     amode_31 = emitter.fresh_label("hl_amode_31")
     _branch_when(emitter, _returning(emitter, target), amode_31, "hl_amode_test")
     _branch_when(
@@ -84,14 +90,14 @@ def _set_mode_and_branch(emitter: HlasmEmitter, target: Register) -> None:
     )
     emit_abend(emitter, OPERATION_EXCEPTION_ABEND)
     emitter.emit_inst(Label_(label=amode_31))
-    emit_branch(emitter, target)
+    branch(emitter, target)
 
 
 def _and_link(target: Target) -> StatementLowering:
     def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
         to = target(emitter, statement)
         _link(emitter, statement)
-        emit_branch(emitter, to)
+        emit_link_branch(emitter, to)
 
     return lower
 
@@ -123,13 +129,13 @@ def lower_tam(emitter: HlasmEmitter, statement: MachineStatement) -> None:
 
 BRANCH_AND_LINK_LOWERINGS: Mapping[str, StatementLowering] = {
     "BAL": _and_link(storage_address),
-    "BALR": _register_branch(_link, emit_branch),
+    "BALR": _register_branch(_link, emit_link_branch),
     "BAS": _and_link(storage_address),
-    "BASR": _register_branch(_link, emit_branch),
+    "BASR": _register_branch(_link, emit_link_branch),
     "BRAS": _and_link(relative_target),
     "BRASL": _and_link(relative_target),
-    "BASSM": _register_branch(_link, _set_mode_and_branch),
-    "BSM": _register_branch(_insert_mode_bit, _set_mode_and_branch),
+    "BASSM": _register_branch(_link, _set_mode_and(emit_link_branch)),
+    "BSM": _register_branch(_insert_mode_bit, _set_mode_and(emit_branch)),
     "SAM24": lower_leave_amode_31,
     "SAM31": lower_sam31,
     "SAM64": lower_leave_amode_31,

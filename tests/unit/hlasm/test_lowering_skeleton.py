@@ -122,17 +122,19 @@ def test_seed_program_lowers_to_labels_region_ops_and_dispatch():
     frontend = HlasmFrontend(_program("seed_program.json"), "M")
     ir = frontend.lower(b"")
     dispatch = _between(ir, "hl_dispatch", "end_hello_1")
-    assert _labels(ir)[:5] + _labels(ir)[-2:] == [
+    assert _labels(ir)[:7] + _labels(ir)[-2:] == [
         "entry",
         "func_hello_0",
         "hl_HELLO_0",
         "hl_HELLO_4",
+        "hl_link_dispatch",
+        "hl_stub_call",
         "hl_dispatch",
         "hl_return",
         "end_hello_1",
     ]
     assert _gpr_writes(_between(ir, "hl_HELLO_0", "hl_HELLO_4")) == [(4, 124)]
-    assert _branch_and_abend(_between(ir, "hl_HELLO_4", "hl_dispatch"))[-5:] == [
+    assert _branch_and_abend(_between(ir, "hl_HELLO_4", "hl_link_dispatch"))[-5:] == [
         "StoreVar:__hlasm_target",
         "Branch:hl_dispatch",
         "Const:S0C1",
