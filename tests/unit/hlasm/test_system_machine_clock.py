@@ -1,7 +1,7 @@
 # pyright: standard
 """The system machine clock turns host readings into a 104-bit TOD clock since 1900 and a CPU timer counting down from the top."""
 
-from interpreter.hlasm.system_machine_clock import SystemMachineClock
+from interpreter.hlasm_run_inputs.system_machine_clock import SystemMachineClock
 from tests.covers import NotLanguageFeature, covers
 
 START_OF_1972_UNIX_NS = 63_072_000 * 1_000_000_000

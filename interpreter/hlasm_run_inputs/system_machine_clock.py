@@ -4,7 +4,7 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from interpreter.hlasm.machine_clock import MachineClock
+from interpreter.hlasm_run_inputs.machine_clock import MachineClock
 
 UNIX_EPOCH_AFTER_TOD_EPOCH_NS = 2_208_988_800 * 1_000_000_000
 TOD_FRACTION_BITS = 52

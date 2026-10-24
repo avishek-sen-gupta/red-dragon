@@ -23,6 +23,9 @@ from interpreter.frontend_observer import FrontendObserver
 from interpreter.frontends import get_hlasm_parser
 from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.func_name import FuncName
+from interpreter.hlasm_run_inputs.run_input_builtins import (
+    unsupplied_run_input_builtins,
+)
 from interpreter.instructions import (
     Data,
     Halt_,
@@ -1487,7 +1490,9 @@ def run(
         tolerant: Skip (with a WARNING) COBOL statements whose lowering
             raises, instead of failing compilation. Default off. COBOL only.
         builtins: The builtins table this run resolves builtin calls through
-            (default: ``DEFAULT_BUILTINS``, the core table).
+            (default: ``DEFAULT_BUILTINS``, the core table). An HLASM run adds
+            the HLASM run inputs it is not given: the host clock and an empty
+            PARM.
     """
     lang = Language(language)
     pipeline_start = time.perf_counter()
@@ -1519,12 +1524,22 @@ def run(
         backend=backend,
         unresolved_call_strategy=unresolved_call_strategy,
         io_provider=io_provider,
-        builtins=builtins,
+        builtins=_language_builtins(lang, builtins),
         initial_vm=initial_vm_state(io_provider=io_provider, null_access=null_access),
     )
     _record_run_times(stats, pipeline_start, exec_start)
     _log_report(verbose, stats)
     return vm
+
+
+def _language_builtins(
+    lang: Language, given: Mapping[FuncName, Builtin]
+) -> Mapping[FuncName, Builtin]:
+    match lang:
+        case Language.HLASM:
+            return MappingProxyType({**unsupplied_run_input_builtins(), **given})
+        case _:
+            return given
 
 
 def _compiled_image(

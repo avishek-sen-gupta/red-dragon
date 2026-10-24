@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from interpreter.frontends import get_hlasm_parser
-from interpreter.hlasm.job_parm_builtins import NO_PARM, job_parm_builtins
+from interpreter.hlasm_run_inputs.job_parm_builtins import NO_PARM, job_parm_builtins
 from interpreter.project.hlasm_compile import compile_hlasm
 from interpreter.project.program_entry import ProgramEntry
 from interpreter.project.source_file import SourceFile
