@@ -3,10 +3,13 @@
 
 from dataclasses import dataclass
 
+from interpreter.hlasm.dc_warning import DcWarning
+
 
 @dataclass(frozen=True)
 class ConstantImage:
     image: tuple[int, ...]
+    warnings: tuple[DcWarning, ...] = ()
 
     @property
     def width(self) -> int:

@@ -6,7 +6,13 @@ from dataclasses import replace
 from fractions import Fraction
 
 from zarch_float.condition import Condition, raised
-from zarch_float.dfp_context import bounded, from_decimal, to_decimal, to_integral
+from zarch_float.dfp_context import (
+    bounded,
+    from_decimal,
+    raised_in,
+    to_decimal,
+    to_integral,
+)
 from zarch_float.dfp_format import EXTENDED, LONG, DfpFormat
 from zarch_float.dfp_nan import propagate_nan
 from zarch_float.dfp_quantum import constrained, quantum_differs, with_quantum
@@ -57,8 +63,10 @@ def _resized(
     return resizes[value.kind]()
 
 
-def dfp_fitted(a: DfpValue, mode: RoundingMode) -> DfpValue:
-    return from_decimal(bounded(a.format, mode).create_decimal(to_decimal(a)), a.format)
+def dfp_fitted(a: DfpValue, mode: RoundingMode) -> DfpResult:
+    context = bounded(a.format, mode)
+    fitted = from_decimal(context.create_decimal(to_decimal(a)), a.format)
+    return dfp_exact(fitted, raised_in(context))
 
 
 def dfp_load_rounded(a: DfpValue, target: DfpFormat, mode: RoundingMode) -> DfpResult:
