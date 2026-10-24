@@ -49,6 +49,10 @@ MAIN     CSECT
          CALL  (15)
          LR    9,15
          DELETE EP=SUB
+         LR    4,15
+         DELETE EP=SUB
+         LR    5,15
+         DELETE EP=OTHER
          LR    14,10
          BR    14
          LTORG
@@ -89,6 +93,27 @@ SUB      CSECT
          LTORG
          END
 """
+LINK_FORMS = """\
+MAIN     CSECT
+         LR    12,15
+         USING MAIN,12
+         LR    10,14
+         LINK  EPLOC=NAME
+         LR    3,15
+         LA    2,NAME
+         LINK  EPLOC=(2)
+         AR    3,15
+         LA    15,CONTROL
+         SVC   6
+         AR    3,15
+         LR    14,10
+         LR    15,3
+         BR    14
+NAME     DC    CL8'SUB'
+CONTROL  DC    A(NAME,0)
+         LTORG
+         END   MAIN
+"""
 LINKS_MISSING = """\
 MAIN     CSECT
          LINK  EP=NOPE
@@ -101,6 +126,18 @@ MAIN     CSECT
          USING MAIN,12
          LOAD  EP=NOPE
          BR    14
+         END   MAIN
+"""
+LOADS_MISSING_BY_HAND = """\
+MAIN     CSECT
+         LR    12,15
+         USING MAIN,12
+         LA    15,ERR
+         LA    0,NAME
+         SR    1,1
+         SVC   8
+ERR      BR    14
+NAME     DC    CL8'NOPE'
          END   MAIN
 """
 LOADS_MISSING_WITH_EXIT = """\
@@ -125,6 +162,7 @@ MAIN     CSECT
          CALL  (16)
          LINK  EP=SUB,VL=2
          LINK  PARAM=(A)
+         LINK  EPLOC=(15)
          LOAD  EP=SUB,EPLOC=NAME
          DELETE EP=TOOLONGNAME
 A        DS    F
@@ -139,6 +177,7 @@ BAD_OPERAND_REFUSALS = (
     ("CALL: INVALID REGISTER", 6),
     ("LINK: VL MUST BE 1", 7),
     ("LINK: EP OR EPLOC MISSING", 8),
-    ("LOAD: EP AND EPLOC BOTH GIVEN", 9),
-    ("DELETE: EP LONGER THAN 8 CHARACTERS", 10),
+    ("LINK: EPLOC REGISTER MUST NOT BE 15", 9),
+    ("LOAD: EP AND EPLOC BOTH GIVEN", 10),
+    ("DELETE: EP LONGER THAN 8 CHARACTERS", 11),
 )

@@ -1,12 +1,14 @@
 # pyright: standard
-"""Control across modules: a linking branch out of a module calls its owner, a branch to the activation's return address returns whatever its mode bit, a non-linking branch into a module with an activation below returns to it (a level skipped, or B 4(,14)), any other branch out of the module calls, and an address nothing owns abends S0C1."""
+"""Control across modules: a linking branch out of a module calls its owner, a branch to the activation's return address returns whatever its mode bit unless it is in the module's own code, a non-linking branch into a module with an activation below returns to it (a level skipped, or B 4(,14)), any other branch out of the module calls, and an address nothing owns abends S0C1."""
 
 from interpreter.project.source_file import SourceFile
 from tests.covers import NotLanguageFeature, covers
 from tests.integration.hlasm.far_branch_programs import (
     CALLEE,
     CALLER,
+    GOES_TO_ITS_RETURN,
     INNER,
+    LOOPS_AT_ITS_RETURN,
     MIDDLE,
     MODE_RETURN,
     PLAIN_RETURN,
@@ -80,3 +82,10 @@ def test_a_branch_to_an_address_nothing_owns_abends_s0c1():
         (HlasmRun(return_code=0, abend="S0C1", stdout=""), 1),
         (HlasmRun(return_code=0, abend="S0C1", stdout=""), 1),
     )
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_a_module_entered_at_its_own_return_address_runs_there_instead_of_returning():
+    run, words = _low_words(GOES_TO_ITS_RETURN, module("B", LOOPS_AT_ITS_RETURN))
+
+    assert (run, words[5]) == (HlasmRun(return_code=3, abend="", stdout=""), 3)

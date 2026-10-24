@@ -134,3 +134,31 @@ SUB3     CSECT
          BSM   0,14
          END
 """
+GOES_TO_ITS_RETURN = """\
+A        CSECT
+         LR    12,15
+         USING A,12
+         LR    10,14
+         SR    5,5
+         L     14,=V(BMID)
+         L     15,=V(B)
+         BR    15
+         ENTRY ABACK
+ABACK    LR    14,10
+         LR    15,5
+         BR    14
+         LTORG
+         END   A
+"""
+LOOPS_AT_ITS_RETURN = """\
+B        CSECT
+         USING B,15
+         ENTRY BMID
+BMID     LA    5,1(,5)
+         CH    5,=H'3'
+         BL    BMID
+         L     14,=V(ABACK)
+         BR    14
+         LTORG
+         END
+"""

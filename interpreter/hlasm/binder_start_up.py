@@ -12,6 +12,7 @@ from interpreter.hlasm.hlasm_constants import (
     MODULE_BIT_PREFIX,
     NAME_ADDRESS_FIELD,
     NAME_LENGTH_FIELD,
+    NAME_LOADS_FIELD,
     NAMES_VAR,
     NO_ABEND,
     PROGRAM_NAME_BYTES,
@@ -191,6 +192,7 @@ def _name_entry(
             NAME_LENGTH_FIELD,
             emitter.int_(binder.layouts[placed.module].length // DOUBLEWORD_BYTES),
         ),
+        (NAME_LOADS_FIELD, emitter.int_(0)),
     )
     _ = [
         emitter.emit_inst(StoreField(obj_reg=entry, field_name=f, value_reg=v))

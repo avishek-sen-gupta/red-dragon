@@ -272,9 +272,12 @@ Registers stay shared machine state.
 
 - Every branch stores its target in `__hlasm_target` and goes to `hl_dispatch`; BAL, BALR, BAS,
   BASR, BRAS, BRASL and BASSM go to `hl_link_dispatch`, which records that the branch linked.
-- A masked target equal to `__hlasm_return_to` returns R15's low word. BSM and BASSM make the
-  same comparison before their mode test, so the mode bit of the return address does not matter.
-- A target at a machine statement of the module's own sections branches to its label.
+- A target at a machine statement of the module's own sections branches to its label, even when
+  it equals the return address: the same code runs either way, and a module entered at its own
+  R14 must not return at once.
+- Otherwise a masked target equal to `__hlasm_return_to` returns R15's low word. BSM and BASSM
+  make the same comparison before their mode test, so the mode bit of the return address does
+  not matter.
 - Any other target goes to `__hlasm_far_branch(target, below, me, linking)`, which finds its owner:
   - the module itself: `S0C1` (data, or a DSECT offset);
   - another module: if the branch did not link and that module is in `below`, the activation
@@ -379,9 +382,9 @@ conventions but expand only to lowered opcodes:
 | `CALL ep\|(15)\|(r)[,(p,...)][,VL]` | `BRAS 1` around `DC A(p),...` (VL adds X'80000000' to the last word), `L 15,=V(ep)` or `LR 15,r`, `BALR 14,15` |
 | `CALL ,(p,...)[,VL],MF=L` | The list alone: `DC A(p),...` under the call's label |
 | `CALL ep,(p,...)[,VL],MF=(E,list\|(r))` | `LA 1,list` or `LR 1,r`, then `LA 14,p` and `ST 14,4i(,1)` per parameter, `OI` on the last for VL, then as above |
-| `LINK EP=\|EPLOC=[,PARAM=(p,...)][,VL=1]` | PARAM as CALL's inline list; R0 → the name (`BRAS 0` over `CL8'ep'`, `LA 0,addr` or `LR 0,r`); `SVC 6` |
-| `LOAD EP=\|EPLOC=[,ERRET=addr]` | R0 as LINK; R15 = `ERRET` address or 0; `SVC 8` |
-| `DELETE EP=\|EPLOC=` | R0 as LINK; `SVC 9` |
+| `LINK EP=\|EPLOC=[,PARAM=(p,...)][,VL=1]` | PARAM as CALL's inline list; `BRAS 15` over IBM's control list `A(name),A(0)` (`EPLOC=(r)` stores r into it; r may not be 15); `SVC 6` |
+| `LOAD EP=\|EPLOC=[,ERRET=addr]` | R0 → the name (`BRAS 0` over `CL8'ep'`, `LA 0,addr` or `LR 0,r`); `LA 1,0`, with ERRET `OILH 1,X'8000'`; `SVC 8`; with ERRET `LTR 15,15` and `BNZ addr` |
+| `DELETE EP=\|EPLOC=` | R0 as LOAD; `SVC 9` |
 
 `LOC` is accepted and ignored: storage is never constrained below 16 MB. `BNDRY` is `DBLWD`
 or `PAGE`, and `PAGE` only on the SVC 120 forms. Missing `LV`, `LENGTH`, `A` or `ADDR`,
@@ -389,7 +392,8 @@ another type, `COND` other than `YES` or `NO`, `SP=(r)` outside 2-12, `SP` with
 `R,LV=(0)`, `LV=(1)` or `LENGTH=(1)` on a release, TIME types other than `DEC` and `BIN`,
 and `LINKAGE` other than `SVC` are `MNOTE 8`. So are a CALL third operand other than `VL`, `MF`
 other than `L` or `(E,list)`, `MF=L` without a list, a missing entry or a bad register; LINK `VL`
-other than 1; and on LINK, LOAD and DELETE, no `EP` or `EPLOC`, both, or an `EP` over 8 characters.
+other than 1 or `EPLOC=(15)`; and on LINK, LOAD and DELETE, no `EP` or `EPLOC`, both, or an `EP`
+over 8 characters.
 
 Registers may be numbers or `Rn`. A bad register, a third range entry, a second operand other than `T`, or
 an `RC` register other than 15 is an `MNOTE 8`, which refuses the assembly. Save areas
@@ -421,17 +425,22 @@ services use the table membership builtin, the string builtins and the TOD clock
   are not lowered. R1 is then the date as packed
   `0CYYDDDF` (C is 0 for 19xx, 1 for 20xx). R15 is 0. No zone offset is applied, so local
   time is the TOD clock's UTC; leap seconds are ignored.
-- **SVC 6** (LINK) reads the 8-byte EBCDIC name at R0 and looks its image up in
-  `__hlasm_names`, a start-up object of the image's SD and LD names, each an entry of `address`
-  and `length` (the owning module's region in doublewords). Found, it keeps R2-R14, sets R14 to
-  `0xFF0` and R15 to the entry, and calls `__hlasm_far_branch` as a linking branch with nothing
-  below (Control Across Modules); then R2-R14 are restored and R15 is the program's. Missing, it
-  issues `CallWithMemory` on `__entry_<NAME>` (the name decoded and trimmed at run time), as for
-  an unresolved EXTRN, and R15 takes the result.
+- The SVC 6, 8 and 9 inputs are IBM's: SVC 6 takes R15 → `A(name),A(DCB)` and R1 the parameter
+  list; SVC 8 R0 → the name and R1 the DCB address, its high bit asking for a return on error;
+  SVC 9 R0 → the name. The DCB is ignored.
+- **SVC 6** (LINK) reads the 8-byte EBCDIC name and looks its image up in `__hlasm_names`, a
+  start-up object of the image's SD and LD names, each an entry of `address`, `length` (the
+  owning module's region in doublewords) and `loads`. Found, it sets R14 to `0xFF0` and R15 to
+  the entry and calls `__hlasm_far_branch` as a linking branch with nothing below (Control
+  Across Modules). The registers come back as the program left them (IBM's LINK register
+  information). Missing, it issues `CallWithMemory` on `__entry_<NAME>`, the name decoded and
+  trimmed at run time, exactly as a COBOL `CALL identifier` to a missing program: that raises
+  `UnresolvedProgramError` whether or not unresolved targets are permitted (ruling R80).
 - **SVC 8** (LOAD) sets R0 to the entry with bit 32 on, R1 to the length in doublewords (APF
-  byte 0) and R15 to 0. A missing name branches to the address in R15 (ERRET) with R1
-  `X'00806000'` and R15 4, IBM's code and reason for "not found"; with R15 0 it abends `S806`.
-- **SVC 9** (DELETE) sets R15 to 0 and does nothing else.
+  byte 0) and R15 to 0, and counts the load. A missing name with R1's high bit on returns with R1
+  `X'00806000'` and R15 4 (806, reason 04, "not found"); without it, it abends `S806`.
+- **SVC 9** (DELETE) takes one counted load back and sets R15 to 0; a name not loaded by the run
+  unit, or not in the image, gets R15 4. Nothing is freed.
 - **Any other SVC number** logs the number and abends `S0C1`. This is a project
   choice, not z/OS behaviour.
 
@@ -1404,11 +1413,11 @@ layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.
 - Q, J and CXD relocations and DXD are refused by the binder (`UnsupportedBinding`, red-dragon-6uyp.96).
   An LTR on an unresolved EXTRN sees its stub address, not 0 (ruling R66).
 - LOAD returns the same copy every time: there is no fresh copy for a non-reusable module.
-  LINK and LOAD find only SD and LD names of the image; a LINK to a missing name calls
-  `__entry_<NAME>` with no arguments, its PARAM list unpassed. LINK passes R1 and R13 as they
-  are and hands back R2-R14; the pages at hand do not say whether R14 is a work register.
-  z390's LINK returns R15 as 0 and does not restore R2-R14; its test pins that (red-dragon-6uyp.74).
-  The SVC 6, 8 and 9 register protocol is ours, not IBM's expansion.
+  LINK and LOAD find only SD and LD names of the image. A LINK to a missing name raises, as a
+  COBOL dynamic CALL does, even when unresolved targets are permitted; its PARAM list is not
+  passed. z390's LINK returns R15 as 0; its test pins that (red-dragon-6uyp.74).
+- The layout of LOAD's ERRET code in R1 is unconfirmed: IBM's LOAD page says only "system
+  completion code", and we use the ABEND macro's bits 8-19 (`X'00806000'`), not `X'00000806'`.
 - Machine-instruction bytes are not in section storage (a spec non-goal: self-modifying code), so `CLC` against code does not see them. EX finds its target at assembly instead.
 - An EX target written with an explicit base or an index, an EXRL to an absolute target, or one
   where no machine statement starts abends `S0C1` with a logged warning (red-dragon-6uyp.77). EX
@@ -1522,9 +1531,9 @@ layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.
 | `tests/z390/test_storage_services_differential.py` | Alignment, disjointness, data and R15 against z390 (z390 sets R15 0 on GETMAIN R and FREEMAIN R); the shape of TIME's words against z390's wall clock; z390 reads a hand-coded SVC 11's format from R0 |
 | `tests/unit/hlasm/test_time_service.py` | TIME's words for TOD values across 1900, 2000 (leap day, day 366), 2023 and 2100 |
 | `tests/unit/hlasm/test_service_lowering.py` | SVC 6, 8, 9, 10, 11 and 120 call only existing builtins (and LINK the far branch) and leave nothing symbolic |
-| `tests/integration/hlasm/test_far_branch.py` | A call through a V-constant and BALR; a return that skips a level; a linking branch into a module below; `B 4(,14)`; a plain branch out that calls; `BSM 0,14` to an R14 without the mode bit; an unowned address abending `S0C1` |
+| `tests/integration/hlasm/test_far_branch.py` | A module entered at its own R14 running there; a call through a V-constant and BALR; a return that skips a level; a linking branch into a module below; `B 4(,14)`; a plain branch out that calls; `BSM 0,14` to an R14 without the mode bit; an unowned address abending `S0C1` |
 | `tests/z390/test_far_branch_differential.py` | The call and the skipped-level return against z390 (SYSOBJ autolink) |
-| `tests/integration/hlasm/test_program_services.py` | CALL inline, `MF=L` and `MF=(E,list)` with VL; LOAD's R0 and R1, `CALL (15)`, DELETE; LINK with PARAM and VL restoring R2-R14; a missing name: LINK by name, LOAD `S806` and ERRET; operand refusals |
+| `tests/integration/hlasm/test_program_services.py` | CALL inline, `MF=L` and `MF=(E,list)` with VL; LOAD's R0 and R1, `CALL (15)`, DELETE of a loaded name (0), again (4) and of an unloaded one (4); LINK with PARAM and VL leaving the program's registers, by `EPLOC=addr`, `EPLOC=(r)` and a hand-coded R15 list; a missing name: LINK raising in both modes, LOAD `S806` by macro and by hand with a leftover R15, and ERRET; operand refusals |
 | `tests/z390/test_program_services_differential.py` | CALL, LINK and LOAD return codes against z390; z390's LINK R15 pinned |
 | `tests/z390/test_foundation_differential.py` | Return code, WTO, user abend and assembly failure against z390 (`-m z390`) |
 | `tests/z390/test_z390_log.py` | Registers and CC from a z390 abend dump (default run) |

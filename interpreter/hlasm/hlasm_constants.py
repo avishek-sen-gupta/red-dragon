@@ -18,6 +18,7 @@ ALLOCATIONS_VAR = VarName("__hlasm_allocations")
 NAMES_VAR = VarName("__hlasm_names")
 NAME_ADDRESS_FIELD = FieldName("address")
 NAME_LENGTH_FIELD = FieldName("length")
+NAME_LOADS_FIELD = FieldName("loads")
 PROGRAM_NAME_BYTES = 8
 PROGRAM_NAME_CODEC = "cp037"
 
@@ -170,5 +171,5 @@ RETURN_CODE_REGISTER = 15
 
 DISPATCH_LABEL = CodeLabel("hl_dispatch")
 LINK_DISPATCH_LABEL = CodeLabel("hl_link_dispatch")
-RETURN_CHECK_LABEL = CodeLabel("hl_return_check")
+LOCAL_DISPATCH_LABEL = CodeLabel("hl_local_dispatch")
 RETURN_LABEL = CodeLabel("hl_return")

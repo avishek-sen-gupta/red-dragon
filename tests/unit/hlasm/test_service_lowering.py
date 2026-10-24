@@ -35,7 +35,7 @@ SERVICES: dict[str, tuple[Callable[[HlasmEmitter], None], set[str]]] = {
         },
     ),
     "svc_8": (emit_load, TABLE_LOOKUP),
-    "svc_9": (emit_delete, {"__int_to_binary_bytes"}),
+    "svc_9": (emit_delete, TABLE_LOOKUP),
 }
 
 

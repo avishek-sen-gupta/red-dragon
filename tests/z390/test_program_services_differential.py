@@ -1,5 +1,5 @@
 # pyright: standard
-"""CALL, LINK and LOAD in RedDragon and in z390: CALL's lists reach a module autolinked from SYSOBJ, and LINK and LOAD reach a load module z390 finds beside the program. Only return codes are compared. z390's LINK hands back R15 as 0 and leaves R2-R14 as the called program left them; IBM's LINK hands back the program's R15 and R2-R14 as they were, so z390's LINK return code is pinned at the sum alone (42, not 142)."""
+"""CALL, LINK and LOAD in RedDragon and in z390: CALL's lists reach a module autolinked from SYSOBJ, and LINK and LOAD reach a load module z390 finds beside the program. Only return codes are compared. Both leave the registers as the linked program left them, but z390's LINK hands back R15 as 0 where IBM's hands back the program's R15, so z390's LINK return code is pinned at the sum alone (42, not 142)."""
 
 from pathlib import Path
 
@@ -14,7 +14,7 @@ from tests.z390.z390_runner import Z390Runner
 pytestmark = pytest.mark.z390
 
 LOAD_THEN_RETURN_ITS_CODE = programs.LOADER.replace(
-    "         DELETE EP=SUB\n", "         DELETE EP=SUB\n         LR    15,9\n"
+    "         DELETE EP=OTHER\n", "         DELETE EP=OTHER\n         LR    15,9\n"
 )
 
 

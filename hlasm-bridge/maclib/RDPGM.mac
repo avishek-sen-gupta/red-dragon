@@ -1,5 +1,6 @@
          MACRO
-         RDPGM &OWNER,&EP,&EPLOC
+         RDPGM &OWNER,&EP,&EPLOC,&LIST
+         GBLA  &RDRV
          GBLB  &RDSTBAD
 &RDSTBAD SETB  1
          AIF   ('&EP' NE '' AND '&EPLOC' NE '').BOTH
@@ -11,16 +12,38 @@
          MEXIT
 .EP      AIF   (K'&EP GT 8).LONG
 &RDSTBAD SETB  0
+         AIF   ('&LIST' EQ 'LIST').EPLIST
          BRAS  0,RDN&SYSNDX
          DC    CL8'&EP'
 RDN&SYSNDX DS  0H
          MEXIT
+.EPLIST  BRAS  15,RDN&SYSNDX
+         DC    A(RDE&SYSNDX,0)
+RDE&SYSNDX DC  CL8'&EP'
+RDN&SYSNDX DS  0H
+         MEXIT
 .LONG    MNOTE 8,'&OWNER: EP LONGER THAN 8 CHARACTERS'
          MEXIT
-.EPLOC   ANOP
+.EPLOC   AIF   ('&EPLOC'(1,1) EQ '(').REG
 &RDSTBAD SETB  0
-         AIF   ('&EPLOC'(1,1) EQ '(').REG
+         AIF   ('&LIST' EQ 'LIST').ADDRLST
          LA    0,&EPLOC
          MEXIT
-.REG     LR    0,&EPLOC(1)
+.ADDRLST BRAS  15,RDN&SYSNDX
+         DC    A(&EPLOC,0)
+RDN&SYSNDX DS  0H
+         MEXIT
+.REG     AIF   ('&LIST' EQ 'LIST').REGLIST
+&RDSTBAD SETB  0
+         LR    0,&EPLOC(1)
+         MEXIT
+.REGLIST RDREGN &EPLOC(1)
+         AIF   (&RDRV NE 15).REGOK
+         MNOTE 8,'&OWNER: EPLOC REGISTER MUST NOT BE 15'
+         MEXIT
+.REGOK   ANOP
+&RDSTBAD SETB  0
+         BRAS  15,RDN&SYSNDX
+         DC    A(0,0)
+RDN&SYSNDX ST  &EPLOC(1),0(,15)
          MEND

@@ -1,5 +1,5 @@
 # pyright: standard
-"""Computed branches: a module activation returns at its R14, maps a target in its own sections back to its statement's label, and hands any other target to the far branch."""
+"""Computed branches: a module activation maps a target in its own sections back to its statement's label, returns at its R14 otherwise, and hands any other target to the far branch."""
 
 from collections.abc import Sequence
 
@@ -18,8 +18,8 @@ from interpreter.hlasm.hlasm_constants import (
     LINK_DISPATCH_LABEL,
     LINK_REGISTER,
     LINKING_VAR,
+    LOCAL_DISPATCH_LABEL,
     MODULE_BIT_PREFIX,
-    RETURN_CHECK_LABEL,
     RETURN_CODE_REGISTER,
     RETURN_LABEL,
     RETURN_TO_VAR,
@@ -140,26 +140,30 @@ def _emit_far_branch(emitter: HlasmEmitter, module: str) -> None:
     )
 
 
-def _emit_return_check(emitter: HlasmEmitter) -> None:
+def _emit_entries(emitter: HlasmEmitter) -> None:
     emitter.emit_inst(Label_(label=LINK_DISPATCH_LABEL))
     _set_linking(emitter, 1)
-    emitter.emit_inst(Branch(label=RETURN_CHECK_LABEL))
+    emitter.emit_inst(Branch(label=LOCAL_DISPATCH_LABEL))
     emitter.emit_inst(Label_(label=DISPATCH_LABEL))
     _set_linking(emitter, 0)
-    emitter.emit_inst(Label_(label=RETURN_CHECK_LABEL))
+    emitter.emit_inst(Label_(label=LOCAL_DISPATCH_LABEL))
+
+
+def _emit_return_check(emitter: HlasmEmitter) -> None:
     returning = emitter.binop(
         BinopKind.EQ, _masked_target(emitter), masked_return_address(emitter)
     )
-    _branch_if(emitter, returning, RETURN_LABEL, "hl_dispatch_local")
+    _branch_if(emitter, returning, RETURN_LABEL, "hl_dispatch_far")
 
 
 def emit_dispatch(emitter: HlasmEmitter, program: HlasmProgram, module: str) -> None:
-    _emit_return_check(emitter)
+    _emit_entries(emitter)
     target = _masked_target(emitter)
     _ = [
         _section_chain(emitter, target, (s.name, _machine_offsets(program, s)))
         for s in program.sections
         if s.kind != SectionKind.DSECT
     ]
+    _emit_return_check(emitter)
     _emit_far_branch(emitter, module)
     _emit_return(emitter)

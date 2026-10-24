@@ -153,10 +153,10 @@ def _dispatch_entries(
 ) -> tuple[list[str], list[str], list[str]]:
     return (
         _branch_and_abend(_between(ir, "hl_link_dispatch", "hl_dispatch")),
-        _branch_and_abend(_between(ir, "hl_dispatch", "hl_return_check")),
+        _branch_and_abend(_between(ir, "hl_dispatch", "hl_local_dispatch")),
         [
             str(i.name)
-            for i in _between(ir, "hl_return_check", "hl_dispatch_local_0")
+            for i in _between(ir, "hl_dispatch_next_1", "hl_dispatch_far_2")
             if isinstance(i, LoadVar)
         ],
     )
@@ -174,8 +174,8 @@ def test_seed_program_lowers_to_labels_region_ops_and_dispatch():
         "hl_HELLO_4",
         "hl_link_dispatch",
         "hl_dispatch",
-        "hl_return_check",
-        "hl_dispatch_local_0",
+        "hl_local_dispatch",
+        "hl_dispatch_next_0",
         "hl_return",
         "end_hello_1",
     ]
@@ -191,19 +191,19 @@ def test_seed_program_lowers_to_labels_region_ops_and_dispatch():
         "Halt_",
     ]
     assert _dispatch_entries(ir) == (
-        ["Label_", "Const:1", "StoreVar:__hlasm_linking", "Branch:hl_return_check"],
+        ["Label_", "Const:1", "StoreVar:__hlasm_linking", "Branch:hl_local_dispatch"],
         ["Label_", "Const:0", "StoreVar:__hlasm_linking"],
         ["__hlasm_target", "__hlasm_return_to"],
     )
     assert (
-        _dispatch_comparands(_between(ir, "hl_dispatch_local_0", "hl_return")),
+        _dispatch_comparands(_between(ir, "hl_local_dispatch", "hl_return")),
         [i.branch_targets for i in dispatch if isinstance(i, BranchIf)],
     ) == (
         [0, 4],
         [
-            (CodeLabel("hl_return"), CodeLabel("hl_dispatch_local_0")),
-            (CodeLabel("hl_HELLO_0"), CodeLabel("hl_dispatch_next_1")),
-            (CodeLabel("hl_HELLO_4"), CodeLabel("hl_dispatch_next_2")),
+            (CodeLabel("hl_HELLO_0"), CodeLabel("hl_dispatch_next_0")),
+            (CodeLabel("hl_HELLO_4"), CodeLabel("hl_dispatch_next_1")),
+            (CodeLabel("hl_return"), CodeLabel("hl_dispatch_far_2")),
             (CodeLabel("hl_return"), CodeLabel("hl_dispatch")),
         ],
     )

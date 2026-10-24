@@ -4,9 +4,12 @@
 &NAME    DS    0H
          RDPGM LOAD,&EP,&EPLOC
          AIF   (&RDSTBAD).OUT
+         LA    1,0
          AIF   ('&ERRET' NE '').ERRET
-         LA    15,0
-         AGO   .SVC
-.ERRET   LA    15,&ERRET
-.SVC     SVC   8
+         SVC   8
+         MEXIT
+.ERRET   OILH  1,X'8000'
+         SVC   8
+         LTR   15,15
+         BNZ   &ERRET
 .OUT     MEND

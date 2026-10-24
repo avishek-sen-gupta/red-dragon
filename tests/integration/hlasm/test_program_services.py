@@ -1,5 +1,5 @@
 # pyright: standard
-"""CALL, LINK, LOAD and DELETE: CALL builds the parameter list (inline, MF=L and MF=E, VL marking the last word) and calls through a V-constant or a register; LOAD answers the entry with the AMODE 31 bit and the length in doublewords; LINK calls by name and gives back R2-R14; a missing name is called by name, or abends 806 for LOAD, or takes LOAD's ERRET; bad operands refuse the assembly."""
+"""CALL, LINK, LOAD and DELETE: CALL builds the parameter list (inline, MF=L and MF=E, VL marking the last word) and calls through a V-constant or a register; LOAD answers the entry with the AMODE 31 bit and the length in doublewords; LINK calls by name (through R15's list) and leaves the registers as the program left them; DELETE succeeds only for a loaded name; a missing name is a dynamic call for LINK, an 806 abend for LOAD, or LOAD's ERRET when R1's high bit asks; bad operands refuse the assembly."""
 
 import pytest
 
@@ -51,29 +51,33 @@ def test_call_passes_inline_and_execute_form_lists_marking_the_last_word():
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_load_answers_entry_and_length_then_call_15_reaches_it_and_delete_succeeds():
+def test_load_answers_entry_and_length_then_call_15_reaches_it_and_delete_releases_only_what_was_loaded():
     run, words = _words(programs.LOADER, "SUB", programs.RETURNS_23)
 
-    assert (run, words[7], words[8], words[9]) == (
-        HlasmRun(return_code=0, abend="", stdout=""),
+    assert (run, words[7], words[8], words[9], words[4], words[5]) == (
+        HlasmRun(return_code=4, abend="", stdout=""),
         0x80000000,
         1,
         23,
+        0,
+        4,
     )
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_link_calls_by_name_with_a_vl_list_and_gives_back_r2_to_r14():
+def test_link_calls_by_name_with_a_vl_list_and_leaves_the_registers_the_program_left():
     run, words = _words(programs.LINKER, "SUB", programs.CLOBBERS)
+    forms, _ = _words(programs.LINK_FORMS, "SUB", programs.RETURNS_23)
 
-    assert (run, words[7], words[9]) == (
+    assert (run, words[7], words[9] >> VL_SHIFT, forms) == (
         HlasmRun(return_code=142, abend="", stdout=""),
-        7,
-        0,
+        99,
+        1,
+        HlasmRun(return_code=69, abend="", stdout=""),
     )
 
 
-def _refused_link() -> str:
+def _refused_link(permit: bool) -> str:
     linked = compile_hlasm(
         programs.LINKS_MISSING.encode("ascii"), parser=get_hlasm_parser()
     )
@@ -84,24 +88,31 @@ def _refused_link() -> str:
             max_steps=MAX_STEPS,
             initial_vm=initial_vm_state(),
             builtins=compose_builtins(core_builtins(), job_parm_builtins(NO_PARM)),
-            permit_unresolved_call_targets=False,
+            permit_unresolved_call_targets=permit,
         )
     return str(refused.value)
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_a_missing_name_is_called_by_name_or_abends_806_or_takes_erret():
+def test_a_missing_name_is_called_as_a_dynamic_call_or_abends_806_or_takes_erret():
     exited = run_hlasm_machine(programs.LOADS_MISSING_WITH_EXIT)
+    refused = (
+        "CALL resolved at run time to __entry_NOPE, but nothing in this run unit"
+        " is registered under it"
+    )
 
     assert (
-        _refused_link(),
+        _refused_link(permit=True),
+        _refused_link(permit=False),
         run_hlasm(programs.LOADS_MISSING),
+        run_hlasm(programs.LOADS_MISSING_BY_HAND),
         exited.run,
         exited.gprs[2] & LOW_WORD,
         exited.gprs[3] & LOW_WORD,
     ) == (
-        "CALL resolved at run time to __entry_NOPE, but nothing in this run unit"
-        " is registered under it",
+        refused,
+        refused,
+        HlasmRun(return_code=0, abend="S806", stdout=""),
         HlasmRun(return_code=0, abend="S806", stdout=""),
         HlasmRun(return_code=9, abend="", stdout=""),
         0x00806000,
