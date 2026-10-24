@@ -363,7 +363,7 @@ def test_a_data_field_target_lowers_once_with_byte_one_from_r1():
             [],
             [0x00, 0xF],
             [],
-            [35, 13, 10, 0, 11, 120],
+            [35, 13, 10, 0, 11, 1, 120],
             [
                 ("LoadRegion", 4),
                 ("LoadRegion", 4),

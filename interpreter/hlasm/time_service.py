@@ -1,5 +1,5 @@
 # pyright: standard
-"""SVC 11 in IR: the TOD clock as the time of day (packed HHMMSSth, or binary hundredths when R0's low bit is set) in R0 and the packed 0CYYDDDF date in R1; the TOD clock is taken as local time."""
+"""SVC 11 in IR: the TOD clock as the time of day in R0 (binary hundredths when R1's low byte is 1, else packed HHMMSSth) and the packed 0CYYDDDF date in R1; no zone offset is applied."""
 
 from functools import reduce
 
@@ -16,8 +16,9 @@ MICROSECOND_SHIFT = 52
 MICROSECONDS_PER_DAY = 86_400_000_000
 MICROSECONDS_PER_HUNDREDTH = 10_000
 TIME_REGISTER = 0
+FORMAT_MASK = 0xFF
 RETURN_CODE_REGISTER = 15
-BINARY_FORM_BIT = 1
+BINARY_FORMAT = 1
 DAYS_BEFORE_1900 = 693_595
 DAYS_PER_400_YEARS = 146_097
 DAYS_PER_100_YEARS = 36_524
@@ -158,9 +159,13 @@ def time_words(
 
 def emit_time(emitter: HlasmEmitter) -> None:
     decimal, binary, date = time_words(emitter, emitter.call(TOD_CLOCK_BUILTIN, ()))
-    form = _op(
-        emitter, BinopKind.BIT_AND, emitter.load_gr32(TIME_REGISTER), BINARY_FORM_BIT
+    code = _op(
+        emitter,
+        BinopKind.BIT_AND,
+        emitter.load_gr32(SVC_PARAMETER_REGISTER),
+        FORMAT_MASK,
     )
+    form = _op(emitter, BinopKind.EQ, code, BINARY_FORMAT)
     difference = emitter.binop(BinopKind.SUB, binary, decimal)
     chosen = emitter.binop(
         BinopKind.ADD, decimal, emitter.binop(BinopKind.MUL, difference, form)

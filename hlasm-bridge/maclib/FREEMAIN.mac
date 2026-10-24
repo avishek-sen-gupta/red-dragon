@@ -1,5 +1,6 @@
          MACRO
 &NAME    FREEMAIN &TYPE,&LV=,&A=,&SP=
+         GBLB  &RDSTBAD
          LCLA  &FL
          AIF   ('&TYPE' EQ 'R' OR '&TYPE' EQ 'RU').HAVET
          AIF   ('&TYPE' EQ 'RC').HAVET
@@ -11,7 +12,8 @@
 .HAVEA   AIF   ('&LV' NE '').HAVELV
          MNOTE 8,'FREEMAIN: LV MISSING'
          MEXIT
-.HAVELV  ANOP
+.HAVELV  RDSTCHK FREEMAIN,LV,&LV,&SP,&TYPE,FREE
+         AIF   (&RDSTBAD).OUT
 &NAME    DS    0H
          RDSTREG 1,&A
          AIF   ('&TYPE' NE 'R').SVC120
@@ -20,7 +22,7 @@
          MEXIT
 .SVC120  ANOP
 &FL      SETA  1
-         AIF   ('&TYPE' NE 'RC').RELEASE
+         AIF   ('&TYPE' NE 'RU').RELEASE
 &FL      SETA  3
 .RELEASE RDSTSVC &LV,&SP,&FL
-         MEND
+.OUT     MEND

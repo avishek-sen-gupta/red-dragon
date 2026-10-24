@@ -34,7 +34,7 @@ PAIR = (
     "         SR    5,2\n"
     "         LPR   5,5\n"
     "         SR    9,9\n"
-    "         LA    10,{length}\n"
+    "         L     10,=A({length})\n"
     "         CR    5,10\n"
     "         BL    NEAR\n"
     "         LA    9,1\n"
@@ -78,6 +78,7 @@ def pair_registers(r6: int, r10: int) -> Mapping[int, int]:
 type PairCase = tuple[str, Mapping[int, int]]
 
 UNTOUCHED = 99
+R15_WITH_SUBPOOL_9 = 0x09000000
 
 PAIR_CASES: Mapping[str, PairCase] = {
     "getmain_r": (
@@ -138,7 +139,7 @@ VM_ONLY_PAIR_CASES: Mapping[str, PairCase] = {
         pair(
             "         GETMAIN RU,LV=5000,BNDRY=PAGE\n",
             "         FREEMAIN RU,LV=5000,A=({r})\n",
-            length=4095,
+            length=5000,
             mask=PAGE_MASK,
         ),
         pair_registers(0, 0),
@@ -149,6 +150,28 @@ VM_ONLY_PAIR_CASES: Mapping[str, PairCase] = {
             "         LA    11,24\n         FREEMAIN R,LV=(11),A=({r}),SP=5\n",
         ),
         pair_registers(UNTOUCHED, UNTOUCHED),
+    ),
+    "length_and_subpool_in_r0": (
+        pair(
+            "         IILF  0,X'05000018'\n         GETMAIN R,LV=(0)\n",
+            "         FREEMAIN R,LV=24,A=({r}),SP=5\n",
+        ),
+        pair_registers(UNTOUCHED, UNTOUCHED),
+    ),
+    "subpool_registers_match_literal_subpools": (
+        pair(
+            "         LA    5,9\n         GETMAIN R,LV=24,SP=(5)\n",
+            "         FREEMAIN R,LV=24,A=({r}),SP=9\n",
+        ),
+        pair_registers(R15_WITH_SUBPOOL_9, R15_WITH_SUBPOOL_9),
+    ),
+    "storage_subpool_register": (
+        pair(
+            "         LA    5,X'109'\n"
+            "         STORAGE OBTAIN,LENGTH=24,ADDR=({r}),SP=(5)\n",
+            "         STORAGE RELEASE,LENGTH=24,ADDR=({r}),SP=9\n",
+        ),
+        pair_registers(0, 0),
     ),
     "storage_register_operands": (
         pair(
@@ -165,11 +188,13 @@ LAST_BYTE = (
     "T        CSECT\n"
     "         BASR  12,0\n"
     "         USING *,12\n"
-    "         GETMAIN RU,LV=4096\n"
+    "         GETMAIN RU,LV=4096,BNDRY=PAGE\n"
     "         LR    2,1\n"
     "         MVI   4095(2),X'5A'\n"
     "         SR    3,3\n"
     "         IC    3,4095(,2)\n"
+    "         LR    4,2\n"
+    "         N     4,=F'4095'\n"
     "         FREEMAIN RU,LV=4096,A=(2)\n"
     "         ABEND 1\n"
     "         END\n"
@@ -191,13 +216,16 @@ def bad_release(obtain: str, release: str) -> str:
     return BAD_RELEASE.format(obtain=obtain, release=release)
 
 
-BAD_RELEASES: Mapping[str, tuple[str, str]] = {
+type BadRelease = tuple[str, str, list[tuple[int, int]]]
+
+BAD_RELEASES: Mapping[str, BadRelease] = {
     "freemain_unknown_address": (
         bad_release(
             "         GETMAIN R,LV=24\n         LA    2,8(,1)\n",
             "         FREEMAIN R,LV=16,A=(2)\n",
         ),
         "SA0A",
+        [(24, 0)],
     ),
     "freemain_wrong_length": (
         bad_release(
@@ -205,6 +233,7 @@ BAD_RELEASES: Mapping[str, tuple[str, str]] = {
             "         FREEMAIN R,LV=32,A=(2)\n",
         ),
         "SA0A",
+        [(24, 0)],
     ),
     "freemain_twice": (
         bad_release(
@@ -212,6 +241,7 @@ BAD_RELEASES: Mapping[str, tuple[str, str]] = {
             "         FREEMAIN R,LV=24,A=(2)\n         FREEMAIN R,LV=24,A=(2)\n",
         ),
         "SA0A",
+        [(-1, 0)],
     ),
     "freemain_wrong_subpool": (
         bad_release(
@@ -219,6 +249,7 @@ BAD_RELEASES: Mapping[str, tuple[str, str]] = {
             "         FREEMAIN R,LV=24,A=(2)\n",
         ),
         "SA0A",
+        [(24, 1)],
     ),
     "freemain_ru_unknown_address": (
         bad_release(
@@ -226,6 +257,7 @@ BAD_RELEASES: Mapping[str, tuple[str, str]] = {
             "         FREEMAIN RU,LV=16,A=(2)\n",
         ),
         "SA78",
+        [(24, 0)],
     ),
     "storage_release_wrong_subpool": (
         bad_release(
@@ -233,6 +265,7 @@ BAD_RELEASES: Mapping[str, tuple[str, str]] = {
             "         STORAGE RELEASE,LENGTH=24,ADDR=(2)\n",
         ),
         "SA78",
+        [(24, 3)],
     ),
     "storage_release_wrong_length": (
         bad_release(
@@ -240,6 +273,7 @@ BAD_RELEASES: Mapping[str, tuple[str, str]] = {
             "         STORAGE RELEASE,LENGTH=8,ADDR=(2)\n",
         ),
         "SA78",
+        [(24, 0)],
     ),
 }
 
@@ -255,10 +289,18 @@ TIME = (
     "         LR    5,1\n"
     "         TIME  ,LINKAGE=SVC\n"
     "         LR    7,0\n"
+    "         LA    0,1\n"
+    "         LA    1,2\n"
+    "         SVC   11\n"
+    "         LR    8,0\n"
+    "         SR    0,0\n"
+    "         LA    1,1\n"
+    "         SVC   11\n"
+    "         LR    9,0\n"
     "         ABEND 1\n"
     "         END\n"
 )
-TIME_CHECKED = (2, 3, 4, 5, 6, 7)
+TIME_CHECKED = (2, 3, 4, 5, 6, 7, 8, 9)
 
 
 def time_view(gprs: Mapping[int, int]) -> Mapping[int, int]:
@@ -272,6 +314,8 @@ FIXED_TIME_REGISTERS = {
     5: FIXED_DATE,
     6: 0,
     7: FIXED_DEC_TIME,
+    8: FIXED_DEC_TIME,
+    9: FIXED_BIN_TIME,
 }
 
 BAD_OPERANDS = (
@@ -288,6 +332,10 @@ BAD_OPERANDS = (
     "         STORAGE RELEASE,LENGTH=8\n"
     "         TIME  MIC\n"
     "         TIME  DEC,LINKAGE=SYSTEM\n"
+    "         GETMAIN R,LV=(0),SP=5\n"
+    "         GETMAIN RU,LV=8,SP=(1)\n"
+    "         FREEMAIN R,LV=(1),A=(2)\n"
+    "         STORAGE RELEASE,LENGTH=(1),ADDR=(2)\n"
     "         END\n"
 )
 BAD_OPERAND_REFUSALS = (
@@ -303,4 +351,8 @@ BAD_OPERAND_REFUSALS = (
     ("STORAGE: ADDR MISSING", 11),
     ("TIME: TYPE MUST BE DEC OR BIN", 12),
     ("TIME: LINKAGE MUST BE SVC", 13),
+    ("GETMAIN: SP NOT ALLOWED WITH LV=(0)", 14),
+    ("GETMAIN: SP REGISTER MUST BE 2 TO 12", 15),
+    ("FREEMAIN: LV=(1) NOT ALLOWED ON A RELEASE", 16),
+    ("STORAGE: LENGTH=(1) NOT ALLOWED ON A RELEASE", 17),
 )

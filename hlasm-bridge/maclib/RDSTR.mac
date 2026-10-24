@@ -1,8 +1,16 @@
          MACRO
          RDSTR &LV,&SP
+         GBLA  &RDRV
          RDSTLEN &LV
          AIF   ('&LV'(1,1) NE '(').SP
+         RDREGN &LV(1)
+         AIF   (&RDRV EQ 0).SP
          NILH  0,X'00FF'
 .SP      AIF   ('&SP' EQ '').DONE
+         AIF   ('&SP'(1,1) EQ '(').SPREG
          OILH  0,(&SP)*256
+         MEXIT
+.SPREG   LR    15,&SP(1)
+         SLL   15,24
+         OR    0,15
 .DONE    MEND

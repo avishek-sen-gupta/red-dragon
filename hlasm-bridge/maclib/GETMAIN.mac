@@ -1,5 +1,6 @@
          MACRO
 &NAME    GETMAIN &TYPE,&LV=,&SP=,&LOC=,&BNDRY=
+         GBLB  &RDSTBAD
          LCLA  &FL
          AIF   ('&TYPE' EQ 'R' OR '&TYPE' EQ 'RU').HAVET
          AIF   ('&TYPE' EQ 'RC').HAVET
@@ -17,14 +18,15 @@
          MEXIT
 .PAGEOK  ANOP
 &FL      SETA  4
-.BOUND   ANOP
+.BOUND   RDSTCHK GETMAIN,LV,&LV,&SP,&TYPE,
+         AIF   (&RDSTBAD).OUT
 &NAME    DS    0H
          AIF   ('&TYPE' NE 'R').SVC120
          RDSTR &LV,&SP
          BRAS  1,*+4
          SVC   10
          MEXIT
-.SVC120  AIF   ('&TYPE' NE 'RC').OBTAIN
+.SVC120  AIF   ('&TYPE' NE 'RU').OBTAIN
 &FL      SETA  &FL+2
 .OBTAIN  RDSTSVC &LV,&SP,&FL
-         MEND
+.OUT     MEND

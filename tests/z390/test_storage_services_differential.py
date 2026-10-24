@@ -1,5 +1,5 @@
 # pyright: standard
-"""GETMAIN, FREEMAIN, STORAGE and TIME in RedDragon, with our macros, and in z390, with its own: addresses differ, so the programs compare what follows from them (alignment, distinct areas, data read back, return codes); z390's time is its wall clock, so TIME compares the shape of the words."""
+"""GETMAIN, FREEMAIN, STORAGE and TIME in RedDragon, with our macros, and in z390, with its own: addresses differ, so the programs compare what follows from them (alignment, distinct areas, data read back, return codes); z390's time is its wall clock, so TIME compares the shape of the words; z390 reads a hand-coded SVC 11 format from R0, IBM and we from R1."""
 
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -74,7 +74,7 @@ def _valid_date(date: int) -> bool:
     return all(x <= 9 for x in d) and 1 <= _number(d[4:7]) <= 366
 
 
-type TimeShape = tuple[bool, bool, int, int, bool, bool, int]
+type TimeShape = tuple[bool, bool, int, int, bool, bool, int, bool, bool]
 
 
 def _time_shape(gprs: Mapping[int, int]) -> TimeShape:
@@ -88,10 +88,13 @@ def _time_shape(gprs: Mapping[int, int]) -> TimeShape:
         0 <= binary - _hundredths(dec) < 100,
         words[5] == date,
         words[6],
+        words[8] == dec,
+        words[9] == binary,
     )
 
 
-SHAPE: TimeShape = (True, True, CENTURY_2000, DATE_SIGN, True, True, 0)
+SHAPE: TimeShape = (True, True, CENTURY_2000, DATE_SIGN, True, True, 0, True, True)
+Z390_READS_THE_FORMAT_FROM_R0: TimeShape = (*SHAPE[:7], False, False)
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
@@ -102,4 +105,4 @@ def test_time_words_have_the_same_shape(z390: Z390Runner, tmp_path: Path):
     assert (
         (ours.run, _time_shape(ours.gprs)),
         (theirs.run, _time_shape(theirs.gprs)),
-    ) == ((ABENDED, SHAPE), (ABENDED, SHAPE))
+    ) == ((ABENDED, SHAPE), (ABENDED, Z390_READS_THE_FORMAT_FROM_R0))
