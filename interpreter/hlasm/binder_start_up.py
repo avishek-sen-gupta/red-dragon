@@ -1,5 +1,5 @@
 # pyright: standard
-"""The image's start-up IR, run once: the machine state, one doubleword-aligned region per module with its sections' variables, one region per common section, the stub range, every TXT record and then every RLD."""
+"""The image's start-up IR, run once: the machine state, a bit per module for the far branch, one doubleword-aligned region per module with its sections' variables, one region per common section, the stub range, every TXT record and then every RLD."""
 
 from collections.abc import Sequence
 
@@ -8,10 +8,13 @@ from interpreter.hlasm.bound_name import BoundName
 from interpreter.hlasm.hlasm_constants import (
     ABEND_VAR,
     DOUBLEWORD_BYTES,
+    LINKING_VAR,
+    MODULE_BIT_PREFIX,
     NO_ABEND,
     STUB_BYTES,
     STUBS_HIGH_VAR,
     STUBS_LOW_VAR,
+    TARGET_VAR,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.image_module import ImageModule
@@ -31,6 +34,7 @@ from interpreter.project.relocation_record import RelocationRecord
 from interpreter.project.relocation_sign import RelocationSign
 from interpreter.project.text_record import TextRecord
 from interpreter.register import Register
+from interpreter.var_name import VarName
 
 
 def aligned_region(emitter: HlasmEmitter, length: Register) -> Register:
@@ -146,6 +150,26 @@ def _machine_state(emitter: HlasmEmitter) -> None:
     abend = emitter.fresh_reg()
     emitter.emit_inst(Const.string(abend, NO_ABEND))
     emitter.emit_inst(StoreVar(name=ABEND_VAR, value_reg=abend))
+    _dispatch_state(emitter)
+
+
+def _dispatch_state(emitter: HlasmEmitter) -> None:
+    _ = [
+        emitter.emit_inst(StoreVar(name=name, value_reg=emitter.int_(0)))
+        for name in (TARGET_VAR, LINKING_VAR)
+    ]
+
+
+def _module_bits(emitter: HlasmEmitter, binder: Binder) -> None:
+    _ = [
+        emitter.emit_inst(
+            StoreVar(
+                name=VarName(f"{MODULE_BIT_PREFIX}{module.name}"),
+                value_reg=emitter.int_(1 << index),
+            )
+        )
+        for index, module in enumerate(binder.modules)
+    ]
 
 
 def _lay_out(emitter: HlasmEmitter, binder: Binder) -> None:
@@ -176,6 +200,7 @@ def _load(emitter: HlasmEmitter, binder: Binder) -> None:
 def bound_start_up(binder: Binder) -> tuple[InstructionBase, ...]:
     emitter = HlasmEmitter("hlasm_bind.")
     _machine_state(emitter)
+    _module_bits(emitter, binder)
     _lay_out(emitter, binder)
     _load(emitter, binder)
     registers = (*access_register_allocation(), *floating_point_allocation())

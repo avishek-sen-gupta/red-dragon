@@ -1,5 +1,5 @@
 # pyright: standard
-"""Computed branches: a target address is mapped back to its statement's label."""
+"""Computed branches: a module activation returns at its R14, maps a target in its own sections back to its statement's label, and hands any other target to the far branch."""
 
 from collections.abc import Sequence
 
@@ -7,28 +7,38 @@ from hlasm_asg.program.hlasm_program import HlasmProgram
 from hlasm_asg.program.machine_statement import MachineStatement
 from hlasm_asg.program.section import Section
 from hlasm_asg.program.section_kind import SectionKind
+from interpreter.constants import PARAM_PREFIX
 from interpreter.func_name import FuncName
-from interpreter.hlasm.abend import emit_abend
 from interpreter.hlasm.hlasm_constants import (
     ADDRESS_MASK_31,
+    BELOW_VAR,
     DISPATCH_LABEL,
+    ENTRY_TARGET_VAR,
+    FAR_BRANCH_FUNCTION,
     LINK_DISPATCH_LABEL,
     LINK_REGISTER,
-    OPERATION_EXCEPTION_ABEND,
+    LINKING_VAR,
+    MODULE_BIT_PREFIX,
+    RETURN_CHECK_LABEL,
     RETURN_CODE_REGISTER,
     RETURN_LABEL,
-    RETURN_SENTINEL,
-    STUB_CALL_FUNCTION,
-    STUB_CALL_LABEL,
-    STUBS_HIGH_VAR,
-    STUBS_LOW_VAR,
+    RETURN_TO_VAR,
     TARGET_VAR,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
-from interpreter.instructions import Branch, BranchIf, Label_, Return_, StoreVar
+from interpreter.instructions import (
+    Branch,
+    BranchIf,
+    DeclVar,
+    Label_,
+    Return_,
+    StoreVar,
+    Symbolic,
+)
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
+from interpreter.var_name import VarName
 
 
 def statement_label(section: str, offset: int) -> CodeLabel:
@@ -86,37 +96,70 @@ def _emit_return(emitter: HlasmEmitter) -> None:
     emitter.emit_inst(Return_(value_reg=emitter.load_gr32(RETURN_CODE_REGISTER)))
 
 
-def _in_stub_range(emitter: HlasmEmitter, target: Register) -> Register:
-    above = emitter.binop(BinopKind.GE, target, emitter.load_var(STUBS_LOW_VAR))
-    below = emitter.binop(BinopKind.LT, target, emitter.load_var(STUBS_HIGH_VAR))
-    return emitter.binop(BinopKind.AND, above, below)
-
-
-def _emit_link_dispatch(emitter: HlasmEmitter) -> None:
-    emitter.emit_inst(Label_(label=LINK_DISPATCH_LABEL))
+def _masked_target(emitter: HlasmEmitter) -> Register:
     raw = emitter.load_var(TARGET_VAR)
-    target = emitter.binop(BinopKind.BIT_AND, raw, emitter.int_(ADDRESS_MASK_31))
-    stub = _in_stub_range(emitter, target)
-    emitter.emit_inst(
-        BranchIf(cond_reg=stub, branch_targets=(STUB_CALL_LABEL, DISPATCH_LABEL))
+    return emitter.binop(BinopKind.BIT_AND, raw, emitter.int_(ADDRESS_MASK_31))
+
+
+def masked_return_address(emitter: HlasmEmitter) -> Register:
+    return emitter.load_var(RETURN_TO_VAR)
+
+
+def _declare_parameter(emitter: HlasmEmitter, name: VarName) -> Register:
+    value = emitter.fresh_reg()
+    emitter.emit_inst(Symbolic(result_reg=value, hint=f"{PARAM_PREFIX}{name}"))
+    emitter.emit_inst(DeclVar(name=name, value_reg=value))
+    return value
+
+
+def emit_activation(emitter: HlasmEmitter) -> None:
+    target = _declare_parameter(emitter, ENTRY_TARGET_VAR)
+    _declare_parameter(emitter, BELOW_VAR)
+    link = emitter.load_gr32(LINK_REGISTER)
+    masked = emitter.binop(BinopKind.BIT_AND, link, emitter.int_(ADDRESS_MASK_31))
+    emitter.emit_inst(DeclVar(name=RETURN_TO_VAR, value_reg=masked))
+    emit_branch(emitter, target)
+
+
+def _set_linking(emitter: HlasmEmitter, linking: int) -> None:
+    emitter.emit_inst(StoreVar(name=LINKING_VAR, value_reg=emitter.int_(linking)))
+
+
+def _emit_far_branch(emitter: HlasmEmitter, module: str) -> None:
+    returning = emitter.call(
+        FuncName(FAR_BRANCH_FUNCTION),
+        (
+            _masked_target(emitter),
+            emitter.load_var(BELOW_VAR),
+            emitter.load_var(VarName(f"{MODULE_BIT_PREFIX}{module}")),
+            emitter.load_var(LINKING_VAR),
+        ),
     )
-    emitter.emit_inst(Label_(label=STUB_CALL_LABEL))
-    result = emitter.call(FuncName(STUB_CALL_FUNCTION), (target,))
-    emitter.store_gr32(RETURN_CODE_REGISTER, result)
-    emit_branch(emitter, emitter.load_gr32(LINK_REGISTER))
+    emitter.emit_inst(
+        BranchIf(cond_reg=returning, branch_targets=(RETURN_LABEL, DISPATCH_LABEL))
+    )
 
 
-def emit_dispatch(emitter: HlasmEmitter, program: HlasmProgram) -> None:
-    _emit_link_dispatch(emitter)
+def _emit_return_check(emitter: HlasmEmitter) -> None:
+    emitter.emit_inst(Label_(label=LINK_DISPATCH_LABEL))
+    _set_linking(emitter, 1)
+    emitter.emit_inst(Branch(label=RETURN_CHECK_LABEL))
     emitter.emit_inst(Label_(label=DISPATCH_LABEL))
-    raw = emitter.load_var(TARGET_VAR)
-    target = emitter.binop(BinopKind.BIT_AND, raw, emitter.int_(ADDRESS_MASK_31))
-    returning = emitter.binop(BinopKind.EQ, target, emitter.int_(RETURN_SENTINEL))
-    _branch_if(emitter, returning, RETURN_LABEL, "hl_dispatch_sections")
+    _set_linking(emitter, 0)
+    emitter.emit_inst(Label_(label=RETURN_CHECK_LABEL))
+    returning = emitter.binop(
+        BinopKind.EQ, _masked_target(emitter), masked_return_address(emitter)
+    )
+    _branch_if(emitter, returning, RETURN_LABEL, "hl_dispatch_local")
+
+
+def emit_dispatch(emitter: HlasmEmitter, program: HlasmProgram, module: str) -> None:
+    _emit_return_check(emitter)
+    target = _masked_target(emitter)
     _ = [
         _section_chain(emitter, target, (s.name, _machine_offsets(program, s)))
         for s in program.sections
         if s.kind != SectionKind.DSECT
     ]
-    emit_abend(emitter, OPERATION_EXCEPTION_ABEND)
+    _emit_far_branch(emitter, module)
     _emit_return(emitter)

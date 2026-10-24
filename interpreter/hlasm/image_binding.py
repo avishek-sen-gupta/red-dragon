@@ -32,7 +32,7 @@ def image_module(unit: ModuleUnit) -> ImageModule:
 
 def bind_image(units: Sequence[ModuleUnit]) -> BoundImage:
     binder = Binder(tuple(map(image_module, units)))
-    ir, stub_call = job_step_module(binder)
+    ir, far_branch = job_step_module(binder)
     labels = {name: job_step_label(named_step(name)) for name in binder.entry_points()}
     ends = {
         unit.path: job_step_label(end_step(image_module(unit).name)) for unit in units
@@ -56,7 +56,7 @@ def bind_image(units: Sequence[ModuleUnit]) -> BoundImage:
                         FuncName(str(label)): label
                         for label in (*labels.values(), *ends.values())
                     },
-                    FuncName(stub_call.name): stub_call.label,
+                    FuncName(far_branch.name): far_branch.label,
                 }
             ),
             imports=(),

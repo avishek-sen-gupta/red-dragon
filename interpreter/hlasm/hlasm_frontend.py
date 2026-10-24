@@ -1,5 +1,5 @@
 # pyright: standard
-"""Lowers an assembled HLASM program to one IR function entered at its entry point, then defines the IR functions its lowerings called."""
+"""Lowers an assembled HLASM program to one IR function, an activation entered at a target address, then defines the IR functions its lowerings called."""
 
 from functools import cached_property
 
@@ -11,13 +11,12 @@ from interpreter.hlasm.abend import emit_abend
 from interpreter.hlasm.assembled_module import object_module
 from interpreter.hlasm.assembly_diagnostics import assembly_diagnostics
 from interpreter.hlasm.branch_dispatch import (
-    emit_branch,
+    emit_activation,
     emit_dispatch,
     statement_label,
 )
 from interpreter.hlasm.entry_state import resolve_entry
 from interpreter.hlasm.hlasm_constants import (
-    ENTRY_ADDRESS_REGISTER,
     MODULE_FUNCTION_PREFIX,
     OPERATION_EXCEPTION_ABEND,
 )
@@ -96,13 +95,13 @@ class HlasmFrontend(Frontend):
         emitter.emit_inst(Label_(label=CodeLabel("entry")))
         emitter.emit_inst(Branch(label=end_label))
         emitter.emit_inst(Label_(label=self.entry_label))
-        emit_branch(emitter, emitter.load_gr32(ENTRY_ADDRESS_REGISTER))
+        emit_activation(emitter)
         _ = [
             self._lower_placed(emitter, statement, labelled)
             for statement, labelled in self._placed_statements()
         ]
         emit_abend(emitter, OPERATION_EXCEPTION_ABEND)
-        emit_dispatch(emitter, self._program)
+        emit_dispatch(emitter, self._program, self._module)
         emitter.emit_inst(Label_(label=end_label))
         self._declare(emitter)
 

@@ -83,7 +83,8 @@ LINK_DISPATCH = ["StoreVar __hlasm_target reg", "Branch hl_link_dispatch"]
 ABEND_S0C1 = ["StoreVar __hlasm_abend S0C1", "Halt_"]
 MODE_TEST = [
     "& 2147483647",
-    "== 4080",
+    "LoadVar __hlasm_return_to",
+    "== reg",
     "BranchIf",
     "& 2147483649",
     "== 2147483648",

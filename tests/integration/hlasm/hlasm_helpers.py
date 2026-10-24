@@ -19,6 +19,7 @@ from interpreter.hlasm_run_inputs.run_input_builtins import run_input_builtins
 from interpreter.project.entry_point import EntryPoint
 from interpreter.project.hlasm_compile import compile_hlasm
 from interpreter.project.hlasm_compile_options import HlasmCompileOptions
+from interpreter.project.source_file import SourceFile
 from interpreter.run import initial_vm_state, run_linked
 from interpreter.var_name import VarName
 from interpreter.vm.builtins import compose_builtins, core_builtins
@@ -75,9 +76,13 @@ def _run_vm(
     source: str,
     options: HlasmCompileOptions = NO_INPUTS,
     syslib: Sequence[Path] = (),
+    programs: Sequence[SourceFile] = (),
 ) -> tuple[VMState, str]:
     linked = compile_hlasm(
-        source.encode("utf-8"), parser=get_hlasm_parser(syslib), options=options
+        source.encode("utf-8"),
+        parser=get_hlasm_parser(syslib),
+        options=options,
+        programs=programs,
     )
     console = io.StringIO()
     with redirect_stdout(console):
@@ -134,8 +139,8 @@ def _machine(vm: VMState, stdout: str) -> HlasmMachine:
     )
 
 
-def run_hlasm_machine(source: str) -> HlasmMachine:
-    return _machine(*_run_vm(source))
+def run_hlasm_machine(source: str, programs: Sequence[SourceFile] = ()) -> HlasmMachine:
+    return _machine(*_run_vm(source, programs=programs))
 
 
 def run_hlasm_storage(

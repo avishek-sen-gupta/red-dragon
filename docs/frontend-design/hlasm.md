@@ -27,7 +27,7 @@ hlasm_asg (leaf package)
   │  HlasmBridgeParser — runs the bridge, reads JSON into HlasmProgram (Pydantic)
   ▼
 HlasmFrontend
-  │  lower():         one IR function per module, entered by dispatching on R15,
+  │  lower():         one IR function per module, entered by dispatching on a target address,
   │                   then the IR functions its statements call (the DPD codec)
   │  object_module:   ESD, TXT, RLD and END for the binder
   ▼
@@ -58,12 +58,12 @@ addresses.
 | `interpreter/hlasm/machine.py` | GPR region (`__hlasm_gprs`, 8 bytes per register), `__hlasm_cc`, `__hlasm_pm`, `__hlasm_tod_last` (the last STCK value); the access-register region (`__hlasm_ars`, 4 bytes per register, all 0); the vector-register region (`__hlasm_vrs`, 16 bytes per register, all 0) and `__hlasm_fpc`, allocated after the sections so their addresses do not move |
 | `interpreter/hlasm/floating_point_constant.py`, `float_nominal.py` | E, D and L images, built at assembly time by `zarch_float`'s packers (Language Reference SC26-4940-09, pp. 148-158). `parse_float_nominal` turns each value into a `FloatNumber` (sign, coefficient, written exponent with the modifier, rounding mode) or a `FloatSpecial` once. No extension: HFP rounded by adding one in the first lost bit; a positive zero; the scale modifier shifts the fraction right; a length modifier keeps the leftmost bytes or bits, rounded. Out of range raises `DcCharacteristicOutOfRange` (ASMA064S); a scale or length that leaves no fraction, or cuts the characteristic, raises `DcPrecisionLost` (ASMA073E). H and Q: rounding modes R1 (default), R4-R7, a signed zero, overflow to the largest magnitude, underflow denormalized or zero, and (MAX), (MIN), (DMIN). B: IEEE conversion under R4 (default), R1, R5-R7, into any length from 9/12/16 bits; overflow gives infinity or Nmax by mode; all seven special values, (INF) and the NaNs needing 11/14/18 bits (`DcLengthWrong`, ASMA068S: the manual gives the minimum, and ASMA068S is its message for a wrong length modifier). With one bit of precision a tie has no even significand; round to nearest even then takes the even image (biased exponent), our ruling. D: the written coefficient and exponent fitted under R8 (default) to R15, so an exact value keeps its quantum (IEEE 754-2008 conversion; the manual does not say). (NAN) and (QNAN) are the same quiet NaN. (MIN) is 1E-95/-383/-6143, the smallest normal number, and (DMIN) the smallest subnormal (ruling R60: p. 158 defines MIN only for BFP and HFP). LQ converts as LH. Exponents beyond ±20000 are clamped: every format overflows or underflows alike past them. With a type extension each value carries at most one `DcWarning` (overflow, then underflow, then inexact) on its `ConstantImage` or `BitLengthImage`, as pp. 127 and 156-157 warn; H saturation counts as overflow and denormalization as underflow. They are logged and kept in the unit file (see Diagnostics). Unextended HFP raises none |
 | `interpreter/hlasm/storage_layout.py` | Each section's DC and literal pieces at their offsets: constant images, address slots and external slots |
-| `interpreter/hlasm/binder.py`, `binder_start_up.py`, `job_step.py`, `image_binding.py` | The binder (see Binder) |
+| `interpreter/hlasm/binder.py`, `binder_start_up.py`, `job_step.py`, `image_binding.py`, `far_branch.py`, `unresolved_call.py` | The binder and the far branch (see Binder, Control Across Modules) |
 | `interpreter/hlasm_run_inputs/` | The HLASM run inputs, a sibling of `interpreter.hlasm` so `run()` can import it (the import contracts keep `interpreter.run` from `interpreter.hlasm`): `run_input_names.py` (builtin names, PARM area sizes), `run_input_builtins.py` (`run_input_builtins(clock, parm)`; `unsupplied_run_input_builtins()`, the host clock and an empty PARM, which `run()` adds under any builtins it is given) |
 | `interpreter/hlasm_run_inputs/job_parm_builtins.py` | `job_parm_builtins(parm)`: the job-step PARM, a run input of at most 100 characters (`ParmTooLong`), as a halfword length and EBCDIC text through `EbcdicTable`; a character it has no code for raises `ParmNotEncodable` |
 | `interpreter/hlasm/dc_encoding.py` | DC images: C, CA, CE, CU, X, B, F, FD, H, P, Z, A, AD, Y, V, VD, S, SY, and E, D, L with their extensions through `floating_point_constant.py`. Each operand is placed at the offset che4z exported; Python has no alignment table of its own, and alignment bytes inside a DC are zero. F, FD and H take fractions, a written exponent, the exponent and scale modifiers and the U prefix, and the scaled value is rounded to a whole number. A negative value rounds on its magnitude (-1.5 is -2); that is our reading of the Language Reference, which does not say. A written exponent that, with the exponent modifier, falls outside -85 to +75 raises `DcExponentOutOfRange` (ASMA071E) before any arithmetic. A value outside its length raises `DcValueOutOfRange` with the statement's line (ASMA072E); a literal gives the line that first used it. Y accepts -32768 to 65535 (a halfword read as signed or unsigned) and refuses anything else the same way, while A truncates at the left as IBM specifies. An S-constant in a literal resolves through the USING in force where its pool is assembled, whichever LOCTR the pool lands in. `*` in a literal is the instruction's address in every copy. Bit-length operands (`L.n`) pack from che4z's bit offset, each value in the next free bits (C, E, D and L from their high-order end, other types from the low-order end) and the last byte zero-filled. CCW and CCW0 are format-0 channel command words (24-bit address), CCW1 format 1 (31-bit); a relocatable or external data address is an RLD like an A-constant |
 | `interpreter/hlasm/entry_state.py` | Entry resolution and entry registers (R14 = `0xFF0` return sentinel, R13 = 72-byte save area, R15 = entry address, R1 = parameter list), set by the job step |
-| `interpreter/hlasm/branch_dispatch.py` | `hl_dispatch`: maps a branch address to a statement label; a miss abends `S0C1` |
+| `interpreter/hlasm/branch_dispatch.py` | The module function's activation and `hl_dispatch`: returns at R14, maps an address in the module to a statement label, hands any other to the far branch (see Control Across Modules) |
 | `interpreter/hlasm/operands.py` | `reg_operand`, `mask_operand`, `optional_mask_operand`, `imm_operand`, `value_operand` (R, M or I), `storage_operand`, `reloc_operand`, `storage_length_operand`, `vec_reg_operand`, `vector_indexed_operand` (D(V,B), its own type), `optional_imm_operand`: typed operand access; a mismatch raises `HlasmLoweringError`. `statement_place` names a statement in messages |
 | `interpreter/hlasm/hlasm_lowering_error.py` | `HlasmLoweringError`: names the statement (mnemonic, section, offset, operand) and what was found |
 | `interpreter/hlasm/opcodes/svc.py` | SVC, by number, written or set by EX |
@@ -255,15 +255,37 @@ units' object modules once, at link. Start-up IR is not rebuilt from the AST.
   entry, which is not an external name (ruling R74). The image's `entry_func_label` is the first
   unit's END step, so `compile_hlasm` enters its main source. A step sets R1 to a one-entry VL list pointing at a halfword
   length and up to 100 bytes of PARM text, R13 to a fresh 72-byte save area, R14 to `0xFF0` and
-  R15 to the entry address, then calls the module function (`__hlasm_module_<module>`), which
-  dispatches on R15.
-- **Linking branches.** BAL, BALR, BAS, BASR, BRAS, BRASL and BASSM branch to `hl_link_dispatch`.
-  A target in the stub range calls `__hlasm_stub_call`, which issues `CallWithMemory` on
-  `__entry_<NAME>` with no arguments, as a static COBOL `CALL 'NAME'` to a missing program does;
-  the result goes to R15 and control to R14. Other targets take the plain dispatch.
+  R15 to the entry address, then calls the module function (`__hlasm_module_<module>`) with the
+  entry address and an empty set of modules below.
 - **Far-branch table.** `Binder.far_branch_table()` lists (start, length, owner) for each module
-  and stub; owners are `ModuleOwner`, `UnresolvedOwner` and `CobolOwner` (red-dragon-6uyp.13 and
-  .15 consume it).
+  and stub; owners are `ModuleOwner`, `UnresolvedOwner` and `CobolOwner` (red-dragon-6uyp.15 builds
+  the last). The job-step module's `__hlasm_far_branch` is generated from it (see Control Across
+  Modules).
+
+### Control Across Modules
+
+Each module is one IR function, `__hlasm_module_<module>(target, below)`. An activation declares
+`__hlasm_return_to`, its entry R14 masked to 31 bits, and keeps `__hlasm_below`, the set of
+modules with an activation under it, as bits (`__hlasm_bit_<module>`, set at start-up).
+Registers stay shared machine state.
+
+- Every branch stores its target in `__hlasm_target` and goes to `hl_dispatch`; BAL, BALR, BAS,
+  BASR, BRAS, BRASL and BASSM go to `hl_link_dispatch`, which records that the branch linked.
+- A masked target equal to `__hlasm_return_to` returns R15's low word. BSM and BASSM make the
+  same comparison before their mode test, so the mode bit of the return address does not matter.
+- A target at a machine statement of the module's own sections branches to its label.
+- Any other target goes to `__hlasm_far_branch(target, below, me, linking)`, which finds its owner:
+  - the module itself: `S0C1` (data, or a DSECT offset);
+  - another module: if the branch did not link and that module is in `below`, the activation
+    returns and the one below re-dispatches on the target, so `B 4(,14)` and a return that skips
+    a level work; otherwise it calls `__hlasm_module_<owner>(target, below | me)` and, when that
+    returns, re-dispatches on `__hlasm_target`;
+  - a stub: `CallWithMemory` on `__entry_<NAME>` with no arguments, as a static COBOL
+    `CALL 'NAME'` to a missing program; the result goes to R15 and control to R14;
+  - nothing: `S0C1`.
+
+The job step's R14, `0xFF0`, is owned by nothing, so only the return test ends the outermost
+activation.
 
 ## Diagnostics
 
@@ -330,8 +352,8 @@ che4z has no other data-set variables (`&SYSIN_VOLUME`, `&SYSLIB_*`, `&SYSPRINT_
 `&SYSPUNCH_*`, `&SYSTERM_*`, `&SYSADATA_*`, `&SYSLIN_*`); they stay `E010`.
 
 The entry is the symbol `END` names, or the first CSECT at offset 0 when `END`
-names none. The entry function is `func_<entry>_0`. It returns GR15's low word
-when control branches to the return sentinel.
+names none. The module function's label is `func_<entry>_0`. It returns GR15's low word
+when control branches to its return address.
 
 ## Supervisor Calls and Our Maclib
 
@@ -664,7 +686,7 @@ the CC is unchanged.
   AMODE 31 keeps its bits 33-63.
 - BPP and BPRP are hints with no architected effect and lower to nothing.
 - Every target, relative ones included, goes through `hl_dispatch`; a target that is not a
-  machine statement abends `S0C1`. Branching straight to a static relative target's label
+  machine statement of any module abends `S0C1`. Branching straight to a static relative target's label
   is deferred as a performance item (red-dragon-6uyp.80).
 - z390 branches BIC to the operand address instead of the doubleword stored there, and
   abends `S0C1` on BPP and BPRP. A branch into data runs the data bytes in z390 (J, BC
@@ -683,8 +705,8 @@ BASSM, BSM, SAM24, SAM31, SAM64, TAM. None changes the CC except TAM.
   selecting AMODE 24 or 64 abends `S0C1` after R1 is written; SAM24 and SAM64 abend
   `S0C1` too (red-dragon-6uyp.75). SAM31 does nothing. TAM sets CC 1.
 - The entry R14 (`0xFF0`) has bit 32 off, as in z390, so `BSM 0,14` selects AMODE 24.
-  A BASSM or BSM whose target is the return address returns before the mode test:
-  nothing runs after it.
+  A BASSM or BSM whose target is the activation's return address returns before the mode
+  test: nothing runs after it.
 - BASR, BALR and BRAS moved here from the seed module; LR moved to load and store.
 - z390 models AMODE 24 and 64; its test pins that difference.
 

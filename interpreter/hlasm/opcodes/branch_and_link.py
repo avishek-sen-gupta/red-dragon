@@ -5,13 +5,16 @@ from collections.abc import Callable, Mapping
 
 from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.hlasm.abend import emit_abend
-from interpreter.hlasm.branch_dispatch import emit_branch, emit_link_branch
+from interpreter.hlasm.branch_dispatch import (
+    emit_branch,
+    emit_link_branch,
+    masked_return_address,
+)
 from interpreter.hlasm.data_movement import relative_target, storage_address
 from interpreter.hlasm.hlasm_constants import (
     ADDRESS_MASK_31,
     AMODE_31_LINK_BIT,
     OPERATION_EXCEPTION_ABEND,
-    RETURN_SENTINEL,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.operands import reg_operand
@@ -60,7 +63,7 @@ def _insert_mode_bit(emitter: HlasmEmitter, statement: MachineStatement) -> None
 
 def _returning(emitter: HlasmEmitter, target: Register) -> Register:
     address = emitter.binop(BinopKind.BIT_AND, target, emitter.int_(ADDRESS_MASK_31))
-    return emitter.binop(BinopKind.EQ, address, emitter.int_(RETURN_SENTINEL))
+    return emitter.binop(BinopKind.EQ, address, masked_return_address(emitter))
 
 
 def _stays_in_amode_31(emitter: HlasmEmitter, target: Register) -> Register:

@@ -1,26 +1,37 @@
 # pyright: standard
-"""The job-step module: per entry name, a function that builds the PARM list and enters the module as the system would; and the function a linking branch to a stub calls, which calls the unresolved name as a static COBOL CALL would."""
+"""The job-step module: per entry name, a function that builds the PARM list and enters the module as the system would; and the far branch, which finds a target's owner in the far-branch table and calls it, or tells the activation to return."""
 
 from collections.abc import Sequence
 
-from interpreter.field_name import FieldName
 from interpreter.func_name import FuncName
+from interpreter.hlasm.abend import emit_abend
 from interpreter.hlasm.binder import Binder
 from interpreter.hlasm.binder_start_up import aligned_region, bound_address
+from interpreter.hlasm.cobol_owner import CobolOwner
 from interpreter.hlasm.entry_state import enter_registers
+from interpreter.hlasm.far_branch import FarBranch
+from interpreter.hlasm.far_branch_entry import FarBranchEntry
 from interpreter.hlasm.hlasm_constants import (
     END_STEP_PREFIX,
+    ENTRY_ADDRESS_REGISTER,
+    FAR_BRANCH_FUNCTION,
     JOB_STEP_PREFIX,
     LAST_PARAMETER_BIT,
+    LINK_REGISTER,
+    MODULE_BIT_PREFIX,
     MODULE_FUNCTION_PREFIX,
+    OPERATION_EXCEPTION_ABEND,
     PARM_LIST_BYTES,
     PROGRAM_ENTRY_PREFIX,
-    STUB_CALL_FUNCTION,
+    RETURN_CODE_REGISTER,
+    TARGET_VAR,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.ir_function import IrFunction
+from interpreter.hlasm.module_owner import ModuleOwner
 from interpreter.hlasm.placed_name import PlacedName
-from interpreter.hlasm.stub_name import StubName
+from interpreter.hlasm.unresolved_call import emit_unresolved_call
+from interpreter.hlasm.unresolved_owner import UnresolvedOwner
 from interpreter.hlasm_run_inputs.run_input_names import (
     JOB_PARM_BUILTIN,
     PARM_LENGTH_BYTES,
@@ -29,19 +40,20 @@ from interpreter.hlasm_run_inputs.run_input_names import (
 from interpreter.instructions import (
     Branch,
     BranchIf,
-    CallWithMemory,
     InstructionBase,
     Label_,
-    NewArray,
     Return_,
-    StoreField,
+    StoreVar,
 )
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
 from interpreter.var_name import VarName
 
-ARGUMENT_COUNT = FieldName("count")
+NOTHING_BELOW = 0
+CALLED = 0
+RETURNING = 1
+FAR_BRANCH_ARITY = 4
 
 
 def job_step_label(stem: str) -> CodeLabel:
@@ -73,46 +85,86 @@ def _job_step(emitter: HlasmEmitter, stem: str, entry: PlacedName) -> None:
     emitter.emit_inst(Label_(label=job_step_label(stem)))
     parameters = _parm_list(emitter)
     enter_registers(emitter, bound_address(emitter, entry), parameters)
-    result = emitter.call(FuncName(f"{MODULE_FUNCTION_PREFIX}{entry.module}"), ())
+    result = emitter.call(
+        FuncName(f"{MODULE_FUNCTION_PREFIX}{entry.module}"),
+        (emitter.load_gr32(ENTRY_ADDRESS_REGISTER), emitter.int_(NOTHING_BELOW)),
+    )
     emitter.emit_inst(Return_(value_reg=result))
     emitter.emit_inst(Label_(label=end))
 
 
-def _no_arguments(emitter: HlasmEmitter) -> Register:
-    arguments = emitter.fresh_reg()
-    emitter.emit_inst(NewArray(result_reg=arguments, size_reg=emitter.int_(0)))
-    emitter.emit_inst(
-        StoreField(
-            obj_reg=arguments, field_name=ARGUMENT_COUNT, value_reg=emitter.int_(0)
-        )
-    )
-    return arguments
+def _owner_entry(owner: UnresolvedOwner | CobolOwner) -> VarName:
+    match owner:
+        case UnresolvedOwner(name=name):
+            return VarName(f"{PROGRAM_ENTRY_PREFIX}{name.upper()}")
+        case CobolOwner(program=program):
+            return VarName(f"{PROGRAM_ENTRY_PREFIX}{program.upper()}")
 
 
-def _stub_case(emitter: HlasmEmitter, target: Register, stub: StubName) -> None:
-    called = emitter.fresh_label("hl_stub_called")
-    other = emitter.fresh_label("hl_stub_other")
-    matched = emitter.binop(BinopKind.EQ, target, bound_address(emitter, stub))
-    emitter.emit_inst(BranchIf(cond_reg=matched, branch_targets=(called, other)))
-    emitter.emit_inst(Label_(label=called))
-    result = emitter.fresh_reg()
+def _call_by_name(emitter: HlasmEmitter, owner: UnresolvedOwner | CobolOwner) -> None:
+    result = emit_unresolved_call(emitter, _owner_entry(owner))
+    emitter.store_gr32(RETURN_CODE_REGISTER, result)
     emitter.emit_inst(
-        CallWithMemory(
-            result_reg=result,
-            location=VarName(f"{PROGRAM_ENTRY_PREFIX}{stub.name.upper()}"),
-            memory=_no_arguments(emitter),
-        )
+        StoreVar(name=TARGET_VAR, value_reg=emitter.load_gr32(LINK_REGISTER))
     )
-    emitter.emit_inst(Return_(value_reg=result))
+    emitter.emit_inst(Return_(value_reg=emitter.int_(CALLED)))
+
+
+def _when(emitter: HlasmEmitter, condition: Register, prefix: str) -> CodeLabel:
+    taken, other = emitter.fresh_label(prefix), emitter.fresh_label(f"{prefix}_not")
+    emitter.emit_inst(BranchIf(cond_reg=condition, branch_targets=(taken, other)))
+    emitter.emit_inst(Label_(label=taken))
+    return other
+
+
+def _refuse_own(emitter: HlasmEmitter, request: FarBranch, bit: Register) -> None:
+    own = _when(emitter, emitter.binop(BinopKind.EQ, request.me, bit), "hl_far_own")
+    emit_abend(emitter, OPERATION_EXCEPTION_ABEND)
+    emitter.emit_inst(Label_(label=own))
+
+
+def _call_module(emitter: HlasmEmitter, request: FarBranch, module: str) -> None:
+    bit = emitter.load_var(VarName(f"{MODULE_BIT_PREFIX}{module}"))
+    _refuse_own(emitter, request, bit)
+    held = emitter.binop(
+        BinopKind.NE,
+        emitter.binop(BinopKind.BIT_AND, request.below, bit),
+        emitter.int_(0),
+    )
+    plain = emitter.binop(BinopKind.EQ, request.linking, emitter.int_(0))
+    below = _when(emitter, emitter.binop(BinopKind.AND, held, plain), "hl_far_below")
+    emitter.emit_inst(Return_(value_reg=emitter.int_(RETURNING)))
+    emitter.emit_inst(Label_(label=below))
+    stack = emitter.binop(BinopKind.BIT_OR, request.below, request.me)
+    emitter.call(FuncName(f"{MODULE_FUNCTION_PREFIX}{module}"), (request.target, stack))
+    emitter.emit_inst(Return_(value_reg=emitter.int_(CALLED)))
+
+
+def _far_case(emitter: HlasmEmitter, request: FarBranch, entry: FarBranchEntry) -> None:
+    low = bound_address(emitter, entry.start)
+    high = emitter.binop(BinopKind.ADD, low, emitter.int_(entry.length))
+    inside = emitter.binop(
+        BinopKind.AND,
+        emitter.binop(BinopKind.GE, request.target, low),
+        emitter.binop(BinopKind.LT, request.target, high),
+    )
+    other = _when(emitter, inside, "hl_far_owner")
+    match entry.owner:
+        case ModuleOwner(module=module):
+            _call_module(emitter, request, module)
+        case UnresolvedOwner() | CobolOwner() as named:
+            _call_by_name(emitter, named)
     emitter.emit_inst(Label_(label=other))
 
 
-def _stub_call(binder: Binder) -> IrFunction:
+def _far_branch(binder: Binder) -> IrFunction:
     def body(emitter: HlasmEmitter, parameters: Sequence[Register]) -> Register:
-        _ = [_stub_case(emitter, parameters[0], stub) for stub in binder.stubs.values()]
-        return emitter.int_(0)
+        request = FarBranch(*parameters)
+        _ = [_far_case(emitter, request, e) for e in binder.far_branch_table()]
+        emit_abend(emitter, OPERATION_EXCEPTION_ABEND)
+        return emitter.int_(CALLED)
 
-    return IrFunction(STUB_CALL_FUNCTION, 1, body)
+    return IrFunction(FAR_BRANCH_FUNCTION, FAR_BRANCH_ARITY, body)
 
 
 def job_step_module(binder: Binder) -> tuple[tuple[InstructionBase, ...], IrFunction]:
@@ -122,6 +174,6 @@ def job_step_module(binder: Binder) -> tuple[tuple[InstructionBase, ...], IrFunc
         **{end_step(module): at for module, at in binder.module_entries().items()},
     }
     _ = [_job_step(emitter, stem, entry) for stem, entry in steps.items()]
-    stub_call = _stub_call(binder)
-    stub_call.define(emitter)
-    return emitter.instructions(), stub_call
+    far_branch = _far_branch(binder)
+    far_branch.define(emitter)
+    return emitter.instructions(), far_branch

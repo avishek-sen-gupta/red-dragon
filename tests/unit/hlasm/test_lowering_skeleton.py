@@ -19,9 +19,11 @@ from interpreter.instructions import (
     Binop,
     Branch,
     BranchIf,
+    CallFunction,
     Const,
     InstructionBase,
     Label_,
+    LoadVar,
     StoreVar,
     Symbolic,
     WriteRegion,
@@ -74,7 +76,7 @@ def _dispatch_comparands(ir: Sequence[InstructionBase]) -> list[int | str]:
     return [
         consts[i.right]
         for i in ir
-        if isinstance(i, Binop) and i.operator == BinopKind.EQ
+        if isinstance(i, Binop) and i.operator == BinopKind.EQ and i.right in consts
     ]
 
 
@@ -146,23 +148,41 @@ def _low_words(vm: VMState) -> list[int]:
     ]
 
 
+def _dispatch_entries(
+    ir: Sequence[InstructionBase],
+) -> tuple[list[str], list[str], list[str]]:
+    return (
+        _branch_and_abend(_between(ir, "hl_link_dispatch", "hl_dispatch")),
+        _branch_and_abend(_between(ir, "hl_dispatch", "hl_return_check")),
+        [
+            str(i.name)
+            for i in _between(ir, "hl_return_check", "hl_dispatch_local_0")
+            if isinstance(i, LoadVar)
+        ],
+    )
+
+
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_seed_program_lowers_to_labels_region_ops_and_dispatch():
     frontend = HlasmFrontend(_program("seed_program.json"), "M")
     ir = frontend.lower(b"")
     dispatch = _between(ir, "hl_dispatch", "end_hello_1")
-    assert _labels(ir)[:7] + _labels(ir)[-2:] == [
+    assert _labels(ir)[:8] + _labels(ir)[-2:] == [
         "entry",
         "func_hello_0",
         "hl_HELLO_0",
         "hl_HELLO_4",
         "hl_link_dispatch",
-        "hl_stub_call",
         "hl_dispatch",
+        "hl_return_check",
+        "hl_dispatch_local_0",
         "hl_return",
         "end_hello_1",
     ]
-    assert _gpr_writes(_between(ir, "hl_HELLO_0", "hl_HELLO_4")) == [(4, 124)]
+    assert (
+        _gpr_writes(_between(ir, "hl_HELLO_0", "hl_HELLO_4")),
+        [str(i.hint) for i in ir if isinstance(i, Symbolic)],
+    ) == ([(4, 124)], ["param:__hlasm_entry_target", "param:__hlasm_below"])
     assert _branch_and_abend(_between(ir, "hl_HELLO_4", "hl_link_dispatch"))[-5:] == [
         "StoreVar:__hlasm_target",
         "Branch:hl_dispatch",
@@ -170,13 +190,29 @@ def test_seed_program_lowers_to_labels_region_ops_and_dispatch():
         "StoreVar:__hlasm_abend",
         "Halt_",
     ]
-    assert _dispatch_comparands(dispatch) == [0xFF0, 0, 4]
-    assert [i.branch_targets[0] for i in dispatch if isinstance(i, BranchIf)] == [
-        CodeLabel("hl_return"),
-        CodeLabel("hl_HELLO_0"),
-        CodeLabel("hl_HELLO_4"),
+    assert _dispatch_entries(ir) == (
+        ["Label_", "Const:1", "StoreVar:__hlasm_linking", "Branch:hl_return_check"],
+        ["Label_", "Const:0", "StoreVar:__hlasm_linking"],
+        ["__hlasm_target", "__hlasm_return_to"],
+    )
+    assert (
+        _dispatch_comparands(_between(ir, "hl_dispatch_local_0", "hl_return")),
+        [i.branch_targets for i in dispatch if isinstance(i, BranchIf)],
+    ) == (
+        [0, 4],
+        [
+            (CodeLabel("hl_return"), CodeLabel("hl_dispatch_local_0")),
+            (CodeLabel("hl_HELLO_0"), CodeLabel("hl_dispatch_next_1")),
+            (CodeLabel("hl_HELLO_4"), CodeLabel("hl_dispatch_next_2")),
+            (CodeLabel("hl_return"), CodeLabel("hl_dispatch")),
+        ],
+    )
+    assert [
+        (str(i.func_name), len(i.args)) for i in dispatch if isinstance(i, CallFunction)
+    ] == [
+        ("__hlasm_far_branch", 4),
+        ("__binary_bytes_to_int", 2),
     ]
-    assert [i for i in ir if isinstance(i, Symbolic)] == []
     assert frontend.func_symbol_table == {
         CodeLabel("func_hello_0"): FuncRef(
             name=FuncName("func_hello_0"), label=CodeLabel("func_hello_0")

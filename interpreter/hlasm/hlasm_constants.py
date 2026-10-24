@@ -62,10 +62,15 @@ SECTION_VAR_PREFIX = "__hlasm_sect_"
 
 ABEND_VAR = VarName("__hlasm_abend")
 TARGET_VAR = VarName("__hlasm_target")
+LINKING_VAR = VarName("__hlasm_linking")
+RETURN_TO_VAR = VarName("__hlasm_return_to")
+BELOW_VAR = VarName("__hlasm_below")
+ENTRY_TARGET_VAR = VarName("__hlasm_entry_target")
 STUBS_LOW_VAR = VarName("__hlasm_stubs_low")
 STUBS_HIGH_VAR = VarName("__hlasm_stubs_high")
 MODULE_FUNCTION_PREFIX = "__hlasm_module_"
-STUB_CALL_FUNCTION = "__hlasm_stub_call"
+FAR_BRANCH_FUNCTION = "__hlasm_far_branch"
+MODULE_BIT_PREFIX = "__hlasm_bit_"
 JOB_STEP_PREFIX = "__hlasm_job_"
 END_STEP_PREFIX = "__hlasm_end_"
 PROGRAM_ENTRY_PREFIX = "__entry_"
@@ -152,5 +157,5 @@ RETURN_CODE_REGISTER = 15
 
 DISPATCH_LABEL = CodeLabel("hl_dispatch")
 LINK_DISPATCH_LABEL = CodeLabel("hl_link_dispatch")
-STUB_CALL_LABEL = CodeLabel("hl_stub_call")
+RETURN_CHECK_LABEL = CodeLabel("hl_return_check")
 RETURN_LABEL = CodeLabel("hl_return")
