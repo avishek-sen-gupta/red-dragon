@@ -60,6 +60,7 @@ from interpreter.project.text_record import TextRecord
 from interpreter.project.types import ExportTable, ImportKind, ImportRef, ModuleUnit
 from interpreter.project.unit_diagnostic import UnitDiagnostic
 from interpreter.project.unit_format_error import UnitFormatError
+from interpreter.project.unresolved_external import UnresolvedExternal
 from interpreter.project.weak_reference import WeakReference
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
@@ -110,6 +111,7 @@ _DATACLASSES: tuple[type, ...] = (
     InMacro,
     InOpenCode,
     ObjectModule,
+    UnresolvedExternal,
     ControlSection,
     CommonSection,
     EntryLabel,

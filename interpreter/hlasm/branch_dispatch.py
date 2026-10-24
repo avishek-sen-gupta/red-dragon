@@ -7,14 +7,21 @@ from hlasm_asg.program.hlasm_program import HlasmProgram
 from hlasm_asg.program.machine_statement import MachineStatement
 from hlasm_asg.program.section import Section
 from hlasm_asg.program.section_kind import SectionKind
+from interpreter.func_name import FuncName
 from interpreter.hlasm.abend import emit_abend
 from interpreter.hlasm.hlasm_constants import (
     ADDRESS_MASK_31,
     DISPATCH_LABEL,
+    LINK_DISPATCH_LABEL,
+    LINK_REGISTER,
     OPERATION_EXCEPTION_ABEND,
     RETURN_CODE_REGISTER,
     RETURN_LABEL,
     RETURN_SENTINEL,
+    STUB_CALL_FUNCTION,
+    STUB_CALL_LABEL,
+    STUBS_HIGH_VAR,
+    STUBS_LOW_VAR,
     TARGET_VAR,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
@@ -31,6 +38,11 @@ def statement_label(section: str, offset: int) -> CodeLabel:
 def emit_branch(emitter: HlasmEmitter, target: Register) -> None:
     emitter.emit_inst(StoreVar(name=TARGET_VAR, value_reg=target))
     emitter.emit_inst(Branch(label=DISPATCH_LABEL))
+
+
+def emit_link_branch(emitter: HlasmEmitter, target: Register) -> None:
+    emitter.emit_inst(StoreVar(name=TARGET_VAR, value_reg=target))
+    emitter.emit_inst(Branch(label=LINK_DISPATCH_LABEL))
 
 
 def _branch_if(
@@ -74,7 +86,28 @@ def _emit_return(emitter: HlasmEmitter) -> None:
     emitter.emit_inst(Return_(value_reg=emitter.load_gr32(RETURN_CODE_REGISTER)))
 
 
+def _in_stub_range(emitter: HlasmEmitter, target: Register) -> Register:
+    above = emitter.binop(BinopKind.GE, target, emitter.load_var(STUBS_LOW_VAR))
+    below = emitter.binop(BinopKind.LT, target, emitter.load_var(STUBS_HIGH_VAR))
+    return emitter.binop(BinopKind.AND, above, below)
+
+
+def _emit_link_dispatch(emitter: HlasmEmitter) -> None:
+    emitter.emit_inst(Label_(label=LINK_DISPATCH_LABEL))
+    raw = emitter.load_var(TARGET_VAR)
+    target = emitter.binop(BinopKind.BIT_AND, raw, emitter.int_(ADDRESS_MASK_31))
+    stub = _in_stub_range(emitter, target)
+    emitter.emit_inst(
+        BranchIf(cond_reg=stub, branch_targets=(STUB_CALL_LABEL, DISPATCH_LABEL))
+    )
+    emitter.emit_inst(Label_(label=STUB_CALL_LABEL))
+    result = emitter.call(FuncName(STUB_CALL_FUNCTION), (target,))
+    emitter.store_gr32(RETURN_CODE_REGISTER, result)
+    emit_branch(emitter, emitter.load_gr32(LINK_REGISTER))
+
+
 def emit_dispatch(emitter: HlasmEmitter, program: HlasmProgram) -> None:
+    _emit_link_dispatch(emitter)
     emitter.emit_inst(Label_(label=DISPATCH_LABEL))
     raw = emitter.load_var(TARGET_VAR)
     target = emitter.binop(BinopKind.BIT_AND, raw, emitter.int_(ADDRESS_MASK_31))

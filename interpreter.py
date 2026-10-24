@@ -15,6 +15,7 @@ from interpreter.hlasm.bfp_builtins import bfp_builtins
 from interpreter.hlasm.clock_builtins import clock_builtins
 from interpreter.hlasm.dfp_builtins import dfp_builtins
 from interpreter.hlasm.hfp_builtins import hfp_builtins
+from interpreter.hlasm.job_parm_builtins import NO_PARM, job_parm_builtins
 from interpreter.hlasm.pfpo_builtins import pfpo_builtins
 from interpreter.hlasm.system_machine_clock import SystemMachineClock
 from interpreter.project.entry_point import EntryPoint
@@ -104,6 +105,7 @@ result = factorial(5)
             hfp_builtins(),
             dfp_builtins(),
             pfpo_builtins(),
+            job_parm_builtins(NO_PARM),
         ),
     )
 

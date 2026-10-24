@@ -14,6 +14,7 @@ from interpreter.hlasm.bfp_builtins import bfp_builtins
 from interpreter.hlasm.clock_builtins import clock_builtins
 from interpreter.hlasm.dfp_builtins import dfp_builtins
 from interpreter.hlasm.hfp_builtins import hfp_builtins
+from interpreter.hlasm.job_parm_builtins import NO_PARM, job_parm_builtins
 from interpreter.hlasm.pfpo_builtins import pfpo_builtins
 from interpreter.project.hlasm_compile import compile_hlasm
 from interpreter.project.hlasm_compile_options import HlasmCompileOptions
@@ -27,6 +28,8 @@ from tests.integration.hlasm.hlasm_machine import HlasmMachine
 from tests.integration.hlasm.hlasm_run import HlasmRun
 
 MAX_STEPS = 20_000
+MAIN_PATH = Path("__main__.asm")
+JOB_STEP_ARGUMENTS = 1
 GPR_BYTES = 8
 LOW_WORD_OFFSET = 4
 WORD_BYTES = 4
@@ -77,7 +80,7 @@ def _run_vm(
     linked = compile_hlasm(
         source.encode("utf-8"), parser=get_hlasm_parser(syslib), options=options
     )
-    (entry,) = linked.programs
+    entry = linked.modules[MAIN_PATH].program
     console = io.StringIO()
     with redirect_stdout(console):
         vm = run_linked(
@@ -92,6 +95,7 @@ def _run_vm(
                 hfp_builtins(),
                 dfp_builtins(),
                 pfpo_builtins(),
+                job_parm_builtins(NO_PARM),
             ),
         )
     return vm, console.getvalue()
@@ -121,7 +125,7 @@ def run_hlasm_allocations(
     assert isinstance(table, Pointer)
     pointers = [tv.value for tv in vm.heap_get(table.base).fields.values()]
     entries = sorted(_entry(vm, p) for p in pointers if isinstance(p, Pointer))
-    others = len(vm.heap_items()) - 1 - len(entries)
+    others = len(vm.heap_items()) - 1 - len(entries) - JOB_STEP_ARGUMENTS
     return hlasm_run_of(vm, stdout), entries, others
 
 

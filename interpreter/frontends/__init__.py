@@ -19,7 +19,7 @@ from interpreter.constants import Language
 from interpreter.frontend_extension_lowering import RedDragonExtensionLoweringStrategy
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.frontends._base import BaseFrontend
-from interpreter.hlasm.hlasm_frontend import HlasmFrontend
+from interpreter.hlasm.hlasm_frontend import HlasmFrontend, bind_image
 from interpreter.parser import TreeSitterParserFactory
 
 PROLEAP_BRIDGE_JAR = "proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar"
@@ -101,6 +101,7 @@ __all__ = [
     "SUPPORTED_DETERMINISTIC_LANGUAGES",
     "BaseFrontend",
     "Language",
+    "bind_image",
     "get_cobol_frontend",
     "get_deterministic_frontend",
     "get_hlasm_frontend",

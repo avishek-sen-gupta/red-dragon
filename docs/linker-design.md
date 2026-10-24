@@ -469,19 +469,19 @@ linking apart (ADR-185):
 
 ### 7.4 HLASM units
 
-`compile_hlasm(source, *, parser, options, work_dir)` (`hlasm_compile.py`) runs the same
-three stages for one assembly: `__main__-<digest>.ast.json`,
-`__main__-<digest>.unit.json`, then `image-<digest>.linked.json`. The digest covers
-the source, the SYSLIB directories and their file contents, the bridge binary and the
-supplied system-variable values, but not the assembly clock (`HlasmLoweringSettings`). The unit's
-`program` is the entry name and `programs` maps it to the namespaced entry label,
-which is also `entry_func_label`. Unlike COBOL, the start-up depends on the
-program (one region per section, entry registers), so link reads the AST file
-again to build it. Start-up registers carry `%hlasm_machine_`, `%hlasm.sect.`,
-`%hlasm.dc.` and `%hlasm_entry.` prefixes and lowering registers are `%N`, so the
-two never collide in the one frame both run in. `lower_hlasm_program(program)` stops at
-the unit file, which takes the path of the `SourceFile` it is given. The unit carries
-the assembly's `ObjectModule` ("Object module" in `docs/frontend-design/hlasm.md`).
+`compile_hlasm(source, *, parser, options, work_dir, programs=())` (`hlasm_compile.py`) runs
+the same three stages per assembly: `<stem>-<digest>.ast.json`, `<stem>-<digest>.unit.json`,
+then one `image-<digest>.linked.json`. The digest covers the source, the SYSLIB directories
+and their file contents, the bridge binary and the supplied system-variable values, but not
+the assembly clock (`HlasmLoweringSettings`). `lower_hlasm_program(program)` stops at the unit
+file, named after the `SourceFile`'s path; `link_hlasm_units(units, work_dir)` links unit
+files. Each unit carries its `ObjectModule` ("Object module" in
+`docs/frontend-design/hlasm.md`), and link is a binder over them: `bind_image` builds the
+start-up module (machine state, layout, TXT, RLD, once) and a `__hlasm_job__` module of one
+job-step function per entry name, which `programs` maps each name to. `compile_hlasm` sets
+`entry_func_label` to its main source's END name. Link never reads an AST file. An SD or LD
+name in two units raises `DuplicateProgramInImage`. Unit diagnostics, and the binder's
+unresolved-EXTRN warnings, are logged each time the image is used.
 
 ---
 
@@ -549,7 +549,7 @@ interpreter/project/
     coprocessor_compile.py  CoprocessorSpec, compile_program(), lower_program() — one source's
                             programs lowered with every spec's prepass, strategy and dialect parser
     lowering_settings.py    LoweringSettings — the settings a compiled file's name digests
-    hlasm_compile.py        compile_hlasm(), lower_hlasm_program() — one HLASM assembly
+    hlasm_compile.py        compile_hlasm(), lower_hlasm_program(), link_hlasm_units() — HLASM assemblies bound into one image
                             through the same three file stages
     hlasm_lowering_settings.py HlasmLoweringSettings — the SYSLIB directories an HLASM file's name digests
     ir_codec.py             IrCodec — self-describing JSON for IR values

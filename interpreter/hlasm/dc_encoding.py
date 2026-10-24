@@ -69,7 +69,6 @@ _LOW_DISPLACEMENT_SHIFT = 8
 _UNSIGNED = "U"
 _EXPONENT = "E"
 _Y_RANGE = range(-(1 << 15), 1 << 16)
-_EXTERNAL_ADDRESS_ISSUE = "red-dragon-6uyp.8"
 _FORMAT_1_CCW = "CCW1"
 _FORMAT_1_COMMAND_SHIFT = 24
 _FORMAT_1_FLAGS_SHIFT = 16
@@ -284,26 +283,31 @@ def _address_piece(item: DcItem, value: Address, origin: Origin) -> DcPiece:
     return _image(_assembled_address(item, value, origin), item.length)
 
 
-def _unencodable_ccw_address(
-    statement: CcwStatement, value: ExternalAddress | BaseDisplacementAddress
-) -> DcPiece:
-    if isinstance(value, ExternalAddress):
-        raise UnsupportedDataType(
-            f"{statement.mnemonic} with an external data address",
-            _EXTERNAL_ADDRESS_ISSUE,
-        )
-    raise HlasmLoweringError(
-        "CCW data address", "an absolute or relocatable value", value.kind
-    )
+def _absolute_ccw_address(value: Address, width: int) -> DcPiece:
+    match value:
+        case AbsAddress():
+            return _image(value.value, width)
+        case _:
+            raise HlasmLoweringError(
+                "CCW data address", "an absolute or relocatable value", value.kind
+            )
+
+
+def _unrelocated_ccw_address(value: Address, width: int) -> DcPiece:
+    match value:
+        case ExternalAddress():
+            return ExternalSlot(value, width)
+        case _:
+            return _absolute_ccw_address(value, width)
 
 
 def _ccw_address(statement: CcwStatement, width: int) -> DcPiece:
     value = statement.address
-    if isinstance(value, RelocAddress):
-        return AddressSlot(value, width)
-    if isinstance(value, AbsAddress):
-        return _image(value.value, width)
-    return _unencodable_ccw_address(statement, value)
+    match value:
+        case RelocAddress():
+            return AddressSlot(value, width)
+        case _:
+            return _unrelocated_ccw_address(value, width)
 
 
 def encode_ccw(statement: CcwStatement) -> tuple[DcPiece, ...]:

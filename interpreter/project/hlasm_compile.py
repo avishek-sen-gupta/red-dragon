@@ -14,7 +14,7 @@ from pathlib import Path
 from hlasm_asg.assembly_inputs import AssemblyInputs
 from hlasm_asg.hlasm_ast_parser import HlasmAstParser
 from interpreter.constants import Language
-from interpreter.frontends import get_hlasm_frontend
+from interpreter.frontends import bind_image, get_hlasm_frontend
 from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.project.coded_diagnostic import CodedDiagnostic
 from interpreter.project.comment_mnote import CommentMnote
@@ -32,10 +32,11 @@ from interpreter.project.linked_codec import LinkedCodec
 from interpreter.project.linker import link_every_module, module_prefix
 from interpreter.project.severity_mnote import SeverityMnote
 from interpreter.project.source_file import SourceFile
-from interpreter.project.start_up import START_UP_PATH, with_start_up
+from interpreter.project.start_up import START_UP_PATH
 from interpreter.project.types import LinkedProgram, ModuleUnit
 from interpreter.project.unit_codec import UnitCodec
 from interpreter.project.unit_diagnostic import UnitDiagnostic
+from interpreter.project.unresolved_external import UnresolvedExternal
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 
 HLASM_FRONTEND_LOGGER = "interpreter.hlasm"
@@ -76,16 +77,11 @@ class _Assembly:
         _report(self._unit_module().diagnostics)
         return self._artifact("unit")
 
-    def linked(self) -> LinkedProgram:
-        unit = self._artifact("unit")
-        digest = hashlib.sha256(unit.name.encode("utf-8")).hexdigest()
-        target = self.work_dir / f"image-{digest}.linked.json"
-        codec = LinkedCodec(IrCodec())
+    def unit_file(self) -> Path:
+        target = self._artifact("unit")
         if not target.exists():
-            codec.write(self._link(self._unit_module()), target)
-        linked = codec.read(target)
-        _report(linked.modules[self.program.path].diagnostics)
-        return linked
+            UnitCodec(IrCodec()).write(self._module(), target)
+        return target
 
     def _unit_module(self) -> ModuleUnit:
         target = self._artifact("unit")
@@ -116,26 +112,38 @@ class _Assembly:
             object_module=frontend.object_module,
         )
 
-    def _link(self, unit: ModuleUnit) -> LinkedProgram:
-        start_up = get_hlasm_frontend(
-            self.parser.read(self.ast()), self._name()
-        ).start_up_ir()
-        modules, graph = with_start_up(
-            start_up, Language.HLASM, {unit.path: unit}, {unit.path: ()}
-        )
-        linked = link_every_module(
-            modules=modules,
-            import_graph=graph,
-            project_root=_PROJECT_ROOT,
-            topo_order=(START_UP_PATH, unit.path),
-            language=Language.HLASM,
-            type_env_builder=TypeEnvironmentBuilder(),
-            symbol_table=SymbolTable.empty(),
-        )
-        entry = unit.entry_label.namespace(module_prefix(unit.path, _PROJECT_ROOT))
-        return dataclasses.replace(
-            linked, programs={unit.program: entry}, entry_func_label=entry
-        )
+
+def _link(units: Sequence[Path]) -> LinkedProgram:
+    codec = UnitCodec(IrCodec())
+    read = tuple(codec.read(path) for path in units)
+    bound = bind_image(read)
+    modules = {
+        START_UP_PATH: bound.start_up,
+        **{unit.path: unit for unit in read},
+        bound.job_step.path: bound.job_step,
+    }
+    linked = link_every_module(
+        modules=modules,
+        import_graph={path: () for path in modules},
+        project_root=_PROJECT_ROOT,
+        topo_order=tuple(modules),
+        language=Language.HLASM,
+        type_env_builder=TypeEnvironmentBuilder(),
+        symbol_table=SymbolTable.empty(),
+    )
+    return dataclasses.replace(linked, programs=dict(bound.programs))
+
+
+def _linked(units: Sequence[Path], work_dir: Path) -> LinkedProgram:
+    names = "\0".join(path.name for path in units)
+    digest = hashlib.sha256(names.encode("utf-8")).hexdigest()
+    target = work_dir / f"image-{digest}.linked.json"
+    codec = LinkedCodec(IrCodec())
+    if not target.exists():
+        codec.write(_link(units), target)
+    linked = codec.read(target)
+    _report(tuple(d for unit in linked.modules.values() for d in unit.diagnostics))
+    return linked
 
 
 def _mnote(kind: SeverityMnote | CommentMnote) -> str:
@@ -155,7 +163,18 @@ def _written_in(source: ConstantSource) -> str:
 
 
 def _headed(diagnostic: UnitDiagnostic) -> str:
-    match diagnostic.kind:
+    kind = diagnostic.kind
+    match kind:
+        case UnresolvedExternal(name=name):
+            return f"EXTRN {name} is not in the image; calls reach it by name"
+        case _:
+            return _assembled(kind)
+
+
+def _assembled(
+    kind: CodedDiagnostic | ConstantDiagnostic | SeverityMnote | CommentMnote,
+) -> str:
+    match kind:
         case CodedDiagnostic(code=code, text=text):
             return f"{code} {text}"
         case ConstantDiagnostic(constant=constant, warning=warning, source=source):
@@ -197,13 +216,24 @@ def lower_hlasm_program(
     return (_Assembly(program, parser, options, _work_dir(work_dir)).unit(),)
 
 
+def link_hlasm_units(units: Sequence[Path], work_dir: Path) -> LinkedProgram:
+    return _linked(units, _work_dir(work_dir))
+
+
 def compile_hlasm(
     source: bytes,
     *,
     parser: HlasmAstParser,
     options: HlasmCompileOptions = _NO_INPUTS,
     work_dir: Path | FreshWorkDir = FRESH_WORK_DIR,
+    programs: Sequence[SourceFile] = (),
 ) -> LinkedProgram:
-    return _Assembly(
-        SourceFile(_MAIN_PATH, source), parser, options, _work_dir(work_dir)
-    ).linked()
+    work = _work_dir(work_dir)
+    main, *companions = (
+        _Assembly(program, parser, options, work)
+        for program in (SourceFile(_MAIN_PATH, source), *programs)
+    )
+    units = (main.unit_file(), *(c.unit_file() for c in companions))
+    linked = _linked(units, work)
+    entry = linked.programs[linked.modules[_MAIN_PATH].program]
+    return dataclasses.replace(linked, entry_func_label=entry)
