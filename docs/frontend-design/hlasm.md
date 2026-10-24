@@ -50,7 +50,7 @@ addresses.
 | `interpreter/hlasm/assembly_diagnostics.py` | The unit's diagnostics below error level (che4z warnings and MNOTEs, DC conversion warnings) as `UnitDiagnostic`s |
 | `interpreter/project/hlasm_compile_options.py` | `HlasmCompileOptions(names, clock)`: the inputs `compile_hlasm` takes; `clock` is an `AssemblyClock` (`hlasm_asg/assembly_clock.py`; COBOL's `CompileClock`, which the import contracts keep from `interpreter.project`), `SystemAssemblyClock` by default |
 | `interpreter/frontends/__init__.py` | `get_hlasm_parser(syslib)`: the bridge parser with `hlasm-bridge/maclib/` first on SYSLIB |
-| `hlasm-bridge/maclib/` | Our macros: `WTO`, `ABEND` |
+| `hlasm-bridge/maclib/` | Our macros: `WTO`, `ABEND`, `SAVE`, `RETURN`, `YREGS` |
 | `hlasm_asg/program/` | The bridge JSON models, one class per file. A D(X,B) storage operand also carries its address as written (`written`): the section and offset of an implicit address, before USING resolution, or the absolute displacement. Each DC/DS operand carries its offset and bit offset from che4z's location counter, its length unit (bytes, or bits for `L.n`), scale and exponent. `*` is the address of each constant: an address operand that names the location counter is exported per duplication copy (`ADDRESSES_PER_COPY`), each value evaluated at its own address. An S-constant is a base and displacement resolved through USING. `DC 0F` has an `OMITTED` nominal. CCW, CCW0 and CCW1 are statements with their command code, address, flags and count. Each literal carries the origin of the statement that first used it, a CCW's literals included. The program lists AMODE and RMODE statements, and each diagnostic its macro call stack (`related`) |
 | `interpreter/hlasm/hlasm_frontend.py` | `HlasmFrontend(program)`: `lower()`, `start_up_ir()`, `entry_name`, `entry_label` |
 | `interpreter/hlasm/machine.py` | GPR region (`__hlasm_gprs`, 8 bytes per register), `__hlasm_cc`, `__hlasm_pm`, `__hlasm_tod_last` (the last STCK value); the access-register region (`__hlasm_ars`, 4 bytes per register, all 0); the vector-register region (`__hlasm_vrs`, 16 bytes per register, all 0) and `__hlasm_fpc`, allocated after the sections so their addresses do not move |
@@ -281,6 +281,15 @@ conventions but expand only to lowered opcodes:
 | `WTO 'text'` | `BRAS 1` around an inline list (AL2 length including the 4-byte header, AL2 MCS flags, the text), then `SVC 35` |
 | `ABEND code` | `LA 1,code` (user code, bits 20-31), then `SVC 13` |
 | `ABEND code,,,SYSTEM` | `LA 1,code`, twelve `LA 1,0(1,1)` doublings into bits 8-19, then `SVC 13`. `DUMP` and `STEP` are accepted and ignored. |
+
+| `SAVE (r1,r2)[,T][,id]` | `STM r1,r2` at word `(r1*4+20) mod 64` of the R13 save area; with `T` and `r1` not 14, also `STM 14,15,12(13)`; an `id` (`*` is the CSECT name) is a `J` around `AL1(length),CL'id'`. No chaining. |
+| `RETURN (r1,r2)[,T][,RC=n\|(15)]` | `LM` over the same words, then `MVI 12(13),X'FF'` for `T`, `LA 15,n` for `RC=n`, then `BR 14`. `RC=(15)` skips R15 in the reload, so `(14,12)` is `L 14,12(13)` and `LM 0,12,20(13)`. R13 is restored only if it is in the range. |
+| `YREGS` | `R0` to `R15` as `EQU`s |
+
+Registers may be numbers or `Rn`. A bad register, a second operand other than `T`, or
+an `RC` register other than 15 is an `MNOTE 8`, which refuses the assembly. Save areas
+are the 72-byte format-0 area. z390's own `SAVE` ignores `T` and the identifier, so the
+differential tests expect its flag and R14/R15 slots to differ.
 
 SVCs are lowered in IR over existing builtins; no SVC has a builtin of its own.
 
@@ -1358,6 +1367,8 @@ layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.
 | `tests/integration/hlasm/test_hlasm_compile.py` | Unit files; MNOTEs (WARNING and INFO) with their severity and a DC warning logged with place and call stack, and logged again from the cached files with no assembly; reuse that follows the inputs, SYSLIB member contents and the bridge, not the clock; assembly inputs, clock and `&SYSSEQF` printed through WTO; an unsupplied `&SYSPARM` is null and another input not given is refused; a missing SYSLIB directory refused; a bridge name found on `PATH`; the bridge found from another working directory; `run()`, return code, default entry, BALR/BR, wild branch |
 | `tests/unit/hlasm/test_bridge_command.py` | The bridge command carries each supplied input and the clock as options; a naive clock and a SYSPARM over 255 characters are refused |
 | `tests/integration/hlasm/test_instruction_table.py`, `test_opcode_unit_coverage.py` | Instruction table and opcode-unit coverage |
+| `tests/integration/hlasm/test_save_return.py` | `SAVE`, `RETURN`, `YREGS`: registers and save-area words per range, `T`, `RC`, identifier layout, a nested call, operand refusals |
+| `tests/z390/test_save_return_differential.py` | The same programs against z390 |
 | `tests/z390/test_foundation_differential.py` | Return code, WTO, user abend and assembly failure against z390 (`-m z390`) |
 | `tests/z390/test_z390_log.py` | Registers and CC from a z390 abend dump (default run) |
 | `tests/z390/test_macro_language_differential.py` | The macro-language programs against z390; z390's attribute differences pinned (`-m z390`) |
