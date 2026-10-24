@@ -30,6 +30,7 @@ from hlasm_asg.program.literal_pool import LiteralPool
 from hlasm_asg.program.machine_statement import MachineStatement
 from hlasm_asg.program.macro_origin import MacroOrigin
 from hlasm_asg.program.mask_operand import MaskOperand
+from hlasm_asg.program.mnote_level import MnoteLevel
 from hlasm_asg.program.named_entry import NamedEntry
 from hlasm_asg.program.omitted_nominal import OmittedNominal
 from hlasm_asg.program.open_code_origin import OpenCodeOrigin
@@ -481,10 +482,11 @@ class TestProgramModel:
             Diagnostic(
                 code="MNOTE",
                 severity=Severity.WARNING,
-                message="4,CAREFUL",
+                message="CAREFUL",
                 file=WAVE4_SOURCE,
                 line=3,
                 related=(RelatedLocation(file=WAVE4_SOURCE, line=9),),
+                mnote=MnoteLevel(kind="LEVEL", level=4),
             ),
         )
 

@@ -36,8 +36,12 @@ from interpreter.ir import (
 )
 from interpreter.operator_kind import BinopKind, UnopKind
 from interpreter.path_name import NO_PATH_NAME, NoPathName, PathName
+from interpreter.project.coded_diagnostic import CodedDiagnostic
+from interpreter.project.comment_mnote import CommentMnote
+from interpreter.project.constant_diagnostic import ConstantDiagnostic
 from interpreter.project.diagnostic_place import DiagnosticPlace
 from interpreter.project.diagnostic_severity import DiagnosticSeverity
+from interpreter.project.severity_mnote import SeverityMnote
 from interpreter.project.types import ExportTable, ImportKind, ImportRef, ModuleUnit
 from interpreter.project.unit_diagnostic import UnitDiagnostic
 from interpreter.project.unit_format_error import UnitFormatError
@@ -83,6 +87,10 @@ _DATACLASSES: tuple[type, ...] = (
     ModuleUnit,
     UnitDiagnostic,
     DiagnosticPlace,
+    CodedDiagnostic,
+    SeverityMnote,
+    CommentMnote,
+    ConstantDiagnostic,
     FieldInfo,
     FunctionInfo,
     ClassInfo,

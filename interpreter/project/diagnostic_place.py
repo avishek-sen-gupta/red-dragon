@@ -8,7 +8,3 @@ from dataclasses import dataclass
 class DiagnosticPlace:
     file: str
     line: int
-
-    @property
-    def text(self) -> str:
-        return f"{self.file}:{self.line}"

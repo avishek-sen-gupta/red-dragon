@@ -10,6 +10,9 @@ from hlasm_asg.program.hlasm_program import HlasmProgram
 from hlasm_asg.program.length_unit import LengthUnit
 from hlasm_asg.program.literal_pool import LiteralPool
 from hlasm_asg.program.macro_origin import MacroOrigin
+from hlasm_asg.program.mnote_comment import MnoteComment
+from hlasm_asg.program.mnote_level import MnoteLevel
+from hlasm_asg.program.no_mnote import NoMnote
 from hlasm_asg.program.open_code_origin import OpenCodeOrigin
 from hlasm_asg.program.related_location import RelatedLocation
 from hlasm_asg.program.section import Section
@@ -17,8 +20,12 @@ from hlasm_asg.program.section_kind import SectionKind
 from hlasm_asg.program.severity import Severity
 from hlasm_asg.program.string_nominal import StringNominal
 from interpreter.hlasm.assembly_diagnostics import assembly_diagnostics
+from interpreter.project.coded_diagnostic import CodedDiagnostic
+from interpreter.project.comment_mnote import CommentMnote
+from interpreter.project.constant_diagnostic import ConstantDiagnostic
 from interpreter.project.diagnostic_place import DiagnosticPlace
 from interpreter.project.diagnostic_severity import DiagnosticSeverity
+from interpreter.project.severity_mnote import SeverityMnote
 from interpreter.project.unit_diagnostic import UnitDiagnostic
 from tests.covers import NotLanguageFeature, covers
 
@@ -91,41 +98,66 @@ def _dc(
 def _warning(line: int, message: str) -> UnitDiagnostic:
     return UnitDiagnostic(
         DiagnosticSeverity.WARNING,
+        ConstantDiagnostic(),
         message,
         DiagnosticPlace(SOURCE, line),
     )
 
 
+def _diagnostic(
+    code: str,
+    severity: Severity,
+    message: str,
+    file: str,
+    line: int,
+    mnote: MnoteLevel | MnoteComment | NoMnote,
+    related: tuple[RelatedLocation, ...] = (),
+) -> Diagnostic:
+    return Diagnostic(
+        code=code,
+        severity=severity,
+        message=message,
+        file=file,
+        line=line,
+        related=related,
+        mnote=mnote,
+    )
+
+
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_bridge_diagnostics_keep_text_and_call_stack_with_members_named():
+def test_bridge_diagnostics_keep_kind_text_and_call_stack_with_members_named():
     program = _program(
         diagnostics=(
-            Diagnostic(
-                code="MNOTE",
-                severity=Severity.WARNING,
-                message="4,CAREFUL",
-                file=MEMBER,
-                line=3,
-                related=(
+            _diagnostic(
+                "MNOTE",
+                Severity.WARNING,
+                "CAREFUL",
+                MEMBER,
+                3,
+                MnoteLevel(kind="LEVEL", level=4),
+                (
                     RelatedLocation(file="file:///lib/OUTER", line=2),
                     RelatedLocation(file=SOURCE, line=9),
                 ),
             ),
-            Diagnostic(
-                code="MNOTE",
-                severity=Severity.INFO,
-                message="2,NOTED",
-                file=SOURCE,
-                line=4,
-                related=(),
+            _diagnostic(
+                "MNOTE",
+                Severity.HINT,
+                "NOTED",
+                SOURCE,
+                4,
+                MnoteLevel(kind="LEVEL", level=0),
             ),
-            Diagnostic(
-                code="A300",
-                severity=Severity.HINT,
-                message="Apostrophes missing",
-                file="hlasm://0/AINSERT_1.hlasm",
-                line=1,
-                related=(),
+            _diagnostic(
+                "MNOTE", Severity.HINT, "ASIDE", SOURCE, 5, MnoteComment(kind="COMMENT")
+            ),
+            _diagnostic(
+                "A300",
+                Severity.WARNING,
+                "Apostrophes missing",
+                "hlasm://0/AINSERT_1.hlasm",
+                1,
+                NoMnote(kind="NONE"),
             ),
         )
     )
@@ -133,16 +165,24 @@ def test_bridge_diagnostics_keep_text_and_call_stack_with_members_named():
     assert assembly_diagnostics(program) == (
         UnitDiagnostic(
             DiagnosticSeverity.WARNING,
-            "MNOTE 4,CAREFUL",
+            SeverityMnote(4),
+            "CAREFUL",
             DiagnosticPlace("GREET", 3),
             (DiagnosticPlace("OUTER", 2), DiagnosticPlace(SOURCE, 9)),
         ),
         UnitDiagnostic(
-            DiagnosticSeverity.INFO, "MNOTE 2,NOTED", DiagnosticPlace(SOURCE, 4)
+            DiagnosticSeverity.INFO,
+            SeverityMnote(0),
+            "NOTED",
+            DiagnosticPlace(SOURCE, 4),
         ),
         UnitDiagnostic(
-            DiagnosticSeverity.INFO,
-            "A300 Apostrophes missing",
+            DiagnosticSeverity.INFO, CommentMnote(), "ASIDE", DiagnosticPlace(SOURCE, 5)
+        ),
+        UnitDiagnostic(
+            DiagnosticSeverity.WARNING,
+            CodedDiagnostic("A300"),
+            "Apostrophes missing",
             DiagnosticPlace("hlasm://0/AINSERT_1.hlasm", 1),
         ),
     )

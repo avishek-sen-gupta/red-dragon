@@ -335,6 +335,8 @@ CAREFUL_MACRO = (
     b"         CAREFUL\n"
     b"         MNOTE 4,'MIND THE GAP'\n"
     b"         MNOTE 0,'ALL CLEAR'\n"
+    b"         MNOTE *,'ASIDE'\n"
+    b"         MNOTE 2,BARE\n"
     b"         MEND\n"
 )
 WARNED = (
@@ -406,6 +408,13 @@ def test_warnings_are_logged_and_logged_again_from_a_reused_unit(
             "CAREFUL:3: MNOTE 4,MIND THE GAP (called from __main__.asm:2)",
         ),
         (logging.INFO, "CAREFUL:4: MNOTE 0,ALL CLEAR (called from __main__.asm:2)"),
+        (logging.INFO, "CAREFUL:5: MNOTE *,ASIDE (called from __main__.asm:2)"),
+        (
+            logging.WARNING,
+            "CAREFUL:6: A300 Warning at MNOTE instruction: operand not properly"
+            " enclosed in quotes (called from __main__.asm:2)",
+        ),
+        (logging.INFO, "CAREFUL:6: MNOTE 2,BARE (called from __main__.asm:2)"),
         (logging.WARNING, "__main__.asm:5: EB'1E39' overflow"),
     ]
     assert (reused, lowered, _units(work)) == (first, first, 1)

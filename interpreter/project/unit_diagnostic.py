@@ -3,6 +3,7 @@
 
 from dataclasses import dataclass
 
+from interpreter.project.diagnostic_kind import DiagnosticKind
 from interpreter.project.diagnostic_place import DiagnosticPlace
 from interpreter.project.diagnostic_severity import DiagnosticSeverity
 
@@ -10,12 +11,7 @@ from interpreter.project.diagnostic_severity import DiagnosticSeverity
 @dataclass(frozen=True)
 class UnitDiagnostic:
     severity: DiagnosticSeverity
+    kind: DiagnosticKind
     message: str
     place: DiagnosticPlace
     stack: tuple[DiagnosticPlace, ...] = ()
-
-    @property
-    def text(self) -> str:
-        called = ", ".join(frame.text for frame in self.stack)
-        suffix = f" (called from {called})" if self.stack else ""
-        return f"{self.place.text}: {self.message}{suffix}"
