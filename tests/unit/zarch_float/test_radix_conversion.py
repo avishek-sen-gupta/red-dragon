@@ -4,10 +4,11 @@
 from collections.abc import Sequence
 
 from tests.covers import NotLanguageFeature, covers
-from tests.unit.zarch_float.bfp_bits import long_of, to_bits
+from tests.unit.zarch_float.bfp_bits import long_of
 from tests.unit.zarch_float.hfp_bits import image, short
 from zarch_float.bfp_format import LONG as BFP_LONG
 from zarch_float.bfp_format import SHORT as BFP_SHORT
+from zarch_float.bfp_image import bfp_image
 from zarch_float.bfp_value import BfpValue
 from zarch_float.condition import Condition
 from zarch_float.dfp_format import LONG as DFP_LONG
@@ -38,7 +39,7 @@ def _dfp(result: RadixResult) -> tuple[int, int]:
 
 def _bfp_bits(value: FloatValue) -> int:
     assert isinstance(value, BfpValue)
-    return to_bits(value)
+    return bfp_image(value)
 
 
 def _hfp_image(value: FloatValue) -> int:

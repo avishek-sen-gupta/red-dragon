@@ -14,7 +14,6 @@ from tests.unit.zarch_float.bfp_bits import (
     long_of,
     short_bits,
     short_of,
-    to_bits,
 )
 from zarch_float.bfp_arithmetic import (
     bfp_add,
@@ -33,6 +32,7 @@ from zarch_float.bfp_convert import (
     bfp_widened,
 )
 from zarch_float.bfp_format import EXTENDED, LONG, SHORT
+from zarch_float.bfp_image import bfp_image
 from zarch_float.bfp_result import BfpResult
 from zarch_float.bfp_value import BfpValue
 from zarch_float.condition import Condition
@@ -111,7 +111,7 @@ _LEAF = {
 def _leaf_bits(
     of: Callable[[float], BfpValue], operation: Binary, a: float, b: float
 ) -> int:
-    return to_bits(_LEAF[operation](of(a), of(b), NE).value)
+    return bfp_image(_LEAF[operation](of(a), of(b), NE).value)
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
@@ -127,11 +127,15 @@ def test_round_to_nearest_matches_host_binary64_and_binary32():
     assert [_leaf_bits(long_of, op, a, b) for op, a, b in LONG_CASES] == host_long
     assert [_leaf_bits(short_of, op, a, b) for op, a, b in SHORT_CASES] == host_short
     assert [
-        to_bits(bfp_square_root(long_of(x), NE).value) for x in ROOT_CASES
+        bfp_image(bfp_square_root(long_of(x), NE).value) for x in ROOT_CASES
     ] == host_roots
     assert [
-        to_bits(bfp_multiply_add(long_of(0.1), long_of(10.0), long_of(-1.0), NE).value),
-        to_bits(bfp_multiply_add(long_of(NMIN), long_of(0.5), long_of(DMIN), NE).value),
+        bfp_image(
+            bfp_multiply_add(long_of(0.1), long_of(10.0), long_of(-1.0), NE).value
+        ),
+        bfp_image(
+            bfp_multiply_add(long_of(NMIN), long_of(0.5), long_of(DMIN), NE).value
+        ),
     ] == host_fma
 
 
@@ -150,7 +154,7 @@ FIGURE_9_11_BINARY = {
 
 def _integral_bits(mode: RoundingMode) -> list[int]:
     return [
-        to_bits(bfp_round_to_integral(long_of(x), mode).value)
+        bfp_image(bfp_round_to_integral(long_of(x), mode).value)
         for x in FIGURE_9_11_INPUTS
     ]
 
@@ -172,7 +176,7 @@ def test_round_to_integral_follows_figure_9_11_binary_column():
 
 
 def _long(result: BfpResult) -> tuple[int, frozenset[Condition]]:
-    return to_bits(result.value), result.conditions
+    return bfp_image(result.value), result.conditions
 
 
 def _scaled(result: BfpResult) -> tuple[BfpValue, frozenset[Condition]]:
@@ -313,7 +317,7 @@ def _value(result: BfpResult) -> tuple[BfpValue, frozenset[Condition]]:
 
 
 def _short(result: BfpResult) -> tuple[int, frozenset[Condition]]:
-    return to_bits(result.value), result.conditions
+    return bfp_image(result.value), result.conditions
 
 
 def _extended(n: int) -> BfpValue:

@@ -8,8 +8,9 @@ Arithmetic, rounding and exception conditions for BFP (IEEE binary), HFP and DFP
 the Principles of Operation chapters 9 and 18-20. HLASM lowering reaches it through
 the builtins in `interpreter/hlasm/bfp_builtins.py`, `hfp_builtins.py` and `dfp_builtins.py`.
 
-- **No bytes.** Values are frozen records of sign, kind, significand and exponent. IR
-  encodes and decodes the bit images.
+- **Bytes only for constants.** Values are frozen records of sign, kind, significand and
+  exponent. At run time IR encodes and decodes the bit images. The packers below build the
+  images of E, D and L DC constants at assembly time, for `interpreter/hlasm/floating_point_constant.py`.
 - **Exact, then one rounding.** Results are computed as integers or `Fraction`s and
   rounded once into the target format. Host floats are test oracles only.
 - **Conditions are data.** A result carries the `Condition`s it raised. The caller
@@ -116,6 +117,16 @@ QUANTUM is raised as the PoO defines the quantum-exception condition: inexact, o
 finite result off the preferred quantum; DIVIDE's own four cases; and, for LOAD FP INTEGER,
 QUANTIZE and REROUND, a delivered quantum other than the source's. QUANTIZE, REROUND and
 LOAD FP INTEGER report only INVALID, INEXACT, INCREMENTED and QUANTUM.
+
+## Constant images
+
+| Function | Notes |
+|---|---|
+| `bfp_image` | `(value)`: sign, biased exponent, fraction. Works for any precision, so a short BFP constant with a 12-bit length is `BfpFormat(4, 127, …)` |
+| `hfp_image` | `(value, bits)`: the leftmost `bits` of the long layout, or of the extended layout above 64 bits. The low half's characteristic is the high one less 14, modulo 128. A zero fraction packs as the sign alone |
+| `dfp_image` | `(value)`: combination field, exponent continuation and DPD declets (PoO figures 20-1 and 20-32) |
+| `hfp_rounded`, `hfp_rounded_at` | `(fraction_bits, negative, magnitude, scale or exponent, mode)`: normalized and shifted right `scale` digits, or at a given exponent. A carry out of the fraction renormalizes. The caller checks the exponent range |
+| `dfp_fitted` | `(value, mode)`: a written coefficient and exponent rounded into the format with `decimal`'s `create_decimal`, so an exact value keeps its quantum, a large exponent folds down, and overflow and subnormals follow the method |
 
 ## Radix conversion
 

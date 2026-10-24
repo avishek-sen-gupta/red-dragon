@@ -1,12 +1,12 @@
 # pyright: standard
-"""DFP format, integral and fixed-point conversions (PoO chapter 20)."""
+"""DFP format, integral and fixed-point conversions (PoO chapter 20), and fitting a written value into its format."""
 
 from collections.abc import Callable, Mapping
 from dataclasses import replace
 from fractions import Fraction
 
 from zarch_float.condition import Condition, raised
-from zarch_float.dfp_context import to_decimal, to_integral
+from zarch_float.dfp_context import bounded, from_decimal, to_decimal, to_integral
 from zarch_float.dfp_format import EXTENDED, LONG, DfpFormat
 from zarch_float.dfp_nan import propagate_nan
 from zarch_float.dfp_quantum import constrained, quantum_differs, with_quantum
@@ -55,6 +55,10 @@ def _resized(
         FloatKind.FINITE: finite,
     }
     return resizes[value.kind]()
+
+
+def dfp_fitted(a: DfpValue, mode: RoundingMode) -> DfpValue:
+    return from_decimal(bounded(a.format, mode).create_decimal(to_decimal(a)), a.format)
 
 
 def dfp_load_rounded(a: DfpValue, target: DfpFormat, mode: RoundingMode) -> DfpResult:
