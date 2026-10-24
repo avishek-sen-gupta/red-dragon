@@ -1,11 +1,13 @@
 # pyright: standard
-"""HLASM compiled through AST, unit and linked files, each reused when already on disk."""
+"""HLASM compiled through AST, unit and linked files, each reused when already on disk; the unit's diagnostics are logged each time it is used."""
 
 from __future__ import annotations
 
 import dataclasses
 import hashlib
+import logging
 import tempfile
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -25,7 +27,10 @@ from interpreter.project.source_file import SourceFile
 from interpreter.project.start_up import START_UP_PATH, with_start_up
 from interpreter.project.types import LinkedProgram, ModuleUnit
 from interpreter.project.unit_codec import UnitCodec
+from interpreter.project.unit_diagnostic import UnitDiagnostic
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
+
+logger = logging.getLogger(__name__)
 
 _MAIN_PATH = Path("__main__.asm")
 _PROJECT_ROOT = Path("/")
@@ -60,8 +65,10 @@ class _Assembly:
 
     def unit(self) -> Path:
         target = self._artifact("unit")
+        codec = UnitCodec(IrCodec())
         if not target.exists():
-            UnitCodec(IrCodec()).write(self._module(), target)
+            codec.write(self._module(), target)
+        _report(codec.read(target).diagnostics)
         return target
 
     def linked(self) -> LinkedProgram:
@@ -86,6 +93,7 @@ class _Assembly:
             imports=(),
             entry_label=frontend.entry_label,
             program=frontend.entry_name,
+            diagnostics=frontend.diagnostics,
         )
 
     def _link(self, unit: ModuleUnit) -> LinkedProgram:
@@ -106,6 +114,10 @@ class _Assembly:
         return dataclasses.replace(
             linked, programs={unit.program: entry}, entry_func_label=entry
         )
+
+
+def _report(diagnostics: Sequence[UnitDiagnostic]) -> None:
+    _ = [logger.log(d.severity.value, d.text) for d in diagnostics]
 
 
 def _work_dir(given: Path | FreshWorkDir) -> Path:

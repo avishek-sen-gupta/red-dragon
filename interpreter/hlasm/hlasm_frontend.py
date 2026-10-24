@@ -8,6 +8,7 @@ from hlasm_asg.program.statement import Statement
 from interpreter.frontend import Frontend
 from interpreter.func_name import FuncName
 from interpreter.hlasm.abend import emit_abend
+from interpreter.hlasm.assembly_diagnostics import assembly_diagnostics
 from interpreter.hlasm.branch_dispatch import (
     emit_branch,
     emit_dispatch,
@@ -30,6 +31,7 @@ from interpreter.hlasm.storage_layout import section_allocation
 from interpreter.instructions import Branch, InstructionBase, Label_
 from interpreter.ir import CodeLabel
 from interpreter.namespace_resolver import NamespaceResolver
+from interpreter.project.unit_diagnostic import UnitDiagnostic
 from interpreter.refs.func_ref import FuncRef
 
 
@@ -44,6 +46,10 @@ class HlasmFrontend(Frontend):
     @property
     def entry_name(self) -> str:
         return self._entry.name
+
+    @property
+    def diagnostics(self) -> tuple[UnitDiagnostic, ...]:
+        return assembly_diagnostics(self._program)
 
     @property
     def entry_label(self) -> CodeLabel:
