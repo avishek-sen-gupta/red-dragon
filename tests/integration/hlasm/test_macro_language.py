@@ -1,6 +1,8 @@
 # pyright: standard
 """Macro-language programs assembled by che4z and run on the VM leave the values IBM's HLASM Language Reference gives."""
 
+from pathlib import Path
+
 import pytest
 
 from tests.covers import NotLanguageFeature, covers
@@ -22,7 +24,8 @@ def test_using_resolves_dsect_labeled_dependent_and_literal_addresses(case: str)
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 @pytest.mark.parametrize("case", list(programs.STDOUT_PROGRAMS))
-def test_macro_program_prints_the_reference_values(case: str):
+def test_macro_program_prints_the_reference_values(tmp_path: Path, case: str):
     source, stdout = programs.STDOUT_PROGRAMS[case]
+    syslib = programs.library_in(tmp_path / "lib", ".mac")
 
-    assert run_hlasm(source) == HlasmRun(0, "", stdout)
+    assert run_hlasm(source, syslib=[syslib]) == HlasmRun(0, "", stdout)

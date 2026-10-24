@@ -304,6 +304,12 @@ che4z runs the macro language; the bridge exports only the ordinary statements i
 generates. `tests/integration/hlasm/macro_language_programs.py` holds one program per
 feature, run on the VM and, under `tests/z390/`, in z390. Covered:
 
+- Nested and inline macro definitions, `&SYSNDX` labels, AIF/AGO loops under ACTR, ANOP.
+- GBLx and LCLx scope; SETA, SETB and SETC expressions with bitwise operators,
+  substrings, duplication and UPPER; created (`&(name)`) and subscripted SET symbols.
+- Positional parameters, `&K=` parameters with defaults, sublists, `&SYSLIST`, N' and K'.
+- Opcode substitution, OPSYN rename and delete, AREAD, AINSERT FRONT and BACK, COPY
+  from SYSLIB (`.mac` for us, `.CPY` for z390).
 - DSECTs with USING, labeled and dependent USING; S-constant literals whose pools
   are moved by LOCTR and ORG.
 - T', L', S', I', D' and O', and T' of literals.
