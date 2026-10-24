@@ -36,7 +36,10 @@ from interpreter.ir import (
 )
 from interpreter.operator_kind import BinopKind, UnopKind
 from interpreter.path_name import NO_PATH_NAME, NoPathName, PathName
+from interpreter.project.diagnostic_place import DiagnosticPlace
+from interpreter.project.diagnostic_severity import DiagnosticSeverity
 from interpreter.project.types import ExportTable, ImportKind, ImportRef, ModuleUnit
+from interpreter.project.unit_diagnostic import UnitDiagnostic
 from interpreter.project.unit_format_error import UnitFormatError
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
@@ -78,6 +81,8 @@ _DATACLASSES: tuple[type, ...] = (
     ImportRef,
     ExportTable,
     ModuleUnit,
+    UnitDiagnostic,
+    DiagnosticPlace,
     FieldInfo,
     FunctionInfo,
     ClassInfo,
@@ -101,6 +106,7 @@ _ENUMS: tuple[type[enum.Enum], ...] = (
     FieldKind,
     ImportKind,
     Language,
+    DiagnosticSeverity,
 )
 _NATIVE = (bool, int, float, str)
 

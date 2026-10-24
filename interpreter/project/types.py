@@ -24,6 +24,7 @@ from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.func_name import FuncName
 from interpreter.instructions import InstructionBase
 from interpreter.ir import NO_LABEL, CodeLabel
+from interpreter.project.unit_diagnostic import UnitDiagnostic
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
 from interpreter.register import Register
@@ -102,6 +103,7 @@ class ModuleUnit:
     symbol_table: SymbolTable = field(default_factory=SymbolTable.empty)
     entry_label: CodeLabel = NO_LABEL
     program: str = NO_PROGRAM
+    diagnostics: tuple[UnitDiagnostic, ...] = ()
 
 
 NO_MODULE_UNIT = ModuleUnit(

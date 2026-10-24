@@ -1,10 +1,11 @@
 # pyright: standard
 """HLASM compiled to unit files, linked and run through the shared linker."""
 
+import logging
 import os
 import subprocess
 import sys
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -319,3 +320,53 @@ def test_a_bridge_named_without_a_path_is_found_on_path(tmp_path: Path):
 
     assert _assemble_elsewhere(tmp_path, on_path) == 1
     assert str(missing.value) == "hlasm_ast_bridge not found: no-such-hlasm-bridge"
+
+
+CAREFUL_MACRO = (
+    b"         MACRO\n"
+    b"         CAREFUL\n"
+    b"         MNOTE 4,'MIND THE GAP'\n"
+    b"         MNOTE 0,'ALL CLEAR'\n"
+    b"         MEND\n"
+)
+WARNED = (
+    b"MAIN     CSECT\n"
+    b"         CAREFUL\n"
+    b"         SR    15,15\n"
+    b"         BR    14\n"
+    b"BIG      DC    2EB'1E39'\n"
+    b"         END   MAIN\n"
+)
+
+
+def _logged(
+    caplog: pytest.LogCaptureFixture, step: Callable[[], object]
+) -> list[tuple[int, str]]:
+    start = len(caplog.records)
+    step()
+    return [(r.levelno, r.getMessage()) for r in caplog.records[start:]]
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_warnings_are_logged_and_logged_again_from_a_reused_unit(
+    tmp_path: Path, syslib: Path, caplog: pytest.LogCaptureFixture
+):
+    (syslib / "CAREFUL.mac").write_bytes(CAREFUL_MACRO)
+    work = tmp_path / "work"
+    caplog.set_level(logging.INFO, logger="interpreter.project.hlasm_compile")
+    parser = make_hlasm_parser([syslib])
+
+    first = _logged(caplog, lambda: compile_hlasm(WARNED, parser=parser, work_dir=work))
+    reused = _logged(
+        caplog, lambda: compile_hlasm(WARNED, parser=parser, work_dir=work)
+    )
+    lowered = _logged(
+        caplog, lambda: lower_hlasm_program(WARNED, parser=parser, work_dir=work)
+    )
+
+    assert first == [
+        (logging.WARNING, "CAREFUL:3: MNOTE MIND THE GAP (called from __main__.asm:2)"),
+        (logging.INFO, "CAREFUL:4: MNOTE ALL CLEAR (called from __main__.asm:2)"),
+        (logging.WARNING, "__main__.asm:5: EB'1E39' overflow"),
+    ]
+    assert (reused, lowered, _units(work)) == (first, first, 1)
