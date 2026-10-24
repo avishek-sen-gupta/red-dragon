@@ -10,6 +10,7 @@ from interpreter.hlasm.hlasm_constants import (
     PARM_LENGTH_BYTES,
     PARM_TEXT_BYTES,
 )
+from interpreter.hlasm.parm_not_encodable import ParmNotEncodable
 from interpreter.hlasm.parm_too_long import ParmTooLong
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.builtin import Builtin
@@ -19,10 +20,17 @@ from interpreter.vm.vm_types import BuiltinResult
 NO_PARM = ""
 
 
+def _ebcdic(character: str) -> int:
+    code = ord(character)
+    if code >= len(EbcdicTable.ASCII_TO_EBCDIC):
+        raise ParmNotEncodable(character)
+    return EbcdicTable.ASCII_TO_EBCDIC[code]
+
+
 def job_parm_builtins(parm: str) -> Mapping[FuncName, Builtin]:
     if len(parm) > PARM_TEXT_BYTES:
         raise ParmTooLong(parm)
-    text = EbcdicTable.ascii_to_ebcdic(parm.encode("ascii"))
+    text = bytes(map(_ebcdic, parm))
     image = [
         *len(text).to_bytes(PARM_LENGTH_BYTES, "big"),
         *text.ljust(PARM_TEXT_BYTES, b"\0"),

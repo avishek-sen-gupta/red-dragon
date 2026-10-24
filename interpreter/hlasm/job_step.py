@@ -9,6 +9,7 @@ from interpreter.hlasm.binder import Binder
 from interpreter.hlasm.binder_start_up import aligned_region, bound_address
 from interpreter.hlasm.entry_state import enter_registers
 from interpreter.hlasm.hlasm_constants import (
+    END_STEP_PREFIX,
     JOB_PARM_BUILTIN,
     JOB_STEP_PREFIX,
     LAST_PARAMETER_BIT,
@@ -41,8 +42,16 @@ from interpreter.var_name import VarName
 ARGUMENT_COUNT = FieldName("count")
 
 
-def job_step_label(name: str) -> CodeLabel:
-    return CodeLabel(f"func_{JOB_STEP_PREFIX}{name}_0")
+def job_step_label(stem: str) -> CodeLabel:
+    return CodeLabel(f"func_{stem}_0")
+
+
+def named_step(name: str) -> str:
+    return f"{JOB_STEP_PREFIX}{name}"
+
+
+def end_step(module: str) -> str:
+    return f"{END_STEP_PREFIX}{module}"
 
 
 def _parm_list(emitter: HlasmEmitter) -> Register:
@@ -56,10 +65,10 @@ def _parm_list(emitter: HlasmEmitter) -> Register:
     return region
 
 
-def _job_step(emitter: HlasmEmitter, name: str, entry: PlacedName) -> None:
-    end = CodeLabel(f"end_{JOB_STEP_PREFIX}{name}_1")
+def _job_step(emitter: HlasmEmitter, stem: str, entry: PlacedName) -> None:
+    end = CodeLabel(f"end_{stem}_1")
     emitter.emit_inst(Branch(label=end))
-    emitter.emit_inst(Label_(label=job_step_label(name)))
+    emitter.emit_inst(Label_(label=job_step_label(stem)))
     parameters = _parm_list(emitter)
     enter_registers(emitter, bound_address(emitter, entry), parameters)
     result = emitter.call(FuncName(f"{MODULE_FUNCTION_PREFIX}{entry.module}"), ())
@@ -106,9 +115,11 @@ def _stub_call(binder: Binder) -> IrFunction:
 
 def job_step_module(binder: Binder) -> tuple[tuple[InstructionBase, ...], IrFunction]:
     emitter = HlasmEmitter("hlasm_job.")
-    _ = [
-        _job_step(emitter, name, entry) for name, entry in binder.entry_points().items()
-    ]
+    steps = {
+        **{named_step(name): at for name, at in binder.entry_points().items()},
+        **{end_step(module): at for module, at in binder.module_entries().items()},
+    }
+    _ = [_job_step(emitter, stem, entry) for stem, entry in steps.items()]
     stub_call = _stub_call(binder)
     stub_call.define(emitter)
     return emitter.instructions(), stub_call

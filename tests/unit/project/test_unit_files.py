@@ -64,7 +64,7 @@ def test_a_unit_round_trips_through_its_file(tmp_path):
                     ControlSection("", 8),
                     CommonSection("SHARED", 20),
                     EntryLabel("HERE", "", 4),
-                    ExternalReference("STRONG"),
+                    ExternalReference("STRONG", 3),
                     WeakReference("WEAK"),
                     ExternalDummySection("PR", 12, 8),
                 ),

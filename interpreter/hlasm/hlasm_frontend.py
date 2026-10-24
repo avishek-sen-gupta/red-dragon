@@ -10,14 +10,12 @@ from interpreter.func_name import FuncName
 from interpreter.hlasm.abend import emit_abend
 from interpreter.hlasm.assembled_module import object_module
 from interpreter.hlasm.assembly_diagnostics import assembly_diagnostics
-from interpreter.hlasm.binder import Binder
-from interpreter.hlasm.binder_start_up import bound_start_up
 from interpreter.hlasm.branch_dispatch import (
     emit_branch,
     emit_dispatch,
     statement_label,
 )
-from interpreter.hlasm.entry_state import entry_state, resolve_entry
+from interpreter.hlasm.entry_state import resolve_entry
 from interpreter.hlasm.hlasm_constants import (
     ENTRY_ADDRESS_REGISTER,
     MODULE_FUNCTION_PREFIX,
@@ -25,7 +23,6 @@ from interpreter.hlasm.hlasm_constants import (
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.image_binding import bind_image
-from interpreter.hlasm.image_module import ImageModule
 from interpreter.hlasm.ir_function import define_called
 from interpreter.hlasm.lower_statement import lower_statement
 from interpreter.hlasm.machine_statements import MachineStatements
@@ -77,13 +74,6 @@ class HlasmFrontend(Frontend):
     @property
     def object_module(self) -> ObjectModule:
         return object_module(self._program)
-
-    def start_up_ir(self) -> tuple[InstructionBase, ...]:
-        alone = ImageModule(self._module, self._module, self.object_module)
-        return (
-            *bound_start_up(Binder((alone,))),
-            *entry_state(self._program, self._module),
-        )
 
     def lower(
         self,

@@ -36,7 +36,7 @@ compile_hlasm / link_hlasm_units (interpreter/project/hlasm_compile.py)
   ▼
 bind_image (interpreter/hlasm/image_binding.py)
      start-up module: machine state, one region per module, commons, stubs, TXT, RLD;
-     job-step module: one function per entry name, run with ProgramEntry(<name>)
+     job-step module: one function per SD/LD name (ProgramEntry(<name>)) and per module's END
 ```
 
 che4z supplies symbol values, lengths, location counters and USING resolution.
@@ -54,14 +54,14 @@ addresses.
 | `interpreter/frontends/__init__.py` | `get_hlasm_parser(syslib)`: the bridge parser with `hlasm-bridge/maclib/` first on SYSLIB |
 | `hlasm-bridge/maclib/` | Our macros: `WTO`, `ABEND`, `SAVE`, `RETURN`, `YREGS`, `GETMAIN`, `FREEMAIN`, `STORAGE`, `TIME`, and their `RD*` helpers |
 | `hlasm_asg/program/` | The bridge JSON models, one class per file. A D(X,B) storage operand also carries its address as written (`written`): the section and offset of an implicit address, before USING resolution, or the absolute displacement. Each DC/DS operand carries its offset and bit offset from che4z's location counter, its length unit (bytes, or bits for `L.n`), scale and exponent. `*` is the address of each constant: an address operand that names the location counter is exported per duplication copy (`ADDRESSES_PER_COPY`), each value evaluated at its own address. An S-constant is a base and displacement resolved through USING. `DC 0F` has an `OMITTED` nominal. CCW, CCW0 and CCW1 are statements with their command code, address, flags and count. Each literal carries the origin of the statement that first used it, a CCW's literals included. The program lists AMODE and RMODE statements, and each diagnostic its macro call stack (`related`) |
-| `interpreter/hlasm/hlasm_frontend.py` | `HlasmFrontend(program, module)`: `lower()`, `start_up_ir()`, `object_module`, `entry_name`, `entry_label` |
+| `interpreter/hlasm/hlasm_frontend.py` | `HlasmFrontend(program, module)`: `lower()`, `object_module`, `entry_name`, `entry_label` |
 | `interpreter/hlasm/machine.py` | GPR region (`__hlasm_gprs`, 8 bytes per register), `__hlasm_cc`, `__hlasm_pm`, `__hlasm_tod_last` (the last STCK value); the access-register region (`__hlasm_ars`, 4 bytes per register, all 0); the vector-register region (`__hlasm_vrs`, 16 bytes per register, all 0) and `__hlasm_fpc`, allocated after the sections so their addresses do not move |
 | `interpreter/hlasm/floating_point_constant.py`, `float_nominal.py` | E, D and L images, built at assembly time by `zarch_float`'s packers (Language Reference SC26-4940-09, pp. 148-158). `parse_float_nominal` turns each value into a `FloatNumber` (sign, coefficient, written exponent with the modifier, rounding mode) or a `FloatSpecial` once. No extension: HFP rounded by adding one in the first lost bit; a positive zero; the scale modifier shifts the fraction right; a length modifier keeps the leftmost bytes or bits, rounded. Out of range raises `DcCharacteristicOutOfRange` (ASMA064S); a scale or length that leaves no fraction, or cuts the characteristic, raises `DcPrecisionLost` (ASMA073E). H and Q: rounding modes R1 (default), R4-R7, a signed zero, overflow to the largest magnitude, underflow denormalized or zero, and (MAX), (MIN), (DMIN). B: IEEE conversion under R4 (default), R1, R5-R7, into any length from 9/12/16 bits; overflow gives infinity or Nmax by mode; all seven special values, (INF) and the NaNs needing 11/14/18 bits (`DcLengthWrong`, ASMA068S: the manual gives the minimum, and ASMA068S is its message for a wrong length modifier). With one bit of precision a tie has no even significand; round to nearest even then takes the even image (biased exponent), our ruling. D: the written coefficient and exponent fitted under R8 (default) to R15, so an exact value keeps its quantum (IEEE 754-2008 conversion; the manual does not say). (NAN) and (QNAN) are the same quiet NaN. (MIN) is 1E-95/-383/-6143, the smallest normal number, and (DMIN) the smallest subnormal (ruling R60: p. 158 defines MIN only for BFP and HFP). LQ converts as LH. Exponents beyond ±20000 are clamped: every format overflows or underflows alike past them. With a type extension each value carries at most one `DcWarning` (overflow, then underflow, then inexact) on its `ConstantImage` or `BitLengthImage`, as pp. 127 and 156-157 warn; H saturation counts as overflow and denormalization as underflow. They are logged and kept in the unit file (see Diagnostics). Unextended HFP raises none |
 | `interpreter/hlasm/storage_layout.py` | Each section's DC and literal pieces at their offsets: constant images, address slots and external slots |
 | `interpreter/hlasm/binder.py`, `binder_start_up.py`, `job_step.py`, `image_binding.py` | The binder (see Binder) |
-| `interpreter/hlasm/job_parm_builtins.py` | `job_parm_builtins(parm)`: the job-step PARM, a run input of at most 100 characters (`ParmTooLong`), as a halfword length and EBCDIC text |
+| `interpreter/hlasm/job_parm_builtins.py` | `job_parm_builtins(parm)`: the job-step PARM, a run input of at most 100 characters (`ParmTooLong`), as a halfword length and EBCDIC text through `EbcdicTable`; a character it has no code for raises `ParmNotEncodable` |
 | `interpreter/hlasm/dc_encoding.py` | DC images: C, CA, CE, CU, X, B, F, FD, H, P, Z, A, AD, Y, V, VD, S, SY, and E, D, L with their extensions through `floating_point_constant.py`. Each operand is placed at the offset che4z exported; Python has no alignment table of its own, and alignment bytes inside a DC are zero. F, FD and H take fractions, a written exponent, the exponent and scale modifiers and the U prefix, and the scaled value is rounded to a whole number. A negative value rounds on its magnitude (-1.5 is -2); that is our reading of the Language Reference, which does not say. A written exponent that, with the exponent modifier, falls outside -85 to +75 raises `DcExponentOutOfRange` (ASMA071E) before any arithmetic. A value outside its length raises `DcValueOutOfRange` with the statement's line (ASMA072E); a literal gives the line that first used it. Y accepts -32768 to 65535 (a halfword read as signed or unsigned) and refuses anything else the same way, while A truncates at the left as IBM specifies. An S-constant in a literal resolves through the USING in force where its pool is assembled, whichever LOCTR the pool lands in. `*` in a literal is the instruction's address in every copy. Bit-length operands (`L.n`) pack from che4z's bit offset, each value in the next free bits (C, E, D and L from their high-order end, other types from the low-order end) and the last byte zero-filled. CCW and CCW0 are format-0 channel command words (24-bit address), CCW1 format 1 (31-bit); a relocatable or external data address is an RLD like an A-constant |
-| `interpreter/hlasm/entry_state.py` | Entry resolution and entry registers (R14 = `0xFF0` return sentinel, R13 = 72-byte save area, R15 = entry address, R1 = parameter list); `start_up_ir()` binds the assembly alone and sets them with R1 = 0, for tests that run a frontend without a link |
+| `interpreter/hlasm/entry_state.py` | Entry resolution and entry registers (R14 = `0xFF0` return sentinel, R13 = 72-byte save area, R15 = entry address, R1 = parameter list), set by the job step |
 | `interpreter/hlasm/branch_dispatch.py` | `hl_dispatch`: maps a branch address to a statement label; a miss abends `S0C1` |
 | `interpreter/hlasm/operands.py` | `reg_operand`, `mask_operand`, `optional_mask_operand`, `imm_operand`, `value_operand` (R, M or I), `storage_operand`, `reloc_operand`, `storage_length_operand`, `vec_reg_operand`, `vector_indexed_operand` (D(V,B), its own type), `optional_imm_operand`: typed operand access; a mismatch raises `HlasmLoweringError`. `statement_place` names a statement in messages |
 | `interpreter/hlasm/hlasm_lowering_error.py` | `HlasmLoweringError`: names the statement (mnemonic, section, offset, operand) and what was found |
@@ -232,7 +232,7 @@ The unit carries an `ObjectModule` (`interpreter/project/object_module.py`, buil
 
 `RelocationKind` also holds `PR_OFFSET` (Q), `CLASS_LENGTH` (J) and `PR_TOTAL` (CXD),
 which red-dragon-6uyp.96 produces. The bridge (program format 2) exports `entries`,
-`externals` as name and kind (`EXTRN` or `WXTRN`), and an external address's offset.
+`externals` as name, kind (`EXTRN` or `WXTRN`) and line, and an external address's offset.
 
 ### Binder
 
@@ -245,11 +245,14 @@ units' object modules once, at link. Start-up IR is not rebuilt from the AST.
 - **Names.** An RLD target resolves to a section of its own module, then to an SD or LD anywhere in
   the image, then to 0 for a WXTRN and to a stub for an EXTRN. Stubs are 8 bytes apart in one region
   (`__hlasm_stubs_low` to `__hlasm_stubs_high`); each unresolved EXTRN is logged once as a warning
-  (`UnresolvedExternal`, kept on the job-step module). Every RLD is applied after every module is
+  (`UnresolvedExternal`, kept on the job-step module) at the open-code line of its EXTRN, else of
+  its first use. An address in a DSECT is its offset, as TXT with no RLD (ruling R75). Every RLD is applied after every module is
   laid out. Only `ADDRESS` relocations are bound.
 - **Duplicates.** An SD or LD name in two units raises `DuplicateProgramInImage` naming both.
-- **Job step.** Each SD, LD and END name gets `func___hlasm_job_<NAME>_0` in the `__hlasm_job__`
-  module, registered in `programs`. It sets R1 to a one-entry VL list pointing at a halfword
+- **Job step.** Each SD and LD name gets `func___hlasm_job_<NAME>_0` in the `__hlasm_job__`
+  module, registered in `programs`; each module gets `func___hlasm_end_<module>_0` for its END
+  entry, which is not an external name (ruling R74). The image's `entry_func_label` is the first
+  unit's END step, so `compile_hlasm` enters its main source. A step sets R1 to a one-entry VL list pointing at a halfword
   length and up to 100 bytes of PARM text, R13 to a fresh 72-byte save area, R14 to `0xFF0` and
   R15 to the entry address, then calls the module function (`__hlasm_module_<module>`), which
   dispatches on R15.

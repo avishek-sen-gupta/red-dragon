@@ -16,8 +16,7 @@ from interpreter.hlasm.hlasm_constants import (
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.hlasm_entry import HlasmEntry
-from interpreter.instructions import AllocRegion, InstructionBase
-from interpreter.operator_kind import BinopKind
+from interpreter.instructions import AllocRegion
 from interpreter.register import Register
 
 
@@ -35,11 +34,6 @@ def resolve_entry(program: HlasmProgram) -> HlasmEntry:
             return HlasmEntry(first.name, first.name, 0)
 
 
-def entry_address(emitter: HlasmEmitter, entry: HlasmEntry) -> Register:
-    base = emitter.section_base(entry.section)
-    return emitter.binop(BinopKind.ADD, base, emitter.int_(entry.offset))
-
-
 def _save_area(emitter: HlasmEmitter) -> Register:
     region = emitter.fresh_reg()
     emitter.emit_inst(
@@ -55,11 +49,3 @@ def enter_registers(
     emitter.store_gr32(ENTRY_SAVE_AREA_REGISTER, _save_area(emitter))
     emitter.store_gr32(ENTRY_ADDRESS_REGISTER, entry)
     emitter.store_gr32(ENTRY_PARAMETER_REGISTER, parameters)
-
-
-def entry_state(program: HlasmProgram, module: str) -> tuple[InstructionBase, ...]:
-    emitter = HlasmEmitter("hlasm_entry.", module)
-    enter_registers(
-        emitter, entry_address(emitter, resolve_entry(program)), emitter.int_(0)
-    )
-    return emitter.instructions()

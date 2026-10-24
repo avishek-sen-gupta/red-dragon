@@ -1,5 +1,5 @@
 # pyright: standard
-"""The object module of an assembly: ESD from its sections, ENTRY names and external symbols, TXT and RLD from its placed constants, END from its entry point."""
+"""The object module of an assembly: ESD from its sections, ENTRY names and external symbols, TXT and RLD from its placed constants (an address in a DSECT is its offset, with no RLD), END from its entry point."""
 
 from hlasm_asg.program.default_entry import DefaultEntry
 from hlasm_asg.program.external_kind import ExternalKind
@@ -13,6 +13,7 @@ from interpreter.hlasm.address_slot import AddressSlot
 from interpreter.hlasm.constant_image import ConstantImage
 from interpreter.hlasm.entry_state import resolve_entry
 from interpreter.hlasm.external_slot import ExternalSlot
+from interpreter.hlasm.hlasm_constants import BITS_PER_BYTE
 from interpreter.hlasm.placed_piece import PlacedPiece
 from interpreter.hlasm.storage_layout import placed_pieces
 from interpreter.project.common_section import CommonSection
@@ -49,7 +50,7 @@ def _entry_label(program: HlasmProgram, name: str) -> EsdRecord:
 def _external(symbol: ExternalSymbol) -> EsdRecord:
     match symbol.kind:
         case ExternalKind.EXTRN:
-            return ExternalReference(symbol.name)
+            return ExternalReference(symbol.name, symbol.line)
         case ExternalKind.WXTRN:
             return WeakReference(symbol.name)
 
@@ -66,6 +67,16 @@ def _relocation(
         RelocationSign.PLUS,
         addend,
     )
+
+
+def _in_dummy(placed: PlacedPiece, dummies: frozenset[str]) -> PlacedPiece:
+    match placed.piece:
+        case AddressSlot(address=address, width=width) if address.section in dummies:
+            value = address.offset % (1 << (BITS_PER_BYTE * width))
+            image = ConstantImage(tuple(value.to_bytes(width, "big")))
+            return PlacedPiece(placed.section, placed.offset, image)
+        case _:
+            return placed
 
 
 def _text(placed: PlacedPiece) -> tuple[TextRecord, ...]:
@@ -99,7 +110,11 @@ def _end(program: HlasmProgram) -> ModuleEnd:
 
 def object_module(program: HlasmProgram) -> ObjectModule:
     sections = tuple(s for s in program.sections if s.kind != SectionKind.DSECT)
-    pieces = placed_pieces(program, frozenset(s.name for s in sections))
+    dummies = frozenset(s.name for s in program.sections) - {s.name for s in sections}
+    pieces = tuple(
+        _in_dummy(placed, dummies)
+        for placed in placed_pieces(program, frozenset(s.name for s in sections))
+    )
     return ObjectModule(
         esd=(
             *map(_section, sections),

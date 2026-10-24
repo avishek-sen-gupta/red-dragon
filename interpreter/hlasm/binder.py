@@ -66,12 +66,12 @@ def _exported(module: ImageModule) -> Mapping[str, PlacedName]:
     }
 
 
-def _ended(module: ImageModule) -> tuple[str, PlacedName]:
+def _ended(module: ImageModule) -> PlacedName:
     match module.object_module.end:
-        case NamedEnd() as named:
-            return named.name, PlacedName(module.name, named.section, named.offset)
-        case DefaultEnd() as default:
-            return default.section, PlacedName(module.name, default.section, 0)
+        case NamedEnd(section=section, offset=offset):
+            return PlacedName(module.name, section, offset)
+        case DefaultEnd(section=default):
+            return PlacedName(module.name, default, 0)
 
 
 def _refuse_unsupported(module: ImageModule) -> None:
@@ -172,11 +172,10 @@ class Binder:
         raise UnknownRelocationTarget(target, module.name)
 
     def entry_points(self) -> Mapping[str, PlacedName]:
-        return {
-            name: placed
-            for module in self.modules
-            for name, placed in (*_exported(module).items(), _ended(module))
-        }
+        return self._definitions
+
+    def module_entries(self) -> Mapping[str, PlacedName]:
+        return {module.name: _ended(module) for module in self.modules}
 
     def far_branch_table(self) -> tuple[FarBranchEntry, ...]:
         modules = tuple(
@@ -197,7 +196,7 @@ class Binder:
 
     def warnings(self) -> tuple[UnitDiagnostic, ...]:
         declared = {
-            r.name: module.file
+            r.name: DiagnosticPlace(module.file, r.line)
             for module in reversed(self.modules)
             for r in module.object_module.esd
             if isinstance(r, ExternalReference)
@@ -206,7 +205,7 @@ class Binder:
             UnitDiagnostic(
                 DiagnosticSeverity.WARNING,
                 UnresolvedExternal(name),
-                DiagnosticPlace(declared[name], 0),
+                declared[name],
             )
             for name in self.stubs
         )

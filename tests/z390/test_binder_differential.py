@@ -1,5 +1,5 @@
 # pyright: standard
-"""A V-constant naming another module's ENTRY reads that module's data, in RedDragon's binder and in z390's linker (lz390 autolinks the second module's object from SYSOBJ; z390 echoes the SYSOBJ option into its output, so only its return code and abend are compared)."""
+"""An A-constant naming a DSECT label holds its offset, and a V-constant naming another module's ENTRY reads that module's data, in RedDragon's binder and in z390's linker (lz390 autolinks the second module's object from SYSOBJ; z390 echoes the SYSOBJ option into its output, so only its return code and abend are compared)."""
 
 from pathlib import Path
 
@@ -13,7 +13,7 @@ from interpreter.project.source_file import SourceFile
 from interpreter.run import initial_vm_state, run_linked
 from interpreter.vm.builtins import compose_builtins, core_builtins
 from tests.covers import NotLanguageFeature, covers
-from tests.integration.hlasm.hlasm_helpers import MAX_STEPS, hlasm_run_of
+from tests.integration.hlasm.hlasm_helpers import MAX_STEPS, hlasm_run_of, run_hlasm
 from tests.integration.hlasm.hlasm_run import HlasmRun
 from tests.z390.z390_runner import Z390Runner
 
@@ -61,4 +61,27 @@ def test_a_v_constant_reads_another_modules_entry(z390: Z390Runner, tmp_path: Pa
     assert (_red_dragon(), (z390_run.return_code, z390_run.abend)) == (
         HlasmRun(return_code=42, abend="", stdout=""),
         (42, ""),
+    )
+
+
+DSECT_ADDRESS = (
+    "MAIN     CSECT\n"
+    "         USING MAIN,15\n"
+    "         L     15,ADDR\n"
+    "         BR    14\n"
+    "ADDR     DC    A(FLD)\n"
+    "D        DSECT\n"
+    "         DS    F\n"
+    "FLD      DS    F\n"
+    "         END   MAIN\n"
+)
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_an_address_in_a_dsect_is_its_offset(z390: Z390Runner, tmp_path: Path):
+    expected = HlasmRun(return_code=4, abend="", stdout="")
+
+    assert (run_hlasm(DSECT_ADDRESS), z390.run(DSECT_ADDRESS, tmp_path)) == (
+        expected,
+        expected,
     )
