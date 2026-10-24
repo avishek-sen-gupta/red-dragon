@@ -96,8 +96,11 @@ class _Assembly:
         codec.write(module, target)
         return module
 
+    def _name(self) -> str:
+        return module_prefix(self.program.path, _PROJECT_ROOT)
+
     def _module(self) -> ModuleUnit:
-        frontend = get_hlasm_frontend(self.parser.read(self.ast()))
+        frontend = get_hlasm_frontend(self.parser.read(self.ast()), self._name())
         ir = frontend.lower(self.program.source)
         return ModuleUnit(
             path=self.program.path,
@@ -110,10 +113,13 @@ class _Assembly:
             entry_label=frontend.entry_label,
             program=frontend.entry_name,
             diagnostics=frontend.diagnostics,
+            object_module=frontend.object_module,
         )
 
     def _link(self, unit: ModuleUnit) -> LinkedProgram:
-        start_up = get_hlasm_frontend(self.parser.read(self.ast())).start_up_ir()
+        start_up = get_hlasm_frontend(
+            self.parser.read(self.ast()), self._name()
+        ).start_up_ir()
         modules, graph = with_start_up(
             start_up, Language.HLASM, {unit.path: unit}, {unit.path: ()}
         )
@@ -182,17 +188,13 @@ def _work_dir(given: Path | FreshWorkDir) -> Path:
 
 
 def lower_hlasm_program(
-    source: bytes,
+    program: SourceFile,
     *,
     parser: HlasmAstParser,
     work_dir: Path,
     options: HlasmCompileOptions = _NO_INPUTS,
 ) -> tuple[Path, ...]:
-    return (
-        _Assembly(
-            SourceFile(_MAIN_PATH, source), parser, options, _work_dir(work_dir)
-        ).unit(),
-    )
+    return (_Assembly(program, parser, options, _work_dir(work_dir)).unit(),)
 
 
 def compile_hlasm(

@@ -34,6 +34,7 @@ from interpreter.project.hlasm_compile import (
     lower_hlasm_program,
 )
 from interpreter.project.hlasm_compile_options import HlasmCompileOptions
+from interpreter.project.source_file import SourceFile
 from interpreter.project.types import LinkedProgram
 from interpreter.run import run
 from tests.covers import NotLanguageFeature, covers
@@ -52,6 +53,7 @@ RETURNS_SEVEN = (
     "         END   HELLO\n"
 )
 SEVEN = RETURNS_SEVEN.encode("utf-8")
+MAIN = Path("__main__.asm")
 REPO_ROOT = Path(__file__).resolve().parents[3]
 AN_HOUR_AHEAD = timezone(timedelta(hours=1))
 
@@ -111,7 +113,9 @@ def test_second_compile_reuses_unit_files(tmp_path: Path, syslib: Path):
     first = _artifacts(work_dir)
     compile_hlasm(SEVEN, parser=make_hlasm_parser(), work_dir=work_dir)
     second = _artifacts(work_dir)
-    lowered = lower_hlasm_program(SEVEN, parser=make_hlasm_parser(), work_dir=work_dir)
+    lowered = lower_hlasm_program(
+        SourceFile(MAIN, SEVEN), parser=make_hlasm_parser(), work_dir=work_dir
+    )
     compile_hlasm(SEVEN, parser=make_hlasm_parser([syslib]), work_dir=work_dir)
 
     assert second == first
@@ -392,7 +396,10 @@ def test_warnings_are_logged_and_logged_again_from_a_reused_unit(
         caplog, lambda: compile_hlasm(WARNED, parser=cached, work_dir=work)
     )
     lowered = _logged(
-        caplog, lambda: lower_hlasm_program(WARNED, parser=cached, work_dir=work)
+        caplog,
+        lambda: lower_hlasm_program(
+            SourceFile(MAIN, WARNED), parser=cached, work_dir=work
+        ),
     )
 
     assert first == [

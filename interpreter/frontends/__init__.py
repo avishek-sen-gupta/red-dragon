@@ -91,8 +91,8 @@ def get_hlasm_parser(syslib: Sequence[Path] = ()) -> HlasmBridgeParser:
     return make_hlasm_parser((HLASM_MACLIB, *syslib))
 
 
-def get_hlasm_frontend(program: HlasmProgram) -> HlasmFrontend:
-    return HlasmFrontend(program)
+def get_hlasm_frontend(program: HlasmProgram, module: str) -> HlasmFrontend:
+    return HlasmFrontend(program, module)
 
 
 SUPPORTED_DETERMINISTIC_LANGUAGES: tuple[str, ...] = tuple(_FRONTEND_CLASSES.keys())

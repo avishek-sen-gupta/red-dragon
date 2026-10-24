@@ -16,7 +16,6 @@ from interpreter.hlasm.hlasm_constants import (
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.operands import reg_operand
 from interpreter.hlasm.statement_lowering import StatementLowering
-from interpreter.hlasm.storage_layout import section_var
 from interpreter.instructions import BranchIf, Label_
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import BinopKind
@@ -35,7 +34,7 @@ AMODE_31_CC = 1
 
 
 def _next_address(emitter: HlasmEmitter, statement: MachineStatement) -> Register:
-    base = emitter.load_var(section_var(statement.section))
+    base = emitter.section_base(statement.section)
     after = emitter.int_(statement.offset + statement.length)
     return emitter.binop(BinopKind.ADD, base, after)
 

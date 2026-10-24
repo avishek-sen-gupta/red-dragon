@@ -142,7 +142,9 @@ def run_hlasm_storage(
 ) -> tuple[HlasmMachine, bytes]:
     vm, stdout = _run_vm(source)
     start, end = span
-    loaded = vm.load(int(_var(vm, f"__hlasm_sect_{section}")) + start, end - start)
+    loaded = vm.load(
+        int(_var(vm, f"__hlasm_sect___main__.{section}")) + start, end - start
+    )
     assert isinstance(loaded, list)
     return _machine(vm, stdout), bytes(loaded)
 

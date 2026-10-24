@@ -8,6 +8,7 @@ from hlasm_asg.program.statement import Statement
 from interpreter.frontend import Frontend
 from interpreter.func_name import FuncName
 from interpreter.hlasm.abend import emit_abend
+from interpreter.hlasm.assembled_module import object_module
 from interpreter.hlasm.assembly_diagnostics import assembly_diagnostics
 from interpreter.hlasm.branch_dispatch import (
     emit_branch,
@@ -31,6 +32,7 @@ from interpreter.hlasm.storage_layout import section_allocation
 from interpreter.instructions import Branch, InstructionBase, Label_
 from interpreter.ir import CodeLabel
 from interpreter.namespace_resolver import NamespaceResolver
+from interpreter.project.object_module import ObjectModule
 from interpreter.project.unit_diagnostic import UnitDiagnostic
 from interpreter.refs.func_ref import FuncRef
 
@@ -38,8 +40,9 @@ from interpreter.refs.func_ref import FuncRef
 class HlasmFrontend(Frontend):
     """The assembly is injected already parsed; lower() ignores its source bytes."""
 
-    def __init__(self, program: HlasmProgram) -> None:
+    def __init__(self, program: HlasmProgram, module: str) -> None:
         self._program = program
+        self._module = module
         self._entry = resolve_entry(program)
         self._statements = MachineStatements(program.statements)
 
@@ -66,11 +69,15 @@ class HlasmFrontend(Frontend):
             },
         }
 
+    @property
+    def object_module(self) -> ObjectModule:
+        return object_module(self._program)
+
     def start_up_ir(self) -> tuple[InstructionBase, ...]:
         return (
             *machine_allocation(),
-            *section_allocation(self._program),
-            *entry_state(self._program),
+            *section_allocation(self._program, self._module),
+            *entry_state(self._program, self._module),
             *access_register_allocation(),
             *floating_point_allocation(),
         )
@@ -86,7 +93,7 @@ class HlasmFrontend(Frontend):
     def _lowered(
         self,
     ) -> tuple[tuple[InstructionBase, ...], tuple[ProgramFunction, ...]]:
-        emitter = HlasmEmitter()
+        emitter = HlasmEmitter(module=self._module)
         self._lower_entry(emitter)
         functions = define_called(emitter)
         return emitter.instructions(), functions

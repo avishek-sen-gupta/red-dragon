@@ -29,12 +29,13 @@ from interpreter.hlasm.dc_exponent_out_of_range import (
 )
 from interpreter.hlasm.dc_value_out_of_range import DcValueOutOfRange
 from interpreter.hlasm.encoded_value import EncodedValue
+from interpreter.hlasm.external_slot import ExternalSlot
 from interpreter.hlasm.floating_point_constant import floating_point_image
 from interpreter.hlasm.hlasm_constants import BITS_PER_BYTE
 from interpreter.hlasm.hlasm_lowering_error import HlasmLoweringError
 from interpreter.hlasm.unsupported_data_type import UnsupportedDataType
 
-type DcPiece = ConstantImage | AddressSlot
+type DcPiece = ConstantImage | AddressSlot | ExternalSlot
 type Encoder = Callable[[str, int], int]
 
 LINKER_TYPES_ISSUE = "red-dragon-6uyp.96"
@@ -279,7 +280,7 @@ def _address_piece(item: DcItem, value: Address, origin: Origin) -> DcPiece:
     if isinstance(value, RelocAddress):
         return AddressSlot(value, item.length)
     if isinstance(value, ExternalAddress):
-        return _image(0, item.length)
+        return ExternalSlot(value, item.length)
     return _image(_assembled_address(item, value, origin), item.length)
 
 

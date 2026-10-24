@@ -52,10 +52,10 @@ addresses.
 | `interpreter/frontends/__init__.py` | `get_hlasm_parser(syslib)`: the bridge parser with `hlasm-bridge/maclib/` first on SYSLIB |
 | `hlasm-bridge/maclib/` | Our macros: `WTO`, `ABEND`, `SAVE`, `RETURN`, `YREGS`, `GETMAIN`, `FREEMAIN`, `STORAGE`, `TIME`, and their `RD*` helpers |
 | `hlasm_asg/program/` | The bridge JSON models, one class per file. A D(X,B) storage operand also carries its address as written (`written`): the section and offset of an implicit address, before USING resolution, or the absolute displacement. Each DC/DS operand carries its offset and bit offset from che4z's location counter, its length unit (bytes, or bits for `L.n`), scale and exponent. `*` is the address of each constant: an address operand that names the location counter is exported per duplication copy (`ADDRESSES_PER_COPY`), each value evaluated at its own address. An S-constant is a base and displacement resolved through USING. `DC 0F` has an `OMITTED` nominal. CCW, CCW0 and CCW1 are statements with their command code, address, flags and count. Each literal carries the origin of the statement that first used it, a CCW's literals included. The program lists AMODE and RMODE statements, and each diagnostic its macro call stack (`related`) |
-| `interpreter/hlasm/hlasm_frontend.py` | `HlasmFrontend(program)`: `lower()`, `start_up_ir()`, `entry_name`, `entry_label` |
+| `interpreter/hlasm/hlasm_frontend.py` | `HlasmFrontend(program, module)`: `lower()`, `start_up_ir()`, `object_module`, `entry_name`, `entry_label` |
 | `interpreter/hlasm/machine.py` | GPR region (`__hlasm_gprs`, 8 bytes per register), `__hlasm_cc`, `__hlasm_pm`, `__hlasm_tod_last` (the last STCK value); the access-register region (`__hlasm_ars`, 4 bytes per register, all 0); the vector-register region (`__hlasm_vrs`, 16 bytes per register, all 0) and `__hlasm_fpc`, allocated after the sections so their addresses do not move |
 | `interpreter/hlasm/floating_point_constant.py`, `float_nominal.py` | E, D and L images, built at assembly time by `zarch_float`'s packers (Language Reference SC26-4940-09, pp. 148-158). `parse_float_nominal` turns each value into a `FloatNumber` (sign, coefficient, written exponent with the modifier, rounding mode) or a `FloatSpecial` once. No extension: HFP rounded by adding one in the first lost bit; a positive zero; the scale modifier shifts the fraction right; a length modifier keeps the leftmost bytes or bits, rounded. Out of range raises `DcCharacteristicOutOfRange` (ASMA064S); a scale or length that leaves no fraction, or cuts the characteristic, raises `DcPrecisionLost` (ASMA073E). H and Q: rounding modes R1 (default), R4-R7, a signed zero, overflow to the largest magnitude, underflow denormalized or zero, and (MAX), (MIN), (DMIN). B: IEEE conversion under R4 (default), R1, R5-R7, into any length from 9/12/16 bits; overflow gives infinity or Nmax by mode; all seven special values, (INF) and the NaNs needing 11/14/18 bits (`DcLengthWrong`, ASMA068S: the manual gives the minimum, and ASMA068S is its message for a wrong length modifier). With one bit of precision a tie has no even significand; round to nearest even then takes the even image (biased exponent), our ruling. D: the written coefficient and exponent fitted under R8 (default) to R15, so an exact value keeps its quantum (IEEE 754-2008 conversion; the manual does not say). (NAN) and (QNAN) are the same quiet NaN. (MIN) is 1E-95/-383/-6143, the smallest normal number, and (DMIN) the smallest subnormal (ruling R60: p. 158 defines MIN only for BFP and HFP). LQ converts as LH. Exponents beyond ±20000 are clamped: every format overflows or underflows alike past them. With a type extension each value carries at most one `DcWarning` (overflow, then underflow, then inexact) on its `ConstantImage` or `BitLengthImage`, as pp. 127 and 156-157 warn; H saturation counts as overflow and denormalization as underflow. They are logged and kept in the unit file (see Diagnostics). Unextended HFP raises none |
-| `interpreter/hlasm/storage_layout.py` | One region per section (`__hlasm_sect_<NAME>`) and its DC images; DC registers carry a per-piece index. Section bases are doubleword aligned: regions are allocated in order from address 4096, the 128-byte GPR region first, and each section is sized up to a doubleword multiple |
+| `interpreter/hlasm/storage_layout.py` | One region per section (`__hlasm_sect_<module>.<NAME>`, `section_variable.py`) and its DC images; DC registers carry a per-piece index. Section bases are doubleword aligned: regions are allocated in order from address 4096, the 128-byte GPR region first, and each section is sized up to a doubleword multiple |
 | `interpreter/hlasm/dc_encoding.py` | DC images: C, CA, CE, CU, X, B, F, FD, H, P, Z, A, AD, Y, V, VD, S, SY, and E, D, L with their extensions through `floating_point_constant.py`. Each operand is placed at the offset che4z exported; Python has no alignment table of its own, and alignment bytes inside a DC are zero. F, FD and H take fractions, a written exponent, the exponent and scale modifiers and the U prefix, and the scaled value is rounded to a whole number. A negative value rounds on its magnitude (-1.5 is -2); that is our reading of the Language Reference, which does not say. A written exponent that, with the exponent modifier, falls outside -85 to +75 raises `DcExponentOutOfRange` (ASMA071E) before any arithmetic. A value outside its length raises `DcValueOutOfRange` with the statement's line (ASMA072E); a literal gives the line that first used it. Y accepts -32768 to 65535 (a halfword read as signed or unsigned) and refuses anything else the same way, while A truncates at the left as IBM specifies. An S-constant in a literal resolves through the USING in force where its pool is assembled, whichever LOCTR the pool lands in. `*` in a literal is the instruction's address in every copy. Bit-length operands (`L.n`) pack from che4z's bit offset, each value in the next free bits (C, E, D and L from their high-order end, other types from the low-order end) and the last byte zero-filled. CCW and CCW0 are format-0 channel command words (24-bit address), CCW1 format 1 (31-bit); a relocatable data address is filled at start-up like an A-constant, and an external one raises `UnsupportedDataType` (red-dragon-6uyp.8) |
 | `interpreter/hlasm/entry_state.py` | Entry resolution and entry registers (R14 = `0xFF0` return sentinel, R13 = 72-byte save area, R15 = entry address) |
 | `interpreter/hlasm/branch_dispatch.py` | `hl_dispatch`: maps a branch address to a statement label; a miss abends `S0C1` |
@@ -201,7 +201,30 @@ three files to the work directory, each skipped when it already exists:
 the contents of every file in them, the bridge binary's hash and the supplied
 `names`. Editing a macro or rebuilding the bridge therefore gets new files. The clock
 is not in the digest: a reused unit keeps the time it was assembled at, as COBOL's
-`WHEN-COMPILED` does. `lower_hlasm_program` stops after the unit file.
+`WHEN-COMPILED` does. `lower_hlasm_program(program: SourceFile, ...)` stops after the unit
+file and names it after the source's path; `compile_hlasm` names its source `__main__.asm`.
+The module name is the path's stem, and qualifies every section variable
+(`__hlasm_sect_<module>.<section>`), so private code and same-named sections in two
+modules do not collide.
+
+### Object module
+
+The unit carries an `ObjectModule` (`interpreter/project/object_module.py`, built by
+`interpreter/hlasm/assembled_module.py`), the records of IBM's object-module format:
+
+| Record | Type | From |
+|---|---|---|
+| ESD SD, CM | `ControlSection`, `CommonSection` (name, length) | each CSECT, RSECT and COM in section order; private code is named "" |
+| ESD LD | `EntryLabel` (name, section, offset) | each ENTRY operand, in order |
+| ESD ER, WX | `ExternalReference`, `WeakReference` | EXTRN and V-constant names; WXTRN |
+| ESD PR/XD | `ExternalDummySection` (name, length, alignment) | none yet: the bridge does not export DXD (red-dragon-6uyp.96) |
+| TXT | `TextRecord` (section, offset, bytes) | each placed constant image |
+| RLD | `RelocationRecord` (section, offset, length, kind, target, sign, addend) | each A, Y or V address naming a section or an external symbol; kind `ADDRESS` |
+| END | `NamedEnd` (name, section, offset) or `DefaultEnd` (section) | END's operand, or the first CSECT |
+
+`RelocationKind` also holds `PR_OFFSET` (Q), `CLASS_LENGTH` (J) and `PR_TOTAL` (CXD),
+which red-dragon-6uyp.96 produces. The bridge (program format 2) exports `entries`,
+`externals` as name and kind (`EXTRN` or `WXTRN`), and an external address's offset.
 
 ## Diagnostics
 

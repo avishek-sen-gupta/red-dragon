@@ -98,8 +98,8 @@ def test_conditional_masks_test_the_cc_bit_then_branch_to_their_target():
         _shape(_lowered("BCR", (mask_operand(4), reg_operand(BASE)))),
     ] == [
         [*CC_TEST, *GPR_12, "+ reg", "& 2147483647", *DISPATCH],
-        [*CC_TEST, "LoadVar __hlasm_sect_T", "+ 40", *DISPATCH],
-        [*CC_TEST, "LoadVar __hlasm_sect_T", "+ 40", *DISPATCH],
+        [*CC_TEST, "LoadVar __hlasm_sect_.T", "+ 40", *DISPATCH],
+        [*CC_TEST, "LoadVar __hlasm_sect_.T", "+ 40", *DISPATCH],
         [
             *CC_TEST,
             *GPR_12,

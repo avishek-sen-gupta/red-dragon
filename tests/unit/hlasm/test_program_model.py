@@ -23,6 +23,8 @@ from hlasm_asg.program.diagnostic import Diagnostic
 from hlasm_asg.program.ds_item import DsItem
 from hlasm_asg.program.ds_statement import DsStatement
 from hlasm_asg.program.external_address import ExternalAddress
+from hlasm_asg.program.external_kind import ExternalKind
+from hlasm_asg.program.external_symbol import ExternalSymbol
 from hlasm_asg.program.hlasm_program import HlasmProgram
 from hlasm_asg.program.imm_operand import ImmOperand
 from hlasm_asg.program.length_unit import LengthUnit
@@ -132,7 +134,7 @@ def _in_hello(offset: int) -> RelocAddress:
 
 
 EXPECTED = HlasmProgram(
-    format=1,
+    format=2,
     sections=(Section(name="HELLO", kind=SectionKind.CSECT, length=52),),
     symbols=(
         _reloc("EXTR", "EXTR", 0, 1, "T"),
@@ -141,7 +143,8 @@ EXPECTED = HlasmProgram(
         _reloc("OUT", "HELLO", 25, 5, "C"),
     ),
     entry=NamedEntry(kind="NAMED", name="HELLO"),
-    externals=("EXTR",),
+    entries=(),
+    externals=(ExternalSymbol(name="EXTR", kind=ExternalKind.EXTRN),),
     statements=(
         _machine(
             0,
@@ -248,7 +251,7 @@ EXPECTED = HlasmProgram(
                         values=(
                             RelocAddress(kind="RELOC", section="HELLO", offset=20),
                             AbsAddress(kind="ABS", value=0),
-                            ExternalAddress(kind="EXTERNAL", name="EXTR"),
+                            ExternalAddress(kind="EXTERNAL", name="EXTR", offset=0),
                         ),
                     ),
                     **_placed(32),
@@ -284,7 +287,7 @@ def _loop_origin(line: int) -> OpenCodeOrigin:
 
 
 LOOP_EXPECTED = HlasmProgram(
-    format=1,
+    format=2,
     sections=(Section(name="MAIN", kind=SectionKind.CSECT, length=8),),
     symbols=(
         AbsSymbol(kind="ABS", name="FIVE", value=5, type="U", length=1),
@@ -292,6 +295,7 @@ LOOP_EXPECTED = HlasmProgram(
         _reloc("MAIN", "MAIN", 0, 1, "J"),
     ),
     entry=DefaultEntry(kind="DEFAULT"),
+    entries=(),
     externals=(),
     statements=(
         MachineStatement(
@@ -502,7 +506,7 @@ class TestProgramModel:
             HlasmProgram.model_validate_json(text.replace('"OPEN_CODE"', '"ELSEWHERE"'))
         with pytest.raises(ValidationError, match="Extra inputs"):
             HlasmProgram.model_validate_json(
-                text.replace('"format":1', '"format":1,"x":0')
+                text.replace('"format":2', '"format":2,"x":0')
             )
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)

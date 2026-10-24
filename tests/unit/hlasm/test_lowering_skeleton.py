@@ -119,7 +119,7 @@ def _low_words(vm: VMState) -> list[int]:
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_seed_program_lowers_to_labels_region_ops_and_dispatch():
-    frontend = HlasmFrontend(_program("seed_program.json"))
+    frontend = HlasmFrontend(_program("seed_program.json"), "M")
     ir = frontend.lower(b"")
     dispatch = _between(ir, "hl_dispatch", "end_hello_1")
     assert _labels(ir)[:5] + _labels(ir)[-2:] == [
@@ -155,9 +155,9 @@ def test_seed_program_lowers_to_labels_region_ops_and_dispatch():
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_seed_opcodes_branch_link_and_return_through_the_dispatch():
-    vm = _run(HlasmFrontend(_program("seed_branches.json")))
+    vm = _run(HlasmFrontend(_program("seed_branches.json"), "M"))
     words = _low_words(vm)
-    base = int(_var(vm, "__hlasm_sect_MAIN"))
+    base = int(_var(vm, "__hlasm_sect_M.MAIN"))
     gprs = int(_var(vm, "__hlasm_gprs"))
     back = base + 34
     assert [words[r] for r in (2, 3, 4, 5, 6, 7, 10, 11, 12, 14, 15)] == [
@@ -179,12 +179,12 @@ def test_seed_opcodes_branch_link_and_return_through_the_dispatch():
 
 
 def _miss(fixture: str) -> list[int | str]:
-    vm = _run(HlasmFrontend(_program(fixture)))
+    vm = _run(HlasmFrontend(_program(fixture), "M"))
     words = _low_words(vm)
     return [
         _var(vm, "__hlasm_abend"),
         words[15],
-        words[6] - int(_var(vm, "__hlasm_sect_MAIN")),
+        words[6] - int(_var(vm, "__hlasm_sect_M.MAIN")),
         words[6] - words[13],
     ]
 
@@ -193,7 +193,7 @@ def _miss(fixture: str) -> list[int | str]:
 def test_unknown_opcodes_and_dispatch_misses_abend_s0c1(
     caplog: pytest.LogCaptureFixture,
 ):
-    frontend = HlasmFrontend(_program("unknown_opcode.json"))
+    frontend = HlasmFrontend(_program("unknown_opcode.json"), "M")
     with caplog.at_level(logging.WARNING, logger="interpreter.hlasm.lower_statement"):
         vm = _run(frontend)
     assert frontend.entry_label == CodeLabel("func_odd_0")

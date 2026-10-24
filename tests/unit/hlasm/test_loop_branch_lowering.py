@@ -79,7 +79,7 @@ def _signed(modulus: int) -> list[str]:
 
 
 STORAGE_TARGET = [*_read(100, 4), "+ reg", "& 2147483647"]
-RELATIVE_TARGET = ["LoadVar __hlasm_sect_T", "+ 40"]
+RELATIVE_TARGET = ["LoadVar __hlasm_sect_.T", "+ 40"]
 DISPATCH = ["BranchIf", "StoreVar __hlasm_target reg", "Branch hl_dispatch"]
 COUNT_R4 = [*_read(36, 4), "- 1", f"% {WORD}", *_write(36, 4, WORD)]
 COUNT_R4_64 = [*_read(32, 8), "- 1", f"% {DOUBLEWORD}", *_write(32, 8, DOUBLEWORD)]

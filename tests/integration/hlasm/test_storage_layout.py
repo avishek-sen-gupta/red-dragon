@@ -12,7 +12,8 @@ from hlasm_asg.program.hlasm_program import HlasmProgram
 from hlasm_asg.program.reloc_symbol import RelocSymbol
 from interpreter.hlasm.dc_value_out_of_range import DcValueOutOfRange
 from interpreter.hlasm.machine import machine_allocation
-from interpreter.hlasm.storage_layout import section_allocation, section_var
+from interpreter.hlasm.section_variable import section_var
+from interpreter.hlasm.storage_layout import section_allocation
 from interpreter.hlasm.unsupported_data_type import UnsupportedDataType
 from interpreter.vm.vm_types import VMState
 from tests.covers import NotLanguageFeature, covers
@@ -128,11 +129,13 @@ def _assemble(source: bytes, tmp_path: Path) -> HlasmProgram:
 
 
 def _start(program: HlasmProgram) -> VMState:
-    return run_straight_line((*machine_allocation(), *section_allocation(program)), {})
+    return run_straight_line(
+        (*machine_allocation(), *section_allocation(program, "M")), {}
+    )
 
 
 def _base(vm: VMState, section: str) -> int:
-    return vm.current_frame.local_vars[section_var(section)].value
+    return vm.current_frame.local_vars[section_var("M", section)].value
 
 
 def _offset(program: HlasmProgram, name: str) -> int:
@@ -164,7 +167,7 @@ def test_address_constant_holds_runtime_address(tmp_path: Path):
         *[0] * 6,
         *[0, 0, 0, 5],
     ]
-    assert section_var("WORK") not in vm.current_frame.local_vars
+    assert section_var("M", "WORK") not in vm.current_frame.local_vars
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
@@ -209,7 +212,7 @@ def test_org_overlay_pieces_get_distinct_registers_and_the_later_piece_wins(
     tmp_path: Path,
 ):
     program = _assemble(OVERLAY_SOURCE, tmp_path)
-    ir = section_allocation(program)
+    ir = section_allocation(program, "M")
     results = [i.result_reg for i in ir if i.result_reg.is_present()]
     vm = _start(program)
 
@@ -251,7 +254,7 @@ def test_a_value_outside_its_length_refuses_naming_the_statement(
     program = _assemble(source, tmp_path)
 
     with pytest.raises(DcValueOutOfRange) as refused:
-        section_allocation(program)
+        section_allocation(program, "M")
 
     assert str(refused.value) == message
 
@@ -272,7 +275,7 @@ def test_a_channel_command_word_naming_an_external_symbol_refuses(tmp_path: Path
     program = _assemble(EXTERNAL_CHANNEL_COMMAND_SOURCE, tmp_path)
 
     with pytest.raises(UnsupportedDataType) as refused:
-        section_allocation(program)
+        section_allocation(program, "M")
 
     assert str(refused.value) == (
         "DC type CCW with an external data address is not supported yet — red-dragon-6uyp.8"

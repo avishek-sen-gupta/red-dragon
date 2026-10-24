@@ -1,5 +1,5 @@
 # pyright: standard
-"""An address constant naming an external symbol."""
+"""An address constant naming an external symbol, plus an offset from it."""
 
 from __future__ import annotations
 
@@ -13,3 +13,4 @@ class ExternalAddress(BaseModel):
 
     kind: Literal["EXTERNAL"]
     name: str
+    offset: int
