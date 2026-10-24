@@ -1,0 +1,13 @@
+         MACRO
+         RDPSTORE &LIST,&VL
+         LCLA  &I,&N,&OFF
+&N       SETA  N'&LIST
+.NEXT    ANOP
+&OFF     SETA  &I*4
+&I       SETA  &I+1
+         LA    14,&LIST(&I)
+         ST    14,&OFF.(,1)
+         AIF   (&I LT &N).NEXT
+         AIF   ('&VL' EQ '').DONE
+         OI    &OFF.(1),X'80'
+.DONE    MEND

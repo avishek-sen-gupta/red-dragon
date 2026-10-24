@@ -1,6 +1,7 @@
 # pyright: standard
 """Names and sizes of the HLASM machine model and its IR helpers."""
 
+from interpreter.field_name import FieldName
 from interpreter.func_name import FuncName
 from interpreter.ir import CodeLabel
 from interpreter.register import Register
@@ -14,6 +15,11 @@ VECTOR_REGISTERS_VAR = VarName("__hlasm_vrs")
 FPC_VAR = VarName("__hlasm_fpc")
 TOD_LAST_VAR = VarName("__hlasm_tod_last")
 ALLOCATIONS_VAR = VarName("__hlasm_allocations")
+NAMES_VAR = VarName("__hlasm_names")
+NAME_ADDRESS_FIELD = FieldName("address")
+NAME_LENGTH_FIELD = FieldName("length")
+PROGRAM_NAME_BYTES = 8
+PROGRAM_NAME_CODEC = "cp037"
 
 GPR_COUNT = 16
 GPR_BYTES = 8
@@ -47,6 +53,7 @@ LIST_GET = FuncName("__list_get")
 LIST_CONCAT = FuncName("__list_concat")
 BYTES_TO_STRING = FuncName("__bytes_to_string")
 STRING_SLICE = FuncName("__string_slice")
+STRING_FIND = FuncName("__string_find")
 STRING_ZFILL = FuncName("__string_zfill")
 STRING_CONCAT_PAIR = FuncName("__string_concat_pair")
 TO_STRING = FuncName("str")
@@ -108,6 +115,12 @@ ABEND_SVC = 13
 GETMAIN_FREEMAIN_SVC = 10
 TIME_SVC = 11
 STORAGE_SVC = 120
+LINK_SVC = 6
+LOAD_SVC = 8
+DELETE_SVC = 9
+PROGRAM_NOT_FOUND_ABEND = "S806"
+PROGRAM_NOT_FOUND_CODE = 0x00806000
+PROGRAM_NOT_FOUND_REASON = 4
 GETMAIN_FREEMAIN_ABEND = "SA0A"
 STORAGE_ABEND = "SA78"
 SVC_PARAMETER_REGISTER = 1

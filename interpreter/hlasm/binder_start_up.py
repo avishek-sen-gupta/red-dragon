@@ -1,5 +1,5 @@
 # pyright: standard
-"""The image's start-up IR, run once: the machine state, a bit per module for the far branch, one doubleword-aligned region per module with its sections' variables, one region per common section, the stub range, every TXT record and then every RLD."""
+"""The image's start-up IR, run once: the machine state, a bit per module for the far branch, one doubleword-aligned region per module with its sections' variables, one region per common section, the stub range, every TXT record, every RLD, and the names table LINK and LOAD read."""
 
 from collections.abc import Sequence
 
@@ -10,7 +10,12 @@ from interpreter.hlasm.hlasm_constants import (
     DOUBLEWORD_BYTES,
     LINKING_VAR,
     MODULE_BIT_PREFIX,
+    NAME_ADDRESS_FIELD,
+    NAME_LENGTH_FIELD,
+    NAMES_VAR,
     NO_ABEND,
+    PROGRAM_NAME_BYTES,
+    PROGRAM_NAME_CODEC,
     STUB_BYTES,
     STUBS_HIGH_VAR,
     STUBS_LOW_VAR,
@@ -27,7 +32,15 @@ from interpreter.hlasm.placed_name import PlacedName
 from interpreter.hlasm.section_variable import section_var
 from interpreter.hlasm.stub_name import StubName
 from interpreter.hlasm.weak_zero import WeakZero
-from interpreter.instructions import AllocRegion, Const, InstructionBase, StoreVar
+from interpreter.instructions import (
+    AllocRegion,
+    Const,
+    InstructionBase,
+    NewObject,
+    StoreField,
+    StoreIndex,
+    StoreVar,
+)
 from interpreter.operator_kind import BinopKind
 from interpreter.project.common_section import CommonSection
 from interpreter.project.relocation_record import RelocationRecord
@@ -160,6 +173,45 @@ def _dispatch_state(emitter: HlasmEmitter) -> None:
     ]
 
 
+def program_name_image(name: str) -> int:
+    return int.from_bytes(
+        name.ljust(PROGRAM_NAME_BYTES).encode(PROGRAM_NAME_CODEC), "big"
+    )
+
+
+def _name_entry(
+    emitter: HlasmEmitter, binder: Binder, named: tuple[str, PlacedName]
+) -> None:
+    name, placed = named
+    entry = emitter.fresh_reg()
+    emitter.emit_inst(NewObject(result_reg=entry))
+    fields = (
+        (NAME_ADDRESS_FIELD, bound_address(emitter, placed)),
+        (
+            NAME_LENGTH_FIELD,
+            emitter.int_(binder.layouts[placed.module].length // DOUBLEWORD_BYTES),
+        ),
+    )
+    _ = [
+        emitter.emit_inst(StoreField(obj_reg=entry, field_name=f, value_reg=v))
+        for f, v in fields
+    ]
+    emitter.emit_inst(
+        StoreIndex(
+            arr_reg=emitter.load_var(NAMES_VAR),
+            index_reg=emitter.int_(program_name_image(name)),
+            value_reg=entry,
+        )
+    )
+
+
+def _names(emitter: HlasmEmitter, binder: Binder) -> None:
+    table = emitter.fresh_reg()
+    emitter.emit_inst(NewObject(result_reg=table))
+    emitter.emit_inst(StoreVar(name=NAMES_VAR, value_reg=table))
+    _ = [_name_entry(emitter, binder, named) for named in binder.entry_points().items()]
+
+
 def _module_bits(emitter: HlasmEmitter, binder: Binder) -> None:
     _ = [
         emitter.emit_inst(
@@ -203,6 +255,7 @@ def bound_start_up(binder: Binder) -> tuple[InstructionBase, ...]:
     _module_bits(emitter, binder)
     _lay_out(emitter, binder)
     _load(emitter, binder)
+    _names(emitter, binder)
     registers = (*access_register_allocation(), *floating_point_allocation())
     _ = [emitter.emit_inst(inst) for inst in registers]
     return emitter.instructions()

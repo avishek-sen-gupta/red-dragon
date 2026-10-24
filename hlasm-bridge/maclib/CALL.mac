@@ -1,0 +1,41 @@
+         MACRO
+&NAME    CALL  &EP,&PLIST,&VL,&MF=I
+         GBLA  &RDRV
+         AIF   ('&VL' EQ '' OR '&VL' EQ 'VL').VLOK
+         MNOTE 8,'CALL: THIRD OPERAND MUST BE VL'
+         MEXIT
+.VLOK    AIF   ('&MF' EQ 'I').INLINE
+         AIF   ('&MF' EQ 'L').LIST
+         AIF   ('&MF(1)' EQ 'E' AND N'&MF EQ 2).EXEC
+         MNOTE 8,'CALL: MF MUST BE L OR (E,LIST)'
+         MEXIT
+.LIST    AIF   ('&PLIST' NE '').LISTOK
+         MNOTE 8,'CALL: MF=L NEEDS A PARAMETER LIST'
+         MEXIT
+.LISTOK  ANOP
+&NAME    RDPLIST &PLIST,&VL
+         MEXIT
+.EXEC    ANOP
+&NAME    DS    0H
+         RDSTLA 1,&MF(2)
+         AIF   ('&PLIST' EQ '').ENTRY
+         RDPSTORE &PLIST,&VL
+         AGO   .ENTRY
+.INLINE  ANOP
+&NAME    DS    0H
+         AIF   ('&PLIST' EQ '').ENTRY
+         RDPLIST &PLIST,&VL,INLINE
+.ENTRY   AIF   ('&EP' NE '').HAVEEP
+         MNOTE 8,'CALL: ENTRY MISSING'
+         MEXIT
+.HAVEEP  AIF   ('&EP'(1,1) EQ '(').REG
+         L     15,=V(&EP)
+         AGO   .BRANCH
+.REG     RDREGN &EP(1)
+         AIF   (&RDRV LT 0).BADREG
+         AIF   (&RDRV EQ 15).BRANCH
+         LR    15,&RDRV
+.BRANCH  BALR  14,15
+         MEXIT
+.BADREG  MNOTE 8,'CALL: INVALID REGISTER'
+         MEND

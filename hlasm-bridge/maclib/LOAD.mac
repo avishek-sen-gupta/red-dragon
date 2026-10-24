@@ -1,0 +1,12 @@
+         MACRO
+&NAME    LOAD  &EP=,&EPLOC=,&ERRET=
+         GBLB  &RDSTBAD
+&NAME    DS    0H
+         RDPGM LOAD,&EP,&EPLOC
+         AIF   (&RDSTBAD).OUT
+         AIF   ('&ERRET' NE '').ERRET
+         LA    15,0
+         AGO   .SVC
+.ERRET   LA    15,&ERRET
+.SVC     SVC   8
+.OUT     MEND

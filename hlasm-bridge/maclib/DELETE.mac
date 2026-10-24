@@ -1,0 +1,8 @@
+         MACRO
+&NAME    DELETE &EP=,&EPLOC=
+         GBLB  &RDSTBAD
+&NAME    DS    0H
+         RDPGM DELETE,&EP,&EPLOC
+         AIF   (&RDSTBAD).OUT
+         SVC   9
+.OUT     MEND

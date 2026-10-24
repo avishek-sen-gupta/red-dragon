@@ -1,0 +1,17 @@
+         MACRO
+&NAME    LINK  &EP=,&EPLOC=,&PARAM=,&VL=
+         GBLB  &RDSTBAD
+         AIF   ('&VL' EQ '' OR '&VL' EQ '1').VLOK
+         MNOTE 8,'LINK: VL MUST BE 1'
+         MEXIT
+.VLOK    ANOP
+&NAME    DS    0H
+         AIF   ('&PARAM' EQ '').NAME
+         AIF   ('&VL' EQ '').PLAIN
+         RDPLIST &PARAM,VL,INLINE
+         AGO   .NAME
+.PLAIN   RDPLIST &PARAM,,INLINE
+.NAME    RDPGM LINK,&EP,&EPLOC
+         AIF   (&RDSTBAD).OUT
+         SVC   6
+.OUT     MEND

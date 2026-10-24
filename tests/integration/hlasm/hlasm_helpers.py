@@ -119,6 +119,12 @@ def _entry(vm: VMState, entry: Pointer) -> tuple[int, int]:
     )
 
 
+def _names_table_objects(vm: VMState) -> int:
+    table = _var_value(vm, "__hlasm_names")
+    assert isinstance(table, Pointer)
+    return 1 + len(vm.heap_get(table.base).fields)
+
+
 def run_hlasm_allocations(
     source: str,
 ) -> tuple[HlasmRun, list[tuple[int, int]], int]:
@@ -127,7 +133,13 @@ def run_hlasm_allocations(
     assert isinstance(table, Pointer)
     pointers = [tv.value for tv in vm.heap_get(table.base).fields.values()]
     entries = sorted(_entry(vm, p) for p in pointers if isinstance(p, Pointer))
-    others = len(vm.heap_items()) - 1 - len(entries) - JOB_STEP_ARGUMENTS
+    others = (
+        len(vm.heap_items())
+        - 1
+        - len(entries)
+        - JOB_STEP_ARGUMENTS
+        - _names_table_objects(vm)
+    )
     return hlasm_run_of(vm, stdout), entries, others
 
 

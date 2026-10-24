@@ -59,6 +59,7 @@ addresses.
 | `interpreter/hlasm/floating_point_constant.py`, `float_nominal.py` | E, D and L images, built at assembly time by `zarch_float`'s packers (Language Reference SC26-4940-09, pp. 148-158). `parse_float_nominal` turns each value into a `FloatNumber` (sign, coefficient, written exponent with the modifier, rounding mode) or a `FloatSpecial` once. No extension: HFP rounded by adding one in the first lost bit; a positive zero; the scale modifier shifts the fraction right; a length modifier keeps the leftmost bytes or bits, rounded. Out of range raises `DcCharacteristicOutOfRange` (ASMA064S); a scale or length that leaves no fraction, or cuts the characteristic, raises `DcPrecisionLost` (ASMA073E). H and Q: rounding modes R1 (default), R4-R7, a signed zero, overflow to the largest magnitude, underflow denormalized or zero, and (MAX), (MIN), (DMIN). B: IEEE conversion under R4 (default), R1, R5-R7, into any length from 9/12/16 bits; overflow gives infinity or Nmax by mode; all seven special values, (INF) and the NaNs needing 11/14/18 bits (`DcLengthWrong`, ASMA068S: the manual gives the minimum, and ASMA068S is its message for a wrong length modifier). With one bit of precision a tie has no even significand; round to nearest even then takes the even image (biased exponent), our ruling. D: the written coefficient and exponent fitted under R8 (default) to R15, so an exact value keeps its quantum (IEEE 754-2008 conversion; the manual does not say). (NAN) and (QNAN) are the same quiet NaN. (MIN) is 1E-95/-383/-6143, the smallest normal number, and (DMIN) the smallest subnormal (ruling R60: p. 158 defines MIN only for BFP and HFP). LQ converts as LH. Exponents beyond ±20000 are clamped: every format overflows or underflows alike past them. With a type extension each value carries at most one `DcWarning` (overflow, then underflow, then inexact) on its `ConstantImage` or `BitLengthImage`, as pp. 127 and 156-157 warn; H saturation counts as overflow and denormalization as underflow. They are logged and kept in the unit file (see Diagnostics). Unextended HFP raises none |
 | `interpreter/hlasm/storage_layout.py` | Each section's DC and literal pieces at their offsets: constant images, address slots and external slots |
 | `interpreter/hlasm/binder.py`, `binder_start_up.py`, `job_step.py`, `image_binding.py`, `far_branch.py`, `unresolved_call.py` | The binder and the far branch (see Binder, Control Across Modules) |
+| `interpreter/hlasm/program_services.py` | SVC 6, 8 and 9: LINK, LOAD, DELETE |
 | `interpreter/hlasm_run_inputs/` | The HLASM run inputs, a sibling of `interpreter.hlasm` so `run()` can import it (the import contracts keep `interpreter.run` from `interpreter.hlasm`): `run_input_names.py` (builtin names, PARM area sizes), `run_input_builtins.py` (`run_input_builtins(clock, parm)`; `unsupplied_run_input_builtins()`, the host clock and an empty PARM, which `run()` adds under any builtins it is given) |
 | `interpreter/hlasm_run_inputs/job_parm_builtins.py` | `job_parm_builtins(parm)`: the job-step PARM, a run input of at most 100 characters (`ParmTooLong`), as a halfword length and EBCDIC text through `EbcdicTable`; a character it has no code for raises `ParmNotEncodable` |
 | `interpreter/hlasm/dc_encoding.py` | DC images: C, CA, CE, CU, X, B, F, FD, H, P, Z, A, AD, Y, V, VD, S, SY, and E, D, L with their extensions through `floating_point_constant.py`. Each operand is placed at the offset che4z exported; Python has no alignment table of its own, and alignment bytes inside a DC are zero. F, FD and H take fractions, a written exponent, the exponent and scale modifiers and the U prefix, and the scaled value is rounded to a whole number. A negative value rounds on its magnitude (-1.5 is -2); that is our reading of the Language Reference, which does not say. A written exponent that, with the exponent modifier, falls outside -85 to +75 raises `DcExponentOutOfRange` (ASMA071E) before any arithmetic. A value outside its length raises `DcValueOutOfRange` with the statement's line (ASMA072E); a literal gives the line that first used it. Y accepts -32768 to 65535 (a halfword read as signed or unsigned) and refuses anything else the same way, while A truncates at the left as IBM specifies. An S-constant in a literal resolves through the USING in force where its pool is assembled, whichever LOCTR the pool lands in. `*` in a literal is the instruction's address in every copy. Bit-length operands (`L.n`) pack from che4z's bit offset, each value in the next free bits (C, E, D and L from their high-order end, other types from the low-order end) and the last byte zero-filled. CCW and CCW0 are format-0 channel command words (24-bit address), CCW1 format 1 (31-bit); a relocatable or external data address is an RLD like an A-constant |
@@ -375,12 +376,20 @@ conventions but expand only to lowered opcodes:
 | `GETMAIN RU\|RC`, `FREEMAIN RU\|RC` | IBM's layout: R0 = length, R15 = subpool × 256 + flags (X'01' release, X'02' unconditional, X'04' page); `SVC 120`. `SP=(r)` takes the register's low byte (`LLCR`, `SLL`, `OILL`) |
 | `STORAGE OBTAIN\|RELEASE,LENGTH=,ADDR=[,SP=][,COND=][,BNDRY=][,LOC=]` | As the SVC 120 forms. OBTAIN stores R1 with `ST 1,addr`, or `LR r,1` for `ADDR=(r)`; RELEASE loads R1 from `ADDR` as FREEMAIN does from `A` |
 | `TIME [DEC\|BIN][,LINKAGE=SVC]` | `LA 1,2` (DEC) or `LA 1,1` (BIN), IBM's codes, then `SVC 11` |
+| `CALL ep\|(15)\|(r)[,(p,...)][,VL]` | `BRAS 1` around `DC A(p),...` (VL adds X'80000000' to the last word), `L 15,=V(ep)` or `LR 15,r`, `BALR 14,15` |
+| `CALL ,(p,...)[,VL],MF=L` | The list alone: `DC A(p),...` under the call's label |
+| `CALL ep,(p,...)[,VL],MF=(E,list\|(r))` | `LA 1,list` or `LR 1,r`, then `LA 14,p` and `ST 14,4i(,1)` per parameter, `OI` on the last for VL, then as above |
+| `LINK EP=\|EPLOC=[,PARAM=(p,...)][,VL=1]` | PARAM as CALL's inline list; R0 → the name (`BRAS 0` over `CL8'ep'`, `LA 0,addr` or `LR 0,r`); `SVC 6` |
+| `LOAD EP=\|EPLOC=[,ERRET=addr]` | R0 as LINK; R15 = `ERRET` address or 0; `SVC 8` |
+| `DELETE EP=\|EPLOC=` | R0 as LINK; `SVC 9` |
 
 `LOC` is accepted and ignored: storage is never constrained below 16 MB. `BNDRY` is `DBLWD`
 or `PAGE`, and `PAGE` only on the SVC 120 forms. Missing `LV`, `LENGTH`, `A` or `ADDR`,
 another type, `COND` other than `YES` or `NO`, `SP=(r)` outside 2-12, `SP` with
 `R,LV=(0)`, `LV=(1)` or `LENGTH=(1)` on a release, TIME types other than `DEC` and `BIN`,
-and `LINKAGE` other than `SVC` are `MNOTE 8`.
+and `LINKAGE` other than `SVC` are `MNOTE 8`. So are a CALL third operand other than `VL`, `MF`
+other than `L` or `(E,list)`, `MF=L` without a list, a missing entry or a bad register; LINK `VL`
+other than 1; and on LINK, LOAD and DELETE, no `EP` or `EPLOC`, both, or an `EP` over 8 characters.
 
 Registers may be numbers or `Rn`. A bad register, a third range entry, a second operand other than `T`, or
 an `RC` register other than 15 is an `MNOTE 8`, which refuses the assembly. Save areas
@@ -388,7 +397,7 @@ are the 72-byte format-0 area. The differential tests run against z390's `mac/` 
 identifier, so they expect its flag and R14/R15 slots to differ; the identifier layout rests on the VM tests.
 
 SVCs are lowered in IR over existing builtins; no SVC has a builtin of its own. The
-services use `dict_contains_key` and the TOD clock builtin.
+services use the table membership builtin, the string builtins and the TOD clock builtin.
 
 - **SVC 35** reads the text length from the list at R1, copies the text a byte at a
   time, decodes it from EBCDIC and writes it as one line with `println`.
@@ -412,6 +421,17 @@ services use `dict_contains_key` and the TOD clock builtin.
   are not lowered. R1 is then the date as packed
   `0CYYDDDF` (C is 0 for 19xx, 1 for 20xx). R15 is 0. No zone offset is applied, so local
   time is the TOD clock's UTC; leap seconds are ignored.
+- **SVC 6** (LINK) reads the 8-byte EBCDIC name at R0 and looks its image up in
+  `__hlasm_names`, a start-up object of the image's SD and LD names, each an entry of `address`
+  and `length` (the owning module's region in doublewords). Found, it keeps R2-R14, sets R14 to
+  `0xFF0` and R15 to the entry, and calls `__hlasm_far_branch` as a linking branch with nothing
+  below (Control Across Modules); then R2-R14 are restored and R15 is the program's. Missing, it
+  issues `CallWithMemory` on `__entry_<NAME>` (the name decoded and trimmed at run time), as for
+  an unresolved EXTRN, and R15 takes the result.
+- **SVC 8** (LOAD) sets R0 to the entry with bit 32 on, R1 to the length in doublewords (APF
+  byte 0) and R15 to 0. A missing name branches to the address in R15 (ERRET) with R1
+  `X'00806000'` and R15 4, IBM's code and reason for "not found"; with R15 0 it abends `S806`.
+- **SVC 9** (DELETE) sets R15 to 0 and does nothing else.
 - **Any other SVC number** logs the number and abends `S0C1`. This is a project
   choice, not z/OS behaviour.
 
@@ -1382,9 +1402,13 @@ layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.
   and the unit codec (red-dragon-fu6c). EX of a register-field target (RR, RX, RS, RI, RIL and
   the like) still expands up to 256 copies.
 - Q, J and CXD relocations and DXD are refused by the binder (`UnsupportedBinding`, red-dragon-6uyp.96).
-  A branch to another module is not yet a call or return (red-dragon-6uyp.13); only a linking
-  branch to an unresolved EXTRN's stub calls out. An LTR on an unresolved EXTRN sees its stub
-  address, not 0 (ruling R66).
+  An LTR on an unresolved EXTRN sees its stub address, not 0 (ruling R66).
+- LOAD returns the same copy every time: there is no fresh copy for a non-reusable module.
+  LINK and LOAD find only SD and LD names of the image; a LINK to a missing name calls
+  `__entry_<NAME>` with no arguments, its PARAM list unpassed. LINK passes R1 and R13 as they
+  are and hands back R2-R14; the pages at hand do not say whether R14 is a work register.
+  z390's LINK returns R15 as 0 and does not restore R2-R14; its test pins that (red-dragon-6uyp.74).
+  The SVC 6, 8 and 9 register protocol is ours, not IBM's expansion.
 - Machine-instruction bytes are not in section storage (a spec non-goal: self-modifying code), so `CLC` against code does not see them. EX finds its target at assembly instead.
 - An EX target written with an explicit base or an index, an EXRL to an absolute target, or one
   where no machine statement starts abends `S0C1` with a logged warning (red-dragon-6uyp.77). EX
@@ -1497,7 +1521,11 @@ layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.
 | `tests/integration/hlasm/test_storage_services.py` | `GETMAIN`/`FREEMAIN` R, RU, RC and `STORAGE` with `COND`, `BNDRY=PAGE`, register operands and subpools: two areas aligned, disjoint, written, read and released; `LV=(0)` with the subpool in R0 and `SP=(r)` matched by a literal `SP`; the last byte of a page-aligned area; bad releases abending `SA0A` and `SA78` with the table left as it was; `TIME` DEC and BIN on the fixed clock, by macro and hand-coded `SVC 11` with R1's code, flag bits ignored; operand refusals |
 | `tests/z390/test_storage_services_differential.py` | Alignment, disjointness, data and R15 against z390 (z390 sets R15 0 on GETMAIN R and FREEMAIN R); the shape of TIME's words against z390's wall clock; z390 reads a hand-coded SVC 11's format from R0 |
 | `tests/unit/hlasm/test_time_service.py` | TIME's words for TOD values across 1900, 2000 (leap day, day 366), 2023 and 2100 |
-| `tests/unit/hlasm/test_service_lowering.py` | SVC 10, 11 and 120 call only existing builtins and leave nothing symbolic |
+| `tests/unit/hlasm/test_service_lowering.py` | SVC 6, 8, 9, 10, 11 and 120 call only existing builtins (and LINK the far branch) and leave nothing symbolic |
+| `tests/integration/hlasm/test_far_branch.py` | A call through a V-constant and BALR; a return that skips a level; a linking branch into a module below; `B 4(,14)`; a plain branch out that calls; `BSM 0,14` to an R14 without the mode bit; an unowned address abending `S0C1` |
+| `tests/z390/test_far_branch_differential.py` | The call and the skipped-level return against z390 (SYSOBJ autolink) |
+| `tests/integration/hlasm/test_program_services.py` | CALL inline, `MF=L` and `MF=(E,list)` with VL; LOAD's R0 and R1, `CALL (15)`, DELETE; LINK with PARAM and VL restoring R2-R14; a missing name: LINK by name, LOAD `S806` and ERRET; operand refusals |
+| `tests/z390/test_program_services_differential.py` | CALL, LINK and LOAD return codes against z390; z390's LINK R15 pinned |
 | `tests/z390/test_foundation_differential.py` | Return code, WTO, user abend and assembly failure against z390 (`-m z390`) |
 | `tests/z390/test_z390_log.py` | Registers and CC from a z390 abend dump (default run) |
 | `tests/z390/test_macro_language_differential.py` | The macro-language programs against z390; z390's attribute differences pinned (`-m z390`) |

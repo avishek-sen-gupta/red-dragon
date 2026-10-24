@@ -1,0 +1,26 @@
+         MACRO
+         RDPGM &OWNER,&EP,&EPLOC
+         GBLB  &RDSTBAD
+&RDSTBAD SETB  1
+         AIF   ('&EP' NE '' AND '&EPLOC' NE '').BOTH
+         AIF   ('&EP' NE '').EP
+         AIF   ('&EPLOC' NE '').EPLOC
+         MNOTE 8,'&OWNER: EP OR EPLOC MISSING'
+         MEXIT
+.BOTH    MNOTE 8,'&OWNER: EP AND EPLOC BOTH GIVEN'
+         MEXIT
+.EP      AIF   (K'&EP GT 8).LONG
+&RDSTBAD SETB  0
+         BRAS  0,RDN&SYSNDX
+         DC    CL8'&EP'
+RDN&SYSNDX DS  0H
+         MEXIT
+.LONG    MNOTE 8,'&OWNER: EP LONGER THAN 8 CHARACTERS'
+         MEXIT
+.EPLOC   ANOP
+&RDSTBAD SETB  0
+         AIF   ('&EPLOC'(1,1) EQ '(').REG
+         LA    0,&EPLOC
+         MEXIT
+.REG     LR    0,&EPLOC(1)
+         MEND

@@ -311,6 +311,20 @@ GPR_STORE = ("WriteRegion", 4)
 SVC_10_GPR_ACCESSES = (GPR_LOAD, GPR_LOAD, GPR_STORE, GPR_LOAD)
 SVC_11_GPR_ACCESSES = (GPR_LOAD, GPR_STORE, GPR_STORE, GPR_STORE)
 SVC_120_GPR_ACCESSES = (GPR_LOAD, GPR_LOAD, GPR_STORE, GPR_LOAD, GPR_STORE)
+NAME_LOAD = ("LoadRegion", 8)
+KEPT_REGISTERS = 13
+SVC_6_ACCESSES = (
+    GPR_LOAD,
+    NAME_LOAD,
+    *(("LoadRegion", 8),) * KEPT_REGISTERS,
+    GPR_STORE,
+    GPR_STORE,
+    *(("WriteRegion", 8),) * KEPT_REGISTERS,
+    NAME_LOAD,
+    GPR_STORE,
+)
+SVC_8_ACCESSES = (GPR_LOAD, GPR_LOAD, NAME_LOAD, *(GPR_STORE,) * 5)
+SVC_9_ACCESSES = (GPR_STORE,)
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
@@ -361,9 +375,9 @@ def test_a_data_field_target_lowers_once_with_byte_one_from_r1():
         ),
         "SVC": (
             [],
-            [0x00, 0xF],
+            [0x00, 0xF, 0x80000000],
             [],
-            [35, 13, 10, 0, 11, 1, 120],
+            [35, 13, 10, 0, 11, 1, 120, 6, 8, 9],
             [
                 ("LoadRegion", 4),
                 ("LoadRegion", 4),
@@ -373,6 +387,9 @@ def test_a_data_field_target_lowers_once_with_byte_one_from_r1():
                 *SVC_10_GPR_ACCESSES,
                 *SVC_11_GPR_ACCESSES,
                 *SVC_120_GPR_ACCESSES,
+                *SVC_6_ACCESSES,
+                *SVC_8_ACCESSES,
+                *SVC_9_ACCESSES,
             ],
             False,
         ),

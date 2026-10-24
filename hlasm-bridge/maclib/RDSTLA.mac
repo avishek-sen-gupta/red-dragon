@@ -1,0 +1,7 @@
+         MACRO
+         RDSTLA &R,&FROM
+         AIF   ('&FROM'(1,1) EQ '(').REG
+         LA    &R,&FROM
+         MEXIT
+.REG     LR    &R,&FROM(1)
+         MEND
