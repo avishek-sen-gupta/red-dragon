@@ -1,5 +1,5 @@
 # pyright: standard
-"""Binds the HLASM units of an image into its start-up module and job-step module, and names each entry's job-step function."""
+"""Binds the HLASM units of an image, and the COBOL programs beside them, into its start-up module and job-step module, and names each entry's job-step function."""
 
 from collections.abc import Sequence
 from pathlib import Path
@@ -8,6 +8,7 @@ from interpreter.constants import Language
 from interpreter.func_name import FuncName
 from interpreter.hlasm.binder import Binder
 from interpreter.hlasm.binder_start_up import bound_start_up
+from interpreter.hlasm.cobol_program import CobolProgram
 from interpreter.hlasm.image_module import ImageModule
 from interpreter.hlasm.job_step import (
     end_step,
@@ -30,12 +31,18 @@ def image_module(unit: ModuleUnit) -> ImageModule:
     )
 
 
+def _cobol_program(unit: ModuleUnit) -> CobolProgram:
+    return CobolProgram(unit.program, unit.path.name, unit.using)
+
+
 def bind_image(units: Sequence[ModuleUnit]) -> BoundImage:
-    binder = Binder(tuple(map(image_module, units)))
+    cobol = tuple(u for u in units if u.language == Language.COBOL)
+    hlasm = tuple(u for u in units if u.language == Language.HLASM)
+    binder = Binder(tuple(map(image_module, hlasm)), tuple(map(_cobol_program, cobol)))
     ir, far_branch = job_step_module(binder)
     labels = {name: job_step_label(named_step(name)) for name in binder.entry_points()}
     ends = {
-        unit.path: job_step_label(end_step(image_module(unit).name)) for unit in units
+        unit.path: job_step_label(end_step(image_module(unit).name)) for unit in hlasm
     }
     prefix = module_prefix(JOB_STEP_PATH, _PROJECT_ROOT)
     return BoundImage(

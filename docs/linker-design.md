@@ -483,7 +483,14 @@ start-up module (machine state, layout, TXT, RLD, once) and a `__hlasm_job__` mo
 job-step function per SD or LD name, which `programs` maps each name to, plus one per unit
 entering at its END. `entry_func_label` is the first unit's END step, so `compile_hlasm`
 enters its main source. Link never reads an AST file. An SD or LD
-name in two units raises `DuplicateProgramInImage`. Unit diagnostics, and the binder's
+name in two units raises `DuplicateProgramInImage`.
+
+`link_hlasm_units` also takes COBOL unit files, making one mixed image. Its modules run in a
+fixed order: the COBOL run-unit allocation (`__cobol_start_up__`, only when a COBOL unit is
+present), the binder's start-up, the units in the order given, then the job-step module. The
+image's language is HLASM; `programs` holds each PROGRAM-ID beside the SD and LD names, and
+`entry_func_label` is the first HLASM unit's END step. One duplicate check runs over SD, LD and
+PROGRAM-ID names and names both units. Unit diagnostics, and the binder's
 unresolved-EXTRN warnings, are logged each time the image is used.
 
 ---

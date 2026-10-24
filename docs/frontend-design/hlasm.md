@@ -245,12 +245,13 @@ units' object modules once, at link. Start-up IR is not rebuilt from the AST.
   by 7 bytes so its base is doubleword aligned. Each CM name is one region at its largest length,
   shared by every module naming it. `__hlasm_sect_<module>.<section>` holds each address.
 - **Names.** An RLD target resolves to a section of its own module, then to an SD or LD anywhere in
-  the image, then to 0 for a WXTRN and to a stub for an EXTRN. Stubs are 8 bytes apart in one region
-  (`__hlasm_stubs_low` to `__hlasm_stubs_high`); each unresolved EXTRN is logged once as a warning
+  the image, then to a COBOL program's stub, then to 0 for a WXTRN and to a stub for an EXTRN. Stubs are 8 bytes apart in one region
+  (`__hlasm_stubs_low` to `__hlasm_stubs_high`), the COBOL programs' first; each unresolved EXTRN is logged once as a warning
   (`UnresolvedExternal`, kept on the job-step module) at the open-code line of its EXTRN, else of
   its first use. An address in a DSECT is its offset, as TXT with no RLD (ruling R75). Every RLD is applied after every module is
   laid out. Only `ADDRESS` relocations are bound.
-- **Duplicates.** An SD or LD name in two units raises `DuplicateProgramInImage` naming both.
+- **Duplicates.** An SD, LD or COBOL PROGRAM-ID name defined twice in the image raises
+  `DuplicateProgramInImage` naming both units (ruling R67).
 - **Job step.** Each SD and LD name gets `func___hlasm_job_<NAME>_0` in the `__hlasm_job__`
   module, registered in `programs`; each module gets `func___hlasm_end_<module>_0` for its END
   entry, which is not an external name (ruling R74). The image's `entry_func_label` is the first
@@ -259,8 +260,8 @@ units' object modules once, at link. Start-up IR is not rebuilt from the AST.
   R15 to the entry address, then calls the module function (`__hlasm_module_<module>`) with the
   entry address and an empty set of modules below.
 - **Far-branch table.** `Binder.far_branch_table()` lists (start, length, owner) for each module
-  and stub; owners are `ModuleOwner`, `UnresolvedOwner` and `CobolOwner` (red-dragon-6uyp.15 builds
-  the last). The job-step module's `__hlasm_far_branch` is generated from it (see Control Across
+  and stub; owners are `ModuleOwner`, `UnresolvedOwner` and `CobolOwner`, which holds the COBOL
+  program's name, unit file and USING signature. The job-step module's `__hlasm_far_branch` is generated from it (see Control Across
   Modules).
 
 ### Control Across Modules

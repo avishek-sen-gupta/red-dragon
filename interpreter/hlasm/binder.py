@@ -1,5 +1,5 @@
 # pyright: standard
-"""The names of an image: each module's layout, the common sections, what every name binds to, the stubs of unresolved EXTRNs, the job-step entry points and the far-branch table."""
+"""The names of an image: each module's layout, the common sections, what every name binds to, the stubs of COBOL programs and unresolved EXTRNs, the job-step entry points and the far-branch table."""
 
 from collections.abc import Mapping, Sequence
 from functools import cached_property
@@ -7,6 +7,8 @@ from itertools import accumulate
 from pathlib import Path
 
 from interpreter.hlasm.bound_name import BoundName
+from interpreter.hlasm.cobol_owner import CobolOwner
+from interpreter.hlasm.cobol_program import CobolProgram
 from interpreter.hlasm.far_branch_entry import FarBranchEntry
 from interpreter.hlasm.hlasm_constants import DOUBLEWORD_BYTES, STUB_BYTES
 from interpreter.hlasm.image_module import ImageModule
@@ -91,14 +93,25 @@ def _refuse_unsupported(module: ImageModule) -> None:
         raise UnsupportedBinding(unsupported[0], module.name)
 
 
-def _refuse_duplicates(modules: Sequence[ImageModule]) -> None:
+def _named_files(
+    modules: Sequence[ImageModule], programs: Sequence[CobolProgram]
+) -> tuple[tuple[str, str], ...]:
+    return (
+        *((name, module.file) for module in modules for name in _exported(module)),
+        *((program.name, program.file) for program in programs),
+    )
+
+
+def _refuse_duplicates(
+    modules: Sequence[ImageModule], programs: Sequence[CobolProgram]
+) -> None:
+    named = _named_files(modules, programs)
     clash = next(
         (
-            (name, modules[earlier].file, modules[later].file)
-            for later in range(len(modules))
+            (named[later][0], named[earlier][1], named[later][1])
+            for later in range(len(named))
             for earlier in range(later)
-            for name in _exported(modules[later])
-            if name in _exported(modules[earlier])
+            if named[earlier][0] == named[later][0]
         ),
         (),
     )
@@ -112,10 +125,15 @@ def _refuse_duplicates(modules: Sequence[ImageModule]) -> None:
 class Binder:
     """Raises on a name defined twice and on a record it does not bind yet."""
 
-    def __init__(self, modules: Sequence[ImageModule]) -> None:
-        _refuse_duplicates(modules)
+    def __init__(
+        self,
+        modules: Sequence[ImageModule],
+        programs: Sequence[CobolProgram] = (),
+    ) -> None:
+        _refuse_duplicates(modules, programs)
         _ = [_refuse_unsupported(module) for module in modules]
         self.modules = tuple(modules)
+        self.programs = {program.name: program for program in programs}
 
     @cached_property
     def layouts(self) -> Mapping[str, ModuleLayout]:
@@ -143,13 +161,20 @@ class Binder:
         }
 
     @cached_property
-    def stubs(self) -> Mapping[str, StubName]:
-        names = dict.fromkeys(
+    def _unresolved_names(self) -> tuple[str, ...]:
+        named = [
             r.name
             for module in self.modules
             for r in module.object_module.esd
-            if isinstance(r, ExternalReference) and r.name not in self._definitions
-        )
+            if isinstance(r, ExternalReference)
+            and r.name not in self._definitions
+            and r.name not in self.programs
+        ]
+        return tuple(n for at, n in enumerate(named) if n not in named[:at])
+
+    @cached_property
+    def stubs(self) -> Mapping[str, StubName]:
+        names = (*self.programs, *self._unresolved_names)
         return {name: StubName(name, index) for index, name in enumerate(names)}
 
     def resolve(self, module: ImageModule, target: str) -> BoundName:
@@ -159,9 +184,16 @@ class Binder:
             for r in esd
         ):
             return PlacedName(module.name, target, 0)
-        if target in self._definitions:
-            return self._definitions[target]
+        if target in self._bound_names:
+            return self._bound_names[target]
         return self._unresolved(module, target)
+
+    @cached_property
+    def _bound_names(self) -> Mapping[str, BoundName]:
+        return {
+            **{name: self.stubs[name] for name in self.programs},
+            **self._definitions,
+        }
 
     def _unresolved(self, module: ImageModule, target: str) -> BoundName:
         esd = module.object_module.esd
@@ -189,10 +221,15 @@ class Binder:
             if layout.offsets
         )
         stubs = tuple(
-            FarBranchEntry(stub, STUB_BYTES, UnresolvedOwner(stub.name))
+            FarBranchEntry(stub, STUB_BYTES, self._stub_owner(stub.name))
             for stub in self.stubs.values()
         )
         return (*modules, *stubs)
+
+    def _stub_owner(self, name: str) -> CobolOwner | UnresolvedOwner:
+        if name in self.programs:
+            return CobolOwner(self.programs[name])
+        return UnresolvedOwner(name)
 
     def warnings(self) -> tuple[UnitDiagnostic, ...]:
         declared = {
@@ -207,5 +244,5 @@ class Binder:
                 UnresolvedExternal(name),
                 declared[name],
             )
-            for name in self.stubs
+            for name in self._unresolved_names
         )

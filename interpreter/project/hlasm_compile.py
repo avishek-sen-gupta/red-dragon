@@ -1,5 +1,5 @@
 # pyright: standard
-"""HLASM compiled through AST, unit and linked files, each reused when already on disk; the unit's diagnostics are logged each time it is used."""
+"""HLASM compiled through AST, unit and linked files, each reused when already on disk; the unit's diagnostics are logged each time it is used. Link also takes COBOL unit files, binding them into one mixed image."""
 
 from __future__ import annotations
 
@@ -14,8 +14,9 @@ from pathlib import Path
 from hlasm_asg.assembly_inputs import AssemblyInputs
 from hlasm_asg.hlasm_ast_parser import HlasmAstParser
 from interpreter.constants import Language
-from interpreter.frontends import bind_image, get_hlasm_frontend
+from interpreter.frontends import bind_image, get_cobol_frontend, get_hlasm_frontend
 from interpreter.frontends.symbol_table import SymbolTable
+from interpreter.ir import CodeLabel
 from interpreter.project.coded_diagnostic import CodedDiagnostic
 from interpreter.project.comment_mnote import CommentMnote
 from interpreter.project.compiler import build_export_table
@@ -33,7 +34,7 @@ from interpreter.project.linker import link_every_module, module_prefix
 from interpreter.project.severity_mnote import SeverityMnote
 from interpreter.project.source_file import SourceFile
 from interpreter.project.start_up import START_UP_PATH
-from interpreter.project.types import LinkedProgram, ModuleUnit
+from interpreter.project.types import ExportTable, LinkedProgram, ModuleUnit
 from interpreter.project.unit_codec import UnitCodec
 from interpreter.project.unit_diagnostic import UnitDiagnostic
 from interpreter.project.unresolved_external import UnresolvedExternal
@@ -43,6 +44,7 @@ HLASM_FRONTEND_LOGGER = "interpreter.hlasm"
 logger = logging.getLogger(HLASM_FRONTEND_LOGGER)
 
 _MAIN_PATH = Path("__main__.asm")
+COBOL_START_UP_PATH = Path("__cobol_start_up__")
 _PROJECT_ROOT = Path("/")
 _NO_INPUTS = HlasmCompileOptions()
 
@@ -113,11 +115,36 @@ class _Assembly:
         )
 
 
+def _cobol_start_up(read: Sequence[ModuleUnit]) -> dict[Path, ModuleUnit]:
+    if all(unit.language != Language.COBOL for unit in read):
+        return {}
+    return {
+        COBOL_START_UP_PATH: ModuleUnit(
+            path=COBOL_START_UP_PATH,
+            language=Language.COBOL,
+            ir=get_cobol_frontend().start_up_ir(),
+            exports=ExportTable(),
+            imports=(),
+        )
+    }
+
+
+def _cobol_programs(read: Sequence[ModuleUnit]) -> dict[str, CodeLabel]:
+    return {
+        unit.program: unit.entry_label.namespace(
+            module_prefix(unit.path, _PROJECT_ROOT)
+        )
+        for unit in read
+        if unit.language == Language.COBOL
+    }
+
+
 def _link(units: Sequence[Path]) -> LinkedProgram:
     codec = UnitCodec(IrCodec())
     read = tuple(codec.read(path) for path in units)
     bound = bind_image(read)
     modules = {
+        **_cobol_start_up(read),
         START_UP_PATH: bound.start_up,
         **{unit.path: unit for unit in read},
         bound.job_step.path: bound.job_step,
@@ -131,10 +158,11 @@ def _link(units: Sequence[Path]) -> LinkedProgram:
         type_env_builder=TypeEnvironmentBuilder(),
         symbol_table=SymbolTable.empty(),
     )
+    first = next(unit for unit in read if unit.language == Language.HLASM)
     return dataclasses.replace(
         linked,
-        programs=dict(bound.programs),
-        entry_func_label=bound.module_entries[read[0].path],
+        programs={**_cobol_programs(read), **bound.programs},
+        entry_func_label=bound.module_entries[first.path],
     )
 
 

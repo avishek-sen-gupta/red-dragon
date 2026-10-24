@@ -98,7 +98,7 @@ def _owner_entry(owner: UnresolvedOwner | CobolOwner) -> VarName:
         case UnresolvedOwner(name=name):
             return VarName(f"{PROGRAM_ENTRY_PREFIX}{name.upper()}")
         case CobolOwner(program=program):
-            return VarName(f"{PROGRAM_ENTRY_PREFIX}{program.upper()}")
+            return VarName(f"{PROGRAM_ENTRY_PREFIX}{program.name.upper()}")
 
 
 def _call_by_name(emitter: HlasmEmitter, owner: UnresolvedOwner | CobolOwner) -> None:
