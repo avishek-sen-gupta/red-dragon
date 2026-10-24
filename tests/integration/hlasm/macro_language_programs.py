@@ -1,7 +1,9 @@
 # pyright: standard
 """Macro-language programs, one per feature, shared by the VM tests and the z390 differential tests."""
 
-from collections.abc import Mapping
+import logging
+from collections.abc import Mapping, Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 
 from tests.integration.hlasm.hlasm_machine import HlasmMachine
@@ -76,8 +78,51 @@ LIBRARY: Mapping[str, str] = {
         "         HELLO COPY\n"
         "         WTO   'FROM COPY'\n"
     ),
+    "SEQMEM": "         SEQ" + " " * 60 + "SEQ00500\n",
 }
 STDOUT_PROGRAMS: Mapping[str, tuple[str, str]] = {
+    "SYSECT and SYSLOC": (
+        "         MACRO\n"
+        "         WHERE\n"
+        "         GBLC  &LOCS\n"
+        "&LOCS    SETC  '&LOCS &SYSECT/&SYSLOC'\n"
+        "         MEND\n"
+        "         GBLC  &LOCS\n"
+        "MAIN     CSECT\n"
+        "         WHERE\n"
+        "PART2    LOCTR\n"
+        "         WHERE\n"
+        "OTHER    CSECT\n"
+        "         WHERE\n"
+        "PART3    LOCTR\n"
+        "         WHERE\n"
+        "MAIN     LOCTR\n"
+        "         WTO   'LOC&LOCS'\n"
+        "         SR    15,15\n"
+        "         BR    14\n"
+        "         END   MAIN\n",
+        "LOC MAIN/MAIN MAIN/PART2 OTHER/OTHER OTHER/PART3\n",
+    ),
+    "SYSSEQF and SYSSTMT from open code, a COPY member and after lookahead": (
+        "         MACRO\n"
+        "         SEQ\n"
+        "         GBLC  &SEQS\n"
+        "&SEQS    SETC  '&SEQS &SYSSEQF/&SYSSTMT'\n"
+        "         MEND\n"
+        "         GBLC  &SEQS\n"
+        "MAIN     CSECT\n"
+        "         SEQ                                                            SEQ00100\n"
+        "         COPY  SEQMEM\n"
+        "         AIF   (T'LATER EQ 'F').GO                                      SEQ00300\n"
+        ".GO      ANOP                                                           SEQ00400\n"
+        "         SEQ                                                            SEQ00600\n"
+        "         WTO   'SEQ&SEQS'\n"
+        "         SR    15,15\n"
+        "         BR    14\n"
+        "LATER    DC    F'1'\n"
+        "         END   MAIN\n",
+        "SEQ SEQ00100/00000010 SEQ00500/00000015 SEQ00600/00000021\n",
+    ),
     "nested and inline macros with SYSNDX labels": (
         "         MACRO\n"
         "         INNER &X\n"
@@ -389,6 +434,9 @@ Z390_STDOUT: Mapping[str, str] = {
         "FX T=F L=4 S=0 I=0 D=0\n"
         "FL T=D L=8 S=0 I=0 D=0\n"
     ),
+    "SYSSEQF and SYSSTMT from open code, a COPY member and after lookahead": (
+        "SEQ /00000008 /00000011 /00000013\n"
+    ),
     "type attribute of literals": "USED T=U\nUNUSED T=U\nUNUSEDC T=U\nLATER T=U\n",
 }
 
@@ -402,3 +450,45 @@ def library_in(directory: Path, suffix: str) -> Path:
     for name, text in LIBRARY.items():
         (directory / name).with_suffix(suffix).write_text(text, encoding="ascii")
     return directory
+
+
+SYSPARM_PROGRAM = (
+    "MAIN     CSECT\n"
+    "         WTO   'P=&SYSPARM;'\n"
+    "         SR    15,15\n"
+    "         BR    14\n"
+    "         END   MAIN\n"
+)
+SYSPARM_PRINTS: Mapping[str, str] = {"": "P=;\n", "ALPHA": "P=ALPHA;\n"}
+CLOCK_PROGRAM = (
+    "         MACRO\n"
+    "         STAMP\n"
+    "         WTO   '&SYSDATC &SYSTIME &SYSDATE'\n"
+    "         MEND\n"
+    "MAIN     CSECT\n"
+    "         STAMP\n"
+    "         SR    15,15\n"
+    "         BR    14\n"
+    "         END   MAIN\n"
+)
+CLOCK = datetime(2026, 3, 4, 5, 6, 7, tzinfo=UTC)
+CLOCK_PRINTS = "20260304 05.06 03/04/26\n"
+MNOTE_PROGRAM = (
+    "         MACRO\n"
+    "         NOTE  &WHAT\n"
+    "         MNOTE 4,'CHECK &WHAT'\n"
+    "         MNOTE *,'SEEN &WHAT'\n"
+    "         MEND\n"
+    "MAIN     CSECT\n"
+    "         NOTE  FIELD\n"
+    "         SR    15,15\n"
+    "         BR    14\n"
+    "         END   MAIN\n"
+)
+MNOTE_LOG: Sequence[tuple[int, str]] = (
+    (
+        logging.WARNING,
+        "__main__.asm:3: MNOTE 4,CHECK FIELD (called from __main__.asm:7)",
+    ),
+    (logging.INFO, "__main__.asm:4: MNOTE *,SEEN FIELD (called from __main__.asm:7)"),
+)

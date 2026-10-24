@@ -86,16 +86,20 @@ class Z390Runner:
     home: Path
     runner: SubprocessRunner
 
-    def run(self, source: str, tmp: Path) -> HlasmRun:
-        return hlasm_run_of_log(self._log(source, tmp))
+    def run(self, source: str, tmp: Path, options: Sequence[str] = ()) -> HlasmRun:
+        return hlasm_run_of_log(self._log(source, tmp, options))
 
     def run_machine(self, source: str, tmp: Path) -> HlasmMachine:
         return hlasm_machine_of_log(self._log(source, tmp))
 
-    def _log(self, source: str, tmp: Path) -> Sequence[str]:
+    def _log(
+        self, source: str, tmp: Path, options: Sequence[str] = ()
+    ) -> Sequence[str]:
         program = tmp / PROGRAM
         program.with_suffix(".MLC").write_text(source, encoding="ascii")
-        ran = self.runner.run([str(self.home / "bash" / "asmlg"), str(program)])
+        ran = self.runner.run(
+            [str(self.home / "bash" / "asmlg"), str(program), *options]
+        )
         log = program.with_suffix(".LOG")
         if not log.exists():
             err = program.with_suffix(".ERR").read_text(encoding="latin-1")

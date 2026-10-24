@@ -12,7 +12,6 @@ from pathlib import Path
 
 import pytest
 
-from hlasm_asg.assembly_clock import AssemblyClock
 from hlasm_asg.assembly_input import AssemblyInput
 from hlasm_asg.assembly_inputs import AssemblyInputs
 from hlasm_asg.hlasm_ast_parser import HlasmAstParser
@@ -38,6 +37,7 @@ from interpreter.project.hlasm_compile_options import HlasmCompileOptions
 from interpreter.project.types import LinkedProgram
 from interpreter.run import run
 from tests.covers import NotLanguageFeature, covers
+from tests.integration.hlasm.fixed_assembly_clock import FixedAssemblyClock
 from tests.integration.hlasm.hlasm_helpers import (
     MAX_STEPS,
     HlasmRun,
@@ -56,15 +56,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 AN_HOUR_AHEAD = timezone(timedelta(hours=1))
 
 
-@dataclass(frozen=True)
-class _FixedClock(AssemblyClock):
-    at: datetime
-
-    def now(self) -> datetime:
-        return self.at
-
-
-AT_HALF_PAST_MIDNIGHT = _FixedClock(
+AT_HALF_PAST_MIDNIGHT = FixedAssemblyClock(
     datetime(2026, 1, 2, 0, 30, 15, 123456, tzinfo=AN_HOUR_AHEAD)
 )
 
@@ -266,7 +258,7 @@ def test_unit_reuse_follows_inputs_syslib_members_and_bridge_but_not_the_clock(
 ):
     work = tmp_path / "work"
     parser = make_hlasm_parser([syslib])
-    later = _FixedClock(datetime(2027, 6, 1, 12, 0, tzinfo=AN_HOUR_AHEAD))
+    later = FixedAssemblyClock(datetime(2027, 6, 1, 12, 0, tzinfo=AN_HOUR_AHEAD))
     parm = HlasmCompileOptions({AssemblyInput.SYSPARM: "X"}, AT_HALF_PAST_MIDNIGHT)
     (syslib / "GREET.mac").write_bytes(
         b"         MACRO\n         GREET\n         MEND\n"
