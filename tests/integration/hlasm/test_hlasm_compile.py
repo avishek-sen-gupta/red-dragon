@@ -14,6 +14,8 @@ import pytest
 
 from hlasm_asg.assembly_clock import AssemblyClock
 from hlasm_asg.assembly_input import AssemblyInput
+from hlasm_asg.assembly_inputs import AssemblyInputs
+from hlasm_asg.hlasm_ast_parser import HlasmAstParser
 from hlasm_asg.hlasm_bridge_not_found import HlasmBridgeNotFound
 from hlasm_asg.hlasm_bridge_parser import (
     BRIDGE_ENV_VAR,
@@ -24,10 +26,16 @@ from hlasm_asg.hlasm_bridge_parser import (
 )
 from hlasm_asg.hlasm_parse_error import HlasmParseError
 from hlasm_asg.missing_syslib_directory import MissingSyslibDirectory
+from hlasm_asg.program.hlasm_program import HlasmProgram
 from hlasm_asg.real_subprocess_runner import RealSubprocessRunner
 from interpreter.constants import Language
-from interpreter.project.hlasm_compile import compile_hlasm, lower_hlasm_program
+from interpreter.project.hlasm_compile import (
+    HLASM_FRONTEND_LOGGER,
+    compile_hlasm,
+    lower_hlasm_program,
+)
 from interpreter.project.hlasm_compile_options import HlasmCompileOptions
+from interpreter.project.types import LinkedProgram
 from interpreter.run import run
 from tests.covers import NotLanguageFeature, covers
 from tests.integration.hlasm.hlasm_helpers import (
@@ -339,8 +347,35 @@ WARNED = (
 )
 
 
+class _AssemblyNotExpected(Exception):
+    pass
+
+
+@dataclass(frozen=True)
+class _CachedOnly(HlasmAstParser):
+    libraries: tuple[Path, ...]
+    bridge: str
+
+    @property
+    def syslib(self) -> tuple[Path, ...]:
+        return self.libraries
+
+    @property
+    def identity(self) -> str:
+        return self.bridge
+
+    def parse_to_file(
+        self, source: bytes, source_name: str, out_path: Path, inputs: AssemblyInputs
+    ) -> Path:
+        raise _AssemblyNotExpected(source_name)
+
+    def read(self, path: Path) -> HlasmProgram:
+        raise _AssemblyNotExpected(str(path))
+
+
 def _logged(
-    caplog: pytest.LogCaptureFixture, step: Callable[[], object]
+    caplog: pytest.LogCaptureFixture,
+    step: Callable[[], LinkedProgram | tuple[Path, ...]],
 ) -> list[tuple[int, str]]:
     start = len(caplog.records)
     step()
@@ -353,20 +388,24 @@ def test_warnings_are_logged_and_logged_again_from_a_reused_unit(
 ):
     (syslib / "CAREFUL.mac").write_bytes(CAREFUL_MACRO)
     work = tmp_path / "work"
-    caplog.set_level(logging.INFO, logger="interpreter.project.hlasm_compile")
+    caplog.set_level(logging.INFO, logger=HLASM_FRONTEND_LOGGER)
     parser = make_hlasm_parser([syslib])
+    cached = _CachedOnly(parser.syslib, parser.identity)
 
     first = _logged(caplog, lambda: compile_hlasm(WARNED, parser=parser, work_dir=work))
     reused = _logged(
-        caplog, lambda: compile_hlasm(WARNED, parser=parser, work_dir=work)
+        caplog, lambda: compile_hlasm(WARNED, parser=cached, work_dir=work)
     )
     lowered = _logged(
-        caplog, lambda: lower_hlasm_program(WARNED, parser=parser, work_dir=work)
+        caplog, lambda: lower_hlasm_program(WARNED, parser=cached, work_dir=work)
     )
 
     assert first == [
-        (logging.WARNING, "CAREFUL:3: MNOTE MIND THE GAP (called from __main__.asm:2)"),
-        (logging.INFO, "CAREFUL:4: MNOTE ALL CLEAR (called from __main__.asm:2)"),
+        (
+            logging.WARNING,
+            "CAREFUL:3: MNOTE 4,MIND THE GAP (called from __main__.asm:2)",
+        ),
+        (logging.INFO, "CAREFUL:4: MNOTE 0,ALL CLEAR (called from __main__.asm:2)"),
         (logging.WARNING, "__main__.asm:5: EB'1E39' overflow"),
     ]
     assert (reused, lowered, _units(work)) == (first, first, 1)

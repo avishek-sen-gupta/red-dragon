@@ -481,7 +481,7 @@ class TestProgramModel:
             Diagnostic(
                 code="MNOTE",
                 severity=Severity.WARNING,
-                message="CAREFUL",
+                message="4,CAREFUL",
                 file=WAVE4_SOURCE,
                 line=3,
                 related=(RelatedLocation(file=WAVE4_SOURCE, line=9),),
