@@ -18,6 +18,8 @@ from hlasm_asg.program.dc_statement import DcStatement
 from hlasm_asg.program.diagnostic import Diagnostic
 from hlasm_asg.program.length_unit import LengthUnit
 from hlasm_asg.program.macro_origin import MacroOrigin
+from hlasm_asg.program.mnote_level import MnoteLevel
+from hlasm_asg.program.no_mnote import NoMnote
 from hlasm_asg.program.open_code_origin import OpenCodeOrigin
 from hlasm_asg.program.related_location import RelatedLocation
 from hlasm_asg.program.reloc_address import RelocAddress
@@ -136,10 +138,11 @@ class TestBridgeParser:
             Diagnostic(
                 code="MNOTE",
                 severity=Severity.WARNING,
-                message="4,CAREFUL",
+                message="CAREFUL",
                 file=SOURCE_NAME,
                 line=3,
                 related=(RelatedLocation(file=SOURCE_NAME, line=9),),
+                mnote=MnoteLevel(kind="LEVEL", level=4),
             ),
         )
 
@@ -163,5 +166,6 @@ class TestBridgeParser:
             file=SOURCE_NAME,
             line=1,
             related=(),
+            mnote=NoMnote(kind="NONE"),
         )
         assert not (tmp_path / "program.json").exists()

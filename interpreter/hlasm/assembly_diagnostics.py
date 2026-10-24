@@ -11,6 +11,9 @@ from hlasm_asg.program.dc_statement import DcStatement
 from hlasm_asg.program.diagnostic import Diagnostic
 from hlasm_asg.program.hlasm_program import HlasmProgram
 from hlasm_asg.program.macro_origin import MacroOrigin
+from hlasm_asg.program.mnote_comment import MnoteComment
+from hlasm_asg.program.mnote_level import MnoteLevel
+from hlasm_asg.program.no_mnote import NoMnote
 from hlasm_asg.program.open_code_origin import OpenCodeOrigin
 from hlasm_asg.program.origin import Origin
 from hlasm_asg.program.severity import Severity
@@ -18,8 +21,13 @@ from interpreter.hlasm.bit_length_image import BitLengthImage
 from interpreter.hlasm.constant_image import ConstantImage
 from interpreter.hlasm.dc_encoding import encode_dc
 from interpreter.hlasm.dc_warning import DcWarning
+from interpreter.project.coded_diagnostic import CodedDiagnostic
+from interpreter.project.comment_mnote import CommentMnote
+from interpreter.project.constant_diagnostic import ConstantDiagnostic
+from interpreter.project.diagnostic_kind import DiagnosticKind
 from interpreter.project.diagnostic_place import DiagnosticPlace
 from interpreter.project.diagnostic_severity import DiagnosticSeverity
+from interpreter.project.severity_mnote import SeverityMnote
 from interpreter.project.unit_diagnostic import UnitDiagnostic
 
 _LIBRARY_SCHEME = "file"
@@ -42,10 +50,27 @@ def _place(file: str, line: int) -> DiagnosticPlace:
     return DiagnosticPlace(_named(file), line)
 
 
+def _mnote_kind(mnote: MnoteLevel | MnoteComment) -> DiagnosticKind:
+    match mnote:
+        case MnoteLevel(level=level):
+            return SeverityMnote(level)
+        case MnoteComment():
+            return CommentMnote()
+
+
+def _kind(diagnostic: Diagnostic) -> DiagnosticKind:
+    match diagnostic.mnote:
+        case NoMnote():
+            return CodedDiagnostic(diagnostic.code)
+        case mnote:
+            return _mnote_kind(mnote)
+
+
 def _bridge(diagnostic: Diagnostic) -> UnitDiagnostic:
     return UnitDiagnostic(
         _SEVERITIES[diagnostic.severity],
-        f"{diagnostic.code} {diagnostic.message}",
+        _kind(diagnostic),
+        diagnostic.message,
         _place(diagnostic.file, diagnostic.line),
         tuple(_place(frame.file, frame.line) for frame in diagnostic.related),
     )
@@ -76,6 +101,7 @@ def _generated_by(origin: Origin) -> str:
 def _constant(warning: DcWarning, origin: Origin) -> UnitDiagnostic:
     return UnitDiagnostic(
         DiagnosticSeverity.WARNING,
+        ConstantDiagnostic(),
         f"{warning.constant} {warning.kind.value}{_generated_by(origin)}",
         _place(origin.file, origin.line),
     )

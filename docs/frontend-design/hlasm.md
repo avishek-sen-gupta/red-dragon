@@ -217,10 +217,12 @@ the run. Two sources:
 
 - che4z's diagnostics: its warnings, and MNOTEs below severity 8. che4z classifies
   MNOTE 4-7 as warnings, 2-3 as info and 0-1 as hints. Warnings log at `WARNING`;
-  info and hints at `INFO`. The message is che4z's code, then its text. Our bridge
-  puts an MNOTE's severity before its text, as the listing does (`MNOTE 4,MIND THE
-  GAP`). che4z reads `MNOTE 'text'` and `MNOTE *,'text'` as severity 0. che4z's
-  codes are its own, not IBM's `ASMA` ids.
+  info and hints at `INFO`. Our bridge exports each diagnostic's MNOTE form as its
+  own field (`Diagnostic.mnote`): `MnoteLevel` with the severity, `MnoteComment`
+  for `MNOTE *,'text'` and `MNOTE 'text'` (che4z reads both as level 0; our fork
+  keeps the form), or `NoMnote`. The unit keeps it as the record's `kind`:
+  `SeverityMnote`, `CommentMnote`, or `CodedDiagnostic` with che4z's code.
+  che4z's codes are its own, not IBM's `ASMA` ids.
 - `DcWarning`s from E, D and L constants with a type extension, at `WARNING`, at the
   DC statement's line: `EB'1E39' overflow`. A macro-generated DC takes the call's
   line and names the macro (`EB'1E39' overflow in macro GEN`); a literal takes its
@@ -228,9 +230,11 @@ the run. Two sources:
   and duplication factor 0 included: HLASM checks their nominal values though it
   emits no object code for them (ruling R63).
 
-Each record (`UnitDiagnostic`) holds the severity, message, place and macro call
-stack, innermost call first, and logs as
-`CAREFUL:3: MNOTE 4,MIND THE GAP (called from __main__.asm:2)`. A SYSLIB member's
+Each record (`UnitDiagnostic`) holds the severity, kind, message, place and macro
+call stack, innermost call first. Only the log line renders them, as the listing
+shows an MNOTE: `CAREFUL:3: MNOTE 4,MIND THE GAP (called from __main__.asm:2)`,
+`MNOTE *,ASIDE` for a comment, `A300 <text>` for a coded diagnostic, and the
+constant's text (`EB'1E39' overflow`) for a DC warning. A SYSLIB member's
 `file://` URI is shown as the member name; open code keeps its source name.
 
 ## Assembly Inputs

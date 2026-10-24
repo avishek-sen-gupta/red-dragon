@@ -16,13 +16,18 @@ from hlasm_asg.hlasm_ast_parser import HlasmAstParser
 from interpreter.constants import Language
 from interpreter.frontends import get_hlasm_frontend
 from interpreter.frontends.symbol_table import SymbolTable
+from interpreter.project.coded_diagnostic import CodedDiagnostic
+from interpreter.project.comment_mnote import CommentMnote
 from interpreter.project.compiler import build_export_table
+from interpreter.project.constant_diagnostic import ConstantDiagnostic
+from interpreter.project.diagnostic_place import DiagnosticPlace
 from interpreter.project.fresh_work_dir import FRESH_WORK_DIR, FreshWorkDir
 from interpreter.project.hlasm_compile_options import HlasmCompileOptions
 from interpreter.project.hlasm_lowering_settings import HlasmLoweringSettings
 from interpreter.project.ir_codec import IrCodec
 from interpreter.project.linked_codec import LinkedCodec
 from interpreter.project.linker import link_every_module, module_prefix
+from interpreter.project.severity_mnote import SeverityMnote
 from interpreter.project.source_file import SourceFile
 from interpreter.project.start_up import START_UP_PATH, with_start_up
 from interpreter.project.types import LinkedProgram, ModuleUnit
@@ -124,8 +129,36 @@ class _Assembly:
         )
 
 
+def _mnote_severity(kind: SeverityMnote | CommentMnote) -> str:
+    match kind:
+        case SeverityMnote(level=level):
+            return str(level)
+        case CommentMnote():
+            return "*"
+
+
+def _headed(diagnostic: UnitDiagnostic) -> str:
+    match diagnostic.kind:
+        case CodedDiagnostic(code=code):
+            return f"{code} {diagnostic.message}"
+        case ConstantDiagnostic():
+            return diagnostic.message
+        case mnote:
+            return f"MNOTE {_mnote_severity(mnote)},{diagnostic.message}"
+
+
+def _at(place: DiagnosticPlace) -> str:
+    return f"{place.file}:{place.line}"
+
+
+def _rendered(diagnostic: UnitDiagnostic) -> str:
+    called = ", ".join(map(_at, diagnostic.stack))
+    suffix = f" (called from {called})" if diagnostic.stack else ""
+    return f"{_at(diagnostic.place)}: {_headed(diagnostic)}{suffix}"
+
+
 def _report(diagnostics: Sequence[UnitDiagnostic]) -> None:
-    _ = [logger.log(d.severity.value, d.text) for d in diagnostics]
+    _ = [logger.log(d.severity.value, _rendered(d)) for d in diagnostics]
 
 
 def _work_dir(given: Path | FreshWorkDir) -> Path:
