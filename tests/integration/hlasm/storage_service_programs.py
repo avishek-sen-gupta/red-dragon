@@ -221,8 +221,8 @@ type BadRelease = tuple[str, str, list[tuple[int, int]]]
 BAD_RELEASES: Mapping[str, BadRelease] = {
     "freemain_unknown_address": (
         bad_release(
-            "         GETMAIN R,LV=24\n         LA    2,8(,1)\n",
-            "         FREEMAIN R,LV=16,A=(2)\n",
+            "         GETMAIN R,LV=24\n",
+            "         LA    2,8(,2)\n         FREEMAIN R,LV=24,A=(2)\n",
         ),
         "SA0A",
         [(24, 0)],
@@ -253,8 +253,8 @@ BAD_RELEASES: Mapping[str, BadRelease] = {
     ),
     "freemain_ru_unknown_address": (
         bad_release(
-            "         GETMAIN RU,LV=24\n         LA    2,8(,1)\n",
-            "         FREEMAIN RU,LV=16,A=(2)\n",
+            "         GETMAIN RU,LV=24\n",
+            "         LA    2,8(,2)\n         FREEMAIN RU,LV=24,A=(2)\n",
         ),
         "SA78",
         [(24, 0)],
@@ -297,10 +297,13 @@ TIME = (
     "         LA    1,1\n"
     "         SVC   11\n"
     "         LR    9,0\n"
+    "         LA    1,X'09'\n"
+    "         SVC   11\n"
+    "         LR    10,0\n"
     "         ABEND 1\n"
     "         END\n"
 )
-TIME_CHECKED = (2, 3, 4, 5, 6, 7, 8, 9)
+TIME_CHECKED = (2, 3, 4, 5, 6, 7, 8, 9, 10)
 
 
 def time_view(gprs: Mapping[int, int]) -> Mapping[int, int]:
@@ -316,6 +319,7 @@ FIXED_TIME_REGISTERS = {
     7: FIXED_DEC_TIME,
     8: FIXED_DEC_TIME,
     9: FIXED_BIN_TIME,
+    10: FIXED_BIN_TIME,
 }
 
 BAD_OPERANDS = (

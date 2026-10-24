@@ -1,5 +1,5 @@
 # pyright: standard
-"""SVC 11 in IR: the TOD clock as the time of day in R0 (binary hundredths when R1's low byte is 1, else packed HHMMSSth) and the packed 0CYYDDDF date in R1; no zone offset is applied."""
+"""SVC 11 in IR: the TOD clock as the time of day in R0 (binary hundredths when the format bits of R1's low byte are 1, else packed HHMMSSth; the GMT and ERRET flag bits are ignored) and the packed 0CYYDDDF date in R1; no zone offset is applied."""
 
 from functools import reduce
 
@@ -16,7 +16,7 @@ MICROSECOND_SHIFT = 52
 MICROSECONDS_PER_DAY = 86_400_000_000
 MICROSECONDS_PER_HUNDREDTH = 10_000
 TIME_REGISTER = 0
-FORMAT_MASK = 0xFF
+FORMAT_MASK = 0x03
 RETURN_CODE_REGISTER = 15
 BINARY_FORMAT = 1
 DAYS_BEFORE_1900 = 693_595
