@@ -288,6 +288,7 @@ def test_a_written_exponent_outside_its_range_refuses(item: DcItem, constant: st
         encode_dc(item, ORIGIN)
     assert str(refused.value) == (
         f"{constant} at line 7 of src/t.asm has an exponent outside -85 to +75"
+        " — ASMA071E"
     )
 
 
@@ -340,10 +341,6 @@ def test_doubleword_character_set_and_base_displacement_types():
 @pytest.mark.parametrize(
     ("type_", "extension", "message"),
     [
-        ("E", "", "DC type E is not supported yet — red-dragon-6uyp.94"),
-        ("D", "", "DC type D is not supported yet — red-dragon-6uyp.94"),
-        ("L", "", "DC type L is not supported yet — red-dragon-6uyp.94"),
-        ("E", "H", "DC type EH is not supported yet — red-dragon-6uyp.94"),
         ("Q", "", "DC type Q is not supported yet — red-dragon-6uyp.96"),
         ("J", "", "DC type J is not supported yet — red-dragon-6uyp.96"),
         ("G", "", "DC type G is not supported yet — red-dragon-6uyp.63"),
