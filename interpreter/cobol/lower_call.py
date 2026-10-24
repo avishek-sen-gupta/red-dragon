@@ -73,6 +73,8 @@ _FULLWORD = parse_pic("S9(9)", usage="COMP-5")
 _COMP2 = parse_pic("", usage="COMP-2")
 _DIRECTORY_HOLDS = "dict_contains_key"
 
+type ArgumentAddress = tuple[Register, Register, int, bool]
+
 
 def _emit_callee_name(scope: LoweringScope, operand: RefModOperand) -> Register:
     """Emit IR that produces the callee's name from a data item, at run time.
@@ -316,7 +318,7 @@ def _store_giving(scope: LoweringScope, giving: RefModOperand) -> None:
 
 def _argument_array(scope: LoweringScope, using: Sequence[CallUsingParam]) -> Register:
     """One element per USING argument, by position: its argument mode, its byte
-    length, and, unless OMITTED, a region and an offset."""
+    length, and, unless OMITTED, whether it is signed, a region and an offset."""
     ctx, span = scope.ctx, scope.span
     args = ctx.fresh_reg()
     ctx.emit_inst(
@@ -350,21 +352,22 @@ def _argument(scope: LoweringScope, param: CallUsingParam) -> Register:
 
 
 def _store_address(
-    scope: LoweringScope, element: Register, address: tuple[Register, Register, int]
+    scope: LoweringScope, element: Register, address: ArgumentAddress
 ) -> None:
-    region, offset, length = address
+    region, offset, length, signed = address
     _store_field(
         scope, element, "length", scope.ctx.const_to_reg(length, span=scope.span)
+    )
+    _store_field(
+        scope, element, "signed", scope.ctx.const_to_reg(signed, span=scope.span)
     )
     _store_field(scope, element, "region", region)
     _store_field(scope, element, "offset", offset)
 
 
-def _address(
-    scope: LoweringScope, param: CallUsingParam
-) -> tuple[Register, Register, int]:
+def _address(scope: LoweringScope, param: CallUsingParam) -> ArgumentAddress:
     """BY REFERENCE: the argument's own bytes. Anything else: a fresh copy. With
-    the argument's byte length."""
+    the argument's byte length and whether it is signed."""
     ctx, materialised, span = scope.ctx, scope.materialised, scope.span
     if param.address_of or param.is_literal:
         return (
@@ -376,13 +379,16 @@ def _address(
         param.name, materialised, param.qualifiers, param.subscripts, span=span
     )
     if param.param_type == "REFERENCE":
-        return region_reg, ref.offset_reg, ref.fl.byte_length
+        return (
+            region_reg,
+            ref.offset_reg,
+            ref.fl.byte_length,
+            ref.fl.type_descriptor.signed,
+        )
     return _content_copy(scope, ref, region_reg, param.name)
 
 
-def _pointer_argument(
-    scope: LoweringScope, param: CallUsingParam
-) -> tuple[Register, Register, int]:
+def _pointer_argument(scope: LoweringScope, param: CallUsingParam) -> ArgumentAddress:
     ctx = scope.ctx
     length = ctx.addressing_mode.pointer_type.byte_length
     region, offset = PointerLowering(
@@ -390,12 +396,10 @@ def _pointer_argument(
     ).address_argument(
         param.name, param.qualifiers, _copy_extent(length, LITERAL_ARGUMENT)
     )
-    return region, offset, length
+    return region, offset, length, False
 
 
-def _literal_copy(
-    scope: LoweringScope, param: CallUsingParam
-) -> tuple[Register, Register, int]:
+def _literal_copy(scope: LoweringScope, param: CallUsingParam) -> ArgumentAddress:
     """A literal argument in the representation IBM defines for it, in a fresh copy."""
     ctx, span = scope.ctx, scope.span
     layout = _layout(_literal_type(param, ctx.figuratives))
@@ -415,7 +419,7 @@ def _literal_copy(
         extent=_copy_extent(layout.byte_length, LITERAL_ARGUMENT),
         span=span,
     )
-    return copy, zero, layout.byte_length
+    return copy, zero, layout.byte_length, layout.type_descriptor.signed
 
 
 def _literal_type(
@@ -455,7 +459,7 @@ def _content_copy(
     ref: ResolvedFieldRef,
     region_reg: Register,
     name: str,
-) -> tuple[Register, Register, int]:
+) -> ArgumentAddress:
     ctx, span = scope.ctx, scope.span
     length = ref.fl.byte_length
     copy = ctx.fresh_reg()
@@ -481,7 +485,7 @@ def _content_copy(
         extent=_copy_extent(length, name),
         span=span,
     )
-    return copy, zero, length
+    return copy, zero, length, ref.fl.type_descriptor.signed
 
 
 def _copy_extent(length: int, name: str) -> FieldExtent:

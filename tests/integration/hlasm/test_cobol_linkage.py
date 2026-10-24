@@ -10,6 +10,7 @@ from interpreter.frontend import make_cobol_parser
 from interpreter.frontends import get_hlasm_parser
 from interpreter.hlasm_run_inputs.job_parm_builtins import NO_PARM
 from interpreter.hlasm_run_inputs.run_input_builtins import run_input_builtins
+from interpreter.ir import NO_LABEL
 from interpreter.project.coprocessor_compile import lower_program
 from interpreter.project.duplicate_program_in_image import DuplicateProgramInImage
 from interpreter.project.hlasm_compile import link_hlasm_units, lower_hlasm_program
@@ -58,12 +59,16 @@ CALLS_ASMSUB = b"""\
        01  WS-C   PIC X VALUE 'Q'.
        01  WS-D   COMP-2.
        01  WS-RC  PIC S9(4) COMP-5 VALUE 0.
+       01  WS-RC2 PIC S9(4) COMP-5 VALUE 0.
        PROCEDURE DIVISION.
            MOVE 1.5 TO WS-D.
            CALL 'ASMSUB' USING BY REFERENCE WS-A BY CONTENT WS-B
                BY VALUE WS-N WS-H WS-C WS-D.
            MOVE RETURN-CODE TO WS-RC.
            CANCEL 'ASMSUB'.
+           CALL 'ASMSUB' USING BY REFERENCE WS-A BY CONTENT WS-B
+               BY VALUE WS-N WS-H WS-C WS-D.
+           MOVE RETURN-CODE TO WS-RC2.
            GOBACK.
 """
 ASMSUB = b"""\
@@ -73,8 +78,13 @@ ASMSUB   CSECT
          LM    2,8,0(1)
          STM   4,8,0(2)
          MVC   0(4,3),=C'ZZZZ'
-         L     15,=F'-7'
+         L     9,COUNT
+         LA    9,1(,9)
+         ST    9,COUNT
+         S     9,=F'8'
+         LR    15,9
          BR    14
+COUNT    DC    F'0'
          END
 """
 CALLS_OMITTING = b"""\
@@ -171,9 +181,13 @@ ASMMID   CSECT
          USING ASMMID,12
          LR    11,14
          LA    2,77
+         LR    10,13
          L     15,=V(COBLEAF)
          BALR  14,15
          AR    15,2
+         LR    9,13
+         SR    9,10
+         AR    15,9
          LR    14,11
          BR    14
          END
@@ -303,15 +317,16 @@ def _ws(vm: VMState, image: LinkedProgram, program: str) -> dict[str, bytes]:
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_a_cobol_call_hands_hlasm_a_standard_list_and_takes_r15(tmp_path: Path):
+def test_a_cobol_call_hands_hlasm_a_standard_list_and_cancel_keeps_it(tmp_path: Path):
     image = _image((CALLS_ASMSUB,), (ASMSUB,), tmp_path)
 
     ws = _ws(_entered(image, "COBMAIN"), image, "COBMAIN")
 
-    assert (ws["WS-A"], ws["WS-B"], ws["WS-RC"]) == (
-        bytes.fromhex("12345678" "0000FFFE" "000000D8") + ws["WS-D"],
+    assert (ws["WS-A"], ws["WS-B"], ws["WS-RC"], ws["WS-RC2"]) == (
+        bytes.fromhex("12345678" "FFFFFFFE" "000000D8") + ws["WS-D"],
         "SAME".encode(EBCDIC),
         bytes.fromhex("FFF9"),
+        bytes.fromhex("FFFA"),
     )
 
 
@@ -364,6 +379,21 @@ def test_an_hlasm_abend_ends_the_run_unit_under_a_cobol_caller(tmp_path: Path):
     assert (_ws(vm, image, "ABMAIN")["WS-X"], hlasm_run_of(vm, "")) == (
         "FIRST".encode(EBCDIC),
         HlasmRun(return_code=0, abend="U0005", stdout=""),
+    )
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_an_image_without_hlasm_has_no_default_entry_and_runs_by_name(
+    tmp_path: Path, capsys
+):
+    image = link_hlasm_units(_cobol(COBOL_SAYS, tmp_path), tmp_path)
+    capsys.readouterr()
+
+    _entered(image, "COBMAIN")
+
+    assert (image.entry_func_label, capsys.readouterr().out) == (
+        NO_LABEL,
+        "IN COBOL\n",
     )
 
 

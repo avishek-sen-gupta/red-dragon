@@ -4,7 +4,7 @@
 from cobol_asg.asg_types import CobolASG, CobolField
 from cobol_asg.cobol_statements import CallUsingParam
 from interpreter.cobol.features import CobolFeature
-from interpreter.cobol.sectioned_layout import using_signature
+from interpreter.cobol.sectioned_layout import build_sectioned_layout, using_signature
 from interpreter.project.argument_mode import ArgumentMode
 from interpreter.project.using_parameter import UsingParameter
 from tests.covers import covers
@@ -28,10 +28,14 @@ def test_each_using_position_has_its_mode_and_length() -> None:
         CallUsingParam(name="LK-H", param_type="VALUE"),
     ]
 
+    def signature(asg: CobolASG) -> tuple[UsingParameter, ...]:
+        parameters = build_sectioned_layout(asg).linkage_parameters
+        return using_signature(asg.procedure_using, parameters)
+
     assert (
-        using_signature(CobolASG(linkage_fields=linkage, procedure_using=using)),
-        using_signature(CobolASG(linkage_fields=linkage[:1])),
-        using_signature(CobolASG()),
+        signature(CobolASG(linkage_fields=linkage, procedure_using=using)),
+        signature(CobolASG(linkage_fields=linkage[:1])),
+        signature(CobolASG()),
     ) == (
         (
             UsingParameter(ArgumentMode.REFERENCE, 10),

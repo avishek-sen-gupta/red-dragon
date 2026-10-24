@@ -16,7 +16,7 @@ from hlasm_asg.hlasm_ast_parser import HlasmAstParser
 from interpreter.constants import Language
 from interpreter.frontends import bind_image, get_cobol_frontend, get_hlasm_frontend
 from interpreter.frontends.symbol_table import SymbolTable
-from interpreter.ir import CodeLabel
+from interpreter.ir import NO_LABEL, CodeLabel
 from interpreter.project.coded_diagnostic import CodedDiagnostic
 from interpreter.project.comment_mnote import CommentMnote
 from interpreter.project.compiler import build_export_table
@@ -158,11 +158,10 @@ def _link(units: Sequence[Path]) -> LinkedProgram:
         type_env_builder=TypeEnvironmentBuilder(),
         symbol_table=SymbolTable.empty(),
     )
-    first = next(unit for unit in read if unit.language == Language.HLASM)
     return dataclasses.replace(
         linked,
         programs={**_cobol_programs(read), **bound.programs},
-        entry_func_label=bound.module_entries[first.path],
+        entry_func_label=next(iter(bound.module_entries.values()), NO_LABEL),
     )
 
 

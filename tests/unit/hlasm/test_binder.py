@@ -75,7 +75,7 @@ CALLEE = _module(
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_binder_lays_out_merges_and_resolves_names():
-    binder = Binder((CALLER, CALLEE))
+    binder = Binder((CALLER, CALLEE), ())
 
     assert binder.layouts == {
         "A": ModuleLayout({"": 0, "MAIN": 8}, 24),
@@ -195,12 +195,12 @@ def test_binder_refuses_duplicates_and_records_it_does_not_bind():
     dummy = _module("E", (ControlSection("X", 4), ExternalDummySection("PR", 8, 8)))
 
     with pytest.raises(DuplicateProgramInImage) as duplicate:
-        Binder((CALLEE, entry_twice))
+        Binder((CALLEE, entry_twice), ())
 
     with pytest.raises(UnsupportedBinding) as relocation:
-        Binder((q_constant,))
+        Binder((q_constant,), ())
     with pytest.raises(UnsupportedBinding) as external_dummy:
-        Binder((dummy,))
+        Binder((dummy,), ())
 
     assert [
         str(duplicate.value),

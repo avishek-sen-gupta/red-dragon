@@ -144,7 +144,7 @@ def _assemble(source: bytes, tmp_path: Path) -> HlasmProgram:
 
 
 def _start_up(program: HlasmProgram) -> tuple[InstructionBase, ...]:
-    return bound_start_up(Binder((ImageModule("M", "M", object_module(program)),)))
+    return bound_start_up(Binder((ImageModule("M", "M", object_module(program)),), ()))
 
 
 def _start(program: HlasmProgram) -> VMState:

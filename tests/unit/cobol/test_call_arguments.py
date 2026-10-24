@@ -22,6 +22,7 @@ def test_each_region_is_handed_over_by_base_address_with_the_count() -> None:
         array.fields[FieldName("count")].value,
         fields[FieldName("mode")].value,
         fields[FieldName("length")].value,
+        fields[FieldName("signed")].value,
         fields[FieldName("region")].value,
         fields[FieldName("offset")].value,
-    ) == (1, "REFERENCE", 4, 4099, 0)
+    ) == (1, "REFERENCE", 4, False, 4099, 0)

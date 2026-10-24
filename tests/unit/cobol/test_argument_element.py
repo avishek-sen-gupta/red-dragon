@@ -62,9 +62,33 @@ def test_each_element_carries_mode_and_length() -> None:
     lower_call(ctx, statement, materialised)
 
     assert _elements(ctx, start) == [
-        {"mode": "REFERENCE", "length": 5, "region": "address", "offset": 0},
-        {"mode": "CONTENT", "length": 3, "region": "address", "offset": 0},
-        {"mode": "VALUE", "length": 4, "region": "address", "offset": 0},
+        {
+            "mode": "REFERENCE",
+            "length": 5,
+            "signed": False,
+            "region": "address",
+            "offset": 0,
+        },
+        {
+            "mode": "CONTENT",
+            "length": 3,
+            "signed": False,
+            "region": "address",
+            "offset": 0,
+        },
+        {
+            "mode": "VALUE",
+            "length": 4,
+            "signed": True,
+            "region": "address",
+            "offset": 0,
+        },
         {"mode": "OMITTED", "length": 0},
-        {"mode": "VALUE", "length": 4, "region": "address", "offset": 0},
+        {
+            "mode": "VALUE",
+            "length": 4,
+            "signed": True,
+            "region": "address",
+            "offset": 0,
+        },
     ]

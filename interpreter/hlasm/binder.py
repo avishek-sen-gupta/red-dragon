@@ -128,7 +128,7 @@ class Binder:
     def __init__(
         self,
         modules: Sequence[ImageModule],
-        programs: Sequence[CobolProgram] = (),
+        programs: Sequence[CobolProgram],
     ) -> None:
         _refuse_duplicates(modules, programs)
         _ = [_refuse_unsupported(module) for module in modules]

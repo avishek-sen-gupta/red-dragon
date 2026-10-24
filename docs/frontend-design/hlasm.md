@@ -308,7 +308,7 @@ and its note 3), APAR PI44924.
   under that name, so a COBOL `CALL` finds it as it finds a COBOL program. It calls
   `__hlasm_from_cobol(arguments, entry)`, which writes the R1 list in a fresh doubleword-aligned
   region: BY REFERENCE and BY CONTENT an address; BY VALUE the value itself, 1, 2 and 4 bytes
-  right-aligned in one word, 8 bytes in two words; OMITTED a zero word. The last word gets
+  widened to one word by the item's signedness, 8 bytes in two words; OMITTED a zero word. The last word gets
   X'80000000' unless the last argument is BY VALUE. R13 gets a fresh 72-byte save area, R14
   `0xFF0`, R15 the entry. The module is entered with no modules below, and R15's low halfword
   comes back as RETURN-CODE.
@@ -317,7 +317,8 @@ and its note 3), APAR PI44924.
   link: a BY REFERENCE position takes the word's 31-bit address, OMITTED when zero, and the VL
   bit ends the walk there; a BY VALUE position copies 1, 2, 4 or 8 bytes from its slot into a
   fresh region and never ends the walk. The walk stops at the signature's length. R14–R12 are
-  saved at 12(R13) and restored after the call; R15 gets RETURN-CODE sign-extended.
+  saved at 12(R13) and restored after the call, R13 is put back, and R15 gets RETURN-CODE
+  sign-extended.
 - **CANCEL** of an HLASM name does nothing: the program directory does not hold it.
 - **Abends.** An HLASM abend halts the VM, so it ends the whole run unit, COBOL callers
   included.
@@ -1486,10 +1487,11 @@ layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.
 - Each PLO statement lowers its whole function-code table inline, about 7,300 IR instructions; the
   50 codes that do not use R1 or R3 could be emitted once per program (red-dragon-6uyp.83). Lowering
   logs a warning per PLO statement with its IR count.
-- COBOL linkage, where IBM's manuals at hand are silent (rulings in
+- COBOL linkage, where IBM's COBOL manuals are silent (our rulings; R83 and
   `docs/superpowers/plans/2026-10-24-hlasm-unit-cobol-linkage.md`): 1- and 2-byte BY VALUE
-  values are right-aligned in a word with zero high bytes, an 8-byte value takes two words, and
-  no VL bit follows a trailing BY VALUE. A BY VALUE length other than 1, 2, 4 or 8, which IBM
+  values widen to a word by their signedness, a signed item sign-extended (S9(4) -2 gives
+  X'FFFFFFFE') and an unsigned one zero-extended, as LE ILC widens C char and short; an 8-byte
+  value takes two words; no VL bit follows a trailing BY VALUE. A BY VALUE length other than 1, 2, 4 or 8, which IBM
   refuses, gives a zero word (COBOL → HLASM) or a zero-filled copy (HLASM → COBOL).
   RETURN-CODE is a halfword: COBOL keeps R15's low halfword.
 - LINK and LOAD do not find COBOL programs of a mixed image (red-dragon-6uyp.100).

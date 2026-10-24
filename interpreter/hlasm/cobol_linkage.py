@@ -57,6 +57,7 @@ FROM_COBOL_FUNCTION = "__hlasm_from_cobol"
 COUNT_FIELD = FieldName("count")
 MODE_FIELD = FieldName("mode")
 LENGTH_FIELD = FieldName("length")
+SIGNED_FIELD = FieldName("signed")
 REGION_FIELD = FieldName("region")
 OFFSET_FIELD = FieldName("offset")
 SLOT_VAR = VarName("__hlasm_slot")
@@ -116,20 +117,34 @@ def _advance(emitter: HlasmEmitter, slot: Register, width: int) -> None:
     emitter.emit_inst(StoreVar(name=SLOT_VAR, value_reg=after))
 
 
-def _copy_value(
+def _widen_value(
     emitter: HlasmEmitter,
     into: tuple[Register, Register],
-    address: Register,
+    source: tuple[Register, Register],
     width: int,
 ) -> Case:
     plist, slot = into
-    slot_width = DOUBLEWORD_BYTES if width == DOUBLEWORD_BYTES else WORD_BYTES
+    address, signed = source
 
     def body() -> None:
         image = emitter.load_bytes(address, emitter.int_(0), width)
-        at = emitter.binop(BinopKind.ADD, slot, emitter.int_(slot_width - width))
-        emitter.write_bytes(plist, at, width, image)
-        _advance(emitter, slot, slot_width)
+        value = emitter.call(BINARY_BYTES_TO_INT, (image, signed))
+        word = emitter.binop(BinopKind.BIT_AND, value, emitter.int_(LOW_WORD_MASK))
+        emitter.write_bytes(plist, slot, WORD_BYTES, emitter.image(word, WORD_BYTES))
+        _advance(emitter, slot, WORD_BYTES)
+
+    return body
+
+
+def _copy_doubleword(
+    emitter: HlasmEmitter, into: tuple[Register, Register], address: Register
+) -> Case:
+    plist, slot = into
+
+    def body() -> None:
+        image = emitter.load_bytes(address, emitter.int_(0), DOUBLEWORD_BYTES)
+        emitter.write_bytes(plist, slot, DOUBLEWORD_BYTES, image)
+        _advance(emitter, slot, DOUBLEWORD_BYTES)
 
     return body
 
@@ -143,14 +158,21 @@ def _value_slot(
         _field(emitter, element, REGION_FIELD),
         _field(emitter, element, OFFSET_FIELD),
     )
+    source = (address, _field(emitter, element, SIGNED_FIELD))
     _cases(
         emitter,
-        tuple(
+        (
+            *(
+                (
+                    _is(emitter, length, emitter.int_(w)),
+                    _widen_value(emitter, (plist, slot), source, w),
+                )
+                for w in RIGHT_ALIGNED_LENGTHS
+            ),
             (
-                _is(emitter, length, emitter.int_(w)),
-                _copy_value(emitter, (plist, slot), address, w),
-            )
-            for w in (*RIGHT_ALIGNED_LENGTHS, DOUBLEWORD_BYTES)
+                _is(emitter, length, emitter.int_(DOUBLEWORD_BYTES)),
+                _copy_doubleword(emitter, (plist, slot), address),
+            ),
         ),
         lambda: _advance(emitter, slot, WORD_BYTES),
     )
@@ -306,6 +328,7 @@ def _address_element(
         (
             (MODE_FIELD, mode),
             (LENGTH_FIELD, emitter.int_(parameter.length)),
+            (SIGNED_FIELD, _flag(emitter, False)),
             (REGION_FIELD, address),
             (OFFSET_FIELD, emitter.int_(0)),
         ),
@@ -332,6 +355,7 @@ def _value_element(
         (
             (MODE_FIELD, emitter.str_(ArgumentMode.VALUE.value)),
             (LENGTH_FIELD, emitter.int_(length)),
+            (SIGNED_FIELD, _flag(emitter, False)),
             (REGION_FIELD, copy),
             (OFFSET_FIELD, emitter.int_(0)),
         ),
@@ -429,6 +453,7 @@ def _restore_registers(emitter: HlasmEmitter, save_area: Register) -> None:
         )
         for k, r in enumerate(SAVED_REGISTERS)
     ]
+    emitter.store_gr32(ENTRY_SAVE_AREA_REGISTER, save_area)
 
 
 def emit_cobol_call(emitter: HlasmEmitter, program: CobolProgram) -> None:
@@ -443,7 +468,7 @@ def emit_cobol_call(emitter: HlasmEmitter, program: CobolProgram) -> None:
             memory=arguments,
         )
     )
-    return_code = emitter.call(BINARY_BYTES_TO_INT, (returned, _signed(emitter)))
+    return_code = emitter.call(BINARY_BYTES_TO_INT, (returned, _flag(emitter, SIGNED)))
     _restore_registers(emitter, save_area)
     emitter.store_gr32(
         RETURN_CODE_REGISTER,
@@ -455,7 +480,7 @@ def emit_cobol_call(emitter: HlasmEmitter, program: CobolProgram) -> None:
     emitter.emit_inst(Return_(value_reg=emitter.int_(CALLED)))
 
 
-def _signed(emitter: HlasmEmitter) -> Register:
+def _flag(emitter: HlasmEmitter, value: bool) -> Register:
     flag = emitter.fresh_reg()
-    emitter.emit_inst(Const.bool_(flag, SIGNED))
+    emitter.emit_inst(Const.bool_(flag, value))
     return flag

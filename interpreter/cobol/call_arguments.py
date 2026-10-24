@@ -40,6 +40,7 @@ def _element(vm: VMState, region: Address) -> TypedValue:
             fields={
                 FieldName("mode"): typed(ArgumentMode.REFERENCE.value, UNKNOWN),
                 FieldName("length"): typed(vm.segment_of(region).size, UNKNOWN),
+                FieldName("signed"): typed(False, UNKNOWN),
                 FieldName("region"): typed(vm.segment_of(region).base, UNKNOWN),
                 FieldName("offset"): typed(0, UNKNOWN),
             }

@@ -158,7 +158,6 @@ class CobolFrontend(Frontend):
 
     @property
     def using_signature(self) -> tuple[UsingParameter, ...]:
-        """The PROCEDURE DIVISION USING signature. Available after lowering."""
         return self._using
 
     @property
@@ -219,7 +218,7 @@ class CobolFrontend(Frontend):
         """Shared lowering core: ASG → IR. Called by lower() and lower_from_ast_dict()."""
         sectioned = build_sectioned_layout(asg)
         self._program_id = program_name(asg)
-        self._using = using_signature(asg)
+        self._using = using_signature(asg.procedure_using, sectioned.linkage_parameters)
         logger.debug(
             "lowering %s: %d sections, %d paragraphs",
             self._program_id,

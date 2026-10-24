@@ -9,6 +9,7 @@ from dataclasses import dataclass, field, replace
 from itertools import chain, islice
 
 from cobol_asg.asg_types import CobolASG, CobolField
+from cobol_asg.cobol_statements import CallUsingParam
 from cobol_memory.region_id import RegionId
 from interpreter.cobol.data_layout import (
     DataItemMatch,
@@ -259,16 +260,20 @@ def build_sectioned_layout(asg: CobolASG) -> SectionedLayout:
     )
 
 
-def using_signature(asg: CobolASG) -> tuple[UsingParameter, ...]:
-    """Each LINKAGE parameter the procedure binds, in order: BY VALUE where the
-    PROCEDURE DIVISION USING says so, else BY REFERENCE; and its byte length."""
-    values = {p.name.upper() for p in asg.procedure_using if p.param_type == "VALUE"}
+def using_signature(
+    using: Sequence[CallUsingParam], parameters: Sequence[LinkageRecord]
+) -> tuple[UsingParameter, ...]:
+    values = {
+        p.name.upper()
+        for p in using
+        if ArgumentMode(p.param_type) == ArgumentMode.VALUE
+    }
     return tuple(
         UsingParameter(
             ArgumentMode.VALUE if record.name in values else ArgumentMode.REFERENCE,
             record.length,
         )
-        for record in build_sectioned_layout(asg).linkage_parameters
+        for record in parameters
     )
 
 

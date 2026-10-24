@@ -489,7 +489,7 @@ name in two units raises `DuplicateProgramInImage`.
 fixed order: the COBOL run-unit allocation (`__cobol_start_up__`, only when a COBOL unit is
 present), the binder's start-up, the units in the order given, then the job-step module. The
 image's language is HLASM; `programs` holds each PROGRAM-ID beside the SD and LD names, and
-`entry_func_label` is the first HLASM unit's END step. One duplicate check runs over SD, LD and
+`entry_func_label` is the first HLASM unit's END step, or `NO_LABEL` when there is none. One duplicate check runs over SD, LD and
 PROGRAM-ID names and names both units. Unit diagnostics, and the binder's
 unresolved-EXTRN warnings, are logged each time the image is used.
 

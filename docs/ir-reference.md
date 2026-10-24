@@ -361,7 +361,7 @@ Call the function found at a location, giving it memory (an argument array).
 | `location` | `VarName \| Register` | the variable holding the callee's function reference, or a register holding that variable's name |
 | `memory` | `Register` | argument array |
 
-Lowers `CALL ... USING` (ADR-150). The caller builds the argument array in plain IR: a `NEW_ARRAY` with a `count` field, and per argument a `NEW_OBJECT` with `mode`, `length`, `region` and `offset`. BY REFERENCE hands over the argument's own region and offset. BY CONTENT, BY VALUE and literals hand over a fresh copy. OMITTED has mode OMITTED, length 0 and no address.
+Lowers `CALL ... USING` (ADR-150). The caller builds the argument array in plain IR: a `NEW_ARRAY` with a `count` field, and per argument a `NEW_OBJECT` with `mode`, `length`, `signed`, `region` and `offset`. BY REFERENCE hands over the argument's own region and offset. BY CONTENT, BY VALUE and literals hand over a fresh copy. OMITTED has mode OMITTED, length 0 and no address.
 
 Dispatch (ADR-182):
 
