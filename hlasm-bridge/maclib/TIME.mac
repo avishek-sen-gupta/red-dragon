@@ -8,9 +8,9 @@
          MNOTE 8,'TIME: TYPE MUST BE DEC OR BIN'
          MEXIT
 .DEC     ANOP
-&NAME    LA    0,0
+&NAME    LA    1,2
          AGO   .SVC
 .BIN     ANOP
-&NAME    LA    0,1
+&NAME    LA    1,1
 .SVC     SVC   11
          MEND

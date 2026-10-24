@@ -286,17 +286,17 @@ conventions but expand only to lowered opcodes:
 | `SAVE (r1,r2)[,T][,id]` | With an `id` (`*` is the macro's label, else the CSECT name; up to 70 characters), `J` around `AL1(length),CL'id'` first, so the count byte is at entry+4 and the text at entry+5. Then `STM r1,r2` at byte `(r1*4+20) mod 64` of the R13 save area; with `T` and `r1` not 14, also `STM 14,15,12(13)`. |
 | `RETURN (r1,r2)[,T][,RC=n\|(15)]` | `LM` over the same slots, then `MVI 12(13),X'FF'` for `T`, `LA 15,n` for `RC=n`, then `BR 14`. `RC=(15)` (or `(R15)`) never reloads R15: `(14,12)` is `L 14,12(13)` and `LM 0,12,20(13)`, `(14,15)` is `L 14,12(13)`. R13 is restored only if it is in the range. |
 | `YREGS` | `R0` to `R15` as `EQU`s |
-| `GETMAIN R,LV=n\|(r)[,SP=n]` | R0 = length, `SP` in bits 32-39 (`NILH`/`OILH`); `BRAS 1,*+4` makes R1 negative; `SVC 10` |
+| `GETMAIN R,LV=n\|(r)[,SP=n\|(r)]` | R0 = length, `SP` in bits 32-39 (`NILH`/`OILH`, or `LR`, `SLL`, `OR` through R15 for `SP=(r)`). `LV=(0)` keeps R0 as given, subpool included. `BRAS 1,*+4` makes R1 negative; `SVC 10` |
 | `FREEMAIN R,LV=,A=addr\|(r)[,SP=]` | R1 = `L 1,addr` or `LR 1,r`, R0 as for GETMAIN; `SVC 10` |
-| `GETMAIN RU\|RC`, `FREEMAIN RU\|RC` | R0 = length, R15 = subpool × 256 + flags (1 release, 2 conditional, 4 page); `SVC 120` |
+| `GETMAIN RU\|RC`, `FREEMAIN RU\|RC` | IBM's layout: R0 = length, R15 = subpool × 256 + flags (X'01' release, X'02' unconditional, X'04' page); `SVC 120`. `SP=(r)` takes the register's low byte (`LLCR`, `SLL`, `OILL`) |
 | `STORAGE OBTAIN\|RELEASE,LENGTH=,ADDR=[,SP=][,COND=][,BNDRY=][,LOC=]` | As the SVC 120 forms. OBTAIN stores R1 with `ST 1,addr`, or `LR r,1` for `ADDR=(r)`; RELEASE loads R1 from `ADDR` as FREEMAIN does from `A` |
-| `TIME [DEC\|BIN][,LINKAGE=SVC]` | `LA 0,0` (DEC) or `LA 0,1` (BIN), then `SVC 11` |
+| `TIME [DEC\|BIN][,LINKAGE=SVC]` | `LA 1,2` (DEC) or `LA 1,1` (BIN), IBM's codes, then `SVC 11` |
 
 `LOC` is accepted and ignored: storage is never constrained below 16 MB. `BNDRY` is `DBLWD`
-or `PAGE`, and `PAGE` only on the SVC 120 forms. A release loads the address before the
-length, so `LV=(1)` on a release reads the address. Missing `LV`, `LENGTH`, `A` or `ADDR`,
-another type, `COND` other than `YES` or `NO`, TIME types other than `DEC` and `BIN`, and
-`LINKAGE` other than `SVC` are `MNOTE 8`.
+or `PAGE`, and `PAGE` only on the SVC 120 forms. Missing `LV`, `LENGTH`, `A` or `ADDR`,
+another type, `COND` other than `YES` or `NO`, `SP=(r)` outside 2-12, `SP` with
+`R,LV=(0)`, `LV=(1)` or `LENGTH=(1)` on a release, TIME types other than `DEC` and `BIN`,
+and `LINKAGE` other than `SVC` are `MNOTE 8`.
 
 Registers may be numbers or `Rn`. A bad register, a third range entry, a second operand other than `T`, or
 an `RC` register other than 15 is an `MNOTE 8`, which refuses the assembly. Save areas
@@ -322,10 +322,11 @@ services use `dict_contains_key` and the TOD clock builtin.
 - **Releasing** needs an entry at the address with the same rounded length and subpool,
   else it abends `SA0A` (SVC 10) or `SA78` (SVC 120). The entry's length becomes -1, so a
   second release abends. Freed storage is not reused, and releasing part of an area abends.
-- **SVC 11** reads `__hlasm_tod_clock`. R0 is the time of day as packed `HHMMSSth`, or, when
-  R0's low bit is set, binary hundredths since midnight. R1 is the date as packed `0CYYDDDF`
-  (C is 0 for 19xx, 1 for 20xx). R15 is 0. The TOD clock is taken as local time: no zone
-  offset and no leap seconds.
+- **SVC 11** reads `__hlasm_tod_clock`. R1's low byte selects the format, as on z/OS: 1 is
+  BIN (R0 = binary hundredths since midnight), any other value DEC (R0 = packed
+  `HHMMSSth`); TU, MIC and STCK (0, 3, 4) are not lowered. R1 is then the date as packed
+  `0CYYDDDF` (C is 0 for 19xx, 1 for 20xx). R15 is 0. No zone offset is applied, so local
+  time is the TOD clock's UTC; leap seconds are ignored.
 - **Any other SVC number** logs the number and abends `S0C1`. This is a project
   choice, not z/OS behaviour.
 
@@ -1310,7 +1311,8 @@ layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.
   whatever mode it selects.
 - GETMAIN, FREEMAIN and STORAGE never reuse freed storage, never fail, ignore `LOC`, and
   do not model subpool semantics beyond matching a release to its request. Only the R,
-  RU and RC forms are lowered. TIME supports `DEC` and `BIN` with `LINKAGE=SVC`, in UTC.
+  RU and RC forms are lowered. A subpool FREEMAIN (SVC 10 with R1 = 0) abends `SA0A`
+  instead of freeing the subpool. TIME supports `DEC` and `BIN` with `LINKAGE=SVC`.
 - Access registers hold values only; no instruction addresses through them. LAE and LAEY do
   not set access register R1 (red-dragon-6uyp.86).
 - `run()` defaults to `DEFAULT_BUILTINS`, which has no clock or floating-point builtins, so such an
@@ -1401,10 +1403,10 @@ layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.
 | `tests/integration/hlasm/test_instruction_table.py`, `test_opcode_unit_coverage.py` | Instruction table and opcode-unit coverage |
 | `tests/integration/hlasm/test_save_return.py` | `SAVE`, `RETURN`, `YREGS`: registers per range including `(14,15)` and a wrapped range, `T`, `RC`, identifier layout at entry+4 with label and CSECT names, a nested call, operand refusals |
 | `tests/z390/test_save_return_differential.py` | The same programs against z390 |
-| `tests/integration/hlasm/test_storage_services.py` | `GETMAIN`/`FREEMAIN` R, RU, RC and `STORAGE` with `COND`, `BNDRY=PAGE`, register operands and subpools: two areas aligned, disjoint, written, read and released; the last byte of a page; bad releases abending `SA0A` and `SA78`; `TIME` DEC and BIN on the fixed clock; operand refusals |
-| `tests/z390/test_storage_services_differential.py` | Alignment, disjointness, data and R15 against z390 (z390 sets R15 0 on GETMAIN R and FREEMAIN R); the shape of TIME's words against z390's wall clock |
+| `tests/integration/hlasm/test_storage_services.py` | `GETMAIN`/`FREEMAIN` R, RU, RC and `STORAGE` with `COND`, `BNDRY=PAGE`, register operands and subpools: two areas aligned, disjoint, written, read and released; `LV=(0)` with the subpool in R0 and `SP=(r)` matched by a literal `SP`; the last byte of a page-aligned area; bad releases abending `SA0A` and `SA78` with the table left as it was; `TIME` DEC and BIN on the fixed clock, by macro and hand-coded `SVC 11` with R1's code; operand refusals |
+| `tests/z390/test_storage_services_differential.py` | Alignment, disjointness, data and R15 against z390 (z390 sets R15 0 on GETMAIN R and FREEMAIN R); the shape of TIME's words against z390's wall clock; z390 reads a hand-coded SVC 11's format from R0 |
 | `tests/unit/hlasm/test_time_service.py` | TIME's words for TOD values across 1900, 2000 (leap day, day 366), 2023 and 2100 |
-| `tests/unit/hlasm/test_service_lowering.py` | SVC 10, 11 and 120 call only existing builtins and leave nothing symbolic |
+| `tests/unit/hlasm/test_service_lowering.py` | SVC 10, 11 and 120 call only existing builtins and leave nothing symbolic; a release on the branching runner (`branching_vm.py`) finds its area or abends `SA78` |
 | `tests/z390/test_foundation_differential.py` | Return code, WTO, user abend and assembly failure against z390 (`-m z390`) |
 | `tests/z390/test_z390_log.py` | Registers and CC from a z390 abend dump (default run) |
 | `tests/z390/test_macro_language_differential.py` | The macro-language programs against z390; z390's attribute differences pinned (`-m z390`) |

@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from hlasm_asg.assembly_inputs import AssemblyInputs
+from interpreter.field_name import FieldName
 from interpreter.frontends import get_hlasm_parser
 from interpreter.hlasm.bfp_builtins import bfp_builtins
 from interpreter.hlasm.clock_builtins import clock_builtins
@@ -20,7 +21,7 @@ from interpreter.project.program_entry import ProgramEntry
 from interpreter.run import initial_vm_state, run_linked
 from interpreter.var_name import VarName
 from interpreter.vm.builtins import compose_builtins, core_builtins
-from interpreter.vm.vm_types import VMState
+from interpreter.vm.vm_types import Pointer, VMState
 from tests.integration.hlasm.fixed_machine_clock import FixedMachineClock
 from tests.integration.hlasm.hlasm_machine import HlasmMachine
 from tests.integration.hlasm.hlasm_run import HlasmRun
@@ -36,6 +37,10 @@ RETURN_CODE_REGISTER = 15
 NO_RETURN_CODE = 0
 NO_INPUTS = HlasmCompileOptions()
 BARE_ASSEMBLY = AssemblyInputs({}, datetime(2026, 1, 1, tzinfo=UTC))
+
+
+def _var_value(vm: VMState, name: str) -> Pointer | int | str:
+    return vm.call_stack[0].local_vars[VarName(name)].value
 
 
 def _var(vm: VMState, name: str) -> int | str:
@@ -98,6 +103,26 @@ def run_hlasm(
     syslib: Sequence[Path] = (),
 ) -> HlasmRun:
     return hlasm_run_of(*_run_vm(source, options, syslib))
+
+
+def _entry(vm: VMState, entry: Pointer) -> tuple[int, int]:
+    fields = vm.heap_get(entry.base).fields
+    return (
+        int(fields[FieldName("length")].value),
+        int(fields[FieldName("subpool")].value),
+    )
+
+
+def run_hlasm_allocations(
+    source: str,
+) -> tuple[HlasmRun, list[tuple[int, int]], int]:
+    vm, stdout = _run_vm(source)
+    table = _var_value(vm, "__hlasm_allocations")
+    assert isinstance(table, Pointer)
+    pointers = [tv.value for tv in vm.heap_get(table.base).fields.values()]
+    entries = sorted(_entry(vm, p) for p in pointers if isinstance(p, Pointer))
+    others = len(vm.heap_items()) - 1 - len(entries)
+    return hlasm_run_of(vm, stdout), entries, others
 
 
 def _machine(vm: VMState, stdout: str) -> HlasmMachine:

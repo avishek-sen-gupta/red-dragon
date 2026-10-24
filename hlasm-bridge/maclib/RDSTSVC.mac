@@ -1,10 +1,14 @@
          MACRO
          RDSTSVC &LV,&SP,&FLAGS
-         LCLC  &SPV
-&SPV     SETC  '0'
-         AIF   ('&SP' EQ '').LOAD
-&SPV     SETC  '&SP'
-.LOAD    RDSTLEN &LV
-         IILF  15,(&SPV)*256+&FLAGS
-         SVC   120
+         RDSTLEN &LV
+         AIF   ('&SP' NE '').SP
+         IILF  15,&FLAGS
+         AGO   .SVC
+.SP      AIF   ('&SP'(1,1) EQ '(').SPREG
+         IILF  15,(&SP)*256+&FLAGS
+         AGO   .SVC
+.SPREG   LLCR  15,&SP(1)
+         SLL   15,8
+         OILL  15,&FLAGS
+.SVC     SVC   120
          MEND

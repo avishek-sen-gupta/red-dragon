@@ -7,7 +7,11 @@ from hlasm_asg.hlasm_parse_error import HlasmParseError
 from hlasm_asg.program.mnote_level import MnoteLevel
 from tests.covers import NotLanguageFeature, covers
 from tests.integration.hlasm import storage_service_programs as programs
-from tests.integration.hlasm.hlasm_helpers import run_hlasm, run_hlasm_machine
+from tests.integration.hlasm.hlasm_helpers import (
+    run_hlasm,
+    run_hlasm_allocations,
+    run_hlasm_machine,
+)
 from tests.integration.hlasm.hlasm_run import HlasmRun
 
 ABENDED = HlasmRun(return_code=0, abend="U0001", stdout="")
@@ -25,18 +29,22 @@ def test_two_obtained_areas_are_aligned_distinct_usable_and_released(case: str):
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_the_last_byte_of_an_area_is_written_and_read_back():
+def test_the_last_byte_of_a_page_aligned_area_is_written_and_read_back():
     ran = run_hlasm_machine(programs.LAST_BYTE)
 
-    assert (ran.run, ran.gprs[3]) == (ABENDED, 0x5A)
+    assert (ran.run, ran.gprs[3], ran.gprs[4]) == (ABENDED, 0x5A, 0)
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 @pytest.mark.parametrize("case", list(programs.BAD_RELEASES))
-def test_a_release_not_matching_an_obtained_area_abends(case: str):
-    source, code = programs.BAD_RELEASES[case]
+def test_a_release_not_matching_an_obtained_area_abends_and_leaves_the_table(case: str):
+    source, code, entries = programs.BAD_RELEASES[case]
 
-    assert run_hlasm(source) == HlasmRun(return_code=0, abend=code, stdout="")
+    assert run_hlasm_allocations(source) == (
+        HlasmRun(return_code=0, abend=code, stdout=""),
+        entries,
+        0,
+    )
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
@@ -55,7 +63,7 @@ def test_bad_operands_refuse_the_assembly_with_severity_8():
         run_hlasm(programs.BAD_OPERANDS)
 
     assert [
-        (d.message, d.related[0].line, d.mnote) for d in refused.value.diagnostics
+        (d.message, d.related[-1].line, d.mnote) for d in refused.value.diagnostics
     ] == [
         (m, line, MnoteLevel(kind="LEVEL", level=8))
         for m, line in programs.BAD_OPERAND_REFUSALS

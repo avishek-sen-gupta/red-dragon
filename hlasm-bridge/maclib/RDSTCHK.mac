@@ -1,0 +1,22 @@
+         MACRO
+         RDSTCHK &OWNER,&KW,&LV,&SP,&R10,&FREE
+         GBLA  &RDRV
+         GBLB  &RDSTBAD
+&RDSTBAD SETB  0
+         AIF   ('&SP' EQ '').LENGTH
+         AIF   ('&SP'(1,1) NE '(').LENGTH
+         RDREGN &SP(1)
+         AIF   (&RDRV GE 2 AND &RDRV LE 12).LENGTH
+         MNOTE 8,'&OWNER: SP REGISTER MUST BE 2 TO 12'
+&RDSTBAD SETB  1
+         MEXIT
+.LENGTH  AIF   ('&LV'(1,1) NE '(').DONE
+         RDREGN &LV(1)
+         AIF   (&RDRV NE 0 OR '&R10' NE 'R' OR '&SP' EQ '').FREE
+         MNOTE 8,'&OWNER: SP NOT ALLOWED WITH &KW=(0)'
+&RDSTBAD SETB  1
+         MEXIT
+.FREE    AIF   (&RDRV NE 1 OR '&FREE' NE 'FREE').DONE
+         MNOTE 8,'&OWNER: &KW=(1) NOT ALLOWED ON A RELEASE'
+&RDSTBAD SETB  1
+.DONE    MEND
