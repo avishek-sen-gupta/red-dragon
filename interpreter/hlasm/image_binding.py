@@ -39,7 +39,7 @@ def bind_image(units: Sequence[ModuleUnit]) -> BoundImage:
     cobol = tuple(u for u in units if u.language == Language.COBOL)
     hlasm = tuple(u for u in units if u.language == Language.HLASM)
     binder = Binder(tuple(map(image_module, hlasm)), tuple(map(_cobol_program, cobol)))
-    ir, far_branch = job_step_module(binder)
+    ir, functions = job_step_module(binder)
     labels = {name: job_step_label(named_step(name)) for name in binder.entry_points()}
     ends = {
         unit.path: job_step_label(end_step(image_module(unit).name)) for unit in hlasm
@@ -63,7 +63,7 @@ def bind_image(units: Sequence[ModuleUnit]) -> BoundImage:
                         FuncName(str(label)): label
                         for label in (*labels.values(), *ends.values())
                     },
-                    FuncName(far_branch.name): far_branch.label,
+                    **{FuncName(f.name): f.label for f in functions},
                 }
             ),
             imports=(),

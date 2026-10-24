@@ -59,6 +59,7 @@ addresses.
 | `interpreter/hlasm/floating_point_constant.py`, `float_nominal.py` | E, D and L images, built at assembly time by `zarch_float`'s packers (Language Reference SC26-4940-09, pp. 148-158). `parse_float_nominal` turns each value into a `FloatNumber` (sign, coefficient, written exponent with the modifier, rounding mode) or a `FloatSpecial` once. No extension: HFP rounded by adding one in the first lost bit; a positive zero; the scale modifier shifts the fraction right; a length modifier keeps the leftmost bytes or bits, rounded. Out of range raises `DcCharacteristicOutOfRange` (ASMA064S); a scale or length that leaves no fraction, or cuts the characteristic, raises `DcPrecisionLost` (ASMA073E). H and Q: rounding modes R1 (default), R4-R7, a signed zero, overflow to the largest magnitude, underflow denormalized or zero, and (MAX), (MIN), (DMIN). B: IEEE conversion under R4 (default), R1, R5-R7, into any length from 9/12/16 bits; overflow gives infinity or Nmax by mode; all seven special values, (INF) and the NaNs needing 11/14/18 bits (`DcLengthWrong`, ASMA068S: the manual gives the minimum, and ASMA068S is its message for a wrong length modifier). With one bit of precision a tie has no even significand; round to nearest even then takes the even image (biased exponent), our ruling. D: the written coefficient and exponent fitted under R8 (default) to R15, so an exact value keeps its quantum (IEEE 754-2008 conversion; the manual does not say). (NAN) and (QNAN) are the same quiet NaN. (MIN) is 1E-95/-383/-6143, the smallest normal number, and (DMIN) the smallest subnormal (ruling R60: p. 158 defines MIN only for BFP and HFP). LQ converts as LH. Exponents beyond ±20000 are clamped: every format overflows or underflows alike past them. With a type extension each value carries at most one `DcWarning` (overflow, then underflow, then inexact) on its `ConstantImage` or `BitLengthImage`, as pp. 127 and 156-157 warn; H saturation counts as overflow and denormalization as underflow. They are logged and kept in the unit file (see Diagnostics). Unextended HFP raises none |
 | `interpreter/hlasm/storage_layout.py` | Each section's DC and literal pieces at their offsets: constant images, address slots and external slots |
 | `interpreter/hlasm/binder.py`, `binder_start_up.py`, `job_step.py`, `image_binding.py`, `far_branch.py`, `unresolved_call.py` | The binder and the far branch (see Binder, Control Across Modules) |
+| `interpreter/hlasm/cobol_linkage.py`, `cobol_program.py`, `cobol_owner.py` | Calls between COBOL and HLASM (see COBOL Linkage) |
 | `interpreter/hlasm/program_services.py` | SVC 6, 8 and 9: LINK, LOAD, DELETE |
 | `interpreter/hlasm_run_inputs/` | The HLASM run inputs, a sibling of `interpreter.hlasm` so `run()` can import it (the import contracts keep `interpreter.run` from `interpreter.hlasm`): `run_input_names.py` (builtin names, PARM area sizes), `run_input_builtins.py` (`run_input_builtins(clock, parm)`; `unsupplied_run_input_builtins()`, the host clock and an empty PARM, which `run()` adds under any builtins it is given) |
 | `interpreter/hlasm_run_inputs/job_parm_builtins.py` | `job_parm_builtins(parm)`: the job-step PARM, a run input of at most 100 characters (`ParmTooLong`), as a halfword length and EBCDIC text through `EbcdicTable`; a character it has no code for raises `ParmNotEncodable` |
@@ -287,12 +288,39 @@ Registers stay shared machine state.
     returns and the one below re-dispatches on the target, so `B 4(,14)` and a return that skips
     a level work; otherwise it calls `__hlasm_module_<owner>(target, below | me)` and, when that
     returns, re-dispatches on `__hlasm_target`;
-  - a stub: `CallWithMemory` on `__entry_<NAME>` with no arguments, as a static COBOL
+  - a COBOL program's stub: the program is called with its arguments (see COBOL Linkage);
+  - an unresolved stub: `CallWithMemory` on `__entry_<NAME>` with no arguments, as a static COBOL
     `CALL 'NAME'` to a missing program; the result goes to R15 and control to R14;
   - nothing: `S0C1`.
 
 The job step's R14, `0xFF0`, is owned by nothing, so only the return test ends the outermost
 activation.
+
+### COBOL Linkage
+
+A mixed image (`link_hlasm_units` over COBOL and HLASM unit files, `docs/linker-design.md`
+§7.4) calls across the languages in IR; no builtin is added. Sources: Enterprise COBOL
+Programming Guide (Table 65; "Understanding the RETURN-CODE special register"; "Testing for
+OMITTED arguments"), z/OS LE Writing ILC Applications (Figure 54; the C/COBOL by-value table
+and its note 3), APAR PI44924.
+
+- **COBOL → HLASM.** Each SD and LD name gets a job-step function `__entry_<NAME>`, declared
+  under that name, so a COBOL `CALL` finds it as it finds a COBOL program. It calls
+  `__hlasm_from_cobol(arguments, entry)`, which writes the R1 list in a fresh doubleword-aligned
+  region: BY REFERENCE and BY CONTENT an address; BY VALUE the value itself, 1, 2 and 4 bytes
+  right-aligned in one word, 8 bytes in two words; OMITTED a zero word. The last word gets
+  X'80000000' unless the last argument is BY VALUE. R13 gets a fresh 72-byte save area, R14
+  `0xFF0`, R15 the entry. The module is entered with no modules below, and R15's low halfword
+  comes back as RETURN-CODE.
+- **HLASM → COBOL.** A COBOL program's stub is owned by `CobolOwner`, which holds its USING
+  signature (`ModuleUnit.using`). The far branch walks the R1 list by it, at offsets known at
+  link: a BY REFERENCE position takes the word's 31-bit address, OMITTED when zero, and the VL
+  bit ends the walk there; a BY VALUE position copies 1, 2, 4 or 8 bytes from its slot into a
+  fresh region and never ends the walk. The walk stops at the signature's length. R14–R12 are
+  saved at 12(R13) and restored after the call; R15 gets RETURN-CODE sign-extended.
+- **CANCEL** of an HLASM name does nothing: the program directory does not hold it.
+- **Abends.** An HLASM abend halts the VM, so it ends the whole run unit, COBOL callers
+  included.
 
 ## Diagnostics
 
@@ -1458,6 +1486,13 @@ layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.
 - Each PLO statement lowers its whole function-code table inline, about 7,300 IR instructions; the
   50 codes that do not use R1 or R3 could be emitted once per program (red-dragon-6uyp.83). Lowering
   logs a warning per PLO statement with its IR count.
+- COBOL linkage, where IBM's manuals at hand are silent (rulings in
+  `docs/superpowers/plans/2026-10-24-hlasm-unit-cobol-linkage.md`): 1- and 2-byte BY VALUE
+  values are right-aligned in a word with zero high bytes, an 8-byte value takes two words, and
+  no VL bit follows a trailing BY VALUE. A BY VALUE length other than 1, 2, 4 or 8, which IBM
+  refuses, gives a zero word (COBOL → HLASM) or a zero-filled copy (HLASM → COBOL).
+  RETURN-CODE is a halfword: COBOL keeps R15's low halfword.
+- LINK and LOAD do not find COBOL programs of a mixed image (red-dragon-6uyp.100).
 - `ABEND` takes only a self-defining code of 0-4095. Register notation (`ABEND (R2)`) and larger codes are not supported.
 
 ## Test Coverage
@@ -1519,7 +1554,9 @@ layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.
 | `tests/integration/hlasm/test_bridge_parser.py` | The real bridge: macro origins, refused assemblies; operand placement, modifiers, S-constants, CCW, AMODE/RMODE and diagnostic call stacks |
 | `tests/integration/hlasm/test_macro_language.py` | One program per macro-language feature on the VM: printed values and registers |
 | `tests/unit/hlasm/test_object_module.py` | ESD, TXT, RLD and END of an assembly with private code, a COM, ENTRY, EXTRN, WXTRN, A and V constants |
-| `tests/unit/hlasm/test_binder.py` | Layout offsets, CM merge, name resolution (local, image, weak zero, stub), entry points, far-branch table, unresolved warning; duplicate, non-ADDRESS RLD and XD refusals |
+| `tests/unit/hlasm/test_binder.py` | Layout offsets, CM merge, name resolution (local, image, COBOL stub, weak zero, stub), entry points, far-branch table, unresolved warning; duplicates in either language, non-ADDRESS RLD and XD refusals |
+| `tests/unit/hlasm/test_cobol_linkage.py` | The job step's `__entry_<NAME>` functions, the shared conversion, the far branch's COBOL call |
+| `tests/integration/hlasm/test_cobol_linkage.py` | Mixed image: start-up order, entry by name, PROGRAM-ID vs CSECT refused; COBOL → HLASM list with every mode, OMITTED middle and last, RETURN-CODE; HLASM → COBOL by signature, short VL list; nesting with register restore; abend under COBOL; CANCEL |
 | `tests/integration/hlasm/test_binder.py` | Two modules: a V-constant to a later module's ENTRY and its data; PARM supplied and empty; BALR to an unresolved EXTRN, permitted and refused; a CSECT in two units refused |
 | `tests/z390/test_binder_differential.py` | The two-module V-constant program against z390's linker (SYSOBJ autolink) |
 | `tests/integration/hlasm/test_storage_layout.py` | Section regions and address constants; `*` in each constant after `DC 0F`, and in a duplicated literal; out-of-range values refused with their line, a literal's included; CCW images with relocated addresses, a literal operand's included, and an unresolved external address holding its stub; V-constants to another section; an S-type literal resolved through the USING at its pool |

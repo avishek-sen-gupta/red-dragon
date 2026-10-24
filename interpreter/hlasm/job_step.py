@@ -1,5 +1,5 @@
 # pyright: standard
-"""The job-step module: per entry name, a function that builds the PARM list and enters the module as the system would; and the far branch, which finds a target's owner in the far-branch table and calls it, or tells the activation to return."""
+"""The job-step module: per entry name, a function that builds the PARM list and enters the module as the system would, and a COBOL entry `__entry_<NAME>` that enters it from a COBOL CALL; and the far branch, which finds a target's owner in the far-branch table and calls it, or tells the activation to return."""
 
 from collections.abc import Sequence
 
@@ -7,6 +7,8 @@ from interpreter.func_name import FuncName
 from interpreter.hlasm.abend import emit_abend
 from interpreter.hlasm.binder import Binder
 from interpreter.hlasm.binder_start_up import aligned_region, bound_address
+from interpreter.hlasm.branch_owner import BranchOwner
+from interpreter.hlasm.cobol_linkage import cobol_entry, emit_cobol_call
 from interpreter.hlasm.cobol_owner import CobolOwner
 from interpreter.hlasm.entry_state import enter_registers
 from interpreter.hlasm.far_branch import FarBranch
@@ -27,9 +29,10 @@ from interpreter.hlasm.hlasm_constants import (
     TARGET_VAR,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
-from interpreter.hlasm.ir_function import IrFunction
+from interpreter.hlasm.ir_function import IrFunction, define_called
 from interpreter.hlasm.module_owner import ModuleOwner
 from interpreter.hlasm.placed_name import PlacedName
+from interpreter.hlasm.program_function import ProgramFunction
 from interpreter.hlasm.unresolved_call import emit_unresolved_call
 from interpreter.hlasm.unresolved_owner import UnresolvedOwner
 from interpreter.hlasm_run_inputs.run_input_names import (
@@ -93,16 +96,10 @@ def _job_step(emitter: HlasmEmitter, stem: str, entry: PlacedName) -> None:
     emitter.emit_inst(Label_(label=end))
 
 
-def _owner_entry(owner: UnresolvedOwner | CobolOwner) -> VarName:
-    match owner:
-        case UnresolvedOwner(name=name):
-            return VarName(f"{PROGRAM_ENTRY_PREFIX}{name.upper()}")
-        case CobolOwner(program=program):
-            return VarName(f"{PROGRAM_ENTRY_PREFIX}{program.name.upper()}")
-
-
-def _call_by_name(emitter: HlasmEmitter, owner: UnresolvedOwner | CobolOwner) -> None:
-    result = emit_unresolved_call(emitter, _owner_entry(owner))
+def _call_by_name(emitter: HlasmEmitter, owner: UnresolvedOwner) -> None:
+    result = emit_unresolved_call(
+        emitter, VarName(f"{PROGRAM_ENTRY_PREFIX}{owner.name.upper()}")
+    )
     emitter.store_gr32(RETURN_CODE_REGISTER, result)
     emitter.emit_inst(
         StoreVar(name=TARGET_VAR, value_reg=emitter.load_gr32(LINK_REGISTER))
@@ -140,6 +137,22 @@ def _call_module(emitter: HlasmEmitter, request: FarBranch, module: str) -> None
     emitter.emit_inst(Return_(value_reg=emitter.int_(CALLED)))
 
 
+def _call_program(emitter: HlasmEmitter, owner: UnresolvedOwner | CobolOwner) -> None:
+    match owner:
+        case UnresolvedOwner() as unresolved:
+            _call_by_name(emitter, unresolved)
+        case CobolOwner(program=program):
+            emit_cobol_call(emitter, program)
+
+
+def _call_owner(emitter: HlasmEmitter, request: FarBranch, owner: BranchOwner) -> None:
+    match owner:
+        case ModuleOwner(module=module):
+            _call_module(emitter, request, module)
+        case UnresolvedOwner() | CobolOwner() as program:
+            _call_program(emitter, program)
+
+
 def _far_case(emitter: HlasmEmitter, request: FarBranch, entry: FarBranchEntry) -> None:
     low = bound_address(emitter, entry.start)
     high = emitter.binop(BinopKind.ADD, low, emitter.int_(entry.length))
@@ -149,11 +162,7 @@ def _far_case(emitter: HlasmEmitter, request: FarBranch, entry: FarBranchEntry) 
         emitter.binop(BinopKind.LT, request.target, high),
     )
     other = _when(emitter, inside, "hl_far_owner")
-    match entry.owner:
-        case ModuleOwner(module=module):
-            _call_module(emitter, request, module)
-        case UnresolvedOwner() | CobolOwner() as named:
-            _call_by_name(emitter, named)
+    _call_owner(emitter, request, entry.owner)
     emitter.emit_inst(Label_(label=other))
 
 
@@ -167,13 +176,27 @@ def _far_branch(binder: Binder) -> IrFunction:
     return IrFunction(FAR_BRANCH_FUNCTION, FAR_BRANCH_ARITY, body)
 
 
-def job_step_module(binder: Binder) -> tuple[tuple[InstructionBase, ...], IrFunction]:
+def _defined(
+    emitter: HlasmEmitter, functions: tuple[ProgramFunction, ...]
+) -> tuple[ProgramFunction, ...]:
+    _ = [function.define(emitter) for function in functions]
+    return define_called(emitter, functions)
+
+
+def job_step_module(
+    binder: Binder,
+) -> tuple[tuple[InstructionBase, ...], tuple[ProgramFunction, ...]]:
     emitter = HlasmEmitter("hlasm_job.")
     steps = {
         **{named_step(name): at for name, at in binder.entry_points().items()},
         **{end_step(module): at for module, at in binder.module_entries().items()},
     }
     _ = [_job_step(emitter, stem, entry) for stem, entry in steps.items()]
-    far_branch = _far_branch(binder)
-    far_branch.define(emitter)
-    return emitter.instructions(), far_branch
+    defined = _defined(
+        emitter,
+        (
+            _far_branch(binder),
+            *(cobol_entry(name, at) for name, at in binder.entry_points().items()),
+        ),
+    )
+    return emitter.instructions(), defined
