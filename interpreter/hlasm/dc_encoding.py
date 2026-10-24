@@ -23,8 +23,12 @@ from interpreter.encoding.ebcdic_table import EbcdicTable
 from interpreter.hlasm.address_slot import AddressSlot
 from interpreter.hlasm.bit_length_image import BitLengthImage
 from interpreter.hlasm.constant_image import ConstantImage
-from interpreter.hlasm.dc_exponent_out_of_range import DcExponentOutOfRange
+from interpreter.hlasm.dc_exponent_out_of_range import (
+    NOMINAL_EXPONENT_RANGE,
+    DcExponentOutOfRange,
+)
 from interpreter.hlasm.dc_value_out_of_range import DcValueOutOfRange
+from interpreter.hlasm.floating_point_constant import floating_point_image
 from interpreter.hlasm.hlasm_constants import BITS_PER_BYTE
 from interpreter.hlasm.hlasm_lowering_error import HlasmLoweringError
 from interpreter.hlasm.unsupported_data_type import UnsupportedDataType
@@ -32,12 +36,13 @@ from interpreter.hlasm.unsupported_data_type import UnsupportedDataType
 type DcPiece = ConstantImage | AddressSlot
 type Encoder = Callable[[str, int], int]
 
-FLOATING_POINT_ISSUE = "red-dragon-6uyp.94"
 LINKER_TYPES_ISSUE = "red-dragon-6uyp.96"
 OTHER_TYPES_ISSUE = "red-dragon-6uyp.63"
 BIT_LENGTH_STAR_ISSUE = "red-dragon-6uyp.97"
 
-_FLOATING_POINT_TYPES = frozenset({"E", "D", "L"})
+_FLOATING_POINT_TYPES = frozenset(
+    {"E", "EH", "EB", "ED", "D", "DH", "DB", "DD", "L", "LH", "LB", "LD", "LQ"}
+)
 _LINKER_TYPES = frozenset({"Q", "J"})
 _UNSPLIT_TYPES = frozenset({"C"})
 _NOMINAL_SEPARATOR = ","
@@ -61,7 +66,6 @@ _HIGH_DISPLACEMENT_MASK = 0xFF
 _LOW_DISPLACEMENT_SHIFT = 8
 _UNSIGNED = "U"
 _EXPONENT = "E"
-_EXPONENT_RANGE = range(-85, 76)
 _Y_RANGE = range(-(1 << 15), 1 << 16)
 _EXTERNAL_ADDRESS_ISSUE = "red-dragon-6uyp.8"
 _FORMAT_1_CCW = "CCW1"
@@ -167,7 +171,12 @@ _VALUE_LENGTHS: Mapping[str, Callable[[str], int]] = {
 
 _ADDRESS_TYPES = frozenset({"A", "AD", "Y", "V", "VD", "S", "SY"})
 _FIXED_POINT_TYPES = frozenset({"F", "FD", "H"})
-_SUPPORTED_TYPES = _STRING_ENCODERS.keys() | _ADDRESS_TYPES | _FIXED_POINT_TYPES
+_SUPPORTED_TYPES = (
+    _STRING_ENCODERS.keys()
+    | _ADDRESS_TYPES
+    | _FIXED_POINT_TYPES
+    | _FLOATING_POINT_TYPES
+)
 
 
 def _code(item: DcItem) -> str:
@@ -175,8 +184,6 @@ def _code(item: DcItem) -> str:
 
 
 def _issue(item: DcItem) -> str:
-    if item.type in _FLOATING_POINT_TYPES:
-        return FLOATING_POINT_ISSUE
     if item.type in _LINKER_TYPES:
         return LINKER_TYPES_ISSUE
     return OTHER_TYPES_ISSUE
@@ -193,7 +200,7 @@ def _fixed_value(item: DcItem, text: str, origin: Origin) -> int:
         text.replace(_SPACE, "").removeprefix(_UNSIGNED).upper().partition(_EXPONENT)
     )
     exponent = int(written or "0") + item.exponent
-    if exponent not in _EXPONENT_RANGE:
+    if exponent not in NOMINAL_EXPONENT_RANGE:
         raise DcExponentOutOfRange(f"{_code(item)}'{text}'", origin)
     number = Fraction(mantissa)
     scaled = abs(number) * _DECIMAL_BASE**exponent * _BINARY_BASE**item.scale
@@ -217,6 +224,8 @@ def _fixed(item: DcItem, text: str, bits: int, origin: Origin) -> int:
 def _string_value(item: DcItem, text: str, bits: int, origin: Origin) -> int:
     if _code(item) in _FIXED_POINT_TYPES:
         return _fixed(item, text, bits, origin)
+    if _code(item) in _FLOATING_POINT_TYPES:
+        return floating_point_image(item, text, bits, origin)
     return _STRING_ENCODERS[_code(item)](text, bits)
 
 

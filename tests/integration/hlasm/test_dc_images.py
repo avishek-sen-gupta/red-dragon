@@ -1,5 +1,5 @@
 # pyright: standard
-"""DC constants assembled into a section hold their HLASM images when the program loads them; bit-length forms z390 misassembles follow the Language Reference's bit-length modifier rules (fields from the next free bit, C from its high-order end, others from the low-order end, the last byte zero-filled)."""
+"""DC constants assembled into a section hold their HLASM images when the program loads them. Forms z390 misassembles or cannot assemble follow the Language Reference (SC26-4940-09): bit-length modifiers (pp. 125-126: fields from the next free bit, C, E, D and L from their high-order end, others from the low-order end, the last byte zero-filled); without a type extension an HFP zero is positive, and scale shifts the fraction right (pp. 127, 153); EE2'.46415' is 46.415 (p. 153); a length modifier rounds the fraction (p. 150); H overflows to the largest magnitude and denormalizes (p. 151); BFP converts correctly rounded under its rounding mode (pp. 156-157); special values (p. 158); DFP keeps the written quantum (IEEE 754-2008 conversion, not stated by the manual), and DFP (MIN) is the smallest normal number (our reading: p. 158 states MIN only for BFP and HFP)."""
 
 import pytest
 
@@ -35,9 +35,11 @@ def test_alignment_inside_a_statement_is_zero_filled():
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_bit_length_forms_follow_the_language_reference():
-    expected = programs.registers(programs.BIT_LENGTHS_PAST_Z390_IMAGE)
-    source = programs.image_program(programs.BIT_LENGTHS_PAST_Z390, len(expected))
+@pytest.mark.parametrize("family", list(programs.PAST_Z390))
+def test_forms_z390_misassembles_follow_the_language_reference(family: str):
+    constants, image = programs.PAST_Z390[family]
+    expected = programs.registers(image)
+    source = programs.image_program(constants, len(expected))
 
     assert run_hlasm_machine(source).restricted_to(expected) == HlasmMachine(
         ABENDED, 0, expected
