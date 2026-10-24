@@ -1,47 +1,55 @@
          MACRO
 &NAME    RETURN &REGS,&T,&RC=
-         GBLA  &IHBRV
-         LCLA  &R1,&R2,&OFF
+         GBLA  &RDRV
+         LCLA  &R1,&R2,&OFF,&LOW
          LCLB  &SKIP15
-&NAME    DS    0H
-         AIF   (N'&REGS EQ 0).AFTER
-         IHBREGN &REGS(1)
-&R1      SETA  &IHBRV
-&R2      SETA  &IHBRV
-         AIF   (N'&REGS LT 2).CHECK
-         IHBREGN &REGS(2)
-&R2      SETA  &IHBRV
-.CHECK   AIF   (&R1 LT 0 OR &R2 LT 0).BADREG
-         AIF   ('&T' EQ '' OR '&T' EQ 'T').TOK
+         LCLC  &RCV
+&RCV     SETC  '&RC'
+         AIF   ('&RC' NE '(R15)').CHECKT
+&RCV     SETC  '(15)'
+.CHECKT  AIF   ('&T' EQ '' OR '&T' EQ 'T').CHECKRC
          MNOTE 8,'RETURN: SECOND OPERAND MUST BE T'
          MEXIT
-.TOK     AIF   ('&RC' EQ '' OR '&RC' EQ '(15)').RCOK
-         AIF   ('&RC'(1,1) NE '(').RCOK
+.CHECKRC AIF   ('&RCV' EQ '' OR '&RCV' EQ '(15)').CHECKN
+         AIF   ('&RCV'(1,1) NE '(').CHECKN
          MNOTE 8,'RETURN: RC REGISTER MUST BE 15'
          MEXIT
-.RCOK    ANOP
+.CHECKN  AIF   (N'&REGS LE 2).CHECKR
+         MNOTE 8,'RETURN: REGISTER RANGE TOO LONG'
+         MEXIT
+.CHECKR  ANOP
+&NAME    DS    0H
+         AIF   (N'&REGS EQ 0).AFTER
+         RDREGN &REGS(1)
+&R1      SETA  &RDRV
+&R2      SETA  &RDRV
+         AIF   (N'&REGS LT 2).RANGE
+         RDREGN &REGS(2)
+&R2      SETA  &RDRV
+.RANGE   AIF   (&R1 LT 0 OR &R2 LT 0).BADREG
 &OFF     SETA  (&R1*4+20)-((&R1*4+20)/64)*64
-&SKIP15  SETB  ('&RC' EQ '(15)' AND (&R1 GT &R2 OR &R1 EQ 15))
+&LOW     SETA  &OFF+4*(16-&R1)
+&SKIP15  SETB  ('&RCV' EQ '(15)' AND (&R1 GT &R2 OR &R2 EQ 15))
          AIF   (&SKIP15).SPLIT
          AIF   (&R1 EQ &R2).ONE
          LM    &R1,&R2,&OFF.(13)
          AGO   .AFTER
 .ONE     L     &R1,&OFF.(13)
          AGO   .AFTER
-.SPLIT   AIF   (&R1 EQ 15).LOW
+.SPLIT   AIF   (&R1 GE 15).LOW
          AIF   (&R1 EQ 14).HIGHL
          LM    &R1,14,&OFF.(13)
          AGO   .LOW
 .HIGHL   L     14,12(13)
-.LOW     AIF   (&R1 EQ &R2).AFTER
+.LOW     AIF   (&R1 LE &R2).AFTER
          AIF   (&R2 EQ 0).LOWL
-         LM    0,&R2,20(13)
+         LM    0,&R2,&LOW.(13)
          AGO   .AFTER
-.LOWL    L     0,20(13)
+.LOWL    L     0,&LOW.(13)
 .AFTER   AIF   ('&T' NE 'T').RCSET
          MVI   12(13),X'FF'
-.RCSET   AIF   ('&RC' EQ '' OR '&RC' EQ '(15)').RET
-         LA    15,&RC
+.RCSET   AIF   ('&RCV' EQ '' OR '&RCV' EQ '(15)').RET
+         LA    15,&RCV
 .RET     BR    14
          MEXIT
 .BADREG  MNOTE 8,'RETURN: INVALID REGISTER'

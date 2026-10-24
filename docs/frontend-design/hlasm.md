@@ -281,15 +281,14 @@ conventions but expand only to lowered opcodes:
 | `WTO 'text'` | `BRAS 1` around an inline list (AL2 length including the 4-byte header, AL2 MCS flags, the text), then `SVC 35` |
 | `ABEND code` | `LA 1,code` (user code, bits 20-31), then `SVC 13` |
 | `ABEND code,,,SYSTEM` | `LA 1,code`, twelve `LA 1,0(1,1)` doublings into bits 8-19, then `SVC 13`. `DUMP` and `STEP` are accepted and ignored. |
-
-| `SAVE (r1,r2)[,T][,id]` | `STM r1,r2` at word `(r1*4+20) mod 64` of the R13 save area; with `T` and `r1` not 14, also `STM 14,15,12(13)`; an `id` (`*` is the CSECT name) is a `J` around `AL1(length),CL'id'`. No chaining. |
-| `RETURN (r1,r2)[,T][,RC=n\|(15)]` | `LM` over the same words, then `MVI 12(13),X'FF'` for `T`, `LA 15,n` for `RC=n`, then `BR 14`. `RC=(15)` skips R15 in the reload, so `(14,12)` is `L 14,12(13)` and `LM 0,12,20(13)`. R13 is restored only if it is in the range. |
+| `SAVE (r1,r2)[,T][,id]` | With an `id` (`*` is the macro's label, else the CSECT name; up to 70 characters), `J` around `AL1(length),CL'id'` first, so the count byte is at entry+4 and the text at entry+5. Then `STM r1,r2` at byte `(r1*4+20) mod 64` of the R13 save area; with `T` and `r1` not 14, also `STM 14,15,12(13)`. |
+| `RETURN (r1,r2)[,T][,RC=n\|(15)]` | `LM` over the same slots, then `MVI 12(13),X'FF'` for `T`, `LA 15,n` for `RC=n`, then `BR 14`. `RC=(15)` (or `(R15)`) never reloads R15: `(14,12)` is `L 14,12(13)` and `LM 0,12,20(13)`, `(14,15)` is `L 14,12(13)`. R13 is restored only if it is in the range. |
 | `YREGS` | `R0` to `R15` as `EQU`s |
 
-Registers may be numbers or `Rn`. A bad register, a second operand other than `T`, or
+Registers may be numbers or `Rn`. A bad register, a third range entry, a second operand other than `T`, or
 an `RC` register other than 15 is an `MNOTE 8`, which refuses the assembly. Save areas
-are the 72-byte format-0 area. z390's own `SAVE` ignores `T` and the identifier, so the
-differential tests expect its flag and R14/R15 slots to differ.
+are the 72-byte format-0 area. The differential tests run against z390's `mac/` library, whose `SAVE` and `RETURN` ignore `T` and the
+identifier, so they expect its flag and R14/R15 slots to differ; the identifier layout rests on the VM tests.
 
 SVCs are lowered in IR over existing builtins; no SVC has a builtin of its own.
 
@@ -1367,7 +1366,7 @@ layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.
 | `tests/integration/hlasm/test_hlasm_compile.py` | Unit files; MNOTEs (WARNING and INFO) with their severity and a DC warning logged with place and call stack, and logged again from the cached files with no assembly; reuse that follows the inputs, SYSLIB member contents and the bridge, not the clock; assembly inputs, clock and `&SYSSEQF` printed through WTO; an unsupplied `&SYSPARM` is null and another input not given is refused; a missing SYSLIB directory refused; a bridge name found on `PATH`; the bridge found from another working directory; `run()`, return code, default entry, BALR/BR, wild branch |
 | `tests/unit/hlasm/test_bridge_command.py` | The bridge command carries each supplied input and the clock as options; a naive clock and a SYSPARM over 255 characters are refused |
 | `tests/integration/hlasm/test_instruction_table.py`, `test_opcode_unit_coverage.py` | Instruction table and opcode-unit coverage |
-| `tests/integration/hlasm/test_save_return.py` | `SAVE`, `RETURN`, `YREGS`: registers and save-area words per range, `T`, `RC`, identifier layout, a nested call, operand refusals |
+| `tests/integration/hlasm/test_save_return.py` | `SAVE`, `RETURN`, `YREGS`: registers per range including `(14,15)` and a wrapped range, `T`, `RC`, identifier layout at entry+4 with label and CSECT names, a nested call, operand refusals |
 | `tests/z390/test_save_return_differential.py` | The same programs against z390 |
 | `tests/z390/test_foundation_differential.py` | Return code, WTO, user abend and assembly failure against z390 (`-m z390`) |
 | `tests/z390/test_z390_log.py` | Registers and CC from a z390 abend dump (default run) |

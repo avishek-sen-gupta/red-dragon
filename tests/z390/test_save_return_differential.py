@@ -1,5 +1,5 @@
 # pyright: standard
-"""SAVE, RETURN and YREGS leave the same registers and return code in RedDragon, with our macros, and in z390, with its own; z390 ignores the T and identifier operands, so the flag and the R14/R15 slots differ."""
+"""SAVE, RETURN and YREGS leave the same registers and return code in RedDragon, with our macros, and in z390, with its own; z390's mac/ SAVE and RETURN ignore the T and identifier operands, so the flag and the R14/R15 slots differ."""
 
 from pathlib import Path
 
@@ -39,12 +39,16 @@ def test_registers_after_return_match(z390: Z390Runner, tmp_path: Path, case: st
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_standard_entry_and_exit_returns_the_same_code(
-    z390: Z390Runner, tmp_path: Path
+@pytest.mark.parametrize(
+    "name,source,code",
+    [
+        ("standard", programs.standard(""), 7),
+        ("nested", programs.NESTED, 3),
+    ],
+)
+def test_entry_and_exit_return_the_same_code(
+    z390: Z390Runner, tmp_path: Path, name: str, source: str, code: int
 ):
-    returned = HlasmRun(return_code=7, abend="", stdout="")
+    returned = HlasmRun(return_code=code, abend="", stdout="")
 
-    assert (
-        run_hlasm(programs.STANDARD),
-        z390.run(programs.STANDARD, tmp_path),
-    ) == (returned, returned)
+    assert (run_hlasm(source), z390.run(source, tmp_path)) == (returned, returned)
