@@ -129,7 +129,7 @@ def test_wto_from_macro_keeps_call_site_span(tmp_path: Path):
         )
     )
 
-    ir = get_hlasm_frontend(program).lower(b"")
+    ir = get_hlasm_frontend(program, "M").lower(b"")
 
     (println,) = [
         inst

@@ -18,7 +18,6 @@ from interpreter.hlasm.hlasm_constants import (
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.hlasm_entry import HlasmEntry
-from interpreter.hlasm.storage_layout import section_var
 from interpreter.instructions import AllocRegion, Const, InstructionBase, StoreVar
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
@@ -39,7 +38,7 @@ def resolve_entry(program: HlasmProgram) -> HlasmEntry:
 
 
 def entry_address(emitter: HlasmEmitter, entry: HlasmEntry) -> Register:
-    base = emitter.load_var(section_var(entry.section))
+    base = emitter.section_base(entry.section)
     return emitter.binop(BinopKind.ADD, base, emitter.int_(entry.offset))
 
 
@@ -51,8 +50,8 @@ def _save_area(emitter: HlasmEmitter) -> Register:
     return region
 
 
-def entry_state(program: HlasmProgram) -> tuple[InstructionBase, ...]:
-    emitter = HlasmEmitter("hlasm_entry.")
+def entry_state(program: HlasmProgram, module: str) -> tuple[InstructionBase, ...]:
+    emitter = HlasmEmitter("hlasm_entry.", module)
     entry = resolve_entry(program)
     abend = emitter.fresh_reg()
     emitter.emit_inst(Const.string(abend, NO_ABEND))

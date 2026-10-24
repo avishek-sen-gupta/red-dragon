@@ -23,6 +23,7 @@ from interpreter.hlasm.constant_image import ConstantImage
 from interpreter.hlasm.dc_encoding import encode_dc
 from interpreter.hlasm.dc_exponent_out_of_range import DcExponentOutOfRange
 from interpreter.hlasm.dc_value_out_of_range import DcValueOutOfRange
+from interpreter.hlasm.external_slot import ExternalSlot
 from interpreter.hlasm.unsupported_data_type import UnsupportedDataType
 
 ORIGIN = MacroOrigin(kind="MACRO", file="src/t.asm", line=7, macro="GEN", depth=1)
@@ -145,7 +146,9 @@ def test_address_constants_are_absolute_relocated_or_external():
         _address_item("A", (AbsAddress(kind="ABS", value=-1),), 2, True),
         _address_item("A", (FIELD,), 3, explicit_length=True),
         _address_item("Y", (FIELD,), 2),
-        _address_item("V", (ExternalAddress(kind="EXTERNAL", name="EXTRN"),), 4),
+        _address_item(
+            "V", (ExternalAddress(kind="EXTERNAL", name="EXTRN", offset=0),), 4
+        ),
         _address_item("A", (), 4).model_copy(
             update={
                 "duplication": 2,
@@ -160,7 +163,7 @@ def test_address_constants_are_absolute_relocated_or_external():
         (ConstantImage((0xFF, 0xFF)),),
         (AddressSlot(FIELD, 3),),
         (AddressSlot(FIELD, 2),),
-        (ConstantImage((0, 0, 0, 0)),),
+        (ExternalSlot(ExternalAddress(kind="EXTERNAL", name="EXTRN", offset=0), 4),),
         (AddressSlot(FIELD, 4), AddressSlot(NEXT, 4)),
     ]
 
@@ -332,10 +335,10 @@ def test_doubleword_character_set_and_base_displacement_types():
     )
     assert encode_dc(
         _address_item(
-            "V", (ExternalAddress(kind="EXTERNAL", name="EXTRN"),), 8
+            "V", (ExternalAddress(kind="EXTERNAL", name="EXTRN", offset=0),), 8
         ).model_copy(update={"extension": "D"}),
         ORIGIN,
-    ) == (ConstantImage((0,) * 8),)
+    ) == (ExternalSlot(ExternalAddress(kind="EXTERNAL", name="EXTRN", offset=0), 8),)
 
 
 @pytest.mark.parametrize(

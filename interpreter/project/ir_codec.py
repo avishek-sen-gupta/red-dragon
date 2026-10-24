@@ -38,16 +38,29 @@ from interpreter.operator_kind import BinopKind, UnopKind
 from interpreter.path_name import NO_PATH_NAME, NoPathName, PathName
 from interpreter.project.coded_diagnostic import CodedDiagnostic
 from interpreter.project.comment_mnote import CommentMnote
+from interpreter.project.common_section import CommonSection
 from interpreter.project.constant_diagnostic import ConstantDiagnostic
+from interpreter.project.control_section import ControlSection
 from interpreter.project.dc_warning_kind import DcWarningKind
+from interpreter.project.default_end import DefaultEnd
 from interpreter.project.diagnostic_place import DiagnosticPlace
 from interpreter.project.diagnostic_severity import DiagnosticSeverity
+from interpreter.project.entry_label import EntryLabel
+from interpreter.project.external_dummy_section import ExternalDummySection
+from interpreter.project.external_reference import ExternalReference
 from interpreter.project.in_macro import InMacro
 from interpreter.project.in_open_code import InOpenCode
+from interpreter.project.named_end import NamedEnd
+from interpreter.project.object_module import ObjectModule
+from interpreter.project.relocation_kind import RelocationKind
+from interpreter.project.relocation_record import RelocationRecord
+from interpreter.project.relocation_sign import RelocationSign
 from interpreter.project.severity_mnote import SeverityMnote
+from interpreter.project.text_record import TextRecord
 from interpreter.project.types import ExportTable, ImportKind, ImportRef, ModuleUnit
 from interpreter.project.unit_diagnostic import UnitDiagnostic
 from interpreter.project.unit_format_error import UnitFormatError
+from interpreter.project.weak_reference import WeakReference
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
 from interpreter.register import NO_REGISTER, NoRegister, Register
@@ -96,6 +109,17 @@ _DATACLASSES: tuple[type, ...] = (
     ConstantDiagnostic,
     InMacro,
     InOpenCode,
+    ObjectModule,
+    ControlSection,
+    CommonSection,
+    EntryLabel,
+    ExternalReference,
+    WeakReference,
+    ExternalDummySection,
+    TextRecord,
+    RelocationRecord,
+    NamedEnd,
+    DefaultEnd,
     FieldInfo,
     FunctionInfo,
     ClassInfo,
@@ -121,6 +145,8 @@ _ENUMS: tuple[type[enum.Enum], ...] = (
     Language,
     DiagnosticSeverity,
     DcWarningKind,
+    RelocationKind,
+    RelocationSign,
 )
 _NATIVE = (bool, int, float, str)
 

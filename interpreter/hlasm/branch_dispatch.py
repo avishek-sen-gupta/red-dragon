@@ -18,7 +18,6 @@ from interpreter.hlasm.hlasm_constants import (
     TARGET_VAR,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
-from interpreter.hlasm.storage_layout import section_var
 from interpreter.instructions import Branch, BranchIf, Label_, Return_, StoreVar
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import BinopKind
@@ -54,9 +53,7 @@ def _section_chain(
     emitter: HlasmEmitter, target: Register, case: tuple[str, Sequence[int]]
 ) -> None:
     section, offsets = case
-    offset = emitter.binop(
-        BinopKind.SUB, target, emitter.load_var(section_var(section))
-    )
+    offset = emitter.binop(BinopKind.SUB, target, emitter.section_base(section))
     _ = [_offset_case(emitter, offset, (section, at)) for at in offsets]
 
 

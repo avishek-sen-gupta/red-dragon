@@ -7,7 +7,6 @@ from hlasm_asg.program.storage_operand import StorageOperand
 from interpreter.hlasm.element_size import ElementSize
 from interpreter.hlasm.hlasm_constants import ADDRESS_MASK_31
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
-from interpreter.hlasm.storage_layout import section_var
 from interpreter.hlasm.vector_elements import load_element
 from interpreter.hlasm.vector_indexed_operand import VectorIndexedOperand
 from interpreter.operator_kind import BinopKind
@@ -66,7 +65,7 @@ def length_operand_address(
 
 
 def relative_address(emitter: HlasmEmitter, operand: RelocImmOperand) -> Register:
-    base = emitter.load_var(section_var(operand.section))
+    base = emitter.section_base(operand.section)
     return emitter.binop(BinopKind.ADD, base, emitter.int_(operand.offset))
 
 

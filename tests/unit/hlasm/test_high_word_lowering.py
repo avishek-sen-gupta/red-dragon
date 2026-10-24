@@ -214,7 +214,7 @@ def test_brcth_takes_the_target_then_counts_down_the_high_word():
     relative = RelocImmOperand(kind="RELOC_IMM", section="T", offset=40)
 
     assert _shape("BRCTH", (reg_operand(4), relative)) == [
-        "LoadVar __hlasm_sect_T",
+        "LoadVar __hlasm_sect_.T",
         "+ 40",
         "LoadVar __hlasm_gprs",
         "LoadRegion 32+4",

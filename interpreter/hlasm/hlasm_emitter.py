@@ -25,6 +25,7 @@ from interpreter.hlasm.hlasm_constants import (
 )
 from interpreter.hlasm.located_span import LocatedSpan
 from interpreter.hlasm.program_function import ProgramFunction
+from interpreter.hlasm.section_variable import section_var
 from interpreter.instructions import (
     Binop,
     CallFunction,
@@ -44,8 +45,9 @@ from interpreter.var_name import VarName
 class HlasmEmitter:
     """The lowering's instruction sink; GPR values are unsigned images, stores wrap."""
 
-    def __init__(self, register_prefix: str = "") -> None:
+    def __init__(self, register_prefix: str = "", module: str = "") -> None:
         self._register_prefix = register_prefix
+        self._module = module
         self._registers = count()
         self._labels = count()
         self._instructions: Chain[InstructionBase] = EmptyChain()
@@ -66,6 +68,9 @@ class HlasmEmitter:
             )
             for index, inst in enumerate(flattened(self._instructions))
         )
+
+    def section_base(self, section: str) -> Register:
+        return self.load_var(section_var(self._module, section))
 
     def use_function(self, function: ProgramFunction) -> None:
         self._functions = {**self._functions, function.name: function}

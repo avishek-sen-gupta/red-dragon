@@ -15,7 +15,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 def _defined(name: str) -> tuple[list[str], list[str]]:
     program = HlasmProgram.model_validate_json((FIXTURES / name).read_text())
-    frontend = HlasmFrontend(program)
+    frontend = HlasmFrontend(program, "M")
     labels = [
         str(i.label)
         for i in frontend.lower(b"")

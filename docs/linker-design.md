@@ -429,11 +429,12 @@ list of pairs, so any value can be a name), `loc`, `none`, `unknown_type`, and
 constructing the class, null-object classes to their singletons). An unknown
 kind or class raises `UnitFormatError`.
 
-`UnitCodec` and `LinkedCodec` write `{"format": 6, "unit" | "linked": …}` and raise
-`UnitFormatError` naming the file when it does not decode, a file of format 5
+`UnitCodec` and `LinkedCodec` write `{"format": 7, "unit" | "linked": …}` and raise
+`UnitFormatError` naming the file when it does not decode, a file of format 6
 included. Format 4 added `ModuleUnit.diagnostics`, the warnings lowering raised, so a
 reused unit reports them again (HLASM fills it); format 5 gave each one a typed
-`kind`, and format 6 moved every fact, a DC warning's included, into it. The encoding is verbose
+`kind`, format 6 moved every fact, a DC warning's included, into it, and format 7 added
+`ModuleUnit.object_module` (HLASM's ESD, TXT, RLD and END; `NO_OBJECT_MODULE` elsewhere). The encoding is verbose
 (red-dragon-rfwv).
 
 ### 7.3 One image, entered by program (COBOL)
@@ -478,8 +479,9 @@ which is also `entry_func_label`. Unlike COBOL, the start-up depends on the
 program (one region per section, entry registers), so link reads the AST file
 again to build it. Start-up registers carry `%hlasm_machine_`, `%hlasm.sect.`,
 `%hlasm.dc.` and `%hlasm_entry.` prefixes and lowering registers are `%N`, so the
-two never collide in the one frame both run in. `lower_hlasm_program` stops at the
-unit file.
+two never collide in the one frame both run in. `lower_hlasm_program(program)` stops at
+the unit file, which takes the path of the `SourceFile` it is given. The unit carries
+the assembly's `ObjectModule` ("Object module" in `docs/frontend-design/hlasm.md`).
 
 ---
 

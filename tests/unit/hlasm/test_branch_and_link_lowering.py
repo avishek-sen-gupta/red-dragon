@@ -69,9 +69,9 @@ GPRS = "LoadVar __hlasm_gprs"
 READ_R4 = [GPRS, "LoadRegion 36+4"]
 READ_R12 = [GPRS, "LoadRegion 100+4"]
 STORAGE_TARGET = [*READ_R12, "+ reg", "& 2147483647"]
-RELATIVE_TARGET = ["LoadVar __hlasm_sect_T", "+ 40"]
+RELATIVE_TARGET = ["LoadVar __hlasm_sect_.T", "+ 40"]
 LINK_R5 = [
-    "LoadVar __hlasm_sect_T",
+    "LoadVar __hlasm_sect_.T",
     "+ 8",
     "| 2147483648",
     GPRS,

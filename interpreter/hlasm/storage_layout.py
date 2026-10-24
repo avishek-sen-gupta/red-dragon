@@ -17,13 +17,14 @@ from interpreter.hlasm.address_slot import AddressSlot
 from interpreter.hlasm.bit_length_image import BitLengthImage
 from interpreter.hlasm.constant_image import ConstantImage
 from interpreter.hlasm.dc_encoding import DcPiece, encode_ccw, encode_dc
+from interpreter.hlasm.external_slot import ExternalSlot
 from interpreter.hlasm.hlasm_constants import (
     BITS_PER_BYTE,
     DOUBLEWORD_BYTES,
     INT_TO_BINARY_BYTES,
-    SECTION_VAR_PREFIX,
 )
 from interpreter.hlasm.placed_piece import PlacedPiece
+from interpreter.hlasm.section_variable import section_var
 from interpreter.instructions import (
     AllocRegion,
     Binop,
@@ -36,28 +37,23 @@ from interpreter.instructions import (
 )
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
-from interpreter.var_name import VarName
 
 type Fragment = tuple[Register, tuple[InstructionBase, ...]]
 type ByteAt = tuple[int, int]
-
-
-def section_var(name: str) -> VarName:
-    return VarName(f"{SECTION_VAR_PREFIX}{name}")
 
 
 def _reg(prefix: str, role: str) -> Register:
     return Register(f"%{prefix}.{role}")
 
 
-def _allocate(section: Section) -> tuple[InstructionBase, ...]:
+def _allocate(module: str, section: Section) -> tuple[InstructionBase, ...]:
     prefix = f"hlasm.sect.{section.name}"
     size = _reg(prefix, "size")
     region = _reg(prefix, "region")
     return (
         Const.int_(size, _align(section.length, DOUBLEWORD_BYTES)),
         AllocRegion(result_reg=region, size_reg=size),
-        StoreVar(name=section_var(section.name), value_reg=region),
+        StoreVar(name=section_var(module, section.name), value_reg=region),
     )
 
 
@@ -122,7 +118,9 @@ def _place_items(
     return (*pieces, *_packed_bytes(section, bits))
 
 
-def _placed(program: HlasmProgram, sections: frozenset[str]) -> tuple[PlacedPiece, ...]:
+def placed_pieces(
+    program: HlasmProgram, sections: frozenset[str]
+) -> tuple[PlacedPiece, ...]:
     statements = (
         _place_items(s.section, s.items, s.origin)
         for s in program.statements
@@ -141,17 +139,25 @@ def _placed(program: HlasmProgram, sections: frozenset[str]) -> tuple[PlacedPiec
     return tuple(chain.from_iterable(chain(statements, literals, channel_commands)))
 
 
-def _constant_value(prefix: str, piece: ConstantImage) -> Fragment:
+def _assembled(piece: ConstantImage | ExternalSlot) -> int:
+    match piece:
+        case ConstantImage():
+            return int.from_bytes(bytes(piece.image), "big")
+        case ExternalSlot():
+            return 0
+
+
+def _constant_value(prefix: str, piece: ConstantImage | ExternalSlot) -> Fragment:
     value = _reg(prefix, "value")
-    return value, (Const.int_(value, int.from_bytes(bytes(piece.image), "big")),)
+    return value, (Const.int_(value, _assembled(piece)),)
 
 
-def _address_value(prefix: str, piece: AddressSlot) -> Fragment:
+def _address_value(module: str, prefix: str, piece: AddressSlot) -> Fragment:
     base, offset, address, modulus, value = (
         _reg(prefix, role) for role in ("base", "offset", "address", "mod", "value")
     )
     return value, (
-        LoadVar(result_reg=base, name=section_var(piece.address.section)),
+        LoadVar(result_reg=base, name=section_var(module, piece.address.section)),
         Const.int_(offset, piece.address.offset),
         Binop(result_reg=address, operator=BinopKind.ADD, left=base, right=offset),
         Const.int_(modulus, 1 << (BITS_PER_BYTE * piece.width)),
@@ -159,17 +165,17 @@ def _address_value(prefix: str, piece: AddressSlot) -> Fragment:
     )
 
 
-def _value(prefix: str, piece: DcPiece) -> Fragment:
+def _value(module: str, prefix: str, piece: DcPiece) -> Fragment:
     match piece:
-        case ConstantImage():
-            return _constant_value(prefix, piece)
         case AddressSlot():
-            return _address_value(prefix, piece)
+            return _address_value(module, prefix, piece)
+        case _:
+            return _constant_value(prefix, piece)
 
 
-def _write(index: int, placed: PlacedPiece) -> tuple[InstructionBase, ...]:
+def _write(module: str, index: int, placed: PlacedPiece) -> tuple[InstructionBase, ...]:
     prefix = f"hlasm.dc.{placed.section}.{placed.offset}.{index}"
-    value, value_ir = _value(prefix, placed.piece)
+    value, value_ir = _value(module, prefix, placed.piece)
     width, unsigned, image, region, offset = (
         _reg(prefix, role) for role in ("width", "unsigned", "image", "region", "at")
     )
@@ -182,7 +188,7 @@ def _write(index: int, placed: PlacedPiece) -> tuple[InstructionBase, ...]:
             func_name=INT_TO_BINARY_BYTES,
             args=(value, width, unsigned),
         ),
-        LoadVar(result_reg=region, name=section_var(placed.section)),
+        LoadVar(result_reg=region, name=section_var(module, placed.section)),
         Const.int_(offset, placed.offset),
         WriteRegion(
             region_reg=region,
@@ -193,13 +199,15 @@ def _write(index: int, placed: PlacedPiece) -> tuple[InstructionBase, ...]:
     )
 
 
-def section_allocation(program: HlasmProgram) -> tuple[InstructionBase, ...]:
+def section_allocation(
+    program: HlasmProgram, module: str
+) -> tuple[InstructionBase, ...]:
     sections = tuple(s for s in program.sections if s.kind != SectionKind.DSECT)
     names = frozenset(section.name for section in sections)
     return (
-        *chain.from_iterable(_allocate(section) for section in sections),
+        *chain.from_iterable(_allocate(module, section) for section in sections),
         *chain.from_iterable(
-            _write(index, placed)
-            for index, placed in enumerate(_placed(program, names))
+            _write(module, index, placed)
+            for index, placed in enumerate(placed_pieces(program, names))
         ),
     )
