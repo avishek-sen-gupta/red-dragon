@@ -2,11 +2,11 @@
 """HFP arithmetic: guard digit, truncation, rounding and exponent conditions per the PoO."""
 
 from tests.covers import NotLanguageFeature, covers
-from tests.unit.zarch_float.bfp_bits import to_bits
 from tests.unit.zarch_float.hfp_bits import image, long, short
 from zarch_float.bfp_format import LONG as BFP_LONG
 from zarch_float.bfp_format import SHORT as BFP_SHORT
 from zarch_float.bfp_format import BfpFormat
+from zarch_float.bfp_image import bfp_image
 from zarch_float.comparison import Comparison
 from zarch_float.comparison_result import ComparisonResult
 from zarch_float.condition import Condition
@@ -240,7 +240,7 @@ def test_hfp_to_bfp_rounds_by_the_modifier_denormalizes_and_overflows_per_figure
 
     def converted(bits: int, target: BfpFormat, m3: int) -> tuple[int, bool]:
         result = hfp_to_bfp(long(bits), target, modes[m3])
-        return to_bits(result.value), Condition.OVERFLOW in result.conditions
+        return bfp_image(result.value), Condition.OVERFLOW in result.conditions
 
     assert sorted(modes) == [0, 1, 3, 4, 5, 6, 7]
     assert [

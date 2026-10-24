@@ -3,7 +3,6 @@
 
 import ctypes
 import struct
-from collections.abc import Callable, Mapping
 
 from zarch_float.bfp_format import LONG, SHORT, BfpFormat
 from zarch_float.bfp_value import BfpValue
@@ -20,34 +19,6 @@ def _fraction_bits(fmt: BfpFormat) -> int:
 
 def _quiet_bit(fmt: BfpFormat) -> int:
     return 1 << (fmt.precision - 2)
-
-
-def _image(value: BfpValue, biased: int, fraction: int) -> int:
-    width = _exponent_bits(value.format) + _fraction_bits(value.format)
-    sign = int(value.negative) << width
-    return sign | biased << _fraction_bits(value.format) | fraction
-
-
-def _finite_image(value: BfpValue) -> int:
-    fmt = value.format
-    normal = value.significand >> _fraction_bits(fmt)
-    biased = (value.exponent + _fraction_bits(fmt) + fmt.emax) * normal
-    return _image(value, biased, value.significand & (_quiet_bit(fmt) * 2 - 1))
-
-
-_IMAGES: Mapping[FloatKind, Callable[[BfpValue], int]] = {
-    FloatKind.ZERO: lambda v: _image(v, 0, 0),
-    FloatKind.FINITE: _finite_image,
-    FloatKind.INFINITY: lambda v: _image(v, 2 * v.format.emax + 1, 0),
-    FloatKind.QNAN: lambda v: _image(
-        v, 2 * v.format.emax + 1, v.significand | _quiet_bit(v.format)
-    ),
-    FloatKind.SNAN: lambda v: _image(v, 2 * v.format.emax + 1, v.significand),
-}
-
-
-def to_bits(value: BfpValue) -> int:
-    return _IMAGES[value.kind](value)
 
 
 def _special(fmt: BfpFormat, negative: bool, fraction: int) -> BfpValue:
