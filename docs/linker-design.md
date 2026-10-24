@@ -429,11 +429,11 @@ list of pairs, so any value can be a name), `loc`, `none`, `unknown_type`, and
 constructing the class, null-object classes to their singletons). An unknown
 kind or class raises `UnitFormatError`.
 
-`UnitCodec` and `LinkedCodec` write `{"format": 5, "unit" | "linked": …}` and raise
-`UnitFormatError` naming the file when it does not decode, a file of format 4
+`UnitCodec` and `LinkedCodec` write `{"format": 6, "unit" | "linked": …}` and raise
+`UnitFormatError` naming the file when it does not decode, a file of format 5
 included. Format 4 added `ModuleUnit.diagnostics`, the warnings lowering raised, so a
 reused unit reports them again (HLASM fills it); format 5 gave each one a typed
-`kind`. The encoding is verbose
+`kind`, and format 6 moved every fact, a DC warning's included, into it. The encoding is verbose
 (red-dragon-rfwv).
 
 ### 7.3 One image, entered by program (COBOL)

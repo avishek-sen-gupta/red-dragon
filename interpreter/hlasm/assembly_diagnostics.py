@@ -24,9 +24,12 @@ from interpreter.hlasm.dc_warning import DcWarning
 from interpreter.project.coded_diagnostic import CodedDiagnostic
 from interpreter.project.comment_mnote import CommentMnote
 from interpreter.project.constant_diagnostic import ConstantDiagnostic
+from interpreter.project.constant_source import ConstantSource
 from interpreter.project.diagnostic_kind import DiagnosticKind
 from interpreter.project.diagnostic_place import DiagnosticPlace
 from interpreter.project.diagnostic_severity import DiagnosticSeverity
+from interpreter.project.in_macro import InMacro
+from interpreter.project.in_open_code import InOpenCode
 from interpreter.project.severity_mnote import SeverityMnote
 from interpreter.project.unit_diagnostic import UnitDiagnostic
 
@@ -50,27 +53,26 @@ def _place(file: str, line: int) -> DiagnosticPlace:
     return DiagnosticPlace(_named(file), line)
 
 
-def _mnote_kind(mnote: MnoteLevel | MnoteComment) -> DiagnosticKind:
+def _mnote_kind(mnote: MnoteLevel | MnoteComment, text: str) -> DiagnosticKind:
     match mnote:
         case MnoteLevel(level=level):
-            return SeverityMnote(level)
+            return SeverityMnote(level, text)
         case MnoteComment():
-            return CommentMnote()
+            return CommentMnote(text)
 
 
 def _kind(diagnostic: Diagnostic) -> DiagnosticKind:
     match diagnostic.mnote:
         case NoMnote():
-            return CodedDiagnostic(diagnostic.code)
+            return CodedDiagnostic(diagnostic.code, diagnostic.message)
         case mnote:
-            return _mnote_kind(mnote)
+            return _mnote_kind(mnote, diagnostic.message)
 
 
 def _bridge(diagnostic: Diagnostic) -> UnitDiagnostic:
     return UnitDiagnostic(
         _SEVERITIES[diagnostic.severity],
         _kind(diagnostic),
-        diagnostic.message,
         _place(diagnostic.file, diagnostic.line),
         tuple(_place(frame.file, frame.line) for frame in diagnostic.related),
     )
@@ -90,19 +92,18 @@ def _one_copy_warnings(item: DcItem, origin: Origin) -> tuple[DcWarning, ...]:
             )
 
 
-def _generated_by(origin: Origin) -> str:
+def _source(origin: Origin) -> ConstantSource:
     match origin:
         case MacroOrigin(macro=macro):
-            return f" in macro {macro}"
+            return InMacro(macro)
         case OpenCodeOrigin():
-            return ""
+            return InOpenCode()
 
 
 def _constant(warning: DcWarning, origin: Origin) -> UnitDiagnostic:
     return UnitDiagnostic(
         DiagnosticSeverity.WARNING,
-        ConstantDiagnostic(),
-        f"{warning.constant} {warning.kind.value}{_generated_by(origin)}",
+        ConstantDiagnostic(warning.constant, warning.kind, _source(origin)),
         _place(origin.file, origin.line),
     )
 

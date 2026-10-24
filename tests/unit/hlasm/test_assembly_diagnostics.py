@@ -23,8 +23,11 @@ from interpreter.hlasm.assembly_diagnostics import assembly_diagnostics
 from interpreter.project.coded_diagnostic import CodedDiagnostic
 from interpreter.project.comment_mnote import CommentMnote
 from interpreter.project.constant_diagnostic import ConstantDiagnostic
+from interpreter.project.dc_warning_kind import DcWarningKind
 from interpreter.project.diagnostic_place import DiagnosticPlace
 from interpreter.project.diagnostic_severity import DiagnosticSeverity
+from interpreter.project.in_macro import InMacro
+from interpreter.project.in_open_code import InOpenCode
 from interpreter.project.severity_mnote import SeverityMnote
 from interpreter.project.unit_diagnostic import UnitDiagnostic
 from tests.covers import NotLanguageFeature, covers
@@ -95,11 +98,12 @@ def _dc(
     )
 
 
-def _warning(line: int, message: str) -> UnitDiagnostic:
+def _warning(
+    line: int, constant: str, kind: DcWarningKind, source: InMacro | InOpenCode
+) -> UnitDiagnostic:
     return UnitDiagnostic(
         DiagnosticSeverity.WARNING,
-        ConstantDiagnostic(),
-        message,
+        ConstantDiagnostic(constant, kind, source),
         DiagnosticPlace(SOURCE, line),
     )
 
@@ -165,24 +169,21 @@ def test_bridge_diagnostics_keep_kind_text_and_call_stack_with_members_named():
     assert assembly_diagnostics(program) == (
         UnitDiagnostic(
             DiagnosticSeverity.WARNING,
-            SeverityMnote(4),
-            "CAREFUL",
+            SeverityMnote(4, "CAREFUL"),
             DiagnosticPlace("GREET", 3),
             (DiagnosticPlace("OUTER", 2), DiagnosticPlace(SOURCE, 9)),
         ),
         UnitDiagnostic(
             DiagnosticSeverity.INFO,
-            SeverityMnote(0),
-            "NOTED",
+            SeverityMnote(0, "NOTED"),
             DiagnosticPlace(SOURCE, 4),
         ),
         UnitDiagnostic(
-            DiagnosticSeverity.INFO, CommentMnote(), "ASIDE", DiagnosticPlace(SOURCE, 5)
+            DiagnosticSeverity.INFO, CommentMnote("ASIDE"), DiagnosticPlace(SOURCE, 5)
         ),
         UnitDiagnostic(
             DiagnosticSeverity.WARNING,
-            CodedDiagnostic("A300"),
-            "Apostrophes missing",
+            CodedDiagnostic("A300", "Apostrophes missing"),
             DiagnosticPlace("hlasm://0/AINSERT_1.hlasm", 1),
         ),
     )
@@ -222,11 +223,11 @@ def test_dc_warnings_come_once_per_value_from_every_section_with_line_and_macro(
     )
 
     assert assembly_diagnostics(program) == (
-        _warning(9, "EB'1E39' overflow"),
-        _warning(12, "EB'1E39' overflow in macro GEN"),
-        _warning(12, "EB'1E39' overflow in macro GEN"),
-        _warning(12, "EB'1E-50' underflow in macro GEN"),
-        _warning(20, "EB'1E39' overflow"),
-        _warning(20, "DB'1E400' overflow"),
-        _warning(14, "ED'1.2345678' inexact"),
+        _warning(9, "EB'1E39'", DcWarningKind.OVERFLOW, InOpenCode()),
+        _warning(12, "EB'1E39'", DcWarningKind.OVERFLOW, InMacro("GEN")),
+        _warning(12, "EB'1E39'", DcWarningKind.OVERFLOW, InMacro("GEN")),
+        _warning(12, "EB'1E-50'", DcWarningKind.UNDERFLOW, InMacro("GEN")),
+        _warning(20, "EB'1E39'", DcWarningKind.OVERFLOW, InOpenCode()),
+        _warning(20, "DB'1E400'", DcWarningKind.OVERFLOW, InOpenCode()),
+        _warning(14, "ED'1.2345678'", DcWarningKind.INEXACT, InOpenCode()),
     )

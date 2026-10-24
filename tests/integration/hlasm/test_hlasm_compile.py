@@ -337,6 +337,7 @@ CAREFUL_MACRO = (
     b"         MNOTE 0,'ALL CLEAR'\n"
     b"         MNOTE *,'ASIDE'\n"
     b"         MNOTE 2,BARE\n"
+    b"         DC    EB'1E-50'\n"
     b"         MEND\n"
 )
 WARNED = (
@@ -415,6 +416,7 @@ def test_warnings_are_logged_and_logged_again_from_a_reused_unit(
             " enclosed in quotes (called from __main__.asm:2)",
         ),
         (logging.INFO, "CAREFUL:6: MNOTE 2,BARE (called from __main__.asm:2)"),
+        (logging.WARNING, "__main__.asm:2: EB'1E-50' underflow in macro CAREFUL"),
         (logging.WARNING, "__main__.asm:5: EB'1E39' overflow"),
     ]
     assert (reused, lowered, _units(work)) == (first, first, 1)

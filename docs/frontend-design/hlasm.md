@@ -230,11 +230,15 @@ the run. Two sources:
   and duplication factor 0 included: HLASM checks their nominal values though it
   emits no object code for them (ruling R63).
 
-Each record (`UnitDiagnostic`) holds the severity, kind, message, place and macro
-call stack, innermost call first. Only the log line renders them, as the listing
+Each record (`UnitDiagnostic`) holds the severity, a typed kind, the place and the
+macro call stack, innermost call first. The kind carries the facts:
+`CodedDiagnostic(code, text)`, `SeverityMnote(level, text)`, `CommentMnote(text)`,
+or `ConstantDiagnostic(constant, warning, source)` with a `DcWarningKind` and
+`InMacro(name)` or `InOpenCode()`. Only the log line renders them, as the listing
 shows an MNOTE: `CAREFUL:3: MNOTE 4,MIND THE GAP (called from __main__.asm:2)`,
 `MNOTE *,ASIDE` for a comment, `A300 <text>` for a coded diagnostic, and the
-constant's text (`EB'1E39' overflow`) for a DC warning. A SYSLIB member's
+constant and its warning (`EB'1E39' overflow`, `EB'1E-50' underflow in macro
+CAREFUL`) for a DC warning. A SYSLIB member's
 `file://` URI is shown as the member name; open code keeps its source name.
 
 ## Assembly Inputs
