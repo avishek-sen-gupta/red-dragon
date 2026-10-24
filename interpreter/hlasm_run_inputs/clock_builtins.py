@@ -4,8 +4,11 @@
 from collections.abc import Mapping, Sequence
 
 from interpreter.func_name import FuncName
-from interpreter.hlasm.hlasm_constants import CPU_TIMER_BUILTIN, TOD_CLOCK_BUILTIN
-from interpreter.hlasm.machine_clock import MachineClock
+from interpreter.hlasm_run_inputs.machine_clock import MachineClock
+from interpreter.hlasm_run_inputs.run_input_names import (
+    CPU_TIMER_BUILTIN,
+    TOD_CLOCK_BUILTIN,
+)
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.builtin import Builtin
 from interpreter.vm.vm import VMState

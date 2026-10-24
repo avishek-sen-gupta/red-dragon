@@ -10,13 +10,10 @@ from interpreter.hlasm.binder_start_up import aligned_region, bound_address
 from interpreter.hlasm.entry_state import enter_registers
 from interpreter.hlasm.hlasm_constants import (
     END_STEP_PREFIX,
-    JOB_PARM_BUILTIN,
     JOB_STEP_PREFIX,
     LAST_PARAMETER_BIT,
     MODULE_FUNCTION_PREFIX,
-    PARM_LENGTH_BYTES,
     PARM_LIST_BYTES,
-    PARM_TEXT_BYTES,
     PROGRAM_ENTRY_PREFIX,
     STUB_CALL_FUNCTION,
 )
@@ -24,6 +21,11 @@ from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.ir_function import IrFunction
 from interpreter.hlasm.placed_name import PlacedName
 from interpreter.hlasm.stub_name import StubName
+from interpreter.hlasm_run_inputs.run_input_names import (
+    JOB_PARM_BUILTIN,
+    PARM_LENGTH_BYTES,
+    PARM_TEXT_BYTES,
+)
 from interpreter.instructions import (
     Branch,
     BranchIf,

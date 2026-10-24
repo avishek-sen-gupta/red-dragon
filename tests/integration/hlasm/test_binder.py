@@ -1,14 +1,15 @@
 # pyright: standard
-"""Images of several HLASM modules: a V-constant reaches a later module's ENTRY and its data, the first unit is entered at its own END though another module ends at the same label and two are private code alone, the job step hands the program its PARM, a linking branch to an unresolved EXTRN calls it by name, and a CSECT named in two units is refused."""
+"""Images of several HLASM modules: a V-constant reaches a later module's ENTRY and its data, the first unit is entered at its own END though another module ends at the same label and two are private code alone, the job step hands the program its PARM, a linking branch to an unresolved EXTRN calls it by name, a CSECT named in two units is refused, and run() hands the job step an empty PARM."""
 
 import logging
 from pathlib import Path
 
 import pytest
 
+from interpreter.constants import Language
 from interpreter.frontends import get_hlasm_parser
 from interpreter.handlers.calls import UnresolvedProgramError
-from interpreter.hlasm.job_parm_builtins import NO_PARM, job_parm_builtins
+from interpreter.hlasm_run_inputs.job_parm_builtins import NO_PARM, job_parm_builtins
 from interpreter.project.duplicate_program_in_image import DuplicateProgramInImage
 from interpreter.project.entry_point import EntryPoint
 from interpreter.project.hlasm_compile import (
@@ -19,7 +20,7 @@ from interpreter.project.hlasm_compile import (
 )
 from interpreter.project.source_file import SourceFile
 from interpreter.project.types import LinkedProgram
-from interpreter.run import initial_vm_state, run_linked
+from interpreter.run import initial_vm_state, run, run_linked
 from interpreter.var_name import VarName
 from interpreter.vm.builtins import compose_builtins, core_builtins
 from interpreter.vm.vm_types import SymbolicValue, VMState
@@ -180,4 +181,15 @@ def test_a_csect_in_two_units_is_refused_naming_both():
 
     assert str(refused.value) == (
         "program BMOD is in the image twice: __main__.asm and TWICE.asm"
+    )
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_run_hands_the_job_step_an_empty_parm():
+    vm = run(PARM_READER.decode("ascii"), language=Language.HLASM, max_steps=MAX_STEPS)
+    text = vm.load(_var(vm, "__hlasm_sect___main__.MAIN") + 18, 5)
+
+    assert (hlasm_run_of(vm, ""), text) == (
+        HlasmRun(return_code=0, abend="", stdout=""),
+        [0] * 5,
     )

@@ -3,8 +3,8 @@
 
 from interpreter.constants import Language
 from interpreter.default_builtins import DEFAULT_BUILTINS
-from interpreter.hlasm.clock_builtins import clock_builtins
-from interpreter.hlasm.system_machine_clock import SystemMachineClock
+from interpreter.hlasm_run_inputs.clock_builtins import clock_builtins
+from interpreter.hlasm_run_inputs.system_machine_clock import SystemMachineClock
 from interpreter.run import run
 from interpreter.vm.builtins import compose_builtins
 from tests.covers import NotLanguageFeature, covers

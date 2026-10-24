@@ -5,14 +5,16 @@ from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.hlasm.data_movement import FIRST_OPERAND, SECOND_OPERAND
 from interpreter.hlasm.effective_address import effective_address, register_address
 from interpreter.hlasm.hlasm_constants import (
-    CPU_TIMER_BUILTIN,
     DOUBLEWORD_BYTES,
     QUADWORD_BYTES,
-    TOD_CLOCK_BUILTIN,
     TOD_LAST_VAR,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.operands import reg_operand, storage_operand
+from interpreter.hlasm_run_inputs.run_input_names import (
+    CPU_TIMER_BUILTIN,
+    TOD_CLOCK_BUILTIN,
+)
 from interpreter.instructions import StoreVar
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register

@@ -5,13 +5,13 @@ from collections.abc import Mapping, Sequence
 
 from interpreter.encoding.ebcdic_table import EbcdicTable
 from interpreter.func_name import FuncName
-from interpreter.hlasm.hlasm_constants import (
+from interpreter.hlasm_run_inputs.parm_not_encodable import ParmNotEncodable
+from interpreter.hlasm_run_inputs.parm_too_long import ParmTooLong
+from interpreter.hlasm_run_inputs.run_input_names import (
     JOB_PARM_BUILTIN,
     PARM_LENGTH_BYTES,
     PARM_TEXT_BYTES,
 )
-from interpreter.hlasm.parm_not_encodable import ParmNotEncodable
-from interpreter.hlasm.parm_too_long import ParmTooLong
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.builtin import Builtin
 from interpreter.vm.vm import VMState

@@ -6,9 +6,9 @@ from functools import reduce
 from interpreter.hlasm.hlasm_constants import (
     NIBBLE_BITS,
     SVC_PARAMETER_REGISTER,
-    TOD_CLOCK_BUILTIN,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
+from interpreter.hlasm_run_inputs.run_input_names import TOD_CLOCK_BUILTIN
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
 

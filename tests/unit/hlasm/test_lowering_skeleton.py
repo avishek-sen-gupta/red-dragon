@@ -14,7 +14,7 @@ from interpreter.frontends import bind_image
 from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.func_name import FuncName
 from interpreter.hlasm.hlasm_frontend import HlasmFrontend
-from interpreter.hlasm.job_parm_builtins import NO_PARM, job_parm_builtins
+from interpreter.hlasm_run_inputs.job_parm_builtins import NO_PARM, job_parm_builtins
 from interpreter.instructions import (
     Binop,
     Branch,

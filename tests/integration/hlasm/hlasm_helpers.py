@@ -11,11 +11,11 @@ from hlasm_asg.assembly_inputs import AssemblyInputs
 from interpreter.field_name import FieldName
 from interpreter.frontends import get_hlasm_parser
 from interpreter.hlasm.bfp_builtins import bfp_builtins
-from interpreter.hlasm.clock_builtins import clock_builtins
 from interpreter.hlasm.dfp_builtins import dfp_builtins
 from interpreter.hlasm.hfp_builtins import hfp_builtins
-from interpreter.hlasm.job_parm_builtins import NO_PARM, job_parm_builtins
 from interpreter.hlasm.pfpo_builtins import pfpo_builtins
+from interpreter.hlasm_run_inputs.job_parm_builtins import NO_PARM
+from interpreter.hlasm_run_inputs.run_input_builtins import run_input_builtins
 from interpreter.project.entry_point import EntryPoint
 from interpreter.project.hlasm_compile import compile_hlasm
 from interpreter.project.hlasm_compile_options import HlasmCompileOptions
@@ -88,12 +88,11 @@ def _run_vm(
             initial_vm=initial_vm_state(),
             builtins=compose_builtins(
                 core_builtins(),
-                clock_builtins(FixedMachineClock()),
+                run_input_builtins(FixedMachineClock(), NO_PARM),
                 bfp_builtins(),
                 hfp_builtins(),
                 dfp_builtins(),
                 pfpo_builtins(),
-                job_parm_builtins(NO_PARM),
             ),
         )
     return vm, console.getvalue()

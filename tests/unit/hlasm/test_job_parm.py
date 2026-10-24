@@ -3,10 +3,10 @@
 
 import pytest
 
-from interpreter.hlasm.hlasm_constants import JOB_PARM_BUILTIN
-from interpreter.hlasm.job_parm_builtins import job_parm_builtins
-from interpreter.hlasm.parm_not_encodable import ParmNotEncodable
-from interpreter.hlasm.parm_too_long import ParmTooLong
+from interpreter.hlasm_run_inputs.job_parm_builtins import job_parm_builtins
+from interpreter.hlasm_run_inputs.parm_not_encodable import ParmNotEncodable
+from interpreter.hlasm_run_inputs.parm_too_long import ParmTooLong
+from interpreter.hlasm_run_inputs.run_input_names import JOB_PARM_BUILTIN
 from interpreter.run import initial_vm_state
 from tests.covers import NotLanguageFeature, covers
 
