@@ -6,7 +6,8 @@ from decimal import Context, Decimal
 from fractions import Fraction
 
 from zarch_float.condition import Condition, raised
-from zarch_float.dfp_context import bounded, from_decimal, to_decimal, unbounded
+from zarch_float.dfp_context import from_decimal, to_decimal, unbounded
+from zarch_float.dfp_convert import dfp_fitted
 from zarch_float.dfp_nan import has_nan, invalid, propagate_nan
 from zarch_float.dfp_quantum import constrained, quantum_differs, with_quantum
 from zarch_float.dfp_result import DfpResult, dfp_exact
@@ -102,9 +103,7 @@ def _rerounded(value: DfpValue, significance: int, mode: RoundingMode) -> DfpRes
     shortened = from_decimal(context.plus(to_decimal(value)), value.format)
     if shortened.magnitude() > _largest(value):
         return invalid(value.format)
-    fitted = from_decimal(
-        bounded(value.format, mode).create_decimal(to_decimal(shortened)), value.format
-    )
+    fitted = dfp_fitted(shortened, mode).value
     inexact = shortened.magnitude() != value.magnitude()
     rounding = raised(
         (Condition.INEXACT, inexact),

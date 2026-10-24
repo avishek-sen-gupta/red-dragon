@@ -64,6 +64,8 @@ Rules taken from the PoO:
 - NaNs: the first SNaN in operand order, quieted, with INVALID; else the first QNaN.
   For fused multiply-add, 0 × ∞ gives the default NaN even when op1 is a NaN.
 - An exact zero sum of opposite signs is +0, or −0 under round toward −∞.
+- A format with one bit of precision (a short HLASM BFP constant) has no even significand, so
+  round to nearest even breaks a tie toward the even image, the even biased exponent (our ruling).
 
 ## HFP
 
@@ -126,7 +128,7 @@ LOAD FP INTEGER report only INVALID, INEXACT, INCREMENTED and QUANTUM.
 | `hfp_image` | `(value, bits)`: the leftmost `bits` of the long layout, or of the extended layout above 64 bits. The low half's characteristic is the high one less 14, modulo 128. A zero fraction packs as the sign alone |
 | `dfp_image` | `(value)`: combination field, exponent continuation and DPD declets (PoO figures 20-1 and 20-32) |
 | `hfp_rounded`, `hfp_rounded_at` | `(fraction_bits, negative, magnitude, scale or exponent, mode)`: normalized and shifted right `scale` digits, or at a given exponent. A carry out of the fraction renormalizes. The caller checks the exponent range |
-| `dfp_fitted` | `(value, mode)`: a written coefficient and exponent rounded into the format with `decimal`'s `create_decimal`, so an exact value keeps its quantum, a large exponent folds down, and overflow and subnormals follow the method |
+| `dfp_fitted` | `(value, mode)`: a written coefficient and exponent rounded into the format with `decimal`'s `create_decimal`, so an exact value keeps its quantum, a large exponent folds down, and overflow and subnormals follow the method. Returns a `DfpResult` with the conditions raised; `dfp_reround` uses it too |
 
 ## Radix conversion
 

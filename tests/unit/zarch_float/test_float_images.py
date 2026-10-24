@@ -10,7 +10,9 @@ from zarch_float.bfp_format import EXTENDED as BFP_EXTENDED
 from zarch_float.bfp_format import LONG as BFP_LONG
 from zarch_float.bfp_format import BfpFormat
 from zarch_float.bfp_image import bfp_image
+from zarch_float.bfp_rounding import rounding_into
 from zarch_float.bfp_value import BfpValue
+from zarch_float.condition import Condition
 from zarch_float.dfp_convert import dfp_fitted
 from zarch_float.dfp_format import EXTENDED, LONG, SHORT, DfpFormat
 from zarch_float.dfp_image import dfp_image
@@ -156,14 +158,16 @@ def test_hfp_rounding_normalizes_scales_carries_and_denormalizes_at_an_exponent(
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_dfp_fitting_keeps_the_written_quantum_and_rounds_into_the_format():
     assert [
-        dfp_fitted(_dfp(LONG, False, 150, -2), NE),
-        dfp_fitted(_dfp(SHORT, False, 12345678, -1), NE),
-        dfp_fitted(_dfp(SHORT, False, 12345675, -1), RoundingMode.NEAREST_TOWARD_ZERO),
-        dfp_fitted(_dfp(SHORT, False, 1, 96), NE),
-        dfp_fitted(_dfp(SHORT, False, 1, 97), NE),
-        dfp_fitted(_dfp(SHORT, True, 1, 97), TRUNCATE),
-        dfp_fitted(_dfp(SHORT, False, 15, -102), NE),
-        dfp_fitted(_dfp(SHORT, True, 0, -200), NE),
+        dfp_fitted(_dfp(LONG, False, 150, -2), NE).value,
+        dfp_fitted(_dfp(SHORT, False, 12345678, -1), NE).value,
+        dfp_fitted(
+            _dfp(SHORT, False, 12345675, -1), RoundingMode.NEAREST_TOWARD_ZERO
+        ).value,
+        dfp_fitted(_dfp(SHORT, False, 1, 96), NE).value,
+        dfp_fitted(_dfp(SHORT, False, 1, 97), NE).value,
+        dfp_fitted(_dfp(SHORT, True, 1, 97), TRUNCATE).value,
+        dfp_fitted(_dfp(SHORT, False, 15, -102), NE).value,
+        dfp_fitted(_dfp(SHORT, True, 0, -200), NE).value,
     ] == [
         _dfp(LONG, False, 150, -2),
         _dfp(SHORT, False, 1234568, 0),
@@ -174,3 +178,27 @@ def test_dfp_fitting_keeps_the_written_quantum_and_rounds_into_the_format():
         _dfp(SHORT, False, 2, -101),
         _dfp(SHORT, True, 0, -101),
     ]
+    assert [
+        dfp_fitted(_dfp(SHORT, False, 15, -1), NE).conditions,
+        dfp_fitted(_dfp(SHORT, False, 12345678, -1), NE).conditions,
+        dfp_fitted(_dfp(SHORT, False, 1, 97), NE).conditions,
+        dfp_fitted(_dfp(SHORT, False, 15, -102), NE).conditions,
+    ] == [
+        frozenset(),
+        frozenset({Condition.INEXACT}),
+        frozenset({Condition.OVERFLOW, Condition.INEXACT}),
+        frozenset({Condition.UNDERFLOW, Condition.TINY, Condition.INEXACT}),
+    ]
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_bfp_ties_at_one_bit_of_precision_take_the_even_image():
+    one_bit = BfpFormat(1, 127, 192)
+    rounding = rounding_into(one_bit, NE)
+    assert [
+        bfp_image(rounding.round(False, Fraction(3, 2)).value),
+        bfp_image(rounding.round(False, Fraction(3)).value),
+        bfp_image(rounding.round(True, Fraction(6)).value),
+        bfp_image(rounding.round(False, Fraction(1, 2**127)).value),
+        bfp_image(rounding_into(one_bit, AWAY).round(False, Fraction(3)).value),
+    ] == [0x080, 0x080, 0x182, 0x000, 0x081]

@@ -28,6 +28,7 @@ from interpreter.hlasm.dc_exponent_out_of_range import (
     DcExponentOutOfRange,
 )
 from interpreter.hlasm.dc_value_out_of_range import DcValueOutOfRange
+from interpreter.hlasm.encoded_value import EncodedValue
 from interpreter.hlasm.floating_point_constant import floating_point_image
 from interpreter.hlasm.hlasm_constants import BITS_PER_BYTE
 from interpreter.hlasm.hlasm_lowering_error import HlasmLoweringError
@@ -221,12 +222,12 @@ def _fixed(item: DcItem, text: str, bits: int, origin: Origin) -> int:
     return _truncated(value, bits)
 
 
-def _string_value(item: DcItem, text: str, bits: int, origin: Origin) -> int:
+def _string_value(item: DcItem, text: str, bits: int, origin: Origin) -> EncodedValue:
     if _code(item) in _FIXED_POINT_TYPES:
-        return _fixed(item, text, bits, origin)
+        return EncodedValue(_fixed(item, text, bits, origin))
     if _code(item) in _FLOATING_POINT_TYPES:
         return floating_point_image(item, text, bits, origin)
-    return _STRING_ENCODERS[_code(item)](text, bits)
+    return EncodedValue(_STRING_ENCODERS[_code(item)](text, bits))
 
 
 def _values(item: DcItem, text: str) -> tuple[str, ...]:
@@ -246,7 +247,8 @@ def _string_piece(item: DcItem, text: str, origin: Origin) -> ConstantImage:
         if code in _VALUE_LENGTHS and not item.explicit_length
         else item.length
     )
-    return _image(_string_value(item, text, length * BITS_PER_BYTE, origin), length)
+    encoded = _string_value(item, text, length * BITS_PER_BYTE, origin)
+    return ConstantImage(tuple(encoded.value.to_bytes(length, "big")), encoded.warnings)
 
 
 def _base_displacement(item: DcItem, base: int, displacement: int) -> int:
@@ -358,9 +360,9 @@ def _copies(
             return _operand(item, once, origin) * item.duplication
 
 
-def _bit_address(item: DcItem, value: Address) -> int:
+def _bit_address(item: DcItem, value: Address) -> EncodedValue:
     if isinstance(value, AbsAddress):
-        return _truncated(value.value, item.length)
+        return EncodedValue(_truncated(value.value, item.length))
     raise HlasmLoweringError(
         f"{_code(item)}L.{item.length}", "an absolute value", value.kind
     )
@@ -368,7 +370,7 @@ def _bit_address(item: DcItem, value: Address) -> int:
 
 def _bit_values(
     item: DcItem, nominal: StringNominal | AddressesNominal, origin: Origin
-) -> tuple[int, ...]:
+) -> tuple[EncodedValue, ...]:
     match nominal:
         case StringNominal(value=text):
             return tuple(
@@ -391,8 +393,10 @@ def _bit_image(
                 BIT_LENGTH_STAR_ISSUE,
             )
         case once:
-            values = _bit_values(item, once, origin)
-            return BitLengthImage(values * item.duplication, item.length)
+            encoded = _bit_values(item, once, origin)
+            values = tuple(value.value for value in encoded)
+            warnings = tuple(chain.from_iterable(value.warnings for value in encoded))
+            return BitLengthImage(values * item.duplication, item.length, warnings)
 
 
 def encode_dc(item: DcItem, origin: Origin) -> tuple[DcPiece, ...] | BitLengthImage:

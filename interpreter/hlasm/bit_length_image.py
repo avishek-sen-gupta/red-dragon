@@ -3,8 +3,11 @@
 
 from dataclasses import dataclass
 
+from interpreter.hlasm.dc_warning import DcWarning
+
 
 @dataclass(frozen=True)
 class BitLengthImage:
     values: tuple[int, ...]
     bits: int
+    warnings: tuple[DcWarning, ...] = ()

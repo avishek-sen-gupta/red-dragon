@@ -14,8 +14,10 @@ from interpreter.hlasm.constant_image import ConstantImage
 from interpreter.hlasm.dc_characteristic_out_of_range import DcCharacteristicOutOfRange
 from interpreter.hlasm.dc_encoding import encode_dc
 from interpreter.hlasm.dc_exponent_out_of_range import DcExponentOutOfRange
+from interpreter.hlasm.dc_length_wrong import DcLengthWrong
 from interpreter.hlasm.dc_precision_lost import DcPrecisionLost
-from interpreter.hlasm.hlasm_lowering_error import HlasmLoweringError
+from interpreter.hlasm.dc_warning import DcWarning
+from interpreter.hlasm.dc_warning_kind import DcWarningKind
 
 ORIGIN = MacroOrigin(kind="MACRO", file="src/t.asm", line=7, macro="GEN", depth=1)
 IMPLICIT_BYTES = {"E": 4, "D": 8, "L": 16}
@@ -236,12 +238,82 @@ def test_binary_special_values_and_their_minimum_lengths():
         "7FF40000" "00000000",
         "7FFEFFFF" "FFFFFFFF" "FFFFFFFF" "FFFFFFFF",
     ]
-    assert _bits(_item("EB", "(NAN)", 11, unit=LengthUnit.BIT)) == (0x3FE,)
-    with pytest.raises(HlasmLoweringError) as refused:
+    assert [
+        _bits(_item("EB", "(NAN)", 11, unit=LengthUnit.BIT)),
+        _bits(_item("EB", "(MAX)", 9, unit=LengthUnit.BIT)),
+        _bits(_item("EB", "(DMIN)", 10, unit=LengthUnit.BIT)),
+        _bits(_item("DB", "(MIN)", 12, unit=LengthUnit.BIT)),
+        _bits(_item("LB", "(MAX)", 17, unit=LengthUnit.BIT)),
+    ] == [(0x3FE,), (0x0FE,), (0x001,), (0x001,), (0x0FFFD,)]
+    assert _hex(_item("LB", "(MIN)", 2)) == "0001"
+    with pytest.raises(DcLengthWrong) as refused:
         encode_dc(_item("DB", "(INF)", 13, unit=LengthUnit.BIT), ORIGIN)
     assert str(refused.value) == (
-        "DB'(INF)' at line 7 of src/t.asm: expected a length of at least 14 bits,"
-        " found 13 bits"
+        "DB'(INF)' at line 7 of src/t.asm needs a length of at least 14 bits"
+        " — ASMA068S"
+    )
+
+
+def test_binary_ties_at_one_bit_of_precision_go_to_the_even_image():
+    assert [
+        _bits(_item("EB", value, 9, unit=LengthUnit.BIT))
+        for value in ("1.5", "3", "6", "1.5R1", "3R1")
+    ] + [_hex(_item("LB", "1.5", 2)), _hex(_item("LB", "3", 2))] == [
+        (0x080,),
+        (0x080,),
+        (0x082,),
+        (0x080,),
+        (0x081,),
+        "4000",
+        "4000",
+    ]
+
+
+def _warnings(item: DcItem) -> tuple[DcWarning, ...]:
+    pieces = encode_dc(item, ORIGIN)
+    assert not isinstance(pieces, BitLengthImage)
+    return tuple(
+        warning
+        for piece in pieces
+        if isinstance(piece, ConstantImage)
+        for warning in piece.warnings
+    )
+
+
+def test_type_extended_constants_warn_of_overflow_underflow_and_inexact_values():
+    codes_and_values = (
+        ("EB", "1E39"),
+        ("EB", "1E-50"),
+        ("EB", "0.1"),
+        ("EB", "1.5,(MAX)"),
+        ("DD", "1E400"),
+        ("ED", "15E-102"),
+        ("ED", "1234567.8"),
+        ("ED", "1.5"),
+        ("EH", "1E80"),
+        ("EH", "1E-79"),
+        ("EH", "0.1"),
+        ("EH", "1,(DMIN)"),
+        ("E", "0.1"),
+    )
+    assert [_warnings(_item(code, value)) for code, value in codes_and_values] == [
+        (DcWarning("EB'1E39'", DcWarningKind.OVERFLOW),),
+        (DcWarning("EB'1E-50'", DcWarningKind.UNDERFLOW),),
+        (DcWarning("EB'0.1'", DcWarningKind.INEXACT),),
+        (),
+        (DcWarning("DD'1E400'", DcWarningKind.OVERFLOW),),
+        (DcWarning("ED'15E-102'", DcWarningKind.UNDERFLOW),),
+        (DcWarning("ED'1234567.8'", DcWarningKind.INEXACT),),
+        (),
+        (DcWarning("EH'1E80'", DcWarningKind.OVERFLOW),),
+        (DcWarning("EH'1E-79'", DcWarningKind.UNDERFLOW),),
+        (DcWarning("EH'0.1'", DcWarningKind.INEXACT),),
+        (),
+        (),
+    ]
+    image = encode_dc(_item("EB", "0.1", 32, unit=LengthUnit.BIT), ORIGIN)
+    assert image == BitLengthImage(
+        (0x3DCCCCCD,), 32, (DcWarning("EB'0.1'", DcWarningKind.INEXACT),)
     )
 
 
