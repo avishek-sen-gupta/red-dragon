@@ -1,0 +1,39 @@
+         MACRO
+&NAME    SAVE  &REGS,&T,&ID
+         GBLA  &IHBRV
+         LCLA  &R1,&R2,&LEN,&OFF
+         LCLC  &TEXT
+         AIF   (N'&REGS GT 0).HAVE
+         MNOTE 8,'SAVE: REGISTER RANGE MISSING'
+         MEXIT
+.HAVE    ANOP
+         IHBREGN &REGS(1)
+&R1      SETA  &IHBRV
+&R2      SETA  &IHBRV
+         AIF   (N'&REGS LT 2).CHECK
+         IHBREGN &REGS(2)
+&R2      SETA  &IHBRV
+.CHECK   AIF   (&R1 LT 0 OR &R2 LT 0).BADREG
+         AIF   ('&T' EQ '' OR '&T' EQ 'T').TOK
+         MNOTE 8,'SAVE: SECOND OPERAND MUST BE T'
+         MEXIT
+.TOK     ANOP
+&OFF     SETA  (&R1*4+20)-((&R1*4+20)/64)*64
+&NAME    STM   &R1,&R2,&OFF.(13)
+         AIF   ('&T' NE 'T' OR &R1 EQ 14).ID
+         STM   14,15,12(13)
+.ID      AIF   ('&ID' EQ '').DONE
+&TEXT    SETC  '&ID'
+         AIF   ('&ID' NE '*').SIZE
+&TEXT    SETC  '&SYSECT'
+.SIZE    ANOP
+&LEN     SETA  K'&TEXT
+         AIF   (&LEN GT 100).LONG
+         J     IHBB&SYSNDX
+         DC    AL1(&LEN),CL&LEN'&TEXT'
+IHBB&SYSNDX DS 0H
+.DONE    MEXIT
+.BADREG  MNOTE 8,'SAVE: INVALID REGISTER'
+         MEXIT
+.LONG    MNOTE 8,'SAVE: IDENTIFIER LONGER THAN 100 CHARACTERS'
+         MEND

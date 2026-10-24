@@ -1,0 +1,8 @@
+         MACRO
+         YREGS
+         LCLA  &I
+.NEXT    ANOP
+R&I      EQU   &I
+&I       SETA  &I+1
+         AIF   (&I LT 16).NEXT
+         MEND

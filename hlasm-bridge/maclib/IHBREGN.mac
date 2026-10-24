@@ -1,0 +1,17 @@
+         MACRO
+         IHBREGN &R
+         GBLA  &IHBRV
+         LCLA  &I
+         LCLC  &S
+&IHBRV   SETA  -1
+&S       SETC  '&R'
+         AIF   (K'&R LT 2).SEARCH
+         AIF   ('&R'(1,1) NE 'R').SEARCH
+&S       SETC  '&R'(2,K'&R-1)
+.SEARCH  AIF   ('&S' EQ '&I').FOUND
+&I       SETA  &I+1
+         AIF   (&I LT 16).SEARCH
+         MEXIT
+.FOUND   ANOP
+&IHBRV   SETA  &I
+         MEND
