@@ -9,7 +9,6 @@ from pathlib import Path
 
 from hlasm_asg.assembly_inputs import AssemblyInputs
 from interpreter.cobol.real_file_provider import RealFileIOProvider
-from interpreter.cobol.run_inputs import RunInputs
 from interpreter.field_name import FieldName
 from interpreter.frontends import get_hlasm_parser
 from interpreter.hlasm.bfp_builtins import bfp_builtins
@@ -18,6 +17,7 @@ from interpreter.hlasm.hfp_builtins import hfp_builtins
 from interpreter.hlasm.pfpo_builtins import pfpo_builtins
 from interpreter.hlasm_run_inputs.dd_builtins import NO_DDS
 from interpreter.hlasm_run_inputs.dd_definition import DdDefinition
+from interpreter.hlasm_run_inputs.dd_run_inputs import dd_run_inputs
 from interpreter.hlasm_run_inputs.declare_file_builtins import declare_file_builtins
 from interpreter.hlasm_run_inputs.job_parm_builtins import NO_PARM
 from interpreter.hlasm_run_inputs.run_input_builtins import run_input_builtins
@@ -78,11 +78,6 @@ def _return_code(vm: VMState, abend: str) -> int:
             return NO_RETURN_CODE
 
 
-def _file_provider(dds: Mapping[str, DdDefinition]) -> RealFileIOProvider:
-    paths = {name: dd.path for name, dd in dds.items()}
-    return RealFileIOProvider(Path(), RunInputs(path_overrides=paths))
-
-
 def _run_vm(
     source: str,
     options: HlasmCompileOptions = NO_INPUTS,
@@ -96,16 +91,20 @@ def _run_vm(
         options=options,
         programs=programs,
     )
+    dd_builtins, provider_inputs = dd_run_inputs(dds)
     console = io.StringIO()
     with redirect_stdout(console):
         vm = run_linked(
             linked,
             EntryPoint.function(lambda ref: ref.label == linked.entry_func_label),
             max_steps=MAX_STEPS,
-            initial_vm=initial_vm_state(io_provider=_file_provider(dds)),
+            initial_vm=initial_vm_state(
+                io_provider=RealFileIOProvider(Path(), provider_inputs)
+            ),
             builtins=compose_builtins(
                 core_builtins(),
-                run_input_builtins(FixedMachineClock(), NO_PARM, dds),
+                run_input_builtins(FixedMachineClock(), NO_PARM),
+                dd_builtins,
                 declare_file_builtins(),
                 bfp_builtins(),
                 hfp_builtins(),

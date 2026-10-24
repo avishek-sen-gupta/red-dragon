@@ -1491,8 +1491,10 @@ def run(
             raises, instead of failing compilation. Default off. COBOL only.
         builtins: The builtins table this run resolves builtin calls through
             (default: ``DEFAULT_BUILTINS``, the core table). An HLASM run adds
-            the HLASM run inputs it is not given: the host clock and an empty
-            PARM.
+            the HLASM run inputs it is not given: the host clock, an empty
+            PARM and no DD definitions. Callers add the floating-point
+            builtins, ``declare_file_builtins()``, and the DD builtin and
+            file-provider inputs from ``dd_run_inputs(dds)``.
     """
     lang = Language(language)
     pipeline_start = time.perf_counter()

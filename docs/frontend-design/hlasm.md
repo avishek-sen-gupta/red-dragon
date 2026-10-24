@@ -62,8 +62,8 @@ addresses.
 | `interpreter/hlasm/cobol_linkage.py`, `cobol_program.py`, `cobol_owner.py` | Calls between COBOL and HLASM (see COBOL Linkage) |
 | `interpreter/hlasm/program_services.py` | SVC 6, 8 and 9: LINK, LOAD, DELETE |
 | `interpreter/hlasm/data_set_services.py` | SVC 19, 20, 200 and 201: OPEN, CLOSE, GET, PUT over the COBOL file provider |
-| `interpreter/hlasm_run_inputs/` | The HLASM run inputs, a sibling of `interpreter.hlasm` so `run()` can import it (the import contracts keep `interpreter.run` from `interpreter.hlasm`): `run_input_names.py` (builtin names, PARM area sizes, the positions of `__hlasm_dd`'s facts), `run_input_builtins.py` (`run_input_builtins(clock, parm, dds)`; `unsupplied_run_input_builtins()`, the host clock, an empty PARM and no DDs, which `run()` adds under any builtins it is given) |
-| `interpreter/hlasm_run_inputs/dd_definition.py`, `record_format.py`, `dd_builtins.py` | `DdDefinition(path, recfm, lrecl, blksize)`, one per DDNAME; `dd_builtins(dds)`: `__hlasm_dd(name)` answers `[1, RECFM byte, LRECL, BLKSIZE]`, 0 where not given, or zeros for a DDNAME not supplied |
+| `interpreter/hlasm_run_inputs/` | The HLASM run inputs, a sibling of `interpreter.hlasm` so `run()` can import it (the import contracts keep `interpreter.run` from `interpreter.hlasm`): `run_input_names.py` (builtin names, PARM area sizes, the positions of `__hlasm_dd`'s facts), `run_input_builtins.py` (`run_input_builtins(clock, parm)`; `unsupplied_run_input_builtins()`, the host clock, an empty PARM and no DD definitions, which `run()` adds under any builtins it is given) |
+| `interpreter/hlasm_run_inputs/dd_definition.py`, `record_format.py`, `dd_builtins.py`, `dd_run_inputs.py` | `DdDefinition(path, recfm, lrecl, blksize)`, one per DDNAME; `dd_builtins(dds)`: `__hlasm_dd(name)` answers `[1, RECFM byte, LRECL, BLKSIZE]`, 0 where not given, or zeros for a DDNAME not supplied; `dd_run_inputs(dds)` returns that builtin and the `RunInputs` whose `path_overrides` send each DDNAME to its DD's path, for the caller's file provider |
 | `interpreter/hlasm_run_inputs/declare_file_builtins.py` | `declare_file_builtins()`: `__hlasm_declare_file(ddname, variable, record_length)` declares the provider's sequential `FileFrame` for OPEN. It imports `interpreter.cobol`, so `run()` cannot compose it; callers do |
 | `interpreter/hlasm_run_inputs/job_parm_builtins.py` | `job_parm_builtins(parm)`: the job-step PARM, a run input of at most 100 characters (`ParmTooLong`), as a halfword length and EBCDIC text through `EbcdicTable`; a character it has no code for raises `ParmNotEncodable` |
 | `interpreter/hlasm/dc_encoding.py` | DC images: C, CA, CE, CU, X, B, F, FD, H, P, Z, A, AD, Y, V, VD, S, SY, Q, QD, J, JD (Q and J as binder slots, filled at bind), and E, D, L with their extensions through `floating_point_constant.py`. Each operand is placed at the offset che4z exported; Python has no alignment table of its own, and alignment bytes inside a DC are zero. F, FD and H take fractions, a written exponent, the exponent and scale modifiers and the U prefix, and the scaled value is rounded to a whole number. A negative value rounds on its magnitude (-1.5 is -2); that is our reading of the Language Reference, which does not say. A written exponent that, with the exponent modifier, falls outside -85 to +75 raises `DcExponentOutOfRange` (ASMA071E) before any arithmetic. A value outside its length raises `DcValueOutOfRange` with the statement's line (ASMA072E); a literal gives the line that first used it. Y accepts -32768 to 65535 (a halfword read as signed or unsigned) and refuses anything else the same way, while A truncates at the left as IBM specifies. An S-constant in a literal resolves through the USING in force where its pool is assembled, whichever LOCTR the pool lands in. `*` in a literal is the instruction's address in every copy. Bit-length operands (`L.n`) pack from che4z's bit offset, each value in the next free bits (C, E, D and L from their high-order end, other types from the low-order end) and the last byte zero-filled. CCW and CCW0 are format-0 channel command words (24-bit address), CCW1 format 1 (31-bit); a relocatable or external data address is an RLD like an A-constant |
@@ -1517,11 +1517,15 @@ layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.
 - Access registers hold values only; no instruction addresses through them. LAE and LAEY do
   not set access register R1 (red-dragon-6uyp.86).
 - `run()` adds the HLASM run inputs its caller does not supply (`unsupplied_run_input_builtins()`:
-  the host clock and an empty PARM), but not the floating-point builtins, which are not run inputs:
-  a floating-point instruction under plain `run()` stores what the unresolved-call strategy gives.
-  Callers compose `bfp_builtins()`, `hfp_builtins()`, `dfp_builtins()` and `pfpo_builtins()`; the
-  `interpreter.py` CLI does. The PARM and DD definitions cannot be supplied through `run()`, and
-  `run()` does not compose `declare_file_builtins()`; a caller that injects a file provider does.
+  the host clock, an empty PARM and no DD definitions). Callers add the rest through `run()`'s
+  `builtins` and `io_provider`:
+  - the floating-point builtins `bfp_builtins()`, `hfp_builtins()`, `dfp_builtins()` and
+    `pfpo_builtins()`, which are not run inputs; the `interpreter.py` CLI adds them. Without them a
+    floating-point instruction stores what the unresolved-call strategy gives;
+  - `declare_file_builtins()`, for OPEN;
+  - a PARM, from `run_input_builtins(clock, parm)`;
+  - the DDs, from `dd_run_inputs(dds)`: its `__hlasm_dd` builtin, and its `RunInputs` given to the
+    file provider. That is where each DD's path goes: OPEN of a DDNAME reads and writes that path.
 - DCBD maps `DCBMACR` at 50, as before OPEN. `DCBMACRF` (offset 42 after OPEN) is not mapped:
   DDNAME stays at 40, so nothing is moved there.
 - GET on a DCB opened OUTPUT or EXTEND branches to EODAD rather than failing; CLOSE always sets

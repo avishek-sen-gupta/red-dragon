@@ -8,7 +8,6 @@ import pytest
 from interpreter.cobol.layout_data import field_positions
 from interpreter.frontend import make_cobol_parser
 from interpreter.frontends import get_hlasm_parser
-from interpreter.hlasm_run_inputs.dd_builtins import NO_DDS
 from interpreter.hlasm_run_inputs.job_parm_builtins import NO_PARM
 from interpreter.hlasm_run_inputs.run_input_builtins import run_input_builtins
 from interpreter.ir import NO_LABEL
@@ -257,7 +256,7 @@ def _entered(image: LinkedProgram, name: str) -> VMState:
         max_steps=MAX_STEPS,
         initial_vm=initial_vm_state(),
         builtins=compose_builtins(
-            core_builtins(), run_input_builtins(FixedMachineClock(), NO_PARM, NO_DDS)
+            core_builtins(), run_input_builtins(FixedMachineClock(), NO_PARM)
         ),
     )
 
