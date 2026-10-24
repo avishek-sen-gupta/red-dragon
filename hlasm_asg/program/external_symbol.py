@@ -1,5 +1,5 @@
 # pyright: standard
-"""An external symbol the program refers to and how strongly."""
+"""An external symbol the program refers to, how strongly, and the open-code line of its EXTRN or WXTRN, else of its first use."""
 
 from __future__ import annotations
 
@@ -13,3 +13,4 @@ class ExternalSymbol(BaseModel):
 
     name: str
     kind: ExternalKind
+    line: int

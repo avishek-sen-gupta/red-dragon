@@ -1,5 +1,5 @@
 # pyright: standard
-"""Images of several HLASM modules: a V-constant reaches a later module's ENTRY and its data, the job step hands the program its PARM, a linking branch to an unresolved EXTRN calls it by name, and a CSECT named in two units is refused."""
+"""Images of several HLASM modules: a V-constant reaches a later module's ENTRY and its data, the first unit is entered at its own END though another module ends at the same label and two are private code alone, the job step hands the program its PARM, a linking branch to an unresolved EXTRN calls it by name, and a CSECT named in two units is refused."""
 
 import logging
 from pathlib import Path
@@ -10,13 +10,13 @@ from interpreter.frontends import get_hlasm_parser
 from interpreter.handlers.calls import UnresolvedProgramError
 from interpreter.hlasm.job_parm_builtins import NO_PARM, job_parm_builtins
 from interpreter.project.duplicate_program_in_image import DuplicateProgramInImage
+from interpreter.project.entry_point import EntryPoint
 from interpreter.project.hlasm_compile import (
     HLASM_FRONTEND_LOGGER,
     compile_hlasm,
     link_hlasm_units,
     lower_hlasm_program,
 )
-from interpreter.project.program_entry import ProgramEntry
 from interpreter.project.source_file import SourceFile
 from interpreter.project.types import LinkedProgram
 from interpreter.run import initial_vm_state, run_linked
@@ -30,16 +30,21 @@ from tests.integration.hlasm.hlasm_run import HlasmRun
 CALLER = b"""\
 MAIN     CSECT
          USING MAIN,15
-         L     2,=V(BDATA)
+LAB      L     2,=V(BDATA)
          L     15,0(,2)
          BR    14
-         END   MAIN
+         END   LAB
 """
 CALLEE = b"""\
 BMOD     CSECT
          ENTRY BDATA
-         DC    F'1'
+LAB      DC    F'1'
 BDATA    DC    F'42'
+         END   LAB
+"""
+PRIVATE = b"""\
+         LA    15,3
+         BR    14
          END
 """
 PARM_READER = b"""\
@@ -72,7 +77,7 @@ LOW_WORD = 0xFFFFFFFF
 def _run(linked: LinkedProgram, parm: str = NO_PARM, permit: bool = True) -> VMState:
     return run_linked(
         linked,
-        ProgramEntry("MAIN"),
+        EntryPoint.function(lambda ref: ref.label == linked.entry_func_label),
         max_steps=MAX_STEPS,
         initial_vm=initial_vm_state(),
         builtins=compose_builtins(core_builtins(), job_parm_builtins(parm)),
@@ -85,7 +90,9 @@ def _var(vm: VMState, name: str) -> int:
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_a_v_constant_reaches_the_entry_and_data_of_a_later_module(tmp_path: Path):
+def test_a_v_constant_reaches_a_later_module_and_the_first_unit_is_entered_at_its_end(
+    tmp_path: Path,
+):
     parser = get_hlasm_parser()
     units = (
         *lower_hlasm_program(
@@ -93,6 +100,12 @@ def test_a_v_constant_reaches_the_entry_and_data_of_a_later_module(tmp_path: Pat
         ),
         *lower_hlasm_program(
             SourceFile(Path("B.asm"), CALLEE), parser=parser, work_dir=tmp_path
+        ),
+        *lower_hlasm_program(
+            SourceFile(Path("C.asm"), PRIVATE), parser=parser, work_dir=tmp_path
+        ),
+        *lower_hlasm_program(
+            SourceFile(Path("D.asm"), PRIVATE), parser=parser, work_dir=tmp_path
         ),
     )
     linked = link_hlasm_units(units, tmp_path)
@@ -145,7 +158,7 @@ def test_a_linking_branch_to_an_unresolved_extrn_calls_it_by_name(
         _run(linked, permit=False)
 
     assert [r.getMessage() for r in caplog.records] == [
-        "__main__.asm:0: EXTRN MISSING is not in the image; calls reach it by name"
+        "__main__.asm:5: EXTRN MISSING is not in the image; calls reach it by name"
     ]
     assert hlasm_run_of(permitted, "") == HlasmRun(return_code=7, abend="", stdout="")
     assert type(permitted.load(gprs + 2 * 8, 8)) is SymbolicValue

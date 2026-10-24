@@ -110,6 +110,18 @@ TEST     CSECT
          END   TEST
 """
 
+DSECT_ADDRESS_SOURCE = b"""\
+MAIN     CSECT
+         USING MAIN,15
+         L     15,ADDR
+         BR    14
+ADDR     DC    A(FLD),AL2(FLD+2)
+D        DSECT
+         DS    F
+FLD      DS    F
+         END   MAIN
+"""
+
 S_LITERAL_SOURCE = b"""\
 TEST     CSECT
          USING TEST,12
@@ -292,3 +304,12 @@ def test_an_s_type_literal_resolves_through_the_using_at_its_pool(tmp_path: Path
     vm = _start(program)
 
     assert vm.load(_base(vm, "TEST") + 8, 2) == [0xB0, 0x0C]
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_an_address_in_a_dsect_is_its_offset(tmp_path: Path):
+    program = _assemble(DSECT_ADDRESS_SOURCE, tmp_path)
+    vm = _start(program)
+
+    assert object_module(program).relocations == ()
+    assert vm.load(_base(vm, "MAIN") + 8, 6) == [0, 0, 0, 4, 0, 6]

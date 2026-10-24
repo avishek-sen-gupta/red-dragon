@@ -46,7 +46,7 @@ def test_object_module_records_esd_txt_rld_and_end():
             CommonSection("SHARED", 20),
             ControlSection("DATA", 2),
             EntryLabel("HERE", "MAIN", 8),
-            ExternalReference("STRONG"),
+            ExternalReference("STRONG", 4),
             WeakReference("WEAK"),
         ),
         text=(

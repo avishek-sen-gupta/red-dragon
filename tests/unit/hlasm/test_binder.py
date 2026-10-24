@@ -51,8 +51,8 @@ CALLER = _module(
         ControlSection("", 3),
         ControlSection("MAIN", 13),
         CommonSection("SHARED", 20),
-        ExternalReference("SUB"),
-        ExternalReference("GONE"),
+        ExternalReference("SUB", 4),
+        ExternalReference("GONE", 6),
         WeakReference("MAYBE"),
         WeakReference("HELPER"),
     ),
@@ -64,7 +64,7 @@ CALLEE = _module(
         ControlSection("DATA", 4),
         EntryLabel("HELPER", "DATA", 2),
         CommonSection("SHARED", 32),
-        ExternalReference("GONE"),
+        ExternalReference("GONE", 9),
     ),
 )
 
@@ -90,8 +90,11 @@ def test_binder_lays_out_merges_and_resolves_names():
         WeakZero("MAYBE"),
         StubName("GONE", 0),
     ]
+    assert binder.module_entries() == {
+        "A": PlacedName("A", "", 0),
+        "B": PlacedName("B", "SUB", 0),
+    }
     assert binder.entry_points() == {
-        "": PlacedName("A", "", 0),
         "MAIN": PlacedName("A", "MAIN", 0),
         "SUB": PlacedName("B", "SUB", 0),
         "DATA": PlacedName("B", "DATA", 0),
@@ -106,7 +109,7 @@ def test_binder_lays_out_merges_and_resolves_names():
         UnitDiagnostic(
             DiagnosticSeverity.WARNING,
             UnresolvedExternal("GONE"),
-            DiagnosticPlace("A.asm", 0),
+            DiagnosticPlace("A.asm", 6),
         ),
     )
 

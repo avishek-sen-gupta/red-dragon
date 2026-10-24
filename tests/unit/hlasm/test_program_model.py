@@ -144,7 +144,7 @@ EXPECTED = HlasmProgram(
     ),
     entry=NamedEntry(kind="NAMED", name="HELLO"),
     entries=(),
-    externals=(ExternalSymbol(name="EXTR", kind=ExternalKind.EXTRN),),
+    externals=(ExternalSymbol(name="EXTR", kind=ExternalKind.EXTRN, line=10),),
     statements=(
         _machine(
             0,

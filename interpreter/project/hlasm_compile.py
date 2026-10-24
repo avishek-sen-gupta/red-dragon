@@ -131,7 +131,11 @@ def _link(units: Sequence[Path]) -> LinkedProgram:
         type_env_builder=TypeEnvironmentBuilder(),
         symbol_table=SymbolTable.empty(),
     )
-    return dataclasses.replace(linked, programs=dict(bound.programs))
+    return dataclasses.replace(
+        linked,
+        programs=dict(bound.programs),
+        entry_func_label=bound.module_entries[read[0].path],
+    )
 
 
 def _linked(units: Sequence[Path], work_dir: Path) -> LinkedProgram:
@@ -234,6 +238,4 @@ def compile_hlasm(
         for program in (SourceFile(_MAIN_PATH, source), *programs)
     )
     units = (main.unit_file(), *(c.unit_file() for c in companions))
-    linked = _linked(units, work)
-    entry = linked.programs[linked.modules[_MAIN_PATH].program]
-    return dataclasses.replace(linked, entry_func_label=entry)
+    return _linked(units, work)

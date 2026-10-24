@@ -16,9 +16,9 @@ from interpreter.hlasm.dfp_builtins import dfp_builtins
 from interpreter.hlasm.hfp_builtins import hfp_builtins
 from interpreter.hlasm.job_parm_builtins import NO_PARM, job_parm_builtins
 from interpreter.hlasm.pfpo_builtins import pfpo_builtins
+from interpreter.project.entry_point import EntryPoint
 from interpreter.project.hlasm_compile import compile_hlasm
 from interpreter.project.hlasm_compile_options import HlasmCompileOptions
-from interpreter.project.program_entry import ProgramEntry
 from interpreter.run import initial_vm_state, run_linked
 from interpreter.var_name import VarName
 from interpreter.vm.builtins import compose_builtins, core_builtins
@@ -28,7 +28,6 @@ from tests.integration.hlasm.hlasm_machine import HlasmMachine
 from tests.integration.hlasm.hlasm_run import HlasmRun
 
 MAX_STEPS = 20_000
-MAIN_PATH = Path("__main__.asm")
 JOB_STEP_ARGUMENTS = 1
 GPR_BYTES = 8
 LOW_WORD_OFFSET = 4
@@ -80,12 +79,11 @@ def _run_vm(
     linked = compile_hlasm(
         source.encode("utf-8"), parser=get_hlasm_parser(syslib), options=options
     )
-    entry = linked.modules[MAIN_PATH].program
     console = io.StringIO()
     with redirect_stdout(console):
         vm = run_linked(
             linked,
-            ProgramEntry(entry),
+            EntryPoint.function(lambda ref: ref.label == linked.entry_func_label),
             max_steps=MAX_STEPS,
             initial_vm=initial_vm_state(),
             builtins=compose_builtins(

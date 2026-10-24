@@ -1,5 +1,5 @@
 # pyright: standard
-"""HLASM lowering: statement labels, seed opcodes and computed-branch dispatch."""
+"""HLASM lowering: statement labels, seed opcodes and computed-branch dispatch, run through the binder's start-up and job step."""
 
 import logging
 from collections.abc import Sequence
@@ -9,9 +9,12 @@ import pytest
 
 from hlasm_asg.program.hlasm_program import HlasmProgram
 from interpreter.address import Address
-from interpreter.cfg import build_cfg
+from interpreter.constants import Language
+from interpreter.frontends import bind_image
+from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.func_name import FuncName
 from interpreter.hlasm.hlasm_frontend import HlasmFrontend
+from interpreter.hlasm.job_parm_builtins import NO_PARM, job_parm_builtins
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -25,12 +28,16 @@ from interpreter.instructions import (
 )
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import BinopKind
+from interpreter.project.compiler import build_export_table
+from interpreter.project.entry_point import EntryPoint
+from interpreter.project.linker import link_every_module
+from interpreter.project.types import ModuleUnit
 from interpreter.refs.func_ref import FuncRef
 from interpreter.register import Register
-from interpreter.registry import build_registry
-from interpreter.run import execute_cfg, initial_vm_state
-from interpreter.run_types import VMConfig
+from interpreter.run import initial_vm_state, run_linked
+from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 from interpreter.var_name import VarName
+from interpreter.vm.builtins import compose_builtins, core_builtins
 from interpreter.vm.vm_types import VMState
 from tests.covers import NotLanguageFeature, covers
 
@@ -87,16 +94,38 @@ def _branch_and_abend(ir: Sequence[InstructionBase]) -> list[str]:
 
 
 def _run(frontend: HlasmFrontend) -> VMState:
-    lowered = frontend.lower(b"")
-    ir = [lowered[0], *frontend.start_up_ir(), *lowered[1:]]
-    cfg = build_cfg(ir)
-    registry = build_registry(ir, cfg, func_symbol_table=frontend.func_symbol_table)
-    config = VMConfig(max_steps=2000)
-    started, _stats = execute_cfg(cfg, "entry", registry, config, vm=initial_vm_state())
-    finished, _ran = execute_cfg(
-        cfg, frontend.entry_label, registry, config, vm=started
+    ir = frontend.lower(b"")
+    unit = ModuleUnit(
+        path=Path("M.asm"),
+        language=Language.HLASM,
+        ir=tuple(ir),
+        exports=build_export_table(ir, frontend.func_symbol_table, {}),
+        imports=(),
+        object_module=frontend.object_module,
     )
-    return finished
+    bound = bind_image((unit,))
+    modules = {
+        bound.start_up.path: bound.start_up,
+        unit.path: unit,
+        bound.job_step.path: bound.job_step,
+    }
+    linked = link_every_module(
+        modules=modules,
+        import_graph={path: () for path in modules},
+        project_root=Path("/"),
+        topo_order=tuple(modules),
+        language=Language.HLASM,
+        type_env_builder=TypeEnvironmentBuilder(),
+        symbol_table=SymbolTable.empty(),
+    )
+    entry = bound.module_entries[unit.path]
+    return run_linked(
+        linked,
+        EntryPoint.function(lambda ref: ref.label == entry),
+        max_steps=2000,
+        initial_vm=initial_vm_state(),
+        builtins=compose_builtins(core_builtins(), job_parm_builtins(NO_PARM)),
+    )
 
 
 def _var(vm: VMState, name: str) -> int | str:

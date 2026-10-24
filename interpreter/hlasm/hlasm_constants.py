@@ -69,6 +69,7 @@ STUBS_HIGH_VAR = VarName("__hlasm_stubs_high")
 MODULE_FUNCTION_PREFIX = "__hlasm_module_"
 STUB_CALL_FUNCTION = "__hlasm_stub_call"
 JOB_STEP_PREFIX = "__hlasm_job_"
+END_STEP_PREFIX = "__hlasm_end_"
 PROGRAM_ENTRY_PREFIX = "__entry_"
 JOB_PARM_BUILTIN = FuncName("__hlasm_job_parm")
 NO_ABEND = ""
