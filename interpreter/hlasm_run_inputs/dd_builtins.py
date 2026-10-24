@@ -6,14 +6,14 @@ from types import MappingProxyType
 
 from interpreter.func_name import FuncName
 from interpreter.hlasm_run_inputs.dd_definition import DdDefinition
-from interpreter.hlasm_run_inputs.run_input_names import DD_BUILTIN
+from interpreter.hlasm_run_inputs.run_input_names import DD_BUILTIN, DD_FACTS
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.builtin import Builtin
 from interpreter.vm.vm import VMState
 from interpreter.vm.vm_types import BuiltinResult
 
 NO_DDS: Mapping[str, DdDefinition] = MappingProxyType({})
-UNSUPPLIED = (0, 0, 0, 0)
+UNSUPPLIED = (0,) * DD_FACTS
 
 
 def dd_builtins(dds: Mapping[str, DdDefinition]) -> Mapping[FuncName, Builtin]:

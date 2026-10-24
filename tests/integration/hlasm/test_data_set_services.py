@@ -113,12 +113,24 @@ def test_variable_records_carry_their_rdw_through_get_and_put(tmp_path: Path):
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 @pytest.mark.parametrize(
     ("source", "abend"),
-    [(programs.NO_EODAD, "S337"), (programs.NOT_OPENED, "S0C1")],
-    ids=["end_of_data_without_eodad", "get_before_open"],
+    [
+        (programs.NO_EODAD, "S337"),
+        (programs.EODAD_ZERO, "S337"),
+        (programs.NOT_OPENED, "S0C1"),
+        (programs.PUT_BEFORE_OPEN, "S0C1"),
+        (programs.NO_LRECL, "S013"),
+        (programs.VARIABLE_PUT_OVER_LRECL, "S002"),
+    ],
+    ids=[
+        "end_of_data_without_eodad",
+        "end_of_data_with_eodad_zero",
+        "get_before_open",
+        "put_before_open",
+        "open_without_lrecl",
+        "variable_put_over_lrecl",
+    ],
 )
-def test_a_get_past_the_end_without_eodad_or_before_open_abends(
-    tmp_path: Path, source: str, abend: str
-):
+def test_data_set_misuse_abends(tmp_path: Path, source: str, abend: str):
     ran = run_hlasm_machine(
         source, dds=_dds(tmp_path, programs.fixed_records("ONLY RECORD"))
     )
@@ -127,15 +139,20 @@ def test_a_get_past_the_end_without_eodad_or_before_open_abends(
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_open_fills_empty_dcb_fields_from_the_dd_and_fails_a_dd_not_supplied(
+def test_open_fills_empty_dcb_fields_from_the_dd_and_fails_a_dd_or_mode_it_lacks(
     tmp_path: Path,
 ):
     (tmp_path / "in.dat").write_bytes(programs.FIXED_INPUT)
-    dds = {"INDD": DdDefinition(tmp_path / "in.dat", RecordFormat.FB, 80, 800)}
+    (tmp_path / "ex.dat").write_bytes(programs.fixed_records("FIRST RECORD"))
+    dds = {
+        "INDD": DdDefinition(tmp_path / "in.dat", RecordFormat.FB, 80, 800),
+        "EXDD": DdDefinition(tmp_path / "ex.dat"),
+    }
 
     ran = run_hlasm_machine(programs.OPEN_FROM_DDS, dds=dds)
 
     assert (
         ran.run,
         {r: ran.gprs[r] for r in programs.OPEN_FROM_DDS_REGISTERS},
-    ) == (ABENDED, programs.OPEN_FROM_DDS_REGISTERS)
+        (tmp_path / "ex.dat").read_bytes(),
+    ) == (ABENDED, programs.OPEN_FROM_DDS_REGISTERS, programs.EXTENDED)

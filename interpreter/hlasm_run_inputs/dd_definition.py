@@ -6,6 +6,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from interpreter.hlasm_run_inputs.record_format import RecordFormat
+from interpreter.hlasm_run_inputs.run_input_names import (
+    DD_BLKSIZE_FACT,
+    DD_FACTS,
+    DD_LRECL_FACT,
+    DD_RECFM_FACT,
+    DD_SUPPLIED_FACT,
+)
 
 SUPPLIED = 1
 
@@ -18,4 +25,10 @@ class DdDefinition:
     blksize: int = 0
 
     def facts(self) -> Sequence[int]:
-        return [SUPPLIED, self.recfm.value, self.lrecl, self.blksize]
+        at = {
+            DD_SUPPLIED_FACT: SUPPLIED,
+            DD_RECFM_FACT: self.recfm.value,
+            DD_LRECL_FACT: self.lrecl,
+            DD_BLKSIZE_FACT: self.blksize,
+        }
+        return [at[position] for position in range(DD_FACTS)]

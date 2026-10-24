@@ -36,7 +36,11 @@ from interpreter.hlasm.program_services import blank_ended_name
 from interpreter.hlasm.storage_request import StorageRequest
 from interpreter.hlasm.storage_services import obtained
 from interpreter.hlasm_run_inputs.run_input_names import (
+    DD_BLKSIZE_FACT,
     DD_BUILTIN,
+    DD_LRECL_FACT,
+    DD_RECFM_FACT,
+    DD_SUPPLIED_FACT,
     DECLARE_FILE_BUILTIN,
 )
 from interpreter.instructions import (
@@ -88,13 +92,14 @@ RDW_BYTES = 4
 NO_EXIT = 1
 OPEN_FAILED_CODE = 8
 NO_PROGRAM = ""
+NO_LRECL_ABEND = "S013"
+LONG_RECORD_ABEND = "S002"
 NO_KEY = ""
 OPEN_MODES: Mapping[int, OpenMode] = {
     0x00: OpenMode.INPUT,
     0x0F: OpenMode.OUTPUT,
     0x0E: OpenMode.EXTEND,
 }
-DD_SUPPLIED, DD_RECFM, DD_LRECL, DD_BLKSIZE = range(4)
 
 type EntryBody = Callable[[HlasmEmitter, Register, Register], None]
 
@@ -242,9 +247,11 @@ def _merge_field(
 
 
 def _merge_dd(emitter: HlasmEmitter, dcb: Register, facts: Register) -> Register:
-    _merge_field(emitter, dcb, facts, (RECFM_OFFSET, ONE_BYTE, DD_RECFM))
-    _merge_field(emitter, dcb, facts, (BLKSIZE_OFFSET, HALFWORD_BYTES, DD_BLKSIZE))
-    return _merge_field(emitter, dcb, facts, (LRECL_OFFSET, HALFWORD_BYTES, DD_LRECL))
+    _merge_field(emitter, dcb, facts, (RECFM_OFFSET, ONE_BYTE, DD_RECFM_FACT))
+    _merge_field(emitter, dcb, facts, (BLKSIZE_OFFSET, HALFWORD_BYTES, DD_BLKSIZE_FACT))
+    return _merge_field(
+        emitter, dcb, facts, (LRECL_OFFSET, HALFWORD_BYTES, DD_LRECL_FACT)
+    )
 
 
 def _mode_case(
@@ -314,17 +321,24 @@ def _open_entry(emitter: HlasmEmitter, dcb: Register, option: Register) -> None:
     emitter.emit_inst(Label_(label=done))
 
 
+def _merged_lrecl(emitter: HlasmEmitter, dcb: Register, facts: Register) -> Register:
+    lrecl = _merge_dd(emitter, dcb, facts)
+    missing = emitter.binop(BinopKind.EQ, lrecl, emitter.int_(0))
+    _abend_when(emitter, missing, NO_LRECL_ABEND)
+    return lrecl
+
+
 def _attempt_open(
     emitter: HlasmEmitter, dcb: Register, option: Register, failed: CodeLabel
 ) -> None:
     name = _ddname(emitter, dcb)
     facts = emitter.call(DD_BUILTIN, (name,))
     supplied = emitter.binop(
-        BinopKind.NE, _dd_fact(emitter, facts, DD_SUPPLIED), emitter.int_(0)
+        BinopKind.NE, _dd_fact(emitter, facts, DD_SUPPLIED_FACT), emitter.int_(0)
     )
     _otherwise_to(emitter, supplied, failed)
-    lrecl = _merge_dd(emitter, dcb, facts)
     mode = _open_mode(emitter, option, failed)
+    lrecl = _merged_lrecl(emitter, dcb, facts)
     _declared(emitter, dcb, name, lrecl)
     raw = _call(emitter, OPEN_FILE, name, mode)
     _otherwise_to(emitter, _outcome_is(emitter, raw, PROVIDER_OK), failed)
@@ -340,17 +354,26 @@ def emit_open(emitter: HlasmEmitter) -> None:
     emitter.store_gr32(RETURN_CODE_REGISTER, code)
 
 
+def _abend_when(emitter: HlasmEmitter, condition: Register, code: str) -> None:
+    _when(emitter, condition, lambda: emit_abend(emitter, code))
+
+
+def _written_length(
+    emitter: HlasmEmitter, dcb: Register, source: Register, variable: Register
+) -> Register:
+    described = emitter.load_storage(source, 0, HALFWORD_BYTES)
+    lrecl = emitter.load_storage(dcb, LRECL_OFFSET, HALFWORD_BYTES)
+    longer = emitter.binop(BinopKind.GT, described, lrecl)
+    _abend_when(
+        emitter, emitter.binop(BinopKind.AND, variable, longer), LONG_RECORD_ABEND
+    )
+    data = emitter.binop(BinopKind.SUB, described, emitter.int_(RDW_BYTES))
+    return _selected(emitter, variable, (data, lrecl))
+
+
 def _record_from(emitter: HlasmEmitter, dcb: Register, source: Register) -> Register:
     variable = _variable(emitter, dcb)
-    described = emitter.load_storage(source, 0, HALFWORD_BYTES)
-    length = _selected(
-        emitter,
-        variable,
-        (
-            emitter.binop(BinopKind.SUB, described, emitter.int_(RDW_BYTES)),
-            emitter.load_storage(dcb, LRECL_OFFSET, HALFWORD_BYTES),
-        ),
-    )
+    length = _written_length(emitter, dcb, source, variable)
     start = _selected(emitter, variable, (emitter.int_(RDW_BYTES), emitter.int_(0)))
     first = emitter.binop(BinopKind.ADD, source, start)
     emitter.store_var(

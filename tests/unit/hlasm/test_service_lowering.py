@@ -5,12 +5,14 @@ from collections.abc import Callable
 
 import pytest
 
+from interpreter.cobol.access_result import AccessCondition
 from interpreter.hlasm.data_set_services import (
     emit_close,
     emit_get,
     emit_open,
     emit_put,
 )
+from interpreter.hlasm.hlasm_constants import PROVIDER_END_OF_FILE, PROVIDER_OK
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.program_services import emit_delete, emit_link, emit_load
 from interpreter.hlasm.storage_services import (
@@ -91,3 +93,10 @@ def test_a_service_calls_only_existing_builtins(service: str):
         {str(i.func_name) for i in instructions if isinstance(i, CallFunction)},
         [i for i in instructions if isinstance(i, Symbolic)],
     ) == (builtins, [])
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_the_provider_outcomes_the_lowering_compares_are_the_access_condition_positions():
+    positions = (AccessCondition.OK.position(), AccessCondition.END_OF_FILE.position())
+
+    assert positions == (PROVIDER_OK, PROVIDER_END_OF_FILE)

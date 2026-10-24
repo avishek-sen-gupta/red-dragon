@@ -61,7 +61,9 @@ DCBD_FIELDS = (
     "         IPM   6\n"
     "         SRL   6,28\n"
     "         IC    7,DCBOFLGS\n"
-    "         LH    8,DCBMACRF\n"
+    "         LH    8,DCBMACR\n"
+    "         SR    14,14\n"
+    "         IC    14,DCBMACR2\n"
     "         L     9,DCBSYNAD\n"
     "         LH    10,DCBBLKSI\n"
     "         LH    11,DCBLRECL\n"
@@ -82,6 +84,7 @@ DCBD_REGISTERS: Mapping[int, int] = {
     6: 0,
     7: 0,
     8: 0x0048,
+    14: 0x48,
     9: 1,
     10: 1000,
     11: 104,
@@ -243,10 +246,54 @@ OPEN_FROM_DDS = (
     "         LH    7,DCBBLKSI\n"
     "         LA    10,NODCB\n"
     "         IC    4,DCBOFLGS\n"
+    "         LA    1,BADLIST\n"
+    "         SVC   19\n"
+    "         LR    8,15\n"
+    "         SR    9,9\n"
+    "         IC    9,BADDCB+48\n"
+    "         SR    11,11\n"
+    "         IC    11,BADDCB+36\n"
+    "         OPEN  (EXDCB,(EXTEND))\n"
+    "         PUT   EXDCB,NEWREC\n"
+    "         CLOSE (EXDCB,,NEVER)\n"
+    "         LR    10,15\n"
     "         ABEND 1\n"
+    "         DS    0F\n"
+    "BADLIST  DC    AL1(X'81'),AL3(BADDCB)\n"
+    "NEWREC   DC    CL80'APPENDED'\n"
     "INDCB    DCB   DSORG=PS,MACRF=GM,RECFM=F,DDNAME=INDD\n"
     "NODCB    DCB   DSORG=PS,MACRF=GM,DDNAME=NODD\n"
+    "BADDCB   DCB   DSORG=PS,MACRF=GM,DDNAME=INDD\n"
+    "EXDCB    DCB   DSORG=PS,MACRF=PM,RECFM=F,LRECL=80,DDNAME=EXDD\n"
+    "NEVER    DCB   DSORG=PS,MACRF=PL,RECFM=F,LRECL=80,DDNAME=NODD\n"
     "         DCBD\n"
     "         END\n"
 )
-OPEN_FROM_DDS_REGISTERS = {2: 8, 3: 0x10, 4: 0, 5: 0x80, 6: 80, 7: 800}
+OPEN_FROM_DDS_REGISTERS = {
+    2: 8,
+    3: 0x10,
+    4: 0,
+    5: 0x80,
+    6: 80,
+    7: 800,
+    8: 8,
+    9: 0,
+    10: 0,
+    11: 0,
+}
+EXTENDED = fixed_records("FIRST RECORD", "APPENDED")
+
+PUT_BEFORE_OPEN = NOT_OPENED.replace("GET   INDCB,REC", "PUT   INDCB,REC")
+EODAD_ZERO = NO_EODAD.replace("LRECL=80,DDNAME=INDD", "LRECL=80,DDNAME=INDD,EODAD=0")
+NO_LRECL = NO_EODAD.replace("LRECL=80,DDNAME=INDD", "DDNAME=INDD")
+VARIABLE_PUT_OVER_LRECL = (
+    "T        CSECT\n"
+    "         BASR  12,0\n"
+    "         USING *,12\n"
+    "         OPEN  (OUTDCB,(OUTPUT))\n"
+    "         PUT   OUTDCB,REC\n"
+    "         ABEND 1\n"
+    "REC      DC    AL2(200),AL2(0),CL196'X'\n"
+    "OUTDCB   DCB   DSORG=PS,MACRF=PM,RECFM=V,LRECL=104,DDNAME=OUTDD\n"
+    "         END\n"
+)

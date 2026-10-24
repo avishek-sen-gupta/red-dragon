@@ -1,1 +1,1 @@
-"""HLASM run inputs as builtins: what a run reads from outside the program (the machine clock, the job-step PARM and the DD definitions), kept outside interpreter.hlasm so run() can compose them."""
+"""HLASM builtins kept outside interpreter.hlasm: the run inputs (the machine clock, the job-step PARM and the DD definitions), which run() composes, and OPEN's file declaration, which reaches the COBOL file provider and which callers compose."""
