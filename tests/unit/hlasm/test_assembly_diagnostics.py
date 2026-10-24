@@ -29,11 +29,27 @@ OPEN_CODE = OpenCodeOrigin(kind="OPEN_CODE", file=SOURCE, line=9)
 GENERATED = MacroOrigin(kind="MACRO", file=SOURCE, line=12, macro="GEN", depth=1)
 
 
-def _program(**update: object) -> HlasmProgram:
+HELLO_SECTIONS = (Section(name="HELLO", kind=SectionKind.CSECT, length=64),)
+
+
+def _program(
+    *,
+    diagnostics: tuple[Diagnostic, ...] = (),
+    sections: tuple[Section, ...] = HELLO_SECTIONS,
+    statements: tuple[DcStatement, ...] = (),
+    literals: tuple[LiteralPool, ...] = (),
+) -> HlasmProgram:
     hello = HlasmProgram.model_validate_json(
         (FIXTURES / "hello_program.json").read_text()
     )
-    return hello.model_copy(update={"statements": (), "literals": (), **update})
+    return hello.model_copy(
+        update={
+            "diagnostics": diagnostics,
+            "sections": sections,
+            "statements": statements,
+            "literals": literals,
+        }
+    )
 
 
 def _item(type_: str, extension: str, value: str, duplication: int = 1) -> DcItem:
@@ -58,7 +74,9 @@ def _bit_item(value: str) -> DcItem:
     )
 
 
-def _dc(section: str, origin: OpenCodeOrigin | MacroOrigin, *items: DcItem):
+def _dc(
+    section: str, origin: OpenCodeOrigin | MacroOrigin, *items: DcItem
+) -> DcStatement:
     return DcStatement(
         kind="DC",
         section=section,
@@ -70,10 +88,10 @@ def _dc(section: str, origin: OpenCodeOrigin | MacroOrigin, *items: DcItem):
     )
 
 
-def _warning(line: int, constant: str, kind: str) -> UnitDiagnostic:
+def _warning(line: int, message: str) -> UnitDiagnostic:
     return UnitDiagnostic(
         DiagnosticSeverity.WARNING,
-        f"{constant} {kind}",
+        message,
         DiagnosticPlace(SOURCE, line),
     )
 
@@ -85,7 +103,7 @@ def test_bridge_diagnostics_keep_text_and_call_stack_with_members_named():
             Diagnostic(
                 code="MNOTE",
                 severity=Severity.WARNING,
-                message="CAREFUL",
+                message="4,CAREFUL",
                 file=MEMBER,
                 line=3,
                 related=(
@@ -96,7 +114,7 @@ def test_bridge_diagnostics_keep_text_and_call_stack_with_members_named():
             Diagnostic(
                 code="MNOTE",
                 severity=Severity.INFO,
-                message="NOTED",
+                message="2,NOTED",
                 file=SOURCE,
                 line=4,
                 related=(),
@@ -115,12 +133,12 @@ def test_bridge_diagnostics_keep_text_and_call_stack_with_members_named():
     assert assembly_diagnostics(program) == (
         UnitDiagnostic(
             DiagnosticSeverity.WARNING,
-            "MNOTE CAREFUL",
+            "MNOTE 4,CAREFUL",
             DiagnosticPlace("GREET", 3),
             (DiagnosticPlace("OUTER", 2), DiagnosticPlace(SOURCE, 9)),
         ),
         UnitDiagnostic(
-            DiagnosticSeverity.INFO, "MNOTE NOTED", DiagnosticPlace(SOURCE, 4)
+            DiagnosticSeverity.INFO, "MNOTE 2,NOTED", DiagnosticPlace(SOURCE, 4)
         ),
         UnitDiagnostic(
             DiagnosticSeverity.INFO,
@@ -131,10 +149,10 @@ def test_bridge_diagnostics_keep_text_and_call_stack_with_members_named():
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_dc_warnings_come_once_per_value_with_their_statement_line():
+def test_dc_warnings_come_once_per_value_from_every_section_with_line_and_macro():
     program = _program(
         sections=(
-            Section(name="HELLO", kind=SectionKind.CSECT, length=64),
+            *HELLO_SECTIONS,
             Section(name="MAP", kind=SectionKind.DSECT, length=4),
         ),
         statements=(
@@ -146,7 +164,12 @@ def test_dc_warnings_come_once_per_value_with_their_statement_line():
                 _item("E", "", "1"),
                 _bit_item("1E-50"),
             ),
-            _dc("MAP", OPEN_CODE, _item("E", "B", "1E39")),
+            _dc(
+                "MAP",
+                OpenCodeOrigin(kind="OPEN_CODE", file=SOURCE, line=20),
+                _item("E", "B", "1E39"),
+                _item("D", "B", "1E400", duplication=0),
+            ),
         ),
         literals=(
             LiteralPool(
@@ -159,9 +182,11 @@ def test_dc_warnings_come_once_per_value_with_their_statement_line():
     )
 
     assert assembly_diagnostics(program) == (
-        _warning(9, "EB'1E39'", "overflow"),
-        _warning(12, "EB'1E39'", "overflow"),
-        _warning(12, "EB'1E39'", "overflow"),
-        _warning(12, "EB'1E-50'", "underflow"),
-        _warning(14, "ED'1.2345678'", "inexact"),
+        _warning(9, "EB'1E39' overflow"),
+        _warning(12, "EB'1E39' overflow in macro GEN"),
+        _warning(12, "EB'1E39' overflow in macro GEN"),
+        _warning(12, "EB'1E-50' underflow in macro GEN"),
+        _warning(20, "EB'1E39' overflow"),
+        _warning(20, "DB'1E400' overflow"),
+        _warning(14, "ED'1.2345678' inexact"),
     )

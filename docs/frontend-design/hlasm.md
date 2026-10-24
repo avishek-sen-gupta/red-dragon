@@ -203,23 +203,34 @@ is not in the digest: a reused unit keeps the time it was assembled at, as COBOL
 
 ## Diagnostics
 
-Errors refuse the assembly (`HlasmParseError`). Everything below error level is kept
-on the unit (`ModuleUnit.diagnostics`, from `HlasmFrontend.diagnostics`) and logged
-through the `interpreter.project.hlasm_compile` logger every time the unit is used,
-built or reused. They never stop the run. Two sources:
+Errors refuse the assembly. che4z's errors refuse in the bridge (`HlasmParseError`).
+DC errors (ASMA064S, ASMA068S, ASMA071E, ASMA072E, ASMA073E, `UnsupportedDataType`)
+are raised when the unit is lowered, while its diagnostics are collected, so
+`lower_hlasm_program` refuses them too, not only linking.
+
+Everything below error level is kept on the unit (`ModuleUnit.diagnostics`, from
+`HlasmFrontend.diagnostics`). It is logged through the `interpreter.hlasm` logger
+each time `compile_hlasm` or `lower_hlasm_program` uses the unit, whether built or
+reused. The records come from the files in hand: `compile_hlasm` reads them from the
+linked file, `lower_hlasm_program` from the unit it built or read. They never stop
+the run. Two sources:
 
 - che4z's diagnostics: its warnings, and MNOTEs below severity 8. che4z classifies
   MNOTE 4-7 as warnings, 2-3 as info and 0-1 as hints. Warnings log at `WARNING`;
-  info and hints at `INFO`. The message is che4z's code, then its text
-  (`MNOTE MIND THE GAP`). che4z's codes are its own, not IBM's `ASMA` ids.
-- `DcWarning`s from E, D and L constants with a type extension: `EB'1E39' overflow`
-  at `WARNING`, at the DC statement's line (the call's line for a macro-generated DC;
-  a literal's first use). A duplicated operand warns once per value. DCs in DSECTs
-  are not encoded, so they do not warn.
+  info and hints at `INFO`. The message is che4z's code, then its text. Our bridge
+  puts an MNOTE's severity before its text, as the listing does (`MNOTE 4,MIND THE
+  GAP`). che4z reads `MNOTE 'text'` and `MNOTE *,'text'` as severity 0. che4z's
+  codes are its own, not IBM's `ASMA` ids.
+- `DcWarning`s from E, D and L constants with a type extension, at `WARNING`, at the
+  DC statement's line: `EB'1E39' overflow`. A macro-generated DC takes the call's
+  line and names the macro (`EB'1E39' overflow in macro GEN`); a literal takes its
+  first use. A duplicated operand warns once per value. Every DC is checked, DSECTs
+  and duplication factor 0 included: HLASM checks their nominal values though it
+  emits no object code for them (ruling R63).
 
 Each record (`UnitDiagnostic`) holds the severity, message, place and macro call
 stack, innermost call first, and logs as
-`CAREFUL:3: MNOTE MIND THE GAP (called from __main__.asm:2)`. A SYSLIB member's
+`CAREFUL:3: MNOTE 4,MIND THE GAP (called from __main__.asm:2)`. A SYSLIB member's
 `file://` URI is shown as the member name; open code keeps its source name.
 
 ## Assembly Inputs
@@ -1244,7 +1255,7 @@ layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.
 | `tests/unit/hlasm/test_operands.py` | Typed operand access and its failures |
 | `tests/unit/hlasm/test_machine.py` | Machine start-up state |
 | `tests/unit/hlasm/test_vector_registers.py` | Vector registers on the VM: 128-bit values over the FPRs, elements by static and run-time index, return fields, M-field checks, the VRV address, the VXC |
-| `tests/unit/hlasm/test_assembly_diagnostics.py` | Bridge diagnostics and DC warnings as unit diagnostics: severity, code and text, member names, call stack, once per value, literals, DSECTs skipped |
+| `tests/unit/hlasm/test_assembly_diagnostics.py` | Bridge diagnostics and DC warnings as unit diagnostics: severity, code and text, member names, call stack, once per value, literals, DSECTs and duplication 0 checked, the macro named |
 | `tests/unit/hlasm/test_dc_encoding.py` | DC images |
 | `tests/unit/hlasm/test_floating_point_constant.py` | E, D and L images: HFP without extension and with H, BFP and DFP rounding modes and lengths, special values, and the ASMA071E, ASMA064S and ASMA073E refusals |
 | `tests/unit/hlasm/test_fixed_width_ir.py` | Fixed-width arithmetic, truncating division, bitwise connectives, shifts and rotates, and condition codes |
@@ -1293,7 +1304,7 @@ layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.
 | `tests/integration/hlasm/test_storage_layout.py` | Section regions and address constants; `*` in each constant after `DC 0F`, and in a duplicated literal; out-of-range values refused with their line, a literal's included; CCW images with relocated addresses, a literal operand's included, and an external address refused; an S-type literal resolved through the USING at its pool |
 | `tests/integration/hlasm/test_dc_images.py` | DC images loaded into registers on the VM, one family per type group (`dc_image_programs.py`); alignment bytes inside a DC are zero; bit-length and floating-point forms z390 misassembles (`PAST_Z390`) |
 | `tests/integration/hlasm/test_svc.py` | `WTO`, `ABEND` user and system codes, unlowered SVCs, `run()` with our maclib then `copybook_dirs`, call-site spans |
-| `tests/integration/hlasm/test_hlasm_compile.py` | Unit files; MNOTEs (WARNING and INFO) and a DC warning logged with place and call stack, and logged again from a reused unit; reuse that follows the inputs, SYSLIB member contents and the bridge, not the clock; assembly inputs, clock and `&SYSSEQF` printed through WTO; an unsupplied `&SYSPARM` is null and another input not given is refused; a missing SYSLIB directory refused; a bridge name found on `PATH`; the bridge found from another working directory; `run()`, return code, default entry, BALR/BR, wild branch |
+| `tests/integration/hlasm/test_hlasm_compile.py` | Unit files; MNOTEs (WARNING and INFO) with their severity and a DC warning logged with place and call stack, and logged again from the cached files with no assembly; reuse that follows the inputs, SYSLIB member contents and the bridge, not the clock; assembly inputs, clock and `&SYSSEQF` printed through WTO; an unsupplied `&SYSPARM` is null and another input not given is refused; a missing SYSLIB directory refused; a bridge name found on `PATH`; the bridge found from another working directory; `run()`, return code, default entry, BALR/BR, wild branch |
 | `tests/unit/hlasm/test_bridge_command.py` | The bridge command carries each supplied input and the clock as options; a naive clock and a SYSPARM over 255 characters are refused |
 | `tests/integration/hlasm/test_instruction_table.py`, `test_opcode_unit_coverage.py` | Instruction table and opcode-unit coverage |
 | `tests/z390/test_foundation_differential.py` | Return code, WTO, user abend and assembly failure against z390 (`-m z390`) |

@@ -30,7 +30,8 @@ from interpreter.project.unit_codec import UnitCodec
 from interpreter.project.unit_diagnostic import UnitDiagnostic
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 
-logger = logging.getLogger(__name__)
+HLASM_FRONTEND_LOGGER = "interpreter.hlasm"
+logger = logging.getLogger(HLASM_FRONTEND_LOGGER)
 
 _MAIN_PATH = Path("__main__.asm")
 _PROJECT_ROOT = Path("/")
@@ -64,21 +65,28 @@ class _Assembly:
         return target
 
     def unit(self) -> Path:
-        target = self._artifact("unit")
-        codec = UnitCodec(IrCodec())
-        if not target.exists():
-            codec.write(self._module(), target)
-        _report(codec.read(target).diagnostics)
-        return target
+        _report(self._unit_module().diagnostics)
+        return self._artifact("unit")
 
     def linked(self) -> LinkedProgram:
-        unit = self.unit()
+        unit = self._artifact("unit")
         digest = hashlib.sha256(unit.name.encode("utf-8")).hexdigest()
         target = self.work_dir / f"image-{digest}.linked.json"
         codec = LinkedCodec(IrCodec())
         if not target.exists():
-            codec.write(self._link(UnitCodec(IrCodec()).read(unit)), target)
-        return codec.read(target)
+            codec.write(self._link(self._unit_module()), target)
+        linked = codec.read(target)
+        _report(linked.modules[self.program.path].diagnostics)
+        return linked
+
+    def _unit_module(self) -> ModuleUnit:
+        target = self._artifact("unit")
+        codec = UnitCodec(IrCodec())
+        if target.exists():
+            return codec.read(target)
+        module = self._module()
+        codec.write(module, target)
+        return module
 
     def _module(self) -> ModuleUnit:
         frontend = get_hlasm_frontend(self.parser.read(self.ast()))

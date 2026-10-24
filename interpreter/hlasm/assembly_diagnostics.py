@@ -1,5 +1,5 @@
 # pyright: standard
-"""An assembly's diagnostics below error level: che4z's warnings and MNOTEs, and its DC constants' warnings."""
+"""An assembly's diagnostics below error level: che4z's warnings and MNOTEs, and the warnings of every DC constant, DSECTs included; encoding each one also refuses its errors."""
 
 from collections.abc import Mapping
 from itertools import chain
@@ -10,8 +10,9 @@ from hlasm_asg.program.dc_item import DcItem
 from hlasm_asg.program.dc_statement import DcStatement
 from hlasm_asg.program.diagnostic import Diagnostic
 from hlasm_asg.program.hlasm_program import HlasmProgram
+from hlasm_asg.program.macro_origin import MacroOrigin
+from hlasm_asg.program.open_code_origin import OpenCodeOrigin
 from hlasm_asg.program.origin import Origin
-from hlasm_asg.program.section_kind import SectionKind
 from hlasm_asg.program.severity import Severity
 from interpreter.hlasm.bit_length_image import BitLengthImage
 from interpreter.hlasm.constant_image import ConstantImage
@@ -64,34 +65,37 @@ def _one_copy_warnings(item: DcItem, origin: Origin) -> tuple[DcWarning, ...]:
             )
 
 
+def _generated_by(origin: Origin) -> str:
+    match origin:
+        case MacroOrigin(macro=macro):
+            return f" in macro {macro}"
+        case OpenCodeOrigin():
+            return ""
+
+
 def _constant(warning: DcWarning, origin: Origin) -> UnitDiagnostic:
     return UnitDiagnostic(
         DiagnosticSeverity.WARNING,
-        f"{warning.constant} {warning.kind.value}",
+        f"{warning.constant} {warning.kind.value}{_generated_by(origin)}",
         _place(origin.file, origin.line),
     )
 
 
-def _stored_constants(program: HlasmProgram) -> tuple[tuple[DcItem, Origin], ...]:
-    stored = {s.name for s in program.sections if s.kind != SectionKind.DSECT}
+def _constants(program: HlasmProgram) -> tuple[tuple[DcItem, Origin], ...]:
     statements = (
         (item, s.origin)
         for s in program.statements
-        if isinstance(s, DcStatement) and s.section in stored
+        if isinstance(s, DcStatement)
         for item in s.items
     )
-    literals = (
-        (literal.item, literal.origin)
-        for literal in program.literals
-        if literal.section in stored
-    )
+    literals = ((literal.item, literal.origin) for literal in program.literals)
     return (*statements, *literals)
 
 
 def assembly_diagnostics(program: HlasmProgram) -> tuple[UnitDiagnostic, ...]:
     constants = (
         _constant(warning, origin)
-        for item, origin in _stored_constants(program)
+        for item, origin in _constants(program)
         for warning in _one_copy_warnings(item, origin)
     )
     return (*map(_bridge, program.diagnostics), *constants)

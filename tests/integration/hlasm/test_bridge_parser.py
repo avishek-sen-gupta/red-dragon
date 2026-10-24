@@ -136,7 +136,7 @@ class TestBridgeParser:
             Diagnostic(
                 code="MNOTE",
                 severity=Severity.WARNING,
-                message="CAREFUL",
+                message="4,CAREFUL",
                 file=SOURCE_NAME,
                 line=3,
                 related=(RelatedLocation(file=SOURCE_NAME, line=9),),
