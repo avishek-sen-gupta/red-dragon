@@ -111,3 +111,10 @@ def test_floating_point_registers_are_the_left_halves_of_thirty_two_zero_vector_
         [0] * 128,
         0,
     ]
+
+
+def test_the_allocation_table_starts_empty():
+    vm = run_straight_line(machine_allocation(), {})
+    table = vm.current_frame.local_vars[VarName("__hlasm_allocations")].value
+
+    assert vm.heap_get(table.base).fields == {}

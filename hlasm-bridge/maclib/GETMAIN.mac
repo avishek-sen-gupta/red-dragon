@@ -1,0 +1,30 @@
+         MACRO
+&NAME    GETMAIN &TYPE,&LV=,&SP=,&LOC=,&BNDRY=
+         LCLA  &FL
+         AIF   ('&TYPE' EQ 'R' OR '&TYPE' EQ 'RU').HAVET
+         AIF   ('&TYPE' EQ 'RC').HAVET
+         MNOTE 8,'GETMAIN: TYPE MUST BE R, RU OR RC'
+         MEXIT
+.HAVET   AIF   ('&LV' NE '').HAVELV
+         MNOTE 8,'GETMAIN: LV MISSING'
+         MEXIT
+.HAVELV  AIF   ('&BNDRY' EQ '' OR '&BNDRY' EQ 'DBLWD').BOUND
+         AIF   ('&BNDRY' EQ 'PAGE').PAGE
+         MNOTE 8,'GETMAIN: BNDRY MUST BE DBLWD OR PAGE'
+         MEXIT
+.PAGE    AIF   ('&TYPE' NE 'R').PAGEOK
+         MNOTE 8,'GETMAIN: BNDRY=PAGE NEEDS RU OR RC'
+         MEXIT
+.PAGEOK  ANOP
+&FL      SETA  4
+.BOUND   ANOP
+&NAME    DS    0H
+         AIF   ('&TYPE' NE 'R').SVC120
+         RDSTR &LV,&SP
+         BRAS  1,*+4
+         SVC   10
+         MEXIT
+.SVC120  AIF   ('&TYPE' NE 'RC').OBTAIN
+&FL      SETA  &FL+2
+.OBTAIN  RDSTSVC &LV,&SP,&FL
+         MEND

@@ -1,0 +1,8 @@
+         MACRO
+         RDSTR &LV,&SP
+         RDSTLEN &LV
+         AIF   ('&LV'(1,1) NE '(').SP
+         NILH  0,X'00FF'
+.SP      AIF   ('&SP' EQ '').DONE
+         OILH  0,(&SP)*256
+.DONE    MEND

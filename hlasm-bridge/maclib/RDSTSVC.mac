@@ -1,0 +1,10 @@
+         MACRO
+         RDSTSVC &LV,&SP,&FLAGS
+         LCLC  &SPV
+&SPV     SETC  '0'
+         AIF   ('&SP' EQ '').LOAD
+&SPV     SETC  '&SP'
+.LOAD    RDSTLEN &LV
+         IILF  15,(&SPV)*256+&FLAGS
+         SVC   120
+         MEND
