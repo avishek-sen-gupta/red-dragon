@@ -313,10 +313,16 @@ feature, run on the VM and, under `tests/z390/`, in z390. Covered:
 - DSECTs with USING, labeled and dependent USING; S-constant literals whose pools
   are moved by LOCTR and ORG.
 - T', L', S', I', D' and O', and T' of literals.
+- `&SYSECT` and `&SYSLOC` across LOCTRs and CSECTs; `&SYSSEQF` and `&SYSSTMT` from open
+  code, a COPY member and after lookahead; `&SYSPARM` empty and given; `&SYSDATC`,
+  `&SYSTIME` and `&SYSDATE` from the injected clock (VM only: z390 reads its own clock).
+- An MNOTE from a macro reaches the log (VM only: z390 writes MNOTEs to its listing).
 
 Where z390 disagrees, the VM test follows the Language Reference and a z390 test pins
 z390's value (red-dragon-6uyp.74): z390 gives I' as 0, S' as 0 for a symbol defined
-later, and T' of every literal as U. The Language Reference gives a literal in a macro
+later, T' of every literal as U, `&SYSSEQF` as empty, and numbers `&SYSSTMT` by
+open-code lines only. Our `&SYSSTMT` is che4z's, which also counts the statements a
+macro expansion processes; the Language Reference does not say which. The Language Reference gives a literal in a macro
 operand its constant's type only if a machine instruction already used it; otherwise U.
 Our che4z fork follows that inside macros.
 
@@ -336,7 +342,8 @@ Z390_HOME=/path/to/z390 uv run pytest -m z390 tests/z390 -n0
 `bash/asmlg` and reads the program's `.LOG`. The return code comes from the
 `EZ390 ENDED RC=` line, or is 0 after an abend. The abend code comes from
 `program aborting due to abend`. The WTO lines are the run's lines minus z390's
-`EZ390` messages and register dumps.
+`EZ390` messages and register dumps. Extra asmlg options go through `run`, for
+example `SYSPARM(ALPHA)`.
 
 Registers and the CC are compared through `HlasmMachine`: `run_hlasm_machine` reads
 all 16 GPRs (64-bit) and `__hlasm_cc`; `Z390Runner.run_machine` reads them from the
