@@ -30,6 +30,8 @@ from interpreter.cobol.linkage_record import LinkageRecord
 from interpreter.cobol.program_object import program_name
 from interpreter.cobol.special_registers import SPECIAL_REGISTERS_LAYOUT
 from interpreter.cobol.undeclared_data_name import UndeclaredDataName
+from interpreter.project.argument_mode import ArgumentMode
+from interpreter.project.using_parameter import UsingParameter
 from interpreter.register import NO_REGISTER, Register
 
 logger = logging.getLogger(__name__)
@@ -254,6 +256,19 @@ def build_sectioned_layout(asg: CobolASG) -> SectionedLayout:
         },
         enclosing=tuple(_enclosing_layout(outer) for outer in asg.enclosing),
         special_registers=special_registers_layout(asg),
+    )
+
+
+def using_signature(asg: CobolASG) -> tuple[UsingParameter, ...]:
+    """Each LINKAGE parameter the procedure binds, in order: BY VALUE where the
+    PROCEDURE DIVISION USING says so, else BY REFERENCE; and its byte length."""
+    values = {p.name.upper() for p in asg.procedure_using if p.param_type == "VALUE"}
+    return tuple(
+        UsingParameter(
+            ArgumentMode.VALUE if record.name in values else ArgumentMode.REFERENCE,
+            record.length,
+        )
+        for record in build_sectioned_layout(asg).linkage_parameters
     )
 
 

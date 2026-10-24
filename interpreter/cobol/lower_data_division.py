@@ -37,6 +37,7 @@ from interpreter.instructions import (
     StoreVar,
 )
 from interpreter.operator_kind import resolve_binop
+from interpreter.project.argument_mode import ArgumentMode
 from interpreter.register import NO_REGISTER, Register
 from interpreter.var_name import VarName
 
@@ -246,7 +247,16 @@ def _bind_parameter(
     ctx.emit_inst(
         LoadIndex(result_reg=element, arr_reg=args, index_reg=index), span=None
     )
-    omitted = _field(ctx, element, "omitted")
+    omitted = ctx.fresh_reg()
+    ctx.emit_inst(
+        Binop(
+            result_reg=omitted,
+            operator=resolve_binop("=="),
+            left=_field(ctx, element, "mode"),
+            right=ctx.const_to_reg(ArgumentMode.OMITTED.value, span=None),
+        ),
+        span=None,
+    )
     ctx.emit_inst(BranchIf(cond_reg=omitted, branch_targets=(absent, bind)), span=None)
     ctx.emit_inst(Label_(label=bind), span=None)
     _store_binding(

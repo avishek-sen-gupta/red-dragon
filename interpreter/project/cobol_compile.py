@@ -106,6 +106,7 @@ def compile_cobol_module(
         symbol_table=frontend.symbol_table,
         entry_label=CodeLabel(f"func_{frontend.program_id.lower()}_0"),
         program=frontend.program_id,
+        using=frontend.using_signature,
     )
 
 

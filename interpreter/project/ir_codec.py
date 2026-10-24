@@ -36,6 +36,7 @@ from interpreter.ir import (
 )
 from interpreter.operator_kind import BinopKind, UnopKind
 from interpreter.path_name import NO_PATH_NAME, NoPathName, PathName
+from interpreter.project.argument_mode import ArgumentMode
 from interpreter.project.coded_diagnostic import CodedDiagnostic
 from interpreter.project.comment_mnote import CommentMnote
 from interpreter.project.common_section import CommonSection
@@ -61,6 +62,7 @@ from interpreter.project.types import ExportTable, ImportKind, ImportRef, Module
 from interpreter.project.unit_diagnostic import UnitDiagnostic
 from interpreter.project.unit_format_error import UnitFormatError
 from interpreter.project.unresolved_external import UnresolvedExternal
+from interpreter.project.using_parameter import UsingParameter
 from interpreter.project.weak_reference import WeakReference
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
@@ -122,6 +124,7 @@ _DATACLASSES: tuple[type, ...] = (
     RelocationRecord,
     NamedEnd,
     DefaultEnd,
+    UsingParameter,
     FieldInfo,
     FunctionInfo,
     ClassInfo,
@@ -149,6 +152,7 @@ _ENUMS: tuple[type[enum.Enum], ...] = (
     DcWarningKind,
     RelocationKind,
     RelocationSign,
+    ArgumentMode,
 )
 _NATIVE = (bool, int, float, str)
 

@@ -20,7 +20,8 @@ def test_each_region_is_handed_over_by_base_address_with_the_count() -> None:
     fields = vm.heap_get(element.base).fields
     assert (
         array.fields[FieldName("count")].value,
+        fields[FieldName("mode")].value,
+        fields[FieldName("length")].value,
         fields[FieldName("region")].value,
         fields[FieldName("offset")].value,
-        fields[FieldName("omitted")].value,
-    ) == (1, 4099, 0, False)
+    ) == (1, "REFERENCE", 4, 4099, 0)

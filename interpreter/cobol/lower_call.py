@@ -61,6 +61,7 @@ from interpreter.instructions import (
 )
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import resolve_binop
+from interpreter.project.argument_mode import ArgumentMode
 from interpreter.register import Register
 from interpreter.var_name import VarName
 
@@ -314,8 +315,8 @@ def _store_giving(scope: LoweringScope, giving: RefModOperand) -> None:
 
 
 def _argument_array(scope: LoweringScope, using: Sequence[CallUsingParam]) -> Register:
-    """One element per USING argument, by position: a region, an offset, and
-    whether it was OMITTED."""
+    """One element per USING argument, by position: its argument mode, its byte
+    length, and, unless OMITTED, a region and an offset."""
     ctx, span = scope.ctx, scope.span
     args = ctx.fresh_reg()
     ctx.emit_inst(
@@ -339,28 +340,35 @@ def _argument(scope: LoweringScope, param: CallUsingParam) -> Register:
     ctx, span = scope.ctx, scope.span
     element = ctx.fresh_reg()
     ctx.emit_inst(NewObject(result_reg=element), span=span)
-    omitted = param.omitted
-    _store_field(scope, element, "omitted", ctx.const_to_reg(omitted, span=span))
-    if omitted:
+    mode = ArgumentMode.OMITTED if param.omitted else ArgumentMode(param.param_type)
+    _store_field(scope, element, "mode", ctx.const_to_reg(mode.value, span=span))
+    if param.omitted:
+        _store_field(scope, element, "length", ctx.const_to_reg(0, span=span))
         return element
-    region, offset = _address(scope, param)
-    _store_field(scope, element, "region", region)
-    _store_field(scope, element, "offset", offset)
+    _store_address(scope, element, _address(scope, param))
     return element
 
 
-def _address(scope: LoweringScope, param: CallUsingParam) -> tuple[Register, Register]:
-    """BY REFERENCE: the argument's own bytes. Anything else: a fresh copy."""
+def _store_address(
+    scope: LoweringScope, element: Register, address: tuple[Register, Register, int]
+) -> None:
+    region, offset, length = address
+    _store_field(
+        scope, element, "length", scope.ctx.const_to_reg(length, span=scope.span)
+    )
+    _store_field(scope, element, "region", region)
+    _store_field(scope, element, "offset", offset)
+
+
+def _address(
+    scope: LoweringScope, param: CallUsingParam
+) -> tuple[Register, Register, int]:
+    """BY REFERENCE: the argument's own bytes. Anything else: a fresh copy. With
+    the argument's byte length."""
     ctx, materialised, span = scope.ctx, scope.materialised, scope.span
-    if param.is_literal or param.address_of:
+    if param.address_of or param.is_literal:
         return (
-            PointerLowering(ctx, materialised, span).address_argument(
-                param.name,
-                param.qualifiers,
-                _copy_extent(
-                    ctx.addressing_mode.pointer_type.byte_length, LITERAL_ARGUMENT
-                ),
-            )
+            _pointer_argument(scope, param)
             if param.address_of
             else _literal_copy(scope, param)
         )
@@ -368,13 +376,26 @@ def _address(scope: LoweringScope, param: CallUsingParam) -> tuple[Register, Reg
         param.name, materialised, param.qualifiers, param.subscripts, span=span
     )
     if param.param_type == "REFERENCE":
-        return region_reg, ref.offset_reg
+        return region_reg, ref.offset_reg, ref.fl.byte_length
     return _content_copy(scope, ref, region_reg, param.name)
+
+
+def _pointer_argument(
+    scope: LoweringScope, param: CallUsingParam
+) -> tuple[Register, Register, int]:
+    ctx = scope.ctx
+    length = ctx.addressing_mode.pointer_type.byte_length
+    region, offset = PointerLowering(
+        ctx, scope.materialised, scope.span
+    ).address_argument(
+        param.name, param.qualifiers, _copy_extent(length, LITERAL_ARGUMENT)
+    )
+    return region, offset, length
 
 
 def _literal_copy(
     scope: LoweringScope, param: CallUsingParam
-) -> tuple[Register, Register]:
+) -> tuple[Register, Register, int]:
     """A literal argument in the representation IBM defines for it, in a fresh copy."""
     ctx, span = scope.ctx, scope.span
     layout = _layout(_literal_type(param, ctx.figuratives))
@@ -394,7 +415,7 @@ def _literal_copy(
         extent=_copy_extent(layout.byte_length, LITERAL_ARGUMENT),
         span=span,
     )
-    return copy, zero
+    return copy, zero, layout.byte_length
 
 
 def _literal_type(
@@ -434,7 +455,7 @@ def _content_copy(
     ref: ResolvedFieldRef,
     region_reg: Register,
     name: str,
-) -> tuple[Register, Register]:
+) -> tuple[Register, Register, int]:
     ctx, span = scope.ctx, scope.span
     length = ref.fl.byte_length
     copy = ctx.fresh_reg()
@@ -460,7 +481,7 @@ def _content_copy(
         extent=_copy_extent(length, name),
         span=span,
     )
-    return copy, zero
+    return copy, zero, length
 
 
 def _copy_extent(length: int, name: str) -> FieldExtent:

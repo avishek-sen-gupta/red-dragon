@@ -450,13 +450,13 @@ WORKING-STORAGE is laid down by one block inside the init block, `__ws_initial_<
 
 `CALL … USING` passes one address per argument ([ADR-150](architectural-design-decisions.md), replacing ADR-144's copy-in/copy-back):
 
-1. The caller builds an argument array in plain IR: `NEW_ARRAY` with a `count` field and, per argument, a `NEW_OBJECT` with `region`, `offset` and `omitted`. BY REFERENCE passes the argument's own region and offset. BY CONTENT, BY VALUE and literals pass a fresh `RegionId.CALL_ARGUMENT` copy.
+1. The caller builds an argument array in plain IR: `NEW_ARRAY` with a `count` field and, per argument, a `NEW_OBJECT` with `mode` (`ArgumentMode`), `length`, `region` and `offset`. BY REFERENCE hands over the argument's own region and offset. BY CONTENT, BY VALUE and literals hand over a fresh `RegionId.CALL_ARGUMENT` copy.
 2. `_handle_call_with_memory` looks up the location's variable, binds the argument array to the callee's first declared parameter, and enters it; the COBOL lowering computes the location (`__entry_<NAME>`, trimmed and upper-cased in IR for `CALL identifier`) ([ADR-182](architectural-design-decisions.md)).
 3. The callee binds each LINKAGE 01 to its argument: a region and a shift from its static offset. An absent or OMITTED argument binds NULL ([ADR-152](architectural-design-decisions.md)).
 
 A literal callee that is not linked goes to `call_resolver` and stays symbolic, unless the run is started with `permit_unresolved_call_targets=False` (a `VMConfig` field, carried on `HandlerContext`), in which case it raises `UnresolvedProgramError`. A runtime-resolved name that is not linked always raises `UnresolvedProgramError`.
 
-Harnesses build an argument array with `call_arguments(vm, regions)` (`interpreter/cobol/call_arguments.py`), passing each region BY REFERENCE at offset 0.
+Harnesses build an argument array with `call_arguments(vm, regions)` (`interpreter/cobol/call_arguments.py`), giving each region BY REFERENCE at offset 0, its length the region's size.
 
 ### 12.3 RETURN-CODE
 

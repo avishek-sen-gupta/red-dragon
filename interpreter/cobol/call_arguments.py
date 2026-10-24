@@ -7,13 +7,14 @@ from collections.abc import Sequence
 from interpreter import constants
 from interpreter.address import Address
 from interpreter.field_name import FieldKind, FieldName
+from interpreter.project.argument_mode import ArgumentMode
 from interpreter.types.type_expr import UNKNOWN
 from interpreter.types.typed_value import TypedValue, typed
 from interpreter.vm.vm_types import HeapObject, Pointer, VMState
 
 
 def call_arguments(vm: VMState, regions: Sequence[Address]) -> TypedValue:
-    """For a harness frame: each region passed BY REFERENCE at offset 0."""
+    """For a harness frame: each region BY REFERENCE at offset 0, its whole length."""
     elements = tuple(_element(vm, region) for region in regions)
     array = _fresh(vm, constants.ARR_ADDR_PREFIX)
     vm.heap_set(
@@ -37,9 +38,10 @@ def _element(vm: VMState, region: Address) -> TypedValue:
         element,
         HeapObject(
             fields={
+                FieldName("mode"): typed(ArgumentMode.REFERENCE.value, UNKNOWN),
+                FieldName("length"): typed(vm.segment_of(region).size, UNKNOWN),
                 FieldName("region"): typed(vm.segment_of(region).base, UNKNOWN),
                 FieldName("offset"): typed(0, UNKNOWN),
-                FieldName("omitted"): typed(False, UNKNOWN),
             }
         ),
     )

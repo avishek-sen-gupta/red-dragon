@@ -429,12 +429,14 @@ list of pairs, so any value can be a name), `loc`, `none`, `unknown_type`, and
 constructing the class, null-object classes to their singletons). An unknown
 kind or class raises `UnitFormatError`.
 
-`UnitCodec` and `LinkedCodec` write `{"format": 7, "unit" | "linked": …}` and raise
-`UnitFormatError` naming the file when it does not decode, a file of format 6
+`UnitCodec` and `LinkedCodec` write `{"format": 8, "unit" | "linked": …}` and raise
+`UnitFormatError` naming the file when it does not decode, a file of format 7
 included. Format 4 added `ModuleUnit.diagnostics`, the warnings lowering raised, so a
 reused unit reports them again (HLASM fills it); format 5 gave each one a typed
 `kind`, format 6 moved every fact, a DC warning's included, into it, and format 7 added
-`ModuleUnit.object_module` (HLASM's ESD, TXT, RLD and END; `NO_OBJECT_MODULE` elsewhere). The encoding is verbose
+`ModuleUnit.object_module` (HLASM's ESD, TXT, RLD and END; `NO_OBJECT_MODULE` elsewhere), and format 8
+added `ModuleUnit.using`, a COBOL program's USING signature: one `UsingParameter(mode, length)`
+per bound LINKAGE parameter, mode VALUE where PROCEDURE DIVISION USING says BY VALUE. The encoding is verbose
 (red-dragon-rfwv).
 
 ### 7.3 One image, entered by program (COBOL)

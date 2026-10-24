@@ -26,6 +26,7 @@ from interpreter.instructions import InstructionBase
 from interpreter.ir import NO_LABEL, CodeLabel
 from interpreter.project.object_module import NO_OBJECT_MODULE, ObjectModule
 from interpreter.project.unit_diagnostic import UnitDiagnostic
+from interpreter.project.using_parameter import UsingParameter
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
 from interpreter.register import Register
@@ -106,6 +107,7 @@ class ModuleUnit:
     program: str = NO_PROGRAM
     diagnostics: tuple[UnitDiagnostic, ...] = ()
     object_module: ObjectModule = NO_OBJECT_MODULE
+    using: tuple[UsingParameter, ...] = ()
 
 
 NO_MODULE_UNIT = ModuleUnit(

@@ -51,6 +51,7 @@ from interpreter.cobol.run_unit import run_unit_allocation
 from interpreter.cobol.sectioned_layout import (
     MaterialisedSectionedLayout,
     build_sectioned_layout,
+    using_signature,
 )
 from interpreter.cobol.statement_dispatch import dispatch_statement
 from interpreter.frontend import Frontend
@@ -61,6 +62,7 @@ from interpreter.instructions import Branch, InstructionBase, Label_
 from interpreter.ir import CodeLabel
 from interpreter.namespace_resolver import NamespaceResolver
 from interpreter.path_name import PathName
+from interpreter.project.using_parameter import UsingParameter
 from interpreter.refs.func_ref import FuncRef
 from interpreter.register import Register
 
@@ -155,6 +157,11 @@ class CobolFrontend(Frontend):
         return getattr(self, "_program_id", UNNAMED_PROGRAM)
 
     @property
+    def using_signature(self) -> tuple[UsingParameter, ...]:
+        """The PROCEDURE DIVISION USING signature. Available after lowering."""
+        return self._using
+
+    @property
     def func_symbol_table(self) -> dict[CodeLabel, FuncRef]:
         """Expose func_PROGRAMID_0, func_init_params_PROGRAMID_0 and
         func_cancel_PROGRAMID_0 so that
@@ -212,6 +219,7 @@ class CobolFrontend(Frontend):
         """Shared lowering core: ASG → IR. Called by lower() and lower_from_ast_dict()."""
         sectioned = build_sectioned_layout(asg)
         self._program_id = program_name(asg)
+        self._using = using_signature(asg)
         logger.debug(
             "lowering %s: %d sections, %d paragraphs",
             self._program_id,

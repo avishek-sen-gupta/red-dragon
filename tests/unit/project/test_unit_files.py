@@ -140,24 +140,24 @@ def test_a_file_that_does_not_decode_names_itself(tmp_path, text):
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_a_linked_file_of_format_6_is_refused_naming_itself(tmp_path):
+def test_a_linked_file_of_format_7_is_refused_naming_itself(tmp_path):
     path = tmp_path / "old.linked.json"
     LinkedCodec(IrCodec()).write(_linked(), path)
     path.write_text(
-        json.dumps({**json.loads(path.read_text()), "format": 6}), encoding="utf-8"
+        json.dumps({**json.loads(path.read_text()), "format": 7}), encoding="utf-8"
     )
     with pytest.raises(UnitFormatError) as refused:
         LinkedCodec(IrCodec()).read(path)
-    assert str(refused.value) == f"{path}: not a linked-program file of format 7"
+    assert str(refused.value) == f"{path}: not a linked-program file of format 8"
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_a_unit_file_of_format_6_is_refused_naming_itself(tmp_path):
+def test_a_unit_file_of_format_7_is_refused_naming_itself(tmp_path):
     path = tmp_path / "old.unit.json"
     UnitCodec(IrCodec()).write(next(iter(_linked().modules.values())), path)
     path.write_text(
-        json.dumps({**json.loads(path.read_text()), "format": 6}), encoding="utf-8"
+        json.dumps({**json.loads(path.read_text()), "format": 7}), encoding="utf-8"
     )
     with pytest.raises(UnitFormatError) as refused:
         UnitCodec(IrCodec()).read(path)
-    assert str(refused.value) == f"{path}: not a unit file of format 7"
+    assert str(refused.value) == f"{path}: not a unit file of format 8"
