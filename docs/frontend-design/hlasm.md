@@ -231,17 +231,18 @@ The unit carries an `ObjectModule` (`interpreter/project/object_module.py`, buil
 | ESD SD, CM | `ControlSection`, `CommonSection` (name, length) | each CSECT, RSECT and COM in section order; private code is named "" |
 | ESD LD | `EntryLabel` (name, section, offset) | each ENTRY operand, in order |
 | ESD ER, WX | `ExternalReference`, `WeakReference` | EXTRN and V-constant names; WXTRN |
-| ESD PR/XD | `ExternalDummySection` (name, length, alignment) | each DXD (DS-style length, strictest operand alignment) and each DSECT a Q-constant names (assembled length, doubleword) |
+| ESD PR/XD | `ExternalDummySection` (name, length, alignment) | each DXD (DS-style length, strictest operand alignment) and each DSECT a Q-constant names (assembled length; doubleword, or its strictest field's alignment when stricter, so LQ gives quadword as in APAR PK79869) |
 | TXT | `TextRecord` (section, offset, bytes) | each placed constant image |
 | RLD | `RelocationRecord` (section, offset, length, kind, target, sign, addend) | each A, Y or V address naming a section or an external symbol (`ADDRESS`); each Q (`PR_OFFSET`), J (`CLASS_LENGTH`) and CXD (`PR_TOTAL`); a complex-relocatable A or Y constant is one signed `ADDRESS` item per term at one field, the first carrying the absolute part, a DSECT term dropped (its offset is in the absolute part) |
 | END | `NamedEnd` (name, section, offset) or `DefaultEnd` (section) | END's operand, or the first CSECT |
 
-A target is `RelocationName(name)`, or `NoRelocationTarget()` for CXD. Q, J and CXD fields have
+A target is `RelocationName(name)`, or `NoRelocationTarget()` for CXD; a record whose target does not fit its kind raises `RelocationTargetMismatch` when built. Q, J and CXD fields have
 no TXT. The bridge (program format 3) exports `entries`, `externals` as name, kind (`EXTRN` or
 `WXTRN`) and line (0 when it has none, as for `EXTRN PART(...)`), an external address's offset,
 `external_dummies` as name, length and alignment, and a `CXD` statement. A Q or J value is a
 `RELOC` naming the dummy section. A complex-relocatable value is `COMPLEX`: its terms (`SECTION`
-or `EXTERNAL`, name, `PLUS` or `MINUS`, one per count, sorted by name) and its absolute part.
+or `EXTERNAL`, name, `PLUS` or `MINUS`, one per count, sorted by name) and its absolute part. A complex-relocatable machine operand refuses the
+assembly, as in HLASM, which requires those to be absolute or simply relocatable.
 
 ### Binder
 
@@ -256,7 +257,7 @@ units' object modules once, at link. Start-up IR is not rebuilt from the AST.
   (`__hlasm_stubs_low` to `__hlasm_stubs_high`), the COBOL programs' first; each unresolved EXTRN is logged once as a warning
   (`UnresolvedExternal`, kept on the job-step module) at the open-code line of its EXTRN, else of
   its first use. An address in a DSECT is its offset, as TXT with no RLD (ruling R75). Every RLD is applied after every module is
-  laid out. The signed items at one field are summed and stored once.
+  laid out. The signed items at one field are summed and stored once, wherever they sit among the records (ORG can overlay two constants).
 - **Pseudo registers.** External dummy sections merge by name across the image at their largest
   length and strictest alignment, then sit in first appearance (module order, ESD order), each
   at the next offset aligned to its alignment, from 0 (IBM leaves the order to the binder). Q
@@ -1506,7 +1507,6 @@ layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.
   an opcode position abends `S0C1`, even one the opcode already has; byte-1 shapes not in the
   table (SS-d, the vector formats) count as opcode (red-dragon-6uyp.78).
 - che4z encodes LHHR and LLHFR without the Z bit, where the Principles of Operation (Figure 7-397) define RISBHGZ and RISBLGZ; the range is the whole word, so the result is the same.
-- A complex-relocatable machine operand (e.g. `EX 2,MOVE+MOVE`) still refuses the assembly; only DC values export their terms.
 - AMODE 24 and 64 are not modelled: SAM24, SAM64 and BASSM or BSM into those modes
   abend `S0C1` (red-dragon-6uyp.75). A BASSM or BSM to the return address returns
   whatever mode it selects.

@@ -1,11 +1,13 @@
 # pyright: standard
-"""An object module's RLD record: a field of a section that the binder fills with the target's value, signed, plus the addend."""
+"""An object module's RLD record: a field of a section that the binder fills with the target's value, signed, plus the addend; PR_TOTAL alone has no target, and a record breaking that is refused when built."""
 
 from dataclasses import dataclass
 
+from interpreter.project.no_relocation_target import NoRelocationTarget
 from interpreter.project.relocation_kind import RelocationKind
 from interpreter.project.relocation_sign import RelocationSign
 from interpreter.project.relocation_target import RelocationTarget
+from interpreter.project.relocation_target_mismatch import RelocationTargetMismatch
 
 
 @dataclass(frozen=True)
@@ -17,3 +19,8 @@ class RelocationRecord:
     target: RelocationTarget
     sign: RelocationSign
     addend: int
+
+    def __post_init__(self) -> None:
+        untargeted = isinstance(self.target, NoRelocationTarget)
+        if untargeted != (self.kind == RelocationKind.PR_TOTAL):
+            raise RelocationTargetMismatch(self.kind, untargeted)

@@ -1,5 +1,5 @@
 # pyright: standard
-"""HLASM lowering: statement labels, seed opcodes and computed-branch dispatch, run through the binder's start-up and job step."""
+"""HLASM lowering: statement labels, seed opcodes and computed-branch dispatch, run through the binder's start-up and job step; the start-up sums every signed RLD item at a field, wherever it sits among the records."""
 
 import logging
 from collections.abc import Sequence
@@ -31,8 +31,18 @@ from interpreter.instructions import (
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import BinopKind
 from interpreter.project.compiler import build_export_table
+from interpreter.project.control_section import ControlSection
 from interpreter.project.entry_point import EntryPoint
+from interpreter.project.external_dummy_section import ExternalDummySection
 from interpreter.project.linker import link_every_module
+from interpreter.project.named_end import NamedEnd
+from interpreter.project.no_relocation_target import NoRelocationTarget
+from interpreter.project.object_module import ObjectModule
+from interpreter.project.relocation_kind import RelocationKind
+from interpreter.project.relocation_name import RelocationName
+from interpreter.project.relocation_record import RelocationRecord
+from interpreter.project.relocation_sign import RelocationSign
+from interpreter.project.relocation_target import RelocationTarget
 from interpreter.project.types import ModuleUnit
 from interpreter.refs.func_ref import FuncRef
 from interpreter.register import Register
@@ -96,6 +106,10 @@ def _branch_and_abend(ir: Sequence[InstructionBase]) -> list[str]:
 
 
 def _run(frontend: HlasmFrontend) -> VMState:
+    return _run_bound(frontend, frontend.object_module)
+
+
+def _run_bound(frontend: HlasmFrontend, object_module: ObjectModule) -> VMState:
     ir = frontend.lower(b"")
     unit = ModuleUnit(
         path=Path("M.asm"),
@@ -103,7 +117,7 @@ def _run(frontend: HlasmFrontend) -> VMState:
         ir=tuple(ir),
         exports=build_export_table(ir, frontend.func_symbol_table, {}),
         imports=(),
-        object_module=frontend.object_module,
+        object_module=object_module,
     )
     bound = bind_image((unit,))
     modules = {
@@ -270,3 +284,45 @@ def test_unknown_opcodes_and_dispatch_misses_abend_s0c1(
     assert [_var(vm, "__hlasm_abend"), _low_words(vm)[15]] == ["S0C1", 3]
     assert _miss("branch_into_data.json")[:3] == ["S0C1", 4, 16]
     assert [_miss("branch_into_dsect.json")[at] for at in (0, 1, 3)] == ["S0C1", 5, 4]
+
+
+def _item(
+    offset: int, kind: RelocationKind, target: RelocationTarget, addend: int
+) -> RelocationRecord:
+    return RelocationRecord(
+        "HELLO", offset, 4, kind, target, RelocationSign.PLUS, addend
+    )
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_start_up_sums_every_signed_item_at_a_field_wherever_it_sits():
+    address, total = RelocationKind.ADDRESS, RelocationKind.PR_TOTAL
+    object_module = ObjectModule(
+        esd=(
+            ControlSection("HELLO", 16),
+            ControlSection("DATA", 8),
+            ExternalDummySection("PR", 6, 4),
+        ),
+        text=(),
+        relocations=(
+            _item(8, address, RelocationName("DATA"), 5),
+            _item(12, total, NoRelocationTarget(), 0),
+            RelocationRecord(
+                "HELLO",
+                8,
+                4,
+                address,
+                RelocationName("HELLO"),
+                RelocationSign.MINUS,
+                0,
+            ),
+            _item(8, total, NoRelocationTarget(), 0),
+        ),
+        end=NamedEnd("HELLO", "HELLO", 0),
+    )
+    vm = _run_bound(HlasmFrontend(_program("seed_program.json"), "M"), object_module)
+    hello = int(_var(vm, "__hlasm_sect_M.HELLO"))
+
+    assert [
+        int.from_bytes(bytes(_bytes_at(vm, hello + at, 4)), "big") for at in (8, 12)
+    ] == [16 + 5 + 6, 6]

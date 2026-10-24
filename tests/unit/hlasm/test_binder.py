@@ -1,5 +1,5 @@
 # pyright: standard
-"""The binder: sections at doubleword offsets in ESD order, commons merged at their largest length, external dummy sections merged by name (largest length, strictest alignment) into the pseudo-register area in first appearance, names resolved locally, then across the image, then to a COBOL program's stub, then to zero (WXTRN) or a stub (EXTRN, warned once); duplicate names across both languages and a J-constant naming no external dummy section are refused."""
+"""The binder: sections at doubleword offsets in ESD order, commons merged at their largest length, external dummy sections merged by name (largest length, strictest alignment) into the pseudo-register area in first appearance, names resolved locally, then across the image, then to a COBOL program's stub, then to zero (WXTRN) or a stub (EXTRN, warned once); duplicate names across both languages a J-constant naming no external dummy section are refused, and an RLD record whose target does not fit its kind is refused when built."""
 
 import pytest
 
@@ -27,16 +27,20 @@ from interpreter.project.entry_label import EntryLabel
 from interpreter.project.esd_record import EsdRecord
 from interpreter.project.external_dummy_section import ExternalDummySection
 from interpreter.project.external_reference import ExternalReference
+from interpreter.project.no_relocation_target import NoRelocationTarget
 from interpreter.project.object_module import ObjectModule
 from interpreter.project.relocation_kind import RelocationKind
 from interpreter.project.relocation_name import RelocationName
 from interpreter.project.relocation_record import RelocationRecord
 from interpreter.project.relocation_sign import RelocationSign
+from interpreter.project.relocation_target_mismatch import RelocationTargetMismatch
 from interpreter.project.unit_diagnostic import UnitDiagnostic
 from interpreter.project.unresolved_external import UnresolvedExternal
 from interpreter.project.using_parameter import UsingParameter
 from interpreter.project.weak_reference import WeakReference
 from tests.covers import NotLanguageFeature, covers
+
+PLUS = RelocationSign.PLUS
 
 
 def _module(
@@ -198,10 +202,25 @@ def test_binder_refuses_duplicates_and_records_it_does_not_bind():
         Binder((CALLEE, entry_twice), ())
     with pytest.raises(UnsupportedBinding) as relocation:
         Binder((class_length,), ())
+    with pytest.raises(RelocationTargetMismatch) as untargeted_offset:
+        RelocationRecord(
+            "J", 0, 4, RelocationKind.PR_OFFSET, NoRelocationTarget(), PLUS, 0
+        )
+    with pytest.raises(RelocationTargetMismatch) as named_total:
+        RelocationRecord(
+            "J", 0, 4, RelocationKind.PR_TOTAL, RelocationName("PR"), PLUS, 0
+        )
 
-    assert [str(duplicate.value), str(relocation.value)] == [
+    assert [
+        str(duplicate.value),
+        str(relocation.value),
+        str(untargeted_offset.value),
+        str(named_total.value),
+    ] == [
         "program SUB is in the image twice: B.asm and C.asm",
         "J-constant naming J in module D is not bound yet (red-dragon-6uyp.104)",
+        "a PR_OFFSET relocation takes a named target, not none",
+        "a PR_TOTAL relocation takes no target, not a name",
     ]
 
 

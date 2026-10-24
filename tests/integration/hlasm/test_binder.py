@@ -1,5 +1,5 @@
 # pyright: standard
-"""Images of several HLASM modules: a V-constant reaches a later module's ENTRY and its data, the first unit is entered at its own END though another module ends at the same label and two are private code alone, the job step hands the program its PARM, a linking branch to an unresolved EXTRN calls it by name, a CSECT named in two units is refused, run() hands the job step an empty PARM, two modules share external dummy sections through Q, J and CXD in an area the program GETMAINs, and complex-relocatable A and Y constants hold differences across sections and modules."""
+"""Images of several HLASM modules: a V-constant reaches a later module's ENTRY and its data, the first unit is entered at its own END though another module ends at the same label and two are private code alone, the job step hands the program its PARM, a linking branch to an unresolved EXTRN calls it by name, a CSECT named in two units is refused, run() hands the job step an empty PARM, two modules share external dummy sections through Q, J and CXD in an area the program GETMAINs, a Q-named DSECT holding LQ sits on a quadword, and complex-relocatable A and Y constants hold differences across sections and modules, every RLD item at a field summed even when ORG overlays one constant on another."""
 
 import logging
 from pathlib import Path
@@ -254,6 +254,20 @@ BIG      DXD   D
 """
 
 
+QUADWORD_DSECT = """\
+MAIN     CSECT
+         USING MAIN,15
+         L     15,QE
+         BR    14
+QA       DC    Q(PRA)
+QE       DC    Q(E)
+PRA      DXD   CL1
+E        DSECT
+         DS    LQ
+         END   MAIN
+"""
+
+
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_two_modules_share_external_dummy_sections_in_an_area_the_program_getmains():
     machine = run_hlasm_machine(
@@ -261,7 +275,10 @@ def test_two_modules_share_external_dummy_sections_in_an_area_the_program_getmai
         programs=(SourceFile(Path("SUB.asm"), PSEUDO_REGISTER_USER),),
     )
 
+    quadword = run_hlasm_machine(QUADWORD_DSECT)
+
     assert machine.run == HlasmRun(return_code=12, abend="", stdout="")
+    assert quadword.run == HlasmRun(return_code=16, abend="", stdout="")
     assert [machine.gprs[r] & LOW_WORD for r in (5, 6, 7, 8, 9)] == [
         24,
         8,
@@ -269,6 +286,23 @@ def test_two_modules_share_external_dummy_sections_in_an_area_the_program_getmai
         16,
         0xAB,
     ]
+
+
+OVERLAID_FIELD = """\
+MAIN     CSECT
+         USING MAIN,15
+         L     2,F
+         SR    2,15
+         LR    15,2
+         BR    14
+F        DC    A(MAIN+4)
+G        DC    A(MAIN)
+         ORG   F
+TOT      CXD
+         ORG
+PRA      DXD   F
+         END   MAIN
+"""
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
@@ -281,5 +315,8 @@ def test_complex_relocatable_constants_hold_differences_across_sections_and_modu
         ),
     )
 
+    overlaid = run_hlasm_machine(OVERLAID_FIELD)
+
     assert machine.run == HlasmRun(return_code=7, abend="", stdout="")
     assert machine.gprs[2] & LOW_WORD == (56 - (96 + 4)) & LOW_WORD
+    assert overlaid.run == HlasmRun(return_code=4 + 4, abend="", stdout="")

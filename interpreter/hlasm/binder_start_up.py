@@ -1,9 +1,8 @@
 # pyright: standard
-"""The image's start-up IR, run once: the machine state, a bit per module for the far branch, one doubleword-aligned region per module with its sections' variables, one region per common section, the stub range, every TXT record, every RLD (an address, a pseudo-register offset or length, or their total; the consecutive signed items at one field summed and stored once), and the names table LINK and LOAD read."""
+"""The image's start-up IR, run once: the machine state, a bit per module for the far branch, one doubleword-aligned region per module with its sections' variables, one region per common section, the stub range, every TXT record, every RLD (an address, a pseudo-register offset or length, or their total; the signed items at one field, wherever they sit, summed and stored once), and the names table LINK and LOAD read."""
 
 from collections.abc import Callable, Mapping, Sequence
 from functools import reduce
-from itertools import groupby
 
 from interpreter.hlasm.binder import Binder, aligned
 from interpreter.hlasm.bound_name import BoundName
@@ -209,8 +208,12 @@ def _relocate(
 
 
 def _fields(module: ImageModule) -> tuple[tuple[RelocationRecord, ...], ...]:
+    relocations = module.object_module.relocations
+    places = tuple(map(_place, relocations))
     return tuple(
-        tuple(items) for _, items in groupby(module.object_module.relocations, _place)
+        tuple(r for r in relocations if _place(r) == place)
+        for at, place in enumerate(places)
+        if place not in places[:at]
     )
 
 
