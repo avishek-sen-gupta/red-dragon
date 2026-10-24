@@ -22,6 +22,7 @@ from interpreter.hlasm.hlasm_constants import (
     MODULE_BIT_PREFIX,
     RETURN_CODE_REGISTER,
     RETURN_LABEL,
+    RETURN_SENTINEL,
     RETURN_TO_VAR,
     TARGET_VAR,
 )
@@ -101,8 +102,10 @@ def _masked_target(emitter: HlasmEmitter) -> Register:
     return emitter.binop(BinopKind.BIT_AND, raw, emitter.int_(ADDRESS_MASK_31))
 
 
-def masked_return_address(emitter: HlasmEmitter) -> Register:
-    return emitter.load_var(RETURN_TO_VAR)
+def returns(emitter: HlasmEmitter, masked: Register) -> Register:
+    own = emitter.binop(BinopKind.EQ, masked, emitter.load_var(RETURN_TO_VAR))
+    system = emitter.binop(BinopKind.EQ, masked, emitter.int_(RETURN_SENTINEL))
+    return emitter.binop(BinopKind.OR, own, system)
 
 
 def _declare_parameter(emitter: HlasmEmitter, name: VarName) -> Register:
@@ -150,9 +153,7 @@ def _emit_entries(emitter: HlasmEmitter) -> None:
 
 
 def _emit_return_check(emitter: HlasmEmitter) -> None:
-    returning = emitter.binop(
-        BinopKind.EQ, _masked_target(emitter), masked_return_address(emitter)
-    )
+    returning = returns(emitter, _masked_target(emitter))
     _branch_if(emitter, returning, RETURN_LABEL, "hl_dispatch_far")
 
 

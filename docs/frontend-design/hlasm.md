@@ -275,9 +275,11 @@ Registers stay shared machine state.
 - A target at a machine statement of the module's own sections branches to its label, even when
   it equals the return address: the same code runs either way, and a module entered at its own
   R14 must not return at once.
-- Otherwise a masked target equal to `__hlasm_return_to` returns R15's low word. BSM and BASSM
-  make the same comparison before their mode test, so the mode bit of the return address does
-  not matter.
+- Otherwise a masked target equal to `__hlasm_return_to`, or to the system's return address
+  `0xFF0`, returns R15's low word. A branch to `0xFF0` from any activation therefore unwinds every
+  activation up to the job step, ending the step with R15, or up to the LINK that entered it
+  (ruling R82). BSM and BASSM make the same comparison before their mode test, so the mode bit of
+  the return address does not matter.
 - Any other target goes to `__hlasm_far_branch(target, below, me, linking)`, which finds its owner:
   - the module itself: `S0C1` (data, or a DSECT offset);
   - another module: if the branch did not link and that module is in `below`, the activation
@@ -379,10 +381,10 @@ conventions but expand only to lowered opcodes:
 | `GETMAIN RU\|RC`, `FREEMAIN RU\|RC` | IBM's layout: R0 = length, R15 = subpool × 256 + flags (X'01' release, X'02' unconditional, X'04' page); `SVC 120`. `SP=(r)` takes the register's low byte (`LLCR`, `SLL`, `OILL`) |
 | `STORAGE OBTAIN\|RELEASE,LENGTH=,ADDR=[,SP=][,COND=][,BNDRY=][,LOC=]` | As the SVC 120 forms. OBTAIN stores R1 with `ST 1,addr`, or `LR r,1` for `ADDR=(r)`; RELEASE loads R1 from `ADDR` as FREEMAIN does from `A` |
 | `TIME [DEC\|BIN][,LINKAGE=SVC]` | `LA 1,2` (DEC) or `LA 1,1` (BIN), IBM's codes, then `SVC 11` |
-| `CALL ep\|(15)\|(r)[,(p,...)][,VL]` | `BRAS 1` around `DC A(p),...` (VL adds X'80000000' to the last word), `L 15,=V(ep)` or `LR 15,r`, `BALR 14,15` |
+| `CALL ep\|(15)\|(r)[,(p,...)][,VL]` | `BRAS 1` around `DC AL4(p),...` (unaligned, so the list starts where R1 points; VL adds X'80000000' to the last word), `L 15,=V(ep)` or `LR 15,r`, `BALR 14,15` |
 | `CALL ,(p,...)[,VL],MF=L` | The list alone: `DC A(p),...` under the call's label |
 | `CALL ep,(p,...)[,VL],MF=(E,list\|(r))` | `LA 1,list` or `LR 1,r`, then `LA 14,p` and `ST 14,4i(,1)` per parameter, `OI` on the last for VL, then as above |
-| `LINK EP=\|EPLOC=[,PARAM=(p,...)][,VL=1]` | PARAM as CALL's inline list; `BRAS 15` over IBM's control list `A(name),A(0)` (`EPLOC=(r)` stores r into it; r may not be 15); `SVC 6` |
+| `LINK EP=\|EPLOC=[,PARAM=(p,...)][,VL=1]` | PARAM as CALL's inline list; `BRAS 15` over IBM's control list `AL4(name,0)` (`EPLOC=(r)` stores r into it, so the standard form is not reentrant, as IBM's is not); `SVC 6` |
 | `LOAD EP=\|EPLOC=[,ERRET=addr]` | R0 → the name (`BRAS 0` over `CL8'ep'`, `LA 0,addr` or `LR 0,r`); `LA 1,0`, with ERRET `OILH 1,X'8000'`; `SVC 8`; with ERRET `LTR 15,15` and `BNZ addr` |
 | `DELETE EP=\|EPLOC=` | R0 as LOAD; `SVC 9` |
 
@@ -392,8 +394,8 @@ another type, `COND` other than `YES` or `NO`, `SP=(r)` outside 2-12, `SP` with
 `R,LV=(0)`, `LV=(1)` or `LENGTH=(1)` on a release, TIME types other than `DEC` and `BIN`,
 and `LINKAGE` other than `SVC` are `MNOTE 8`. So are a CALL third operand other than `VL`, `MF`
 other than `L` or `(E,list)`, `MF=L` without a list, a missing entry or a bad register; LINK `VL`
-other than 1 or `EPLOC=(15)`; and on LINK, LOAD and DELETE, no `EP` or `EPLOC`, both, or an `EP`
-over 8 characters.
+other than 1; and on LINK, LOAD and DELETE, no `EP` or `EPLOC`, both, an `EP` over 8 characters,
+or an `EPLOC` register outside 2-12 (IBM's range).
 
 Registers may be numbers or `Rn`. A bad register, a third range entry, a second operand other than `T`, or
 an `RC` register other than 15 is an `MNOTE 8`, which refuses the assembly. Save areas
@@ -1531,10 +1533,10 @@ layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.
 | `tests/z390/test_storage_services_differential.py` | Alignment, disjointness, data and R15 against z390 (z390 sets R15 0 on GETMAIN R and FREEMAIN R); the shape of TIME's words against z390's wall clock; z390 reads a hand-coded SVC 11's format from R0 |
 | `tests/unit/hlasm/test_time_service.py` | TIME's words for TOD values across 1900, 2000 (leap day, day 366), 2023 and 2100 |
 | `tests/unit/hlasm/test_service_lowering.py` | SVC 6, 8, 9, 10, 11 and 120 call only existing builtins (and LINK the far branch) and leave nothing symbolic |
-| `tests/integration/hlasm/test_far_branch.py` | A module entered at its own R14 running there; a call through a V-constant and BALR; a return that skips a level; a linking branch into a module below; `B 4(,14)`; a plain branch out that calls; `BSM 0,14` to an R14 without the mode bit; an unowned address abending `S0C1` |
+| `tests/integration/hlasm/test_far_branch.py` | A module entered at its own R14 running there; a call through a V-constant and BALR; a return that skips a level; a branch to the job step's `0xFF0` ending the step; a linking branch into a module below; `B 4(,14)`; a plain branch out that calls; `BSM 0,14` to an R14 without the mode bit; an unowned address abending `S0C1` |
 | `tests/z390/test_far_branch_differential.py` | The call and the skipped-level return against z390 (SYSOBJ autolink) |
-| `tests/integration/hlasm/test_program_services.py` | CALL inline, `MF=L` and `MF=(E,list)` with VL; LOAD's R0 and R1, `CALL (15)`, DELETE of a loaded name (0), again (4) and of an unloaded one (4); LINK with PARAM and VL leaving the program's registers, by `EPLOC=addr`, `EPLOC=(r)` and a hand-coded R15 list; a missing name: LINK raising in both modes, LOAD `S806` by macro and by hand with a leftover R15, and ERRET; operand refusals |
-| `tests/z390/test_program_services_differential.py` | CALL, LINK and LOAD return codes against z390; z390's LINK R15 pinned |
+| `tests/integration/hlasm/test_program_services.py` | CALL inline, `MF=L` and `MF=(E,list)` with VL; LOAD's R0 and R1, `CALL (15)`, DELETE of a loaded name (0), again (4) and of an unloaded one (4); LINK with PARAM and VL leaving the program's registers, by `EPLOC=addr`, `EPLOC=(r)` and a hand-coded R15 list, and a callback inside it branching to `0xFF0`; a missing name: LINK raising in both modes, LOAD `S806` by macro and by hand with a leftover R15, and ERRET; operand refusals |
+| `tests/z390/test_program_services_differential.py` | CALL, LINK and LOAD return codes against z390, z390's LINK R15 pinned; the registers LINK leaves (R7, R9's VL bit) |
 | `tests/z390/test_foundation_differential.py` | Return code, WTO, user abend and assembly failure against z390 (`-m z390`) |
 | `tests/z390/test_z390_log.py` | Registers and CC from a z390 abend dump (default run) |
 | `tests/z390/test_macro_language_differential.py` | The macro-language programs against z390; z390's attribute differences pinned (`-m z390`) |

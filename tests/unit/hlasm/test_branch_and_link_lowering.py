@@ -85,6 +85,8 @@ MODE_TEST = [
     "& 2147483647",
     "LoadVar __hlasm_return_to",
     "== reg",
+    "== 4080",
+    "or reg",
     "BranchIf",
     "& 2147483649",
     "== 2147483648",

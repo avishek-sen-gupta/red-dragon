@@ -18,7 +18,7 @@
 RDN&SYSNDX DS  0H
          MEXIT
 .EPLIST  BRAS  15,RDN&SYSNDX
-         DC    A(RDE&SYSNDX,0)
+         DC    AL4(RDE&SYSNDX,0)
 RDE&SYSNDX DC  CL8'&EP'
 RDN&SYSNDX DS  0H
          MEXIT
@@ -30,20 +30,19 @@ RDN&SYSNDX DS  0H
          LA    0,&EPLOC
          MEXIT
 .ADDRLST BRAS  15,RDN&SYSNDX
-         DC    A(&EPLOC,0)
+         DC    AL4(&EPLOC,0)
 RDN&SYSNDX DS  0H
          MEXIT
-.REG     AIF   ('&LIST' EQ 'LIST').REGLIST
-&RDSTBAD SETB  0
-         LR    0,&EPLOC(1)
-         MEXIT
-.REGLIST RDREGN &EPLOC(1)
-         AIF   (&RDRV NE 15).REGOK
-         MNOTE 8,'&OWNER: EPLOC REGISTER MUST NOT BE 15'
+.REG     RDREGN &EPLOC(1)
+         AIF   (&RDRV GE 2 AND &RDRV LE 12).REGOK
+         MNOTE 8,'&OWNER: EPLOC REGISTER MUST BE 2 TO 12'
          MEXIT
 .REGOK   ANOP
 &RDSTBAD SETB  0
-         BRAS  15,RDN&SYSNDX
-         DC    A(0,0)
-RDN&SYSNDX ST  &EPLOC(1),0(,15)
+         AIF   ('&LIST' EQ 'LIST').REGLIST
+         LR    0,&RDRV
+         MEXIT
+.REGLIST BRAS  15,RDN&SYSNDX
+         DC    AL4(0,0)
+RDN&SYSNDX ST  &RDRV,0(,15)
          MEND

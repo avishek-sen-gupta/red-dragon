@@ -1,5 +1,5 @@
 # pyright: standard
-"""CALL, LINK, LOAD and DELETE: CALL builds the parameter list (inline, MF=L and MF=E, VL marking the last word) and calls through a V-constant or a register; LOAD answers the entry with the AMODE 31 bit and the length in doublewords; LINK calls by name (through R15's list) and leaves the registers as the program left them; DELETE succeeds only for a loaded name; a missing name is a dynamic call for LINK, an 806 abend for LOAD, or LOAD's ERRET when R1's high bit asks; bad operands refuse the assembly."""
+"""CALL, LINK, LOAD and DELETE: CALL builds the parameter list (inline, MF=L and MF=E, VL marking the last word) and calls through a V-constant or a register; LOAD answers the entry with the AMODE 31 bit and the length in doublewords; LINK calls by name (through R15's list) and leaves the registers as the program left them, and a branch to the system's return address inside it ends the LINK; DELETE succeeds only for a loaded name; a missing name is a dynamic call for LINK, an 806 abend for LOAD, or LOAD's ERRET when R1's high bit asks; bad operands refuse the assembly."""
 
 import pytest
 
@@ -68,12 +68,14 @@ def test_load_answers_entry_and_length_then_call_15_reaches_it_and_delete_releas
 def test_link_calls_by_name_with_a_vl_list_and_leaves_the_registers_the_program_left():
     run, words = _words(programs.LINKER, "SUB", programs.CLOBBERS)
     forms, _ = _words(programs.LINK_FORMS, "SUB", programs.RETURNS_23)
+    exited = _words(programs.LINKS_THEN_EXITS, "B", programs.CALLS_BACK_AND_EXITS)[0]
 
-    assert (run, words[7], words[9] >> VL_SHIFT, forms) == (
+    assert (run, words[7], words[9] >> VL_SHIFT, forms, exited) == (
         HlasmRun(return_code=142, abend="", stdout=""),
         99,
         1,
         HlasmRun(return_code=69, abend="", stdout=""),
+        HlasmRun(return_code=7, abend="", stdout=""),
     )
 
 

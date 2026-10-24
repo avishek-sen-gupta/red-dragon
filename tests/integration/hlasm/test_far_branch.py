@@ -1,17 +1,19 @@
 # pyright: standard
-"""Control across modules: a linking branch out of a module calls its owner, a branch to the activation's return address returns whatever its mode bit unless it is in the module's own code, a non-linking branch into a module with an activation below returns to it (a level skipped, or B 4(,14)), any other branch out of the module calls, and an address nothing owns abends S0C1."""
+"""Control across modules: a linking branch out of a module calls its owner, a branch to the activation's return address returns whatever its mode bit unless it is in the module's own code, a non-linking branch into a module with an activation below returns to it (a level skipped, or B 4(,14)), a branch to the system's return address ends every activation up to the one entered with it, any other branch out of the module calls, and an address nothing owns abends S0C1."""
 
 from interpreter.project.source_file import SourceFile
 from tests.covers import NotLanguageFeature, covers
 from tests.integration.hlasm.far_branch_programs import (
     CALLEE,
     CALLER,
+    EXITS_TO_THE_SYSTEM,
     GOES_TO_ITS_RETURN,
     INNER,
     LOOPS_AT_ITS_RETURN,
     MIDDLE,
     MODE_RETURN,
     PLAIN_RETURN,
+    SAVES_ITS_EXIT,
     SKIPPER,
     SKIPS_A_BRANCH,
     SKIPS_ONE,
@@ -40,14 +42,16 @@ def test_a_linking_branch_calls_another_module_which_returns_through_r14():
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_a_return_skips_a_level_and_a_linking_branch_into_a_module_below_calls_it():
+def test_a_return_skips_a_level_or_ends_the_step_and_a_linking_branch_into_a_module_below_calls_it():
     run, words = _low_words(SKIPPER, module("B", MIDDLE), module("C", INNER))
+    exited, _ = _low_words(SAVES_ITS_EXIT, module("B", EXITS_TO_THE_SYSTEM))
 
-    assert (run, words[5], words[7], words[8]) == (
+    assert (run, words[5], words[7], words[8], exited) == (
         HlasmRun(return_code=77, abend="", stdout=""),
         1,
         0,
         1,
+        HlasmRun(return_code=5, abend="", stdout=""),
     )
 
 

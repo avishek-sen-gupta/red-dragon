@@ -162,3 +162,27 @@ BMID     LA    5,1(,5)
          LTORG
          END
 """
+SAVES_ITS_EXIT = """\
+A        CSECT
+         LR    12,15
+         USING A,12
+         ST    14,EXIT
+         L     15,=V(B)
+         BALR  14,15
+         LA    15,99
+         BR    14
+         ENTRY EXIT
+EXIT     DS    F
+         LTORG
+         END   A
+"""
+EXITS_TO_THE_SYSTEM = """\
+B        CSECT
+         USING B,15
+         L     2,=V(EXIT)
+         L     14,0(,2)
+         LA    15,5
+         BR    14
+         LTORG
+         END
+"""

@@ -8,7 +8,7 @@ from interpreter.hlasm.abend import emit_abend
 from interpreter.hlasm.branch_dispatch import (
     emit_branch,
     emit_link_branch,
-    masked_return_address,
+    returns,
 )
 from interpreter.hlasm.data_movement import relative_target, storage_address
 from interpreter.hlasm.hlasm_constants import (
@@ -63,7 +63,7 @@ def _insert_mode_bit(emitter: HlasmEmitter, statement: MachineStatement) -> None
 
 def _returning(emitter: HlasmEmitter, target: Register) -> Register:
     address = emitter.binop(BinopKind.BIT_AND, target, emitter.int_(ADDRESS_MASK_31))
-    return emitter.binop(BinopKind.EQ, address, masked_return_address(emitter))
+    return returns(emitter, address)
 
 
 def _stays_in_amode_31(emitter: HlasmEmitter, target: Register) -> Register:

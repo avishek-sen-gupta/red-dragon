@@ -6,6 +6,7 @@ MAIN     CSECT
          LR    12,15
          USING MAIN,12
          LR    10,14
+         LR    0,0
          CALL  SUB,(ADDEND,SUM),VL
          LR    2,15
          LR    7,6
@@ -114,6 +115,33 @@ CONTROL  DC    A(NAME,0)
          LTORG
          END   MAIN
 """
+LINKS_THEN_EXITS = """\
+A        CSECT
+         LR    12,15
+         USING A,12
+         ST    14,EXIT
+         LINK  EP=B
+         L     14,EXIT
+         LA    15,4(,15)
+         BR    14
+         ENTRY ACB,ACB2
+ACB      BR    14
+ACB2     L     14,EXIT
+         LA    15,3
+         BR    14
+EXIT     DS    F
+         LTORG
+         END   A
+"""
+CALLS_BACK_AND_EXITS = """\
+B        CSECT
+         USING B,15
+         L     14,=V(ACB2)
+         L     15,=V(ACB)
+         BR    15
+         LTORG
+         END
+"""
 LINKS_MISSING = """\
 MAIN     CSECT
          LINK  EP=NOPE
@@ -163,6 +191,7 @@ MAIN     CSECT
          LINK  EP=SUB,VL=2
          LINK  PARAM=(A)
          LINK  EPLOC=(15)
+         LOAD  EPLOC=(1)
          LOAD  EP=SUB,EPLOC=NAME
          DELETE EP=TOOLONGNAME
 A        DS    F
@@ -177,7 +206,8 @@ BAD_OPERAND_REFUSALS = (
     ("CALL: INVALID REGISTER", 6),
     ("LINK: VL MUST BE 1", 7),
     ("LINK: EP OR EPLOC MISSING", 8),
-    ("LINK: EPLOC REGISTER MUST NOT BE 15", 9),
-    ("LOAD: EP AND EPLOC BOTH GIVEN", 10),
-    ("DELETE: EP LONGER THAN 8 CHARACTERS", 11),
+    ("LINK: EPLOC REGISTER MUST BE 2 TO 12", 9),
+    ("LOAD: EPLOC REGISTER MUST BE 2 TO 12", 10),
+    ("LOAD: EP AND EPLOC BOTH GIVEN", 11),
+    ("DELETE: EP LONGER THAN 8 CHARACTERS", 12),
 )

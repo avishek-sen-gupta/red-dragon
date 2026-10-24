@@ -1,10 +1,12 @@
          MACRO
 &NAME    RDPLIST &LIST,&VL,&INLINE
          LCLA  &I,&N
-         LCLC  &HIGH,&LABEL
+         LCLC  &HIGH,&LABEL,&TYPE
 &N       SETA  N'&LIST
 &LABEL   SETC  '&NAME'
+&TYPE    SETC  'A'
          AIF   ('&INLINE' NE 'INLINE').NEXT
+&TYPE    SETC  'AL4'
 &NAME    BRAS  1,RDP&SYSNDX
 &LABEL   SETC  ''
 .NEXT    ANOP
@@ -13,7 +15,7 @@
          AIF   (&I LT &N OR '&VL' EQ '').WORD
 &HIGH    SETC  'X''80000000''+'
 .WORD    ANOP
-&LABEL   DC    A(&HIGH&LIST(&I))
+&LABEL   DC    &TYPE.(&HIGH&LIST(&I))
 &LABEL   SETC  ''
          AIF   (&I LT &N).NEXT
          AIF   ('&INLINE' NE 'INLINE').DONE

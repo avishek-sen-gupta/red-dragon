@@ -199,7 +199,7 @@ def test_seed_program_lowers_to_labels_region_ops_and_dispatch():
         _dispatch_comparands(_between(ir, "hl_local_dispatch", "hl_return")),
         [i.branch_targets for i in dispatch if isinstance(i, BranchIf)],
     ) == (
-        [0, 4],
+        [0, 4, 0xFF0],
         [
             (CodeLabel("hl_HELLO_0"), CodeLabel("hl_dispatch_next_0")),
             (CodeLabel("hl_HELLO_4"), CodeLabel("hl_dispatch_next_1")),
