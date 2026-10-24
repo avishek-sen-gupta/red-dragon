@@ -302,29 +302,42 @@ in the open-code source. Columns are 0: the bridge reports lines only.
 
 che4z runs the macro language; the bridge exports only the ordinary statements it
 generates. `tests/integration/hlasm/macro_language_programs.py` holds one program per
-feature, run on the VM and, under `tests/z390/`, in z390. Covered:
+feature, run on the VM and, under `tests/z390/`, in z390. Tests carry `HlasmFeature`
+tags (`interpreter/hlasm/features.py`). Covered:
 
-- Nested and inline macro definitions, `&SYSNDX` labels, AIF/AGO loops under ACTR, ANOP.
+- Nested and inline macro definitions, `&SYSNDX` labels, AIF/AGO loops under ACTR,
+  ANOP. A loop past its ACTR count refuses the assembly (che4z E056; HLASM ends the
+  expansion with an error).
 - GBLx and LCLx scope; SETA, SETB and SETC expressions with bitwise operators,
   substrings, duplication and UPPER; created (`&(name)`) and subscripted SET symbols.
-- Positional parameters, `&K=` parameters with defaults, sublists, `&SYSLIST`, N' and K'.
+- Positional parameters, `&K=` parameters with defaults, sublists, `&SYSLIST`, N'
+  and K'.
 - Opcode substitution, OPSYN rename and delete, AREAD, AINSERT FRONT and BACK, COPY
-  from SYSLIB (`.mac` for us, `.CPY` for z390).
+  from SYSLIB (`.mac` for us, `.CPY` and `.MAC` for z390).
 - DSECTs with USING, labeled and dependent USING; S-constant literals whose pools
   are moved by LOCTR and ORG.
-- T', L', S', I', D' and O', and T' of literals.
-- `&SYSECT` and `&SYSLOC` across LOCTRs and CSECTs; `&SYSSEQF` and `&SYSSTMT` from open
-  code, a COPY member and after lookahead; `&SYSPARM` empty and given; `&SYSDATC`,
-  `&SYSTIME` and `&SYSDATE` from the injected clock (VM only: z390 reads its own clock).
+- T', L', S', I', D' and O'; T' and D' of literals.
+- `&SYSECT` and `&SYSLOC` across LOCTRs and CSECTs; `&SYSSEQF` and `&SYSSTMT` from
+  open code, a COPY member, after lookahead and in a SYSLIB macro; `&SYSPARM` empty
+  and given; `&SYSDATC`, `&SYSTIME` and `&SYSDATE` from the injected clock (VM only:
+  z390 reads its own clock).
 - An MNOTE from a macro reaches the log (VM only: z390 writes MNOTEs to its listing).
 
-Where z390 disagrees, the VM test follows the Language Reference and a z390 test pins
-z390's value (red-dragon-6uyp.74): z390 gives I' as 0, S' as 0 for a symbol defined
-later, T' of every literal as U, `&SYSSEQF` as empty, and numbers `&SYSSTMT` by
-open-code lines only. Our `&SYSSTMT` is che4z's, which also counts the statements a
-macro expansion processes; the Language Reference does not say which. The Language Reference gives a literal in a macro
-operand its constant's type only if a machine instruction already used it; otherwise U.
-Our che4z fork follows that inside macros.
+Our che4z fork follows the Language Reference in three places:
+
+- T' of a literal named by a macro operand is the constant's type only if a machine
+  instruction already used that literal; otherwise U. A literal written in the macro
+  body keeps its constant's type.
+- `&SYSSTMT` is the next statement number, inside an expansion as in open code.
+  Statements of a SYSLIB macro definition are not numbered. Which statements an
+  expansion numbers is not in the manual; we follow che4z, which numbers each one.
+- A literal's pool is matched by literal-pool generation, so its S-constants use the
+  USING at its own LTORG wherever LOCTR puts it.
+
+Where z390 disagrees, a z390 test pins z390's value (red-dragon-6uyp.74): I' is 0,
+S' is 0 for a symbol defined later, T' of a literal is U and D' is 0, `&SYSSEQF` is
+empty, `&SYSSTMT` counts open-code lines only, and an attribute of a literal in a
+macro body does not assemble.
 
 ## Differential Tests Against z390
 
