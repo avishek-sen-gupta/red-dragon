@@ -306,6 +306,13 @@ def _constant_tests(ir: Sequence[InstructionBase], operator: BinopKind) -> list[
     ]
 
 
+GPR_LOAD = ("LoadRegion", 4)
+GPR_STORE = ("WriteRegion", 4)
+SVC_10_GPR_ACCESSES = (GPR_LOAD, GPR_LOAD, GPR_STORE, GPR_LOAD)
+SVC_11_GPR_ACCESSES = (GPR_LOAD, GPR_STORE, GPR_STORE, GPR_STORE)
+SVC_120_GPR_ACCESSES = (GPR_LOAD, GPR_LOAD, GPR_STORE, GPR_LOAD, GPR_STORE)
+
+
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_a_data_field_target_lowers_once_with_byte_one_from_r1():
     svc = _statement("SVC", "I", (imm_operand(0),), length=2)
@@ -354,15 +361,18 @@ def test_a_data_field_target_lowers_once_with_byte_one_from_r1():
         ),
         "SVC": (
             [],
-            [0x00],
+            [0x00, 0xF],
             [],
-            [35, 13],
+            [35, 13, 10, 0, 11, 120],
             [
                 ("LoadRegion", 4),
                 ("LoadRegion", 4),
                 ("LoadRegion", 2),
                 ("LoadRegion", 1),
                 ("LoadRegion", 4),
+                *SVC_10_GPR_ACCESSES,
+                *SVC_11_GPR_ACCESSES,
+                *SVC_120_GPR_ACCESSES,
             ],
             False,
         ),

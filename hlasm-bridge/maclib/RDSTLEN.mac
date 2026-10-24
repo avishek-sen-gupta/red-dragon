@@ -1,0 +1,7 @@
+         MACRO
+         RDSTLEN &LV
+         AIF   ('&LV'(1,1) EQ '(').REG
+         IILF  0,&LV
+         MEXIT
+.REG     LR    0,&LV(1)
+         MEND

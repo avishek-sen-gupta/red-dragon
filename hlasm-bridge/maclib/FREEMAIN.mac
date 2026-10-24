@@ -1,0 +1,26 @@
+         MACRO
+&NAME    FREEMAIN &TYPE,&LV=,&A=,&SP=
+         LCLA  &FL
+         AIF   ('&TYPE' EQ 'R' OR '&TYPE' EQ 'RU').HAVET
+         AIF   ('&TYPE' EQ 'RC').HAVET
+         MNOTE 8,'FREEMAIN: TYPE MUST BE R, RU OR RC'
+         MEXIT
+.HAVET   AIF   ('&A' NE '').HAVEA
+         MNOTE 8,'FREEMAIN: A MISSING'
+         MEXIT
+.HAVEA   AIF   ('&LV' NE '').HAVELV
+         MNOTE 8,'FREEMAIN: LV MISSING'
+         MEXIT
+.HAVELV  ANOP
+&NAME    DS    0H
+         RDSTREG 1,&A
+         AIF   ('&TYPE' NE 'R').SVC120
+         RDSTR &LV,&SP
+         SVC   10
+         MEXIT
+.SVC120  ANOP
+&FL      SETA  1
+         AIF   ('&TYPE' NE 'RC').RELEASE
+&FL      SETA  3
+.RELEASE RDSTSVC &LV,&SP,&FL
+         MEND

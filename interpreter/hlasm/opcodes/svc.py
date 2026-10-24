@@ -1,5 +1,5 @@
 # pyright: standard
-"""SVC: the supervisor calls lowered in IR, by number, the number written or set by EX; any other number abends S0C1."""
+"""SVC: the supervisor calls lowered in IR (WTO, ABEND, GETMAIN/FREEMAIN, TIME, STORAGE), by number, the number written or set by EX; any other number abends S0C1."""
 
 import logging
 from collections.abc import Callable, Mapping
@@ -12,11 +12,16 @@ from interpreter.hlasm.data_field import DataField
 from interpreter.hlasm.field_lowering import FieldLowering, written_lowerings
 from interpreter.hlasm.hlasm_constants import (
     ABEND_SVC,
+    GETMAIN_FREEMAIN_SVC,
     OPERATION_EXCEPTION_ABEND,
+    STORAGE_SVC,
+    TIME_SVC,
     WTO_SVC,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.statement_lowering import StatementLowering
+from interpreter.hlasm.storage_services import emit_getmain_freemain, emit_storage
+from interpreter.hlasm.time_service import emit_time
 from interpreter.hlasm.write_to_operator import emit_write_to_operator
 
 logger = logging.getLogger(__name__)
@@ -24,6 +29,9 @@ logger = logging.getLogger(__name__)
 _SERVICES: Mapping[int, Callable[[HlasmEmitter], None]] = {
     WTO_SVC: emit_write_to_operator,
     ABEND_SVC: emit_abend_completion,
+    GETMAIN_FREEMAIN_SVC: emit_getmain_freemain,
+    TIME_SVC: emit_time,
+    STORAGE_SVC: emit_storage,
 }
 
 

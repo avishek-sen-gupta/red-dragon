@@ -1,0 +1,16 @@
+         MACRO
+&NAME    TIME  &TYPE,&LINKAGE=SVC
+         AIF   ('&LINKAGE' EQ 'SVC').HAVEL
+         MNOTE 8,'TIME: LINKAGE MUST BE SVC'
+         MEXIT
+.HAVEL   AIF   ('&TYPE' EQ '' OR '&TYPE' EQ 'DEC').DEC
+         AIF   ('&TYPE' EQ 'BIN').BIN
+         MNOTE 8,'TIME: TYPE MUST BE DEC OR BIN'
+         MEXIT
+.DEC     ANOP
+&NAME    LA    0,0
+         AGO   .SVC
+.BIN     ANOP
+&NAME    LA    0,1
+.SVC     SVC   11
+         MEND
