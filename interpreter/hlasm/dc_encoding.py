@@ -21,6 +21,7 @@ from hlasm_asg.program.reloc_address import RelocAddress
 from hlasm_asg.program.string_nominal import StringNominal
 from interpreter.encoding.ebcdic_table import EbcdicTable
 from interpreter.hlasm.address_slot import AddressSlot
+from interpreter.hlasm.binder_slot import BinderSlot
 from interpreter.hlasm.bit_length_image import BitLengthImage
 from interpreter.hlasm.constant_image import ConstantImage
 from interpreter.hlasm.dc_exponent_out_of_range import (
@@ -34,18 +35,23 @@ from interpreter.hlasm.floating_point_constant import floating_point_image
 from interpreter.hlasm.hlasm_constants import BITS_PER_BYTE
 from interpreter.hlasm.hlasm_lowering_error import HlasmLoweringError
 from interpreter.hlasm.unsupported_data_type import UnsupportedDataType
+from interpreter.project.relocation_kind import RelocationKind
+from interpreter.project.relocation_name import RelocationName
 
-type DcPiece = ConstantImage | AddressSlot | ExternalSlot
+type DcPiece = ConstantImage | AddressSlot | ExternalSlot | BinderSlot
 type Encoder = Callable[[str, int], int]
 
-LINKER_TYPES_ISSUE = "red-dragon-6uyp.96"
+LONG_DISPLACEMENT_OFFSET_ISSUE = "red-dragon-6uyp.103"
 OTHER_TYPES_ISSUE = "red-dragon-6uyp.63"
 BIT_LENGTH_STAR_ISSUE = "red-dragon-6uyp.97"
 
 _FLOATING_POINT_TYPES = frozenset(
     {"E", "EH", "EB", "ED", "D", "DH", "DB", "DD", "L", "LH", "LB", "LD", "LQ"}
 )
-_LINKER_TYPES = frozenset({"Q", "J"})
+_BOUND_KINDS: Mapping[str, RelocationKind] = {
+    "Q": RelocationKind.PR_OFFSET,
+    "J": RelocationKind.CLASS_LENGTH,
+}
 _UNSPLIT_TYPES = frozenset({"C"})
 _NOMINAL_SEPARATOR = ","
 _DECIMAL_POINT = "."
@@ -170,7 +176,7 @@ _VALUE_LENGTHS: Mapping[str, Callable[[str], int]] = {
     "Z": lambda text: len(_digits(text)),
 }
 
-_ADDRESS_TYPES = frozenset({"A", "AD", "Y", "V", "VD", "S", "SY"})
+_ADDRESS_TYPES = frozenset({"A", "AD", "Y", "V", "VD", "S", "SY", "Q", "QD", "J", "JD"})
 _FIXED_POINT_TYPES = frozenset({"F", "FD", "H"})
 _SUPPORTED_TYPES = (
     _STRING_ENCODERS.keys()
@@ -185,8 +191,8 @@ def _code(item: DcItem) -> str:
 
 
 def _issue(item: DcItem) -> str:
-    if item.type in _LINKER_TYPES:
-        return LINKER_TYPES_ISSUE
+    if _code(item) == "QY":
+        return LONG_DISPLACEMENT_OFFSET_ISSUE
     return OTHER_TYPES_ISSUE
 
 
@@ -275,6 +281,16 @@ def _assembled_address(
             return _base_displacement(item, base, displacement)
 
 
+def _bound_piece(item: DcItem, value: Address) -> DcPiece:
+    match value:
+        case RelocAddress(section=section):
+            return BinderSlot(
+                _BOUND_KINDS[item.type], RelocationName(section), item.length
+            )
+        case _:
+            raise HlasmLoweringError(_code(item), "a DXD or DSECT name", value.kind)
+
+
 def _address_piece(item: DcItem, value: Address, origin: Origin) -> DcPiece:
     if isinstance(value, RelocAddress):
         return AddressSlot(value, item.length)
@@ -334,6 +350,8 @@ def encode_ccw(statement: CcwStatement) -> tuple[DcPiece, ...]:
 def _address_pieces(
     item: DcItem, values: Sequence[Address], origin: Origin
 ) -> tuple[DcPiece, ...]:
+    if item.type in _BOUND_KINDS:
+        return tuple(_bound_piece(item, value) for value in values)
     return tuple(_address_piece(item, value, origin) for value in values)
 
 

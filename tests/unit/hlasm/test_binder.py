@@ -1,5 +1,5 @@
 # pyright: standard
-"""The binder: sections at doubleword offsets in ESD order, commons merged at their largest length, names resolved locally, then across the image, then to a COBOL program's stub, then to zero (WXTRN) or a stub (EXTRN, warned once); duplicate names across both languages and records not bound yet are refused."""
+"""The binder: sections at doubleword offsets in ESD order, commons merged at their largest length, external dummy sections merged by name (largest length, strictest alignment) into the pseudo-register area in first appearance, names resolved locally, then across the image, then to a COBOL program's stub, then to zero (WXTRN) or a stub (EXTRN, warned once); duplicate names across both languages and a J-constant naming no external dummy section are refused."""
 
 import pytest
 
@@ -11,6 +11,7 @@ from interpreter.hlasm.image_module import ImageModule
 from interpreter.hlasm.module_layout import ModuleLayout
 from interpreter.hlasm.module_owner import ModuleOwner
 from interpreter.hlasm.placed_name import PlacedName
+from interpreter.hlasm.pseudo_register import PseudoRegister
 from interpreter.hlasm.stub_name import StubName
 from interpreter.hlasm.unresolved_owner import UnresolvedOwner
 from interpreter.hlasm.unsupported_binding import UnsupportedBinding
@@ -28,6 +29,7 @@ from interpreter.project.external_dummy_section import ExternalDummySection
 from interpreter.project.external_reference import ExternalReference
 from interpreter.project.object_module import ObjectModule
 from interpreter.project.relocation_kind import RelocationKind
+from interpreter.project.relocation_name import RelocationName
 from interpreter.project.relocation_record import RelocationRecord
 from interpreter.project.relocation_sign import RelocationSign
 from interpreter.project.unit_diagnostic import UnitDiagnostic
@@ -183,31 +185,63 @@ def test_binder_refuses_duplicates_and_records_it_does_not_bind():
     entry_twice = _module(
         "C", (ControlSection("OTHER", 4), EntryLabel("SUB", "OTHER", 0))
     )
-    q_constant = _module(
+    class_length = _module(
         "D",
-        (ControlSection("Q", 4),),
+        (ControlSection("J", 4), ExternalDummySection("PR", 8, 8)),
         (
-            RelocationRecord(
-                "Q", 0, 4, RelocationKind.PR_OFFSET, "PR", RelocationSign.PLUS, 0
-            ),
+            _length("J", 0, "PR"),
+            _length("J", 4, "J"),
         ),
     )
-    dummy = _module("E", (ControlSection("X", 4), ExternalDummySection("PR", 8, 8)))
 
     with pytest.raises(DuplicateProgramInImage) as duplicate:
         Binder((CALLEE, entry_twice), ())
-
     with pytest.raises(UnsupportedBinding) as relocation:
-        Binder((q_constant,), ())
-    with pytest.raises(UnsupportedBinding) as external_dummy:
-        Binder((dummy,), ())
+        Binder((class_length,), ())
 
-    assert [
-        str(duplicate.value),
-        str(relocation.value),
-        str(external_dummy.value),
-    ] == [
+    assert [str(duplicate.value), str(relocation.value)] == [
         "program SUB is in the image twice: B.asm and C.asm",
-        "PR_OFFSET relocation in module D is not bound yet (red-dragon-6uyp.96)",
-        "XD PR in module E is not bound yet (red-dragon-6uyp.96)",
+        "J-constant naming J in module D is not bound yet (red-dragon-6uyp.104)",
     ]
+
+
+def _length(section: str, offset: int, target: str) -> RelocationRecord:
+    return RelocationRecord(
+        section,
+        offset,
+        4,
+        RelocationKind.CLASS_LENGTH,
+        RelocationName(target),
+        RelocationSign.PLUS,
+        0,
+    )
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_binder_merges_external_dummies_and_lays_out_the_pseudo_register_area():
+    first = _module(
+        "A",
+        (
+            ControlSection("MAIN", 8),
+            ExternalDummySection("BYTE", 5, 1),
+            ExternalDummySection("WORDS", 6, 2),
+        ),
+    )
+    second = _module(
+        "B",
+        (
+            ControlSection("SUB", 8),
+            ExternalDummySection("WORDS", 5, 4),
+            ExternalDummySection("DOUBLE", 1, 8),
+            ExternalDummySection("BYTE", 2, 1),
+        ),
+    )
+    binder = Binder((first, second), ())
+
+    assert binder.pseudo_registers == {
+        "BYTE": PseudoRegister(0, 5),
+        "WORDS": PseudoRegister(8, 6),
+        "DOUBLE": PseudoRegister(16, 1),
+    }
+    assert binder.pseudo_register_total == 17
+    assert Binder((CALLER,), ()).pseudo_register_total == 0

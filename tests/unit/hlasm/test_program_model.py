@@ -134,7 +134,7 @@ def _in_hello(offset: int) -> RelocAddress:
 
 
 EXPECTED = HlasmProgram(
-    format=2,
+    format=3,
     sections=(Section(name="HELLO", kind=SectionKind.CSECT, length=52),),
     symbols=(
         _reloc("EXTR", "EXTR", 0, 1, "T"),
@@ -145,6 +145,7 @@ EXPECTED = HlasmProgram(
     entry=NamedEntry(kind="NAMED", name="HELLO"),
     entries=(),
     externals=(ExternalSymbol(name="EXTR", kind=ExternalKind.EXTRN, line=10),),
+    external_dummies=(),
     statements=(
         _machine(
             0,
@@ -287,7 +288,7 @@ def _loop_origin(line: int) -> OpenCodeOrigin:
 
 
 LOOP_EXPECTED = HlasmProgram(
-    format=2,
+    format=3,
     sections=(Section(name="MAIN", kind=SectionKind.CSECT, length=8),),
     symbols=(
         AbsSymbol(kind="ABS", name="FIVE", value=5, type="U", length=1),
@@ -297,6 +298,7 @@ LOOP_EXPECTED = HlasmProgram(
     entry=DefaultEntry(kind="DEFAULT"),
     entries=(),
     externals=(),
+    external_dummies=(),
     statements=(
         MachineStatement(
             kind="MACHINE",
@@ -506,7 +508,7 @@ class TestProgramModel:
             HlasmProgram.model_validate_json(text.replace('"OPEN_CODE"', '"ELSEWHERE"'))
         with pytest.raises(ValidationError, match="Extra inputs"):
             HlasmProgram.model_validate_json(
-                text.replace('"format":2', '"format":2,"x":0')
+                text.replace('"format":3', '"format":3,"x":0')
             )
 
     @covers(NotLanguageFeature.INFRASTRUCTURE)

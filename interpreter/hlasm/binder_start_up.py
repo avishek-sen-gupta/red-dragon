@@ -1,7 +1,7 @@
 # pyright: standard
-"""The image's start-up IR, run once: the machine state, a bit per module for the far branch, one doubleword-aligned region per module with its sections' variables, one region per common section, the stub range, every TXT record, every RLD, and the names table LINK and LOAD read."""
+"""The image's start-up IR, run once: the machine state, a bit per module for the far branch, one doubleword-aligned region per module with its sections' variables, one region per common section, the stub range, every TXT record, every RLD (an address, a pseudo-register offset or length, or their total), and the names table LINK and LOAD read."""
 
-from collections.abc import Sequence
+from collections.abc import Callable, Mapping, Sequence
 
 from interpreter.hlasm.binder import Binder, aligned
 from interpreter.hlasm.bound_name import BoundName
@@ -30,6 +30,7 @@ from interpreter.hlasm.machine import (
     machine_allocation,
 )
 from interpreter.hlasm.placed_name import PlacedName
+from interpreter.hlasm.pseudo_register import PseudoRegister
 from interpreter.hlasm.section_variable import section_var
 from interpreter.hlasm.stub_name import StubName
 from interpreter.hlasm.weak_zero import WeakZero
@@ -44,11 +45,19 @@ from interpreter.instructions import (
 )
 from interpreter.operator_kind import BinopKind
 from interpreter.project.common_section import CommonSection
+from interpreter.project.no_relocation_target import NoRelocationTarget
+from interpreter.project.relocation_kind import RelocationKind
+from interpreter.project.relocation_name import RelocationName
 from interpreter.project.relocation_record import RelocationRecord
 from interpreter.project.relocation_sign import RelocationSign
 from interpreter.project.text_record import TextRecord
 from interpreter.register import Register
 from interpreter.var_name import VarName
+
+_PSEUDO_REGISTER_FACTS: Mapping[RelocationKind, Callable[[PseudoRegister], int]] = {
+    RelocationKind.PR_OFFSET: lambda register: register.offset,
+    RelocationKind.CLASS_LENGTH: lambda register: register.length,
+}
 
 
 def aligned_region(emitter: HlasmEmitter, length: Register) -> Register:
@@ -144,12 +153,34 @@ def _signed(
             return emitter.binop(BinopKind.SUB, emitter.int_(0), address)
 
 
+def _named_value(
+    emitter: HlasmEmitter,
+    binder: Binder,
+    module: ImageModule,
+    named: tuple[RelocationKind, str],
+) -> Register:
+    kind, name = named
+    if kind in _PSEUDO_REGISTER_FACTS:
+        return emitter.int_(_PSEUDO_REGISTER_FACTS[kind](binder.pseudo_registers[name]))
+    return bound_address(emitter, binder.resolve(module, name))
+
+
+def _target_value(
+    emitter: HlasmEmitter, binder: Binder, module: ImageModule, record: RelocationRecord
+) -> Register:
+    match record.target:
+        case NoRelocationTarget():
+            return emitter.int_(binder.pseudo_register_total)
+        case RelocationName(name=name):
+            return _named_value(emitter, binder, module, (record.kind, name))
+
+
 def _relocate(
     emitter: HlasmEmitter, binder: Binder, module: ImageModule, record: RelocationRecord
 ) -> None:
-    address = bound_address(emitter, binder.resolve(module, record.target))
+    target = _target_value(emitter, binder, module, record)
     value = emitter.binop(
-        BinopKind.ADD, _signed(emitter, record, address), emitter.int_(record.addend)
+        BinopKind.ADD, _signed(emitter, record, target), emitter.int_(record.addend)
     )
     emitter.store_storage(
         emitter.load_var(section_var(module.name, record.section)),

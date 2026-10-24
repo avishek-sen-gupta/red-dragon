@@ -1,5 +1,5 @@
 # pyright: standard
-"""The program the che4z bridge exports: sections, symbols, statements and literals."""
+"""The program the che4z bridge exports: sections, symbols, external symbols and dummy sections, statements and literals."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict
 from hlasm_asg.program.amode_setting import AmodeSetting
 from hlasm_asg.program.diagnostic import Diagnostic
 from hlasm_asg.program.entry import Entry
+from hlasm_asg.program.external_dummy import ExternalDummy
 from hlasm_asg.program.external_symbol import ExternalSymbol
 from hlasm_asg.program.literal_pool import LiteralPool
 from hlasm_asg.program.rmode_setting import RmodeSetting
@@ -25,6 +26,7 @@ class HlasmProgram(BaseModel):
     entry: Entry
     entries: tuple[str, ...]
     externals: tuple[ExternalSymbol, ...]
+    external_dummies: tuple[ExternalDummy, ...]
     statements: tuple[Statement, ...]
     literals: tuple[LiteralPool, ...]
     amodes: tuple[AmodeSetting, ...]

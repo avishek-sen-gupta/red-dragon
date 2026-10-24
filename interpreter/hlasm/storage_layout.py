@@ -1,5 +1,5 @@
 # pyright: standard
-"""Each section's constants and literals as pieces at their offsets: constant images and address slots."""
+"""Each section's constants, literals and CXD fields as pieces at their offsets: constant images and address and binder slots."""
 
 from collections.abc import Iterable, Sequence
 from functools import reduce
@@ -7,17 +7,21 @@ from itertools import accumulate, chain, groupby
 from operator import itemgetter, or_
 
 from hlasm_asg.program.ccw_statement import CcwStatement
+from hlasm_asg.program.cxd_statement import CxdStatement
 from hlasm_asg.program.dc_item import DcItem
 from hlasm_asg.program.dc_statement import DcStatement
 from hlasm_asg.program.hlasm_program import HlasmProgram
 from hlasm_asg.program.origin import Origin
+from interpreter.hlasm.binder_slot import BinderSlot
 from interpreter.hlasm.bit_length_image import BitLengthImage
 from interpreter.hlasm.constant_image import ConstantImage
 from interpreter.hlasm.dc_encoding import DcPiece, encode_ccw, encode_dc
-from interpreter.hlasm.hlasm_constants import (
-    BITS_PER_BYTE,
-)
+from interpreter.hlasm.hlasm_constants import BITS_PER_BYTE, WORD_BYTES
 from interpreter.hlasm.placed_piece import PlacedPiece
+from interpreter.project.no_relocation_target import NoRelocationTarget
+from interpreter.project.relocation_kind import RelocationKind
+
+_TOTAL = BinderSlot(RelocationKind.PR_TOTAL, NoRelocationTarget(), WORD_BYTES)
 
 type ByteAt = tuple[int, int]
 
@@ -97,4 +101,11 @@ def placed_pieces(
         for s in program.statements
         if isinstance(s, CcwStatement) and s.section in sections
     )
-    return tuple(chain.from_iterable(chain(statements, literals, channel_commands)))
+    totals = (
+        _place_pieces(s.section, s.offset, (_TOTAL,))
+        for s in program.statements
+        if isinstance(s, CxdStatement) and s.section in sections
+    )
+    return tuple(
+        chain.from_iterable(chain(statements, literals, channel_commands, totals))
+    )

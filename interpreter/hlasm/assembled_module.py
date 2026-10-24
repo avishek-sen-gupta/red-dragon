@@ -1,7 +1,8 @@
 # pyright: standard
-"""The object module of an assembly: ESD from its sections, ENTRY names and external symbols, TXT and RLD from its placed constants (an address in a DSECT is its offset, with no RLD), END from its entry point."""
+"""The object module of an assembly: ESD from its sections, ENTRY names, external symbols and external dummy sections, TXT and RLD from its placed constants (an address in a DSECT is its offset, with no RLD; Q, J and CXD are RLD alone), END from its entry point."""
 
 from hlasm_asg.program.default_entry import DefaultEntry
+from hlasm_asg.program.external_dummy import ExternalDummy
 from hlasm_asg.program.external_kind import ExternalKind
 from hlasm_asg.program.external_symbol import ExternalSymbol
 from hlasm_asg.program.hlasm_program import HlasmProgram
@@ -10,6 +11,7 @@ from hlasm_asg.program.reloc_symbol import RelocSymbol
 from hlasm_asg.program.section import Section
 from hlasm_asg.program.section_kind import SectionKind
 from interpreter.hlasm.address_slot import AddressSlot
+from interpreter.hlasm.binder_slot import BinderSlot
 from interpreter.hlasm.constant_image import ConstantImage
 from interpreter.hlasm.entry_state import resolve_entry
 from interpreter.hlasm.external_slot import ExternalSlot
@@ -21,11 +23,13 @@ from interpreter.project.control_section import ControlSection
 from interpreter.project.default_end import DefaultEnd
 from interpreter.project.entry_label import EntryLabel
 from interpreter.project.esd_record import EsdRecord
+from interpreter.project.external_dummy_section import ExternalDummySection
 from interpreter.project.external_reference import ExternalReference
 from interpreter.project.module_end import ModuleEnd
 from interpreter.project.named_end import NamedEnd
 from interpreter.project.object_module import ObjectModule
 from interpreter.project.relocation_kind import RelocationKind
+from interpreter.project.relocation_name import RelocationName
 from interpreter.project.relocation_record import RelocationRecord
 from interpreter.project.relocation_sign import RelocationSign
 from interpreter.project.text_record import TextRecord
@@ -63,7 +67,7 @@ def _relocation(
         placed.offset,
         width,
         RelocationKind.ADDRESS,
-        target,
+        RelocationName(target),
         RelocationSign.PLUS,
         addend,
     )
@@ -87,7 +91,7 @@ def _text(placed: PlacedPiece) -> tuple[TextRecord, ...]:
             return ()
 
 
-def _relocations(placed: PlacedPiece) -> tuple[RelocationRecord, ...]:
+def _address_relocations(placed: PlacedPiece) -> tuple[RelocationRecord, ...]:
     match placed.piece:
         case AddressSlot() as slot:
             section = slot.address.section
@@ -97,6 +101,27 @@ def _relocations(placed: PlacedPiece) -> tuple[RelocationRecord, ...]:
             return (_relocation(placed, name, external.address.offset, external.width),)
         case _:
             return ()
+
+
+def _bound_relocations(placed: PlacedPiece) -> tuple[RelocationRecord, ...]:
+    match placed.piece:
+        case BinderSlot(kind=kind, target=target, width=width):
+            sign = RelocationSign.PLUS
+            return (
+                RelocationRecord(
+                    placed.section, placed.offset, width, kind, target, sign, 0
+                ),
+            )
+        case _:
+            return ()
+
+
+def _relocations(placed: PlacedPiece) -> tuple[RelocationRecord, ...]:
+    return (*_address_relocations(placed), *_bound_relocations(placed))
+
+
+def _external_dummy(dummy: ExternalDummy) -> EsdRecord:
+    return ExternalDummySection(dummy.name, dummy.length, dummy.alignment)
 
 
 def _end(program: HlasmProgram) -> ModuleEnd:
@@ -120,6 +145,7 @@ def object_module(program: HlasmProgram) -> ObjectModule:
             *map(_section, sections),
             *(_entry_label(program, name) for name in program.entries),
             *map(_external, program.externals),
+            *map(_external_dummy, program.external_dummies),
         ),
         text=tuple(record for placed in pieces for record in _text(placed)),
         relocations=tuple(

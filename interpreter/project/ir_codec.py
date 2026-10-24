@@ -53,7 +53,9 @@ from interpreter.project.in_macro import InMacro
 from interpreter.project.in_open_code import InOpenCode
 from interpreter.project.named_end import NamedEnd
 from interpreter.project.object_module import ObjectModule
+from interpreter.project.no_relocation_target import NoRelocationTarget
 from interpreter.project.relocation_kind import RelocationKind
+from interpreter.project.relocation_name import RelocationName
 from interpreter.project.relocation_record import RelocationRecord
 from interpreter.project.relocation_sign import RelocationSign
 from interpreter.project.severity_mnote import SeverityMnote
@@ -122,6 +124,8 @@ _DATACLASSES: tuple[type, ...] = (
     ExternalDummySection,
     TextRecord,
     RelocationRecord,
+    RelocationName,
+    NoRelocationTarget,
     NamedEnd,
     DefaultEnd,
     UsingParameter,

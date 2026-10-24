@@ -429,14 +429,15 @@ list of pairs, so any value can be a name), `loc`, `none`, `unknown_type`, and
 constructing the class, null-object classes to their singletons). An unknown
 kind or class raises `UnitFormatError`.
 
-`UnitCodec` and `LinkedCodec` write `{"format": 8, "unit" | "linked": …}` and raise
-`UnitFormatError` naming the file when it does not decode, a file of format 7
+`UnitCodec` and `LinkedCodec` write `{"format": 9, "unit" | "linked": …}` and raise
+`UnitFormatError` naming the file when it does not decode, a file of format 8
 included. Format 4 added `ModuleUnit.diagnostics`, the warnings lowering raised, so a
 reused unit reports them again (HLASM fills it); format 5 gave each one a typed
 `kind`, format 6 moved every fact, a DC warning's included, into it, and format 7 added
 `ModuleUnit.object_module` (HLASM's ESD, TXT, RLD and END; `NO_OBJECT_MODULE` elsewhere), and format 8
 added `ModuleUnit.using`, a COBOL program's USING signature: one `UsingParameter(mode, length)`
-per bound LINKAGE parameter, mode VALUE where PROCEDURE DIVISION USING says BY VALUE. The encoding is verbose
+per bound LINKAGE parameter, mode VALUE where PROCEDURE DIVISION USING says BY VALUE. Format 9
+made an RLD's target `RelocationName` or `NoRelocationTarget` (CXD). The encoding is verbose
 (red-dragon-rfwv).
 
 ### 7.3 One image, entered by program (COBOL)
@@ -479,7 +480,7 @@ the assembly clock (`HlasmLoweringSettings`). `lower_hlasm_program(program)` sto
 file, named after the `SourceFile`'s path; `link_hlasm_units(units, work_dir)` links unit
 files. Each unit carries its `ObjectModule` ("Object module" in
 `docs/frontend-design/hlasm.md`), and link is a binder over them: `bind_image` builds the
-start-up module (machine state, layout, TXT, RLD, once) and a `__hlasm_job__` module of one
+start-up module (machine state, layout, TXT, RLD with the pseudo-register offsets and total, once) and a `__hlasm_job__` module of one
 job-step function per SD or LD name, which `programs` maps each name to, plus one per unit
 entering at its END. `entry_func_label` is the first unit's END step, so `compile_hlasm`
 enters its main source. Link never reads an AST file. An SD or LD

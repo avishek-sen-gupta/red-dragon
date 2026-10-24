@@ -1,5 +1,5 @@
 # pyright: standard
-"""An assembly's object module: ESD in section order with private code, common sections, ENTRY labels and external references by strength; TXT from its constants; an ADDRESS RLD for each relocatable or external address constant; END at the named entry."""
+"""An assembly's object module: ESD in section order with private code, common sections, ENTRY labels, external references by strength and external dummy sections; TXT from its constants; an ADDRESS RLD for each relocatable or external address constant, a PR_OFFSET, CLASS_LENGTH or PR_TOTAL RLD for each Q, J or CXD; END at the named entry."""
 
 from pathlib import Path
 
@@ -8,17 +8,29 @@ from interpreter.hlasm.hlasm_frontend import HlasmFrontend
 from interpreter.project.common_section import CommonSection
 from interpreter.project.control_section import ControlSection
 from interpreter.project.entry_label import EntryLabel
+from interpreter.project.external_dummy_section import ExternalDummySection
 from interpreter.project.external_reference import ExternalReference
 from interpreter.project.named_end import NamedEnd
+from interpreter.project.no_relocation_target import NoRelocationTarget
 from interpreter.project.object_module import ObjectModule
 from interpreter.project.relocation_kind import RelocationKind
+from interpreter.project.relocation_name import RelocationName
 from interpreter.project.relocation_record import RelocationRecord
 from interpreter.project.relocation_sign import RelocationSign
+from interpreter.project.relocation_target import RelocationTarget
 from interpreter.project.text_record import TextRecord
 from interpreter.project.weak_reference import WeakReference
 from tests.covers import NotLanguageFeature, covers
 
 FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def _record(
+    offset: int, length: int, kind: RelocationKind, target: RelocationTarget
+) -> RelocationRecord:
+    return RelocationRecord(
+        "MAIN", offset, length, kind, target, RelocationSign.PLUS, 0
+    )
 
 
 def _address(offset: int, length: int, target: str, addend: int) -> RelocationRecord:
@@ -27,7 +39,7 @@ def _address(offset: int, length: int, target: str, addend: int) -> RelocationRe
         offset,
         length,
         RelocationKind.ADDRESS,
-        target,
+        RelocationName(target),
         RelocationSign.PLUS,
         addend,
     )
@@ -58,6 +70,29 @@ def test_object_module_records_esd_txt_rld_and_end():
             _address(12, 4, "STRONG", 0),
             _address(16, 4, "WEAK", 0),
             _address(20, 3, "MAIN", 8),
+        ),
+        end=NamedEnd("MAIN", "MAIN", 0),
+    )
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_object_module_records_external_dummies_and_their_q_j_and_cxd_fields():
+    program = HlasmProgram.model_validate_json(
+        (FIXTURES / "pseudo_register_program.json").read_text()
+    )
+
+    assert HlasmFrontend(program, "M").object_module == ObjectModule(
+        esd=(
+            ControlSection("MAIN", 16),
+            ExternalDummySection("PRA", 11, 4),
+            ExternalDummySection("D", 20, 8),
+        ),
+        text=(),
+        relocations=(
+            _record(0, 4, RelocationKind.PR_OFFSET, RelocationName("PRA")),
+            _record(4, 2, RelocationKind.PR_OFFSET, RelocationName("D")),
+            _record(8, 4, RelocationKind.CLASS_LENGTH, RelocationName("PRA")),
+            _record(12, 4, RelocationKind.PR_TOTAL, NoRelocationTarget()),
         ),
         end=NamedEnd("MAIN", "MAIN", 0),
     )

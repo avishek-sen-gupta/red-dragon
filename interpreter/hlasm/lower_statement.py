@@ -4,6 +4,7 @@
 import logging
 
 from hlasm_asg.program.ccw_statement import CcwStatement
+from hlasm_asg.program.cxd_statement import CxdStatement
 from hlasm_asg.program.dc_statement import DcStatement
 from hlasm_asg.program.ds_statement import DsStatement
 from hlasm_asg.program.machine_statement import MachineStatement
@@ -46,5 +47,5 @@ def lower_statement(
     match statement:
         case MachineStatement():
             _lower_instruction(emitter, statement, statements)
-        case DcStatement() | DsStatement() | CcwStatement():
+        case DcStatement() | DsStatement() | CcwStatement() | CxdStatement():
             return

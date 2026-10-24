@@ -18,6 +18,7 @@ from hlasm_asg.program.per_copy_addresses_nominal import PerCopyAddressesNominal
 from hlasm_asg.program.reloc_address import RelocAddress
 from hlasm_asg.program.string_nominal import StringNominal
 from interpreter.hlasm.address_slot import AddressSlot
+from interpreter.hlasm.binder_slot import BinderSlot
 from interpreter.hlasm.bit_length_image import BitLengthImage
 from interpreter.hlasm.constant_image import ConstantImage
 from interpreter.hlasm.dc_encoding import encode_dc
@@ -25,10 +26,13 @@ from interpreter.hlasm.dc_exponent_out_of_range import DcExponentOutOfRange
 from interpreter.hlasm.dc_value_out_of_range import DcValueOutOfRange
 from interpreter.hlasm.external_slot import ExternalSlot
 from interpreter.hlasm.unsupported_data_type import UnsupportedDataType
+from interpreter.project.relocation_kind import RelocationKind
+from interpreter.project.relocation_name import RelocationName
 
 ORIGIN = MacroOrigin(kind="MACRO", file="src/t.asm", line=7, macro="GEN", depth=1)
 FIELD = RelocAddress(kind="RELOC", section="HELLO", offset=8)
 NEXT = RelocAddress(kind="RELOC", section="HELLO", offset=12)
+PSEUDO_REGISTER = RelocAddress(kind="RELOC", section="PRA", offset=0)
 
 
 def _item(
@@ -140,7 +144,7 @@ def test_encodes_character_hex_binary_fixed_packed_zoned():
     ]
 
 
-def test_address_constants_are_absolute_relocated_or_external():
+def test_address_constants_are_absolute_relocated_external_or_bound_by_name():
     items = (
         _address_item("A", (FIELD, AbsAddress(kind="ABS", value=8)), 4),
         _address_item("A", (AbsAddress(kind="ABS", value=-1),), 2, True),
@@ -149,6 +153,9 @@ def test_address_constants_are_absolute_relocated_or_external():
         _address_item(
             "V", (ExternalAddress(kind="EXTERNAL", name="EXTRN", offset=0),), 4
         ),
+        _address_item("Q", (PSEUDO_REGISTER,), 4),
+        _address_item("Q", (PSEUDO_REGISTER,), 8).model_copy(update={"extension": "D"}),
+        _address_item("J", (PSEUDO_REGISTER,), 2, explicit_length=True),
         _address_item("A", (), 4).model_copy(
             update={
                 "duplication": 2,
@@ -164,6 +171,9 @@ def test_address_constants_are_absolute_relocated_or_external():
         (AddressSlot(FIELD, 3),),
         (AddressSlot(FIELD, 2),),
         (ExternalSlot(ExternalAddress(kind="EXTERNAL", name="EXTRN", offset=0), 4),),
+        (BinderSlot(RelocationKind.PR_OFFSET, RelocationName("PRA"), 4),),
+        (BinderSlot(RelocationKind.PR_OFFSET, RelocationName("PRA"), 8),),
+        (BinderSlot(RelocationKind.CLASS_LENGTH, RelocationName("PRA"), 2),),
         (AddressSlot(FIELD, 4), AddressSlot(NEXT, 4)),
     ]
 
@@ -344,8 +354,7 @@ def test_doubleword_character_set_and_base_displacement_types():
 @pytest.mark.parametrize(
     ("type_", "extension", "message"),
     [
-        ("Q", "", "DC type Q is not supported yet — red-dragon-6uyp.96"),
-        ("J", "", "DC type J is not supported yet — red-dragon-6uyp.96"),
+        ("Q", "Y", "DC type QY is not supported yet — red-dragon-6uyp.103"),
         ("G", "", "DC type G is not supported yet — red-dragon-6uyp.63"),
         ("R", "", "DC type R is not supported yet — red-dragon-6uyp.63"),
         ("X", "A", "DC type XA is not supported yet — red-dragon-6uyp.63"),

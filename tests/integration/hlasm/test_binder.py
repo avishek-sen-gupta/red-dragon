@@ -1,5 +1,5 @@
 # pyright: standard
-"""Images of several HLASM modules: a V-constant reaches a later module's ENTRY and its data, the first unit is entered at its own END though another module ends at the same label and two are private code alone, the job step hands the program its PARM, a linking branch to an unresolved EXTRN calls it by name, a CSECT named in two units is refused, and run() hands the job step an empty PARM."""
+"""Images of several HLASM modules: a V-constant reaches a later module's ENTRY and its data, the first unit is entered at its own END though another module ends at the same label and two are private code alone, the job step hands the program its PARM, a linking branch to an unresolved EXTRN calls it by name, a CSECT named in two units is refused, run() hands the job step an empty PARM, and two modules share external dummy sections through Q, J and CXD in an area the program GETMAINs."""
 
 import logging
 from pathlib import Path
@@ -25,7 +25,12 @@ from interpreter.var_name import VarName
 from interpreter.vm.builtins import compose_builtins, core_builtins
 from interpreter.vm.vm_types import SymbolicValue, VMState
 from tests.covers import NotLanguageFeature, covers
-from tests.integration.hlasm.hlasm_helpers import MAX_STEPS, gpr, hlasm_run_of
+from tests.integration.hlasm.hlasm_helpers import (
+    MAX_STEPS,
+    gpr,
+    hlasm_run_of,
+    run_hlasm_machine,
+)
 from tests.integration.hlasm.hlasm_run import HlasmRun
 
 CALLER = b"""\
@@ -193,3 +198,73 @@ def test_run_hands_the_job_step_an_empty_parm():
         HlasmRun(return_code=0, abend="", stdout=""),
         [0] * 5,
     )
+
+
+PSEUDO_REGISTER_OWNER = """\
+MAIN     CSECT
+         LR    12,15
+         USING MAIN,12
+         LR    11,14
+         L     0,TOTAL
+         GETMAIN RU,LV=(0)
+         LR    10,1
+         L     2,QCOUNT
+         LA    3,7
+         ST    3,0(2,10)
+         L     15,=V(SUB)
+         BALR  14,15
+         L     2,QCOUNT
+         L     3,QBIG
+         SR    9,9
+         IC    9,0(3,10)
+         L     5,TOTAL
+         L     6,QFLAG
+         L     7,JCOUNT
+         L     8,QBIG
+         L     15,0(2,10)
+         LR    14,11
+         BR    14
+QCOUNT   DC    Q(COUNT)
+QFLAG    DC    Q(FLAG)
+QBIG     DC    Q(BIG)
+JCOUNT   DC    J(COUNT)
+TOTAL    CXD
+COUNT    DXD   F
+FLAG     DXD   C
+BIG      DXD   C
+         END   MAIN
+"""
+PSEUDO_REGISTER_USER = b"""\
+SUB      CSECT
+         USING SUB,15
+         L     2,QCOUNT
+         L     3,0(2,10)
+         LA    3,5(,3)
+         ST    3,0(2,10)
+         L     2,QBIG
+         LA    4,0(2,10)
+         MVI   0(4),X'AB'
+         BR    14
+QCOUNT   DC    Q(COUNT)
+QBIG     DC    Q(BIG)
+COUNT    DXD   2F
+BIG      DXD   D
+         END
+"""
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_two_modules_share_external_dummy_sections_in_an_area_the_program_getmains():
+    machine = run_hlasm_machine(
+        PSEUDO_REGISTER_OWNER,
+        programs=(SourceFile(Path("SUB.asm"), PSEUDO_REGISTER_USER),),
+    )
+
+    assert machine.run == HlasmRun(return_code=12, abend="", stdout="")
+    assert [machine.gprs[r] & LOW_WORD for r in (5, 6, 7, 8, 9)] == [
+        24,
+        8,
+        8,
+        16,
+        0xAB,
+    ]

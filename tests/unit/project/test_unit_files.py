@@ -25,7 +25,9 @@ from interpreter.project.in_open_code import InOpenCode
 from interpreter.project.ir_codec import IrCodec
 from interpreter.project.linked_codec import LinkedCodec
 from interpreter.project.object_module import ObjectModule
+from interpreter.project.no_relocation_target import NoRelocationTarget
 from interpreter.project.relocation_kind import RelocationKind
+from interpreter.project.relocation_name import RelocationName
 from interpreter.project.relocation_record import RelocationRecord
 from interpreter.project.relocation_sign import RelocationSign
 from interpreter.project.severity_mnote import SeverityMnote
@@ -75,9 +77,18 @@ def test_a_unit_round_trips_through_its_file(tmp_path):
                         4,
                         4,
                         RelocationKind.PR_OFFSET,
-                        "PR",
+                        RelocationName("PR"),
                         RelocationSign.MINUS,
                         2,
+                    ),
+                    RelocationRecord(
+                        "",
+                        0,
+                        4,
+                        RelocationKind.PR_TOTAL,
+                        NoRelocationTarget(),
+                        RelocationSign.PLUS,
+                        0,
                     ),
                 ),
                 end=DefaultEnd(""),
@@ -148,7 +159,7 @@ def test_a_linked_file_of_format_7_is_refused_naming_itself(tmp_path):
     )
     with pytest.raises(UnitFormatError) as refused:
         LinkedCodec(IrCodec()).read(path)
-    assert str(refused.value) == f"{path}: not a linked-program file of format 8"
+    assert str(refused.value) == f"{path}: not a linked-program file of format 9"
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
@@ -160,4 +171,4 @@ def test_a_unit_file_of_format_7_is_refused_naming_itself(tmp_path):
     )
     with pytest.raises(UnitFormatError) as refused:
         UnitCodec(IrCodec()).read(path)
-    assert str(refused.value) == f"{path}: not a unit file of format 8"
+    assert str(refused.value) == f"{path}: not a unit file of format 9"

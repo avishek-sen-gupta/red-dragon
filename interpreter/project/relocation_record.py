@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from interpreter.project.relocation_kind import RelocationKind
 from interpreter.project.relocation_sign import RelocationSign
+from interpreter.project.relocation_target import RelocationTarget
 
 
 @dataclass(frozen=True)
@@ -13,6 +14,6 @@ class RelocationRecord:
     offset: int
     length: int
     kind: RelocationKind
-    target: str
+    target: RelocationTarget
     sign: RelocationSign
     addend: int

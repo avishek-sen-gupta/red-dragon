@@ -1,5 +1,5 @@
 # pyright: standard
-"""The names of an image: each module's layout, the common sections, what every name binds to, the stubs of COBOL programs and unresolved EXTRNs, the job-step entry points and the far-branch table."""
+"""The names of an image: each module's layout, the common sections, the pseudo-register area (external dummy sections merged by name at their largest length and strictest alignment, laid out in first appearance), what every name binds to, the stubs of COBOL programs and unresolved EXTRNs, the job-step entry points and the far-branch table."""
 
 from collections.abc import Mapping, Sequence
 from functools import cached_property
@@ -15,6 +15,7 @@ from interpreter.hlasm.image_module import ImageModule
 from interpreter.hlasm.module_layout import ModuleLayout
 from interpreter.hlasm.module_owner import ModuleOwner
 from interpreter.hlasm.placed_name import PlacedName
+from interpreter.hlasm.pseudo_register import PseudoRegister
 from interpreter.hlasm.stub_name import StubName
 from interpreter.hlasm.unknown_relocation_target import UnknownRelocationTarget
 from interpreter.hlasm.unresolved_owner import UnresolvedOwner
@@ -31,6 +32,7 @@ from interpreter.project.external_dummy_section import ExternalDummySection
 from interpreter.project.external_reference import ExternalReference
 from interpreter.project.named_end import NamedEnd
 from interpreter.project.relocation_kind import RelocationKind
+from interpreter.project.relocation_name import RelocationName
 from interpreter.project.unit_diagnostic import UnitDiagnostic
 from interpreter.project.unresolved_external import UnresolvedExternal
 from interpreter.project.weak_reference import WeakReference
@@ -76,21 +78,29 @@ def _ended(module: ImageModule) -> PlacedName:
             return PlacedName(module.name, default, 0)
 
 
-def _refuse_unsupported(module: ImageModule) -> None:
+def _refuse_unsupported(module: ImageModule, dummies: frozenset[str]) -> None:
     unsupported = [
-        *(
-            f"XD {r.name}"
-            for r in module.object_module.esd
-            if isinstance(r, ExternalDummySection)
-        ),
-        *(
-            f"{r.kind.value} relocation"
-            for r in module.object_module.relocations
-            if r.kind != RelocationKind.ADDRESS
-        ),
+        f"J-constant naming {r.target.name}"
+        for r in module.object_module.relocations
+        if r.kind == RelocationKind.CLASS_LENGTH
+        and isinstance(r.target, RelocationName)
+        and r.target.name not in dummies
     ]
     if unsupported:
         raise UnsupportedBinding(unsupported[0], module.name)
+
+
+def _merged(
+    dummies: Sequence[ExternalDummySection],
+) -> tuple[ExternalDummySection, ...]:
+    return tuple(
+        ExternalDummySection(
+            name,
+            max(d.length for d in dummies if d.name == name),
+            max(d.alignment for d in dummies if d.name == name),
+        )
+        for name in dict.fromkeys(d.name for d in dummies)
+    )
 
 
 def _named_files(
@@ -131,9 +141,42 @@ class Binder:
         programs: Sequence[CobolProgram],
     ) -> None:
         _refuse_duplicates(modules, programs)
-        _ = [_refuse_unsupported(module) for module in modules]
         self.modules = tuple(modules)
         self.programs = {program.name: program for program in programs}
+        dummies = frozenset(self.pseudo_registers)
+        _ = [_refuse_unsupported(module, dummies) for module in modules]
+
+    @cached_property
+    def _dummies(self) -> tuple[ExternalDummySection, ...]:
+        return _merged(
+            [
+                r
+                for module in self.modules
+                for r in module.object_module.esd
+                if isinstance(r, ExternalDummySection)
+            ]
+        )
+
+    @cached_property
+    def _dummy_ends(self) -> tuple[int, ...]:
+        return tuple(
+            accumulate(
+                self._dummies,
+                lambda end, d: aligned(end, d.alignment) + d.length,
+                initial=0,
+            )
+        )
+
+    @cached_property
+    def pseudo_registers(self) -> Mapping[str, PseudoRegister]:
+        return {
+            d.name: PseudoRegister(aligned(end, d.alignment), d.length)
+            for d, end in zip(self._dummies, self._dummy_ends, strict=False)
+        }
+
+    @cached_property
+    def pseudo_register_total(self) -> int:
+        return self._dummy_ends[-1]
 
     @cached_property
     def layouts(self) -> Mapping[str, ModuleLayout]:
