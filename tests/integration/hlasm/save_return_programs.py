@@ -8,6 +8,7 @@ CALLER = (
     "         BASR  11,0\n"
     "         USING *,11\n"
     "         LA    13,AREA\n"
+    "         LA    0,100\n"
     "         LA    2,102\n"
     "         LA    3,103\n"
     "         LA    4,104\n"
@@ -26,14 +27,13 @@ CALLER = (
     "         ABEND 1\n"
     "SUB      DS    0H\n"
     "{body}"
-    "AREA     DC    18F'0'\n"
+    "AREA     DC    24F'0'\n"
     "         END\n"
 )
 CLOBBER = (
     "         LA    2,1\n         LA    3,1\n         LA    4,1\n         LA    5,1\n"
 )
-FLAG_REGISTER = 6
-CHECKED = (2, 3, 4, 5, 6, 7, 9, 15)
+CHECKED = (0, 2, 3, 4, 5, 6, 7, 9, 15)
 MARKERS = {2: 102, 3: 103, 4: 104, 5: 105}
 FLAGGED = 1
 
@@ -45,32 +45,50 @@ SUB_CASES: Mapping[str, SubCase] = {
         + CLOBBER
         + "         LA    15,9\n"
         + "         RETURN (14,12),T,RC=7\n",
-        {**MARKERS, 6: FLAGGED, 7: 0, 9: 5, 15: 7},
+        {**MARKERS, 0: 100, 6: FLAGGED, 7: 0, 9: 5, 15: 7},
     ),
     "rc_register_keeps_r15": (
         "         SAVE  (14,12)\n"
         + CLOBBER
         + "         LA    15,9\n"
         + "         RETURN (14,12),RC=(15)\n",
-        {**MARKERS, 6: 0, 7: 0, 9: 5, 15: 9},
+        {**MARKERS, 0: 100, 6: 0, 7: 0, 9: 5, 15: 9},
     ),
     "no_rc_reloads_r15": (
         "         SAVE  (14,12)\n"
         + CLOBBER
         + "         LA    15,9\n"
         + "         RETURN (14,12)\n",
-        {**MARKERS, 6: 0, 7: 0, 9: 5, 15: 5},
+        {**MARKERS, 0: 100, 6: 0, 7: 0, 9: 5, 15: 5},
     ),
     "partial_range_with_t_saves_14_15": (
         "         SAVE  (2,5),T\n"
         + CLOBBER
         + "         LA    15,9\n"
         + "         RETURN (2,5),T,RC=(15)\n",
-        {**MARKERS, 6: FLAGGED, 7: 0, 9: 5, 15: 9},
+        {**MARKERS, 0: 100, 6: FLAGGED, 7: 0, 9: 5, 15: 9},
+    ),
+    "range_ending_at_r15_keeps_r15": (
+        "         SAVE  (14,15)\n"
+        + CLOBBER
+        + "         LA    15,9\n"
+        + "         RETURN (14,15),RC=(15)\n",
+        {0: 100, 2: 1, 3: 1, 4: 1, 5: 1, 6: 0, 7: 0, 9: 5, 15: 9},
     ),
     "range_from_r0": (
         "         SAVE  (0,12)\n" + CLOBBER + "         RETURN (0,12),RC=2\n",
-        {**MARKERS, 6: 0, 7: 0, 9: 0, 15: 2},
+        {**MARKERS, 0: 100, 6: 0, 7: 0, 9: 0, 15: 2},
+    ),
+}
+
+VM_ONLY_CASES: Mapping[str, SubCase] = {
+    "wrapped_range_not_from_14_restores_r0": (
+        "         SAVE  (3,1)\n"
+        + CLOBBER
+        + "         LA    0,1\n"
+        + "         LA    15,9\n"
+        + "         RETURN (3,1),RC=(15)\n",
+        {**MARKERS, 0: 100, 2: 1, 6: 0, 7: 0, 9: 0, 15: 9},
     ),
 }
 
@@ -83,22 +101,26 @@ def machine_view(gprs: Mapping[int, int]) -> Mapping[int, int]:
     return {r: gprs[r] & 0xFFFFFFFF for r in CHECKED}
 
 
-STANDARD = (
-    "         YREGS\n"
-    "MAIN     CSECT\n"
-    "         J     GO\n"
-    "SA       DS    18F\n"
-    "GO       SAVE  (R14,R12),T,*\n"
-    "         LR    R12,R15\n"
-    "         USING MAIN,R12\n"
-    "         ST    R13,SA+4\n"
-    "         LA    R2,SA\n"
-    "         ST    R2,8(,R13)\n"
-    "         LR    R13,R2\n"
-    "         L     R13,4(,R13)\n"
-    "         RETURN (R14,R12),T,RC=7\n"
-    "         END   MAIN\n"
-)
+def standard(label: str) -> str:
+    return (
+        "         YREGS\n"
+        "MAIN     CSECT\n"
+        f"{label:<9}SAVE  (R14,R12),T,*\n"
+        "         LR    R12,R15\n"
+        "         USING MAIN,R12\n"
+        "         ST    R13,SA+4\n"
+        "         LA    R2,SA\n"
+        "         ST    R2,8(,R13)\n"
+        "         LR    R13,R2\n"
+        "         L     R13,4(,R13)\n"
+        "         RETURN (R14,R12),T,RC=7\n"
+        "SA       DS    18F\n"
+        "         END   MAIN\n"
+    )
+
+
+ID_START = 4
+IDENTIFIERS = {"ENTRYX": "ENTRYX", "": "MAIN"}
 
 NESTED = (
     "         YREGS\n"
@@ -133,21 +155,41 @@ NESTED = (
     "         END   MAIN\n"
 )
 NESTED_SPAN = (4, 156)
-SA_BACK_CHAIN = 4
-SA_FORWARD_CHAIN = 8
-SA_RETURN = 12
-ISA_OFFSET = 76
-SAVED_ID_OFFSET = 84
-STANDARD_SAVE_SPAN = (76, 94)
+SA_BACK_CHAIN_WORD = 8
+SA_FORWARD_CHAIN_WORD = 12
+ISA_BACK_CHAIN_WORD = 80
+SAVED_R14_WORD = 16
+SAVED_R2_WORD = 32
+SAVED_R3_WORD = 36
+KEEP_WORD = 148
+BASE_WORD = 152
+ISA_FROM_BASE = 76
+SA_FROM_BASE = 4
+
+
+def _long_identifier() -> str:
+    first = "         SAVE  (14,12),,"
+    cut = 71 - len(first)
+    return first + "A" * cut + "X\n" + " " * 15 + "A" * (71 - cut) + "\n"
+
+
 BAD_OPERANDS = (
     "MAIN     CSECT\n"
     "         SAVE  (14,99)\n"
     "         RETURN (14,12),RC=(3)\n"
     "         SAVE  (14,12),X\n"
-    "         END\n"
+    "         RETURN RC=(3)\n"
+    "         RETURN ,X\n"
+    "         SAVE  (14,12,3)\n"
+    "         RETURN (14,12,3)\n" + _long_identifier() + "         END\n"
 )
 BAD_OPERAND_REFUSALS = (
     ("SAVE: INVALID REGISTER", 2),
     ("RETURN: RC REGISTER MUST BE 15", 3),
     ("SAVE: SECOND OPERAND MUST BE T", 4),
+    ("RETURN: RC REGISTER MUST BE 15", 5),
+    ("RETURN: SECOND OPERAND MUST BE T", 6),
+    ("SAVE: REGISTER RANGE MISSING OR TOO LONG", 7),
+    ("RETURN: REGISTER RANGE TOO LONG", 8),
+    ("SAVE: IDENTIFIER LONGER THAN 70 CHARACTERS", 9),
 )

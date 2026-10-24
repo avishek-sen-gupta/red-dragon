@@ -27,9 +27,9 @@ def _word(stored: bytes, offset: int, start: int) -> int:
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-@pytest.mark.parametrize("case", list(programs.SUB_CASES))
+@pytest.mark.parametrize("case", [*programs.SUB_CASES, *programs.VM_ONLY_CASES])
 def test_save_and_return_restore_the_registers_they_cover(case: str):
-    body, expected = programs.SUB_CASES[case]
+    body, expected = {**programs.SUB_CASES, **programs.VM_ONLY_CASES}[case]
 
     ran = run_hlasm_machine(programs.caller(body))
 
@@ -37,12 +37,20 @@ def test_save_and_return_restore_the_registers_they_cover(case: str):
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_standard_entry_and_exit_with_an_identifier_and_the_returned_code():
-    ran, stored = run_hlasm_storage(programs.STANDARD, "MAIN", (0, 100))
+@pytest.mark.parametrize("label", list(programs.IDENTIFIERS))
+def test_the_identifier_follows_a_branch_at_entry_and_names_the_label_or_csect(
+    label: str,
+):
+    name = programs.IDENTIFIERS[label]
+    ran, stored = run_hlasm_storage(
+        programs.standard(label),
+        "MAIN",
+        (programs.ID_START, programs.ID_START + 1 + len(name)),
+    )
 
-    assert (ran.run, stored[84:89]) == (
+    assert (ran.run, stored) == (
         HlasmRun(7, "", ""),
-        b"\x04" + "MAIN".encode("cp037"),
+        bytes([len(name)]) + name.encode("cp037"),
     )
 
 
@@ -51,24 +59,34 @@ def test_a_nested_subroutine_chains_through_its_own_save_area():
     start, _ = programs.NESTED_SPAN
     ran, stored = run_hlasm_storage(programs.NESTED, "MAIN", programs.NESTED_SPAN)
     word = partial(_word, stored, start=start)
-    base = word(152)
-    caller_area = word(8)
+    base = word(programs.BASE_WORD)
+    keep = word(programs.KEEP_WORD)
+    caller_area = word(programs.SA_BACK_CHAIN_WORD)
 
     assert (
         ran.run,
         ran.gprs[13] & LOW_WORD,
-        [word(o) for o in (8, 12, 16, 32, 36, 80, 148)],
+        [
+            word(o)
+            for o in (
+                programs.SA_BACK_CHAIN_WORD,
+                programs.SA_FORWARD_CHAIN_WORD,
+                programs.SAVED_R14_WORD,
+                programs.SAVED_R2_WORD,
+                programs.SAVED_R3_WORD,
+                programs.ISA_BACK_CHAIN_WORD,
+            )
+        ],
     ) == (
         HlasmRun(3, "", ""),
         caller_area,
         [
             caller_area,
-            base + 76,
-            AMODE_31 | word(148),
-            base + 4,
+            base + programs.ISA_FROM_BASE,
+            AMODE_31 | keep,
+            base + programs.SA_FROM_BASE,
             33,
-            base + 4,
-            word(148),
+            base + programs.SA_FROM_BASE,
         ],
     )
 
