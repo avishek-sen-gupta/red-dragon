@@ -6,6 +6,7 @@ from functools import partial
 import pytest
 
 from hlasm_asg.hlasm_parse_error import HlasmParseError
+from hlasm_asg.program.mnote_level import MnoteLevel
 from tests.covers import NotLanguageFeature, covers
 from tests.integration.hlasm import save_return_programs as programs
 from tests.integration.hlasm.hlasm_helpers import (
@@ -78,5 +79,8 @@ def test_bad_operands_refuse_the_assembly_with_severity_8():
         run_hlasm(programs.BAD_OPERANDS)
 
     assert [
-        (d.message, d.related[0].line, d.mnote.level) for d in refused.value.diagnostics
-    ] == [(m, line, 8) for m, line in programs.BAD_OPERAND_REFUSALS]
+        (d.message, d.related[0].line, d.mnote) for d in refused.value.diagnostics
+    ] == [
+        (m, line, MnoteLevel(kind="LEVEL", level=8))
+        for m, line in programs.BAD_OPERAND_REFUSALS
+    ]
