@@ -11,6 +11,7 @@ from interpreter.frontends import get_hlasm_parser
 from interpreter.hlasm_run_inputs.job_parm_builtins import NO_PARM
 from interpreter.hlasm_run_inputs.run_input_builtins import run_input_builtins
 from interpreter.ir import NO_LABEL
+from interpreter.project.cobol_compile import link_units
 from interpreter.project.coprocessor_compile import lower_program
 from interpreter.project.duplicate_program_in_image import DuplicateProgramInImage
 from interpreter.project.hlasm_compile import link_hlasm_units, lower_hlasm_program
@@ -383,17 +384,26 @@ def test_an_hlasm_abend_ends_the_run_unit_under_a_cobol_caller(tmp_path: Path):
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_an_image_without_hlasm_has_no_default_entry_and_runs_by_name(
+def test_an_image_without_hlasm_has_no_default_entry_runs_by_name_and_keeps_apart_from_cobols(
     tmp_path: Path, capsys
 ):
-    image = link_hlasm_units(_cobol(COBOL_SAYS, tmp_path), tmp_path)
+    units = _cobol(COBOL_SAYS, tmp_path)
+    link_units(units, tmp_path)
+    image = link_hlasm_units(units, tmp_path)
     capsys.readouterr()
 
     _entered(image, "COBMAIN")
 
-    assert (image.entry_func_label, capsys.readouterr().out) == (
+    assert (
+        image.entry_func_label,
+        capsys.readouterr().out,
+        [path.name for path in image.modules],
+        [path.name for path in link_units(units, tmp_path).modules],
+    ) == (
         NO_LABEL,
         "IN COBOL\n",
+        ["__cobol_start_up__", "__start_up__", "COBMAIN.cbl", "__hlasm_job__"],
+        ["__start_up__", "COBMAIN.cbl"],
     )
 
 

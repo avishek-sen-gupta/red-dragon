@@ -205,7 +205,7 @@ writes these files to the work directory, each skipped when it already exists:
 |---|---|
 | `<stem>-<digest>.ast.json` | The bridge's program JSON, per assembly |
 | `<stem>-<digest>.unit.json` | The lowered `ModuleUnit`; `program` is the END entry name |
-| `image-<digest>.linked.json` | The image: start-up module, the units, the job-step module |
+| `hlasm-image-<digest>.linked.json` | The image: start-up module, the units, the job-step module |
 
 The main source is `__main__.asm`; each of `programs` keeps its own path.
 `link_hlasm_units(units, work_dir)` links unit files already lowered. A second compile of

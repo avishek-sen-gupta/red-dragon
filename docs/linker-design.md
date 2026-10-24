@@ -474,7 +474,8 @@ linking apart (ADR-185):
 
 `compile_hlasm(source, *, parser, options, work_dir, programs=())` (`hlasm_compile.py`) runs
 the same three stages per assembly: `<stem>-<digest>.ast.json`, `<stem>-<digest>.unit.json`,
-then one `image-<digest>.linked.json`. The digest covers the source, the SYSLIB directories
+then one `hlasm-image-<digest>.linked.json` (its own stem, so `link_units` over the same units
+in the same directory never reads it). The digest covers the source, the SYSLIB directories
 and their file contents, the bridge binary and the supplied system-variable values, but not
 the assembly clock (`HlasmLoweringSettings`). `lower_hlasm_program(program)` stops at the unit
 file, named after the `SourceFile`'s path; `link_hlasm_units(units, work_dir)` links unit

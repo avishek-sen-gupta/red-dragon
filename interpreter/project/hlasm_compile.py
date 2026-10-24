@@ -168,7 +168,7 @@ def _link(units: Sequence[Path]) -> LinkedProgram:
 def _linked(units: Sequence[Path], work_dir: Path) -> LinkedProgram:
     names = "\0".join(path.name for path in units)
     digest = hashlib.sha256(names.encode("utf-8")).hexdigest()
-    target = work_dir / f"image-{digest}.linked.json"
+    target = work_dir / f"hlasm-image-{digest}.linked.json"
     codec = LinkedCodec(IrCodec())
     if not target.exists():
         codec.write(_link(units), target)
