@@ -52,7 +52,7 @@ addresses.
 | `interpreter/hlasm/assembly_diagnostics.py` | The unit's diagnostics below error level (che4z warnings and MNOTEs, DC conversion warnings) as `UnitDiagnostic`s |
 | `interpreter/project/hlasm_compile_options.py` | `HlasmCompileOptions(names, clock)`: the inputs `compile_hlasm` takes; `clock` is an `AssemblyClock` (`hlasm_asg/assembly_clock.py`; COBOL's `CompileClock`, which the import contracts keep from `interpreter.project`), `SystemAssemblyClock` by default |
 | `interpreter/frontends/__init__.py` | `get_hlasm_parser(syslib)`: the bridge parser with `hlasm-bridge/maclib/` first on SYSLIB |
-| `hlasm-bridge/maclib/` | Our macros: `WTO`, `ABEND`, `SAVE`, `RETURN`, `YREGS`, `GETMAIN`, `FREEMAIN`, `STORAGE`, `TIME`, `DCB`, `DCBD`, and their `RD*` helpers |
+| `hlasm-bridge/maclib/` | Our macros: `WTO`, `ABEND`, `SAVE`, `RETURN`, `YREGS`, `GETMAIN`, `FREEMAIN`, `STORAGE`, `TIME`, `DCB`, `DCBD`, `OPEN`, `CLOSE`, `GET`, `PUT`, and their `RD*` helpers |
 | `hlasm_asg/program/` | The bridge JSON models, one class per file. A D(X,B) storage operand also carries its address as written (`written`): the section and offset of an implicit address, before USING resolution, or the absolute displacement. Each DC/DS operand carries its offset and bit offset from che4z's location counter, its length unit (bytes, or bits for `L.n`), scale and exponent. `*` is the address of each constant: an address operand that names the location counter is exported per duplication copy (`ADDRESSES_PER_COPY`), each value evaluated at its own address. An S-constant is a base and displacement resolved through USING. `DC 0F` has an `OMITTED` nominal. CCW, CCW0 and CCW1 are statements with their command code, address, flags and count. Each literal carries the origin of the statement that first used it, a CCW's literals included. The program lists AMODE and RMODE statements, and each diagnostic its macro call stack (`related`) |
 | `interpreter/hlasm/hlasm_frontend.py` | `HlasmFrontend(program, module)`: `lower()`, `object_module`, `entry_name`, `entry_label` |
 | `interpreter/hlasm/machine.py` | GPR region (`__hlasm_gprs`, 8 bytes per register), `__hlasm_cc`, `__hlasm_pm`, `__hlasm_tod_last` (the last STCK value); the access-register region (`__hlasm_ars`, 4 bytes per register, all 0); the vector-register region (`__hlasm_vrs`, 16 bytes per register, all 0) and `__hlasm_fpc`, allocated after the sections so their addresses do not move |
@@ -61,8 +61,10 @@ addresses.
 | `interpreter/hlasm/binder.py`, `binder_start_up.py`, `job_step.py`, `image_binding.py`, `far_branch.py`, `unresolved_call.py` | The binder and the far branch (see Binder, Control Across Modules) |
 | `interpreter/hlasm/cobol_linkage.py`, `cobol_program.py`, `cobol_owner.py` | Calls between COBOL and HLASM (see COBOL Linkage) |
 | `interpreter/hlasm/program_services.py` | SVC 6, 8 and 9: LINK, LOAD, DELETE |
+| `interpreter/hlasm/data_set_services.py` | SVC 19, 20, 200 and 201: OPEN, CLOSE, GET, PUT over the COBOL file provider |
 | `interpreter/hlasm_run_inputs/` | The HLASM run inputs, a sibling of `interpreter.hlasm` so `run()` can import it (the import contracts keep `interpreter.run` from `interpreter.hlasm`): `run_input_names.py` (builtin names, PARM area sizes), `run_input_builtins.py` (`run_input_builtins(clock, parm, dds)`; `unsupplied_run_input_builtins()`, the host clock, an empty PARM and no DDs, which `run()` adds under any builtins it is given) |
 | `interpreter/hlasm_run_inputs/dd_definition.py`, `record_format.py`, `dd_builtins.py` | `DdDefinition(path, recfm, lrecl, blksize)`, one per DDNAME; `dd_builtins(dds)`: `__hlasm_dd(name)` answers `[1, RECFM byte, LRECL, BLKSIZE]`, 0 where not given, or zeros for a DDNAME not supplied |
+| `interpreter/hlasm_run_inputs/declare_file_builtins.py` | `declare_file_builtins()`: `__hlasm_declare_file(ddname, variable, record_length)` declares the provider's sequential `FileFrame` for OPEN. It imports `interpreter.cobol`, so `run()` cannot compose it; callers do |
 | `interpreter/hlasm_run_inputs/job_parm_builtins.py` | `job_parm_builtins(parm)`: the job-step PARM, a run input of at most 100 characters (`ParmTooLong`), as a halfword length and EBCDIC text through `EbcdicTable`; a character it has no code for raises `ParmNotEncodable` |
 | `interpreter/hlasm/dc_encoding.py` | DC images: C, CA, CE, CU, X, B, F, FD, H, P, Z, A, AD, Y, V, VD, S, SY, and E, D, L with their extensions through `floating_point_constant.py`. Each operand is placed at the offset che4z exported; Python has no alignment table of its own, and alignment bytes inside a DC are zero. F, FD and H take fractions, a written exponent, the exponent and scale modifiers and the U prefix, and the scaled value is rounded to a whole number. A negative value rounds on its magnitude (-1.5 is -2); that is our reading of the Language Reference, which does not say. A written exponent that, with the exponent modifier, falls outside -85 to +75 raises `DcExponentOutOfRange` (ASMA071E) before any arithmetic. A value outside its length raises `DcValueOutOfRange` with the statement's line (ASMA072E); a literal gives the line that first used it. Y accepts -32768 to 65535 (a halfword read as signed or unsigned) and refuses anything else the same way, while A truncates at the left as IBM specifies. An S-constant in a literal resolves through the USING in force where its pool is assembled, whichever LOCTR the pool lands in. `*` in a literal is the instruction's address in every copy. Bit-length operands (`L.n`) pack from che4z's bit offset, each value in the next free bits (C, E, D and L from their high-order end, other types from the low-order end) and the last byte zero-filled. CCW and CCW0 are format-0 channel command words (24-bit address), CCW1 format 1 (31-bit); a relocatable or external data address is an RLD like an A-constant |
 | `interpreter/hlasm/entry_state.py` | Entry resolution and entry registers (R14 = `0xFF0` return sentinel, R13 = 72-byte save area, R15 = entry address, R1 = parameter list), set by the job step |
@@ -420,6 +422,9 @@ conventions but expand only to lowered opcodes:
 | `DELETE EP=\|EPLOC=` | R0 as LOAD; `SVC 9` |
 | `DCB DSORG=PS,MACRF=,RECFM=,LRECL=,BLKSIZE=,DDNAME=,EODAD=,SYNAD=` | 96 bytes at IBM's offsets: DSORG 26 (PS X'40'), EODAD 33 (3 bytes, 1 when omitted, as IBM), RECFM 36 (F X'80', FB X'90', V X'40', VB X'50'), DDNAME 40, OFLGS 48, MACRF 50 (GM X'5000', GL X'4800', PM X'0050', PL X'0048', summed over a list), SYNAD 57, BLKSIZE 62, LRECL 82 |
 | `DCBD` | DSECT `IHADCB`: `DCBDSORG`, `DCBEODAD`/`DCBEODA`, `DCBRECFM`, `DCBEXLSA`, `DCBDDNAM`, `DCBOFLGS`, `DCBMACRF`, `DCBSYNAD`/`DCBSYNA`, `DCBBLKSI`, `DCBLRECL`; `DCBDSGPS`, `DCBRECF`, `DCBRECV`, `DCBRECBR`, `DCBOFOPN` (X'10'). Operands are ignored |
+| `OPEN (dcb,(opt),...)` | `CNOP 0,4`, `BRAS 1` over the list `AL1(opt),AL3(dcb)`, X'80' on the last option; INPUT 0, OUTPUT 15, EXTEND 14; `SVC 19` |
+| `CLOSE (dcb,,...)` | The same list with option 0; `SVC 20` |
+| `GET dcb[,area]`, `PUT dcb[,area]` | R1 → the DCB, R0 → the area (`LA`, or `LR` for `(r)`); `LARL 14` past the SVC and `OILH 14,X'8000'`, as a BALR in AMODE 31 leaves it; `SVC 200` / `SVC 201` |
 
 `LOC` is accepted and ignored: storage is never constrained below 16 MB. `BNDRY` is `DBLWD`
 or `PAGE`, and `PAGE` only on the SVC 120 forms. Missing `LV`, `LENGTH`, `A` or `ADDR`,
@@ -430,15 +435,17 @@ other than `L` or `(E,list)`, `MF=L` without a list, a missing entry or a bad re
 other than 1; and on LINK, LOAD and DELETE, no `EP` or `EPLOC`, both, an `EP` over 8 characters,
 or an `EPLOC` register outside 2-12 (IBM's range). On DCB, `DSORG` other than `PS`, `MACRF` other than
 `GM`, `GL`, `PM`, `PL`, `RECFM` other than `F`, `FB`, `V`, `VB`, and a self-defining `EODAD` or `SYNAD`
-at or above 2^24 (they are 3-byte fields) are `MNOTE 8`.
+at or above 2^24 (they are 3-byte fields) are `MNOTE 8`, and so is an OPEN option other than
+`INPUT`, `OUTPUT` or `EXTEND`.
 
 Registers may be numbers or `Rn`. A bad register, a third range entry, a second operand other than `T`, or
 an `RC` register other than 15 is an `MNOTE 8`, which refuses the assembly. Save areas
 are the 72-byte format-0 area. The differential tests run against z390's `mac/` library, whose `SAVE` and `RETURN` ignore `T` and the
 identifier, so they expect its flag and R14/R15 slots to differ; the identifier layout rests on the VM tests.
 
-SVCs are lowered in IR over existing builtins; no SVC has a builtin of its own. The
-services use the table membership builtin, the string builtins and the TOD clock builtin.
+SVCs are lowered in IR over existing builtins. The services use the table membership
+builtin, the string and list builtins, the TOD clock builtin, the COBOL file provider's
+primitives, `__hlasm_dd` and `__hlasm_declare_file`.
 
 - **SVC 35** reads the text length from the list at R1, copies the text a byte at a
   time, decodes it from EBCDIC and writes it as one line with `println`.
@@ -478,6 +485,28 @@ services use the table membership builtin, the string builtins and the TOD clock
   `X'00806000'` and R15 4 (806, reason 04, "not found"); without it, it abends `S806`.
 - **SVC 9** (DELETE) takes one counted load back and sets R15 to 0; a name not loaded by the run
   unit, or not in the image, gets R15 4. Nothing is freed.
+- **SVC 19** (OPEN) walks the list at R1 to the entry with X'80'. For each DCB: the DDNAME at
+  offset 40, cut at the first blank; `__hlasm_dd` for it; an unsupplied DD fails the entry.
+  Each zero RECFM, LRECL and BLKSIZE takes the DD's and is written back. The mode is the
+  option's low four bits (0 INPUT, 15 OUTPUT, 14 EXTEND; any other fails the entry). OPEN
+  declares the file (`__hlasm_declare_file`, V with LRECL less the RDW) and calls
+  `__cobol_open_file`; a result other than OK fails the entry. An opened DCB gets DCBOFOPN and,
+  with MACRF GL or PL, an LRECL buffer obtained as GETMAIN obtains, kept in
+  `__hlasm_dcb_buffers` by DCB address with a pending-PUT flag. R15 is 0, or 8 if any entry
+  failed. A failed DCB keeps DCBOFOPN off.
+- **SVC 20** (CLOSE) writes a pending locate-mode record, calls `__cobol_close_file` and turns
+  DCBOFOPN off for each open DCB in the list. R15 is 0.
+- **SVC 200** (GET) reads with `__cobol_read_record`. At end of data it branches to EODAD (R14
+  is the GET macro's), or abends `S337` when EODAD is 0 or 1 (the DCB macro's default). A RECFM V
+  record gets its RDW in front. Move mode copies it to R0's area a byte at a time; locate mode
+  copies it to the DCB's buffer and returns that address in R1.
+- **SVC 201** (PUT) writes LRECL bytes from the area for RECFM F, or the RDW's length less 4
+  bytes after the RDW for V. Locate mode writes the buffer's pending record, if any, and
+  returns the buffer in R1; CLOSE writes the last one, as IBM's does.
+- GET or PUT on a DCB without DCBOFOPN abends `S0C1`: IBM's macros branch through the DCB's
+  routine field, which an unopened DCB does not hold, and an unowned branch here abends `S0C1`.
+- Driver outcomes are compared by `AccessCondition` position (OK 0, END_OF_FILE 2), named in
+  `hlasm_constants` since `interpreter.hlasm` cannot import `interpreter.cobol`.
 - **Any other SVC number** logs the number and abends `S0C1`. This is a project
   choice, not z/OS behaviour.
 
@@ -1477,7 +1506,17 @@ layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.
   the host clock and an empty PARM), but not the floating-point builtins, which are not run inputs:
   a floating-point instruction under plain `run()` stores what the unresolved-call strategy gives.
   Callers compose `bfp_builtins()`, `hfp_builtins()`, `dfp_builtins()` and `pfpo_builtins()`; the
-  `interpreter.py` CLI does. The PARM and DD definitions cannot be supplied through `run()`.
+  `interpreter.py` CLI does. The PARM and DD definitions cannot be supplied through `run()`, and
+  `run()` does not compose `declare_file_builtins()`; a caller that injects a file provider does.
+- QSAM only, sequential, RECFM F, FB, V and VB: BSAM, VSAM and EXCP, DCBE, exit lists, SYNAD,
+  UPDAT and the other OPEN modes, `MODE=31` lists and the BLKSIZE of a file (VB files are read
+  and written with RDWs and no block descriptors) are out of scope.
+- A hand-coded `L 15,48(,1)` and `BALR 14,15` into a DCB's GET routine is not supported: the
+  DCB holds no routine address.
+- A branch to a label that lies in CNOP alignment padding abends `S0C1` (red-dragon-6uyp.102); OPEN
+  and CLOSE label the instruction after their CNOP.
+- The file provider is the COBOL one and finds files by name, so a COBOL file and an HLASM
+  DDNAME share one namespace in a mixed image.
 - DCB checks an `EODAD` or `SYNAD` against 2^24 only when it is a self-defining term; a
   relocatable one is not checked, since sections are placed far below 16 MB.
 - In AMODE 31, LM, STM, LMD, NC, OC, XC, the decimal instructions and the storage moves, compares and translates do not wrap
@@ -1578,10 +1617,11 @@ layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.
 | `tests/z390/test_save_return_differential.py` | The same programs against z390 |
 | `tests/integration/hlasm/test_storage_services.py` | `GETMAIN`/`FREEMAIN` R, RU, RC and `STORAGE` with `COND`, `BNDRY=PAGE`, register operands and subpools: two areas aligned, disjoint, written, read and released; `LV=(0)` with the subpool in R0 and `SP=(r)` matched by a literal `SP`; the last byte of a page-aligned area; bad releases abending `SA0A` and `SA78` with the table left as it was; `TIME` DEC and BIN on the fixed clock, by macro and hand-coded `SVC 11` with R1's code, flag bits ignored; operand refusals |
 | `tests/z390/test_storage_services_differential.py` | Alignment, disjointness, data and R15 against z390 (z390 sets R15 0 on GETMAIN R and FREEMAIN R); the shape of TIME's words against z390's wall clock; z390 reads a hand-coded SVC 11's format from R0 |
-| `tests/integration/hlasm/test_data_set_services.py` | The DCB image at IBM's offsets; every DCBD name read from a DCB; DCB operand refusals |
+| `tests/integration/hlasm/test_data_set_services.py` | The DCB image at IBM's offsets; every DCBD name read from a DCB; DCB and OPEN operand refusals; a fixed copy in move mode ending at EODAD with R14 after the GET; a locate-mode copy through both buffers; RECFM V with its RDW; `S337` without EODAD and `S0C1` for GET before OPEN; OPEN filling empty fields from the DD and failing an unsupplied DD with R15 8 |
+| `tests/z390/test_data_set_services_differential.py` | The fixed move, fixed locate and V copies against z390, DDNAMEs through the environment; z390 drops the record a locate PUT leaves at CLOSE |
 | `tests/unit/hlasm/test_dd_definitions.py` | `__hlasm_dd` for a DD with every field, one with a path only, and a DDNAME not supplied |
 | `tests/unit/hlasm/test_time_service.py` | TIME's words for TOD values across 1900, 2000 (leap day, day 366), 2023 and 2100 |
-| `tests/unit/hlasm/test_service_lowering.py` | SVC 6, 8, 9, 10, 11 and 120 call only existing builtins (and LINK the far branch) and leave nothing symbolic |
+| `tests/unit/hlasm/test_service_lowering.py` | SVC 6, 8, 9, 10, 11, 19, 20, 120, 200 and 201 call only existing builtins (and LINK the far branch) and leave nothing symbolic |
 | `tests/integration/hlasm/test_far_branch.py` | A module entered at its own R14 running there; a call through a V-constant and BALR; a return that skips a level; a branch to the job step's `0xFF0` ending the step; a linking branch into a module below; `B 4(,14)`; a plain branch out that calls; `BSM 0,14` to an R14 without the mode bit; an unowned address abending `S0C1` |
 | `tests/z390/test_far_branch_differential.py` | The call and the skipped-level return against z390 (SYSOBJ autolink) |
 | `tests/integration/hlasm/test_program_services.py` | CALL inline, `MF=L` and `MF=(E,list)` with VL; LOAD's R0 and R1, `CALL (15)`, DELETE of a loaded name (0), again (4) and of an unloaded one (4); LINK with PARAM and VL leaving the program's registers, by `EPLOC=addr`, `EPLOC=(r)` and a hand-coded R15 list, and a callback inside it branching to `0xFF0`; a missing name: LINK raising in both modes, LOAD `S806` by macro and by hand with a leftover R15, and ERRET; operand refusals |

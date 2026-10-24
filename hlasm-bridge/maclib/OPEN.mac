@@ -1,0 +1,31 @@
+         MACRO
+&NAME    OPEN  &LIST
+         LCLA  &I,&OPT
+         LCLC  &O
+.CHECK   ANOP
+&I       SETA  &I+2
+&O       SETC  '&LIST(&I,1)'
+         AIF   ('&O' EQ '' OR '&O' EQ 'INPUT').CHECKED
+         AIF   ('&O' EQ 'OUTPUT' OR '&O' EQ 'EXTEND').CHECKED
+         MNOTE 8,'OPEN: OPTION MUST BE INPUT, OUTPUT OR EXTEND'
+         MEXIT
+.CHECKED AIF   (&I LT N'&LIST).CHECK
+&I       SETA  0
+         CNOP  0,4
+&NAME    BRAS  1,RDO&SYSNDX
+.NEXT    ANOP
+&I       SETA  &I+1
+&O       SETC  '&LIST(&I+1,1)'
+&OPT     SETA  0
+         AIF   ('&O' EQ '' OR '&O' EQ 'INPUT').OPT
+&OPT     SETA  15
+         AIF   ('&O' EQ 'OUTPUT').OPT
+&OPT     SETA  14
+.OPT     AIF   (&I+1 LT N'&LIST).ENTRY
+&OPT     SETA  &OPT+128
+.ENTRY   DC    AL1(&OPT),AL3(&LIST(&I))
+&I       SETA  &I+1
+         AIF   (&I LT N'&LIST).NEXT
+RDO&SYSNDX DS  0H
+         SVC   19
+         MEND

@@ -6,6 +6,7 @@ from interpreter.hlasm.hlasm_constants import (
     ACCESS_REGISTERS_VAR,
     ALLOCATIONS_VAR,
     CC_VAR,
+    DCB_BUFFERS_VAR,
     FPC_VAR,
     GPR_BYTES,
     GPR_COUNT,
@@ -34,6 +35,7 @@ _CC = Register("%hlasm_machine_cc")
 _PROGRAM_MASK = Register("%hlasm_machine_pm")
 _TOD_LAST = Register("%hlasm_machine_tod_last")
 _ALLOCATIONS = Register("%hlasm_machine_allocations")
+_DCB_BUFFERS = Register("%hlasm_machine_dcb_buffers")
 _ARS_SIZE = Register("%hlasm_machine_ars_size")
 _ARS = Register("%hlasm_machine_ars")
 _VRS_SIZE = Register("%hlasm_machine_vrs_size")
@@ -54,6 +56,8 @@ def machine_allocation() -> tuple[InstructionBase, ...]:
         StoreVar(name=TOD_LAST_VAR, value_reg=_TOD_LAST),
         NewObject(result_reg=_ALLOCATIONS),
         StoreVar(name=ALLOCATIONS_VAR, value_reg=_ALLOCATIONS),
+        NewObject(result_reg=_DCB_BUFFERS),
+        StoreVar(name=DCB_BUFFERS_VAR, value_reg=_DCB_BUFFERS),
     )
 
 

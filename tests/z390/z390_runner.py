@@ -2,7 +2,7 @@
 """Runs a program under z390 and reads its LOG: stdout is the run's lines minus z390's own EZ390 messages and register dumps; an abend's dump gives the registers and CC."""
 
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -101,16 +101,29 @@ class Z390Runner:
         self.runner.run([str(self.home / "bash" / "asml"), str(program)])
         return program.with_suffix(".390")
 
-    def run_machine(self, source: str, tmp: Path) -> HlasmMachine:
-        return hlasm_machine_of_log(self._log(source, tmp))
+    def run_machine(
+        self, source: str, tmp: Path, environment: Mapping[str, str] = {}
+    ) -> HlasmMachine:
+        return hlasm_machine_of_log(self._log(source, tmp, (), environment))
 
     def _log(
-        self, source: str, tmp: Path, options: Sequence[str] = ()
+        self,
+        source: str,
+        tmp: Path,
+        options: Sequence[str] = (),
+        environment: Mapping[str, str] = {},
     ) -> Sequence[str]:
         program = tmp / PROGRAM
         program.with_suffix(".MLC").write_text(source, encoding="ascii")
+        settings = [f"{name}={value}" for name, value in environment.items()]
         ran = self.runner.run(
-            [str(self.home / "bash" / "asmlg"), str(program), *options]
+            [
+                "env",
+                *settings,
+                str(self.home / "bash" / "asmlg"),
+                str(program),
+                *options,
+            ]
         )
         log = program.with_suffix(".LOG")
         if not log.exists():

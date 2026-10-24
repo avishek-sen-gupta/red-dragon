@@ -1,10 +1,16 @@
 # pyright: standard
-"""GETMAIN/FREEMAIN, TIME, STORAGE, LINK, LOAD and DELETE lower to IR over existing builtins only: the table's membership test, the TOD clock, the byte and string conversions, and LINK's call of the far branch, with nothing left symbolic."""
+"""GETMAIN/FREEMAIN, TIME, STORAGE, LINK, LOAD, DELETE, OPEN, CLOSE, GET and PUT lower to IR over existing builtins only: the table's membership test, the TOD clock, the byte, list and string conversions, LINK's call of the far branch, and the file provider with the DD lookup and OPEN's file declaration, with nothing left symbolic."""
 
 from collections.abc import Callable
 
 import pytest
 
+from interpreter.hlasm.data_set_services import (
+    emit_close,
+    emit_get,
+    emit_open,
+    emit_put,
+)
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.program_services import emit_delete, emit_link, emit_load
 from interpreter.hlasm.storage_services import (
@@ -18,6 +24,14 @@ from tests.covers import NotLanguageFeature, covers
 
 REGISTER_IMAGES = {"__binary_bytes_to_int", "__int_to_binary_bytes"}
 TABLE_LOOKUP = {str(TABLE_HOLDS), *REGISTER_IMAGES}
+DDNAME = {
+    *REGISTER_IMAGES,
+    "__bytes_to_string",
+    "__string_concat_pair",
+    "__string_find",
+    "__string_slice",
+}
+RECORD_WRITE = {*DDNAME, "__list_concat", "__make_list", "__cobol_write_record"}
 
 SERVICES: dict[str, tuple[Callable[[HlasmEmitter], None], set[str]]] = {
     "svc_10": (emit_getmain_freemain, TABLE_LOOKUP),
@@ -36,6 +50,32 @@ SERVICES: dict[str, tuple[Callable[[HlasmEmitter], None], set[str]]] = {
     ),
     "svc_8": (emit_load, TABLE_LOOKUP),
     "svc_9": (emit_delete, TABLE_LOOKUP),
+    "svc_19": (
+        emit_open,
+        {
+            *DDNAME,
+            "__hlasm_dd",
+            "__list_get",
+            "__hlasm_declare_file",
+            "__cobol_open_file",
+            "__cobol_io_outcome",
+        },
+    ),
+    "svc_20": (emit_close, {*RECORD_WRITE, "__cobol_close_file"}),
+    "svc_200": (
+        emit_get,
+        {
+            *DDNAME,
+            "__cobol_read_record",
+            "__cobol_io_outcome",
+            "__cobol_io_data",
+            "__string_to_bytes",
+            "__list_concat",
+            "__list_len",
+            "__list_slice",
+        },
+    ),
+    "svc_201": (emit_put, RECORD_WRITE),
 }
 
 

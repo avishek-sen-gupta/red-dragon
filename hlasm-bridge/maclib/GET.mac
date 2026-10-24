@@ -1,0 +1,4 @@
+         MACRO
+&NAME    GET   &DCB,&AREA
+&NAME    RDQSAM 200,&DCB,&AREA
+         MEND

@@ -9,3 +9,4 @@ JOB_PARM_BUILTIN = FuncName("__hlasm_job_parm")
 PARM_TEXT_BYTES = 100
 PARM_LENGTH_BYTES = 2
 DD_BUILTIN = FuncName("__hlasm_dd")
+DECLARE_FILE_BUILTIN = FuncName("__hlasm_declare_file")

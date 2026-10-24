@@ -1,0 +1,17 @@
+         MACRO
+&NAME    RDQSAM &SVC,&DCB,&AREA
+&NAME    DS    0H
+         AIF   ('&DCB'(1,1) EQ '(').DCBREG
+         LA    1,&DCB
+         AGO   .AREA
+.DCBREG  LR    1,&DCB(1)
+.AREA    AIF   ('&AREA' EQ '').LINK
+         AIF   ('&AREA'(1,1) EQ '(').AREAREG
+         LA    0,&AREA
+         AGO   .LINK
+.AREAREG LR    0,&AREA(1)
+.LINK    LARL  14,RDQ&SYSNDX
+         OILH  14,X'8000'
+         SVC   &SVC
+RDQ&SYSNDX DS  0H
+         MEND

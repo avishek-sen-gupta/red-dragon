@@ -1,10 +1,14 @@
 # pyright: standard
 """DCB, DCBD, OPEN, CLOSE, GET and PUT from our maclib, run in the VM over the run's DD definitions and the file provider."""
 
+from pathlib import Path
+
 import pytest
 
 from hlasm_asg.hlasm_parse_error import HlasmParseError
 from hlasm_asg.program.mnote_level import MnoteLevel
+from interpreter.hlasm_run_inputs.dd_definition import DdDefinition
+from interpreter.hlasm_run_inputs.record_format import RecordFormat
 from tests.covers import NotLanguageFeature, covers
 from tests.integration.hlasm import data_set_service_programs as programs
 from tests.integration.hlasm.hlasm_helpers import (
@@ -16,6 +20,7 @@ from tests.integration.hlasm.hlasm_run import HlasmRun
 
 ABENDED = HlasmRun(return_code=0, abend="U0001", stdout="")
 DCB_BYTES = 96
+AMODE_31_BIT = 0x80000000
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
@@ -40,7 +45,7 @@ def test_dcbd_names_each_field_and_flag_of_a_dcb():
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_bad_dcb_operands_refuse_the_assembly_with_severity_8():
+def test_bad_dcb_and_open_operands_refuse_the_assembly_with_severity_8():
     with pytest.raises(HlasmParseError) as refused:
         run_hlasm(programs.BAD_DCBS)
 
@@ -50,3 +55,87 @@ def test_bad_dcb_operands_refuse_the_assembly_with_severity_8():
         (m, line, MnoteLevel(kind="LEVEL", level=8))
         for m, line in programs.BAD_DCB_REFUSALS
     ]
+
+
+def _dds(tmp_path: Path, given: bytes) -> dict[str, DdDefinition]:
+    (tmp_path / "in.dat").write_bytes(given)
+    return {
+        "INDD": DdDefinition(tmp_path / "in.dat"),
+        "OUTDD": DdDefinition(tmp_path / "out.dat"),
+    }
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_move_mode_copies_fixed_records_and_ends_at_eodad(tmp_path: Path):
+    ran = run_hlasm_machine(
+        programs.COPY_MOVE, dds=_dds(tmp_path, programs.FIXED_INPUT)
+    )
+
+    assert (
+        ran.run,
+        {r: ran.gprs[r] for r in programs.COPY_MOVE_REGISTERS},
+        ran.gprs[6],
+        (tmp_path / "out.dat").read_bytes(),
+    ) == (
+        ABENDED,
+        programs.COPY_MOVE_REGISTERS,
+        ran.gprs[5] | AMODE_31_BIT,
+        programs.FIXED_INPUT,
+    )
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_locate_mode_get_and_put_copy_through_their_buffers(tmp_path: Path):
+    ran = run_hlasm_machine(
+        programs.COPY_LOCATE, dds=_dds(tmp_path, programs.FIXED_INPUT)
+    )
+
+    assert (ran.run, ran.gprs[2], (tmp_path / "out.dat").read_bytes()) == (
+        ABENDED,
+        3,
+        programs.FIXED_INPUT,
+    )
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_variable_records_carry_their_rdw_through_get_and_put(tmp_path: Path):
+    ran = run_hlasm_machine(
+        programs.COPY_VARIABLE, dds=_dds(tmp_path, programs.VARIABLE_INPUT)
+    )
+
+    assert (ran.run, ran.gprs[4], (tmp_path / "out.dat").read_bytes()) == (
+        ABENDED,
+        programs.FIRST_DESCRIPTOR,
+        programs.VARIABLE_INPUT,
+    )
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+@pytest.mark.parametrize(
+    ("source", "abend"),
+    [(programs.NO_EODAD, "S337"), (programs.NOT_OPENED, "S0C1")],
+    ids=["end_of_data_without_eodad", "get_before_open"],
+)
+def test_a_get_past_the_end_without_eodad_or_before_open_abends(
+    tmp_path: Path, source: str, abend: str
+):
+    ran = run_hlasm_machine(
+        source, dds=_dds(tmp_path, programs.fixed_records("ONLY RECORD"))
+    )
+
+    assert ran.run == HlasmRun(return_code=0, abend=abend, stdout="")
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_open_fills_empty_dcb_fields_from_the_dd_and_fails_a_dd_not_supplied(
+    tmp_path: Path,
+):
+    (tmp_path / "in.dat").write_bytes(programs.FIXED_INPUT)
+    dds = {"INDD": DdDefinition(tmp_path / "in.dat", RecordFormat.FB, 80, 800)}
+
+    ran = run_hlasm_machine(programs.OPEN_FROM_DDS, dds=dds)
+
+    assert (
+        ran.run,
+        {r: ran.gprs[r] for r in programs.OPEN_FROM_DDS_REGISTERS},
+    ) == (ABENDED, programs.OPEN_FROM_DDS_REGISTERS)

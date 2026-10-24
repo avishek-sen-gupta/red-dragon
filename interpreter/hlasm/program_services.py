@@ -93,12 +93,16 @@ def _labels(emitter: HlasmEmitter, service: str) -> tuple[CodeLabel, ...]:
     )
 
 
-def _entry_name(emitter: HlasmEmitter, name_at: Register) -> Register:
+def blank_ended_name(emitter: HlasmEmitter, name_at: Register) -> Register:
     image = emitter.load_bytes(name_at, emitter.int_(0), PROGRAM_NAME_BYTES)
     text = emitter.call(BYTES_TO_STRING, (image, emitter.str_(EBCDIC)))
     ended = emitter.call(STRING_CONCAT_PAIR, (text, emitter.str_(NAME_END)))
     length = emitter.call(STRING_FIND, (ended, emitter.str_(NAME_END)))
-    name = emitter.call(STRING_SLICE, (text, emitter.int_(0), length))
+    return emitter.call(STRING_SLICE, (text, emitter.int_(0), length))
+
+
+def _entry_name(emitter: HlasmEmitter, name_at: Register) -> Register:
+    name = blank_ended_name(emitter, name_at)
     return emitter.call(STRING_CONCAT_PAIR, (emitter.str_(PROGRAM_ENTRY_PREFIX), name))
 
 

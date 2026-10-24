@@ -93,11 +93,15 @@ def _record(
     )
 
 
-def _obtain(emitter: HlasmEmitter, request: StorageRequest) -> None:
+def obtained(emitter: HlasmEmitter, request: StorageRequest) -> Register:
     rounded = _rounded(emitter, request.length)
     address = _aligned_region(emitter, rounded, request.alignment)
     _record(emitter, address, rounded, request.subpool)
-    emitter.store_gr32(SVC_PARAMETER_REGISTER, address)
+    return address
+
+
+def _obtain(emitter: HlasmEmitter, request: StorageRequest) -> None:
+    emitter.store_gr32(SVC_PARAMETER_REGISTER, obtained(emitter, request))
 
 
 def _field(emitter: HlasmEmitter, entry: Register, name: FieldName) -> Register:

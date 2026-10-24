@@ -2,12 +2,14 @@
 """Compile an HLASM source through the unit-file pipeline and run it to its end."""
 
 import io
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from contextlib import redirect_stdout
 from datetime import UTC, datetime
 from pathlib import Path
 
 from hlasm_asg.assembly_inputs import AssemblyInputs
+from interpreter.cobol.real_file_provider import RealFileIOProvider
+from interpreter.cobol.run_inputs import RunInputs
 from interpreter.field_name import FieldName
 from interpreter.frontends import get_hlasm_parser
 from interpreter.hlasm.bfp_builtins import bfp_builtins
@@ -15,6 +17,8 @@ from interpreter.hlasm.dfp_builtins import dfp_builtins
 from interpreter.hlasm.hfp_builtins import hfp_builtins
 from interpreter.hlasm.pfpo_builtins import pfpo_builtins
 from interpreter.hlasm_run_inputs.dd_builtins import NO_DDS
+from interpreter.hlasm_run_inputs.dd_definition import DdDefinition
+from interpreter.hlasm_run_inputs.declare_file_builtins import declare_file_builtins
 from interpreter.hlasm_run_inputs.job_parm_builtins import NO_PARM
 from interpreter.hlasm_run_inputs.run_input_builtins import run_input_builtins
 from interpreter.project.entry_point import EntryPoint
@@ -30,6 +34,7 @@ from tests.integration.hlasm.hlasm_machine import HlasmMachine
 from tests.integration.hlasm.hlasm_run import HlasmRun
 
 MAX_STEPS = 20_000
+DCB_BUFFERS_TABLE = 1
 JOB_STEP_ARGUMENTS = 1
 GPR_BYTES = 8
 LOW_WORD_OFFSET = 4
@@ -73,11 +78,17 @@ def _return_code(vm: VMState, abend: str) -> int:
             return NO_RETURN_CODE
 
 
+def _file_provider(dds: Mapping[str, DdDefinition]) -> RealFileIOProvider:
+    paths = {name: dd.path for name, dd in dds.items()}
+    return RealFileIOProvider(Path(), RunInputs(path_overrides=paths))
+
+
 def _run_vm(
     source: str,
     options: HlasmCompileOptions = NO_INPUTS,
     syslib: Sequence[Path] = (),
     programs: Sequence[SourceFile] = (),
+    dds: Mapping[str, DdDefinition] = NO_DDS,
 ) -> tuple[VMState, str]:
     linked = compile_hlasm(
         source.encode("utf-8"),
@@ -91,10 +102,11 @@ def _run_vm(
             linked,
             EntryPoint.function(lambda ref: ref.label == linked.entry_func_label),
             max_steps=MAX_STEPS,
-            initial_vm=initial_vm_state(),
+            initial_vm=initial_vm_state(io_provider=_file_provider(dds)),
             builtins=compose_builtins(
                 core_builtins(),
-                run_input_builtins(FixedMachineClock(), NO_PARM, NO_DDS),
+                run_input_builtins(FixedMachineClock(), NO_PARM, dds),
+                declare_file_builtins(),
                 bfp_builtins(),
                 hfp_builtins(),
                 dfp_builtins(),
@@ -140,6 +152,7 @@ def run_hlasm_allocations(
         - len(entries)
         - JOB_STEP_ARGUMENTS
         - _names_table_objects(vm)
+        - DCB_BUFFERS_TABLE
     )
     return hlasm_run_of(vm, stdout), entries, others
 
@@ -152,8 +165,12 @@ def _machine(vm: VMState, stdout: str) -> HlasmMachine:
     )
 
 
-def run_hlasm_machine(source: str, programs: Sequence[SourceFile] = ()) -> HlasmMachine:
-    return _machine(*_run_vm(source, programs=programs))
+def run_hlasm_machine(
+    source: str,
+    programs: Sequence[SourceFile] = (),
+    dds: Mapping[str, DdDefinition] = NO_DDS,
+) -> HlasmMachine:
+    return _machine(*_run_vm(source, programs=programs, dds=dds))
 
 
 def run_hlasm_storage(

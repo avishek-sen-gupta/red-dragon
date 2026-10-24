@@ -1,0 +1,16 @@
+         MACRO
+&NAME    CLOSE &LIST
+         LCLA  &I,&OPT
+         CNOP  0,4
+&NAME    BRAS  1,RDC&SYSNDX
+.NEXT    ANOP
+&I       SETA  &I+1
+&OPT     SETA  0
+         AIF   (&I+1 LT N'&LIST).ENTRY
+&OPT     SETA  128
+.ENTRY   DC    AL1(&OPT),AL3(&LIST(&I))
+&I       SETA  &I+1
+         AIF   (&I LT N'&LIST).NEXT
+RDC&SYSNDX DS  0H
+         SVC   20
+         MEND
