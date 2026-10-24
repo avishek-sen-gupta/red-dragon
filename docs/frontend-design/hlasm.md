@@ -322,9 +322,10 @@ services use `dict_contains_key` and the TOD clock builtin.
 - **Releasing** needs an entry at the address with the same rounded length and subpool,
   else it abends `SA0A` (SVC 10) or `SA78` (SVC 120). The entry's length becomes -1, so a
   second release abends. Freed storage is not reused, and releasing part of an area abends.
-- **SVC 11** reads `__hlasm_tod_clock`. R1's low byte selects the format, as on z/OS: 1 is
-  BIN (R0 = binary hundredths since midnight), any other value DEC (R0 = packed
-  `HHMMSSth`); TU, MIC and STCK (0, 3, 4) are not lowered. R1 is then the date as packed
+- **SVC 11** reads `__hlasm_tod_clock`. The format bits of R1's low byte select the format,
+  as on z/OS; the GMT and ERRET flag bits are ignored. 1 is BIN (R0 = binary hundredths
+  since midnight), any other value DEC (R0 = packed `HHMMSSth`); TU, MIC and STCK (0, 3, 4)
+  are not lowered. R1 is then the date as packed
   `0CYYDDDF` (C is 0 for 19xx, 1 for 20xx). R15 is 0. No zone offset is applied, so local
   time is the TOD clock's UTC; leap seconds are ignored.
 - **Any other SVC number** logs the number and abends `S0C1`. This is a project
@@ -1403,10 +1404,10 @@ layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.
 | `tests/integration/hlasm/test_instruction_table.py`, `test_opcode_unit_coverage.py` | Instruction table and opcode-unit coverage |
 | `tests/integration/hlasm/test_save_return.py` | `SAVE`, `RETURN`, `YREGS`: registers per range including `(14,15)` and a wrapped range, `T`, `RC`, identifier layout at entry+4 with label and CSECT names, a nested call, operand refusals |
 | `tests/z390/test_save_return_differential.py` | The same programs against z390 |
-| `tests/integration/hlasm/test_storage_services.py` | `GETMAIN`/`FREEMAIN` R, RU, RC and `STORAGE` with `COND`, `BNDRY=PAGE`, register operands and subpools: two areas aligned, disjoint, written, read and released; `LV=(0)` with the subpool in R0 and `SP=(r)` matched by a literal `SP`; the last byte of a page-aligned area; bad releases abending `SA0A` and `SA78` with the table left as it was; `TIME` DEC and BIN on the fixed clock, by macro and hand-coded `SVC 11` with R1's code; operand refusals |
+| `tests/integration/hlasm/test_storage_services.py` | `GETMAIN`/`FREEMAIN` R, RU, RC and `STORAGE` with `COND`, `BNDRY=PAGE`, register operands and subpools: two areas aligned, disjoint, written, read and released; `LV=(0)` with the subpool in R0 and `SP=(r)` matched by a literal `SP`; the last byte of a page-aligned area; bad releases abending `SA0A` and `SA78` with the table left as it was; `TIME` DEC and BIN on the fixed clock, by macro and hand-coded `SVC 11` with R1's code, flag bits ignored; operand refusals |
 | `tests/z390/test_storage_services_differential.py` | Alignment, disjointness, data and R15 against z390 (z390 sets R15 0 on GETMAIN R and FREEMAIN R); the shape of TIME's words against z390's wall clock; z390 reads a hand-coded SVC 11's format from R0 |
 | `tests/unit/hlasm/test_time_service.py` | TIME's words for TOD values across 1900, 2000 (leap day, day 366), 2023 and 2100 |
-| `tests/unit/hlasm/test_service_lowering.py` | SVC 10, 11 and 120 call only existing builtins and leave nothing symbolic; a release on the branching runner (`branching_vm.py`) finds its area or abends `SA78` |
+| `tests/unit/hlasm/test_service_lowering.py` | SVC 10, 11 and 120 call only existing builtins and leave nothing symbolic |
 | `tests/z390/test_foundation_differential.py` | Return code, WTO, user abend and assembly failure against z390 (`-m z390`) |
 | `tests/z390/test_z390_log.py` | Registers and CC from a z390 abend dump (default run) |
 | `tests/z390/test_macro_language_differential.py` | The macro-language programs against z390; z390's attribute differences pinned (`-m z390`) |
