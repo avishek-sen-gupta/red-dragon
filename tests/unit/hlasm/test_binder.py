@@ -1,5 +1,5 @@
 # pyright: standard
-"""The binder: sections at doubleword offsets in ESD order, commons merged at their largest length, external dummy sections merged by name (largest length, strictest alignment) into the pseudo-register area in first appearance, names resolved locally, then across the image, then to a COBOL program's stub, then to zero (WXTRN) or a stub (EXTRN, warned once); duplicate names across both languages a J-constant naming no external dummy section are refused, and an RLD record whose target does not fit its kind is refused when built."""
+"""The binder: sections at doubleword offsets in ESD order, commons merged at their largest length, external dummy sections merged by name (largest length, strictest alignment) into the pseudo-register area in first appearance, names resolved locally, then across the image, then to a COBOL program's stub, then to zero (WXTRN) or a stub (EXTRN, warned once); duplicate names across both languages and a J-constant naming no external dummy section are refused, and an RLD record whose target does not fit its kind is refused when built."""
 
 import pytest
 
