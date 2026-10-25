@@ -201,6 +201,27 @@ def _fpr(vm: VMState, register: int) -> int:
     return int.from_bytes(bytes(loaded), "big")
 
 
+def run_hlasm_vector_register(
+    source: str, section: str, span: tuple[int, int], register: int
+) -> tuple[HlasmMachine, bytes, int, int]:
+    vm, stdout = _run_vm(source)
+    start, end = span
+    stored = vm.load(
+        int(_var(vm, f"__hlasm_sect___main__.{section}")) + start, end - start
+    )
+    loaded = vm.load(
+        int(_var(vm, "__hlasm_vrs")) + VECTOR_REGISTER_BYTES * register,
+        VECTOR_REGISTER_BYTES,
+    )
+    assert isinstance(stored, list) and isinstance(loaded, list)
+    return (
+        _machine(vm, stdout),
+        bytes(stored),
+        int(_var(vm, "__hlasm_fpc")),
+        int.from_bytes(bytes(loaded), "big"),
+    )
+
+
 def run_hlasm_float(source: str) -> tuple[HlasmMachine, dict[int, int], int]:
     vm, stdout = _run_vm(source)
     fprs = {r: _fpr(vm, r) for r in range(GPR_COUNT)}

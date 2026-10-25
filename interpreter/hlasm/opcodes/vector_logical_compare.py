@@ -5,19 +5,24 @@ from collections.abc import Callable, Mapping, Sequence
 from functools import reduce
 
 from hlasm_asg.program.machine_statement import MachineStatement
-from interpreter.hlasm.bit_fields import combined_bits, placed_bits
+from interpreter.hlasm.bit_fields import combined_bits
 from interpreter.hlasm.conditional import pick
 from interpreter.hlasm.element_return_field import CC_FIELD, RESULT_BITS
 from interpreter.hlasm.element_size import ElementSize
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.ir_function import Body, IrFunction
 from interpreter.hlasm.opcodes.vector_fields import (
+    FIFTH,
+    FOURTH,
     SECOND,
     THIRD,
     V1,
+    assembled,
     below,
     count_cc,
     element_bits,
+    element_of,
+    element_wise,
     ones,
     per_size,
     replication,
@@ -31,8 +36,6 @@ from interpreter.hlasm.vector_elements import load_element
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
 
-FOURTH = 3
-FIFTH = 4
 ALL_ONES = ones(RESULT_BITS)
 ALTERNATE_BITS = ALL_ONES // 3
 ALTERNATE_PAIRS = ALL_ONES // 5
@@ -52,7 +55,6 @@ UP_TO_DOUBLEWORD = frozenset({B, H, F, G})
 COMPARED_ELEMENT = {B: 7, H: 3, F: 1, G: 0, Q: 0}
 
 type Combine = Callable[[HlasmEmitter, Register, Register], Register]
-type ElementOp = Callable[[HlasmEmitter, Sequence[Register]], Register]
 type Order = Callable[[HlasmEmitter, Register], Register]
 type Test = Callable[[HlasmEmitter, Register, Register], Register]
 type Counts = Callable[[HlasmEmitter, Register, ElementSize], Register]
@@ -108,49 +110,6 @@ def _evaluate(emitter: HlasmEmitter, statement: MachineStatement) -> None:
     to_v1(emitter, statement, combined_bits(emitter, [emitter.int_(0), *terms]))
 
 
-def _shift(size: ElementSize, at: int) -> int:
-    return RESULT_BITS - element_bits(size) * (at + 1)
-
-
-def _element(
-    emitter: HlasmEmitter, value: Register, size: ElementSize, at: int
-) -> Register:
-    moved = emitter.binop(BinopKind.RSHIFT, value, emitter.int_(_shift(size, at)))
-    return emitter.binop(
-        BinopKind.BIT_AND, moved, emitter.int_(ones(element_bits(size)))
-    )
-
-
-def _assembled(
-    emitter: HlasmEmitter, size: ElementSize, pieces: Sequence[Register]
-) -> Register:
-    mask = ones(element_bits(size))
-    return combined_bits(
-        emitter,
-        [
-            placed_bits(emitter, piece, mask, _shift(size, at))
-            for at, piece in enumerate(pieces)
-        ],
-    )
-
-
-def _element_wise(
-    arity: int, op: ElementOp
-) -> Callable[[ElementSize], StatementLowering]:
-    def build(size: ElementSize) -> StatementLowering:
-        def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
-            sources = [vr_at(SECOND + k)(emitter, statement) for k in range(arity)]
-            pieces = [
-                op(emitter, [_element(emitter, s, size, at) for s in sources])
-                for at in range(size.count)
-            ]
-            to_v1(emitter, statement, _assembled(emitter, size, pieces))
-
-        return lower
-
-    return build
-
-
 def _signed_order(size: ElementSize) -> Order:
     sign = 1 << (element_bits(size) - 1)
     return lambda emitter, value: emitter.binop(
@@ -177,7 +136,7 @@ def _extreme(
                 else pick(emitter, lower, left, right)
             )
 
-        return _element_wise(2, op)(size)
+        return element_wise(2, op)(size)
 
     return build
 
@@ -187,7 +146,7 @@ def _negated(emitter: HlasmEmitter, value: Register) -> Register:
 
 
 def _complement(size: ElementSize) -> StatementLowering:
-    return _element_wise(1, lambda emitter, one: _negated(emitter, one[0]))(size)
+    return element_wise(1, lambda emitter, one: _negated(emitter, one[0]))(size)
 
 
 def _positive(size: ElementSize) -> StatementLowering:
@@ -198,7 +157,7 @@ def _positive(size: ElementSize) -> StatementLowering:
         sign = emitter.binop(BinopKind.RSHIFT, value, emitter.int_(sign_bit))
         return pick(emitter, sign, _negated(emitter, value), value)
 
-    return _element_wise(1, op)(size)
+    return element_wise(1, op)(size)
 
 
 def _equal(size: ElementSize) -> Test:
@@ -228,8 +187,8 @@ def _compare_body(size: ElementSize, test: Test) -> Body:
         flags = [
             test(
                 emitter,
-                _element(emitter, left, size, at),
-                _element(emitter, right, size, at),
+                element_of(emitter, left, size, at),
+                element_of(emitter, right, size, at),
             )
             for at in range(size.count)
         ]
@@ -242,7 +201,7 @@ def _compare_body(size: ElementSize, test: Test) -> Body:
             emitter.int_(size.count),
         )
         cc = CC_FIELD.placed(emitter, count_cc(emitter, misses, size.count))
-        return emitter.binop(BinopKind.BIT_OR, _assembled(emitter, size, masks), cc)
+        return emitter.binop(BinopKind.BIT_OR, assembled(emitter, size, masks), cc)
 
     return body
 

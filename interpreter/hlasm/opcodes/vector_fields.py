@@ -1,10 +1,11 @@
 # pyright: standard
-"""Vector operand helpers at lowering: M-field checks (an element size outside the instruction's allowed set, a must-be-zero bit that is set, or a static element index past the element count abends S0C6; an omitted M field is 0), whole-register sources and sinks, element replication, the borrow compare, the CC from a count of elements, and the call of an element function that returns a result and a CC set only with CS."""
+"""Vector operand helpers at lowering: M-field checks (an element size outside the instruction's allowed set, a must-be-zero bit that is set, or a static element index past the element count abends S0C6; an omitted M field is 0), whole-register sources and sinks, element replication, element extraction and assembly with an element-wise unroll, the borrow compare, the CC from a count of elements, and the call of an element function that returns a result and a CC set only with CS."""
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 
 from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.hlasm.abend import emit_abend
+from interpreter.hlasm.bit_fields import combined_bits, placed_bits
 from interpreter.hlasm.data_movement import Source, Transform
 from interpreter.hlasm.element_return_field import CC_FIELD, RESULT_BITS, RESULT_FIELD
 from interpreter.hlasm.element_size import ElementSize
@@ -28,10 +29,13 @@ OMITTED_M_FIELD = 0
 V1 = 0
 SECOND = 1
 THIRD = 2
+FOURTH = 3
+FIFTH = 4
 CS_FIELD = 4
 CONDITION_CODE_SET = 0b0001
 
 type SizedLowering = Callable[[HlasmEmitter, MachineStatement, ElementSize], None]
+type ElementOp = Callable[[HlasmEmitter, Sequence[Register]], Register]
 
 
 def m_field(statement: MachineStatement, index: int) -> int:
@@ -111,6 +115,51 @@ def below(emitter: HlasmEmitter, left: Register, right: Register) -> Register:
     difference = emitter.binop(BinopKind.SUB, left, right)
     borrow = emitter.binop(BinopKind.RSHIFT, difference, emitter.int_(RESULT_BITS))
     return emitter.binop(BinopKind.BIT_AND, borrow, emitter.int_(1))
+
+
+def element_shift(size: ElementSize, at: int) -> int:
+    return RESULT_BITS - element_bits(size) * (at + 1)
+
+
+def element_of(
+    emitter: HlasmEmitter, value: Register, size: ElementSize, at: int
+) -> Register:
+    moved = emitter.binop(
+        BinopKind.RSHIFT, value, emitter.int_(element_shift(size, at))
+    )
+    return emitter.binop(
+        BinopKind.BIT_AND, moved, emitter.int_(ones(element_bits(size)))
+    )
+
+
+def assembled(
+    emitter: HlasmEmitter, size: ElementSize, pieces: Sequence[Register]
+) -> Register:
+    mask = ones(element_bits(size))
+    return combined_bits(
+        emitter,
+        [
+            placed_bits(emitter, piece, mask, element_shift(size, at))
+            for at, piece in enumerate(pieces)
+        ],
+    )
+
+
+def element_wise(
+    arity: int, op: ElementOp
+) -> Callable[[ElementSize], StatementLowering]:
+    def build(size: ElementSize) -> StatementLowering:
+        def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
+            sources = [vr_at(SECOND + k)(emitter, statement) for k in range(arity)]
+            pieces = [
+                op(emitter, [element_of(emitter, s, size, at) for s in sources])
+                for at in range(size.count)
+            ]
+            to_v1(emitter, statement, assembled(emitter, size, pieces))
+
+        return lower
+
+    return build
 
 
 def count_cc(emitter: HlasmEmitter, counted: Register, elements: int) -> Register:
