@@ -101,6 +101,20 @@ ACCESS_REGISTERS: Mapping[str, Case] = {
         + _line("EAR", "5,0"),
         {4: HIGH_FILL | 0x12345678, 5: HIGH_FILL},
     ),
+    "LAE LAEY clear the access register": _ran(
+        _line("IILF", "4,X'12345678'")
+        + _line("SAR", "2,4")
+        + _line("SAR", "3,4")
+        + _line("LAE", "2,NEG")
+        + _line("LAEY", "3,NEG")
+        + _line("LA", "5,NEG")
+        + _line("SR", "2,5")
+        + _line("SR", "3,5")
+        + _line("EAR", "6,2")
+        + _line("EAR", "7,3"),
+        {2: HIGH_FILL, 3: HIGH_FILL, 6: HIGH_FILL, 7: HIGH_FILL},
+        0,
+    ),
     "LAM STAM wrapping": _kept(
         _line("LAM", "14,1,WORDS")
         + _line("STAM", "15,0,OUT")

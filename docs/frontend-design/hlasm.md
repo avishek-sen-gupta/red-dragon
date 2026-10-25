@@ -648,6 +648,9 @@ LLIHF, LLIHH, LLIHL, LLILF (LLGFI), LLILH, LLILL (LLGHI); IIHF, IIHH, IIHL, IILF
   -1), so each lowering takes its field-width bit image first.
 - z390 raises `S0C5` for LAE and LAEY at an address beyond its storage; the
   Principles of Operation make no storage reference. The z390 test pins that difference.
+- LAE and LAEY also set access register R1 to 0, its value in primary-space mode, the only
+  mode this machine has (PoO 5-54, 7-304). z390 leaves the access register unchanged; the
+  miscellaneous z390 test pins that difference.
 
 **Signed add and subtract (red-dragon-6uyp.25).** A, AY, AR, ARK, AH, AHY, AHI,
 AFI, AHIK, ASI, AG, AGR, AGRK, AGF, AGFR, AGH, AGHI, AGFI, AGHIK, AGSI; S, SY, SR,
@@ -1653,8 +1656,7 @@ chapter 23), with every extended mnemonic (VFAEZBS, VSTRCFS, VSTRSZH, ...). ES 0
   do not model subpool semantics beyond matching a release to its request. Only the R,
   RU and RC forms are lowered. A subpool FREEMAIN (SVC 10 with R1 = 0) abends `SA0A`
   instead of freeing the subpool. TIME supports `DEC` and `BIN` with `LINKAGE=SVC`.
-- Access registers hold values only; no instruction addresses through them. LAE and LAEY do
-  not set access register R1 (red-dragon-6uyp.86).
+- Access registers hold values only; no instruction addresses through them.
 - `run()` adds the HLASM run inputs its caller does not supply (`unsupplied_run_input_builtins()`:
   the host clock, an empty PARM and no DD definitions). Callers add the rest through `run()`'s
   `builtins` and `io_provider`:

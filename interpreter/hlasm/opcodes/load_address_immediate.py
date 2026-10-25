@@ -1,5 +1,5 @@
 # pyright: standard
-"""Load address and immediate opcodes: addresses, relative and indexed addresses, and immediates."""
+"""Load address and immediate opcodes: addresses (LAE and LAEY also zero access register R1, as in primary-space mode), relative and indexed addresses, and immediates."""
 
 from collections.abc import Mapping
 
@@ -23,8 +23,9 @@ from interpreter.hlasm.hlasm_constants import (
     WORD_BITS,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
-from interpreter.hlasm.operands import mask_operand, storage_operand
+from interpreter.hlasm.operands import mask_operand, reg_operand, storage_operand
 from interpreter.hlasm.statement_lowering import StatementLowering
+from interpreter.register import Register
 
 TARGET_OPERAND = 0
 ADDRESS_OPERAND = 1
@@ -36,6 +37,13 @@ def _logical(bits: int, shift: int) -> StatementLowering:
 
 def _inserted(bits: int, shift: int) -> StatementLowering:
     return move(immediate(bits), (), into_field(bits, shift))
+
+
+def _to_gr32_primary_space(
+    emitter: HlasmEmitter, statement: MachineStatement, value: Register
+) -> None:
+    to_gr32(emitter, statement, value)
+    emitter.store_ar(reg_operand(statement, TARGET_OPERAND), emitter.int_(0))
 
 
 def _indexed(shift: int) -> StatementLowering:
@@ -53,8 +61,8 @@ def _indexed(shift: int) -> StatementLowering:
 ADDRESSES: Mapping[str, StatementLowering] = {
     "LA": move(storage_address, (), to_gr32),
     "LAY": move(storage_address, (), to_gr32),
-    "LAE": move(storage_address, (), to_gr32),
-    "LAEY": move(storage_address, (), to_gr32),
+    "LAE": move(storage_address, (), _to_gr32_primary_space),
+    "LAEY": move(storage_address, (), _to_gr32_primary_space),
     "LARL": move(relative_target, (keep(ADDRESS_MASK_31),), to_gr32),
     "LXAB": _indexed(0),
     "LXAH": _indexed(1),

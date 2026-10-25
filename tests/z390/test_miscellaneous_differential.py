@@ -1,5 +1,5 @@
 # pyright: standard
-"""Miscellaneous programs leave the same declared registers, CC and abend in RedDragon and in z390, bar the instructions z390 does not execute, its unchecked boundaries, its STFLE and clock CCs, and its initial access registers; those expectations come from the Principles of Operation."""
+"""Miscellaneous programs leave the same declared registers, CC and abend in RedDragon and in z390, bar the instructions z390 does not execute, its unchecked boundaries, its STFLE and clock CCs, its initial access registers and its LAE, which leaves the access register; those expectations come from the Principles of Operation."""
 
 from collections.abc import Callable, Mapping
 from pathlib import Path
@@ -37,6 +37,16 @@ Z390_PINNED: Mapping[str, HlasmMachine] = {
         "U0001",
         2,
         {4: HIGH_FILL | 0x12345678, 5: HIGH_FILL | Z390_INITIAL_ACCESS_REGISTER},
+    ),
+    "LAE LAEY clear the access register": _z390(
+        "U0001",
+        0,
+        {
+            2: HIGH_FILL,
+            3: HIGH_FILL,
+            6: HIGH_FILL | 0x12345678,
+            7: HIGH_FILL | 0x12345678,
+        },
     ),
     "LAM off a word": _z390("U0001", 2, {2: HIGH_FILL}),
     "STAM off a word": _z390("U0001", 2, {2: HIGH_FILL}),
