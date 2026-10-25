@@ -288,6 +288,41 @@ def test_two_modules_share_external_dummy_sections_in_an_area_the_program_getmai
     ]
 
 
+LONG_DISPLACEMENT_OFFSET = """\
+MAIN     CSECT
+         USING MAIN,15
+         LA    10,AREA
+         SR    6,6
+         ICM   6,7,QYPRA
+         LR    2,6
+         LR    4,6
+         N     4,LOWBYTE
+         SLL   4,12
+         SRL   2,8
+         OR    2,4
+         LA    3,7
+         STY   3,0(2,10)
+         L     5,QPRA
+         LY    15,0(5,10)
+         BR    14
+QYPRA    DC    QY(PRA)
+QPRA     DC    Q(PRA)
+LOWBYTE  DC    F'255'
+BIG      DXD   XL4100
+PRA      DXD   F
+AREA     DS    XL4104
+         END   MAIN
+"""
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_a_qy_constant_holds_the_offset_as_a_long_displacement():
+    machine = run_hlasm_machine(LONG_DISPLACEMENT_OFFSET)
+
+    assert machine.run == HlasmRun(return_code=7, abend="", stdout="")
+    assert [machine.gprs[r] & LOW_WORD for r in (6, 2, 5)] == [0x000401, 4100, 4100]
+
+
 OVERLAID_FIELD = """\
 MAIN     CSECT
          USING MAIN,15

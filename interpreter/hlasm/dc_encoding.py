@@ -43,7 +43,6 @@ from interpreter.project.relocation_name import RelocationName
 type DcPiece = ConstantImage | AddressSlot | ExternalSlot | ComplexSlot | BinderSlot
 type Encoder = Callable[[str, int], int]
 
-LONG_DISPLACEMENT_OFFSET_ISSUE = "red-dragon-6uyp.103"
 OTHER_TYPES_ISSUE = "red-dragon-6uyp.63"
 BIT_LENGTH_STAR_ISSUE = "red-dragon-6uyp.97"
 
@@ -52,7 +51,10 @@ _FLOATING_POINT_TYPES = frozenset(
 )
 _BOUND_KINDS: Mapping[str, RelocationKind] = {
     "Q": RelocationKind.PR_OFFSET,
+    "QD": RelocationKind.PR_OFFSET,
+    "QY": RelocationKind.PR_LONG_OFFSET,
     "J": RelocationKind.CLASS_LENGTH,
+    "JD": RelocationKind.CLASS_LENGTH,
 }
 _UNSPLIT_TYPES = frozenset({"C"})
 _NOMINAL_SEPARATOR = ","
@@ -178,7 +180,9 @@ _VALUE_LENGTHS: Mapping[str, Callable[[str], int]] = {
     "Z": lambda text: len(_digits(text)),
 }
 
-_ADDRESS_TYPES = frozenset({"A", "AD", "Y", "V", "VD", "S", "SY", "Q", "QD", "J", "JD"})
+_ADDRESS_TYPES = frozenset(
+    {"A", "AD", "Y", "V", "VD", "S", "SY", "Q", "QD", "QY", "J", "JD"}
+)
 _FIXED_POINT_TYPES = frozenset({"F", "FD", "H"})
 _SUPPORTED_TYPES = (
     _STRING_ENCODERS.keys()
@@ -192,16 +196,10 @@ def _code(item: DcItem) -> str:
     return item.type + item.extension
 
 
-def _issue(item: DcItem) -> str:
-    if _code(item) == "QY":
-        return LONG_DISPLACEMENT_OFFSET_ISSUE
-    return OTHER_TYPES_ISSUE
-
-
 def _check_supported(item: DcItem) -> None:
     if _code(item) in _SUPPORTED_TYPES:
         return
-    raise UnsupportedDataType(_code(item), _issue(item))
+    raise UnsupportedDataType(_code(item), OTHER_TYPES_ISSUE)
 
 
 def _fixed_value(item: DcItem, text: str, origin: Origin) -> int:
@@ -259,12 +257,16 @@ def _string_piece(item: DcItem, text: str, origin: Origin) -> ConstantImage:
     return ConstantImage(tuple(encoded.value.to_bytes(length, "big")), encoded.warnings)
 
 
+def long_displacement(displacement: int) -> int:
+    low = displacement & _LOW_DISPLACEMENT_MASK
+    high = (displacement >> _BASE_SHIFT) & _HIGH_DISPLACEMENT_MASK
+    return (low << _LOW_DISPLACEMENT_SHIFT) | high
+
+
 def _base_displacement(item: DcItem, base: int, displacement: int) -> int:
     if item.extension == "":
         return (base << _BASE_SHIFT) | displacement
-    low = displacement & _LOW_DISPLACEMENT_MASK
-    high = (displacement >> _BASE_SHIFT) & _HIGH_DISPLACEMENT_MASK
-    return (base << _LONG_BASE_SHIFT) | (low << _LOW_DISPLACEMENT_SHIFT) | high
+    return (base << _LONG_BASE_SHIFT) | long_displacement(displacement)
 
 
 def _absolute_address(item: DcItem, number: int, origin: Origin) -> int:
@@ -287,7 +289,7 @@ def _bound_piece(item: DcItem, value: Address) -> DcPiece:
     match value:
         case RelocAddress(section=section):
             return BinderSlot(
-                _BOUND_KINDS[item.type], RelocationName(section), item.length
+                _BOUND_KINDS[_code(item)], RelocationName(section), item.length
             )
         case _:
             raise HlasmLoweringError(_code(item), "a DXD or DSECT name", value.kind)
@@ -362,7 +364,7 @@ def encode_ccw(statement: CcwStatement) -> tuple[DcPiece, ...]:
 def _address_pieces(
     item: DcItem, values: Sequence[Address], origin: Origin
 ) -> tuple[DcPiece, ...]:
-    if item.type in _BOUND_KINDS:
+    if _code(item) in _BOUND_KINDS:
         return tuple(_bound_piece(item, value) for value in values)
     return tuple(_address_piece(item, value, origin) for value in values)
 

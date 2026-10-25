@@ -155,6 +155,7 @@ def test_address_constants_are_absolute_relocated_external_or_bound_by_name():
         ),
         _address_item("Q", (PSEUDO_REGISTER,), 4),
         _address_item("Q", (PSEUDO_REGISTER,), 8).model_copy(update={"extension": "D"}),
+        _address_item("Q", (PSEUDO_REGISTER,), 3).model_copy(update={"extension": "Y"}),
         _address_item("J", (PSEUDO_REGISTER,), 2, explicit_length=True),
         _address_item("A", (), 4).model_copy(
             update={
@@ -173,6 +174,7 @@ def test_address_constants_are_absolute_relocated_external_or_bound_by_name():
         (ExternalSlot(ExternalAddress(kind="EXTERNAL", name="EXTRN", offset=0), 4),),
         (BinderSlot(RelocationKind.PR_OFFSET, RelocationName("PRA"), 4),),
         (BinderSlot(RelocationKind.PR_OFFSET, RelocationName("PRA"), 8),),
+        (BinderSlot(RelocationKind.PR_LONG_OFFSET, RelocationName("PRA"), 3),),
         (BinderSlot(RelocationKind.CLASS_LENGTH, RelocationName("PRA"), 2),),
         (AddressSlot(FIELD, 4), AddressSlot(NEXT, 4)),
     ]
@@ -354,7 +356,6 @@ def test_doubleword_character_set_and_base_displacement_types():
 @pytest.mark.parametrize(
     ("type_", "extension", "message"),
     [
-        ("Q", "Y", "DC type QY is not supported yet — red-dragon-6uyp.103"),
         ("G", "", "DC type G is not supported yet — red-dragon-6uyp.63"),
         ("R", "", "DC type R is not supported yet — red-dragon-6uyp.63"),
         ("X", "A", "DC type XA is not supported yet — red-dragon-6uyp.63"),

@@ -6,6 +6,7 @@ from functools import reduce
 
 from interpreter.hlasm.binder import Binder, aligned
 from interpreter.hlasm.bound_name import BoundName
+from interpreter.hlasm.dc_encoding import long_displacement
 from interpreter.hlasm.hlasm_constants import (
     ABEND_VAR,
     DOUBLEWORD_BYTES,
@@ -55,6 +56,7 @@ from interpreter.var_name import VarName
 
 _PSEUDO_REGISTER_FACTS: Mapping[RelocationKind, Callable[[PseudoRegister], int]] = {
     RelocationKind.PR_OFFSET: lambda register: register.offset,
+    RelocationKind.PR_LONG_OFFSET: lambda register: long_displacement(register.offset),
     RelocationKind.CLASS_LENGTH: lambda register: register.length,
 }
 

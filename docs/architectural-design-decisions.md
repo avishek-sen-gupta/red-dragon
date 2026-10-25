@@ -3300,6 +3300,8 @@ Because `Halt_` is a distinct type, it is naturally absent from `_infer_return`'
 
 **Consequences:** J follows GOFF semantics without GOFF, as che4z accepts it; J naming a class or a non-external DSECT is refused (red-dragon-6uyp.104). QY is refused (red-dragon-6uyp.103). z390 ignores DXD and CXD, so these rest on IBM's manuals, not a differential. A complex-relocatable A or Y constant becomes one signed ADDRESS item per term at one field (the bridge exports its terms instead of refusing, red-dragon-6uyp.68); the binder sums the items at a field. z390's loader cannot load subtracted items, so that differential pins its refusal.
 
+**Update (2026-10-25):** QY is bound (red-dragon-6uyp.103). Its RLD kind is PR_LONG_OFFSET, and the binder writes the offset in the long-displacement layout an SY constant uses, through the same split.
+
 ### ADR-198: Record I/O is a sibling package `interpreter.record_io` (2026-10-25)
 
 **Context:** The file provider, its drivers and their data (`AccessCondition`, `FileFrame`, `RunInputs`, the record layouts) lived in `interpreter.cobol`, but HLASM's QSAM services use them too. `run()` could not name the provider's type (`cobol-isolation`), HLASM mirrored `AccessCondition` positions as bare integers (`hlasm-not-cobol`), and the HLASM run inputs that build provider values imported `interpreter.cobol` (red-dragon-0iua).
