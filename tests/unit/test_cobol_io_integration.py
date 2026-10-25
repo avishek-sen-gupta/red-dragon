@@ -2,10 +2,11 @@
 
 from interpreter.cfg import build_cfg
 from interpreter.cobol.features import CobolFeature
-from interpreter.cobol.io_provider import IOResult, NullIOProvider, StubIOProvider
+from interpreter.cobol.io_provider import NullIOProvider, StubIOProvider
 from interpreter.instructions import InstructionBase
 from interpreter.ir import CodeLabel, IRInstruction, Opcode
 from interpreter.record_io.access_result import AccessCondition
+from interpreter.record_io.io_provider import IOResult
 from interpreter.register import Register
 from interpreter.registry import build_registry
 from interpreter.run import execute_cfg, initial_vm_state

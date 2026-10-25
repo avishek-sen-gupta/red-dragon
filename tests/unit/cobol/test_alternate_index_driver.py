@@ -5,11 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from cobol_asg.file_enums import FileOrganization, OpenMode
-from interpreter.cobol.real_file_provider import to_ioresult
 from interpreter.record_io.access_result import AccessCondition, AccessResult
 from interpreter.record_io.alternate_index_driver import open_alternate_index_driver
 from interpreter.record_io.alternate_key import AlternateKey
 from interpreter.record_io.prime_key import PrimeKey
+from interpreter.record_io.real_file_provider import to_ioresult
 from interpreter.record_io.record_shape import RecordShape
 from tests.unit.cobol.file_status_of import file_status_of
 

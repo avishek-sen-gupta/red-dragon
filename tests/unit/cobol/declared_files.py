@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from interpreter.cobol.io_provider import CobolIOProvider, IOResult
+from interpreter.cobol.io_provider import CobolIOProvider
 from interpreter.record_io.file_frame import FileFrame
+from interpreter.record_io.io_provider import IOResult
 
 PROGRAM = "P"
 

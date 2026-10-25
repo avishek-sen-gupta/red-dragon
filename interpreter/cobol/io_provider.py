@@ -1,10 +1,6 @@
 # pyright: standard
-"""Injectable I/O provider for COBOL statement execution.
-
-Provides a pluggable strategy for COBOL I/O operations (ACCEPT, READ, WRITE,
-OPEN, CLOSE) during symbolic execution. Similar to UnresolvedCallResolver,
-this is injected via VMConfig and accessed by the executor for __cobol_*
-CALL_FUNCTION dispatch.
+"""The COBOL file provider: the record operations plus what only COBOL asks of a provider
+(ACCEPT FROM a device and the implementor switches and KEY OF REFERENCE).
 
 Two implementations:
 - NullIOProvider: returns UNCOMPUTABLE for READ; IOResult(AccessCondition.OK, None) for all other ops.
@@ -14,96 +10,40 @@ Two implementations:
 from __future__ import annotations
 
 import logging
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
 
 from cobol_asg.switch_status import SwitchStatus
-from interpreter.data_value import DataRecord
 from interpreter.func_name import FuncName
 from interpreter.record_io.access_result import AccessCondition
-from interpreter.types.typed_value import TypedValue
+from interpreter.record_io.io_provider import (
+    RECORD_OPERATIONS,
+    IOResult,
+    RecordIOProvider,
+)
 from interpreter.vm.vm import Operators
 
 logger = logging.getLogger(__name__)
 
 _UNCOMPUTABLE = Operators.UNCOMPUTABLE
 
-
-@dataclass(frozen=True)
-class IOResult:
-    """Structured return value for all CobolIOProvider I/O methods.
-
-    condition: the driver's outcome; the lowering's IR maps it to a FILE STATUS.
-    data:      Populated on successful READ; None for write-side verbs.
-    """
-
-    condition: AccessCondition
-    data: str | None
-    record_number: int = 0
-
-
 # Dispatch table mapping __cobol_* function names to provider method names.
 _COBOL_IO_DISPATCH: dict[FuncName, str] = {
+    **RECORD_OPERATIONS,
     FuncName("__cobol_accept"): "_accept",
-    FuncName("__cobol_declare_file"): "_declare_file",
-    FuncName("__cobol_open_file"): "_open_file",
-    FuncName("__cobol_close_file"): "_close_file",
-    FuncName("__cobol_read_record"): "_read_record",
-    FuncName("__cobol_write_record"): "_write_record",
-    FuncName("__cobol_rewrite_record"): "_rewrite_record",
-    FuncName("__cobol_start_file"): "_start_file",
     FuncName("__cobol_key_of_reference"): "_key_of_reference",
-    FuncName("__cobol_delete_record"): "_delete_record",
-    FuncName("__cobol_io_outcome"): "_io_outcome",
-    FuncName("__cobol_io_data"): "_io_data",
-    FuncName("__cobol_io_record_number"): "_io_record_number",
     FuncName("__cobol_switch_status"): "_switch_status",
     FuncName("__cobol_set_switch"): "_set_switch",
 }
 
 
-class CobolIOProvider(ABC):
-    """Abstract base for COBOL I/O handling during symbolic execution.
+class CobolIOProvider(RecordIOProvider):
+    """A record provider that also serves COBOL's ACCEPT, implementor switches and
+    KEY OF REFERENCE."""
 
-    The executor calls handle_call(func_name, args) for any __cobol_*
-    CALL_FUNCTION instruction. Implementations decide whether to return
-    concrete data or UNCOMPUTABLE (which the executor wraps as symbolic).
-    """
-
-    def dispatch(self, name: FuncName) -> str | None:
-        return _COBOL_IO_DISPATCH.get(name)
-
-    def handle_call(
-        self, func_name: FuncName, args: list[TypedValue]
-    ) -> Any:  # Any: str | int | IOResult | _Uncomputable — VM I/O boundary
-        """Route a __cobol_* call to the appropriate method.
-
-        Returns a concrete value or UNCOMPUTABLE if unhandled.
-        """
-        method_name = self.dispatch(func_name)
-        if method_name is None:
-            logger.debug("CobolIOProvider: unknown func %s", func_name)
-            return _UNCOMPUTABLE
-        method = getattr(self, method_name)
-        return method(*[a.value for a in args])
-
-    def _io_outcome(self, raw: Any, program: str) -> Any:
-        """The driver outcome of an IOResult, as its AccessCondition's position."""
-        if isinstance(raw, IOResult):
-            return raw.condition.position()
-        return _UNCOMPUTABLE
-
-    def _io_data(self, raw: Any, program: str) -> Any:
-        """Extract record data from an IOResult (empty string if None)."""
-        if isinstance(raw, IOResult):
-            return raw.data or ""
-        return _UNCOMPUTABLE
-
-    def _io_record_number(self, raw: IOResult, program: str) -> int:
-        """The relative record number a relative-file verb used, 0 for others."""
-        return raw.record_number
+    operations = _COBOL_IO_DISPATCH
 
     def _switch_status(self, environment_name: str) -> str:
         """An implementor switch's status, "ON" or "OFF": OFF unless supplied, as
@@ -120,57 +60,6 @@ class CobolIOProvider(ABC):
         """ACCEPT: the device's next input record, END_OF_FILE when its input has
         ended, UNCOMPUTABLE when the input is unknown. The lowering fills the
         receiving area from successive records."""
-        ...
-
-    def _declare_file(self, frame: DataRecord, program: str) -> IOResult:
-        """A program's declaration of one of its files, made once before any OPEN:
-        the ``FileFrame`` record ``file_frame.frame_of`` reads. A provider that
-        frames no records ignores it."""
-        return IOResult(AccessCondition.OK, None)
-
-    @abstractmethod
-    def _open_file(self, filename: str, mode: str, program: str) -> IOResult:
-        """OPEN file in given mode (INPUT/OUTPUT/I-O/EXTEND), as its declaration
-        frames it."""
-        ...
-
-    @abstractmethod
-    def _close_file(self, filename: str, program: str) -> IOResult:
-        """CLOSE file."""
-        ...
-
-    @abstractmethod
-    def _read_record(
-        self, filename: str, key: str, program: str
-    ) -> Any:  # Any: IOResult | _Uncomputable
-        """READ — get next record from file."""
-        ...
-
-    @abstractmethod
-    def _write_record(
-        self, filename: str, data: str, key: str, program: str
-    ) -> IOResult:
-        """WRITE — write a record to file, at relative record number ``key`` if given."""
-        ...
-
-    @abstractmethod
-    def _rewrite_record(
-        self, filename: str, data: str, key: str, program: str
-    ) -> IOResult:
-        """REWRITE — replace the record numbered ``key``, or the last-read one."""
-        ...
-
-    @abstractmethod
-    def _start_file(
-        self, filename: str, key: str, relop: str, program: str
-    ) -> IOResult:
-        """START — position file at key for sequential reading."""
-        ...
-
-    @abstractmethod
-    def _delete_record(self, filename: str, key: str, program: str) -> IOResult:
-        """DELETE — remove the record ``key`` names, or the last-read record
-        when ``key`` is empty (sequential access)."""
         ...
 
     @abstractmethod
@@ -200,25 +89,25 @@ class NullIOProvider(CobolIOProvider):
     def _close_file(self, filename: str, program: str) -> IOResult:
         return IOResult(AccessCondition.OK, None)
 
-    def _read_record(self, filename: str, key: str, program: str) -> Any:
+    def _read_record(self, filename: str, locator: str, program: str) -> Any:
         return _UNCOMPUTABLE
 
     def _write_record(
-        self, filename: str, data: str, key: str, program: str
+        self, filename: str, data: str, locator: str, program: str
     ) -> IOResult:
         return IOResult(AccessCondition.OK, None)
 
     def _rewrite_record(
-        self, filename: str, data: str, key: str, program: str
+        self, filename: str, data: str, locator: str, program: str
     ) -> IOResult:
         return IOResult(AccessCondition.OK, None)
 
     def _start_file(
-        self, filename: str, key: str, relop: str, program: str
+        self, filename: str, locator: str, relop: str, program: str
     ) -> IOResult:
         return IOResult(AccessCondition.OK, None)
 
-    def _delete_record(self, filename: str, key: str, program: str) -> IOResult:
+    def _delete_record(self, filename: str, locator: str, program: str) -> IOResult:
         return IOResult(AccessCondition.OK, None)
 
     def _key_of_reference(self, filename: str, number: int, program: str) -> IOResult:
@@ -275,7 +164,7 @@ class StubIOProvider(CobolIOProvider):
         logger.info("StubIOProvider CLOSE %s", filename)
         return IOResult(AccessCondition.OK, None)
 
-    def _read_record(self, filename: str, key: str, program: str) -> Any:
+    def _read_record(self, filename: str, locator: str, program: str) -> Any:
         stub = self._files.get(filename)
         if stub and stub.records:
             record = stub.records.pop(0)
@@ -285,7 +174,7 @@ class StubIOProvider(CobolIOProvider):
         return IOResult(AccessCondition.END_OF_FILE, None)
 
     def _write_record(
-        self, filename: str, data: str, key: str, program: str
+        self, filename: str, data: str, locator: str, program: str
     ) -> IOResult:
         stub = self.get_file(filename)
         stub.written.append(data)
@@ -293,7 +182,7 @@ class StubIOProvider(CobolIOProvider):
         return IOResult(AccessCondition.OK, None)
 
     def _rewrite_record(
-        self, filename: str, data: str, key: str, program: str
+        self, filename: str, data: str, locator: str, program: str
     ) -> IOResult:
         stub = self.get_file(filename)
         if stub.written:
@@ -304,14 +193,17 @@ class StubIOProvider(CobolIOProvider):
         return IOResult(AccessCondition.OK, None)
 
     def _start_file(
-        self, filename: str, key: str, relop: str, program: str
+        self, filename: str, locator: str, relop: str, program: str
     ) -> IOResult:
         logger.info(
-            "StubIOProvider START %s key=%s relop=%s (no-op)", filename, key, relop
+            "StubIOProvider START %s locator=%s relop=%s (no-op)",
+            filename,
+            locator,
+            relop,
         )
         return IOResult(AccessCondition.OK, None)
 
-    def _delete_record(self, filename: str, key: str, program: str) -> IOResult:
+    def _delete_record(self, filename: str, locator: str, program: str) -> IOResult:
         stub = self._files.get(filename)
         if stub and stub.records:
             removed = stub.records.pop(0)

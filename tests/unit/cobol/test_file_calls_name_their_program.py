@@ -8,7 +8,7 @@ from pathlib import Path
 from cobol_asg.compilation_unit import programs_in_preorder
 from cobol_asg.file_enums import FileOrganization
 from interpreter.cobol.file_definitions_data import FILE_DEFINITIONS
-from interpreter.cobol.io_provider import IOResult, NullIOProvider
+from interpreter.cobol.io_provider import NullIOProvider
 from interpreter.data_literals import text
 from interpreter.data_value import DataList, DataRecord, DataValue
 from interpreter.field_name import FieldName
@@ -17,6 +17,7 @@ from interpreter.instructions import CallFunction, Const, Data, InstructionBase
 from interpreter.project.cobol_compile import compile_cobol_module
 from interpreter.record_io.access_result import AccessCondition
 from interpreter.record_io.file_frame import FileFrame
+from interpreter.record_io.io_provider import IOResult
 from interpreter.record_io.prime_key import PrimeKey
 from interpreter.register import Register
 from interpreter.run import run
@@ -156,7 +157,7 @@ class _Recording(NullIOProvider):
         self._saw("open_file", program)
         return IOResult(AccessCondition.OK, None)
 
-    def _read_record(self, filename: str, key: str, program: str) -> IOResult:
+    def _read_record(self, filename: str, locator: str, program: str) -> IOResult:
         self._saw("read_record", program)
         return IOResult(AccessCondition.OK, "RECORD0001")
 

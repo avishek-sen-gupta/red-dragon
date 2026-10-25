@@ -7,10 +7,10 @@ from pathlib import Path
 
 from cobol_asg.file_enums import FileOrganization
 from interpreter.cobol.features import CobolFeature
-from interpreter.cobol.io_provider import IOResult
 from interpreter.cobol.real_file_provider import RealFileIOProvider
 from interpreter.record_io.access_result import AccessCondition
 from interpreter.record_io.file_frame import FileFrame
+from interpreter.record_io.io_provider import IOResult
 from interpreter.record_io.prime_key import PrimeKey
 from tests.covers import covers
 from tests.unit.cobol.declared_files import opened
