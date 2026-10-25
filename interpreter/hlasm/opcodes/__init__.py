@@ -110,6 +110,7 @@ from interpreter.hlasm.opcodes.vector_logical_compare import (
 )
 from interpreter.hlasm.opcodes.vector_memory import VECTOR_MEMORY_LOWERINGS
 from interpreter.hlasm.opcodes.vector_register import VECTOR_REGISTER_LOWERINGS
+from interpreter.hlasm.opcodes.vector_string import VECTOR_STRING_LOWERINGS
 from interpreter.hlasm.statement_lowering import StatementLowering
 
 OPCODE_LOWERINGS: Mapping[str, StatementLowering] = {
@@ -162,6 +163,7 @@ OPCODE_LOWERINGS: Mapping[str, StatementLowering] = {
     **VECTOR_LOGICAL_COMPARE_LOWERINGS,
     **VECTOR_INTEGER_ARITHMETIC_LOWERINGS,
     **VECTOR_INTEGER_SHIFT_LOWERINGS,
+    **VECTOR_STRING_LOWERINGS,
 }
 
 DATA_FIELD_LOWERINGS: Mapping[str, FieldLowering] = {
