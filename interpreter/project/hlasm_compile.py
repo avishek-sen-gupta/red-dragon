@@ -7,6 +7,7 @@ import dataclasses
 import hashlib
 import logging
 import tempfile
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,6 +15,7 @@ from pathlib import Path
 from hlasm_asg.assembly_inputs import AssemblyInputs
 from hlasm_asg.hlasm_ast_parser import HlasmAstParser
 from interpreter.constants import Language
+from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.frontends import bind_image, get_cobol_frontend, get_hlasm_frontend
 from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.ir import NO_LABEL, CodeLabel
@@ -47,6 +49,7 @@ _MAIN_PATH = Path("__main__.asm")
 COBOL_START_UP_PATH = Path("__cobol_start_up__")
 _PROJECT_ROOT = Path("/")
 _NO_INPUTS = HlasmCompileOptions()
+_NO_OBSERVER = NullFrontendObserver()
 
 
 @dataclass(frozen=True)
@@ -57,6 +60,7 @@ class _Assembly:
     parser: HlasmAstParser
     options: HlasmCompileOptions
     work_dir: Path
+    observer: FrontendObserver
 
     def _artifact(self, kind: str) -> Path:
         settings = HlasmLoweringSettings(
@@ -67,12 +71,14 @@ class _Assembly:
     def ast(self) -> Path:
         target = self._artifact("ast")
         if not target.exists():
+            started = time.perf_counter()
             self.parser.parse_to_file(
                 self.program.source,
                 str(self.program.path),
                 target,
                 AssemblyInputs(self.options.names, self.options.clock.now()),
             )
+            self.observer.on_parse(time.perf_counter() - started)
         return target
 
     def unit(self) -> Path:
@@ -98,8 +104,11 @@ class _Assembly:
         return module_prefix(self.program.path, _PROJECT_ROOT)
 
     def _module(self) -> ModuleUnit:
-        frontend = get_hlasm_frontend(self.parser.read(self.ast()), self._name())
+        ast = self.parser.read(self.ast())
+        started = time.perf_counter()
+        frontend = get_hlasm_frontend(ast, self._name())
         ir = frontend.lower(self.program.source)
+        self.observer.on_lower(time.perf_counter() - started)
         return ModuleUnit(
             path=self.program.path,
             language=Language.HLASM,
@@ -244,7 +253,9 @@ def lower_hlasm_program(
     work_dir: Path,
     options: HlasmCompileOptions = _NO_INPUTS,
 ) -> tuple[Path, ...]:
-    return (_Assembly(program, parser, options, _work_dir(work_dir)).unit(),)
+    return (
+        _Assembly(program, parser, options, _work_dir(work_dir), _NO_OBSERVER).unit(),
+    )
 
 
 def link_hlasm_units(units: Sequence[Path], work_dir: Path) -> LinkedProgram:
@@ -258,10 +269,11 @@ def compile_hlasm(
     options: HlasmCompileOptions = _NO_INPUTS,
     work_dir: Path | FreshWorkDir = FRESH_WORK_DIR,
     programs: Sequence[SourceFile] = (),
+    observer: FrontendObserver = _NO_OBSERVER,
 ) -> LinkedProgram:
     work = _work_dir(work_dir)
     main, *companions = (
-        _Assembly(program, parser, options, work)
+        _Assembly(program, parser, options, work, observer)
         for program in (SourceFile(_MAIN_PATH, source), *programs)
     )
     units = (main.unit_file(), *(c.unit_file() for c in companions))

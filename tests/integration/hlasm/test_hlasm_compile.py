@@ -39,7 +39,8 @@ from interpreter.project.hlasm_compile import (
 from interpreter.project.hlasm_compile_options import HlasmCompileOptions
 from interpreter.project.source_file import SourceFile
 from interpreter.project.types import LinkedProgram
-from interpreter.run import run
+from interpreter.run import _image_program, _StatsObserver, run
+from interpreter.run_types import PipelineStats
 from tests.covers import NotLanguageFeature, covers
 from tests.integration.hlasm.fixed_assembly_clock import FixedAssemblyClock
 from tests.integration.hlasm.hlasm_helpers import (
@@ -92,6 +93,18 @@ def test_run_enters_hlasm_at_its_entry_point():
     vm = run(RETURNS_SEVEN, language=Language.HLASM, max_steps=MAX_STEPS)
 
     assert hlasm_run_of(vm, "") == HlasmRun(return_code=7, abend="", stdout="")
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_an_hlasm_run_reports_its_parse_and_lower_timings():
+    stats = PipelineStats()
+
+    _image_program(
+        Language.HLASM, RETURNS_SEVEN, (), _StatsObserver(stats), False, stats
+    )
+
+    assert stats.parse_time > 0.0
+    assert stats.lower_time > 0.0
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

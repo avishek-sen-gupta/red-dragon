@@ -1550,7 +1550,9 @@ def _compiled_image(
 ) -> LinkedProgram:
     match lang:
         case Language.HLASM:
-            return compile_hlasm(source, parser=get_hlasm_parser(copybook_dirs))
+            return compile_hlasm(
+                source, parser=get_hlasm_parser(copybook_dirs), observer=observer
+            )
         case Language.COBOL:
             return compile_cobol(
                 source,
