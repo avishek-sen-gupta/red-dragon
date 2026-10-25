@@ -6,6 +6,7 @@ root_packages =
     cobol_numeric
     hlasm_asg
     zarch_float
+    infrastructure
 
 # The reason cobol_asg is a sibling of interpreter rather than a subpackage of
 # it: an import of interpreter.anything runs interpreter/__init__.py, which
@@ -52,6 +53,14 @@ name = The z/Architecture floating-point arithmetic must not import the interpre
 type = forbidden
 source_modules =
     zarch_float
+forbidden_modules =
+    interpreter
+
+[importlinter:contract:infrastructure-is-below-interpreter]
+name = infrastructure never imports interpreter, so importing it never loads the VM
+type = forbidden
+source_modules =
+    infrastructure
 forbidden_modules =
     interpreter
 

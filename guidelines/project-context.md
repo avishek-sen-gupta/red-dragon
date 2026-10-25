@@ -26,13 +26,14 @@ Registered in `pyproject.toml`. Three are excluded from the default run:
 
 ### Package layout
 
-The five import-linter root packages — `interpreter`, `cobol_asg`, `cobol_memory`,
-`cobol_numeric`, `hlasm_asg` — are siblings, not subpackages, and the contracts exist to keep
+The import-linter root packages — `interpreter`, `cobol_asg`, `cobol_memory`,
+`cobol_numeric`, `hlasm_asg`, `infrastructure` — are siblings, not subpackages, and the contracts exist to keep
 them that way: importing anything under `interpreter` runs
 `interpreter/__init__.py`, which loads the VM. `cobol_asg` parses COBOL,
 `interpreter.cobol` lowers it, and `cobol_memory` holds storage algebra. A
 consumer that only reads COBOL or computes byte ranges must not pay for the VM.
 `hlasm_asg` runs the che4z bridge and models its JSON; `interpreter.hlasm` lowers it.
+`infrastructure` holds z/OS infrastructure below the VM (abend types) and imports nothing under `interpreter`.
 
 ## External Dependencies
 

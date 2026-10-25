@@ -28,7 +28,7 @@ Also included:
 
 ### Package layout
 
-Six root packages, each a contract root in `.importlinter`:
+Seven root packages, each a contract root in `.importlinter`:
 
 | Package | Contents |
 |---|---|
@@ -38,6 +38,7 @@ Six root packages, each a contract root in `.importlinter`:
 | `cobol_numeric` | Exact COBOL fixed-point values and arithmetic |
 | `hlasm_asg` | HLASM parsing via the che4z bridge, the program and instruction-table models, and the opcode-unit table (`opcode_units.json`) |
 | `zarch_float` | z/Architecture floating-point arithmetic, rounding and exception conditions (BFP, HFP, DFP) |
+| `infrastructure` | z/OS infrastructure below the VM: abend types; imports nothing under `interpreter` |
 
 The three `cobol_*` packages, `hlasm_asg` and `zarch_float` are leaves: they must not import `interpreter`. Importing anything under `interpreter` loads the VM, so a consumer that only parses COBOL or computes byte ranges imports a `cobol_*` package alone.
 
@@ -613,7 +614,7 @@ uv run pydeps interpreter --no-show -T png  # dependency graph (requires graphvi
 | [import-linter](https://import-linter.readthedocs.io/) | Architectural boundary contracts (configured in `.importlinter`) |
 | [pydeps](https://github.com/thebjorn/pydeps) | Module dependency visualization |
 
-Import-linter enforces fourteen contracts:
+Import-linter enforces fifteen contracts:
 
 | Contract | Rule |
 |----------|------|
@@ -622,6 +623,7 @@ Import-linter enforces fourteen contracts:
 | `cobol-numeric-is-a-leaf` | `cobol_numeric` must not import `interpreter` |
 | `hlasm-asg-is-a-leaf` | `hlasm_asg` must not import `interpreter` |
 | `zarch-float-is-a-leaf` | `zarch_float` must not import `interpreter` |
+| `infrastructure-is-below-interpreter` | `infrastructure` must not import `interpreter` |
 | `vm-no-frontend` | VM and handlers must not import frontends |
 | `ir-is-leaf` | IR module must not import other interpreter modules |
 | `project-no-vm-internals` | Project module must not import VM or handler internals |
