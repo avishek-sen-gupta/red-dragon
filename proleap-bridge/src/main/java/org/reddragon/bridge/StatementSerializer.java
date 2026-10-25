@@ -1401,9 +1401,22 @@ public final class StatementSerializer {
     /** A CALL USING argument: a data reference with its qualifiers and subscripts, or a literal's text. */
     private static JsonObject usingOperand(ValueStmt vs) {
         if (vs instanceof CallValueStmt && ((CallValueStmt) vs).getCall() != null) {
-            return serializeRef(((CallValueStmt) vs).getCall());
+            Call call = ((CallValueStmt) vs).getCall();
+            return lengthOfTarget(call) != null ? lengthOfOperand(vs) : serializeRef(call);
         }
         return textOperand(vs);
+    }
+
+    /** The item a CALL USING ... LENGTH OF operand measures, as a length_of reference. */
+    private static JsonObject lengthOfOperand(ValueStmt vs) {
+        if (!(vs instanceof CallValueStmt) || ((CallValueStmt) vs).getCall() == null) {
+            return textOperand(vs);
+        }
+        Call call = ((CallValueStmt) vs).getCall();
+        Call measured = lengthOfTarget(call);
+        JsonObject operand = serializeRef(measured != null ? measured : call);
+        operand.addProperty("kind", "length_of");
+        return operand;
     }
 
     private static JsonObject textOperand(ValueStmt vs) {
@@ -1858,6 +1871,8 @@ public final class StatementSerializer {
                             if (bc.getByContentType() == ByContent.ByContentType.ADDRESS_OF) {
                                 addUsingOperand(paramObj, addressOfOperand(bc.getValueStmt()));
                                 paramObj.addProperty("address_of", true);
+                            } else if (bc.getByContentType() == ByContent.ByContentType.LENGTH_OF) {
+                                addUsingOperand(paramObj, lengthOfOperand(bc.getValueStmt()));
                             } else {
                                 addUsingOperand(paramObj, usingOperand(bc.getValueStmt()));
                             }
@@ -1874,6 +1889,8 @@ public final class StatementSerializer {
                             if (bv.getByValueType() == ByValue.ByValueType.ADDRESS_OF) {
                                 addUsingOperand(paramObj, addressOfOperand(bv.getValueStmt()));
                                 paramObj.addProperty("address_of", true);
+                            } else if (bv.getByValueType() == ByValue.ByValueType.LENGTH_OF) {
+                                addUsingOperand(paramObj, lengthOfOperand(bv.getValueStmt()));
                             } else {
                                 addUsingOperand(paramObj, usingOperand(bv.getValueStmt()));
                             }

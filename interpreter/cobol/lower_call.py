@@ -26,6 +26,7 @@ from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.field_resolution import ResolvedFieldRef
+from interpreter.cobol.length_of_by_reference_error import LengthOfByReferenceError
 from interpreter.cobol.lower_arithmetic import eval_ref_mod_expr
 from interpreter.cobol.lower_program_exit import (
     emit_return_code_load,
@@ -74,6 +75,7 @@ LITERAL_ARGUMENT = "%LITERAL"
 _ZEROS = frozenset({"ZERO", "ZEROS", "ZEROES"})
 _FULLWORD = parse_pic("S9(9)", usage="COMP-5")
 _COMP2 = parse_pic("", usage="COMP-2")
+_LENGTH_REGISTER = parse_pic("9(9)", usage="BINARY")
 _DIRECTORY_HOLDS = "dict_contains_key"
 _BY_VALUE_CATEGORIES = frozenset(
     {CobolDataCategory.BINARY, CobolDataCategory.COMP1, CobolDataCategory.COMP2}
@@ -374,13 +376,21 @@ def _store_address(
 def _address(scope: LoweringScope, param: CallUsingParam) -> ArgumentAddress:
     """BY REFERENCE: the argument's own bytes. Anything else: a fresh copy. With
     the argument's byte length and whether it is signed."""
+    if param.address_of or param.is_literal or param.kind is OperandKind.LENGTH_OF:
+        return _computed_argument(scope, param)
+    return _data_argument(scope, param)
+
+
+def _computed_argument(scope: LoweringScope, param: CallUsingParam) -> ArgumentAddress:
+    if param.address_of:
+        return _pointer_argument(scope, param)
+    if param.is_literal:
+        return _literal_copy(scope, param)
+    return _length_of_copy(scope, param)
+
+
+def _data_argument(scope: LoweringScope, param: CallUsingParam) -> ArgumentAddress:
     ctx, materialised, span = scope.ctx, scope.materialised, scope.span
-    if param.address_of or param.is_literal:
-        return (
-            _pointer_argument(scope, param)
-            if param.address_of
-            else _literal_copy(scope, param)
-        )
     ref, region_reg = ctx.resolve_field_ref(
         param.name, materialised, param.qualifiers, param.subscripts, span=span
     )
@@ -420,10 +430,29 @@ def _pointer_argument(scope: LoweringScope, param: CallUsingParam) -> ArgumentAd
     return region, offset, length, False
 
 
+def _length_of_copy(scope: LoweringScope, param: CallUsingParam) -> ArgumentAddress:
+    """LENGTH OF an item, in a fresh copy of the special register, PIC 9(9) BINARY.
+    IBM passes it only BY CONTENT or BY VALUE."""
+    if param.param_type == "REFERENCE":
+        raise LengthOfByReferenceError(param.name, line_of(scope.span))
+    length = scope.ctx.emit_length_of(
+        param.name, scope.materialised, param.qualifiers, span=scope.span
+    )
+    return _value_copy(scope, _layout(_LENGTH_REGISTER), length)
+
+
 def _literal_copy(scope: LoweringScope, param: CallUsingParam) -> ArgumentAddress:
     """A literal argument in the representation IBM defines for it, in a fresh copy."""
-    ctx, span = scope.ctx, scope.span
+    ctx = scope.ctx
     layout = _layout(_literal_type(param, ctx.figuratives))
+    value = ctx.const_to_reg(_literal_value(param, ctx.figuratives), span=scope.span)
+    return _value_copy(scope, layout, value)
+
+
+def _value_copy(
+    scope: LoweringScope, layout: FieldLayout, value: Register
+) -> ArgumentAddress:
+    ctx, span = scope.ctx, scope.span
     copy = ctx.fresh_reg()
     ctx.emit_inst(
         AllocRegion(
@@ -435,7 +464,7 @@ def _literal_copy(scope: LoweringScope, param: CallUsingParam) -> ArgumentAddres
     ctx.emit_encode_and_write(
         copy,
         layout,
-        ctx.const_to_reg(_literal_value(param, ctx.figuratives), span=span),
+        value,
         zero,
         extent=_copy_extent(layout.byte_length, LITERAL_ARGUMENT),
         span=span,
