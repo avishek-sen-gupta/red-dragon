@@ -1481,6 +1481,8 @@ Rulings R43, R45, R48, R52.
 - A vector-processing exception (PIC 001B) stores the VXC (index << 4 | code) in FPC byte 2
   and abends `S0DB`, as PIC 0013 gives `S0D3` and 001D `S0DD`.
 - Our che4z fork exports `VZERO v` as `VGBM v,0`. Upstream che4z gives `VGBM 1,v`.
+- Our fork exports `VACQ` and `VACCCQ` with V4 in place and M5 4 after it. Upstream inserts 4
+  before V4, so register 4 replaces V4 and V4 becomes the mask.
 
 **Vector loads and stores (red-dragon-6uyp.57.1).** VL, VLR, VLM, VST, VSTM, VLL, VSTL, VLBB,
 VLREP, VLEB/H/F/G, VLEIB/H/F/G, VLLEZ, VSTEB/H/F/G, VGEF, VGEG, VSCEF, VSCEG, VLBR, VLBRREP,
@@ -1756,7 +1758,7 @@ VPOPCTB, ...), which che4z exports as its base with the implied masks. No builti
 | `tests/z390/test_loop_branch_differential.py` | Every branch on count and index case against z390; z390's late reads of R2 and the compare value pinned (`-m z390`) |
 | `tests/unit/hlasm/test_conditional_select_count_lowering.py` | Conditional, select and count IR: the CC mask tested before any operand, SELECT's reads before its write, FLOGR's odd pair `S0C6`, branch-free counts with no builtin, one loop for BEXTG and BDEPG, the count IR's values |
 | `tests/integration/hlasm/test_conditional_select_count.py` | Every conditional, select and count mnemonic and every extended suffix on the VM: met and unmet conditions, masks 0 and 15, kept halves, aliased registers, zero and full operands; CC |
-| `tests/integration/hlasm/test_vector_extended_mnemonics.py` | VZERO and VONE reach VGBM of their own register |
+| `tests/integration/hlasm/test_vector_extended_mnemonics.py` | VZERO and VONE reach VGBM of their own register; VACQ and VACCCQ keep V4 and append M5 4 |
 | `tests/integration/hlasm/test_vector_memory.py` | Every vector load and store family on the VM, read back with VST and VSTE: VLM/VSTM over 2 and 16 registers, element indexes, VLEI signs, replication, zero extension, VLL/VSTL with R3 0, 6, 15 and above, gather and scatter with V1 = V2, byte and element reversal for H, F, G, Q; invalid fields and VLM/VSTM ranges (V3 below V1, 17 registers) `S0C6` with storage unchanged; VLBB at every block size, only the loaded bytes asserted |
 | `tests/integration/hlasm/test_vector_logical_compare.py` | Every vector logical, compare, min/max, complement and count family on the VM, read back with VSTM and IPM, with V1 equal to a source: bitwise forms, VEVAL with an asymmetric function, VCEQ/VCH/VCHL CC 0, 1, 3 with CS and unchanged without, signed against logical order with high-bit elements, VEC/VECL on the PoO's element, VTM's three CCs, the most negative element under VLC/VLP, counts of zero elements, ES 4 forms; invalid sizes `S0C6` with storage unchanged |
 | `tests/integration/hlasm/test_vector_register.py` | Every vector register-manipulation family on the VM, read back with VST, STG and IPM, with V1 equal to a source: masks with wrapping ranges, VLGV/VLVG at addresses past 4095, merges, permutes over both sources, packs saturating with CC 0, 1, 3 and unchanged without CS, replication, selection, sign extension, unpacks; invalid sizes and indexes `S0C6` with storage unchanged |
