@@ -1,5 +1,7 @@
 """Unit tests — verify executor dispatches __cobol_* calls to io_provider."""
 
+import copy
+
 from interpreter.cfg import build_cfg
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.io_provider import NullIOProvider, StubIOProvider
@@ -149,6 +151,7 @@ class TestExecutorIOProviderDispatch:
         ir = _build_call_function_ir("__cobol_prepare_digits", "123", 5, 2, True)
         # No provider — should fall through to builtins
         vm = _execute_with_provider(ir, NO_IO_PROVIDER)
+        assert copy.deepcopy(vm).io_provider is NO_IO_PROVIDER
         result = unwrap(vm.current_frame.registers.get(Register("%result")))
         # Should get a concrete list of digit ints from the builtin, not symbolic
         assert isinstance(

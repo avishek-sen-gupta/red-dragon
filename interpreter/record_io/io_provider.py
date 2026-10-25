@@ -15,6 +15,7 @@ from typing import Any
 from interpreter.data_value import DataRecord
 from interpreter.func_name import FuncName
 from interpreter.record_io.access_result import AccessCondition
+from interpreter.shared_on_deepcopy import SharedOnDeepcopy
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.uncomputable import UNCOMPUTABLE
 
@@ -146,7 +147,7 @@ class RecordIOProvider(ABC):
         ...
 
 
-class NoIOProvider(RecordIOProvider):
+class NoIOProvider(RecordIOProvider, SharedOnDeepcopy):
     """The provider of a run given none: it dispatches no call, so each falls through
     to the builtins as if no provider were there."""
 
