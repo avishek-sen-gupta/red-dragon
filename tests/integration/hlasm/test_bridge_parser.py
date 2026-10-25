@@ -198,3 +198,33 @@ class TestBridgeParser:
                 mnote=NoMnote(kind="NONE"),
             ),
         )
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_bridge_refuses_a_dxd_whose_operand_is_not_a_data_definition(
+        self, tmp_path: Path
+    ):
+        parser = make_hlasm_parser()
+
+        with pytest.raises(HlasmParseError) as refused:
+            parser.parse_to_file(
+                b"MAIN     CSECT\n"
+                b"PR       DXD   F,,F\n"
+                b"         DC    Q(PR)\n"
+                b"         END   MAIN\n",
+                SOURCE_NAME,
+                tmp_path / "program.json",
+                BARE_ASSEMBLY,
+            )
+
+        assert refused.value.diagnostics == (
+            Diagnostic(
+                code="A004",
+                severity=Severity.ERROR,
+                message="Data definition operand expected",
+                file=SOURCE_NAME,
+                line=2,
+                related=(),
+                mnote=NoMnote(kind="NONE"),
+            ),
+        )
+        assert not (tmp_path / "program.json").exists()
