@@ -281,6 +281,35 @@ ASMNOPE  CSECT
          BR    14
          END
 """
+CALLS_ASMRM = b"""\
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. COBRM.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01  WS-OUT PIC X(12) VALUE SPACES.
+       01  WS-X   PIC X(8) VALUE 'ABCDEFGH'.
+       01  WS-L   PIC 9(2) VALUE 3.
+       PROCEDURE DIVISION.
+           CALL 'ASMRM' USING BY REFERENCE WS-OUT BY VALUE WS-X(8:1)
+               BY VALUE LENGTH OF WS-X BY REFERENCE WS-X(2:WS-L)
+               BY CONTENT WS-X(4:2).
+           GOBACK.
+"""
+ASMRM = b"""\
+ASMRM    CSECT
+         LR    12,15
+         USING ASMRM,12
+         LM    2,6,0(1)
+         ST    3,0(,2)
+         ST    4,4(,2)
+         MVC   8(2,2),0(6)
+         MVC   0(3,5),=C'xyz'
+         MVC   0(2,6),=C'qq'
+         SR    15,15
+         BR    14
+         LTORG
+         END
+"""
 EBCDIC = "cp037"
 LOW_WORD = 0xFFFFFFFF
 
@@ -380,6 +409,20 @@ def test_a_cobol_call_hands_hlasm_a_standard_list_and_cancel_keeps_it(tmp_path: 
         "SAME".encode(EBCDIC),
         bytes.fromhex("FFF9"),
         bytes.fromhex("FFFA"),
+    )
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_a_reference_modified_or_length_of_argument_reaches_hlasm_at_its_own_length(
+    tmp_path: Path,
+):
+    image = _image((CALLS_ASMRM,), (ASMRM,), tmp_path)
+
+    ws = _ws(_entered(image, "COBRM"), image, "COBRM")
+
+    assert (ws["WS-OUT"], ws["WS-X"]) == (
+        (0xC8).to_bytes(4) + (8).to_bytes(4) + "DE  ".encode(EBCDIC),
+        "AxyzEFGH".encode(EBCDIC),
     )
 
 

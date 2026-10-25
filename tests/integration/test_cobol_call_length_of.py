@@ -22,11 +22,16 @@ _MAIN = [
     "   05 WS-G-B PIC S9(9) COMP.",
     "01 WS-T.",
     "   05 WS-E PIC X(6) OCCURS 3.",
+    "01 WS-CNT PIC 9 VALUE 2.",
+    "01 WS-ODO.",
+    "   05 WS-ODO-H PIC X(3).",
+    "   05 WS-ODO-E PIC X(4) OCCURS 1 TO 5 DEPENDING ON WS-CNT.",
     "PROCEDURE DIVISION.",
     "    CALL 'LENSUB' USING BY CONTENT LENGTH OF WS-X",
     "        BY VALUE LENGTH OF WS-G",
     "        BY CONTENT LENGTH OF WS-E",
-    "        BY VALUE LENGTH OF WS-X.",
+    "        BY VALUE LENGTH OF WS-X",
+    "        BY CONTENT LENGTH OF WS-ODO LENGTH OF WS-ODO-E.",
     "    STOP RUN.",
 ]
 
@@ -40,17 +45,23 @@ _SUB = [
     "   05 WS-B PIC 9(4).",
     "   05 WS-C PIC 9(4).",
     "   05 WS-D PIC 9(4).",
+    "   05 WS-E PIC 9(4).",
+    "   05 WS-F PIC 9(4).",
     "LINKAGE SECTION.",
     "01 LK-A PIC 9(9) BINARY.",
     "01 LK-B PIC 9(9) BINARY.",
     "01 LK-C PIC 9(9) BINARY.",
     "01 LK-D PIC 9(9) BINARY.",
+    "01 LK-E PIC 9(9) BINARY.",
+    "01 LK-F PIC 9(9) BINARY.",
     "PROCEDURE DIVISION USING LK-A BY VALUE LK-B BY REFERENCE LK-C",
-    "    BY VALUE LK-D.",
+    "    BY VALUE LK-D BY REFERENCE LK-E LK-F.",
     "    MOVE LK-A TO WS-A.",
     "    MOVE LK-B TO WS-B.",
     "    MOVE LK-C TO WS-C.",
     "    MOVE LK-D TO WS-D.",
+    "    MOVE LK-E TO WS-E.",
+    "    MOVE LK-F TO WS-F.",
     "    GOBACK.",
 ]
 
@@ -68,6 +79,8 @@ def test_the_bridge_marks_each_length_of_operand() -> None:
             ("WS-G", "VALUE"),
             ("WS-E", "CONTENT"),
             ("WS-X", "VALUE"),
+            ("WS-ODO", "CONTENT"),
+            ("WS-ODO-E", "CONTENT"),
         )
     ]
 
@@ -76,7 +89,7 @@ def test_the_bridge_marks_each_length_of_operand() -> None:
 def test_the_callee_receives_each_length_as_a_binary_fullword() -> None:
     ws = bytes(ws_region(run_cobol_programs(_MAIN, {"LENSUB": _SUB}), "LENSUB"))
 
-    assert ws[:16].decode("cp037") == "0005000700060005"
+    assert ws[:24].decode("cp037") == "000500070006000500110004"
 
 
 @covers(CobolFeature.CALL_USING)
@@ -90,6 +103,6 @@ def test_length_of_by_reference_is_refused() -> None:
         run_cobol_programs(main, {"LENSUB": _SUB})
 
     assert str(refused.value) == (
-        "line 12: CALL BY REFERENCE LENGTH OF WS-X: IBM Enterprise COBOL passes"
+        "line 16: CALL BY REFERENCE LENGTH OF WS-X: IBM Enterprise COBOL passes"
         " the LENGTH OF special register only BY CONTENT or BY VALUE"
     )
