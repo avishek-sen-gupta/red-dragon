@@ -150,8 +150,10 @@ CLOCK_RELATION_OF: Mapping[str, Callable[[HlasmMachine], int]] = {
 }
 
 
-def _clock_relation(case: str, machine: HlasmMachine) -> int:
-    return CLOCK_RELATION_OF[case](machine)
+Z390_CLOCK_RELATION_OF: Mapping[str, Callable[[HlasmMachine], int]] = {
+    **CLOCK_RELATION_OF,
+    "STCKF": lambda m: min(m.gprs[3] - m.gprs[2], 0),
+}
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
@@ -162,8 +164,8 @@ def test_clocks_set_cc_zero_and_keep_order_where_z390_does_neither_for_stcke(
     ours, theirs = _both(z390, tmp_path, case, CLOCK_REGISTERS)
 
     assert (
-        (ours.run, ours.cc, _clock_relation(case, ours)),
-        (theirs.run, theirs.cc, _clock_relation(case, theirs)),
+        (ours.run, ours.cc, CLOCK_RELATION_OF[case](ours)),
+        (theirs.run, theirs.cc, Z390_CLOCK_RELATION_OF[case](theirs)),
     ) == (
         (programs.expected(case).run, 0, CLOCK_RELATIONS[case][0]),
         (programs.expected(case).run, Z390_CLOCK_CC[case], CLOCK_RELATIONS[case][1]),
