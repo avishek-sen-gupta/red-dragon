@@ -11,11 +11,11 @@ from pathlib import Path
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.layout_data import field_positions
 from interpreter.cobol.real_file_provider import RealFileIOProvider
-from interpreter.cobol.run_inputs import RunInputs
 from interpreter.encoding.ebcdic_table import EbcdicTable
 from interpreter.frontend import make_cobol_parser
 from interpreter.project.cobol_compile import compile_cobol
 from interpreter.project.entry_point import EntryPoint
+from interpreter.record_io.run_inputs import RunInputs
 from interpreter.run import declarations_of, initial_vm_state, run_linked
 from interpreter.vm.builtins import core_builtins
 from tests.covers import covers

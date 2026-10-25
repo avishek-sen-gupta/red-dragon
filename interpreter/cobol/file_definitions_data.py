@@ -16,9 +16,9 @@ from cobol_asg.cobol_statements import (
     RecordVarying,
 )
 from interpreter.cobol.data_layout import record_length
-from interpreter.cobol.data_literals import boolean, integer, named, text
 from interpreter.cobol.fd_record_format import depends, fd_records
 from interpreter.cobol.program_object import program_name
+from interpreter.data_literals import boolean, integer, named, text
 from interpreter.data_value import DataList, DataRecord
 from interpreter.instructions import Data
 from interpreter.var_name import VarName

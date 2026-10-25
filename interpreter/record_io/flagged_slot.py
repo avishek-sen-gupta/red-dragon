@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from interpreter.cobol.relative_slot import RelativeSlot
+from interpreter.record_io.relative_slot import RelativeSlot
 
 _ACTIVE = b"\xff"
 _EMPTY = b"\x00"

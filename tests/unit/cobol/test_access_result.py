@@ -1,4 +1,4 @@
-from interpreter.cobol.access_result import AccessCondition, AccessResult
+from interpreter.record_io.access_result import AccessCondition, AccessResult
 from tests.covers import NotLanguageFeature, covers
 
 

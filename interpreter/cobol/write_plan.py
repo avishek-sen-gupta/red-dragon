@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from interpreter.cobol.prime_key import PrimeKey
+from interpreter.record_io.prime_key import PrimeKey
 from interpreter.register import Register
 
 

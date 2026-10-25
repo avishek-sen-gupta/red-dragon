@@ -10,13 +10,13 @@ from cobol_asg.asg_types import CobolASG
 from cobol_asg.cobol_statements import FileControlEntry
 from cobol_asg.file_enums import FileOrganization
 from cobol_asg.ref_mod import RefModOperand
-from interpreter.cobol.alternate_key import AlternateKey
 from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.fd_record_format import records_vary
-from interpreter.cobol.file_frame import FileFrame
 from interpreter.cobol.global_names import visible_record_files
-from interpreter.cobol.prime_key import PrimeKey
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
+from interpreter.record_io.alternate_key import AlternateKey
+from interpreter.record_io.file_frame import FileFrame
+from interpreter.record_io.prime_key import PrimeKey
 
 
 def largest_record(

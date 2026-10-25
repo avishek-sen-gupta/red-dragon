@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from interpreter.cobol.data_literals import boolean, integer, named, text
 from interpreter.cobol.layout_data import DATA_LAYOUT, field_positions
+from interpreter.data_literals import boolean, integer, named, text
 from interpreter.data_value import DataList, DataRecord
 from interpreter.instructions import Data
 from tests.covers import NotLanguageFeature, covers

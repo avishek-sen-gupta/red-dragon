@@ -20,9 +20,9 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from cobol_asg.switch_status import SwitchStatus
-from interpreter.cobol.access_result import AccessCondition
 from interpreter.data_value import DataRecord
 from interpreter.func_name import FuncName
+from interpreter.record_io.access_result import AccessCondition
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.vm import Operators
 

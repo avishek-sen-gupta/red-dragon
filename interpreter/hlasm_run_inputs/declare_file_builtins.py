@@ -4,10 +4,10 @@
 from collections.abc import Mapping, Sequence
 
 from cobol_asg.file_enums import FileOrganization
-from interpreter.cobol.file_frame import FileFrame
-from interpreter.cobol.prime_key import PrimeKey
 from interpreter.func_name import FuncName
 from interpreter.hlasm_run_inputs.run_input_names import DECLARE_FILE_BUILTIN
+from interpreter.record_io.file_frame import FileFrame
+from interpreter.record_io.prime_key import PrimeKey
 from interpreter.types.typed_value import TypedValue, typed
 from interpreter.vm.builtin import Builtin
 from interpreter.vm.vm import VMState

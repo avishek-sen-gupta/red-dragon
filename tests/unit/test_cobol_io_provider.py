@@ -1,6 +1,5 @@
 """Tests for COBOL I/O provider — NullIOProvider and StubIOProvider."""
 
-from interpreter.cobol.access_result import AccessCondition
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.io_provider import (
     IOResult,
@@ -9,6 +8,7 @@ from interpreter.cobol.io_provider import (
     StubIOProvider,
 )
 from interpreter.func_name import FuncName
+from interpreter.record_io.access_result import AccessCondition
 from interpreter.types.typed_value import typed_from_runtime
 from interpreter.vm.vm import Operators
 from tests.covers import covers

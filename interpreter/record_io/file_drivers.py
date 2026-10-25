@@ -14,18 +14,18 @@ from pathlib import Path
 from typing import BinaryIO, Protocol, runtime_checkable
 
 from cobol_asg.file_enums import FileOrganization, OpenMode
-from interpreter.cobol.access_result import AccessCondition, AccessResult
-from interpreter.cobol.alternate_index import (
+from interpreter.record_io.access_result import AccessCondition, AccessResult
+from interpreter.record_io.alternate_index import (
     AlternateIndex,
     IndexEntry,
     after,
     indexes_of,
 )
-from interpreter.cobol.alternate_key import AlternateKey
-from interpreter.cobol.flagged_slot import FlaggedSlot
-from interpreter.cobol.prime_key import PrimeKey
-from interpreter.cobol.record_shape import RecordShape
-from interpreter.cobol.relative_slot import RelativeSlot
+from interpreter.record_io.alternate_key import AlternateKey
+from interpreter.record_io.flagged_slot import FlaggedSlot
+from interpreter.record_io.prime_key import PrimeKey
+from interpreter.record_io.record_shape import RecordShape
+from interpreter.record_io.relative_slot import RelativeSlot
 
 logger = logging.getLogger(__name__)
 

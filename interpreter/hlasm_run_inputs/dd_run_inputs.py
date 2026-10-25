@@ -4,10 +4,10 @@
 from collections.abc import Mapping
 from types import MappingProxyType
 
-from interpreter.cobol.run_inputs import RunInputs
 from interpreter.func_name import FuncName
 from interpreter.hlasm_run_inputs.dd_builtins import dd_builtins
 from interpreter.hlasm_run_inputs.dd_definition import DdDefinition
+from interpreter.record_io.run_inputs import RunInputs
 from interpreter.vm.builtin import Builtin
 
 

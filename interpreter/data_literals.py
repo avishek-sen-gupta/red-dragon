@@ -1,5 +1,5 @@
 # pyright: standard
-"""Typed scalars and fields for the Data the COBOL lowering declares."""
+"""Typed scalars and fields for the Data a lowering declares."""
 
 from __future__ import annotations
 

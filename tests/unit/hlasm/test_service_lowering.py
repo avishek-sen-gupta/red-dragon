@@ -5,7 +5,6 @@ from collections.abc import Callable
 
 import pytest
 
-from interpreter.cobol.access_result import AccessCondition
 from interpreter.cobol.program_object import ENTRY_PREFIX
 from interpreter.hlasm.data_set_services import (
     emit_close,
@@ -27,6 +26,7 @@ from interpreter.hlasm.storage_services import (
 )
 from interpreter.hlasm.time_service import emit_time
 from interpreter.instructions import CallFunction, Symbolic
+from interpreter.record_io.access_result import AccessCondition
 from tests.covers import NotLanguageFeature, covers
 
 REGISTER_IMAGES = {"__binary_bytes_to_int", "__int_to_binary_bytes"}

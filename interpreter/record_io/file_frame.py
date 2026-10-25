@@ -6,12 +6,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from cobol_asg.file_enums import FileOrganization
-from interpreter.cobol.alternate_key import AlternateKey
-from interpreter.cobol.data_literals import boolean, integer, named, text
-from interpreter.cobol.prime_key import PrimeKey
-from interpreter.cobol.record_shape import RecordShape
+from interpreter.data_literals import boolean, integer, named, text
 from interpreter.data_value import DataList, DataRecord, DataScalar, DataValue
 from interpreter.field_name import FieldName
+from interpreter.record_io.alternate_key import AlternateKey
+from interpreter.record_io.prime_key import PrimeKey
+from interpreter.record_io.record_shape import RecordShape
 
 
 @dataclass(frozen=True)

@@ -10,8 +10,8 @@ from cobol_asg.switch_status import SwitchStatus
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.io_provider import NullIOProvider
 from interpreter.cobol.real_file_provider import RealFileIOProvider
-from interpreter.cobol.run_inputs import RunInputs
 from interpreter.cobol.switch_index import SwitchCondition, SwitchIndex
+from interpreter.record_io.run_inputs import RunInputs
 from tests.covers import covers
 
 _SWITCHES = {

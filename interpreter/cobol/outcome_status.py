@@ -6,8 +6,8 @@ from __future__ import annotations
 
 from types import MappingProxyType
 
-from interpreter.cobol.access_result import AccessCondition
 from interpreter.cobol.file_logic_status import FileLogicStatus
+from interpreter.record_io.access_result import AccessCondition
 
 _STATUS_OF = MappingProxyType(
     {

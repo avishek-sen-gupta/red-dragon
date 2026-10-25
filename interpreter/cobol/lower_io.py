@@ -51,7 +51,6 @@ from interpreter.cobol.ir_emitter import IrEmitter
 from interpreter.cobol.linage_page import emit_linage_open
 from interpreter.cobol.linage_write import linage_write
 from interpreter.cobol.lowering_scope import LoweringScope
-from interpreter.cobol.prime_key import PrimeKey
 from interpreter.cobol.program_object import entry_var, program_name, use_request_var
 from interpreter.cobol.read_plan import ReadPlan
 from interpreter.cobol.relative_key import addressing_key, reported_key
@@ -76,6 +75,7 @@ from interpreter.instructions import (
 )
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import resolve_binop
+from interpreter.record_io.prime_key import PrimeKey
 from interpreter.register import NO_REGISTER, Register
 from interpreter.var_name import VarName
 

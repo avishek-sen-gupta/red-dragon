@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from cobol_asg.sort_key_direction import SortKeyDirection
-from interpreter.cobol.data_literals import integer, integer_of, named, text, text_of
 from interpreter.cobol.sort_key_encoding import SortKeyEncoding
+from interpreter.data_literals import integer, integer_of, named, text, text_of
 from interpreter.data_value import DataRecord
 
 

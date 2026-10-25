@@ -1,4 +1,4 @@
-from interpreter.cobol.run_inputs import RunInputs
+from interpreter.record_io.run_inputs import RunInputs
 from tests.covers import NotLanguageFeature, covers
 
 

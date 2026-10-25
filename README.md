@@ -613,7 +613,7 @@ uv run pydeps interpreter --no-show -T png  # dependency graph (requires graphvi
 | [import-linter](https://import-linter.readthedocs.io/) | Architectural boundary contracts (configured in `.importlinter`) |
 | [pydeps](https://github.com/thebjorn/pydeps) | Module dependency visualization |
 
-Import-linter enforces thirteen contracts:
+Import-linter enforces fourteen contracts:
 
 | Contract | Rule |
 |----------|------|
@@ -630,6 +630,7 @@ Import-linter enforces thirteen contracts:
 | `hlasm-isolation` | VM, handlers, project and run layers must not import `interpreter.hlasm` |
 | `hlasm-not-cobol` | `interpreter.hlasm` must not import `interpreter.cobol` directly |
 | `cobol-not-hlasm` | `interpreter.cobol` must not import `interpreter.hlasm` directly |
+| `record-io-is-neutral` | `interpreter.record_io` must not import `interpreter.cobol` or `interpreter.hlasm` |
 
 ## Documentation
 

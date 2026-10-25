@@ -8,14 +8,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from cobol_asg.compilation_unit import programs_in_preorder
 from cobol_asg.file_enums import FileOrganization
 from interpreter.cobol.features import CobolFeature
-from interpreter.cobol.file_frame import FileFrame, frame_of
-from interpreter.cobol.prime_key import PrimeKey
-from cobol_asg.compilation_unit import programs_in_preorder
 from interpreter.frontend import make_cobol_parser
 from interpreter.instructions import CallFunction, Const, InstructionBase
 from interpreter.project.cobol_compile import compile_cobol_module
+from interpreter.record_io.file_frame import FileFrame, frame_of
+from interpreter.record_io.prime_key import PrimeKey
 from interpreter.register import Register
 from tests.covers import covers
 

@@ -9,11 +9,11 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from cobol_asg.file_enums import OpenMode
-from interpreter.cobol.access_result import AccessCondition, AccessResult
-from interpreter.cobol.alternate_key import AlternateKey
 from interpreter.cobol.features import CobolFeature
-from interpreter.cobol.file_drivers import IndexedDriver
-from interpreter.cobol.prime_key import PrimeKey
+from interpreter.record_io.access_result import AccessCondition, AccessResult
+from interpreter.record_io.alternate_key import AlternateKey
+from interpreter.record_io.file_drivers import IndexedDriver
+from interpreter.record_io.prime_key import PrimeKey
 from tests.covers import covers
 
 _RL = 3

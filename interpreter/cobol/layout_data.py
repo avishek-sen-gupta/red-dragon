@@ -6,8 +6,8 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 
 from interpreter.cobol.data_layout import FieldLayout
-from interpreter.cobol.data_literals import boolean, integer, named, text
 from interpreter.cobol.field_position import FieldPosition
+from interpreter.data_literals import boolean, integer, named, text
 from interpreter.data_value import DataList, DataRecord, DataScalar, DataValue
 from interpreter.field_name import FieldName
 from interpreter.instructions import Data

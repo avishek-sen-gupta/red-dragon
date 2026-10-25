@@ -162,3 +162,12 @@ source_modules =
 forbidden_modules =
     interpreter.hlasm
 allow_indirect_imports = True
+
+[importlinter:contract:record-io-is-neutral]
+name = Record I/O must not import a language's lowering
+type = forbidden
+source_modules =
+    interpreter.record_io
+forbidden_modules =
+    interpreter.cobol
+    interpreter.hlasm

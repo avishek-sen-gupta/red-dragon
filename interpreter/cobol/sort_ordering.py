@@ -5,14 +5,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from interpreter.cobol.data_literals import (
+from interpreter.cobol.sort_field import SortField, sort_field_of
+from interpreter.data_literals import (
     integer,
     integer_value,
     items_of,
     named,
     record_value,
 )
-from interpreter.cobol.sort_field import SortField, sort_field_of
 from interpreter.data_value import DataList, DataRecord
 
 
