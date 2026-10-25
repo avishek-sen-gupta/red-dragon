@@ -75,7 +75,7 @@ The bridge emits the compilation unit as `{"programs": [...]}`: the top-level pr
 
 `ProLeapCobolParser.parse()` and `AstStore.get()` return a `CobolCompilationUnit` of top-level `CobolASG`s, each with its `attribute` (`ProgramAttribute`) and its contained `programs`; the preprocessor runs on each program object alone, in pre-order. A consumer that handles one program takes `first_program`, as `CobolFrontend.lower(source)` does.
 
-`compile_cobol` and `lower_cobol_program` lower every program of a source, in pre-order (`programs_in_preorder`), each with a fresh frontend into a unit of its own, and link every unit. The run unit's main program is the first top-level program of the main source. A CALL to a sibling or contained program resolves through the run unit's program table like a CALL to a separately compiled one.
+`compile_cobol` and `lower_cobol_program` lower every program of a source, in pre-order (`programs_in_preorder`), each with a fresh frontend into a unit of its own, and link every unit. The run unit's main program is the first top-level program of the main source. A CALL to a sibling or contained program resolves through the run unit's program table like a CALL to a separately compiled one. A program that fails to lower fails the compile with its error; with `tolerant=True` a called program that fails is skipped with a WARNING instead, and a CALL to it is unresolved.
 
 Not yet modelled: CALL visibility of contained programs and COMMON (red-dragon-ljku.2), INITIAL (ljku.5). EXTERNAL data and files are modelled; see [EXTERNAL data and files](#external-data-and-files). GLOBAL names are modelled; see [GLOBAL names](#global-names). Today every program in the run unit can CALL every other.
 

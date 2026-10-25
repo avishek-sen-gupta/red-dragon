@@ -194,6 +194,8 @@ class _Lowering:
     def lower_or_skip(
         self, program: SourceFile, ast_file: Path, work_dir: Path
     ) -> tuple[Path, ...]:
+        if not self.tolerant:
+            return self.lower(program, ast_file, work_dir)
         try:
             return self.lower(program, ast_file, work_dir)
         except Exception:  # noqa: BLE001

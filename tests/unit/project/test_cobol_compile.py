@@ -451,7 +451,9 @@ class _FailsToLower(RedDragonExtensionLoweringStrategy):
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_a_program_that_fails_to_lower_is_skipped_with_a_warning(caplog):
+def test_a_program_that_fails_to_lower_is_skipped_with_a_warning_when_tolerant(
+    caplog,
+):
     with caplog.at_level(logging.WARNING, logger="interpreter.project.cobol_compile"):
         linked = compile_cobol(
             _CALLER,
@@ -461,6 +463,7 @@ def test_a_program_that_fails_to_lower_is_skipped_with_a_warning(caplog):
                 SourceFile(Path("CALLEE.cbl"), _CALLEE),
             ),
             extension_strategies=(_FailsToLower("BROKEN"),),
+            tolerant=True,
         )
 
     assert {str(p) for p in linked.modules} == {
@@ -572,6 +575,7 @@ def test_a_callee_that_fails_to_lower_has_no_unit_and_a_rerun_still_links(
         programs=programs,
         extension_strategies=strategies,
         work_dir=tmp_path,
+        tolerant=True,
     )
     linked = compile_cobol(
         _CALLER,
@@ -579,6 +583,7 @@ def test_a_callee_that_fails_to_lower_has_no_unit_and_a_rerun_still_links(
         programs=programs,
         extension_strategies=strategies,
         work_dir=tmp_path,
+        tolerant=True,
     )
     assert (
         sorted(p.name.split("-")[0] for p in tmp_path.glob("*.unit.json")),

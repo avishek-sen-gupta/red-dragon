@@ -77,6 +77,7 @@ def run_cobol_programs(
     max_steps: int = 500_000,
     lp: LP = LP.LP32,
     null_access: NullAccess = WARN_AND_IGNORE,
+    tolerant: bool = False,
 ):
     """Run a main program plus named subprograms through the full pipeline.
 
@@ -99,6 +100,7 @@ def run_cobol_programs(
             for name, lines in subprograms.items()
         ),
         lp=lp,
+        tolerant=tolerant,
     )
     entry = f"func_{main_id.lower()}_0"
     return run_linked(
