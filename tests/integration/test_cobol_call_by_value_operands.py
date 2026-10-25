@@ -46,3 +46,32 @@ def test_by_value_refuses_an_operand_ibm_does_not_pass_by_value() -> None:
         " alphanumeric character"
         for name, _ in _REFUSED
     ]
+
+
+def _receiving(name: str, clause: str) -> list[str]:
+    return [
+        "IDENTIFICATION DIVISION.",
+        "PROGRAM-ID. BYVSUB.",
+        "DATA DIVISION.",
+        "LINKAGE SECTION.",
+        f"01 {name} {clause}.",
+        "   05 WS-PART PIC X." if not clause else "01 WS-PAD PIC X.",
+        f"PROCEDURE DIVISION USING BY VALUE {name}.",
+        "    GOBACK.",
+    ]
+
+
+def _receiving_refusal(name: str, clause: str) -> str:
+    with pytest.raises(ByValueOperandError) as refused:
+        run_cobol_programs(_receiving(name, clause), {})
+    return str(refused.value)
+
+
+@covers(CobolFeature.USING_BY_VALUE, CobolFeature.PROCEDURE_DIVISION_USING)
+def test_procedure_division_using_by_value_refuses_the_same_operands() -> None:
+    assert [_receiving_refusal(name, clause) for name, clause in _REFUSED] == [
+        f"line 5: PROCEDURE DIVISION USING BY VALUE {name}: IBM Enterprise COBOL passes"
+        " BY VALUE only an elementary binary, COMP-1, COMP-2 or pointer item, or a"
+        " single alphanumeric character"
+        for name, _ in _REFUSED
+    ]

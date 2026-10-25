@@ -29,6 +29,7 @@ from interpreter.cobol.file_declarations import lower_file_declarations
 from interpreter.cobol.file_definitions_data import file_definitions_data
 from interpreter.cobol.layout_data import layout_data
 from interpreter.cobol.lower_alter import lower_alter_reset
+from interpreter.cobol.lower_call import refuse_by_value_parameters
 from interpreter.cobol.lower_data_division import (
     lower_file_area,
     lower_sectioned_data_division,
@@ -218,6 +219,7 @@ class CobolFrontend(Frontend):
         """Shared lowering core: ASG → IR. Called by lower() and lower_from_ast_dict()."""
         sectioned = build_sectioned_layout(asg)
         self._program_id = program_name(asg)
+        refuse_by_value_parameters(asg.procedure_using, sectioned.linkage)
         self._using = using_signature(asg.procedure_using, sectioned.linkage_parameters)
         logger.debug(
             "lowering %s: %d sections, %d paragraphs",

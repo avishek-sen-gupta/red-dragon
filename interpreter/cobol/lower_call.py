@@ -23,7 +23,7 @@ from cobol_memory.field_extent import FieldExtent, Precision
 from cobol_memory.region_id import RegionId
 from interpreter.cobol.by_value_operand_error import ByValueOperandError
 from interpreter.cobol.cobol_constants import BuiltinName
-from interpreter.cobol.data_layout import FieldLayout
+from interpreter.cobol.data_layout import DataLayout, FieldLayout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.field_resolution import ResolvedFieldRef
 from interpreter.cobol.length_of_by_reference_error import LengthOfByReferenceError
@@ -479,6 +479,26 @@ def _register(scope: LoweringScope, value: Register | int) -> Register:
 def _refuse_by_value(param: CallUsingParam, field: FieldLayout, line: int) -> None:
     if param.param_type == "VALUE" and not allowed_by_value(field, param.ref_mod):
         raise ByValueOperandError(param.name, line)
+
+
+def refuse_by_value_parameters(
+    using: Sequence[CallUsingParam], linkage: DataLayout
+) -> None:
+    """PROCEDURE DIVISION USING BY VALUE takes the operands CALL BY VALUE does."""
+    _ = [
+        _refuse_by_value_parameter(
+            param, linkage.qualified_matches(param.name, param.qualifiers)[0].storage
+        )
+        for param in using
+        if param.param_type == "VALUE"
+    ]
+
+
+def _refuse_by_value_parameter(param: CallUsingParam, field: FieldLayout) -> None:
+    if not allowed_by_value(field, param.ref_mod):
+        raise ByValueOperandError(
+            param.name, line_of(field.span), "PROCEDURE DIVISION USING BY VALUE"
+        )
 
 
 def allowed_by_value(field: FieldLayout, ref_mod: RefModOperand) -> bool:
