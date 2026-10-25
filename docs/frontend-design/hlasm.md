@@ -268,11 +268,12 @@ units' object modules once, at link. Start-up IR is not rebuilt from the AST.
 - **Pseudo registers.** External dummy sections merge by name across the image at their largest
   length and strictest alignment, then sit in first appearance (module order, ESD order), each
   at the next offset aligned to its alignment, from 0 (IBM leaves the order to the binder). Q
-  gets the offset, J the merged length, CXD the end of the last one. The binder allocates no
+  gets the offset (QY as a long displacement), J the merged length, CXD the end of the last one. The binder allocates no
   area: the program GETMAINs CXD bytes and adds Q values to the area's address, as IBM's steps
   for external dummy sections say. A J naming anything but an external dummy section raises
   `UnsupportedBinding` (red-dragon-6uyp.104). IBM allows J only under GOFF; che4z accepts it
-  without, and so do we.
+  without, and so do we. A QY offset outside the signed 20-bit range raises `UnsupportedBinding`
+  (red-dragon-6uyp.110); no IBM source says what its binder does there.
 - **Duplicates.** An SD, LD or COBOL PROGRAM-ID name defined twice in the image raises
   `DuplicateProgramInImage` naming both units (ruling R67).
 - **Job step.** Each SD and LD name gets `func___hlasm_job_<NAME>_0` in the `__hlasm_job__`

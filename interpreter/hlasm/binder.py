@@ -41,6 +41,13 @@ from interpreter.project.unit_diagnostic import UnitDiagnostic
 from interpreter.project.unresolved_external import UnresolvedExternal
 from interpreter.project.weak_reference import WeakReference
 
+CLASS_LENGTH_ISSUE = "red-dragon-6uyp.104"
+LONG_OFFSET_RANGE_ISSUE = "red-dragon-6uyp.110"
+_LONG_DISPLACEMENT_BITS = 20
+_LONG_DISPLACEMENT_RANGE = range(
+    -(1 << (_LONG_DISPLACEMENT_BITS - 1)), 1 << (_LONG_DISPLACEMENT_BITS - 1)
+)
+
 
 def aligned(length: int, boundary: int) -> int:
     return -(-length // boundary) * boundary
@@ -80,16 +87,44 @@ def _ended(module: ImageModule) -> PlacedName:
             return PlacedName(module.name, default, 0)
 
 
-def _refuse_unsupported(module: ImageModule, dummies: frozenset[str]) -> None:
-    unsupported = [
-        f"J-constant naming {r.target.name}"
+def _unbound_class_lengths(
+    module: ImageModule, registers: Mapping[str, PseudoRegister]
+) -> tuple[tuple[str, str], ...]:
+    return tuple(
+        (f"J-constant naming {r.target.name}", CLASS_LENGTH_ISSUE)
         for r in module.object_module.relocations
         if r.kind == RelocationKind.CLASS_LENGTH
         and isinstance(r.target, RelocationName)
-        and r.target.name not in dummies
-    ]
+        and r.target.name not in registers
+    )
+
+
+def _far_long_offsets(
+    module: ImageModule, registers: Mapping[str, PseudoRegister]
+) -> tuple[tuple[str, str], ...]:
+    return tuple(
+        (
+            f"QY-constant naming {r.target.name}"
+            f" at offset {registers[r.target.name].offset}",
+            LONG_OFFSET_RANGE_ISSUE,
+        )
+        for r in module.object_module.relocations
+        if r.kind == RelocationKind.PR_LONG_OFFSET
+        and isinstance(r.target, RelocationName)
+        and registers[r.target.name].offset not in _LONG_DISPLACEMENT_RANGE
+    )
+
+
+def _refuse_unsupported(
+    module: ImageModule, registers: Mapping[str, PseudoRegister]
+) -> None:
+    unsupported = (
+        *_unbound_class_lengths(module, registers),
+        *_far_long_offsets(module, registers),
+    )
     if unsupported:
-        raise UnsupportedBinding(unsupported[0], module.name)
+        record, issue = unsupported[0]
+        raise UnsupportedBinding(record, module.name, issue)
 
 
 def _merged(
@@ -145,8 +180,7 @@ class Binder:
         _refuse_duplicates(modules, programs)
         self.modules = tuple(modules)
         self.programs = {program.name: program for program in programs}
-        dummies = frozenset(self.pseudo_registers)
-        _ = [_refuse_unsupported(module, dummies) for module in modules]
+        _ = [_refuse_unsupported(module, self.pseudo_registers) for module in modules]
 
     @cached_property
     def _dummies(self) -> tuple[ExternalDummySection, ...]:

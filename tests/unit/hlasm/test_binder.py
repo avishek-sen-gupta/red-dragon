@@ -1,5 +1,5 @@
 # pyright: standard
-"""The binder: sections at doubleword offsets in ESD order, commons merged at their largest length, external dummy sections merged by name (largest length, strictest alignment) into the pseudo-register area in first appearance, names resolved locally, then across the image, then to a COBOL program's stub, then to zero (WXTRN) or a stub (EXTRN, warned once); duplicate names across both languages and a J-constant naming no external dummy section are refused, and an RLD record whose target does not fit its kind is refused when built."""
+"""The binder: sections at doubleword offsets in ESD order, commons merged at their largest length, external dummy sections merged by name (largest length, strictest alignment) into the pseudo-register area in first appearance, names resolved locally, then across the image, then to a COBOL program's stub, then to zero (WXTRN) or a stub (EXTRN, warned once); duplicate names across both languages a J-constant naming no external dummy section and a QY offset beyond the signed 20-bit range are refused, and an RLD record whose target does not fit its kind is refused when built."""
 
 import pytest
 
@@ -233,6 +233,42 @@ def _length(section: str, offset: int, target: str) -> RelocationRecord:
         RelocationName(target),
         RelocationSign.PLUS,
         0,
+    )
+
+
+def _long_offset_after(filler: int) -> ImageModule:
+    return _module(
+        "E",
+        (
+            ControlSection("QY", 4),
+            ExternalDummySection("FILL", filler, 1),
+            ExternalDummySection("PR", 1, 1),
+        ),
+        (
+            RelocationRecord(
+                "QY",
+                0,
+                3,
+                RelocationKind.PR_LONG_OFFSET,
+                RelocationName("PR"),
+                PLUS,
+                0,
+            ),
+        ),
+    )
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_binder_binds_a_qy_offset_only_within_the_signed_20_bit_range():
+    bound = Binder((_long_offset_after((1 << 19) - 1),), ())
+
+    with pytest.raises(UnsupportedBinding) as beyond:
+        Binder((_long_offset_after(1 << 19),), ())
+
+    assert bound.pseudo_registers["PR"].offset == (1 << 19) - 1
+    assert str(beyond.value) == (
+        "QY-constant naming PR at offset 524288 in module E is not bound yet"
+        " (red-dragon-6uyp.110)"
     )
 
 
