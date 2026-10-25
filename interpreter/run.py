@@ -1017,7 +1017,6 @@ def run_linked(
     verbose: bool = False,
     backend: str = LLMProvider.CLAUDE,
     unresolved_call_strategy: UnresolvedCallStrategy = UnresolvedCallStrategy.SYMBOLIC,
-    io_provider: RecordIOProvider = NO_IO_PROVIDER,
     *,
     builtins: Mapping[FuncName, Builtin],
     initial_vm: VMState,
@@ -1035,8 +1034,6 @@ def run_linked(
         verbose: Print IR, CFG, and step-by-step info.
         backend: LLM backend for interpreter fallback.
         unresolved_call_strategy: Resolution strategy for unknown calls.
-        io_provider: The file provider record I/O calls reach (e.g. StubIOProvider for
-            testing); ``NO_IO_PROVIDER``, the default, serves none.
         builtins: The builtins table this run resolves builtin calls through.
         initial_vm: VM state to execute against. Use ``initial_vm_state()`` for a
             fresh one.
@@ -1142,7 +1139,6 @@ def run_linked_resumable(
     verbose: bool = False,
     backend: str = LLMProvider.CLAUDE,
     unresolved_call_strategy: UnresolvedCallStrategy = UnresolvedCallStrategy.SYMBOLIC,
-    io_provider: RecordIOProvider = NO_IO_PROVIDER,
     *,
     builtins: Mapping[FuncName, Builtin],
     initial_vm: VMState,
@@ -1527,7 +1523,6 @@ def run(
         verbose=verbose,
         backend=backend,
         unresolved_call_strategy=unresolved_call_strategy,
-        io_provider=io_provider,
         builtins=_language_builtins(lang, builtins),
         initial_vm=initial_vm_state(io_provider=io_provider, null_access=null_access),
     )

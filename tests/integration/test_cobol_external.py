@@ -112,7 +112,6 @@ def _working_storage(
         max_steps=50_000,
         initial_vm=initial_vm_state(io_provider=provider),
         builtins=core_builtins(),
-        io_provider=provider,
     )
     region = ws_region(vm, program)
     return {

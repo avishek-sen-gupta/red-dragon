@@ -95,7 +95,6 @@ def test_close_reel_unit_leaves_a_non_reel_file_open_with_status_07(tmp_path: Pa
         max_steps=200_000,
         initial_vm=initial_vm_state(io_provider=provider),
         builtins=core_builtins(),
-        io_provider=provider,
     )
     region = ws_region(vm, "CLOSEREEL")
     fields = field_positions(declarations_of(linked, "CLOSEREEL"))

@@ -343,7 +343,6 @@ def _run_unit(prog: str, tmp_path: Path, max_steps: int) -> tuple[Path, RunOutco
         linked,
         entry_point=EntryPoint.function(lambda ref: ref.label == label),
         max_steps=max_steps,
-        io_provider=provider,
         builtins=core_builtins(),
         initial_vm=initial_vm_state(io_provider=provider),
         permit_unresolved_call_targets=False,

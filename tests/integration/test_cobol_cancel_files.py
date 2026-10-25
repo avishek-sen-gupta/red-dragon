@@ -89,7 +89,6 @@ def test_cancel_closes_the_files_the_cancelled_program_left_open(tmp_path: Path)
         max_steps=100_000,
         initial_vm=initial_vm_state(io_provider=provider),
         builtins=core_builtins(),
-        io_provider=provider,
     )
     region = ws_region(vm, "CANFILES")
     statuses = {
