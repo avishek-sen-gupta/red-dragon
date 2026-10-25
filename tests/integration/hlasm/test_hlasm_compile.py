@@ -28,6 +28,9 @@ from hlasm_asg.missing_syslib_directory import MissingSyslibDirectory
 from hlasm_asg.program.hlasm_program import HlasmProgram
 from hlasm_asg.real_subprocess_runner import RealSubprocessRunner
 from interpreter.constants import Language
+from interpreter.frontends import get_hlasm_parser
+from interpreter.hlasm.hlasm_frontend import HlasmFrontend
+from interpreter.project.default_end import DefaultEnd
 from interpreter.project.hlasm_compile import (
     HLASM_FRONTEND_LOGGER,
     compile_hlasm,
@@ -40,6 +43,7 @@ from interpreter.run import run
 from tests.covers import NotLanguageFeature, covers
 from tests.integration.hlasm.fixed_assembly_clock import FixedAssemblyClock
 from tests.integration.hlasm.hlasm_helpers import (
+    BARE_ASSEMBLY,
     MAX_STEPS,
     HlasmRun,
     hlasm_run_of,
@@ -91,7 +95,7 @@ def test_run_enters_hlasm_at_its_entry_point():
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_entry_defaults_to_first_csect():
+def test_entry_defaults_to_first_csect(tmp_path: Path):
     source = (
         "FIRST    CSECT\n"
         "         LA    15,7\n"
@@ -101,8 +105,28 @@ def test_entry_defaults_to_first_csect():
         "         BR    14\n"
         "         END\n"
     )
+    equated_first = "SEVEN    EQU   7\n" + source.replace("15,7", "15,SEVEN")
+    parser = get_hlasm_parser()
+    frontend = HlasmFrontend(
+        parser.read(
+            parser.parse_to_file(
+                equated_first.encode(), "e.asm", tmp_path / "e.json", BARE_ASSEMBLY
+            )
+        ),
+        "E",
+    )
 
-    assert run_hlasm(source) == HlasmRun(return_code=7, abend="", stdout="")
+    assert (
+        run_hlasm(source),
+        run_hlasm(equated_first),
+        frontend.entry_name,
+        frontend.object_module.end,
+    ) == (
+        HlasmRun(return_code=7, abend="", stdout=""),
+        HlasmRun(return_code=7, abend="", stdout=""),
+        "FIRST",
+        DefaultEnd("FIRST"),
+    )
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

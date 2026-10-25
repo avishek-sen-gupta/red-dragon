@@ -410,7 +410,8 @@ che4z has no other data-set variables (`&SYSIN_VOLUME`, `&SYSLIB_*`, `&SYSPRINT_
 `&SYSPUNCH_*`, `&SYSTERM_*`, `&SYSADATA_*`, `&SYSLIN_*`); they stay `E010`.
 
 The entry is the symbol `END` names, or the first CSECT at offset 0 when `END`
-names none. The module function's label is `func_<entry>_0`. It returns GR15's low word
+names none. An EQU before the first CSECT leaves che4z an empty private-code section;
+the entry skips it, since it holds no first byte. The module function's label is `func_<entry>_0`. It returns GR15's low word
 when control branches to its return address.
 
 ## Supervisor Calls and Our Maclib

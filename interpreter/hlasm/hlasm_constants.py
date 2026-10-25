@@ -21,6 +21,7 @@ NAME_ADDRESS_FIELD = FieldName("address")
 NAME_LENGTH_FIELD = FieldName("length")
 NAME_LOADS_FIELD = FieldName("loads")
 PROGRAM_NAME_BYTES = 8
+PRIVATE_CODE = ""
 
 GPR_COUNT = 16
 GPR_BYTES = 8

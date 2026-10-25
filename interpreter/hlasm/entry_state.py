@@ -1,16 +1,18 @@
 # pyright: standard
-"""The entry point and the registers a module is entered with: R14 the return sentinel, R13 a fresh save area, R15 the entry address, R1 the parameter list."""
+"""The entry point (END's operand, else the first control section, skipping an empty private-code section) and the registers a module is entered with: R14 the return sentinel, R13 a fresh save area, R15 the entry address, R1 the parameter list."""
 
 from hlasm_asg.program.default_entry import DefaultEntry
 from hlasm_asg.program.hlasm_program import HlasmProgram
 from hlasm_asg.program.named_entry import NamedEntry
 from hlasm_asg.program.reloc_symbol import RelocSymbol
+from hlasm_asg.program.section import Section
 from hlasm_asg.program.section_kind import SectionKind
 from interpreter.hlasm.hlasm_constants import (
     ENTRY_ADDRESS_REGISTER,
     ENTRY_PARAMETER_REGISTER,
     ENTRY_RETURN_REGISTER,
     ENTRY_SAVE_AREA_REGISTER,
+    PRIVATE_CODE,
     RETURN_SENTINEL,
     SAVE_AREA_BYTES,
 )
@@ -18,6 +20,12 @@ from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.hlasm_entry import HlasmEntry
 from interpreter.instructions import AllocRegion
 from interpreter.register import Register
+
+
+def _control_section(section: Section) -> bool:
+    return section.kind == SectionKind.CSECT and (
+        section.name != PRIVATE_CODE or section.length > 0
+    )
 
 
 def resolve_entry(program: HlasmProgram) -> HlasmEntry:
@@ -30,7 +38,7 @@ def resolve_entry(program: HlasmProgram) -> HlasmEntry:
             )
             return HlasmEntry(name, symbol.section, symbol.offset)
         case DefaultEntry():
-            first = next(s for s in program.sections if s.kind == SectionKind.CSECT)
+            first = next(s for s in program.sections if _control_section(s))
             return HlasmEntry(first.name, first.name, 0)
 
 

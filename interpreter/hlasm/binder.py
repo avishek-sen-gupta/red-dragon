@@ -10,7 +10,11 @@ from interpreter.hlasm.bound_name import BoundName
 from interpreter.hlasm.cobol_owner import CobolOwner
 from interpreter.hlasm.cobol_program import CobolProgram
 from interpreter.hlasm.far_branch_entry import FarBranchEntry
-from interpreter.hlasm.hlasm_constants import DOUBLEWORD_BYTES, STUB_BYTES
+from interpreter.hlasm.hlasm_constants import (
+    DOUBLEWORD_BYTES,
+    PRIVATE_CODE,
+    STUB_BYTES,
+)
 from interpreter.hlasm.image_module import ImageModule
 from interpreter.hlasm.module_layout import ModuleLayout
 from interpreter.hlasm.module_owner import ModuleOwner
@@ -36,8 +40,6 @@ from interpreter.project.relocation_name import RelocationName
 from interpreter.project.unit_diagnostic import UnitDiagnostic
 from interpreter.project.unresolved_external import UnresolvedExternal
 from interpreter.project.weak_reference import WeakReference
-
-PRIVATE_CODE = ""
 
 
 def aligned(length: int, boundary: int) -> int:
