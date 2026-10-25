@@ -31,11 +31,13 @@ from interpreter.hlasm.ir_function import Body, IrFunction
 from interpreter.hlasm.opcodes.vector_fields import (
     V1,
     below,
+    concatenated,
     count_cc,
     element_bits,
     element_index_checked,
     m_field,
     ones,
+    pair,
     per_size,
     replicated,
     replication,
@@ -83,18 +85,6 @@ type ByteMap = Mapping[int, int]
 type Clamp = Callable[[HlasmEmitter, Register, int], tuple[Register, Register]]
 
 
-def _concatenated(
-    emitter: HlasmEmitter, high: Register, low: Register, low_bits: int
-) -> Register:
-    moved = emitter.binop(BinopKind.LSHIFT, high, emitter.int_(low_bits))
-    return emitter.binop(BinopKind.BIT_OR, moved, low)
-
-
-def _pair(emitter: HlasmEmitter, statement: MachineStatement) -> Register:
-    high, low = vr_at(SECOND)(emitter, statement), vr_at(THIRD)(emitter, statement)
-    return _concatenated(emitter, high, low, RESULT_BITS)
-
-
 def _gathered(source_bytes: int, targets: ByteMap) -> Transform:
     moves = tuple(
         (source_bytes - 1 - at, LAST_BYTE - target) for target, at in targets.items()
@@ -103,7 +93,7 @@ def _gathered(source_bytes: int, targets: ByteMap) -> Transform:
 
 
 def _from_pair(targets: ByteMap) -> StatementLowering:
-    return move(_pair, (_gathered(PAIR_BYTES, targets),), to_v1)
+    return move(pair, (_gathered(PAIR_BYTES, targets),), to_v1)
 
 
 def _merged(first: int) -> Callable[[ElementSize], StatementLowering]:
@@ -235,7 +225,7 @@ def _picked(
 
 
 def _permute(emitter: HlasmEmitter, statement: MachineStatement) -> None:
-    pair = _pair(emitter, statement)
+    both = pair(emitter, statement)
     indexes = vr_at(FOURTH)(emitter, statement)
 
     def byte(at: int) -> Register:
@@ -244,7 +234,7 @@ def _permute(emitter: HlasmEmitter, statement: MachineStatement) -> None:
             _byte_of(emitter, indexes, at),
             emitter.int_(PERMUTE_INDEX_MASK),
         )
-        picked = _picked(emitter, pair, index, BITS_PER_BYTE)
+        picked = _picked(emitter, both, index, BITS_PER_BYTE)
         return placed_bits(emitter, picked, BYTE_MASK, BITS_PER_BYTE * (LAST_BYTE - at))
 
     to_v1(
@@ -345,7 +335,7 @@ def _gpr_to_element(size: ElementSize) -> StatementLowering:
 def _gprs_to_vr(emitter: HlasmEmitter, statement: MachineStatement) -> None:
     high = emitter.load_gr64(reg_operand(statement, SECOND))
     low = emitter.load_gr64(reg_operand(statement, THIRD))
-    to_v1(emitter, statement, _concatenated(emitter, high, low, DOUBLEWORD_BITS))
+    to_v1(emitter, statement, concatenated(emitter, high, low, DOUBLEWORD_BITS))
 
 
 def _doubleword_permute(emitter: HlasmEmitter, statement: MachineStatement) -> None:
@@ -402,7 +392,7 @@ def _pack_body(clamp: Clamp, size: ElementSize) -> Body:
 
     def body(emitter: HlasmEmitter, parameters: Sequence[Register]) -> Register:
         high, low = parameters
-        pair = _concatenated(emitter, high, low, RESULT_BITS)
+        pair = concatenated(emitter, high, low, RESULT_BITS)
 
         def element(at: int) -> tuple[Register, Register]:
             moved = emitter.binop(

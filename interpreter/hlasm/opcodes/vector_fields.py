@@ -88,6 +88,18 @@ def vr_at(index: int) -> Source:
     return lambda emitter, statement: emitter.load_vr(vec_reg_operand(statement, index))
 
 
+def concatenated(
+    emitter: HlasmEmitter, high: Register, low: Register, low_bits: int
+) -> Register:
+    moved = emitter.binop(BinopKind.LSHIFT, high, emitter.int_(low_bits))
+    return emitter.binop(BinopKind.BIT_OR, moved, low)
+
+
+def pair(emitter: HlasmEmitter, statement: MachineStatement) -> Register:
+    high, low = vr_at(SECOND)(emitter, statement), vr_at(THIRD)(emitter, statement)
+    return concatenated(emitter, high, low, RESULT_BITS)
+
+
 def to_v1(emitter: HlasmEmitter, statement: MachineStatement, value: Register) -> None:
     emitter.store_vr(vec_reg_operand(statement, V1), value)
 
