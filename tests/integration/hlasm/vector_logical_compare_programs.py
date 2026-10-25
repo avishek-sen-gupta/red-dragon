@@ -58,7 +58,7 @@ CASES: Mapping[str, Case] = {
             "F0FFF0FF FF0FFF3C 80017FFF 5A5AFFFF",
         ),
     ),
-    "VEVAL selects I5 bit (V2 V3 V4) per bit: AND, MAJOR, none, all, NOR, AND(A,NOR(B,C)), XOR into V4 (PoO 22-13, 22-14)": (
+    "VEVAL selects I5 bit (V2 V3 V4) per bit: AND, MAJOR, none, all, NOR, AND(A,NOR(B,C)), I5 256 and -1 as their low 8 bits, XOR into V4 (PoO 22-13, 22-14)": (
         _sources((2, "LOGP"), (3, "LOGR"), (4, "LOGC"))
         + line("VEVAL", "5,2,3,4,1")
         + line("VEVAL", "6,2,3,4,X'17'")
@@ -66,9 +66,11 @@ CASES: Mapping[str, Case] = {
         + line("VEVAL", "8,2,3,4,255")
         + line("VEVAL", "9,2,3,4,X'80'")
         + line("VEVAL", "10,2,3,4,X'08'")
+        + line("VEVAL", "11,2,3,4,256")
+        + line("VEVAL", "12,2,3,4,-1")
         + line("VEVAL", "4,2,3,4,X'69'")
-        + line("VSTM", "5,10,OUT")
-        + line("VST", "4,OUT+96"),
+        + line("VSTM", "5,12,OUT")
+        + line("VST", "4,OUT+128"),
         image(
             "00030003 00050014 00000000 12100000",
             "033F033F 055F147D 0001FFFF 5A7E0420",
@@ -76,6 +78,8 @@ CASES: Mapping[str, Case] = {
             "FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF",
             "C000C000 A0008200 00000000 00000802",
             "00C000C0 0A002800 80000000 0000A185",
+            "00000000 00000000 00000000 00000000",
+            "FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFF",
             "3CC33CC3 5AA56996 FFFE0000 B791F3DD",
         ),
     ),
