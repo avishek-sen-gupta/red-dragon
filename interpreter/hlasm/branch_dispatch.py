@@ -3,6 +3,7 @@
 
 from collections.abc import Sequence
 
+from hlasm_asg.program.cnop_statement import CnopStatement
 from hlasm_asg.program.hlasm_program import HlasmProgram
 from hlasm_asg.program.machine_statement import MachineStatement
 from hlasm_asg.program.section import Section
@@ -82,15 +83,18 @@ def _section_chain(
 
 
 def _machine_offsets(program: HlasmProgram, section: Section) -> tuple[int, ...]:
-    return tuple(
-        sorted(
-            {
-                s.offset
-                for s in program.statements
-                if isinstance(s, MachineStatement) and s.section == section.name
-            }
-        )
-    )
+    machines = {
+        s.offset
+        for s in program.statements
+        if isinstance(s, MachineStatement) and s.section == section.name
+    }
+    no_ops = {
+        at
+        for s in program.statements
+        if isinstance(s, CnopStatement) and s.section == section.name
+        for at in s.no_ops()
+    }
+    return tuple(sorted(machines | no_ops))
 
 
 def _emit_return(emitter: HlasmEmitter) -> None:

@@ -1,8 +1,8 @@
          MACRO
 &NAME    CLOSE &LIST
          LCLA  &I,&OPT
-         CNOP  0,4
-&NAME    BRAS  1,RDC&SYSNDX
+&NAME    CNOP  0,4
+         BRAS  1,RDC&SYSNDX
 .NEXT    ANOP
 &I       SETA  &I+1
 &OPT     SETA  0

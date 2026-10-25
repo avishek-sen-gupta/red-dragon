@@ -43,6 +43,7 @@ from interpreter.project.relocation_name import RelocationName
 from interpreter.project.relocation_record import RelocationRecord
 from interpreter.project.relocation_sign import RelocationSign
 from interpreter.project.relocation_target import RelocationTarget
+from interpreter.project.text_record import TextRecord
 from interpreter.project.types import ModuleUnit
 from interpreter.refs.func_ref import FuncRef
 from interpreter.register import Register
@@ -326,3 +327,26 @@ def test_start_up_sums_every_signed_item_at_a_field_wherever_it_sits():
     assert [
         int.from_bytes(bytes(_bytes_at(vm, hello + at, 4)), "big") for at in (8, 12)
     ] == [16 + 5 + 6, 6]
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_cnop_padding_is_a_dispatchable_bcr_0_0_at_each_halfword():
+    frontend = HlasmFrontend(_program("cnop_padding.json"), "M")
+    ir = frontend.lower(b"")
+    no_op = b"\x07\x00"
+
+    assert (
+        [label for label in _labels(ir) if label.startswith("hl_T_")],
+        _dispatch_comparands(ir),
+        frontend.object_module.text,
+    ) == (
+        [f"hl_T_{offset}" for offset in (0, 2, 6, 8, 10, 12, 14, 16, 20)],
+        [0, 2, 10, 12, 14, 16, 20, 0xFF0],
+        (
+            TextRecord("T", 6, bytes(2)),
+            TextRecord("T", 8, bytes(2)),
+            TextRecord("T", 10, no_op),
+            TextRecord("T", 12, no_op),
+            TextRecord("T", 14, no_op),
+        ),
+    )

@@ -169,3 +169,32 @@ class TestBridgeParser:
             mnote=NoMnote(kind="NONE"),
         )
         assert not (tmp_path / "program.json").exists()
+
+    @covers(NotLanguageFeature.INFRASTRUCTURE)
+    def test_bridge_refuses_a_cnop_whose_operands_are_not_yet_absolute(
+        self, tmp_path: Path
+    ):
+        parser = make_hlasm_parser()
+
+        with pytest.raises(HlasmParseError) as refused:
+            parser.parse_to_file(
+                b"T        CSECT\n"
+                b"         CNOP  0,B\n"
+                b"B        EQU   8\n"
+                b"         END\n",
+                SOURCE_NAME,
+                tmp_path / "program.json",
+                BARE_ASSEMBLY,
+            )
+
+        assert refused.value.diagnostics == (
+            Diagnostic(
+                code="BRIDGE",
+                severity=Severity.ERROR,
+                message="operands of CNOP at line 2 are not absolute",
+                file=SOURCE_NAME,
+                line=0,
+                related=(),
+                mnote=NoMnote(kind="NONE"),
+            ),
+        )

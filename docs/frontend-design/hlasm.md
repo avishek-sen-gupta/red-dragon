@@ -239,14 +239,15 @@ The unit carries an `ObjectModule` (`interpreter/project/object_module.py`, buil
 | ESD LD | `EntryLabel` (name, section, offset) | each ENTRY operand, in order |
 | ESD ER, WX | `ExternalReference`, `WeakReference` | EXTRN and V-constant names; WXTRN |
 | ESD PR/XD | `ExternalDummySection` (name, length, alignment) | each DXD (DS-style length, strictest operand alignment) and each DSECT a Q-constant names (assembled length; doubleword, or its strictest field's alignment when stricter, so LQ gives quadword as in APAR PK79869) |
-| TXT | `TextRecord` (section, offset, bytes) | each placed constant image |
+| TXT | `TextRecord` (section, offset, bytes) | each placed constant image; X'0700' (BCR 0,0) for each halfword of CNOP padding |
 | RLD | `RelocationRecord` (section, offset, length, kind, target, sign, addend) | each A, Y or V address naming a section or an external symbol (`ADDRESS`); each Q or QD (`PR_OFFSET`), QY (`PR_LONG_OFFSET`, the offset as a 20-bit long displacement: DL in the low 12 bits of the first two bytes, DH in the third, PoO 5-11), J (`CLASS_LENGTH`) and CXD (`PR_TOTAL`); a complex-relocatable A or Y constant is one signed `ADDRESS` item per term at one field, the first carrying the absolute part, a DSECT term dropped (its offset is in the absolute part) |
 | END | `NamedEnd` (name, section, offset) or `DefaultEnd` (section) | END's operand, or the first CSECT or RSECT |
 
 A target is `RelocationName(name)`, or `NoRelocationTarget()` for CXD; a record whose target does not fit its kind raises `RelocationTargetMismatch` when built. Q, J and CXD fields have
 no TXT. The bridge (program format 3) exports `entries`, `externals` as name, kind (`EXTRN` or
 `WXTRN`) and line (0 when it has none, as for `EXTRN PART(...)`), an external address's offset,
-`external_dummies` as name, length and alignment, and a `CXD` statement. A Q or J value is a
+`external_dummies` as name, length and alignment, a `CXD` statement, and a `CNOP` statement with
+the length of its padding (0 when already aligned; operands not absolute at the CNOP refuse the assembly). A Q or J value is a
 `RELOC` naming the dummy section. A complex-relocatable value is `COMPLEX`: its terms (`SECTION`
 or `EXTERNAL`, name, `PLUS` or `MINUS`, one per count, sorted by name) and its absolute part. A complex-relocatable machine operand refuses the
 assembly, as in HLASM, which requires those to be absolute or simply relocatable.
@@ -808,7 +809,8 @@ the CC is unchanged.
   AMODE 31 keeps its bits 33-63.
 - BPP and BPRP are hints with no architected effect and lower to nothing.
 - Every target, relative ones included, goes through `hl_dispatch`; a target that is not a
-  machine statement of any module abends `S0C1`. Branching straight to a static relative target's label
+  machine statement or a CNOP padding halfword of any module abends `S0C1`. CNOP padding lowers
+  to a label per halfword, so a branch into it runs its BCR 0,0 no-ops and continues. Branching straight to a static relative target's label
   is deferred as a performance item (red-dragon-6uyp.80).
 - z390 branches BIC to the operand address instead of the doubleword stored there, and
   abends `S0C1` on BPP and BPRP. A branch into data runs the data bytes in z390 (J, BC
@@ -1687,8 +1689,6 @@ chapter 23), with every extended mnemonic (VFAEZBS, VSTRCFS, VSTRSZH, ...). ES 0
   and written with RDWs and no block descriptors) are out of scope.
 - A hand-coded `L 15,48(,1)` and `BALR 14,15` into a DCB's GET routine is not supported: the
   DCB holds no routine address.
-- A branch to a label that lies in CNOP alignment padding abends `S0C1` (red-dragon-6uyp.102); OPEN
-  and CLOSE label the instruction after their CNOP.
 - The file provider is the COBOL one and finds files by name, so a COBOL file and an HLASM
   DDNAME share one namespace in a mixed image.
 - DCB checks an `EODAD` or `SYNAD` against 2^24 only when it is a self-defining term; a
@@ -1740,7 +1740,7 @@ chapter 23), with every extended mnemonic (VFAEZBS, VSTRCFS, VSTRSZH, ...). ES 0
 | `tests/unit/hlasm/test_floating_point_constant.py` | E, D and L images: HFP without extension and with H, BFP and DFP rounding modes and lengths, special values, and the ASMA071E, ASMA064S and ASMA073E refusals |
 | `tests/unit/hlasm/test_fixed_width_ir.py` | Fixed-width arithmetic, truncating division, bitwise connectives, shifts and rotates, and condition codes |
 | `tests/unit/hlasm/test_hlasm_emitter.py` | The chain shares what it extends; the emitter's order and per-statement source locations |
-| `tests/unit/hlasm/test_lowering_skeleton.py` | Labels, LR, BASR, BALR, BRAS and BCR, dispatch, abends |
+| `tests/unit/hlasm/test_lowering_skeleton.py` | Labels, LR, BASR, BALR, BRAS and BCR, dispatch, abends; CNOP padding labels, dispatch cases and X'0700' TXT |
 | `tests/unit/hlasm/test_load_store_lowering.py` | Load and store IR: GPR and storage accesses, alignment branch, CC, no SYMBOLIC |
 | `tests/integration/hlasm/test_load_store.py` | Every load and store mnemonic on the VM: registers, run status and CC; alignment abends |
 | `tests/unit/hlasm/test_load_address_immediate_lowering.py` | Load address and immediate IR: GPR widths read and written, index sum shifted before the base is added, no CC |
@@ -1767,7 +1767,7 @@ chapter 23), with every extended mnemonic (VFAEZBS, VSTRCFS, VSTRSZH, ...). ES 0
 | `tests/integration/hlasm/test_shift_rotate_mnemonics.py` | RISBG-family extended spellings reach their base mnemonic and immediates through the bridge |
 | `tests/unit/hlasm/test_branch_on_condition_lowering.py` | Branch on condition IR: the CC mask test, each form's target, the forms that lower to nothing |
 | `tests/integration/hlasm/test_branch_extended_mnemonics.py` | Every branch on condition, compare-and-branch and compare-and-trap extended spelling reaches its base mnemonic and mask through the bridge; JCT, JCTG, the JX spellings, JAS and JASL reach theirs with R1 |
-| `tests/integration/hlasm/test_branch_on_condition.py` | Every branch on condition mnemonic and a spread of extended mnemonics on the VM: path taken, CC unchanged, branches into data abend `S0C1` |
+| `tests/integration/hlasm/test_branch_on_condition.py` | Every branch on condition mnemonic and a spread of extended mnemonics on the VM: path taken, CC unchanged, branches into data abend `S0C1`; a branch to a CNOP, padded or aligned, continues past it |
 | `tests/unit/hlasm/test_branch_and_link_lowering.py` | Branch and link IR: target read before the link is written, the AMODE 31 link word, the BASSM and BSM mode test, SAM and TAM |
 | `tests/integration/hlasm/test_branch_and_link.py` | Every branch and link mnemonic, JAS and JASL on the VM: link relative to the next instruction, path, CC; BSM 0,14 and BASSM 14,14 return to the caller; SAM24, SAM64 and switches into AMODE 24 or 64 abend `S0C1`, entering those modes xfailed (red-dragon-6uyp.75) |
 | `tests/unit/hlasm/test_loop_branch_lowering.py` | Branch on count and index IR: target first, operands read before R1 is written, wrap, nonzero or signed test |
@@ -1825,7 +1825,7 @@ chapter 23), with every extended mnemonic (VFAEZBS, VSTRCFS, VSTRSZH, ...). ES 0
 | `tests/z390/test_execute_differential.py` | Every execute case against z390; z390's missing odd-target check, BRAS link and ALSI carry CC pinned, and the targets RedDragon abends on run there (`-m z390`) |
 | `tests/z390/test_compare_branch_trap_differential.py` | Every compare-and-branch and trap case against z390; z390's `S0FF` load-and-trap abend and missing CLT and CLGT pinned (`-m z390`) |
 | `tests/z390/test_compare_differential.py` | Every compare mnemonic against z390; the relative-long alignment difference pinned (`-m z390`) |
-| `tests/z390/test_branch_on_condition_differential.py` | Every branch on condition case against z390; the BIC, BPP and BPRP differences and branches into data pinned (`-m z390`) |
+| `tests/z390/test_branch_on_condition_differential.py` | Every branch on condition case against z390; the BIC, BPP and BPRP differences and branches into data pinned; a branch to a padded and an aligned CNOP (`-m z390`) |
 | `tests/z390/test_address_constant_differential.py` | `*` in duplicated and multi-value A-constants against z390 (`-m z390`) |
 | `tests/z390/test_dc_image_differential.py` | The DC image families against z390 (`-m z390`). Alignment padding is VM-only: z390's loader fills skipped bytes with X'F6'. z390's images for the floating-point forms it misassembles are pinned |
 | `tests/z390/test_branch_and_link_differential.py` | Every branch and link case and the mode-setting returns against z390; z390's AMODE 24 and 64 switches pinned (`-m z390`) |

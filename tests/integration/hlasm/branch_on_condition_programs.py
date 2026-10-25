@@ -172,3 +172,27 @@ DIRECT_INTO_DATA = (
     _line("BRCL", "15,FILL"),
 )
 INTO_DATA = (*DIRECT_INTO_DATA, _line("BI", "DATATGT"))
+
+CNOP_PADDING = (10, 16)
+NO_OP_HALFWORD = b"\x07\x00"
+
+
+def cnop_target_program(before_target: str, target: str) -> str:
+    return (
+        "T        CSECT\n"
+        "         BASR  12,0\n"
+        "         USING *,12\n"
+        "         XGR   2,2\n"
+        "         B     X\n"
+        f"{before_target}"
+        f"{target}"
+        "         LA    2,7\n"
+        "         ABEND 1\n"
+        "         END\n"
+    )
+
+
+PADDED_CNOP_TARGET = cnop_target_program("", "X        DS    0H\n         CNOP  0,8\n")
+ALIGNED_CNOP_TARGET = cnop_target_program(
+    "         DC    3H'0'\n", "X        CNOP  0,8\n"
+)

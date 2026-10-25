@@ -1,5 +1,5 @@
 # pyright: standard
-"""Each section's constants, literals and CXD fields as pieces at their offsets: constant images and address and binder slots."""
+"""Each section's constants, literals, CXD fields and CNOP padding as pieces at their offsets: constant images and address and binder slots."""
 
 from collections.abc import Iterable, Sequence
 from functools import reduce
@@ -7,6 +7,7 @@ from itertools import accumulate, chain, groupby
 from operator import itemgetter, or_
 
 from hlasm_asg.program.ccw_statement import CcwStatement
+from hlasm_asg.program.cnop_statement import CnopStatement
 from hlasm_asg.program.cxd_statement import CxdStatement
 from hlasm_asg.program.dc_item import DcItem
 from hlasm_asg.program.dc_statement import DcStatement
@@ -22,6 +23,7 @@ from interpreter.project.no_relocation_target import NoRelocationTarget
 from interpreter.project.relocation_kind import RelocationKind
 
 _TOTAL = BinderSlot(RelocationKind.PR_TOTAL, NoRelocationTarget(), WORD_BYTES)
+_NO_OP = ConstantImage((0x07, 0x00))
 
 type ByteAt = tuple[int, int]
 
@@ -106,6 +108,13 @@ def placed_pieces(
         for s in program.statements
         if isinstance(s, CxdStatement) and s.section in sections
     )
+    padding = (
+        _place_pieces(s.section, s.offset, tuple(_NO_OP for _ in s.no_ops()))
+        for s in program.statements
+        if isinstance(s, CnopStatement) and s.section in sections
+    )
     return tuple(
-        chain.from_iterable(chain(statements, literals, channel_commands, totals))
+        chain.from_iterable(
+            chain(statements, literals, channel_commands, totals, padding)
+        )
     )

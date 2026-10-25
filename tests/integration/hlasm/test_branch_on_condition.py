@@ -5,7 +5,11 @@ import pytest
 
 from tests.covers import NotLanguageFeature, covers
 from tests.integration.hlasm import branch_on_condition_programs as programs
-from tests.integration.hlasm.hlasm_helpers import run_hlasm, run_hlasm_machine
+from tests.integration.hlasm.hlasm_helpers import (
+    run_hlasm,
+    run_hlasm_machine,
+    run_hlasm_storage,
+)
 from tests.integration.hlasm.hlasm_machine import HlasmMachine
 from tests.integration.hlasm.hlasm_run import HlasmRun
 
@@ -38,3 +42,21 @@ def test_branch_targets_resolve_through_the_dispatch():
     assert [
         run_hlasm(programs.path_program(0, branch)) for branch in programs.INTO_DATA
     ] == [OPERATION] * len(programs.INTO_DATA)
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_a_branch_to_a_cnop_runs_its_bcr_0_0_padding_and_continues():
+    padded, padding = run_hlasm_storage(
+        programs.PADDED_CNOP_TARGET, "T", programs.CNOP_PADDING
+    )
+    aligned = run_hlasm_machine(programs.ALIGNED_CNOP_TARGET)
+
+    assert (
+        padded.restricted_to((programs.PATH_REGISTER,)),
+        padding,
+        aligned.restricted_to((programs.PATH_REGISTER,)),
+    ) == (
+        HlasmMachine(ABENDED, 0, {programs.PATH_REGISTER: 7}),
+        programs.NO_OP_HALFWORD * 3,
+        HlasmMachine(ABENDED, 0, {programs.PATH_REGISTER: 7}),
+    )

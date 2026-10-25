@@ -76,3 +76,18 @@ def test_branch_into_data_abends_s0c1_here_while_z390_executes_the_data(
             PRIVILEGED_OPERATION, Z390_RAN_FILL_CC, {programs.PATH_REGISTER: FILL}
         ),
     )
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+@pytest.mark.parametrize(
+    "source", [programs.PADDED_CNOP_TARGET, programs.ALIGNED_CNOP_TARGET]
+)
+def test_a_branch_to_a_cnop_continues_past_it(
+    z390: Z390Runner, tmp_path: Path, source: str
+):
+    expected = HlasmMachine(ABENDED, 0, {programs.PATH_REGISTER: 7})
+
+    assert (
+        run_hlasm_machine(source).restricted_to(PATH),
+        z390.run_machine(source, tmp_path).restricted_to(PATH),
+    ) == (expected, expected)
