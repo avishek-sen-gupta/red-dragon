@@ -22,6 +22,7 @@ from cobol_asg.ref_mod import RefModExpr, RefModLiteral, RefModOperand
 from cobol_memory.field_extent import FieldExtent, Precision
 from cobol_memory.region_id import RegionId
 from interpreter.cobol.by_value_operand_error import ByValueOperandError
+from interpreter.cobol.by_value_phrase import ByValuePhrase
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.data_layout import DataLayout, FieldLayout
 from interpreter.cobol.emit_context import EmitContext
@@ -419,8 +420,6 @@ def _substring_argument(
     ref: ResolvedFieldRef,
     region_reg: Register,
 ) -> ArgumentAddress:
-    """A reference-modified operand: BY REFERENCE the substring's own bytes,
-    anything else the substring in a fresh copy of the whole item."""
     start = _substring_start(scope, param.ref_mod)
     length = _substring_length(scope, param.ref_mod, ref.fl, start)
     if param.param_type == "REFERENCE":
@@ -478,13 +477,12 @@ def _register(scope: LoweringScope, value: Register | int) -> Register:
 
 def _refuse_by_value(param: CallUsingParam, field: FieldLayout, line: int) -> None:
     if param.param_type == "VALUE" and not allowed_by_value(field, param.ref_mod):
-        raise ByValueOperandError(param.name, line)
+        raise ByValueOperandError(param.name, line, ByValuePhrase.CALL)
 
 
 def refuse_by_value_parameters(
     using: Sequence[CallUsingParam], linkage: DataLayout
 ) -> None:
-    """PROCEDURE DIVISION USING BY VALUE takes the operands CALL BY VALUE does."""
     _ = [
         _refuse_by_value_parameter(
             param, linkage.qualified_matches(param.name, param.qualifiers)[0].storage
@@ -497,30 +495,44 @@ def refuse_by_value_parameters(
 def _refuse_by_value_parameter(param: CallUsingParam, field: FieldLayout) -> None:
     if not allowed_by_value(field, param.ref_mod):
         raise ByValueOperandError(
-            param.name, line_of(field.span), "PROCEDURE DIVISION USING BY VALUE"
+            param.name,
+            line_of(field.span),
+            ByValuePhrase.PROCEDURE_DIVISION_USING,
         )
 
 
 def allowed_by_value(field: FieldLayout, ref_mod: RefModOperand) -> bool:
-    """IBM's CALL BY VALUE operands: an elementary binary, COMP-1, COMP-2 or
-    pointer item, one alphanumeric character, or a reference-modified DISPLAY
-    item of length 1."""
+    if ref_mod.is_reference_modified:
+        return _one_display_character(field, ref_mod)
+    return _whole_item_by_value(field)
+
+
+def _whole_item_by_value(field: FieldLayout) -> bool:
     descriptor = field.type_descriptor
     if field.is_group or descriptor == INDEX_ITEM:
         return False
-    if ref_mod.is_reference_modified:
-        return descriptor.category in _DISPLAY_CATEGORIES and _one_long(ref_mod)
     return descriptor.category in _BY_VALUE_CATEGORIES or (
         descriptor.category is CobolDataCategory.ALPHANUMERIC and field.byte_length == 1
     )
 
 
-def _one_long(ref_mod: RefModOperand) -> bool:
-    match ref_mod.ref_mod_length:
-        case RefModLiteral(value=value):
-            return value.isdigit() and int(value) == 1
+def _one_display_character(field: FieldLayout, ref_mod: RefModOperand) -> bool:
+    displays = field.type_descriptor.category in _DISPLAY_CATEGORIES
+    return displays and _static_length(ref_mod, field.byte_length) == 1
+
+
+def _static_length(ref_mod: RefModOperand, item_length: int) -> int:
+    match (ref_mod.ref_mod_start, ref_mod.ref_mod_length):
+        case (_, RefModLiteral(value=length)):
+            return _literal_int(length)
+        case (RefModLiteral(value=start), None):
+            return item_length - _literal_int(start) + 1
         case _:
-            return False
+            return 0
+
+
+def _literal_int(value: str) -> int:
+    return int(value) if value.isdigit() else 0
 
 
 def _pointer_argument(scope: LoweringScope, param: CallUsingParam) -> ArgumentAddress:
@@ -535,8 +547,6 @@ def _pointer_argument(scope: LoweringScope, param: CallUsingParam) -> ArgumentAd
 
 
 def _length_of_copy(scope: LoweringScope, param: CallUsingParam) -> ArgumentAddress:
-    """LENGTH OF an item, in a fresh copy of the special register, PIC 9(9) BINARY.
-    IBM passes it only BY CONTENT or BY VALUE."""
     if param.param_type == "REFERENCE":
         raise LengthOfByReferenceError(param.name, line_of(scope.span))
     length = scope.ctx.emit_length_of(

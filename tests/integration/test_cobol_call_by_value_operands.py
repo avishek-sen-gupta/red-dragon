@@ -41,9 +41,10 @@ def _refusal(name: str, clause: str) -> str:
 @covers(CobolFeature.USING_BY_VALUE)
 def test_by_value_refuses_an_operand_ibm_does_not_pass_by_value() -> None:
     assert [_refusal(name, clause) for name, clause in _REFUSED] == [
-        f"line 8: CALL BY VALUE {name}: IBM Enterprise COBOL passes BY VALUE only"
-        " an elementary binary, COMP-1, COMP-2 or pointer item, or a single"
-        " alphanumeric character"
+        f"line 8: CALL BY VALUE {name}: IBM Enterprise COBOL passes"
+        " BY VALUE only an elementary binary, COMP-1, COMP-2 or pointer item, a"
+        " single alphanumeric character, or a DISPLAY item reference-modified to"
+        " length 1"
         for name, _ in _REFUSED
     ]
 
@@ -71,7 +72,8 @@ def _receiving_refusal(name: str, clause: str) -> str:
 def test_procedure_division_using_by_value_refuses_the_same_operands() -> None:
     assert [_receiving_refusal(name, clause) for name, clause in _REFUSED] == [
         f"line 5: PROCEDURE DIVISION USING BY VALUE {name}: IBM Enterprise COBOL passes"
-        " BY VALUE only an elementary binary, COMP-1, COMP-2 or pointer item, or a"
-        " single alphanumeric character"
+        " BY VALUE only an elementary binary, COMP-1, COMP-2 or pointer item, a"
+        " single alphanumeric character, or a DISPLAY item reference-modified to"
+        " length 1"
         for name, _ in _REFUSED
     ]

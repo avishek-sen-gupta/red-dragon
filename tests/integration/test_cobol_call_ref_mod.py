@@ -20,6 +20,9 @@ _MAIN = [
     "01 WS-Y PIC X(8) VALUE 'STUVWXYZ'.",
     "01 WS-S PIC 9(2) VALUE 3.",
     "01 WS-L PIC 9(2) VALUE 2.",
+    "01 WS-G.",
+    "   05 WS-G1 PIC X(2) VALUE 'MN'.",
+    "   05 WS-G2 PIC S9(4) COMP VALUE 0.",
     "PROCEDURE DIVISION.",
     "    CALL 'RMSUB' USING BY REFERENCE WS-X(2:3)",
     "        BY CONTENT WS-X(WS-S:WS-L)",
@@ -101,8 +104,23 @@ def test_by_value_refuses_a_reference_modification_not_of_length_one() -> None:
             run_cobol_programs(main, {"RMSUB": _SUB})
         return str(refused.value)
 
-    assert [refusal(operand) for operand in ("WS-X(7:2)", "WS-X(1:WS-L)")] == [
-        "line 10: CALL BY VALUE WS-X: IBM Enterprise COBOL passes BY VALUE only an"
-        " elementary binary, COMP-1, COMP-2 or pointer item, or a single"
-        " alphanumeric character"
-    ] * 2
+    assert [
+        refusal(operand) for operand in ("WS-X(7:2)", "WS-X(1:WS-L)", "WS-X(7:)")
+    ] == [
+        "line 13: CALL BY VALUE WS-X: IBM Enterprise COBOL passes"
+        " BY VALUE only an elementary binary, COMP-1, COMP-2 or pointer item, a"
+        " single alphanumeric character, or a DISPLAY item reference-modified to"
+        " length 1"
+    ] * 3
+
+
+@covers(CobolFeature.USING_BY_VALUE)
+def test_by_value_takes_any_display_substring_whose_length_is_one_when_compiled() -> (
+    None
+):
+    def seen(operand: str) -> str:
+        main = [line.replace("WS-X(8:1)", operand) for line in _MAIN]
+        vm = run_cobol_programs(main, {"RMSUB": _SUB})
+        return bytes(ws_region(vm, "RMSUB"))[5:6].decode("cp037")
+
+    assert [seen(operand) for operand in ("WS-X(8:)", "WS-G(2:1)")] == ["H", "N"]

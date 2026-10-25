@@ -21,6 +21,7 @@ from cobol_asg.call_target import CallTarget
 from cobol_asg.cobol_expression import (
     ExprNode,
     FieldRefNode,
+    JsonExpr,
     expr_from_dict,
     expr_to_dict,
     field_ref_from_dict,
@@ -1371,7 +1372,7 @@ class CallUsingParam:
             **self._ref_mod_dict(),
         }
 
-    def _ref_mod_dict(self) -> dict:
+    def _ref_mod_dict(self) -> dict[str, JsonExpr]:
         start, length = self.ref_mod.ref_mod_start, self.ref_mod.ref_mod_length
         return {
             **({"ref_mod_start": ref_mod_expr_to_dict(start)} if start else {}),
