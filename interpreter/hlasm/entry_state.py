@@ -23,7 +23,7 @@ from interpreter.register import Register
 
 
 def _control_section(section: Section) -> bool:
-    return section.kind == SectionKind.CSECT and (
+    return section.kind in (SectionKind.CSECT, SectionKind.RSECT) and (
         section.name != PRIVATE_CODE or section.length > 0
     )
 

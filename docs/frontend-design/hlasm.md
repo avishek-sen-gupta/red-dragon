@@ -241,7 +241,7 @@ The unit carries an `ObjectModule` (`interpreter/project/object_module.py`, buil
 | ESD PR/XD | `ExternalDummySection` (name, length, alignment) | each DXD (DS-style length, strictest operand alignment) and each DSECT a Q-constant names (assembled length; doubleword, or its strictest field's alignment when stricter, so LQ gives quadword as in APAR PK79869) |
 | TXT | `TextRecord` (section, offset, bytes) | each placed constant image |
 | RLD | `RelocationRecord` (section, offset, length, kind, target, sign, addend) | each A, Y or V address naming a section or an external symbol (`ADDRESS`); each Q (`PR_OFFSET`), J (`CLASS_LENGTH`) and CXD (`PR_TOTAL`); a complex-relocatable A or Y constant is one signed `ADDRESS` item per term at one field, the first carrying the absolute part, a DSECT term dropped (its offset is in the absolute part) |
-| END | `NamedEnd` (name, section, offset) or `DefaultEnd` (section) | END's operand, or the first CSECT |
+| END | `NamedEnd` (name, section, offset) or `DefaultEnd` (section) | END's operand, or the first CSECT or RSECT |
 
 A target is `RelocationName(name)`, or `NoRelocationTarget()` for CXD; a record whose target does not fit its kind raises `RelocationTargetMismatch` when built. Q, J and CXD fields have
 no TXT. The bridge (program format 3) exports `entries`, `externals` as name, kind (`EXTRN` or
@@ -409,8 +409,8 @@ ISEQ for this, as it does for line layout.
 che4z has no other data-set variables (`&SYSIN_VOLUME`, `&SYSLIB_*`, `&SYSPRINT_*`,
 `&SYSPUNCH_*`, `&SYSTERM_*`, `&SYSADATA_*`, `&SYSLIN_*`); they stay `E010`.
 
-The entry is the symbol `END` names, or the first CSECT at offset 0 when `END`
-names none. An EQU before the first CSECT leaves che4z an empty private-code section;
+The entry is the symbol `END` names, or the first control section (CSECT or RSECT) at
+offset 0 when `END` names none. An EQU before the first CSECT leaves che4z an empty private-code section;
 the entry skips it, since it holds no first byte. The module function's label is `func_<entry>_0`. It returns GR15's low word
 when control branches to its return address.
 

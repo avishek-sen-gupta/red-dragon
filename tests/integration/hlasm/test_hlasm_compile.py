@@ -116,12 +116,16 @@ def test_entry_defaults_to_first_csect(tmp_path: Path):
         "E",
     )
 
+    read_only_first = source.replace("FIRST    CSECT", "FIRST    RSECT")
+
     assert (
         run_hlasm(source),
         run_hlasm(equated_first),
+        run_hlasm(read_only_first),
         frontend.entry_name,
         frontend.object_module.end,
     ) == (
+        HlasmRun(return_code=7, abend="", stdout=""),
         HlasmRun(return_code=7, abend="", stdout=""),
         HlasmRun(return_code=7, abend="", stdout=""),
         "FIRST",

@@ -51,17 +51,16 @@ def test_call_passes_inline_and_execute_form_lists_marking_the_last_word():
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_load_answers_entry_and_length_then_call_15_reaches_it_and_delete_releases_only_what_was_loaded():
-    run, words = _words(programs.LOADER, "SUB", programs.RETURNS_23)
-
-    assert (run, words[7], words[8], words[9], words[4], words[5]) == (
-        HlasmRun(return_code=4, abend="", stdout=""),
-        0x80000000,
-        1,
-        23,
-        0,
-        4,
+def test_load_answers_entry_and_length_then_call_15_reaches_it_and_delete_releases_only_what_was_loaded_in_any_case():
+    loaded = (
+        _words(source, "SUB", programs.RETURNS_23)
+        for source in (programs.LOADER, programs.LOADER.replace("EP=SUB", "EP=sub"))
     )
+    outcome = (HlasmRun(return_code=4, abend="", stdout=""), 0x80000000, 1, 23, 0, 4)
+
+    assert [
+        (run, words[7], words[8], words[9], words[4], words[5]) for run, words in loaded
+    ] == [outcome, outcome]
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
