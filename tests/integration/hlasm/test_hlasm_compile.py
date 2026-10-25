@@ -28,6 +28,7 @@ from hlasm_asg.missing_syslib_directory import MissingSyslibDirectory
 from hlasm_asg.program.hlasm_program import HlasmProgram
 from hlasm_asg.real_subprocess_runner import RealSubprocessRunner
 from interpreter.constants import Language
+from interpreter.frontend_observer import FrontendObserver
 from interpreter.frontends import get_hlasm_parser
 from interpreter.hlasm.hlasm_frontend import HlasmFrontend
 from interpreter.project.default_end import DefaultEnd
@@ -93,6 +94,35 @@ def test_run_enters_hlasm_at_its_entry_point():
     vm = run(RETURNS_SEVEN, language=Language.HLASM, max_steps=MAX_STEPS)
 
     assert hlasm_run_of(vm, "") == HlasmRun(return_code=7, abend="", stdout="")
+
+
+class _RecordingObserver(FrontendObserver):
+    """Records the phase of each callback, in order."""
+
+    def __init__(self) -> None:
+        self.phases: tuple[str, ...] = ()
+
+    def on_parse(self, duration: float) -> None:
+        self.phases = (*self.phases, "parse")
+
+    def on_lower(self, duration: float) -> None:
+        self.phases = (*self.phases, "lower")
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_compile_hlasm_reports_one_parse_then_one_lower_per_source():
+    observer = _RecordingObserver()
+
+    compile_hlasm(
+        SEVEN,
+        parser=get_hlasm_parser(),
+        programs=(
+            SourceFile(Path("SUB.asm"), RETURNS_SEVEN.replace("HELLO", "SUB").encode()),
+        ),
+        observer=observer,
+    )
+
+    assert observer.phases == ("parse", "lower", "parse", "lower")
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
