@@ -1,5 +1,5 @@
 # pyright: standard
-"""Vector loads and stores run on the VM move the bytes the Principles of Operation name (SA22-7832-14 chapter 21), in each element order; an invalid M field, element index or register range abends S0C6 with storage unchanged; VLBB loads up to its block boundary."""
+"""Vector loads and stores run on the VM move the bytes the Principles of Operation name (SA22-7832-14 chapter 21), in each element order; an invalid M field or element index, and a VLM or VSTM range with V3 below V1 or over 16 registers (PoO 21-12, 21-24), abends S0C6 with storage unchanged; VLBB loads up to its block boundary, the bytes past it unasserted (unpredictable)."""
 
 import pytest
 
@@ -33,7 +33,11 @@ def test_invalid_vector_field_abends_s0c6_before_any_access(case: str):
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_vlbb_loads_up_to_each_block_boundary_and_zeroes_the_rest():
+def test_vlbb_loads_up_to_each_block_boundary():
     abend, image = _run(programs.VLBB_BODY, programs.BLOCK_BUFFER)
+    loaded = tuple(
+        image[16 * register : 16 * register + count]
+        for register, count in enumerate(programs.VLBB_LOADED)
+    )
 
-    assert (abend, image) == (programs.COMPLETED, programs.VLBB_EXPECTED)
+    assert (abend, loaded) == (programs.COMPLETED, programs.VLBB_EXPECTED)

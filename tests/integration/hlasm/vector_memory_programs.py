@@ -61,17 +61,20 @@ CASES: Mapping[str, Case] = {
             "20212223 24252627 28292A2B 2C2D2E2F",
         ),
     ),
-    "VLM VSTM wrap from 31 to 0": (
-        _line("VLM", "30,1,SRC")
-        + _line("VST", "0,OUT")
-        + _line("VSTM", "31,0,OUT+16")
-        + _line("VST", "30,OUT+48")
-        + _line("VST", "1,OUT+64"),
+    "VLM VSTM over 2 and 16 registers (PoO 21-12, 21-24)": (
+        _line("VLM", "0,15,SRC")
+        + _line("VSTM", "1,3,OUT")
+        + _line("VST", "4,OUT+48")
+        + _line("VST", "15,OUT+64")
+        + _line("VLM", "30,31,SRC+32")
+        + _line("VSTM", "30,31,OUT+80"),
         _hex(
-            "20212223 24252627 28292A2B 2C2D2E2F",
             "10111213 14151617 18191A1B 1C1D1E1F",
             "20212223 24252627 28292A2B 2C2D2E2F",
-            "00010203 04050607 08090A0B 0C0D0E0F",
+            "30313233 34353637 38393A3B 3C3D3E3F",
+            "EEEEEEEE EEEEEEEE EEEEEEEE EEEEEEEE",
+            "EEEEEEEE EEEEEEEE EEEEEEEE EEEEEEEE",
+            "20212223 24252627 28292A2B 2C2D2E2F",
             "30313233 34353637 38393A3B 3C3D3E3F",
         ),
     ),
@@ -266,8 +269,10 @@ CHECKS: Mapping[str, str] = {
     "VSTBR element size 0": _line("VSTBR", "1,OUT,0"),
     "VSTER element size 4": _line("VSTER", "1,OUT,4"),
     "VLBB boundary code 7": _line("VLBB", "1,SRC,7") + _line("VST", "1,OUT"),
-    "VSTM 17 registers": _line("VSTM", "0,16,OUT"),
-    "VLM 32 registers": _line("VLM", "5,4,SRC") + _line("VST", "1,OUT"),
+    "VSTM 17 registers (PoO 21-24)": _line("VSTM", "0,16,OUT"),
+    "VLM 17 registers (PoO 21-12)": _line("VLM", "0,16,SRC") + _line("VST", "0,OUT"),
+    "VLM V3 below V1 (PoO 21-12)": _line("VLM", "30,1,SRC") + _line("VST", "30,OUT"),
+    "VSTM V3 below V1 (PoO 21-24)": _line("VL", "31,SRC") + _line("VSTM", "31,0,OUT"),
 }
 
 BLOCK_BUFFER = "BUF      DS    XL8208\n"
@@ -301,13 +306,9 @@ VLBB_BODY = (
     + "".join(_within(code) for code in range(1, len(BLOCK_BYTES)))
     + _line("VSTM", "0,13,OUT")
 )
-VLBB_EXPECTED = b"".join(
-    (
-        bytes(range(0x20, 0x30)),
-        *(
-            bytes(range(0x10, 0x12 + code)).ljust(16, b"\0")
-            for code in range(len(BLOCK_BYTES))
-        ),
-        *(bytes(range(0x10)),) * 6,
-    )
+VLBB_LOADED = (16, *(code + 2 for code in range(len(BLOCK_BYTES))), *(16,) * 6)
+VLBB_EXPECTED = (
+    bytes(range(0x20, 0x30)),
+    *(bytes(range(0x10, 0x12 + code)) for code in range(len(BLOCK_BYTES))),
+    *(bytes(range(0x10)),) * 6,
 )

@@ -4,7 +4,7 @@
 from hlasm_asg.program.abs_address import AbsAddress
 from hlasm_asg.program.storage_operand import StorageOperand
 from interpreter.hlasm.opcodes.vector_memory import VECTOR_MEMORY_LOWERINGS
-from interpreter.instructions import Symbolic
+from interpreter.instructions import Binop, Const, Symbolic
 from tests.covers import NotLanguageFeature, covers
 from tests.unit.hlasm.fp_trace import ADDRESS, D8, SPECIFICATION, lowered_ir, trace
 from tests.unit.hlasm.lowering_helpers import imm_operand, mask_operand, reg_operand
@@ -19,6 +19,9 @@ VRV = StorageOperand(
 )
 IMMEDIATES = ("VLEIB", "VLEIH", "VLEIF", "VLEIG")
 GATHER_SCATTER = ("VGEF", "VGEG", "VSCEF", "VSCEG")
+BLOCK_BYTES = {0: 64, 1: 128, 2: 256, 3: 512, 4: 1024, 5: 2048, 6: 4096}
+ADDRESS_MASK = 0x7FFF_FFFF
+MOST_BYTES = 16
 LOOP = [
     "StoreVar __hlasm_ss_at 0",
     "read storage +1",
@@ -28,12 +31,12 @@ LOOP = [
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_whole_register_forms_move_sixteen_bytes_per_register_and_wrap_from_31():
+def test_whole_register_forms_move_sixteen_bytes_per_register_in_one_copy():
     assert {
         "VL": trace("VL", (vr(1), D8, mask_operand(3))),
         "VST": trace("VST", (vr(1), D8)),
         "VLR": trace("VLR", (vr(1), vr(2))),
-        "VLM": trace("VLM", (vr(30), vr(1), D8)),
+        "VLM": trace("VLM", (vr(16), vr(31), D8)),
         "VSTM": trace("VSTM", (vr(2), vr(3), D8)),
         "VLBR": trace("VLBR", (vr(1), D8, mask_operand(4))),
         "VSTER": trace("VSTER", (vr(1), D8, mask_operand(2))),
@@ -41,13 +44,7 @@ def test_whole_register_forms_move_sixteen_bytes_per_register_and_wrap_from_31()
         "VL": [ADDRESS, "read storage +16", "write vr 16+16"],
         "VST": ["read vr 16+16", ADDRESS, "write storage +16"],
         "VLR": ["read vr 32+16", "write vr 16+16"],
-        "VLM": [
-            ADDRESS,
-            "read storage +32",
-            "write vr 480+32",
-            "read storage +32",
-            "write vr 0+32",
-        ],
+        "VLM": [ADDRESS, "read storage +256", "write vr 256+256"],
         "VSTM": [ADDRESS, "read vr 32+32", "write storage +32"],
         "VLBR": [ADDRESS, "read storage +16", "write vr 16+16"],
         "VSTER": ["read vr 16+16", ADDRESS, "write storage +16"],
@@ -113,7 +110,7 @@ def test_an_invalid_field_abends_s0c6_before_any_access():
         "VLER": (vr(1), D8, mask_operand(4)),
         "VLBB": (vr(1), D8, mask_operand(7)),
         "VLM": (vr(0), vr(16), D8),
-        "VSTM": (vr(20), vr(19), D8),
+        "VSTM": (vr(31), vr(0), D8),
     }
 
     assert {m: trace(m, operands) for m, operands in invalid.items()} == {
@@ -140,3 +137,26 @@ def test_every_vector_load_and_store_lowers_without_symbolic():
         [m for m, ir in lowered.items() if any(isinstance(i, Symbolic) for i in ir)],
         [m for m, ir in lowered.items() if trace(m, forms[m]) == [SPECIFICATION]],
     ) == (38, [], [])
+
+
+def _block_arithmetic(code: int) -> list[tuple[str, int | str, int | str]]:
+    ir = lowered_ir("VLBB", (vr(1), D8, mask_operand(code)))
+    consts = {i.result_reg: i.value for i in ir if isinstance(i, Const)}
+    binops = [i for i in ir if isinstance(i, Binop)]
+    return [
+        (i.operator.value, consts.get(i.left, "reg"), consts.get(i.right, "reg"))
+        for i in binops[1:5]
+    ]
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_vlbb_loads_to_the_boundary_of_a_block_of_64_shifted_by_m3():
+    assert {code: _block_arithmetic(code) for code in BLOCK_BYTES} == {
+        code: [
+            ("&", "reg", ADDRESS_MASK),
+            ("&", "reg", block - 1),
+            ("-", block, "reg"),
+            ("-", "reg", MOST_BYTES),
+        ]
+        for code, block in BLOCK_BYTES.items()
+    }

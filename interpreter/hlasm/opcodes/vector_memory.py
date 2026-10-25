@@ -19,13 +19,13 @@ from interpreter.hlasm.data_movement import (
     to_storage,
 )
 from interpreter.hlasm.effective_address import vector_indexed_address
+from interpreter.hlasm.element_placement import ElementPlacement
 from interpreter.hlasm.element_size import ElementSize
 from interpreter.hlasm.hlasm_constants import (
     BITS_PER_BYTE,
     DOUBLEWORD_BITS,
     HALFWORD_BITS,
     VECTOR_REGISTER_BYTES,
-    VECTOR_REGISTER_COUNT,
     VECTOR_REGISTERS_VAR,
     WORD_BITS,
     WORD_BYTES,
@@ -77,9 +77,8 @@ REPLICATED_SIZES = frozenset({B, H, F, G})
 BYTE_REVERSED_SIZES = frozenset({H, F, G, Q})
 ELEMENT_SIZES_FROM_HALFWORD = frozenset({H, F, G})
 
-type Placement = tuple[int, int]
 type RegionAt = tuple[Register, Register]
-type ByteCopy = Callable[[HlasmEmitter, RegionAt, RegionAt, int], None]
+type ByteCopy = Callable[[HlasmEmitter, Register, RegionAt, int], None]
 
 
 def _vr(index: int) -> Source:
@@ -146,8 +145,8 @@ def _whole(
 
 
 def _coded(
-    placements: Mapping[int, Placement],
-    build: Callable[[Placement], StatementLowering],
+    placements: Mapping[int, ElementPlacement],
+    build: Callable[[ElementPlacement], StatementLowering],
 ) -> StatementLowering:
     def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
         build(placements[m_field(statement, M3)])(emitter, statement)
@@ -155,10 +154,10 @@ def _coded(
     return checked(lambda statement: m_field(statement, M3) not in placements, lower)
 
 
-def _zero_extended(sizes: frozenset[ElementSize]) -> Mapping[int, Placement]:
+def _zero_extended(sizes: frozenset[ElementSize]) -> Mapping[int, ElementPlacement]:
     return {
-        **{size.value: (size.width, DOUBLEWORD_BITS) for size in sizes},
-        LEFT_ALIGNED_WORD: (WORD_BYTES, LEFT_ALIGNED_SHIFT),
+        **{size.value: ElementPlacement(size.width, DOUBLEWORD_BITS) for size in sizes},
+        LEFT_ALIGNED_WORD: ElementPlacement(WORD_BYTES, LEFT_ALIGNED_SHIFT),
     }
 
 
@@ -183,52 +182,42 @@ def _load_immediate(size: ElementSize) -> StatementLowering:
     return element_index_checked(M3, size, move(immediate, (), _to_element(size)))
 
 
-def _register_count(statement: MachineStatement) -> int:
+def _register_range(statement: MachineStatement) -> tuple[int, int]:
     first = vec_reg_operand(statement, V1)
-    last = vec_reg_operand(statement, RANGE_END)
-    return (last - first) % VECTOR_REGISTER_COUNT + 1
+    return first, vec_reg_operand(statement, RANGE_END) - first + 1
 
 
-def _ranges(statement: MachineStatement) -> tuple[tuple[int, int, int], ...]:
-    first, count = vec_reg_operand(statement, V1), _register_count(statement)
-    leading = min(count, VECTOR_REGISTER_COUNT - first)
-    runs = ((first, leading, 0), (0, count - leading, leading))
-    return tuple(
-        (register, VECTOR_REGISTER_BYTES * n, VECTOR_REGISTER_BYTES * start)
-        for register, n, start in runs
-        if n > 0
-    )
+def _invalid_range(statement: MachineStatement) -> bool:
+    _, count = _register_range(statement)
+    return not 0 < count <= MOST_REGISTERS
 
 
 def _into_registers(
-    emitter: HlasmEmitter, storage: RegionAt, registers: RegionAt, width: int
+    emitter: HlasmEmitter, storage: Register, registers: RegionAt, width: int
 ) -> None:
     region, offset = registers
-    emitter.write_bytes(region, offset, width, emitter.load_bytes(*storage, width))
+    image = emitter.load_bytes(storage, emitter.int_(0), width)
+    emitter.write_bytes(region, offset, width, image)
 
 
 def _into_storage(
-    emitter: HlasmEmitter, storage: RegionAt, registers: RegionAt, width: int
+    emitter: HlasmEmitter, storage: Register, registers: RegionAt, width: int
 ) -> None:
-    region, offset = storage
-    emitter.write_bytes(region, offset, width, emitter.load_bytes(*registers, width))
+    image = emitter.load_bytes(*registers, width)
+    emitter.write_bytes(storage, emitter.int_(0), width, image)
 
 
 def _multiple(copy: ByteCopy) -> StatementLowering:
     def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
+        first, count = _register_range(statement)
         address = storage_address_at(RANGE_STORAGE)(emitter, statement)
-        vrs = emitter.load_var(VECTOR_REGISTERS_VAR)
-        _ = [
-            copy(
-                emitter,
-                (address, emitter.int_(start)),
-                (vrs, emitter.int_(VECTOR_REGISTER_BYTES * register)),
-                width,
-            )
-            for register, width, start in _ranges(statement)
-        ]
+        registers = (
+            emitter.load_var(VECTOR_REGISTERS_VAR),
+            emitter.int_(VECTOR_REGISTER_BYTES * first),
+        )
+        copy(emitter, address, registers, VECTOR_REGISTER_BYTES * count)
 
-    return checked(lambda statement: _register_count(statement) > MOST_REGISTERS, lower)
+    return checked(_invalid_range, lower)
 
 
 def _vr_address(emitter: HlasmEmitter, v: int) -> Register:
@@ -345,13 +334,15 @@ PLACED_ELEMENTS: Mapping[str, StatementLowering] = {
     ),
     "VLLEZ": _coded(
         _zero_extended(REPLICATED_SIZES),
-        lambda place: move(from_storage(place[0]), (_shifted_left(place[1]),), _to_vr),
+        lambda place: move(
+            from_storage(place.width), (_shifted_left(place.shift),), _to_vr
+        ),
     ),
     "VLLEBRZ": _coded(
         _zero_extended(ELEMENT_SIZES_FROM_HALFWORD),
         lambda place: move(
-            from_storage(place[0]),
-            (reversed_bytes(place[0]), _shifted_left(place[1])),
+            from_storage(place.width),
+            (reversed_bytes(place.width), _shifted_left(place.shift)),
             _to_vr,
         ),
     ),
