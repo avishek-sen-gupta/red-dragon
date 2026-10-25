@@ -16,11 +16,7 @@ from interpreter.hlasm.data_movement import (
     signed_immediate,
     storage_address_at,
 )
-from interpreter.hlasm.element_return_field import (
-    CC_FIELD,
-    RESULT_BITS,
-    RESULT_FIELD,
-)
+from interpreter.hlasm.element_return_field import CC_FIELD, RESULT_BITS
 from interpreter.hlasm.element_size import ElementSize
 from interpreter.hlasm.hlasm_constants import (
     BITS_PER_BYTE,
@@ -34,11 +30,16 @@ from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.ir_function import Body, IrFunction
 from interpreter.hlasm.opcodes.vector_fields import (
     V1,
+    below,
+    count_cc,
+    element_bits,
     element_index_checked,
     m_field,
+    ones,
     per_size,
     replicated,
     replication,
+    status_function,
     to_v1,
     vr_at,
 )
@@ -65,7 +66,6 @@ PERMUTE_INDEX_MASK = PAIR_BYTES - 1
 BIT_PERMUTE_FIRST = 48
 SECOND_DOUBLEWORD_BIT = 0b0100
 THIRD_DOUBLEWORD_BIT = 0b0001
-CONDITION_CODE_SET = 0b0001
 
 B, H, F, G, Q = (
     ElementSize.BYTE,
@@ -81,14 +81,6 @@ SIGN_EXTENDED_SIZES = frozenset({B, H, F})
 
 type ByteMap = Mapping[int, int]
 type Clamp = Callable[[HlasmEmitter, Register, int], tuple[Register, Register]]
-
-
-def _ones(bits: int) -> int:
-    return (1 << bits) - 1
-
-
-def _bits(size: ElementSize) -> int:
-    return BITS_PER_BYTE * size.width
 
 
 def _concatenated(
@@ -162,7 +154,7 @@ def _sign_spread(
 
 
 def _sign_filled(element_bits: int, value_bits: int) -> Transform:
-    fill = _ones(element_bits) ^ _ones(value_bits)
+    fill = ones(element_bits) ^ ones(value_bits)
 
     def extend(emitter: HlasmEmitter, value: Register) -> Register:
         spread = _sign_spread(emitter, value, element_bits, value_bits - 1)
@@ -175,7 +167,10 @@ def _sign_filled(element_bits: int, value_bits: int) -> Transform:
 def _unpacked(first: int) -> Callable[[ElementSize], StatementLowering]:
     return lambda size: move(
         vr_at(SECOND),
-        (_zero_extended(first, size), _sign_filled(2 * _bits(size), _bits(size))),
+        (
+            _zero_extended(first, size),
+            _sign_filled(2 * element_bits(size), element_bits(size)),
+        ),
         to_v1,
     )
 
@@ -185,16 +180,18 @@ def _logically_unpacked(first: int) -> Callable[[ElementSize], StatementLowering
 
 
 def _sign_extended_to_doubleword(size: ElementSize) -> StatementLowering:
-    low = _ones(_bits(size)) * (1 | 1 << DOUBLEWORD_BITS)
+    low = ones(element_bits(size)) * (1 | 1 << DOUBLEWORD_BITS)
     return move(
-        vr_at(SECOND), (keep(low), _sign_filled(DOUBLEWORD_BITS, _bits(size))), to_v1
+        vr_at(SECOND),
+        (keep(low), _sign_filled(DOUBLEWORD_BITS, element_bits(size))),
+        to_v1,
     )
 
 
 def _selected(
     emitter: HlasmEmitter, mask: Register, chosen: Register, otherwise: Register
 ) -> Register:
-    inverse = emitter.binop(BinopKind.BIT_XOR, mask, emitter.int_(_ones(RESULT_BITS)))
+    inverse = emitter.binop(BinopKind.BIT_XOR, mask, emitter.int_(ones(RESULT_BITS)))
     taken = emitter.binop(BinopKind.BIT_AND, chosen, mask)
     left = emitter.binop(BinopKind.BIT_AND, otherwise, inverse)
     return emitter.binop(BinopKind.BIT_OR, taken, left)
@@ -211,11 +208,11 @@ def _selection(selector: Transform) -> StatementLowering:
 
 
 def _element_selector(size: ElementSize) -> Transform:
-    bits = _bits(size)
+    bits = element_bits(size)
 
     def mask(emitter: HlasmEmitter, value: Register) -> Register:
         spread = _sign_spread(emitter, value, bits, bits - 1)
-        return emitter.binop(BinopKind.MUL, spread, emitter.int_(_ones(bits)))
+        return emitter.binop(BinopKind.MUL, spread, emitter.int_(ones(bits)))
 
     return mask
 
@@ -234,7 +231,7 @@ def _picked(
     units = emitter.binop(BinopKind.SUB, last, index)
     shift = emitter.binop(BinopKind.MUL, units, emitter.int_(bits))
     moved = emitter.binop(BinopKind.RSHIFT, source, shift)
-    return emitter.binop(BinopKind.BIT_AND, moved, emitter.int_(_ones(bits)))
+    return emitter.binop(BinopKind.BIT_AND, moved, emitter.int_(ones(bits)))
 
 
 def _permute(emitter: HlasmEmitter, statement: MachineStatement) -> None:
@@ -275,7 +272,7 @@ def _bit_permute(emitter: HlasmEmitter, statement: MachineStatement) -> None:
 
 
 def _element_masks(size: ElementSize) -> StatementLowering:
-    bits = _bits(size)
+    bits = element_bits(size)
 
     def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
         source = vr_at(SECOND)(emitter, statement)
@@ -285,8 +282,8 @@ def _element_masks(size: ElementSize) -> StatementLowering:
                 BinopKind.RSHIFT, source, emitter.int_(RESULT_BITS - 1 - at)
             )
             bit = emitter.binop(BinopKind.BIT_AND, moved, emitter.int_(1))
-            ones = _ones(bits) << (RESULT_BITS - bits * (at + 1))
-            return emitter.binop(BinopKind.MUL, bit, emitter.int_(ones))
+            filled = ones(bits) << (RESULT_BITS - bits * (at + 1))
+            return emitter.binop(BinopKind.MUL, bit, emitter.int_(filled))
 
         pieces = [element(at) for at in range(size.count)]
         to_v1(emitter, statement, combined_bits(emitter, pieces))
@@ -317,7 +314,9 @@ def _bit_range(bits: int, start: int, end: int) -> int:
 def _generated_mask(size: ElementSize) -> StatementLowering:
     def lower(emitter: HlasmEmitter, statement: MachineStatement) -> None:
         element = _bit_range(
-            _bits(size), imm_operand(statement, SECOND), imm_operand(statement, THIRD)
+            element_bits(size),
+            imm_operand(statement, SECOND),
+            imm_operand(statement, THIRD),
         )
         to_v1(emitter, statement, emitter.int_(element * replication(size)))
 
@@ -373,24 +372,18 @@ def _replicated_element(size: ElementSize) -> StatementLowering:
 def _replicated_immediate(size: ElementSize) -> StatementLowering:
     return move(
         signed_immediate(SECOND, HALFWORD_BITS),
-        (keep(_ones(_bits(size))), replicated(size)),
+        (keep(ones(element_bits(size))), replicated(size)),
         to_v1,
     )
-
-
-def _below(emitter: HlasmEmitter, left: Register, right: Register) -> Register:
-    difference = emitter.binop(BinopKind.SUB, left, right)
-    borrow = emitter.binop(BinopKind.RSHIFT, difference, emitter.int_(RESULT_BITS))
-    return emitter.binop(BinopKind.BIT_AND, borrow, emitter.int_(1))
 
 
 def _signed_clamp(
     emitter: HlasmEmitter, element: Register, bits: int
 ) -> tuple[Register, Register]:
-    highest = emitter.int_(_ones(bits // 2 - 1))
+    highest = emitter.int_(ones(bits // 2 - 1))
     lowest = emitter.int_(-(1 << (bits // 2 - 1)))
     value = signed(bits)(emitter, element)
-    over, under = _below(emitter, highest, value), _below(emitter, value, lowest)
+    over, under = below(emitter, highest, value), below(emitter, value, lowest)
     clamped = pick(emitter, over, highest, pick(emitter, under, lowest, value))
     return clamped, emitter.binop(BinopKind.ADD, over, under)
 
@@ -398,23 +391,13 @@ def _signed_clamp(
 def _logical_clamp(
     emitter: HlasmEmitter, element: Register, bits: int
 ) -> tuple[Register, Register]:
-    highest = emitter.int_(_ones(bits // 2))
-    over = _below(emitter, highest, element)
+    highest = emitter.int_(ones(bits // 2))
+    over = below(emitter, highest, element)
     return pick(emitter, over, highest, element), over
 
 
-def _saturation_cc(
-    emitter: HlasmEmitter, saturated: Register, elements: int
-) -> Register:
-    some = _below(emitter, emitter.int_(0), saturated)
-    short = _below(emitter, saturated, emitter.int_(elements))
-    every = emitter.binop(BinopKind.SUB, emitter.int_(1), short)
-    doubled = emitter.binop(BinopKind.MUL, every, emitter.int_(2))
-    return emitter.binop(BinopKind.ADD, some, doubled)
-
-
 def _pack_body(clamp: Clamp, size: ElementSize) -> Body:
-    bits, elements = _bits(size), 2 * size.count
+    bits, elements = element_bits(size), 2 * size.count
     half = bits // 2
 
     def body(emitter: HlasmEmitter, parameters: Sequence[Register]) -> Register:
@@ -425,10 +408,10 @@ def _pack_body(clamp: Clamp, size: ElementSize) -> Body:
             moved = emitter.binop(
                 BinopKind.RSHIFT, pair, emitter.int_(PAIR_BITS - bits * (at + 1))
             )
-            source = emitter.binop(BinopKind.BIT_AND, moved, emitter.int_(_ones(bits)))
+            source = emitter.binop(BinopKind.BIT_AND, moved, emitter.int_(ones(bits)))
             value, saturated = clamp(emitter, source, bits)
             placed = placed_bits(
-                emitter, value, _ones(half), RESULT_BITS - half * (at + 1)
+                emitter, value, ones(half), RESULT_BITS - half * (at + 1)
             )
             return placed, saturated
 
@@ -438,7 +421,7 @@ def _pack_body(clamp: Clamp, size: ElementSize) -> Body:
             lambda left, right: emitter.binop(BinopKind.ADD, left, right),
             [count for _, count in packed],
         )
-        cc = CC_FIELD.placed(emitter, _saturation_cc(emitter, saturated, elements))
+        cc = CC_FIELD.placed(emitter, count_cc(emitter, saturated, elements))
         return emitter.binop(BinopKind.BIT_OR, result, cc)
 
     return body
@@ -453,24 +436,6 @@ def _pack_functions(kind: str, clamp: Clamp) -> Mapping[ElementSize, IrFunction]
         )
         for size in PACKED_SIZES
     }
-
-
-def _packed_saturating(
-    function: IrFunction, emitter: HlasmEmitter, statement: MachineStatement
-) -> None:
-    sources = (vr_at(SECOND)(emitter, statement), vr_at(THIRD)(emitter, statement))
-    returned = function.call(emitter, sources)
-    to_v1(emitter, statement, RESULT_FIELD.of(emitter, returned))
-    if m_field(statement, FIFTH) & CONDITION_CODE_SET:
-        emitter.set_cc(CC_FIELD.of(emitter, returned))
-
-
-def _saturating_pack(
-    functions: Mapping[ElementSize, IrFunction],
-) -> Callable[[ElementSize], StatementLowering]:
-    return lambda size: lambda emitter, statement: _packed_saturating(
-        functions[size], emitter, statement
-    )
 
 
 SIGNED_PACKS = _pack_functions("saturate", _signed_clamp)
@@ -489,8 +454,8 @@ VECTOR_REGISTER_LOWERINGS: Mapping[str, StatementLowering] = {
     "VPERM": _permute,
     "VBPERM": _bit_permute,
     "VPK": per_size(FOURTH, PACKED_SIZES, _packed),
-    "VPKS": per_size(FOURTH, PACKED_SIZES, _saturating_pack(SIGNED_PACKS)),
-    "VPKLS": per_size(FOURTH, PACKED_SIZES, _saturating_pack(LOGICAL_PACKS)),
+    "VPKS": per_size(FOURTH, PACKED_SIZES, status_function(SIGNED_PACKS)),
+    "VPKLS": per_size(FOURTH, PACKED_SIZES, status_function(LOGICAL_PACKS)),
     "VREP": per_size(FOURTH, UP_TO_DOUBLEWORD, _replicated_element),
     "VREPI": per_size(THIRD, UP_TO_DOUBLEWORD, _replicated_immediate),
     "VSEG": per_size(THIRD, SIGN_EXTENDED_SIZES, _sign_extended_to_doubleword),

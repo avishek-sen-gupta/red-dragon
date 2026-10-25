@@ -8,34 +8,34 @@ from tests.integration.hlasm.vector_memory_programs import image, line
 type Case = tuple[str, bytes]
 
 
-def _dc(label: str, *words: str) -> str:
+def dc(label: str, *words: str) -> str:
     return f"{label:<8} DC    " + ",".join(f"X'{w}'" for w in words) + "\n"
 
 
 DATA = (
-    _dc("MASKS", "A55A0000", "00000000", "00000000", "00000000")
-    + _dc("PERMS", "1F00100F", "203FE105", "111E0807", "C90A1602")
-    + _dc("BITS", "0F00161E", "1F84FF7C", "7F173D3C", "010E2D2E")
-    + _dc("GVAL", "81828384", "85868788")
-    + _dc("GVAL2", "01020304", "05060708")
-    + _dc("SIGNH", "007F0080", "FF80FF7F", "00007FFF", "8000FFFF")
-    + _dc("SMALLH", "0001FFFE", "0040FFC0", "00100020", "00300040")
-    + _dc("WIDEH", "01008000", "7FFFFE00", "01008000", "7FFFFE00")
-    + _dc("SIGNF", "00007FFF", "00008000", "FFFF8000", "FFFF7FFF")
-    + _dc("SIGNG", "00000000", "7FFFFFFF", "00000000", "80000000")
-    + _dc("SIGNG2", "FFFFFFFF", "80000000", "FFFFFFFF", "7FFFFFFF")
-    + _dc("LOGH", "00FF0100", "FFFF0080", "00010002", "00030004")
-    + _dc("LOGG", "00000000", "FFFFFFFF", "00000001", "00000000")
-    + _dc("SEG", "01234567", "89ABCD80", "FEDCBA98", "7654327F")
-    + _dc("SELECT", "FF00F00F", "0000FFFF", "AAAA5555", "00000000")
-    + _dc("BLENDB", "807FFF00", "8101C040", "80000080", "FFFF0000")
-    + _dc("BLENDF", "00000000", "FFFFFFFF", "7FFFFFFF", "80000000")
-    + _dc("BLENDG", "80000000", "00000000", "00000000", "00000001")
-    + _dc("UNPACK", "807FFF01", "80017FFF", "89ABCDEF", "01234567")
+    dc("MASKS", "A55A0000", "00000000", "00000000", "00000000")
+    + dc("PERMS", "1F00100F", "203FE105", "111E0807", "C90A1602")
+    + dc("BITS", "0F00161E", "1F84FF7C", "7F173D3C", "010E2D2E")
+    + dc("GVAL", "81828384", "85868788")
+    + dc("GVAL2", "01020304", "05060708")
+    + dc("SIGNH", "007F0080", "FF80FF7F", "00007FFF", "8000FFFF")
+    + dc("SMALLH", "0001FFFE", "0040FFC0", "00100020", "00300040")
+    + dc("WIDEH", "01008000", "7FFFFE00", "01008000", "7FFFFE00")
+    + dc("SIGNF", "00007FFF", "00008000", "FFFF8000", "FFFF7FFF")
+    + dc("SIGNG", "00000000", "7FFFFFFF", "00000000", "80000000")
+    + dc("SIGNG2", "FFFFFFFF", "80000000", "FFFFFFFF", "7FFFFFFF")
+    + dc("LOGH", "00FF0100", "FFFF0080", "00010002", "00030004")
+    + dc("LOGG", "00000000", "FFFFFFFF", "00000001", "00000000")
+    + dc("SEG", "01234567", "89ABCD80", "FEDCBA98", "7654327F")
+    + dc("SELECT", "FF00F00F", "0000FFFF", "AAAA5555", "00000000")
+    + dc("BLENDB", "807FFF00", "8101C040", "80000080", "FFFF0000")
+    + dc("BLENDF", "00000000", "FFFFFFFF", "7FFFFFFF", "80000000")
+    + dc("BLENDG", "80000000", "00000000", "00000000", "00000001")
+    + dc("UNPACK", "807FFF01", "80017FFF", "89ABCDEF", "01234567")
 )
 
 
-def _cc(register: int, at: int) -> str:
+def cc(register: int, at: int) -> str:
     return (
         line("IPM", f"{register}")
         + line("SRL", f"{register},28")
@@ -223,22 +223,22 @@ CASES: Mapping[str, Case] = {
         + line("VL", "3,SMALLH")
         + line("VL", "6,WIDEH")
         + line("VPKSHS", "4,2,3")
-        + _cc(9, 192)
+        + cc(9, 192)
         + line("VPKSHS", "5,3,3")
-        + _cc(9, 193)
+        + cc(9, 193)
         + line("VPKSHS", "6,6,6")
-        + _cc(9, 194)
+        + cc(9, 194)
         + line("LHI", "7,5")
         + line("LTR", "7,7")
         + line("VPKSH", "7,2,3")
-        + _cc(9, 195)
+        + cc(9, 195)
         + line("VL", "8,SIGNF")
         + line("VPKSFS", "8,8,8")
-        + _cc(9, 196)
+        + cc(9, 196)
         + line("VL", "10,SIGNG")
         + line("VL", "11,SIGNG2")
         + line("VPKSGS", "9,10,11")
-        + _cc(9, 197)
+        + cc(9, 197)
         + line("VSTM", "4,9,OUT"),
         image(
             "7F7F8080 007F80FF 01FE40C0 10203040",
@@ -260,18 +260,18 @@ CASES: Mapping[str, Case] = {
         line("VL", "2,LOGH")
         + line("VL", "3,SMALLH")
         + line("VPKLSHS", "4,2,2")
-        + _cc(9, 80)
+        + cc(9, 80)
         + line("VPKLSHS", "5,3,3")
-        + _cc(9, 81)
+        + cc(9, 81)
         + line("VL", "6,LOGG")
         + line("VPKLSGS", "6,6,6")
-        + _cc(9, 82)
+        + cc(9, 82)
         + line("VL", "7,WIDEH")
         + line("VPKLSFS", "7,7,7")
-        + _cc(9, 83)
+        + cc(9, 83)
         + line("VL", "8,SIGNG")
         + line("VPKLSGS", "8,8,8")
-        + _cc(9, 84)
+        + cc(9, 84)
         + line("VSTM", "4,8,OUT"),
         image(
             "FFFFFF80 01020304 FFFFFF80 01020304",
