@@ -20,6 +20,7 @@ from interpreter.field_name import FieldName
 from interpreter.func_name import FuncName
 from interpreter.instructions import Data
 from interpreter.ir import CodeLabel
+from interpreter.record_io.io_provider import NO_IO_PROVIDER, RecordIOProvider
 from interpreter.register import NO_REGISTER, Register
 from interpreter.types.type_expr import UNKNOWN, TypeExpr, scalar
 from interpreter.types.typed_value import TypedValue, typed
@@ -177,9 +178,7 @@ class VMState:
     continuations: dict[ContinuationName, CodeLabel] = field(default_factory=dict)
     exception_stack: list[ExceptionHandler] = field(default_factory=list)
     declarations: tuple[Data, ...] = ()
-    io_provider: Any = (
-        None  # Any: Optional CobolIOProvider — avoids COBOL import in core VM — see red-dragon-r32l
-    )
+    io_provider: RecordIOProvider = NO_IO_PROVIDER
 
     def heap_get(self, addr: Address) -> HeapObject:
         """Get heap object by address. Returns NO_HEAP_OBJECT if not found."""

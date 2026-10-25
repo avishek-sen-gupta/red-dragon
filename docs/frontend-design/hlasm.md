@@ -1526,8 +1526,8 @@ layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.
   - a PARM, from `run_input_builtins(clock, parm)`;
   - the DDs, from `dd_run_inputs(dds)`: its `__hlasm_dd` builtin, and its `RunInputs` given to the
     file provider. That is where each DD's path goes: OPEN of a DDNAME reads and writes that path;
-  - the file provider, `RealFileProvider(base_dir, inputs)` from `interpreter.record_io`, as
-    `io_provider`.
+  - the file provider, `RealFileProvider(inputs)` from `interpreter.record_io`, as `io_provider`.
+    It opens a file only at the path a DD gives; a DDNAME with no DD fails the open.
 
   Every part exists in this repository and none imports `interpreter.cobol`. red-dragon-forge
   composes them, with COBOL's, into the run-time stack (red-dragon-6lic).

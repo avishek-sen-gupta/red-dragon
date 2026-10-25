@@ -14,6 +14,7 @@ from interpreter.vm.vm import VMState
 from interpreter.vm.vm_types import BuiltinResult
 
 PROVIDER_DECLARATION = FuncName("__cobol_declare_file")
+PROVIDER_OUTCOME = FuncName("__cobol_io_outcome")
 NO_PROGRAM = ""
 
 
@@ -30,6 +31,9 @@ def declare_file_builtins() -> Mapping[FuncName, Builtin]:
         declared = vm.io_provider.handle_call(
             PROVIDER_DECLARATION, [typed(frame.data()), typed(NO_PROGRAM)]
         )
-        return BuiltinResult(value=declared.condition.position())
+        outcome = vm.io_provider.handle_call(
+            PROVIDER_OUTCOME, [typed(declared), typed(NO_PROGRAM)]
+        )
+        return BuiltinResult(value=outcome)
 
     return {DECLARE_FILE_BUILTIN: declare_file}

@@ -98,9 +98,7 @@ def _run_vm(
             linked,
             EntryPoint.function(lambda ref: ref.label == linked.entry_func_label),
             max_steps=MAX_STEPS,
-            initial_vm=initial_vm_state(
-                io_provider=RealFileProvider(Path(), provider_inputs)
-            ),
+            initial_vm=initial_vm_state(io_provider=RealFileProvider(provider_inputs)),
             builtins=compose_builtins(
                 core_builtins(),
                 run_input_builtins(FixedMachineClock(), NO_PARM),

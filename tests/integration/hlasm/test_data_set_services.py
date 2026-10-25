@@ -155,4 +155,5 @@ def test_open_fills_empty_dcb_fields_from_the_dd_and_fails_a_dd_or_mode_it_lacks
         ran.run,
         {r: ran.gprs[r] for r in programs.OPEN_FROM_DDS_REGISTERS},
         (tmp_path / "ex.dat").read_bytes(),
-    ) == (ABENDED, programs.OPEN_FROM_DDS_REGISTERS, programs.EXTENDED)
+        Path("nodd.dat").exists(),
+    ) == (ABENDED, programs.OPEN_FROM_DDS_REGISTERS, programs.EXTENDED, False)

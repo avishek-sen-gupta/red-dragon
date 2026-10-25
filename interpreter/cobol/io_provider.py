@@ -122,8 +122,7 @@ class StubIOProvider(CobolIOProvider):
             accept_values=["Y", "JOHN DOE"],
             files={"CUSTOMER-FILE": {"records": ["REC1DATA", "REC2DATA"]}},
         )
-        config = VMConfig(io_provider=stubs)
-        vm = run(source, language="cobol", config=config)
+        vm = run(source, language="cobol", io_provider=stubs)
 
         # Inspect written records:
         stubs.get_file("OUTPUT-FILE").written  # → ["RESULT1", "RESULT2"]

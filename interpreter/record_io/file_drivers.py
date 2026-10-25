@@ -1,5 +1,5 @@
 # pyright: standard
-"""COBOL file organization drivers.
+"""File organization drivers.
 
 Three flat-file implementations covering SEQUENTIAL, INDEXED, and RELATIVE
 file organizations. All use fixed-length records.

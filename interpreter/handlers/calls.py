@@ -320,8 +320,7 @@ def _handle_call_function(
 
     # 0. Try I/O provider (for __cobol_* calls it recognises)
     if (
-        vm.io_provider
-        and isinstance(base_name, FuncName)
+        isinstance(base_name, FuncName)
         and base_name.startswith("__cobol_")
         and vm.io_provider.dispatch(base_name) is not None
     ):

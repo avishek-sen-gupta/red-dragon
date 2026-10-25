@@ -4,11 +4,9 @@
 from __future__ import annotations
 
 import logging
-import os
 from collections.abc import Callable, Mapping
 from pathlib import Path
 
-from cobol_asg.cobol_statements import FileControlEntry
 from cobol_asg.file_enums import FileOrganization, OpenMode
 from interpreter.data_value import DataRecord
 from interpreter.record_io.access_result import AccessCondition, AccessResult
@@ -38,7 +36,6 @@ def to_ioresult(result: AccessResult) -> IOResult:
 
 
 logger = logging.getLogger(__name__)
-_PATH_MARKS = frozenset("/\\.")
 _RELATIVE_NUMBER_BYTES = 4
 _OPEN_FAILED = to_ioresult(AccessResult(AccessCondition.FILE_NOT_FOUND))
 _VARIABLE_DRIVERS: dict[FileOrganization, Callable[[], FileOrganizationDriver]] = {
@@ -48,42 +45,20 @@ _VARIABLE_DRIVERS: dict[FileOrganization, Callable[[], FileOrganizationDriver]] 
 
 
 class RealFileProvider(RecordIOProvider):
-    """Disk-backed record I/O provider.
+    """Disk-backed record I/O provider. It opens a file only at the path the run's
+    inputs give its name; a name with no path fails the open.
 
     Args:
-        base_dir: Root for resolving relative paths from ``assign_to``.
-        inputs: The run's SELECT entries and path overrides (which take precedence
-            over all other resolution).
+        inputs: The run's path overrides, one path per file name.
     """
 
-    def __init__(self, base_dir: Path, inputs: RunInputs = NO_RUN_INPUTS) -> None:
-        self._base_dir = base_dir
-        self._fce: dict[str, FileControlEntry] = {
-            e.file_name: e for e in inputs.file_control
-        }
+    def __init__(self, inputs: RunInputs = NO_RUN_INPUTS) -> None:
         self._overrides: Mapping[str, Path] = inputs.path_overrides
         self._files: dict[str, FileOrganizationDriver] = {}
         self._frames: dict[str, FileFrame] = {}
 
-    def _overridden(self, file_name: str, assign_to: str) -> list[Path]:
-        names = [file_name, *([assign_to] if assign_to else [])]
-        return [self._overrides[k] for k in names if k in self._overrides]
-
-    def _from_environment(self, clean: str) -> Path:
-        bare = not set(clean) & _PATH_MARKS
-        env_val = os.environ.get(clean.upper(), "") if bare else ""
-        return Path(env_val) if env_val else self._base_dir / clean
-
-    def _assigned(self, file_name: str, assign_to: str) -> Path:
-        if not assign_to:
-            return self._base_dir / (file_name.lower().replace("-", "_") + ".dat")
-        return self._from_environment(assign_to.strip("'\""))
-
-    def _resolve_path(self, file_name: str, assign_to: str) -> Path:
-        return next(
-            iter(self._overridden(file_name, assign_to)),
-            self._assigned(file_name, assign_to),
-        )
+    def _paths(self, filename: str) -> tuple[Path, ...]:
+        return tuple(self._overrides[k] for k in (filename,) if k in self._overrides)
 
     def _driver(
         self, frame: FileFrame, path: Path, mode: OpenMode
@@ -99,28 +74,27 @@ class RealFileProvider(RecordIOProvider):
             return drv
         return self._driver(frame, path, mode)
 
-    def _assign_to(self, filename: str) -> str:
-        return self._fce[filename].assign_to if filename in self._fce else ""
-
     def _declare_file(self, frame: DataRecord, program: str) -> IOResult:
         declared = frame_of(frame)
         self._frames = {**self._frames, declared.file_name: declared}
         return to_ioresult(AccessResult(AccessCondition.OK))
 
     def _open_file(self, filename: str, mode: str, program: str) -> IOResult:
-        if self._absent(filename, OpenMode(mode)):
-            logger.info("OPEN %s %s: no such file", mode, filename)
+        paths = self._paths(filename)
+        if not paths:
+            logger.info("OPEN %s %s: no path", mode, filename)
             return _OPEN_FAILED
-        return self._open_closed(filename, OpenMode(mode), self._frames[filename])
+        return self._open_at(filename, OpenMode(mode), paths[0])
 
-    def _absent(self, filename: str, mode: OpenMode) -> bool:
-        return mode is not OpenMode.OUTPUT and not self._path(filename).exists()
+    def _open_at(self, filename: str, mode: OpenMode, path: Path) -> IOResult:
+        if mode is not OpenMode.OUTPUT and not path.exists():
+            logger.info("OPEN %s %s: no such file", mode.value, filename)
+            return _OPEN_FAILED
+        return self._open_closed(filename, mode, self._frames[filename], path)
 
-    def _path(self, filename: str) -> Path:
-        return self._resolve_path(filename, self._assign_to(filename))
-
-    def _open_closed(self, filename: str, mode: OpenMode, frame: FileFrame) -> IOResult:
-        path = self._path(filename)
+    def _open_closed(
+        self, filename: str, mode: OpenMode, frame: FileFrame, path: Path
+    ) -> IOResult:
         try:
             drv = self._driver_for(frame, path, mode)
         except OSError as exc:

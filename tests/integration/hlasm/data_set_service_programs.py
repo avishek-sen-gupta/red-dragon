@@ -257,6 +257,8 @@ OPEN_FROM_DDS = (
     "         PUT   EXDCB,NEWREC\n"
     "         CLOSE (EXDCB,,NEVER)\n"
     "         LR    10,15\n"
+    "         OPEN  (OUTNO,(OUTPUT))\n"
+    "         LR    13,15\n"
     "         ABEND 1\n"
     "         DS    0F\n"
     "BADLIST  DC    AL1(X'81'),AL3(BADDCB)\n"
@@ -266,6 +268,7 @@ OPEN_FROM_DDS = (
     "BADDCB   DCB   DSORG=PS,MACRF=GM,DDNAME=INDD\n"
     "EXDCB    DCB   DSORG=PS,MACRF=PM,RECFM=F,LRECL=80,DDNAME=EXDD\n"
     "NEVER    DCB   DSORG=PS,MACRF=PL,RECFM=F,LRECL=80,DDNAME=NODD\n"
+    "OUTNO    DCB   DSORG=PS,MACRF=PM,RECFM=F,LRECL=80,DDNAME=NODD\n"
     "         DCBD\n"
     "         END\n"
 )
@@ -280,6 +283,7 @@ OPEN_FROM_DDS_REGISTERS = {
     9: 0,
     10: 0,
     11: 0,
+    13: 8,
 }
 EXTENDED = fixed_records("FIRST RECORD", "APPENDED")
 

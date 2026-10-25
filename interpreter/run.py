@@ -1055,7 +1055,6 @@ def run_linked(
         unresolved_call_strategy=unresolved_call_strategy,
         permit_unresolved_call_targets=permit_unresolved_call_targets,
         builtins=builtins,
-        io_provider=io_provider,
         step_callback=step_callback,
         step_callback_interval=step_callback_interval,
     )
@@ -1164,7 +1163,6 @@ def run_linked_resumable(
         unresolved_call_strategy=unresolved_call_strategy,
         permit_unresolved_call_targets=permit_unresolved_call_targets,
         builtins=builtins,
-        io_provider=io_provider,
     )
     dispatch, entered = _entering(linked, entry_point)
     initial_vm.declarations = _declarations_at(linked, entered)
@@ -1198,7 +1196,6 @@ def resume_linked(
         unresolved_call_strategy=unresolved_call_strategy,
         permit_unresolved_call_targets=permit_unresolved_call_targets,
         builtins=builtins,
-        io_provider=io_provider,
     )
     if io_provider is not NO_IO_PROVIDER:
         state.vm.io_provider = io_provider

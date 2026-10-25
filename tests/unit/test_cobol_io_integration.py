@@ -6,7 +6,7 @@ from interpreter.cobol.io_provider import NullIOProvider, StubIOProvider
 from interpreter.instructions import InstructionBase
 from interpreter.ir import CodeLabel, IRInstruction, Opcode
 from interpreter.record_io.access_result import AccessCondition
-from interpreter.record_io.io_provider import IOResult
+from interpreter.record_io.io_provider import NO_IO_PROVIDER, IOResult
 from interpreter.register import Register
 from interpreter.registry import build_registry
 from interpreter.run import execute_cfg, initial_vm_state
@@ -49,7 +49,7 @@ def _execute_with_provider(instructions, provider):
     """Execute IR with a given io_provider and return the VM."""
     cfg = build_cfg(instructions)
     registry = build_registry(instructions, cfg)
-    config = VMConfig(max_steps=50, io_provider=provider)
+    config = VMConfig(max_steps=50)
     vm, _stats = execute_cfg(
         cfg, "entry", registry, config, vm=initial_vm_state(io_provider=provider)
     )
@@ -148,7 +148,7 @@ class TestExecutorIOProviderDispatch:
         """Without io_provider, __cobol_* builtins (prepare_digits etc.) still work."""
         ir = _build_call_function_ir("__cobol_prepare_digits", "123", 5, 2, True)
         # No provider — should fall through to builtins
-        vm = _execute_with_provider(ir, None)
+        vm = _execute_with_provider(ir, NO_IO_PROVIDER)
         result = unwrap(vm.current_frame.registers.get(Register("%result")))
         # Should get a concrete list of digit ints from the builtin, not symbolic
         assert isinstance(

@@ -16,11 +16,9 @@ from interpreter.data_value import DataRecord
 from interpreter.func_name import FuncName
 from interpreter.record_io.access_result import AccessCondition
 from interpreter.types.typed_value import TypedValue
-from interpreter.vm.vm import Operators
+from interpreter.vm.uncomputable import UNCOMPUTABLE
 
 logger = logging.getLogger(__name__)
-
-_UNCOMPUTABLE = Operators.UNCOMPUTABLE
 
 
 @dataclass(frozen=True)
@@ -68,7 +66,7 @@ class RecordIOProvider(ABC):
 
     def handle_call(
         self, func_name: FuncName, args: list[TypedValue]
-    ) -> Any:  # Any: str | int | IOResult | _Uncomputable — VM I/O boundary
+    ) -> Any:  # Any: str | int | IOResult | Uncomputable — VM I/O boundary
         """Route a call to the appropriate method.
 
         Returns a concrete value or UNCOMPUTABLE if unhandled.
@@ -76,7 +74,7 @@ class RecordIOProvider(ABC):
         method_name = self.dispatch(func_name)
         if method_name is None:
             logger.debug("RecordIOProvider: unknown func %s", func_name)
-            return _UNCOMPUTABLE
+            return UNCOMPUTABLE
         method = getattr(self, method_name)
         return method(*[a.value for a in args])
 
@@ -84,13 +82,13 @@ class RecordIOProvider(ABC):
         """The driver outcome of an IOResult, as its AccessCondition's position."""
         if isinstance(raw, IOResult):
             return raw.condition.position()
-        return _UNCOMPUTABLE
+        return UNCOMPUTABLE
 
     def _io_data(self, raw: Any, program: str) -> Any:
         """Extract record data from an IOResult (empty string if None)."""
         if isinstance(raw, IOResult):
             return raw.data or ""
-        return _UNCOMPUTABLE
+        return UNCOMPUTABLE
 
     def _io_record_number(self, raw: IOResult, program: str) -> int:
         """The relative record number a relative-file verb used, 0 for others."""
@@ -116,7 +114,7 @@ class RecordIOProvider(ABC):
     @abstractmethod
     def _read_record(
         self, filename: str, locator: str, program: str
-    ) -> Any:  # Any: IOResult | _Uncomputable
+    ) -> Any:  # Any: IOResult | Uncomputable
         """READ — get next record from file."""
         ...
 
@@ -161,7 +159,7 @@ class NoIOProvider(RecordIOProvider):
         return IOResult(AccessCondition.OK, None)
 
     def _read_record(self, filename: str, locator: str, program: str) -> Any:
-        return _UNCOMPUTABLE
+        return UNCOMPUTABLE
 
     def _write_record(
         self, filename: str, data: str, locator: str, program: str

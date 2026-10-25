@@ -6,7 +6,6 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
 
 from interpreter.constants import LLMProvider
 from interpreter.func_name import FuncName
@@ -32,9 +31,6 @@ class VMConfig:
     permit_unresolved_call_targets: bool = True
     builtins: Mapping[FuncName, Builtin] = field(default_factory=core_builtins)
     source_language: str = ""
-    io_provider: Any = (
-        None  # Any: COBOL isolation boundary — CobolIOProvider avoided in core VM
-    )
     step_callback: Callable[[int, str], None] | None = None
     step_callback_interval: int = 1_000_000
 

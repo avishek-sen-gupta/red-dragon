@@ -72,7 +72,7 @@ All in `interpreter/run.py`.
 
 For COBOL, `run()` switches a top-level entry to the program's procedure function, so phase 1 runs the program's init block and phase 2 enters `func_<PID>_0`.
 
-**Configuration.** `VMConfig` (`interpreter/run_types.py`, frozen): `backend`, `max_steps` (default 100), `verbose`, `unresolved_call_strategy` (`SYMBOLIC` or `LLM`), `source_language`, `io_provider`, `step_callback` and `step_callback_interval`.
+**Configuration.** `VMConfig` (`interpreter/run_types.py`, frozen): `backend`, `max_steps` (default 100), `verbose`, `unresolved_call_strategy` (`SYMBOLIC` or `LLM`), `source_language`, `step_callback` and `step_callback_interval`.
 
 **Strategies.** `ExecutionStrategies` (`interpreter/run.py`, frozen) bundles the per-language pieces: `type_env`, `conversion_rules`, `overload_resolver`, `binop_coercion`, `unop_coercion`, the function and class symbol tables, `field_fallback`, `function_scoping` and `symbol_table`. `_build_strategies_from_linked` builds it from a `LinkedProgram`, running type inference and building the overload resolver. Language choices:
 
@@ -547,6 +547,7 @@ interpreter/
 │   ├── vm.py             apply_update, coerce_local_update, materialize_raw_update, _resolve_reg, _heap_addr, Operators
 │   ├── executor.py       HandlerContext, LocalExecutor.DISPATCH
 │   ├── segment.py        Segment, FIRST_ADDRESS
+│   ├── uncomputable.py   UNCOMPUTABLE, the sentinel Operators and the record provider share
 │   ├── null_access.py, warn_and_ignore.py, halt_on_null.py, null_address_access.py   NULL-page strategies
 │   ├── builtins.py       core_builtins, compose_builtins, METHOD_TABLE
 │   ├── unresolved_call.py  SymbolicResolver, LLMPlausibleResolver

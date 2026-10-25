@@ -15,6 +15,7 @@ from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_expr import UNKNOWN, ScalarType, scalar
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter.var_name import VarName
+from interpreter.vm.uncomputable import UNCOMPUTABLE, Uncomputable
 from interpreter.vm.unwritten_register_read import UnwrittenRegisterRead
 from interpreter.vm.vm_types import (  # noqa: F401 — re-exported for backwards compatibility
     VOID_RETURN,
@@ -394,13 +395,8 @@ def _resolve_typed_reg(
 class Operators:
     """Binary and unary operator evaluation with an explicit UNCOMPUTABLE sentinel."""
 
-    class _Uncomputable:
-        """Sentinel value indicating an operation could not be computed."""
-
-        def __repr__(self) -> str:
-            return "UNCOMPUTABLE"
-
-    UNCOMPUTABLE = _Uncomputable()
+    _Uncomputable = Uncomputable
+    UNCOMPUTABLE = UNCOMPUTABLE
 
     BINOP_TABLE: dict[str, Callable[..., Any]] = (
         {  # Any: operator dispatch — heterogeneous runtime values
