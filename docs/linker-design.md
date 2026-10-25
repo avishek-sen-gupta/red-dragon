@@ -483,7 +483,7 @@ files. Each unit carries its `ObjectModule` ("Object module" in
 `docs/frontend-design/hlasm.md`), and link is a binder over them: `bind_image` builds the
 start-up module (machine state, layout, TXT, RLD with the pseudo-register offsets and total, once) and a `__hlasm_job__` module of one
 job-step function per SD or LD name, which `programs` maps each name to, plus one per unit
-entering at its END. `entry_func_label` is the first unit's END step, so `compile_hlasm`
+entering at its END. `entry_func_label` is the first HLASM unit's END step, so `compile_hlasm`
 enters its main source. Link never reads an AST file. An SD or LD
 name in two units raises `DuplicateProgramInImage`.
 

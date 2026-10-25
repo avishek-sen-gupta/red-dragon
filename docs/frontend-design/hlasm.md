@@ -272,7 +272,7 @@ units' object modules once, at link. Start-up IR is not rebuilt from the AST.
 - **Job step.** Each SD and LD name gets `func___hlasm_job_<NAME>_0` in the `__hlasm_job__`
   module, registered in `programs`; each module gets `func___hlasm_end_<module>_0` for its END
   entry, which is not an external name (ruling R74). The image's `entry_func_label` is the first
-  unit's END step, so `compile_hlasm` enters its main source. A step sets R1 to a one-entry VL list pointing at a halfword
+  HLASM unit's END step, so `compile_hlasm` enters its main source. A step sets R1 to a one-entry VL list pointing at a halfword
   length and up to 100 bytes of PARM text, R13 to a fresh 72-byte save area, R14 to `0xFF0` and
   R15 to the entry address, then calls the module function (`__hlasm_module_<module>`) with the
   entry address and an empty set of modules below.
@@ -295,8 +295,8 @@ Registers stay shared machine state.
   R14 must not return at once.
 - Otherwise a masked target equal to `__hlasm_return_to`, or to the system's return address
   `0xFF0`, returns R15's low word. A branch to `0xFF0` from any activation therefore unwinds every
-  activation up to the job step, ending the step with R15, or up to the LINK that entered it
-  (ruling R82). BSM and BASSM make the same comparison before their mode test, so the mode bit of
+  activation up to the job step, ending the step with R15, or up to the LINK that entered it,
+  or up to the COBOL CALL that entered it (ruling R82). BSM and BASSM make the same comparison before their mode test, so the mode bit of
   the return address does not matter.
 - Any other target goes to `__hlasm_far_branch(target, below, me, linking)`, which finds its owner:
   - the module itself: `S0C1` (data, or a DSECT offset);
