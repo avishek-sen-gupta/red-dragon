@@ -99,6 +99,7 @@ from interpreter.hlasm.opcodes.under_mask import (
 from interpreter.hlasm.opcodes.unicode_string_search import (
     UNICODE_STRING_SEARCH_LOWERINGS,
 )
+from interpreter.hlasm.opcodes.vector_memory import VECTOR_MEMORY_LOWERINGS
 from interpreter.hlasm.statement_lowering import StatementLowering
 
 OPCODE_LOWERINGS: Mapping[str, StatementLowering] = {
@@ -146,6 +147,7 @@ OPCODE_LOWERINGS: Mapping[str, StatementLowering] = {
     **PFPO_LOWERINGS,
     **DFP_SHIFT_LOWERINGS,
     **DFP_CLASS_LOWERINGS,
+    **VECTOR_MEMORY_LOWERINGS,
 }
 
 DATA_FIELD_LOWERINGS: Mapping[str, FieldLowering] = {

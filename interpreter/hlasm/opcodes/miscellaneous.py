@@ -76,7 +76,7 @@ ACCESS_REGISTERS: Mapping[str, StatementLowering] = {
 }
 
 
-def _block_count(emitter: HlasmEmitter, address: Register, block: int) -> Register:
+def block_count(emitter: HlasmEmitter, address: Register, block: int) -> Register:
     offset = emitter.binop(BinopKind.BIT_AND, address, emitter.int_(block - 1))
     remaining = emitter.binop(BinopKind.SUB, emitter.int_(block), offset)
     return smaller(emitter, remaining, emitter.int_(BLOCK_COUNT_LIMIT))
@@ -89,7 +89,7 @@ def lower_load_count_to_block_boundary(
     if boundary_code > LARGEST_BOUNDARY_CODE:
         emit_abend(emitter, SPECIFICATION_EXCEPTION_ABEND)
         return
-    count = _block_count(
+    count = block_count(
         emitter, storage_address(emitter, statement), SMALLEST_BLOCK << boundary_code
     )
     emitter.store_gr32(reg_operand(statement, 0), count)
