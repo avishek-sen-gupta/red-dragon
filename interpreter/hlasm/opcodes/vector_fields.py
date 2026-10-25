@@ -1,18 +1,29 @@
 # pyright: standard
-"""Vector M-field checks at lowering: an element size outside the instruction's allowed set, a must-be-zero bit that is set, or a static element index past the element count abends S0C6; an omitted M field is 0."""
+"""Vector operand helpers at lowering: M-field checks (an element size outside the instruction's allowed set, a must-be-zero bit that is set, or a static element index past the element count abends S0C6; an omitted M field is 0), whole-register sources and sinks, and element replication."""
 
 from collections.abc import Callable
 
 from hlasm_asg.program.machine_statement import MachineStatement
 from interpreter.hlasm.abend import emit_abend
+from interpreter.hlasm.data_movement import Source, Transform
 from interpreter.hlasm.element_size import ElementSize
-from interpreter.hlasm.hlasm_constants import SPECIFICATION_EXCEPTION_ABEND
+from interpreter.hlasm.hlasm_constants import (
+    BITS_PER_BYTE,
+    SPECIFICATION_EXCEPTION_ABEND,
+)
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.opcodes.fp_forms import checked
-from interpreter.hlasm.operands import optional_mask_operand, value_operand
+from interpreter.hlasm.operands import (
+    optional_mask_operand,
+    value_operand,
+    vec_reg_operand,
+)
 from interpreter.hlasm.statement_lowering import StatementLowering
+from interpreter.operator_kind import BinopKind
+from interpreter.register import Register
 
 OMITTED_M_FIELD = 0
+V1 = 0
 
 type SizedLowering = Callable[[HlasmEmitter, MachineStatement, ElementSize], None]
 
@@ -48,4 +59,35 @@ def element_index_checked(
     return checked(
         lambda statement: value_operand(statement, field).value >= size.count,
         lowering,
+    )
+
+
+def per_size(
+    field: int,
+    allowed: frozenset[ElementSize],
+    build: Callable[[ElementSize], StatementLowering],
+) -> StatementLowering:
+    return element_size_checked(
+        field,
+        allowed,
+        lambda emitter, statement, size: build(size)(emitter, statement),
+    )
+
+
+def vr_at(index: int) -> Source:
+    return lambda emitter, statement: emitter.load_vr(vec_reg_operand(statement, index))
+
+
+def to_v1(emitter: HlasmEmitter, statement: MachineStatement, value: Register) -> None:
+    emitter.store_vr(vec_reg_operand(statement, V1), value)
+
+
+def replication(size: ElementSize) -> int:
+    return sum(1 << (BITS_PER_BYTE * size.width * i) for i in range(size.count))
+
+
+def replicated(size: ElementSize) -> Transform:
+    pattern = replication(size)
+    return lambda emitter, value: emitter.binop(
+        BinopKind.MUL, value, emitter.int_(pattern)
     )

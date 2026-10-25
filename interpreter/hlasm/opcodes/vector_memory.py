@@ -39,10 +39,13 @@ from interpreter.hlasm.opcodes.miscellaneous import (
     block_count,
 )
 from interpreter.hlasm.opcodes.vector_fields import (
-    SizedLowering,
+    V1,
     element_index_checked,
-    element_size_checked,
     m_field,
+    per_size,
+    replicated,
+    to_v1,
+    vr_at,
 )
 from interpreter.hlasm.operands import (
     reg_operand,
@@ -54,7 +57,6 @@ from interpreter.hlasm.vector_elements import load_element, store_element
 from interpreter.operator_kind import BinopKind
 from interpreter.register import Register
 
-V1 = 0
 SECOND_OPERAND = 1
 M3 = 2
 RANGE_END = 1
@@ -81,14 +83,6 @@ type RegionAt = tuple[Register, Register]
 type ByteCopy = Callable[[HlasmEmitter, Register, RegionAt, int], None]
 
 
-def _vr(index: int) -> Source:
-    return lambda emitter, statement: emitter.load_vr(vec_reg_operand(statement, index))
-
-
-def _to_vr(emitter: HlasmEmitter, statement: MachineStatement, value: Register) -> None:
-    emitter.store_vr(vec_reg_operand(statement, V1), value)
-
-
 def _element(size: ElementSize) -> Source:
     return lambda emitter, statement: load_element(
         emitter, vec_reg_operand(statement, V1), size, m_field(statement, M3)
@@ -104,13 +98,6 @@ def _to_element(size: ElementSize) -> Sink:
         )
 
     return store
-
-
-def _replicated(size: ElementSize) -> Transform:
-    pattern = sum(1 << (BITS_PER_BYTE * size.width * i) for i in range(size.count))
-    return lambda emitter, value: emitter.binop(
-        BinopKind.MUL, value, emitter.int_(pattern)
-    )
 
 
 def _shifted_left(bits: int) -> Transform:
@@ -134,14 +121,10 @@ def _elements_reversed(size: ElementSize) -> Transform:
     return _permuted(lambda b: (size.count - 1 - b // width) * width + b % width)
 
 
-def _sized(build: Callable[[ElementSize], StatementLowering]) -> SizedLowering:
-    return lambda emitter, statement, size: build(size)(emitter, statement)
-
-
 def _whole(
     sizes: frozenset[ElementSize], build: Callable[[ElementSize], StatementLowering]
 ) -> StatementLowering:
-    return element_size_checked(M3, sizes, _sized(build))
+    return per_size(M3, sizes, build)
 
 
 def _coded(
@@ -293,9 +276,9 @@ def _reversing(size: ElementSize) -> tuple[Transform]:
 
 
 WHOLE_REGISTERS: Mapping[str, StatementLowering] = {
-    "VL": move(from_storage(VECTOR_REGISTER_BYTES), (), _to_vr),
-    "VST": move(_vr(V1), (), to_storage(VECTOR_REGISTER_BYTES)),
-    "VLR": move(_vr(SECOND_OPERAND), (), _to_vr),
+    "VL": move(from_storage(VECTOR_REGISTER_BYTES), (), to_v1),
+    "VST": move(vr_at(V1), (), to_storage(VECTOR_REGISTER_BYTES)),
+    "VLR": move(vr_at(SECOND_OPERAND), (), to_v1),
     "VLM": _multiple(_into_registers),
     "VSTM": _multiple(_into_storage),
 }
@@ -324,18 +307,18 @@ ELEMENTS: Mapping[str, StatementLowering] = {
 PLACED_ELEMENTS: Mapping[str, StatementLowering] = {
     "VLREP": _whole(
         REPLICATED_SIZES,
-        lambda size: move(from_storage(size.width), (_replicated(size),), _to_vr),
+        lambda size: move(from_storage(size.width), (replicated(size),), to_v1),
     ),
     "VLBRREP": _whole(
         ELEMENT_SIZES_FROM_HALFWORD,
         lambda size: move(
-            from_storage(size.width), (*_reversing(size), _replicated(size)), _to_vr
+            from_storage(size.width), (*_reversing(size), replicated(size)), to_v1
         ),
     ),
     "VLLEZ": _coded(
         _zero_extended(REPLICATED_SIZES),
         lambda place: move(
-            from_storage(place.width), (_shifted_left(place.shift),), _to_vr
+            from_storage(place.width), (_shifted_left(place.shift),), to_v1
         ),
     ),
     "VLLEBRZ": _coded(
@@ -343,7 +326,7 @@ PLACED_ELEMENTS: Mapping[str, StatementLowering] = {
         lambda place: move(
             from_storage(place.width),
             (reversed_bytes(place.width), _shifted_left(place.shift)),
-            _to_vr,
+            to_v1,
         ),
     ),
 }
@@ -368,25 +351,25 @@ REORDERED: Mapping[str, StatementLowering] = {
     "VLBR": _whole(
         BYTE_REVERSED_SIZES,
         lambda size: move(
-            from_storage(VECTOR_REGISTER_BYTES), (_bytes_reversed(size),), _to_vr
+            from_storage(VECTOR_REGISTER_BYTES), (_bytes_reversed(size),), to_v1
         ),
     ),
     "VSTBR": _whole(
         BYTE_REVERSED_SIZES,
         lambda size: move(
-            _vr(V1), (_bytes_reversed(size),), to_storage(VECTOR_REGISTER_BYTES)
+            vr_at(V1), (_bytes_reversed(size),), to_storage(VECTOR_REGISTER_BYTES)
         ),
     ),
     "VLER": _whole(
         ELEMENT_SIZES_FROM_HALFWORD,
         lambda size: move(
-            from_storage(VECTOR_REGISTER_BYTES), (_elements_reversed(size),), _to_vr
+            from_storage(VECTOR_REGISTER_BYTES), (_elements_reversed(size),), to_v1
         ),
     ),
     "VSTER": _whole(
         ELEMENT_SIZES_FROM_HALFWORD,
         lambda size: move(
-            _vr(V1), (_elements_reversed(size),), to_storage(VECTOR_REGISTER_BYTES)
+            vr_at(V1), (_elements_reversed(size),), to_storage(VECTOR_REGISTER_BYTES)
         ),
     ),
 }

@@ -117,8 +117,9 @@ addresses.
 | `interpreter/hlasm/opcodes/floating_point_support.py` | The floating-point-support unit: FPR moves, sign forms, the FPC, its checks and the simulated-IEEE trap; `emit_vector_exception` (VXC to the DXC byte, `S0DB`) |
 | `interpreter/hlasm/element_size.py`, `vector_elements.py` | `ElementSize` (ES 0-4); vector elements by static index and by run-time index modulo the element count |
 | `interpreter/hlasm/element_return_field.py` | The fields of an element function's one return value: result, CC, FPC flags, VXC, trap |
-| `interpreter/hlasm/opcodes/vector_fields.py` | `m_field` (omitted is 0); element-size, must-be-zero and static-index checks that abend `S0C6` at lowering |
+| `interpreter/hlasm/opcodes/vector_fields.py` | `m_field` (omitted is 0); element-size, must-be-zero and static-index checks that abend `S0C6` at lowering; a VR operand as a source, V1 as a sink, element replication |
 | `interpreter/hlasm/opcodes/vector_memory.py` | The vector loads and stores: whole registers and ranges, elements, immediates, replicated and zero-extended elements, VLL, VSTL, VLBB, gather and scatter, the byte- and element-reversed forms; `element_placement.py` holds a zero-extended element's width and shift |
+| `interpreter/hlasm/opcodes/vector_register.py` | The vector register manipulations: generated masks, elements to and from GPRs, merges, permutes, packs (the saturating ones as element functions), replication, selection, sign extension, unpacks |
 | `interpreter/hlasm/opcodes/bfp_arithmetic.py` | The BFP arithmetic unit's builtin forms: add, subtract, multiply, divide, square root, fused, load FP integer, divide to integer |
 | `interpreter/hlasm/opcodes/bfp_class.py` | BFP COMPARE, COMPARE AND SIGNAL and TEST DATA CLASS, in IR (ruling R44) |
 | `interpreter/hlasm/opcodes/bfp_sign.py` | BFP LOAD AND TEST and the sign forms, in IR |
@@ -1504,9 +1505,32 @@ with the implied M3. No builtin: every form is region copies, shifts and masks.
   element order (ES H, F, G).
 - Every invalid M field, index or range abends `S0C6` at lowering, before any access.
 
+**Vector register manipulation (red-dragon-6uyp.57.2).** VGBM, VGM, VGEM, VLGV, VLVG, VLVGP,
+VMRH, VMRL, VPDI, VPERM, VBPERM, VPK, VPKS, VPKLS, VREP, VREPI, VSEG, VSEL, VBLEND, VUPH, VUPL,
+VUPLH and VUPLL (PoO chapter 21), with every extended mnemonic (VZERO, VONE, VGMB, VPKSHS,
+VUPLHW, VBLENDQ, ...), which che4z exports as its base with the implied masks. No builtin.
+
+- Each form reads its source VRs whole and writes V1 whole, so V1 may name any source.
+- VMRH, VMRL, VPK, VPDI, VUPLH and VUPLL gather bytes of V2 || V3 (or V2) by a static map.
+  VUPH and VUPL then fill each element's high half from the sign bit; VSEG does the same per
+  doubleword.
+- VGBM and VGM are constants. VGM takes I2 and I3 modulo the element's bits and wraps when I2
+  is past I3. VREP checks its index at lowering; VREPI sign-extends I2 to the element.
+- VPERM picks each byte of V2 || V3 by the low five bits of V4's byte. VBPERM picks bits of V2
+  followed by 128 zeros into bits 48-63 and zeroes the rest. VSEL selects bitwise; VBLEND by
+  bit 0 of each V4 element. Neither works over a concatenation.
+- VLGV and VLVG index the element by the D2(B2) address modulo the element count, which is the
+  low 12 bits modulo the count. Past the count the PoO leaves the result unpredictable; tests
+  pin the modulo in the IR, not the value.
+- VPKS and VPKLS call one element function per signedness and element size. It returns the
+  packed result and the CC (0 none saturated, 1 some, 3 all) in the element return
+  convention; the CC is set only when M5's CS bit is on.
+- An element size outside the PoO's set, or a VREP index past the count, abends `S0C6` at
+  lowering.
+
 ## Known Gaps
 
-- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, miscellaneous, packed-decimal arithmetic, packed-decimal compare and test, decimal conversion, edit, floating-point-support, BFP arithmetic, BFP conversion, HFP arithmetic, HFP conversion and DFP arithmetic units, DFP conversion and PFPO, and the vector loads and stores, are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
+- Only SVC and the load and store, load address and immediates, signed add and subtract, logical add and subtract, compare, compare and branch or trap, boolean, shift and rotate, multiply and divide, load and test with the sign changes, test under mask, storage move, storage compare, translate, branch on condition, branch and link, branch on count and index, execute, conditional load and store, select and bit count, interlocked-update, Unicode conversion and string search, high-word, miscellaneous, packed-decimal arithmetic, packed-decimal compare and test, decimal conversion, edit, floating-point-support, BFP arithmetic, BFP conversion, HFP arithmetic, HFP conversion and DFP arithmetic units, DFP conversion and PFPO, and the vector loads, stores and register manipulations, are lowered; the rest are tracked as opcode-unit beads under red-dragon-6uyp.
 - Floating-point arithmetic is the leaf `zarch_float` ([zarch-float.md](zarch-float.md)); `bfp_builtins.py`, `hfp_builtins.py`, `dfp_builtins.py` and `pfpo_builtins.py` reach it (red-dragon-6uyp.51, .53 to .56).
 - QY raises `UnsupportedDataType` (its 20-bit long-displacement image, red-dragon-6uyp.103), as do G and R (red-dragon-6uyp.63). Our che4z fork takes EB/DB/LB lengths down to 9/12/16 bits and a ±2^31 exponent modifier with a type extension, as the Language Reference allows. It still refuses a scale modifier on EB/DB/LB (the manual ignores it with a warning) and caps the E/D/L scale at 5/13/27 (Table 33; the scale-modifier section says 14/14/28). A bit-length A-constant whose values name `*` raises it too: che4z steps each copy's `*` by the bit length as if it were bytes, and the Language Reference does not say how `*` advances inside a byte (red-dragon-6uyp.97).
 - SY is halfword aligned (the Language Reference's S-type table); z390 does not align it, so the z390 differential places SY on an even offset. z390 also rejects F and H fractions without a scale modifier, rounds FS1'0.25' to 0, wraps out-of-range values and steps `*` across a literal's copies; those cases follow the Language Reference and are unit tests. z390 also misplaces several bit-length forms (duplicated or followed by a byte operand, X, Z), and misassembles floating-point constants: it rejects rounding suffixes, (INF), the NaNs and (DMIN), keeps an unextended zero's sign, ignores scale digits, applies EE2 as E-2, sets (MIN) wrong, truncates where a length modifier rounds, overflows BFP values just under Nmax and DFP values it should fold, and drops a DFP zero's quantum. The VM test for these forms cites the Language Reference; a z390 test pins z390's images (red-dragon-6uyp.74). AMODE/RMODE are not read.
@@ -1608,6 +1632,7 @@ with the implied M3. No builtin: every form is region copies, shifts and masks.
 | `tests/unit/hlasm/test_machine.py` | Machine start-up state, the empty allocation table |
 | `tests/unit/hlasm/test_vector_registers.py` | Vector registers on the VM: 128-bit values over the FPRs, elements by static and run-time index, return fields, M-field checks, the VRV address, the VXC |
 | `tests/unit/hlasm/test_vector_memory_lowering.py` | Vector load and store IR: 16 bytes per register in one copy, one element's bytes for element forms, byte loops after zeroing for VLL and VLBB, VLBB's block mask and size from M3, V2 read first for VRV, `S0C6` before any access, no SYMBOLIC in all 38 |
+| `tests/unit/hlasm/test_vector_register_lowering.py` | Vector register-manipulation IR: sources read whole and V1 written whole, VLGV and VLVG index modulo the element count, one pack function per kind and size with the CC set only for CS, `S0C6` before any access, no SYMBOLIC in all 23 |
 | `tests/unit/hlasm/test_assembly_diagnostics.py` | Bridge diagnostics and DC warnings as unit diagnostics: severity, code and text, member names, call stack, once per value, literals, DSECTs and duplication 0 checked, the macro named |
 | `tests/unit/hlasm/test_dc_encoding.py` | DC images |
 | `tests/unit/hlasm/test_floating_point_constant.py` | E, D and L images: HFP without extension and with H, BFP and DFP rounding modes and lengths, special values, and the ASMA071E, ASMA064S and ASMA073E refusals |
@@ -1707,6 +1732,7 @@ with the implied M3. No builtin: every form is region copies, shifts and masks.
 | `tests/integration/hlasm/test_conditional_select_count.py` | Every conditional, select and count mnemonic and every extended suffix on the VM: met and unmet conditions, masks 0 and 15, kept halves, aliased registers, zero and full operands; CC |
 | `tests/integration/hlasm/test_vector_extended_mnemonics.py` | VZERO and VONE reach VGBM of their own register |
 | `tests/integration/hlasm/test_vector_memory.py` | Every vector load and store family on the VM, read back with VST and VSTE: VLM/VSTM over 2 and 16 registers, element indexes, VLEI signs, replication, zero extension, VLL/VSTL with R3 0, 6, 15 and above, gather and scatter with V1 = V2, byte and element reversal for H, F, G, Q; invalid fields and VLM/VSTM ranges (V3 below V1, 17 registers) `S0C6` with storage unchanged; VLBB at every block size, only the loaded bytes asserted |
+| `tests/integration/hlasm/test_vector_register.py` | Every vector register-manipulation family on the VM, read back with VST, STG and IPM, with V1 equal to a source: masks with wrapping ranges, VLGV/VLVG at addresses past 4095, merges, permutes over both sources, packs saturating with CC 0, 1, 3 and unchanged without CS, replication, selection, sign extension, unpacks; invalid sizes and indexes `S0C6` with storage unchanged |
 | `tests/integration/hlasm/test_conditional_select_count_mnemonics.py` | Every load/store-on-condition and SELECT extended spelling reaches its base mnemonic and Figure J-1 mask |
 | `tests/unit/hlasm/test_interlocked_lowering.py` | Interlocked IR: the boundary check first, one compare that swaps or reloads, CAL's second-operand check only when loading, the load-and-operate stores and overflow check, TS, odd pairs abend `S0C6`, no SYMBOLIC; the PLO table's shape per code, GR0 and test-bit checks before a 62-way tree, PLO under EX lowered once |
 | `tests/integration/hlasm/test_interlocked.py` | Every interlocked mnemonic on the VM: equal and unequal compares, pairs, CALGF zero extension, every CSST code and characteristic, overflow, carry and boolean CCs (zero CCs at 64 bits), R1 as base or R3, each boundary `S0C6` with storage unchanged |
