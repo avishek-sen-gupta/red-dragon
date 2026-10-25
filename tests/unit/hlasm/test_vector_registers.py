@@ -46,6 +46,7 @@ from tests.unit.hlasm.lowering_helpers import (
     machine_statement,
     mask_operand,
     reg_operand,
+    vec_reg_operand,
 )
 from tests.unit.hlasm.straight_line_vm import register_value, run_straight_line
 
@@ -54,7 +55,7 @@ MARK_REGISTER = 1
 VRV_STATEMENT = machine_statement(
     "VGEF",
     (
-        reg_operand(17),
+        vec_reg_operand(17),
         StorageOperand(
             kind="STORAGE",
             displacement=8,
@@ -277,7 +278,7 @@ def test_a_vrv_operand_indexes_by_a_vector_element_and_never_by_a_gpr():
         VectorIndexedOperand(displacement=8, vector_index=19, base=5),
         [0x1028, 0x1308],
         "VGEF in T at offset 2 (t.asm:1) operand 0: expected a vector-indexed storage"
-        " operand, found RegOperand(kind='REG', value=17)",
+        " operand, found VecRegOperand(kind='VEC_REG', value=17)",
     )
 
 

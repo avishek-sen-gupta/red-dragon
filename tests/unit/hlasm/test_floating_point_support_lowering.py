@@ -24,7 +24,7 @@ from tests.unit.hlasm.lowering_helpers import (
     storage_operand,
 )
 
-REGIONS = {"__hlasm_gprs": "gpr", "__hlasm_vrs": "fpr"}
+REGIONS = {"__hlasm_gprs": "gpr", "__hlasm_vrs": "vr"}
 STORAGE = "storage"
 FPC = "__hlasm_fpc"
 BASE = 12
@@ -116,25 +116,25 @@ def test_fpr_forms_move_through_the_fpr_region_and_short_forms_touch_the_high_wo
         "LPDFR": _trace("LPDFR", _registers(1, 2)),
         "CPSDR": _trace("CPSDR", _registers(1, 2, 3)),
     }
-    sign = ["read fpr 32+8", "write fpr 16+8"]
+    sign = ["read vr 32+8", "write vr 16+8"]
 
     assert traces == {
-        "LER": ["read fpr 32+4", "write fpr 16+4"],
-        "LDR": ["read fpr 32+8", "write fpr 16+8"],
-        "LE": [ADDRESS, "read storage +4", "write fpr 16+4"],
-        "LDY": [ADDRESS, "read storage +8", "write fpr 16+8"],
-        "STEY": ["read fpr 48+4", ADDRESS, "write storage +4"],
-        "STD": ["read fpr 48+8", ADDRESS, "write storage +8"],
-        "LDGR": ["read gpr 16+8", "write fpr 16+8"],
-        "LGDR": ["read fpr 16+8", "write gpr 16+8"],
-        "LXR": ["read fpr 64+8", "write fpr 16+8", "read fpr 96+8", "write fpr 48+8"],
-        "LZER": ["write fpr 64+4"],
-        "LZDR": ["write fpr 64+8"],
-        "LZXR": ["write fpr 80+8", "write fpr 112+8"],
+        "LER": ["read vr 32+4", "write vr 16+4"],
+        "LDR": ["read vr 32+8", "write vr 16+8"],
+        "LE": [ADDRESS, "read storage +4", "write vr 16+4"],
+        "LDY": [ADDRESS, "read storage +8", "write vr 16+8"],
+        "STEY": ["read vr 48+4", ADDRESS, "write storage +4"],
+        "STD": ["read vr 48+8", ADDRESS, "write storage +8"],
+        "LDGR": ["read gpr 16+8", "write vr 16+8"],
+        "LGDR": ["read vr 16+8", "write gpr 16+8"],
+        "LXR": ["read vr 64+8", "write vr 16+8", "read vr 96+8", "write vr 48+8"],
+        "LZER": ["write vr 64+4"],
+        "LZDR": ["write vr 64+8"],
+        "LZXR": ["write vr 80+8", "write vr 112+8"],
         "LCDFR": sign,
         "LNDFR": sign,
         "LPDFR": sign,
-        "CPSDR": ["read fpr 48+8", "read fpr 32+8", "write fpr 16+8"],
+        "CPSDR": ["read vr 48+8", "read vr 32+8", "write vr 16+8"],
     }
 
 

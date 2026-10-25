@@ -37,18 +37,18 @@ def test_to_fixed_forms_call_the_builtin_then_store_the_gr_and_cc():
     } == {
         "CFDBR": [
             READ_FPC,
-            "read fpr 16+8",
+            "read vr 16+8",
             "call to_fixed_32_long",
             *ladder("write gpr 20+4", CC),
         ],
         "CGEBRA": [
-            "read fpr 16+4",
+            "read vr 16+4",
             "call to_fixed_64_short",
             *ladder("write gpr 24+8", CC),
         ],
         "CLGXBR": [
-            "read fpr 64+8",
-            "read fpr 96+8",
+            "read vr 64+8",
+            "read vr 96+8",
             "call to_logical_64_extended",
             *ladder("write gpr 16+8", CC),
         ],
@@ -67,11 +67,11 @@ def test_from_fixed_rounds_through_the_builtin_unless_the_target_is_wide_enough(
             READ_FPC,
             "read gpr 20+4",
             "call from_fixed_short",
-            *ladder("write fpr 16+4"),
+            *ladder("write vr 16+4"),
         ],
-        "CDLGBR": ["read gpr 16+8", "call from_fixed_long", *ladder("write fpr 16+8")],
-        "CDFBR": ["read gpr 20+4", "write fpr 16+8"],
-        "CXLGBR": ["read gpr 16+8", "write fpr 64+8", "write fpr 96+8"],
+        "CDLGBR": ["read gpr 16+8", "call from_fixed_long", *ladder("write vr 16+8")],
+        "CDFBR": ["read gpr 20+4", "write vr 16+8"],
+        "CXLGBR": ["read gpr 16+8", "write vr 64+8", "write vr 96+8"],
     }
 
 
@@ -83,25 +83,23 @@ def test_lengthening_is_ir_and_rounding_merges_into_the_source_format_register()
         "LEDBR": trace("LEDBR", registers(1, 2)),
         "LEXBRA": trace("LEXBRA", _rrfe(4, 5, 8, 4)),
     } == {
-        "LDEBR": ["read fpr 32+4", *ladder("write fpr 16+8")],
+        "LDEBR": ["read vr 32+4", *ladder("write vr 16+8")],
         "LXEB": [
             ADDRESS,
             "read storage +4",
-            *ladder("write fpr 64+8", "write fpr 96+8"),
+            *ladder("write vr 64+8", "write vr 96+8"),
         ],
         "LEDBR": [
             READ_FPC,
-            "read fpr 32+8",
+            "read vr 32+8",
             "call rounded_to_short_long",
-            *ladder("read fpr 16+8", "write fpr 16+8"),
+            *ladder("read vr 16+8", "write vr 16+8"),
         ],
         "LEXBRA": [
-            "read fpr 128+8",
-            "read fpr 160+8",
+            "read vr 128+8",
+            "read vr 160+8",
             "call rounded_to_short_extended",
-            *ladder(
-                "read fpr 64+8", "read fpr 96+8", "write fpr 64+8", "write fpr 96+8"
-            ),
+            *ladder("read vr 64+8", "read vr 96+8", "write vr 64+8", "write vr 96+8"),
         ],
     }
 

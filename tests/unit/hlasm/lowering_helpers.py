@@ -13,6 +13,7 @@ from hlasm_asg.program.operand import Operand
 from hlasm_asg.program.reg_operand import RegOperand
 from hlasm_asg.program.storage_length_operand import StorageLengthOperand
 from hlasm_asg.program.storage_operand import StorageOperand
+from hlasm_asg.program.vec_reg_operand import VecRegOperand
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.opcodes import OPCODE_LOWERINGS
 from interpreter.instructions import (
@@ -46,6 +47,10 @@ def machine_statement(mnemonic: str, operands: Sequence[Operand]) -> MachineStat
 
 def reg_operand(value: int) -> RegOperand:
     return RegOperand(kind="REG", value=value)
+
+
+def vec_reg_operand(value: int) -> VecRegOperand:
+    return VecRegOperand(kind="VEC_REG", value=value)
 
 
 def imm_operand(value: int) -> ImmOperand:
