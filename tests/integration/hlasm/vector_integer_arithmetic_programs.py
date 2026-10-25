@@ -481,8 +481,8 @@ CASES: Mapping[str, Case] = {
             "FFFFFFFE FFFFFFFF 00000001 00000002",
         ),
     ),
-    "VD VDL VR VRL with IDC give zero for a zero divisor, and VD for the negative maximum by -1, without an exception (PoO 22-13, 22-27)": (
-        _sources((2, "DIVA"), (3, "DIVB"))
+    "VD VDL VR VRL with IDC give zero for a zero divisor, and VD for the negative maximum by -1, without an exception; VR of the negative maximum by -1 is no fault even without IDC, remainder 0 (PoO 22-13, 22-27)": (
+        _sources((2, "DIVA"), (3, "DIVB"), (4, "ONES"), (5, "QMIN"))
         + line("VDF", "16,2,3,8")
         + line("VDLF", "17,2,3,8")
         + line("VRF", "18,2,3,8")
@@ -495,7 +495,9 @@ CASES: Mapping[str, Case] = {
         + line("VDLQ", "25,2,3,8")
         + line("VRQ", "26,2,3,8")
         + line("VRLQ", "27,2,3,8")
-        + line("VSTM", "16,27,OUT"),
+        + line("VRF", "28,2,4,0")
+        + line("VRQ", "29,5,4,0")
+        + line("VSTM", "16,29,OUT"),
         image(
             "00000000 FFFFFFFD FFFFFFFD 00000000",
             "00000000 7FFFFFFC 00000000 00000000",
@@ -509,6 +511,8 @@ CASES: Mapping[str, Case] = {
             "00000000 00000000 00000000 00000000",
             "FFFFFFFF 7FFFFFFA 00000007 7FFFFFFF",
             "80000000 FFFFFFF9 00000007 7FFFFFFF",
+            "00000000 00000000 00000000 00000000",
+            "00000000 00000000 00000000 00000000",
         ),
     ),
 }

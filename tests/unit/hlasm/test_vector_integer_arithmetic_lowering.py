@@ -1,13 +1,16 @@
 # pyright: standard
-"""Vector integer add, subtract, average, multiply, Galois-field multiply, checksum, sum and divide lowerings: each form reads its source registers whole and writes V1 whole, the divides call one element function per operation, size and IDC and reach the S0DB exit only without IDC, an invalid M field abends S0C6 before any access; no SYMBOLIC in any of the 35."""
+"""Vector integer add, subtract, average, multiply, Galois-field multiply, checksum, sum and divide lowerings: each form reads its source registers whole and writes V1 whole, VGFM and VGFMA call one carry-less multiply function per element size, defined once per program, the divides call one element function per operation, size and IDC and reach the S0DB exit only without IDC, an invalid M field abends S0C6 before any access; no SYMBOLIC in any of the 35."""
 
 from collections.abc import Sequence
 
 from hlasm_asg.program.operand import Operand
+from interpreter.hlasm.hlasm_emitter import HlasmEmitter
+from interpreter.hlasm.ir_function import define_called
+from interpreter.hlasm.opcodes import OPCODE_LOWERINGS
 from interpreter.hlasm.opcodes.vector_integer_arithmetic import (
     VECTOR_INTEGER_ARITHMETIC_LOWERINGS,
 )
-from interpreter.instructions import CallFunction, Symbolic
+from interpreter.instructions import CallFunction, Label_, Symbolic
 from tests.covers import NotLanguageFeature, covers
 from tests.unit.hlasm.fp_trace import (
     READ_FPC,
@@ -16,7 +19,7 @@ from tests.unit.hlasm.fp_trace import (
     lowered_ir,
     trace,
 )
-from tests.unit.hlasm.lowering_helpers import mask_operand
+from tests.unit.hlasm.lowering_helpers import machine_statement, mask_operand
 from tests.unit.hlasm.lowering_helpers import vec_reg_operand as vr
 
 READ_V2 = "read vr 32+16"
@@ -185,3 +188,34 @@ def test_every_vector_integer_arithmetic_instruction_lowers_without_symbolic():
         [m for m, ir in lowered.items() if any(isinstance(i, Symbolic) for i in ir)],
         [m for m, ir in lowered.items() if trace(m, forms[m]) == [SPECIFICATION]],
     ) == (sorted(VECTOR_INTEGER_ARITHMETIC_LOWERINGS), 35, [], [])
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_galois_forms_call_one_carryless_function_per_size_defined_once():
+    emitter = HlasmEmitter()
+    uses = [("VGFM", _two(0)), ("VGFMA", _three(0)), ("VGFM", _two(3))]
+    _ = [
+        OPCODE_LOWERINGS[m](emitter, machine_statement(m, operands))
+        for m, operands in uses
+    ]
+    define_called(emitter)
+    ir = emitter.instructions()
+    calls = [
+        str(i.func_name)
+        for i in ir
+        if isinstance(i, CallFunction) and str(i.func_name).startswith("__hlasm")
+    ]
+    defined = [
+        str(i.label)
+        for i in ir
+        if isinstance(i, Label_) and str(i.label).startswith("func___hlasm")
+    ]
+
+    assert (calls, defined) == (
+        ["__hlasm_vector_carryless_byte"] * 32
+        + ["__hlasm_vector_carryless_doubleword"] * 2,
+        [
+            "func___hlasm_vector_carryless_byte_0",
+            "func___hlasm_vector_carryless_doubleword_0",
+        ],
+    )

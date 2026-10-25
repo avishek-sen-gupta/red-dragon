@@ -268,34 +268,46 @@ def _multiply_sum(size: ElementSize) -> StatementLowering:
     return lower
 
 
-def _carryless(
-    emitter: HlasmEmitter, left: Register, right: Register, bits: int
-) -> Register:
-    terms = [
-        emitter.binop(
-            BinopKind.MUL,
-            _binop(emitter, BinopKind.LSHIFT, left, k),
-            _binop(
-                emitter,
-                BinopKind.BIT_AND,
-                _binop(emitter, BinopKind.RSHIFT, right, k),
-                1,
-            ),
+def _carryless(bits: int) -> Body:
+    def body(emitter: HlasmEmitter, parameters: Sequence[Register]) -> Register:
+        left, right = parameters
+        terms = [
+            emitter.binop(
+                BinopKind.MUL,
+                _binop(emitter, BinopKind.LSHIFT, left, k),
+                _binop(
+                    emitter,
+                    BinopKind.BIT_AND,
+                    _binop(emitter, BinopKind.RSHIFT, right, k),
+                    1,
+                ),
+            )
+            for k in range(bits)
+        ]
+        return reduce(
+            lambda total, term: emitter.binop(BinopKind.BIT_XOR, total, term), terms
         )
-        for k in range(bits)
-    ]
-    return reduce(
-        lambda total, term: emitter.binop(BinopKind.BIT_XOR, total, term), terms
+
+    return body
+
+
+CARRYLESS = {
+    size: IrFunction(
+        f"__hlasm_vector_carryless_{size.name.lower()}",
+        2,
+        _carryless(element_bits(size)),
     )
+    for size in UP_TO_DOUBLEWORD
+}
 
 
 def _galois(size: ElementSize) -> PairOp:
-    bits = element_bits(size)
+    product = CARRYLESS[size]
 
     def op(
         emitter: HlasmEmitter, left: Pair, right: Pair, addend: Register
     ) -> Register:
-        products = [_carryless(emitter, left[k], right[k], bits) for k in (0, 1)]
+        products = [product.call(emitter, (left[k], right[k])) for k in (0, 1)]
         return reduce(
             lambda total, term: emitter.binop(BinopKind.BIT_XOR, total, term),
             [*products, addend],
