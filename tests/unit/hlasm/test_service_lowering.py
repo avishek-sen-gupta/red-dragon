@@ -33,6 +33,7 @@ DDNAME = {
     "__string_find",
     "__string_slice",
 }
+NAME_LOOKUP = {*DDNAME, str(TABLE_HOLDS), "str_upper"}
 RECORD_WRITE = {*DDNAME, "__list_concat", "__make_list", "__cobol_write_record"}
 
 SERVICES: dict[str, tuple[Callable[[HlasmEmitter], None], set[str]]] = {
@@ -41,18 +42,10 @@ SERVICES: dict[str, tuple[Callable[[HlasmEmitter], None], set[str]]] = {
     "svc_120": (emit_storage, TABLE_LOOKUP),
     "svc_6": (
         emit_link,
-        {
-            *TABLE_LOOKUP,
-            "__hlasm_far_branch",
-            "str_upper",
-            "__bytes_to_string",
-            "__string_concat_pair",
-            "__string_find",
-            "__string_slice",
-        },
+        {*NAME_LOOKUP, "__hlasm_far_branch"},
     ),
-    "svc_8": (emit_load, TABLE_LOOKUP),
-    "svc_9": (emit_delete, TABLE_LOOKUP),
+    "svc_8": (emit_load, NAME_LOOKUP),
+    "svc_9": (emit_delete, NAME_LOOKUP),
     "svc_19": (
         emit_open,
         {

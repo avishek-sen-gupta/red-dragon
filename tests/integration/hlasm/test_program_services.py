@@ -68,13 +68,15 @@ def test_load_answers_entry_and_length_then_call_15_reaches_it_and_delete_releas
 def test_link_calls_by_name_with_a_vl_list_and_leaves_the_registers_the_program_left():
     run, words = _words(programs.LINKER, "SUB", programs.CLOBBERS)
     forms, _ = _words(programs.LINK_FORMS, "SUB", programs.RETURNS_23)
+    lowercase = _words(programs.LINKS_IN_LOWERCASE, "SUB", programs.RETURNS_23)[0]
     exited = _words(programs.LINKS_THEN_EXITS, "B", programs.CALLS_BACK_AND_EXITS)[0]
 
-    assert (run, words[7], words[9] >> VL_SHIFT, forms, exited) == (
+    assert (run, words[7], words[9] >> VL_SHIFT, forms, lowercase, exited) == (
         HlasmRun(return_code=142, abend="", stdout=""),
         99,
         1,
         HlasmRun(return_code=69, abend="", stdout=""),
+        HlasmRun(return_code=23, abend="", stdout=""),
         HlasmRun(return_code=7, abend="", stdout=""),
     )
 

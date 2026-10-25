@@ -115,6 +115,17 @@ CONTROL  DC    A(NAME,0)
          LTORG
          END   MAIN
 """
+LINKS_IN_LOWERCASE = """\
+MAIN     CSECT
+         LR    12,15
+         USING MAIN,12
+         LR    10,14
+         LINK  EP=sub
+         LR    14,10
+         BR    14
+         LTORG
+         END   MAIN
+"""
 LINKS_THEN_EXITS = """\
 A        CSECT
          LR    12,15

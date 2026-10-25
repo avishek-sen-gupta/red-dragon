@@ -491,13 +491,14 @@ primitives, `__hlasm_dd` and `__hlasm_declare_file`.
 - The SVC 6, 8 and 9 inputs are IBM's: SVC 6 takes R15 → `A(name),A(DCB)` and R1 the parameter
   list; SVC 8 R0 → the name and R1 the DCB address, its high bit asking for a return on error;
   SVC 9 R0 → the name. The DCB is ignored.
-- **SVC 6** (LINK) reads the 8-byte EBCDIC name and looks its image up in `__hlasm_names`, a
-  start-up object of the image's SD and LD names, each an entry of `address`, `length` (the
-  owning module's region in doublewords) and `loads`. Found, it sets R14 to `0xFF0` and R15 to
+- **SVC 6** (LINK) reads the 8-byte EBCDIC name, decodes, trims and uppercases it to
+  `__entry_<NAME>` (z/OS load-module names are uppercase, so `EP=sub` finds `SUB`), and looks
+  that up in `__hlasm_names`, a start-up object keyed the same way over the image's SD and LD
+  names, each an entry of `address`, `length` (the owning module's region in doublewords) and
+  `loads`. SVC 8 and 9 look names up the same way. Found, it sets R14 to `0xFF0` and R15 to
   the entry and calls `__hlasm_far_branch` as a linking branch with nothing below (Control
   Across Modules). The registers come back as the program left them (IBM's LINK register
-  information). Missing, it issues `CallWithMemory` on `__entry_<NAME>`, the name decoded,
-  trimmed and uppercased at run time (z/OS load-module names are uppercase), exactly as a COBOL `CALL identifier` to a missing program: that raises
+  information). Missing, it issues `CallWithMemory` on that `__entry_<NAME>`, exactly as a COBOL `CALL identifier` to a missing program: that raises
   `UnresolvedProgramError` whether or not unresolved targets are permitted (ruling R80).
 - **SVC 8** (LOAD) sets R0 to the entry with bit 32 on, R1 to the length in doublewords (APF
   byte 0) and R15 to 0, and counts the load. A missing name with R1's high bit on returns with R1

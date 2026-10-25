@@ -61,16 +61,15 @@ def _listed_name_at(emitter: HlasmEmitter) -> Register:
 
 
 def _named(
-    emitter: HlasmEmitter, name_at: Register, labels: tuple[CodeLabel, CodeLabel]
+    emitter: HlasmEmitter, name: Register, labels: tuple[CodeLabel, CodeLabel]
 ) -> Register:
     found, missing = labels
     table = emitter.load_var(NAMES_VAR)
-    name_image = emitter.load_storage(name_at, 0, PROGRAM_NAME_BYTES)
-    held = emitter.call(TABLE_HOLDS, (table, name_image))
+    held = emitter.call(TABLE_HOLDS, (table, name))
     emitter.emit_inst(BranchIf(cond_reg=held, branch_targets=(found, missing)))
     emitter.emit_inst(Label_(label=found))
     entry = emitter.fresh_reg()
-    emitter.emit_inst(LoadIndex(result_reg=entry, arr_reg=table, index_reg=name_image))
+    emitter.emit_inst(LoadIndex(result_reg=entry, arr_reg=table, index_reg=name))
     return entry
 
 
@@ -108,11 +107,11 @@ def _link_found(emitter: HlasmEmitter, entry: Register) -> None:
 
 def emit_link(emitter: HlasmEmitter) -> None:
     found, missing, done = _labels(emitter, "link")
-    name_at = _listed_name_at(emitter)
-    _link_found(emitter, _named(emitter, name_at, (found, missing)))
+    name = _entry_name(emitter, _listed_name_at(emitter))
+    _link_found(emitter, _named(emitter, name, (found, missing)))
     emitter.emit_inst(Branch(label=done))
     emitter.emit_inst(Label_(label=missing))
-    result = emit_unresolved_call(emitter, _entry_name(emitter, name_at))
+    result = emit_unresolved_call(emitter, name)
     emitter.store_gr32(RETURN_CODE_REGISTER, result)
     emitter.emit_inst(Label_(label=done))
 
@@ -154,7 +153,10 @@ def emit_load(emitter: HlasmEmitter) -> None:
         emitter.load_gr32(ERROR_RETURN_REGISTER),
         emitter.int_(AMODE_31_LINK_BIT),
     )
-    _load_found(emitter, _named(emitter, _name_at(emitter), (found, missing)))
+    _load_found(
+        emitter,
+        _named(emitter, _entry_name(emitter, _name_at(emitter)), (found, missing)),
+    )
     emitter.emit_inst(Branch(label=done))
     emitter.emit_inst(Label_(label=missing))
     _load_missing(emitter, returning)
@@ -177,7 +179,9 @@ def _delete_found(
 def emit_delete(emitter: HlasmEmitter) -> None:
     found, missing, done = _labels(emitter, "delete")
     _delete_found(
-        emitter, _named(emitter, _name_at(emitter), (found, missing)), missing
+        emitter,
+        _named(emitter, _entry_name(emitter, _name_at(emitter)), (found, missing)),
+        missing,
     )
     emitter.emit_inst(Branch(label=done))
     emitter.emit_inst(Label_(label=missing))

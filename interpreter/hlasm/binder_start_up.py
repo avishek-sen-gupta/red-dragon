@@ -16,8 +16,6 @@ from interpreter.hlasm.hlasm_constants import (
     NAME_LOADS_FIELD,
     NAMES_VAR,
     NO_ABEND,
-    PROGRAM_NAME_BYTES,
-    PROGRAM_NAME_CODEC,
     STUB_BYTES,
     STUBS_HIGH_VAR,
     STUBS_LOW_VAR,
@@ -31,6 +29,7 @@ from interpreter.hlasm.machine import (
     machine_allocation,
 )
 from interpreter.hlasm.placed_name import PlacedName
+from interpreter.hlasm.program_entry import program_entry_name
 from interpreter.hlasm.pseudo_register import PseudoRegister
 from interpreter.hlasm.section_variable import section_var
 from interpreter.hlasm.stub_name import StubName
@@ -223,12 +222,6 @@ def _dispatch_state(emitter: HlasmEmitter) -> None:
     ]
 
 
-def program_name_image(name: str) -> int:
-    return int.from_bytes(
-        name.ljust(PROGRAM_NAME_BYTES).encode(PROGRAM_NAME_CODEC), "big"
-    )
-
-
 def _name_entry(
     emitter: HlasmEmitter, binder: Binder, named: tuple[str, PlacedName]
 ) -> None:
@@ -250,7 +243,7 @@ def _name_entry(
     emitter.emit_inst(
         StoreIndex(
             arr_reg=emitter.load_var(NAMES_VAR),
-            index_reg=emitter.int_(program_name_image(name)),
+            index_reg=emitter.str_(program_entry_name(name)),
             value_reg=entry,
         )
     )
