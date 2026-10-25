@@ -18,7 +18,7 @@ from cobol_asg.index_types import INDEX_ITEM
 from cobol_asg.nonnumeric_literal import literal_characters
 from cobol_asg.operand_kind import OperandKind
 from cobol_asg.pic_parser import parse_pic
-from cobol_asg.ref_mod import RefModOperand
+from cobol_asg.ref_mod import RefModExpr, RefModLiteral, RefModOperand
 from cobol_memory.field_extent import FieldExtent, Precision
 from cobol_memory.region_id import RegionId
 from interpreter.cobol.by_value_operand_error import ByValueOperandError
@@ -80,8 +80,16 @@ _DIRECTORY_HOLDS = "dict_contains_key"
 _BY_VALUE_CATEGORIES = frozenset(
     {CobolDataCategory.BINARY, CobolDataCategory.COMP1, CobolDataCategory.COMP2}
 )
+_DISPLAY_CATEGORIES = frozenset(
+    {
+        CobolDataCategory.ZONED_DECIMAL,
+        CobolDataCategory.ALPHANUMERIC,
+        CobolDataCategory.ALPHANUMERIC_EDITED,
+        CobolDataCategory.NUMERIC_EDITED,
+    }
+)
 
-type ArgumentAddress = tuple[Register, Register, int, bool]
+type ArgumentAddress = tuple[Register, Register, Register, bool]
 
 
 def _emit_callee_name(scope: LoweringScope, operand: RefModOperand) -> Register:
@@ -363,9 +371,7 @@ def _store_address(
     scope: LoweringScope, element: Register, address: ArgumentAddress
 ) -> None:
     region, offset, length, signed = address
-    _store_field(
-        scope, element, "length", scope.ctx.const_to_reg(length, span=scope.span)
-    )
+    _store_field(scope, element, "length", length)
     _store_field(
         scope, element, "signed", scope.ctx.const_to_reg(signed, span=scope.span)
     )
@@ -395,28 +401,106 @@ def _data_argument(scope: LoweringScope, param: CallUsingParam) -> ArgumentAddre
         param.name, materialised, param.qualifiers, param.subscripts, span=span
     )
     _refuse_by_value(param, ref.fl, line_of(span))
+    if param.ref_mod.is_reference_modified:
+        return _substring_argument(scope, param, ref, region_reg)
     if param.param_type == "REFERENCE":
         return (
             region_reg,
             ref.offset_reg,
-            ref.fl.byte_length,
+            ctx.const_to_reg(ref.fl.byte_length, span=span),
             ref.fl.type_descriptor.signed,
         )
     return _content_copy(scope, ref, region_reg, param.name)
 
 
+def _substring_argument(
+    scope: LoweringScope,
+    param: CallUsingParam,
+    ref: ResolvedFieldRef,
+    region_reg: Register,
+) -> ArgumentAddress:
+    """A reference-modified operand: BY REFERENCE the substring's own bytes,
+    anything else the substring in a fresh copy of the whole item."""
+    start = _substring_start(scope, param.ref_mod)
+    length = _substring_length(scope, param.ref_mod, ref.fl, start)
+    if param.param_type == "REFERENCE":
+        return region_reg, _binop(scope, "+", ref.offset_reg, start), length, False
+    copy, _offset, _length, _signed = _content_copy(scope, ref, region_reg, param.name)
+    return copy, start, length, False
+
+
+def _substring_length(
+    scope: LoweringScope, operand: RefModOperand, field: FieldLayout, start: Register
+) -> Register:
+    match operand.ref_mod_length:
+        case None:
+            return _binop(scope, "-", field.byte_length, start)
+        case length:
+            return _bound(scope, length)
+
+
+def _substring_start(scope: LoweringScope, operand: RefModOperand) -> Register:
+    match operand.ref_mod_start:
+        case None:
+            return scope.ctx.const_to_reg(0, span=scope.span)
+        case start:
+            return _binop(scope, "-", _bound(scope, start), 1)
+
+
+def _bound(scope: LoweringScope, expr: RefModExpr) -> Register:
+    return eval_ref_mod_expr(scope.ctx, expr, scope.materialised, span=scope.span)
+
+
+def _binop(
+    scope: LoweringScope, operator: str, left: Register | int, right: Register | int
+) -> Register:
+    ctx, span = scope.ctx, scope.span
+    result = ctx.fresh_reg()
+    ctx.emit_inst(
+        Binop(
+            result_reg=result,
+            operator=resolve_binop(operator),
+            left=_register(scope, left),
+            right=_register(scope, right),
+        ),
+        span=span,
+    )
+    return result
+
+
+def _register(scope: LoweringScope, value: Register | int) -> Register:
+    match value:
+        case Register():
+            return value
+        case int():
+            return scope.ctx.const_to_reg(value, span=scope.span)
+
+
 def _refuse_by_value(param: CallUsingParam, field: FieldLayout, line: int) -> None:
-    if param.param_type == "VALUE" and not _allowed_by_value(field):
+    if param.param_type == "VALUE" and not allowed_by_value(field, param.ref_mod):
         raise ByValueOperandError(param.name, line)
 
 
-def _allowed_by_value(field: FieldLayout) -> bool:
+def allowed_by_value(field: FieldLayout, ref_mod: RefModOperand) -> bool:
+    """IBM's CALL BY VALUE operands: an elementary binary, COMP-1, COMP-2 or
+    pointer item, one alphanumeric character, or a reference-modified DISPLAY
+    item of length 1."""
     descriptor = field.type_descriptor
     if field.is_group or descriptor == INDEX_ITEM:
         return False
+    if ref_mod.is_reference_modified:
+        return descriptor.category in _DISPLAY_CATEGORIES and _one_long(ref_mod)
     return descriptor.category in _BY_VALUE_CATEGORIES or (
         descriptor.category is CobolDataCategory.ALPHANUMERIC and field.byte_length == 1
     )
+
+
+def _one_long(ref_mod: RefModOperand) -> bool:
+    match ref_mod.ref_mod_length:
+        case RefModLiteral(value=value):
+            return value.isdigit() and int(value) == 1
+        case _:
+            return False
 
 
 def _pointer_argument(scope: LoweringScope, param: CallUsingParam) -> ArgumentAddress:
@@ -427,7 +511,7 @@ def _pointer_argument(scope: LoweringScope, param: CallUsingParam) -> ArgumentAd
     ).address_argument(
         param.name, param.qualifiers, _copy_extent(length, LITERAL_ARGUMENT)
     )
-    return region, offset, length, False
+    return region, offset, ctx.const_to_reg(length, span=scope.span), False
 
 
 def _length_of_copy(scope: LoweringScope, param: CallUsingParam) -> ArgumentAddress:
@@ -469,7 +553,12 @@ def _value_copy(
         extent=_copy_extent(layout.byte_length, LITERAL_ARGUMENT),
         span=span,
     )
-    return copy, zero, layout.byte_length, layout.type_descriptor.signed
+    return (
+        copy,
+        zero,
+        ctx.const_to_reg(layout.byte_length, span=span),
+        layout.type_descriptor.signed,
+    )
 
 
 def _literal_type(
@@ -535,7 +624,12 @@ def _content_copy(
         extent=_copy_extent(length, name),
         span=span,
     )
-    return copy, zero, length, ref.fl.type_descriptor.signed
+    return (
+        copy,
+        zero,
+        ctx.const_to_reg(length, span=span),
+        ref.fl.type_descriptor.signed,
+    )
 
 
 def _copy_extent(length: int, name: str) -> FieldExtent:

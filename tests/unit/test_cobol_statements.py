@@ -1688,6 +1688,17 @@ class TestRoundTrip:
                     "qualifiers": ["WS-REC"],
                     "subscripts": [{"kind": "lit", "value": "2"}],
                 },
+                {
+                    "name": "WS-C",
+                    "type": "VALUE",
+                    "ref_mod_start": {"kind": "ref", "name": "WS-S"},
+                    "ref_mod_length": {"kind": "lit", "value": "1"},
+                },
+                {
+                    "name": "WS-D",
+                    "type": "CONTENT",
+                    "ref_mod_start": {"kind": "lit", "value": "3"},
+                },
             ],
             "giving": {"name": "WS-RESULT", "qualifiers": ["WS-OUT"]},
         }

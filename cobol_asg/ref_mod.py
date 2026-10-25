@@ -324,3 +324,6 @@ _LITERAL_KINDS = {
 def literal_kind_dict(operand: RefModOperand) -> dict:
     """The kind key a literal or figurative operand is written with; none for a reference."""
     return {"kind": operand.kind.value} if operand.kind.value in _LITERAL_KINDS else {}
+
+
+NOT_REFERENCE_MODIFIED = RefModOperand(name="")

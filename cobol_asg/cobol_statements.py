@@ -42,6 +42,7 @@ from cobol_asg.no_linage import NO_LINAGE, NoLinage
 from cobol_asg.operand_kind import OperandKind
 from cobol_asg.program_collation import PROGRAM_COLLATION, ProgramCollation
 from cobol_asg.ref_mod import (
+    NOT_REFERENCE_MODIFIED,
     FunctionCallOperand,
     RefModOperand,
     is_function_operand,
@@ -1313,9 +1314,10 @@ class SearchStatement:
 class CallUsingParam:
     """A single USING parameter in a CALL statement.
 
-    A data-item argument carries the ``OF``/``IN`` qualifiers and subscripts
-    written on it; a literal's text is its ``name``, its ``kind`` says whether
-    it is a figurative constant, and ``numeric`` marks a numeric literal.
+    A data-item argument carries the ``OF``/``IN`` qualifiers, subscripts and
+    reference modification written on it; a literal's text is its ``name``, its
+    ``kind`` says whether it is a figurative constant, and ``numeric`` marks a
+    numeric literal.
     """
 
     name: str
@@ -1327,10 +1329,16 @@ class CallUsingParam:
     subscripts: tuple[ExprNode, ...] = ()
     kind: OperandKind = OperandKind.REF
     numeric: bool = False
+    ref_mod: RefModOperand = NOT_REFERENCE_MODIFIED
 
     @classmethod
     def from_dict(cls, data: dict) -> CallUsingParam:
         return cls(
+            ref_mod=(
+                RefModOperand.from_dict(data)
+                if "ref_mod_start" in data
+                else NOT_REFERENCE_MODIFIED
+            ),
             name=data.get("name", ""),
             param_type=data.get("type", "REFERENCE"),
             omitted=data.get("omitted", False),
@@ -1360,6 +1368,14 @@ class CallUsingParam:
                 if self.subscripts
                 else {}
             ),
+            **self._ref_mod_dict(),
+        }
+
+    def _ref_mod_dict(self) -> dict:
+        start, length = self.ref_mod.ref_mod_start, self.ref_mod.ref_mod_length
+        return {
+            **({"ref_mod_start": ref_mod_expr_to_dict(start)} if start else {}),
+            **({"ref_mod_length": ref_mod_expr_to_dict(length)} if length else {}),
         }
 
 

@@ -1423,11 +1423,12 @@ public final class StatementSerializer {
         return literalOperand(vs);
     }
 
-    /** Copies a USING operand's name, qualifiers and subscripts onto its parameter object. */
+    /** Copies a USING operand's name, qualifiers, subscripts and reference modification onto its parameter object. */
     private static void addUsingOperand(JsonObject paramObj, JsonObject operand) {
-        for (String key : new String[] {"kind", "name", "numeric", "qualifiers", "subscripts"}) {
-            if (operand.has(key)) {
-                paramObj.add(key, operand.get(key));
+        for (String field : new String[] {
+                "kind", "name", "numeric", "qualifiers", "subscripts", "ref_mod_start", "ref_mod_length"}) {
+            if (operand.has(field)) {
+                paramObj.add(field, operand.get(field));
             }
         }
     }
