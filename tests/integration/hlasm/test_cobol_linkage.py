@@ -53,10 +53,12 @@ CALLS_ASMSUB = b"""\
        PROGRAM-ID. COBMAIN.
        DATA DIVISION.
        WORKING-STORAGE SECTION.
-       01  WS-A   PIC X(20) VALUE SPACES.
+       01  WS-A   PIC X(24) VALUE SPACES.
        01  WS-B   PIC X(4)  VALUE 'SAME'.
        01  WS-N   PIC S9(9) COMP-5 VALUE 305419896.
        01  WS-H   PIC S9(4) COMP-5 VALUE -2.
+       01  WS-UX  PIC X(2) VALUE X'9C40'.
+       01  WS-U   REDEFINES WS-UX PIC 9(4) COMP-5.
        01  WS-C   PIC X VALUE 'Q'.
        01  WS-D   COMP-2.
        01  WS-RC  PIC S9(4) COMP-5 VALUE 0.
@@ -64,11 +66,11 @@ CALLS_ASMSUB = b"""\
        PROCEDURE DIVISION.
            MOVE 1.5 TO WS-D.
            CALL 'ASMSUB' USING BY REFERENCE WS-A BY CONTENT WS-B
-               BY VALUE WS-N WS-H WS-C WS-D.
+               BY VALUE WS-N WS-H WS-U WS-C WS-D.
            MOVE RETURN-CODE TO WS-RC.
            CANCEL 'ASMSUB'.
            CALL 'ASMSUB' USING BY REFERENCE WS-A BY CONTENT WS-B
-               BY VALUE WS-N WS-H WS-C WS-D.
+               BY VALUE WS-N WS-H WS-U WS-C WS-D.
            MOVE RETURN-CODE TO WS-RC2.
            GOBACK.
 """
@@ -76,14 +78,14 @@ ASMSUB = b"""\
 ASMSUB   CSECT
          LR    12,15
          USING ASMSUB,12
-         LM    2,8,0(1)
-         STM   4,8,0(2)
+         LM    2,9,0(1)
+         STM   4,9,0(2)
          MVC   0(4,3),=C'ZZZZ'
-         L     9,COUNT
-         LA    9,1(,9)
-         ST    9,COUNT
-         S     9,=F'8'
-         LR    15,9
+         L     10,COUNT
+         LA    10,1(,10)
+         ST    10,COUNT
+         S     10,=F'8'
+         LR    15,10
          BR    14
 COUNT    DC    F'0'
          END
@@ -374,7 +376,7 @@ def test_a_cobol_call_hands_hlasm_a_standard_list_and_cancel_keeps_it(tmp_path: 
     ws = _ws(_entered(image, "COBMAIN"), image, "COBMAIN")
 
     assert (ws["WS-A"], ws["WS-B"], ws["WS-RC"], ws["WS-RC2"]) == (
-        bytes.fromhex("12345678" "FFFFFFFE" "000000D8") + ws["WS-D"],
+        bytes.fromhex("12345678" "FFFFFFFE" "00009C40" "000000D8") + ws["WS-D"],
         "SAME".encode(EBCDIC),
         bytes.fromhex("FFF9"),
         bytes.fromhex("FFFA"),

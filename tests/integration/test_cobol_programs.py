@@ -6222,7 +6222,7 @@ class TestCallUsingByValue:
                     "PROGRAM-ID. MAINPROG.",
                     "DATA DIVISION.",
                     "WORKING-STORAGE SECTION.",
-                    "77 WS-DATA PIC 9(4) VALUE 5.",
+                    "77 WS-DATA PIC X VALUE '5'.",
                     "PROCEDURE DIVISION.",
                     "    CALL 'MODIFIER' USING BY VALUE WS-DATA.",
                     "    STOP RUN.",
@@ -6236,9 +6236,9 @@ class TestCallUsingByValue:
                     "PROGRAM-ID. MODIFIER.",
                     "DATA DIVISION.",
                     "WORKING-STORAGE SECTION.",
-                    "77 WS-RECEIVED PIC 9(4) VALUE 0.",
+                    "77 WS-RECEIVED PIC X VALUE '0'.",
                     "LINKAGE SECTION.",
-                    "01 LS-PARAM PIC 9(4).",
+                    "01 LS-PARAM PIC X.",
                     "PROCEDURE DIVISION.",
                     "    MOVE LS-PARAM TO WS-RECEIVED.",
                     "    MOVE 99 TO LS-PARAM.",
@@ -6282,14 +6282,14 @@ class TestCallUsingByValue:
 
         modifier_ws = _ws("MODIFIER")
         assert modifier_ws is not None
-        received = _decode_zoned_unsigned(modifier_ws, offset=0, length=4)
+        received = _decode_zoned_unsigned(modifier_ws, offset=0, length=1)
         assert (
             received == 5
         ), f"MODIFIER WS-RECEIVED: expected 5 (copy of WS-DATA), got {received}"
 
         mainprog_ws = _ws("MAINPROG")
         assert mainprog_ws is not None
-        ws_data = _decode_zoned_unsigned(mainprog_ws, offset=0, length=4)
+        ws_data = _decode_zoned_unsigned(mainprog_ws, offset=0, length=1)
         assert (
             ws_data == 5
         ), f"WS-DATA must be unchanged after BY VALUE call, got {ws_data}"

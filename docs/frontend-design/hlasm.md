@@ -1709,10 +1709,12 @@ chapter 23), with every extended mnemonic (VFAEZBS, VSTRCFS, VSTRSZH, ...). ES 0
   logs a warning per PLO statement with its IR count.
 - COBOL linkage, where IBM's COBOL manuals are silent (our rulings; R83 and
   `docs/superpowers/plans/2026-10-24-hlasm-unit-cobol-linkage.md`): 1- and 2-byte BY VALUE
-  values widen to a word by their signedness, a signed item sign-extended (S9(4) -2 gives
-  X'FFFFFFFE') and an unsigned one zero-extended, as LE ILC widens C char and short; an 8-byte
-  value takes two words; no VL bit follows a trailing BY VALUE. A BY VALUE length other than 1, 2, 4 or 8, which IBM
-  refuses, gives a zero word (COBOL → HLASM) or a zero-filled copy (HLASM → COBOL).
+  values widen to a word by their signedness, a signed binary sign-extended (S9(4) -2 gives
+  X'FFFFFFFE') and an unsigned binary or a character zero-extended (9(4) X'9C40' gives
+  X'00009C40'), as LE ILC widens C char and short; an 8-byte value takes two words; no VL bit
+  follows a trailing BY VALUE. COBOL refuses at lowering a BY VALUE operand IBM does not allow,
+  so only a PROCEDURE DIVISION USING BY VALUE parameter of another length remains: it gets a
+  zero-filled copy (HLASM → COBOL).
   RETURN-CODE is a halfword: COBOL keeps R15's low halfword.
 - `ABEND` takes only a self-defining code of 0-4095. Register notation (`ABEND (R2)`) and larger codes are not supported.
 

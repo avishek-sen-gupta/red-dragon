@@ -13,13 +13,15 @@ from cobol_asg.cobol_statements import (
     CobolStatementType,
     EntryStatement,
 )
-from cobol_asg.cobol_types import CobolTypeDescriptor
+from cobol_asg.cobol_types import CobolDataCategory, CobolTypeDescriptor
+from cobol_asg.index_types import INDEX_ITEM
 from cobol_asg.nonnumeric_literal import literal_characters
 from cobol_asg.operand_kind import OperandKind
 from cobol_asg.pic_parser import parse_pic
 from cobol_asg.ref_mod import RefModOperand
 from cobol_memory.field_extent import FieldExtent, Precision
 from cobol_memory.region_id import RegionId
+from interpreter.cobol.by_value_operand_error import ByValueOperandError
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.data_layout import FieldLayout
 from interpreter.cobol.emit_context import EmitContext
@@ -41,6 +43,7 @@ from interpreter.cobol.program_object import (
 )
 from interpreter.cobol.run_unit import PROGRAM_DIRECTORY
 from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
+from interpreter.cobol.undeclared_data_name_error import line_of
 from interpreter.field_name import FieldName
 from interpreter.func_name import FuncName
 from interpreter.instructions import (
@@ -72,6 +75,9 @@ _ZEROS = frozenset({"ZERO", "ZEROS", "ZEROES"})
 _FULLWORD = parse_pic("S9(9)", usage="COMP-5")
 _COMP2 = parse_pic("", usage="COMP-2")
 _DIRECTORY_HOLDS = "dict_contains_key"
+_BY_VALUE_CATEGORIES = frozenset(
+    {CobolDataCategory.BINARY, CobolDataCategory.COMP1, CobolDataCategory.COMP2}
+)
 
 type ArgumentAddress = tuple[Register, Register, int, bool]
 
@@ -378,6 +384,7 @@ def _address(scope: LoweringScope, param: CallUsingParam) -> ArgumentAddress:
     ref, region_reg = ctx.resolve_field_ref(
         param.name, materialised, param.qualifiers, param.subscripts, span=span
     )
+    _refuse_by_value(param, ref.fl, line_of(span))
     if param.param_type == "REFERENCE":
         return (
             region_reg,
@@ -386,6 +393,20 @@ def _address(scope: LoweringScope, param: CallUsingParam) -> ArgumentAddress:
             ref.fl.type_descriptor.signed,
         )
     return _content_copy(scope, ref, region_reg, param.name)
+
+
+def _refuse_by_value(param: CallUsingParam, field: FieldLayout, line: int) -> None:
+    if param.param_type == "VALUE" and not _allowed_by_value(field):
+        raise ByValueOperandError(param.name, line)
+
+
+def _allowed_by_value(field: FieldLayout) -> bool:
+    descriptor = field.type_descriptor
+    if field.is_group or descriptor == INDEX_ITEM:
+        return False
+    return descriptor.category in _BY_VALUE_CATEGORIES or (
+        descriptor.category is CobolDataCategory.ALPHANUMERIC and field.byte_length == 1
+    )
 
 
 def _pointer_argument(scope: LoweringScope, param: CallUsingParam) -> ArgumentAddress:

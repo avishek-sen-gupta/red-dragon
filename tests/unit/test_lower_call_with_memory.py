@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import pytest
+
 from cobol_asg.asg_types import CobolASG, CobolField
 from cobol_asg.cobol_statements import CallStatement, CallTarget, CallUsingParam
 from cobol_asg.ref_mod import RefModOperand
+from interpreter.cobol.by_value_operand_error import ByValueOperandError
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.lower_call import lower_call
@@ -33,9 +36,9 @@ def _make_field(name: str, pic: str = "X(5)", offset: int = 0) -> CobolField:
 
 
 def _materialised_with_ws(
-    field_name: str,
+    field_name: str, pic: str = "X(5)"
 ) -> tuple[EmitContext, MaterialisedSectionedLayout]:
-    asg = CobolASG(data_fields=[_make_field(field_name)])
+    asg = CobolASG(data_fields=[_make_field(field_name, pic)])
     sl = build_sectioned_layout(asg)
     ctx = EmitContext(dispatch_fn=dispatch_statement)
     materialised = lower_sectioned_data_division(ctx, sl, "TESTPGM")
@@ -100,7 +103,7 @@ def _post_call_accesses_of_region(ctx, region_reg):
 @covers(CobolFeature.USING_BY_VALUE)
 def test_lower_call_by_value_no_copy_back():
     """BY VALUE: callee gets a copy; no LOAD_REGION or WRITE_REGION after CALL_WITH_MEMORY."""
-    ctx, materialised = _materialised_with_ws("WS-INPUT")
+    ctx, materialised = _materialised_with_ws("WS-INPUT", "X")
     stmt = CallStatement(
         target=CallTarget.of_literal("SUBPROG"),
         using=[CallUsingParam(name="WS-INPUT", param_type="VALUE")],
@@ -307,3 +310,18 @@ def test_a_data_name_call_computes_the_entry_var_in_ir():
         str(upper.func_name),
         str(trim.func_name),
     ) == ("__string_concat_pair", "__entry_", "__upper_case", "__cobol_trim")
+
+
+@covers(CobolFeature.USING_BY_VALUE)
+def test_lower_call_by_value_refuses_a_multi_character_item():
+    ctx, materialised = _materialised_with_ws("WS-INPUT")
+    stmt = CallStatement(
+        target=CallTarget.of_literal("SUBPROG"),
+        using=[CallUsingParam(name="WS-INPUT", param_type="VALUE")],
+        giving=RefModOperand(name=""),
+    )
+
+    with pytest.raises(ByValueOperandError) as refused:
+        lower_call(ctx, stmt, materialised)
+
+    assert (refused.value.name, refused.value.line) == ("WS-INPUT", 0)
