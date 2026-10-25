@@ -15,7 +15,6 @@ from interpreter.hlasm.hlasm_constants import (
     NAME_LOADS_FIELD,
     NAMES_VAR,
     NOTHING_BELOW,
-    PROGRAM_ENTRY_PREFIX,
     PROGRAM_NAME_BYTES,
     PROGRAM_NOT_FOUND_ABEND,
     PROGRAM_NOT_FOUND_CODE,
@@ -28,6 +27,7 @@ from interpreter.hlasm.hlasm_constants import (
     WORD_BYTES,
 )
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
+from interpreter.hlasm.program_entry import emit_program_entry_name
 from interpreter.hlasm.storage_services import TABLE_HOLDS
 from interpreter.hlasm.unresolved_call import emit_unresolved_call
 from interpreter.instructions import (
@@ -90,8 +90,7 @@ def blank_ended_name(emitter: HlasmEmitter, name_at: Register) -> Register:
 
 
 def _entry_name(emitter: HlasmEmitter, name_at: Register) -> Register:
-    name = blank_ended_name(emitter, name_at)
-    return emitter.call(STRING_CONCAT_PAIR, (emitter.str_(PROGRAM_ENTRY_PREFIX), name))
+    return emit_program_entry_name(emitter, blank_ended_name(emitter, name_at))
 
 
 def _link_found(emitter: HlasmEmitter, entry: Register) -> None:

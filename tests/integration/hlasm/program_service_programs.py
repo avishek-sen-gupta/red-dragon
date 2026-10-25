@@ -144,7 +144,7 @@ B        CSECT
 """
 LINKS_MISSING = """\
 MAIN     CSECT
-         LINK  EP=NOPE
+         LINK  EP=nope
          BR    14
          END   MAIN
 """

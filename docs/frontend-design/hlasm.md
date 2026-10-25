@@ -61,6 +61,7 @@ addresses.
 | `interpreter/hlasm/binder.py`, `binder_start_up.py`, `job_step.py`, `image_binding.py`, `far_branch.py`, `unresolved_call.py` | The binder and the far branch (see Binder, Control Across Modules) |
 | `interpreter/hlasm/cobol_linkage.py`, `cobol_program.py`, `cobol_owner.py` | Calls between COBOL and HLASM (see COBOL Linkage) |
 | `interpreter/hlasm/program_services.py` | SVC 6, 8 and 9: LINK, LOAD, DELETE |
+| `interpreter/hlasm/program_entry.py` | `__entry_<NAME>`, the variable COBOL's CALL shares, with the name uppercased: `program_entry_name(name)` at lowering time, `emit_program_entry_name` in IR for LINK's run-time name |
 | `interpreter/hlasm/data_set_services.py` | SVC 19, 20, 200 and 201: OPEN, CLOSE, GET, PUT over the COBOL file provider |
 | `interpreter/hlasm_run_inputs/` | The HLASM run inputs, a sibling of `interpreter.hlasm` so `run()` can import it (the import contracts keep `interpreter.run` from `interpreter.hlasm`): `run_input_names.py` (builtin names, PARM area sizes, the positions of `__hlasm_dd`'s facts), `run_input_builtins.py` (`run_input_builtins(clock, parm)`; `unsupplied_run_input_builtins()`, the host clock, an empty PARM and no DD definitions, which `run()` adds under any builtins it is given) |
 | `interpreter/hlasm_run_inputs/dd_definition.py`, `record_format.py`, `dd_builtins.py`, `dd_run_inputs.py` | `DdDefinition(path, recfm, lrecl, blksize)`, one per DDNAME; `dd_builtins(dds)`: `__hlasm_dd(name)` answers `[1, RECFM byte, LRECL, BLKSIZE]`, 0 where not given, or zeros for a DDNAME not supplied; `dd_run_inputs(dds)` returns that builtin and the `RunInputs` whose `path_overrides` send each DDNAME to its DD's path, for the caller's file provider |
@@ -489,8 +490,8 @@ primitives, `__hlasm_dd` and `__hlasm_declare_file`.
   owning module's region in doublewords) and `loads`. Found, it sets R14 to `0xFF0` and R15 to
   the entry and calls `__hlasm_far_branch` as a linking branch with nothing below (Control
   Across Modules). The registers come back as the program left them (IBM's LINK register
-  information). Missing, it issues `CallWithMemory` on `__entry_<NAME>`, the name decoded and
-  trimmed at run time, exactly as a COBOL `CALL identifier` to a missing program: that raises
+  information). Missing, it issues `CallWithMemory` on `__entry_<NAME>`, the name decoded,
+  trimmed and uppercased at run time (z/OS load-module names are uppercase), exactly as a COBOL `CALL identifier` to a missing program: that raises
   `UnresolvedProgramError` whether or not unresolved targets are permitted (ruling R80).
 - **SVC 8** (LOAD) sets R0 to the entry with bit 32 on, R1 to the length in doublewords (APF
   byte 0) and R15 to 0, and counts the load. A missing name with R1's high bit on returns with R1
@@ -1645,10 +1646,10 @@ layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.
 | `tests/z390/test_data_set_services_differential.py` | The fixed move, fixed locate and V copies against z390, DDNAMEs through the environment; z390 drops the record a locate PUT leaves at CLOSE |
 | `tests/unit/hlasm/test_dd_definitions.py` | `__hlasm_dd` for a DD with every field, one with a path only, and a DDNAME not supplied |
 | `tests/unit/hlasm/test_time_service.py` | TIME's words for TOD values across 1900, 2000 (leap day, day 366), 2023 and 2100 |
-| `tests/unit/hlasm/test_service_lowering.py` | The provider outcome positions the lowering compares match `AccessCondition`; SVC 6, 8, 9, 10, 11, 19, 20, 120, 200 and 201 call only existing builtins (and LINK the far branch) and leave nothing symbolic |
+| `tests/unit/hlasm/test_service_lowering.py` | The provider outcome positions the lowering compares match `AccessCondition`, and the program entry prefix matches COBOL's; SVC 6, 8, 9, 10, 11, 19, 20, 120, 200 and 201 call only existing builtins (and LINK the far branch) and leave nothing symbolic |
 | `tests/integration/hlasm/test_far_branch.py` | A module entered at its own R14 running there; a call through a V-constant and BALR; a return that skips a level; a branch to the job step's `0xFF0` ending the step; a linking branch into a module below; `B 4(,14)`; a plain branch out that calls; `BSM 0,14` to an R14 without the mode bit; an unowned address abending `S0C1` |
 | `tests/z390/test_far_branch_differential.py` | The call and the skipped-level return against z390 (SYSOBJ autolink) |
-| `tests/integration/hlasm/test_program_services.py` | CALL inline, `MF=L` and `MF=(E,list)` with VL; LOAD's R0 and R1, `CALL (15)`, DELETE of a loaded name (0), again (4) and of an unloaded one (4); LINK with PARAM and VL leaving the program's registers, by `EPLOC=addr`, `EPLOC=(r)` and a hand-coded R15 list, and a callback inside it branching to `0xFF0`; a missing name: LINK raising in both modes, LOAD `S806` by macro and by hand with a leftover R15, and ERRET; operand refusals |
+| `tests/integration/hlasm/test_program_services.py` | CALL inline, `MF=L` and `MF=(E,list)` with VL; LOAD's R0 and R1, `CALL (15)`, DELETE of a loaded name (0), again (4) and of an unloaded one (4); LINK with PARAM and VL leaving the program's registers, by `EPLOC=addr`, `EPLOC=(r)` and a hand-coded R15 list, and a callback inside it branching to `0xFF0`; a missing name: LINK raising in both modes, its lowercase `EP=` name uppercased, LOAD `S806` by macro and by hand with a leftover R15, and ERRET; operand refusals |
 | `tests/z390/test_program_services_differential.py` | CALL, LINK and LOAD return codes against z390, z390's LINK R15 pinned; the registers LINK leaves (R7, R9's VL bit) |
 | `tests/z390/test_foundation_differential.py` | Return code, WTO, user abend and assembly failure against z390 (`-m z390`) |
 | `tests/z390/test_z390_log.py` | Registers and CC from a z390 abend dump (default run) |

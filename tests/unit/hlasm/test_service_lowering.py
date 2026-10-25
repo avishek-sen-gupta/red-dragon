@@ -6,13 +6,18 @@ from collections.abc import Callable
 import pytest
 
 from interpreter.cobol.access_result import AccessCondition
+from interpreter.cobol.program_object import ENTRY_PREFIX
 from interpreter.hlasm.data_set_services import (
     emit_close,
     emit_get,
     emit_open,
     emit_put,
 )
-from interpreter.hlasm.hlasm_constants import PROVIDER_END_OF_FILE, PROVIDER_OK
+from interpreter.hlasm.hlasm_constants import (
+    PROGRAM_ENTRY_PREFIX,
+    PROVIDER_END_OF_FILE,
+    PROVIDER_OK,
+)
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.program_services import emit_delete, emit_link, emit_load
 from interpreter.hlasm.storage_services import (
@@ -44,6 +49,7 @@ SERVICES: dict[str, tuple[Callable[[HlasmEmitter], None], set[str]]] = {
         {
             *TABLE_LOOKUP,
             "__hlasm_far_branch",
+            "str_upper",
             "__bytes_to_string",
             "__string_concat_pair",
             "__string_find",
@@ -100,3 +106,8 @@ def test_the_provider_outcomes_the_lowering_compares_are_the_access_condition_po
     positions = (AccessCondition.OK.position(), AccessCondition.END_OF_FILE.position())
 
     assert positions == (PROVIDER_OK, PROVIDER_END_OF_FILE)
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_the_program_entry_prefix_is_cobols():
+    assert PROGRAM_ENTRY_PREFIX == ENTRY_PREFIX

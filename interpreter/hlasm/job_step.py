@@ -28,7 +28,6 @@ from interpreter.hlasm.hlasm_constants import (
     NOTHING_BELOW,
     OPERATION_EXCEPTION_ABEND,
     PARM_LIST_BYTES,
-    PROGRAM_ENTRY_PREFIX,
     RETURN_CODE_REGISTER,
     TARGET_VAR,
 )
@@ -36,6 +35,7 @@ from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.ir_function import IrFunction, define_called
 from interpreter.hlasm.module_owner import ModuleOwner
 from interpreter.hlasm.placed_name import PlacedName
+from interpreter.hlasm.program_entry import program_entry_name
 from interpreter.hlasm.program_function import ProgramFunction
 from interpreter.hlasm.unresolved_call import emit_unresolved_call
 from interpreter.hlasm.unresolved_owner import UnresolvedOwner
@@ -98,9 +98,7 @@ def _job_step(emitter: HlasmEmitter, stem: str, entry: PlacedName) -> None:
 
 
 def _call_by_name(emitter: HlasmEmitter, owner: UnresolvedOwner) -> None:
-    result = emit_unresolved_call(
-        emitter, VarName(f"{PROGRAM_ENTRY_PREFIX}{owner.name.upper()}")
-    )
+    result = emit_unresolved_call(emitter, VarName(program_entry_name(owner.name)))
     emitter.store_gr32(RETURN_CODE_REGISTER, result)
     emitter.emit_inst(
         StoreVar(name=TARGET_VAR, value_reg=emitter.load_gr32(LINK_REGISTER))

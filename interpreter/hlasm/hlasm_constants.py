@@ -61,6 +61,7 @@ STRING_SLICE = FuncName("__string_slice")
 STRING_FIND = FuncName("__string_find")
 STRING_ZFILL = FuncName("__string_zfill")
 STRING_CONCAT_PAIR = FuncName("__string_concat_pair")
+STRING_UPPER = FuncName("str_upper")
 TO_STRING = FuncName("str")
 PRINTLN = FuncName("println")
 EBCDIC = "ebcdic"

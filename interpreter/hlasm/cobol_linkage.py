@@ -23,7 +23,6 @@ from interpreter.hlasm.hlasm_constants import (
     LOW_WORD_MASK,
     MODULE_FUNCTION_PREFIX,
     NOTHING_BELOW,
-    PROGRAM_ENTRY_PREFIX,
     RETURN_CODE_REGISTER,
     TARGET_VAR,
     WORD_BYTES,
@@ -31,6 +30,7 @@ from interpreter.hlasm.hlasm_constants import (
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.ir_function import IrFunction
 from interpreter.hlasm.placed_name import PlacedName
+from interpreter.hlasm.program_entry import program_entry_name
 from interpreter.instructions import (
     AllocRegion,
     Branch,
@@ -285,7 +285,7 @@ def cobol_entry(name: str, entry: PlacedName) -> IrFunction:
         )
         return _return_code_image(emitter)
 
-    return IrFunction(f"{PROGRAM_ENTRY_PREFIX}{name.upper()}", 1, body)
+    return IrFunction(program_entry_name(name), 1, body)
 
 
 def _new(
@@ -457,7 +457,7 @@ def emit_cobol_call(emitter: HlasmEmitter, program: CobolProgram) -> None:
     emitter.emit_inst(
         CallWithMemory(
             result_reg=returned,
-            location=VarName(f"{PROGRAM_ENTRY_PREFIX}{program.name.upper()}"),
+            location=VarName(program_entry_name(program.name)),
             memory=arguments,
         )
     )
