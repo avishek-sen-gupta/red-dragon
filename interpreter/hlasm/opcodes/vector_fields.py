@@ -57,7 +57,7 @@ def element_index_checked(
     field: int, size: ElementSize, lowering: StatementLowering
 ) -> StatementLowering:
     return checked(
-        lambda statement: value_operand(statement, field).value >= size.count,
+        lambda statement: not 0 <= value_operand(statement, field).value < size.count,
         lowering,
     )
 

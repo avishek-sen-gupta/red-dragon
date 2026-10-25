@@ -61,7 +61,7 @@ CASES: Mapping[str, Case] = {
             "20212223 24252627 28292A2B 2C2D2E2F",
         ),
     ),
-    "VLM VSTM over 2 and 16 registers (PoO 21-12, 21-24)": (
+    "VLM VSTM over 2 and 16 registers (PoO 21-14, 21-26)": (
         line("VLM", "0,15,SRC")
         + line("VSTM", "1,3,OUT")
         + line("VST", "4,OUT+48")
@@ -269,10 +269,10 @@ CHECKS: Mapping[str, str] = {
     "VSTBR element size 0": line("VSTBR", "1,OUT,0"),
     "VSTER element size 4": line("VSTER", "1,OUT,4"),
     "VLBB boundary code 7": line("VLBB", "1,SRC,7") + line("VST", "1,OUT"),
-    "VSTM 17 registers (PoO 21-24)": line("VSTM", "0,16,OUT"),
-    "VLM 17 registers (PoO 21-12)": line("VLM", "0,16,SRC") + line("VST", "0,OUT"),
-    "VLM V3 below V1 (PoO 21-12)": line("VLM", "30,1,SRC") + line("VST", "30,OUT"),
-    "VSTM V3 below V1 (PoO 21-24)": line("VL", "31,SRC") + line("VSTM", "31,0,OUT"),
+    "VSTM 17 registers (PoO 21-26)": line("VSTM", "0,16,OUT"),
+    "VLM 17 registers (PoO 21-14)": line("VLM", "0,16,SRC") + line("VST", "0,OUT"),
+    "VLM V3 below V1 (PoO 21-14)": line("VLM", "30,1,SRC") + line("VST", "30,OUT"),
+    "VSTM V3 below V1 (PoO 21-26)": line("VL", "31,SRC") + line("VSTM", "31,0,OUT"),
 }
 
 BLOCK_BUFFER = "BUF      DS    XL8208\n"

@@ -162,9 +162,12 @@ def test_an_invalid_element_size_or_index_abends_s0c6_before_any_access():
         "VUPLL": (vr(1), vr(2), mask_operand(4)),
     }
 
-    assert {m: trace(m, operands) for m, operands in invalid.items()} == {
-        m: [SPECIFICATION] for m in invalid
-    }
+    negative = (vr(1), vr(3), imm_operand(-1), mask_operand(1))
+
+    assert (
+        {m: trace(m, operands) for m, operands in invalid.items()},
+        trace("VREP", negative),
+    ) == ({m: [SPECIFICATION] for m in invalid}, [SPECIFICATION])
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

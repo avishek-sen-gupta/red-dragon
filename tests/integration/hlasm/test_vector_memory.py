@@ -1,5 +1,5 @@
 # pyright: standard
-"""Vector loads and stores run on the VM move the bytes the Principles of Operation name (SA22-7832-14 chapter 21), in each element order; an invalid M field or element index, and a VLM or VSTM range with V3 below V1 or over 16 registers (PoO 21-12, 21-24), abends S0C6 with storage unchanged; VLBB loads up to its block boundary, the bytes past it unasserted (unpredictable)."""
+"""Vector loads and stores run on the VM move the bytes the Principles of Operation name (SA22-7832-14 chapter 21), in each element order; an invalid M field or element index, and a VLM or VSTM range with V3 below V1 or over 16 registers (PoO 21-14, 21-26), abends S0C6 with storage unchanged; VLBB loads up to its block boundary, the bytes past it unasserted (unpredictable)."""
 
 import pytest
 

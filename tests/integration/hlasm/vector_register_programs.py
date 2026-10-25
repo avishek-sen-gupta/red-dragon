@@ -134,6 +134,9 @@ CASES: Mapping[str, Case] = {
     "VMRH VMRL interleave halves, V1 equal to V2 or V3 (PoO 21-17)": (
         _pairs()
         + line("VMRHB", "4,2,3")
+        + line("VL", "9,SRC")
+        + line("VMRHH", "9,9,3")
+        + line("VST", "9,OUT+128")
         + line("VMRLB", "5,2,3")
         + line("VMRHH", "6,2,3")
         + line("VMRHF", "7,2,3")
@@ -152,6 +155,7 @@ CASES: Mapping[str, Case] = {
             "00010203 10111213 04050607 14151617",
             "00010203 04050607 10111213 14151617",
             "08090A0B 18191A1B 0C0D0E0F 1C1D1E1F",
+            "00011011 02031213 04051415 06071617",
         ),
     ),
     "VPDI picks doublewords by M4 bits 1 and 3 (PoO 21-20)": (
@@ -406,6 +410,8 @@ CHECKS: Mapping[str, str] = {
     "VPKLS element size 0": line("VPKLS", "1,2,3,0,1") + line("VST", "1,OUT"),
     "VREP element index 16": line("VREP", "1,2,16,0") + line("VST", "1,OUT"),
     "VREPG element index 2": line("VREPG", "1,2,2") + line("VST", "1,OUT"),
+    "VREPH element index -1, X'FFFF' (PoO 21-21)": line("VREP", "1,3,-1,1")
+    + line("VST", "1,OUT"),
     "VREPI element size 4": line("VREPI", "1,0,4") + line("VST", "1,OUT"),
     "VSEG element size 3": line("VSEG", "1,2,3") + line("VST", "1,OUT"),
     "VBLEND element size 5": line("VBLEND", "1,2,3,4,5") + line("VST", "1,OUT"),

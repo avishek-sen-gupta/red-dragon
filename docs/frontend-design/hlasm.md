@@ -1489,7 +1489,7 @@ with the implied M3. No builtin: every form is region copies, shifts and masks.
 
 - Alignment hints (M3 of VL and VST, M4 of VLM and VSTM) are ignored.
 - VLM and VSTM move V1 to V3 as one region copy. They do not wrap: V3 below V1, or more than
-  16 registers, abends `S0C6` (PoO 21-12, 21-24). The unit's plan said they wrap from 31 to 0;
+  16 registers, abends `S0C6` (PoO 21-14, 21-26). The unit's plan said they wrap from 31 to 0;
   that was wrong.
 - Element forms touch only their element's bytes. The M3 index must be below the element
   count; VLEI sign-extends I2 to the element. VLREP and VLBRREP replicate one element by a
@@ -1510,7 +1510,8 @@ VMRH, VMRL, VPDI, VPERM, VBPERM, VPK, VPKS, VPKLS, VREP, VREPI, VSEG, VSEL, VBLE
 VUPLH and VUPLL (PoO chapter 21), with every extended mnemonic (VZERO, VONE, VGMB, VPKSHS,
 VUPLHW, VBLENDQ, ...), which che4z exports as its base with the implied masks. No builtin.
 
-- Each form reads its source VRs whole and writes V1 whole, so V1 may name any source.
+- Each form reads its source VRs whole and writes V1 whole, so V1 may name any source, except
+  VREP (reads one element of V3), VLGV (reads one element) and VLVG (writes one element).
 - VMRH, VMRL, VPK, VPDI, VUPLH and VUPLL gather bytes of V2 || V3 (or V2) by a static map.
   VUPH and VUPL then fill each element's high half from the sign bit; VSEG does the same per
   doubleword.
@@ -1526,7 +1527,8 @@ VUPLHW, VBLENDQ, ...), which che4z exports as its base with the implied masks. N
   packed result and the CC (0 none saturated, 1 some, 3 all) in the element return
   convention; the CC is set only when M5's CS bit is on.
 - An element size outside the PoO's set, or a VREP index past the count, abends `S0C6` at
-  lowering.
+  lowering. A negative static index is its field's unsigned image (VREP -1 is X'FFFF'), so it
+  abends too (R108).
 
 ## Known Gaps
 
