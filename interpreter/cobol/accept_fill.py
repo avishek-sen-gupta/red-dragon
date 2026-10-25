@@ -6,10 +6,10 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from infrastructure.zos.access_methods.access_result import AccessCondition
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.ir_emitter import IrEmitter
 from interpreter.ir import CodeLabel
-from interpreter.record_io.access_result import AccessCondition
 from interpreter.register import Register
 from interpreter.var_name import VarName
 

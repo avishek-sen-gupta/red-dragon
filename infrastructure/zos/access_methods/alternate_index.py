@@ -8,7 +8,7 @@ import bisect
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from interpreter.record_io.alternate_key import AlternateKey
+from infrastructure.zos.access_methods.alternate_key import AlternateKey
 
 type IndexEntry = tuple[bytes, int, bytes]
 

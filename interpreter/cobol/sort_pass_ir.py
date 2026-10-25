@@ -7,13 +7,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from cobol_asg.file_enums import OpenMode
+from infrastructure.zos.access_methods.access_result import AccessCondition
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.ir_emitter import IrEmitter
 from interpreter.cobol.sort_ordering import SortOrdering
 from interpreter.data_value import DataRecord
 from interpreter.instructions import Const
 from interpreter.ir import CodeLabel
-from interpreter.record_io.access_result import AccessCondition
 from interpreter.register import Register
 from interpreter.types.type_expr import UNKNOWN
 from interpreter.var_name import VarName

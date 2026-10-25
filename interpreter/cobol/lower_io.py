@@ -20,6 +20,7 @@ from cobol_asg.cobol_statements import (
 )
 from cobol_asg.file_enums import AccessMode, FileOrganization, OpenMode
 from cobol_asg.ref_mod import RefModOperand
+from infrastructure.zos.access_methods.prime_key import PrimeKey
 from interpreter.cobol.accept_fill import AcceptFill
 from interpreter.cobol.cobol_constants import BuiltinName
 from interpreter.cobol.emit_context import EmitContext
@@ -75,7 +76,6 @@ from interpreter.instructions import (
 )
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import resolve_binop
-from interpreter.record_io.prime_key import PrimeKey
 from interpreter.register import NO_REGISTER, Register
 from interpreter.var_name import VarName
 

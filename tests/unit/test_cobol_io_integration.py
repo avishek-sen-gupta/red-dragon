@@ -2,12 +2,12 @@
 
 import copy
 
+from infrastructure.zos.access_methods.access_result import AccessCondition
 from interpreter.cfg import build_cfg
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.io_provider import NullIOProvider, StubIOProvider
 from interpreter.instructions import InstructionBase
 from interpreter.ir import CodeLabel, IRInstruction, Opcode
-from interpreter.record_io.access_result import AccessCondition
 from interpreter.record_io.io_provider import NO_IO_PROVIDER, IOResult
 from interpreter.register import Register
 from interpreter.registry import build_registry

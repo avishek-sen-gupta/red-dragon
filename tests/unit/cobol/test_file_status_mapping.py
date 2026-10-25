@@ -1,6 +1,6 @@
 """The lowered IR maps each driver outcome to the FILE STATUS it reports."""
 
-from interpreter.record_io.access_result import AccessCondition
+from infrastructure.zos.access_methods.access_result import AccessCondition
 from interpreter.vm.vm_types import SymbolicValue
 from tests.covers import NotLanguageFeature, covers
 from tests.unit.cobol.file_status_of import file_status_of, file_status_of_outcome

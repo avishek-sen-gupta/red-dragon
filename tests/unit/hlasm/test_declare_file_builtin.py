@@ -1,9 +1,9 @@
 # pyright: standard
 """OPEN's file declaration answers the provider's outcome, and an uncomputable value when the run has no provider."""
 
+from infrastructure.zos.access_methods.access_result import AccessCondition
 from interpreter.hlasm_run_inputs.declare_file_builtins import declare_file_builtins
 from interpreter.hlasm_run_inputs.run_input_names import DECLARE_FILE_BUILTIN
-from interpreter.record_io.access_result import AccessCondition
 from interpreter.record_io.real_file_provider import RealFileProvider
 from interpreter.run import initial_vm_state
 from interpreter.types.typed_value import typed

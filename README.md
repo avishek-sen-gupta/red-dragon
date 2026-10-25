@@ -38,7 +38,7 @@ Seven root packages, each a contract root in `.importlinter`:
 | `cobol_numeric` | Exact COBOL fixed-point values and arithmetic |
 | `hlasm_asg` | HLASM parsing via the che4z bridge, the program and instruction-table models, and the opcode-unit table (`opcode_units.json`) |
 | `zarch_float` | z/Architecture floating-point arithmetic, rounding and exception conditions (BFP, HFP, DFP) |
-| `infrastructure` | z/OS infrastructure below the VM: abend types; imports nothing under `interpreter` |
+| `infrastructure` | z/OS infrastructure below the VM: abend types and the record-access drivers; imports nothing under `interpreter` |
 
 The three `cobol_*` packages, `hlasm_asg` and `zarch_float` are leaves: they must not import `interpreter`. Importing anything under `interpreter` loads the VM, so a consumer that only parses COBOL or computes byte ranges imports a `cobol_*` package alone.
 
@@ -632,7 +632,7 @@ Import-linter enforces fifteen contracts:
 | `hlasm-isolation` | VM, handlers, project and run layers must not import `interpreter.hlasm` |
 | `hlasm-not-cobol` | `interpreter.hlasm` must not import `interpreter.cobol` directly |
 | `cobol-not-hlasm` | `interpreter.cobol` must not import `interpreter.hlasm` directly |
-| `record-io-is-neutral` | `interpreter.record_io` must not import `interpreter.cobol` or `interpreter.hlasm` |
+| `record-io-is-neutral` | `interpreter.record_io` and `infrastructure.zos.access_methods` must not import `interpreter.cobol` or `interpreter.hlasm` |
 
 ## Documentation
 

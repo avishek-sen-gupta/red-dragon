@@ -177,6 +177,7 @@ name = Record I/O must not import a language's lowering
 type = forbidden
 source_modules =
     interpreter.record_io
+    infrastructure.zos.access_methods
 forbidden_modules =
     interpreter.cobol
     interpreter.hlasm

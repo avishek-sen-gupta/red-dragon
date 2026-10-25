@@ -8,9 +8,12 @@ from pathlib import Path
 from typing import BinaryIO, Literal
 
 from cobol_asg.file_enums import OpenMode
-from interpreter.record_io.access_result import AccessCondition, AccessResult
-from interpreter.record_io.file_drivers import FileOrganizationDriver
-from interpreter.record_io.prime_key import PrimeKey
+from infrastructure.zos.access_methods.access_result import (
+    AccessCondition,
+    AccessResult,
+)
+from infrastructure.zos.access_methods.file_drivers import FileOrganizationDriver
+from infrastructure.zos.access_methods.prime_key import PrimeKey
 
 _RDW = 4
 _FILE_MODES: Mapping[OpenMode, Literal["rb", "w+b", "a+b", "r+b"]] = {

@@ -1,9 +1,9 @@
 """Tests for COBOL I/O provider — NullIOProvider and StubIOProvider."""
 
+from infrastructure.zos.access_methods.access_result import AccessCondition
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.io_provider import NullIOProvider, StubFile, StubIOProvider
 from interpreter.func_name import FuncName
-from interpreter.record_io.access_result import AccessCondition
 from interpreter.record_io.io_provider import IOResult
 from interpreter.types.typed_value import typed_from_runtime
 from interpreter.vm.vm import Operators

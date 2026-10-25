@@ -1,14 +1,14 @@
 from pathlib import Path
 
 from cobol_asg.file_enums import FileOrganization, OpenMode
-from interpreter.record_io.file_drivers import (
+from infrastructure.zos.access_methods.file_drivers import (
     IndexedDriver,
     RelativeDriver,
     SequentialDriver,
     open_driver,
 )
-from interpreter.record_io.prime_key import PrimeKey
-from interpreter.record_io.record_shape import RecordShape
+from infrastructure.zos.access_methods.prime_key import PrimeKey
+from infrastructure.zos.access_methods.record_shape import RecordShape
 from tests.covers import NotLanguageFeature, covers
 
 

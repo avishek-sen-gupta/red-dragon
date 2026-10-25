@@ -11,8 +11,8 @@ from pathlib import Path
 
 from cobol_asg.cobol_statements import FileControlEntry
 from cobol_asg.switch_status import SwitchStatus
+from infrastructure.zos.access_methods.access_result import AccessCondition
 from interpreter.cobol.io_provider import CobolIOProvider
-from interpreter.record_io.access_result import AccessCondition
 from interpreter.record_io.io_provider import IOResult
 from interpreter.record_io.real_file_provider import RealFileProvider, to_ioresult
 from interpreter.record_io.run_inputs import NO_RUN_INPUTS, RunInputs

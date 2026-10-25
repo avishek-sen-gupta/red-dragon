@@ -6,10 +6,13 @@ from __future__ import annotations
 from pathlib import Path
 
 from cobol_asg.file_enums import OpenMode
+from infrastructure.zos.access_methods.access_result import AccessCondition
+from infrastructure.zos.access_methods.file_drivers import (
+    IndexedDriver,
+    SequentialDriver,
+)
+from infrastructure.zos.access_methods.prime_key import PrimeKey
 from interpreter.cobol.features import CobolFeature
-from interpreter.record_io.access_result import AccessCondition
-from interpreter.record_io.file_drivers import IndexedDriver, SequentialDriver
-from interpreter.record_io.prime_key import PrimeKey
 from tests.covers import covers
 
 

@@ -11,14 +11,17 @@ import pytest
 
 from cobol_asg.cobol_statements import FileControlEntry
 from cobol_asg.file_enums import FileOrganization, OpenMode
+from infrastructure.zos.access_methods.access_result import AccessCondition
+from infrastructure.zos.access_methods.file_drivers import (
+    FileOrganizationDriver,
+    open_driver,
+)
+from infrastructure.zos.access_methods.prime_key import PrimeKey
+from infrastructure.zos.access_methods.record_shape import RecordShape
 from interpreter.cobol.features import CobolFeature
 from interpreter.cobol.real_file_provider import RealFileIOProvider
-from interpreter.record_io.access_result import AccessCondition
-from interpreter.record_io.file_drivers import FileOrganizationDriver, open_driver
 from interpreter.record_io.file_frame import FileFrame
 from interpreter.record_io.io_provider import IOResult
-from interpreter.record_io.prime_key import PrimeKey
-from interpreter.record_io.record_shape import RecordShape
 from interpreter.record_io.run_inputs import RunInputs
 from tests.covers import NotLanguageFeature, covers
 from tests.unit.cobol.declared_files import opened

@@ -5,12 +5,17 @@ from __future__ import annotations
 from pathlib import Path
 
 from cobol_asg.file_enums import FileOrganization, OpenMode
-from interpreter.record_io.access_result import AccessCondition, AccessResult
-from interpreter.record_io.alternate_index_driver import open_alternate_index_driver
-from interpreter.record_io.alternate_key import AlternateKey
-from interpreter.record_io.prime_key import PrimeKey
+from infrastructure.zos.access_methods.access_result import (
+    AccessCondition,
+    AccessResult,
+)
+from infrastructure.zos.access_methods.alternate_index_driver import (
+    open_alternate_index_driver,
+)
+from infrastructure.zos.access_methods.alternate_key import AlternateKey
+from infrastructure.zos.access_methods.prime_key import PrimeKey
+from infrastructure.zos.access_methods.record_shape import RecordShape
 from interpreter.record_io.real_file_provider import to_ioresult
-from interpreter.record_io.record_shape import RecordShape
 from tests.unit.cobol.file_status_of import file_status_of
 
 _BASE = (b"001BBBxx", b"002AAAyy", b"003AAAzz", b"004CCCww")

@@ -4,6 +4,7 @@
 from collections.abc import Callable, Mapping
 
 from cobol_asg.file_enums import OpenMode
+from infrastructure.zos.access_methods.access_result import AccessCondition
 from interpreter.field_name import FieldName
 from interpreter.func_name import FuncName
 from interpreter.hlasm.abend import emit_abend
@@ -52,7 +53,6 @@ from interpreter.instructions import (
 )
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import BinopKind
-from interpreter.record_io.access_result import AccessCondition
 from interpreter.register import Register
 from interpreter.var_name import VarName
 

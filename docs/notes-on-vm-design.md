@@ -560,7 +560,7 @@ interpreter/
 ├── project/              compiler, linker, LinkedProgram, EntryPoint, compile_cobol, unit/linked file codecs
 ├── frontends/            15 tree-sitter frontends
 ├── cobol/                COBOL lowering, byte builtins, call_arguments, return_code_readback
-├── record_io/            record I/O shared by COBOL and HLASM (RecordIOProvider and RealFileProvider and drivers and AccessCondition and FileFrame and RunInputs)
+├── record_io/            record I/O shared by COBOL and HLASM (RecordIOProvider and RealFileProvider and FileFrame and RunInputs; the drivers and AccessCondition live in infrastructure/zos/access_methods)
 cobol_numeric/            CobolNumber, exact arithmetic, IBM scale rules (leaf)
 cobol_memory/             RegionId, FieldExtent, AbstractLocation, StorageIdentifier (leaf)
 cobol_asg/                COBOL parse model (leaf)

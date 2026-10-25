@@ -7,11 +7,17 @@ import bisect
 from pathlib import Path
 
 from cobol_asg.file_enums import OpenMode
-from interpreter.record_io.access_result import AccessCondition, AccessResult
-from interpreter.record_io.alternate_key import AlternateKey
-from interpreter.record_io.file_drivers import FileOrganizationDriver, IndexedDriver
-from interpreter.record_io.prime_key import PrimeKey
-from interpreter.record_io.record_shape import RecordShape
+from infrastructure.zos.access_methods.access_result import (
+    AccessCondition,
+    AccessResult,
+)
+from infrastructure.zos.access_methods.alternate_key import AlternateKey
+from infrastructure.zos.access_methods.file_drivers import (
+    FileOrganizationDriver,
+    IndexedDriver,
+)
+from infrastructure.zos.access_methods.prime_key import PrimeKey
+from infrastructure.zos.access_methods.record_shape import RecordShape
 
 _WRITE_MODES = frozenset({OpenMode.OUTPUT, OpenMode.EXTEND, OpenMode.IO})
 _Entry = tuple[bytes, bytes]

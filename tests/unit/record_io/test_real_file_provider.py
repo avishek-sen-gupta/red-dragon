@@ -5,10 +5,10 @@ from pathlib import Path
 from types import MappingProxyType
 
 from cobol_asg.file_enums import FileOrganization, OpenMode
+from infrastructure.zos.access_methods.access_result import AccessCondition
+from infrastructure.zos.access_methods.prime_key import PrimeKey
 from interpreter.func_name import FuncName
-from interpreter.record_io.access_result import AccessCondition
 from interpreter.record_io.file_frame import FileFrame
-from interpreter.record_io.prime_key import PrimeKey
 from interpreter.record_io.real_file_provider import RealFileProvider
 from interpreter.record_io.run_inputs import RunInputs
 from interpreter.types.typed_value import typed

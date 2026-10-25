@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from interpreter.record_io.prime_key import PrimeKey
+from infrastructure.zos.access_methods.prime_key import PrimeKey
 
 
 @dataclass(frozen=True)

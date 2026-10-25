@@ -7,6 +7,8 @@ from pathlib import Path
 
 from cobol_asg.compilation_unit import programs_in_preorder
 from cobol_asg.file_enums import FileOrganization
+from infrastructure.zos.access_methods.access_result import AccessCondition
+from infrastructure.zos.access_methods.prime_key import PrimeKey
 from interpreter.cobol.file_definitions_data import FILE_DEFINITIONS
 from interpreter.cobol.io_provider import NullIOProvider
 from interpreter.data_literals import text
@@ -15,10 +17,8 @@ from interpreter.field_name import FieldName
 from interpreter.frontend import make_cobol_parser
 from interpreter.instructions import CallFunction, Const, Data, InstructionBase
 from interpreter.project.cobol_compile import compile_cobol_module
-from interpreter.record_io.access_result import AccessCondition
 from interpreter.record_io.file_frame import FileFrame
 from interpreter.record_io.io_provider import IOResult
-from interpreter.record_io.prime_key import PrimeKey
 from interpreter.register import Register
 from interpreter.run import run
 from tests.covers import NotLanguageFeature, covers

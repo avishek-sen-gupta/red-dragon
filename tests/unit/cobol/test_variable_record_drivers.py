@@ -8,12 +8,17 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from cobol_asg.file_enums import OpenMode
+from infrastructure.zos.access_methods.access_result import AccessCondition
+from infrastructure.zos.access_methods.described_slot import DescribedSlot
+from infrastructure.zos.access_methods.file_drivers import (
+    FileOrganizationDriver,
+    RelativeDriver,
+)
+from infrastructure.zos.access_methods.prime_key import PrimeKey
+from infrastructure.zos.access_methods.variable_sequential_driver import (
+    VariableSequentialDriver,
+)
 from interpreter.cobol.features import CobolFeature
-from interpreter.record_io.access_result import AccessCondition
-from interpreter.record_io.described_slot import DescribedSlot
-from interpreter.record_io.file_drivers import FileOrganizationDriver, RelativeDriver
-from interpreter.record_io.prime_key import PrimeKey
-from interpreter.record_io.variable_sequential_driver import VariableSequentialDriver
 from tests.covers import covers
 
 

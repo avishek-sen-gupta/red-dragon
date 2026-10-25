@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from interpreter.record_io.relative_slot import RelativeSlot
+from infrastructure.zos.access_methods.relative_slot import RelativeSlot
 
 _ACTIVE = b"\xff"
 _EMPTY = b"\x00"

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+from infrastructure.zos.access_methods.access_result import AccessCondition
 from interpreter.cobol.file_state import file_state
 from interpreter.cobol.file_verb_ir import FileVerbIr
 from interpreter.cobol.ir_emitter import IrEmitter
-from interpreter.record_io.access_result import AccessCondition
 from interpreter.register import Register
 from tests.unit.cobol.emitted_ir import ParamValue, run_emitted
 

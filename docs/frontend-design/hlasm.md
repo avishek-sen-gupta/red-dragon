@@ -531,7 +531,7 @@ primitives, `__hlasm_dd` and `__hlasm_declare_file`.
   returns the buffer in R1; CLOSE writes the last one, as IBM's does.
 - GET or PUT on a DCB without DCBOFOPN abends `S0C1`: IBM's macros branch through the DCB's
   routine field, which an unopened DCB does not hold, and an unowned branch here abends `S0C1`.
-- Driver outcomes are compared by `AccessCondition` position, from `interpreter.record_io`.
+- Driver outcomes are compared by `AccessCondition` position, from `infrastructure.zos.access_methods.access_result`.
 - **Any other SVC number** logs the number and abends `S0C1`. This is a project
   choice, not z/OS behaviour.
 

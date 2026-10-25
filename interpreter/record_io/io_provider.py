@@ -12,9 +12,9 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any
 
+from infrastructure.zos.access_methods.access_result import AccessCondition
 from interpreter.data_value import DataRecord
 from interpreter.func_name import FuncName
-from interpreter.record_io.access_result import AccessCondition
 from interpreter.shared_on_deepcopy import SharedOnDeepcopy
 from interpreter.types.typed_value import TypedValue
 from interpreter.vm.uncomputable import UNCOMPUTABLE

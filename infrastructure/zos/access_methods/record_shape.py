@@ -6,8 +6,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from cobol_asg.file_enums import FileOrganization
-from interpreter.record_io.alternate_key import AlternateKey
-from interpreter.record_io.prime_key import PrimeKey
+from infrastructure.zos.access_methods.alternate_key import AlternateKey
+from infrastructure.zos.access_methods.prime_key import PrimeKey
 
 
 @dataclass(frozen=True)

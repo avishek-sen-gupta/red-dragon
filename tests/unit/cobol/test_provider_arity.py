@@ -6,20 +6,22 @@ from __future__ import annotations
 import inspect
 from collections.abc import Callable
 
-from interpreter.cobol.io_provider import CobolIOProvider, NullIOProvider
-from interpreter.func_name import FuncName
-from interpreter.record_io.alternate_index_driver import (
+from infrastructure.zos.access_methods.alternate_index_driver import (
     AlternateIndexDriver,
     open_alternate_index_driver,
 )
-from interpreter.record_io.file_drivers import (
+from infrastructure.zos.access_methods.file_drivers import (
     FileOrganizationDriver,
     IndexedDriver,
     RelativeDriver,
     SequentialDriver,
     open_driver,
 )
-from interpreter.record_io.variable_sequential_driver import VariableSequentialDriver
+from infrastructure.zos.access_methods.variable_sequential_driver import (
+    VariableSequentialDriver,
+)
+from interpreter.cobol.io_provider import CobolIOProvider, NullIOProvider
+from interpreter.func_name import FuncName
 from tests.covers import NotLanguageFeature, covers
 
 _PRIMITIVES = (

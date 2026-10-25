@@ -4,7 +4,7 @@ the file's maximum record length."""
 
 from __future__ import annotations
 
-from interpreter.record_io.relative_slot import RelativeSlot
+from infrastructure.zos.access_methods.relative_slot import RelativeSlot
 
 _RDW = 4
 

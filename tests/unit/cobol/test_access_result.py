@@ -1,4 +1,7 @@
-from interpreter.record_io.access_result import AccessCondition, AccessResult
+from infrastructure.zos.access_methods.access_result import (
+    AccessCondition,
+    AccessResult,
+)
 from tests.covers import NotLanguageFeature, covers
 
 
