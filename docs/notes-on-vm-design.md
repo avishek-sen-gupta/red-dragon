@@ -287,7 +287,7 @@ A function definition lowers to `CONST` with a `FunctionType` and the function's
 `_handle_call_function` (`interpreter/handlers/calls.py`) resolves arguments with `_resolve_call_args` (which expands `SpreadArguments` from a heap array), then tries in order:
 
 ```
-0. io_provider        __cobol_* names the injected COBOL I/O provider recognises
+0. io_provider        __cobol_* names the injected record I/O provider recognises
 1. builtin            the run's table, HandlerContext.builtins (§13)
 2. scope lookup       walk call_stack innermost-out for the name; not found → call_resolver
 2b. heap call-index   f(i) on a heap array (Scala apply)

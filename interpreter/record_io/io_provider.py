@@ -146,3 +146,40 @@ class RecordIOProvider(ABC):
         """DELETE — remove the record ``locator`` names, or the last-read record
         when ``locator`` is empty (sequential access)."""
         ...
+
+
+class NoIOProvider(RecordIOProvider):
+    """The provider of a run given none: it dispatches no call, so each falls through
+    to the builtins as if no provider were there."""
+
+    operations: Mapping[FuncName, str] = MappingProxyType({})
+
+    def _open_file(self, filename: str, mode: str, program: str) -> IOResult:
+        return IOResult(AccessCondition.OK, None)
+
+    def _close_file(self, filename: str, program: str) -> IOResult:
+        return IOResult(AccessCondition.OK, None)
+
+    def _read_record(self, filename: str, locator: str, program: str) -> Any:
+        return _UNCOMPUTABLE
+
+    def _write_record(
+        self, filename: str, data: str, locator: str, program: str
+    ) -> IOResult:
+        return IOResult(AccessCondition.OK, None)
+
+    def _rewrite_record(
+        self, filename: str, data: str, locator: str, program: str
+    ) -> IOResult:
+        return IOResult(AccessCondition.OK, None)
+
+    def _start_file(
+        self, filename: str, locator: str, relop: str, program: str
+    ) -> IOResult:
+        return IOResult(AccessCondition.OK, None)
+
+    def _delete_record(self, filename: str, locator: str, program: str) -> IOResult:
+        return IOResult(AccessCondition.OK, None)
+
+
+NO_IO_PROVIDER = NoIOProvider()

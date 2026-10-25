@@ -12,11 +12,7 @@ from interpreter.hlasm.data_set_services import (
     emit_open,
     emit_put,
 )
-from interpreter.hlasm.hlasm_constants import (
-    PROGRAM_ENTRY_PREFIX,
-    PROVIDER_END_OF_FILE,
-    PROVIDER_OK,
-)
+from interpreter.hlasm.hlasm_constants import PROGRAM_ENTRY_PREFIX
 from interpreter.hlasm.hlasm_emitter import HlasmEmitter
 from interpreter.hlasm.program_services import emit_delete, emit_link, emit_load
 from interpreter.hlasm.storage_services import (
@@ -26,7 +22,6 @@ from interpreter.hlasm.storage_services import (
 )
 from interpreter.hlasm.time_service import emit_time
 from interpreter.instructions import CallFunction, Symbolic
-from interpreter.record_io.access_result import AccessCondition
 from tests.covers import NotLanguageFeature, covers
 
 REGISTER_IMAGES = {"__binary_bytes_to_int", "__int_to_binary_bytes"}
@@ -99,13 +94,6 @@ def test_a_service_calls_only_existing_builtins(service: str):
         {str(i.func_name) for i in instructions if isinstance(i, CallFunction)},
         [i for i in instructions if isinstance(i, Symbolic)],
     ) == (builtins, [])
-
-
-@covers(NotLanguageFeature.INFRASTRUCTURE)
-def test_the_provider_outcomes_the_lowering_compares_are_the_access_condition_positions():
-    positions = (AccessCondition.OK.position(), AccessCondition.END_OF_FILE.position())
-
-    assert positions == (PROVIDER_OK, PROVIDER_END_OF_FILE)
 
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)

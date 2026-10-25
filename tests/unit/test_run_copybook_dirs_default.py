@@ -1,5 +1,6 @@
 import inspect
 
+from interpreter.record_io.io_provider import NO_IO_PROVIDER
 from interpreter.run import run
 from tests.covers import NotLanguageFeature, covers
 
@@ -8,6 +9,5 @@ from tests.covers import NotLanguageFeature, covers
 def test_copybook_dirs_defaults_to_empty_list():
     sig = inspect.signature(run)
     assert sig.parameters["copybook_dirs"].default == []
-    # llm_client and io_provider stay untouched in this task
     assert sig.parameters["llm_client"].default is None
-    assert sig.parameters["io_provider"].default is None
+    assert sig.parameters["io_provider"].default is NO_IO_PROVIDER

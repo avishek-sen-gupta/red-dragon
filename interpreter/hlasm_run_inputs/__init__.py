@@ -1,1 +1,1 @@
-"""HLASM builtins kept outside interpreter.hlasm: the run inputs (the machine clock, the job-step PARM and the DD definitions), which run() composes, and OPEN's file declaration, which reaches the COBOL file provider and which callers compose."""
+"""HLASM builtins kept outside interpreter.hlasm: the run inputs (the machine clock, the job-step PARM and the DD definitions), which run() composes, and OPEN's file declaration, which reaches the record provider (interpreter.record_io) and which callers compose."""

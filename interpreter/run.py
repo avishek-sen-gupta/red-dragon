@@ -50,6 +50,7 @@ from interpreter.project.linker import module_prefix
 from interpreter.project.program_entry import ProgramEntry
 from interpreter.project.program_not_in_image import ProgramNotInImage
 from interpreter.project.types import LinkedProgram
+from interpreter.record_io.io_provider import NO_IO_PROVIDER, RecordIOProvider
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import BoundFuncRef, FuncRef
 from interpreter.register import NO_REGISTER, Register
@@ -588,7 +589,8 @@ def _warn_step_budget_exhausted(max_steps: int, label: CodeLabel, ip: int) -> No
 
 
 def initial_vm_state(
-    io_provider: Any = None, null_access: NullAccess = WARN_AND_IGNORE
+    io_provider: RecordIOProvider = NO_IO_PROVIDER,
+    null_access: NullAccess = WARN_AND_IGNORE,
 ) -> VMState:
     """Build a fresh VMState seeded with the ``<main>`` call frame.
 
@@ -1015,7 +1017,7 @@ def run_linked(
     verbose: bool = False,
     backend: str = LLMProvider.CLAUDE,
     unresolved_call_strategy: UnresolvedCallStrategy = UnresolvedCallStrategy.SYMBOLIC,
-    io_provider: Any = None,  # Any: CobolIOProvider — optional COBOL I/O injection
+    io_provider: RecordIOProvider = NO_IO_PROVIDER,
     *,
     builtins: Mapping[FuncName, Builtin],
     initial_vm: VMState,
@@ -1033,7 +1035,8 @@ def run_linked(
         verbose: Print IR, CFG, and step-by-step info.
         backend: LLM backend for interpreter fallback.
         unresolved_call_strategy: Resolution strategy for unknown calls.
-        io_provider: Optional COBOL I/O provider (e.g. StubIOProvider for testing).
+        io_provider: The file provider record I/O calls reach (e.g. StubIOProvider for
+            testing); ``NO_IO_PROVIDER``, the default, serves none.
         builtins: The builtins table this run resolves builtin calls through.
         initial_vm: VM state to execute against. Use ``initial_vm_state()`` for a
             fresh one.
@@ -1140,7 +1143,7 @@ def run_linked_resumable(
     verbose: bool = False,
     backend: str = LLMProvider.CLAUDE,
     unresolved_call_strategy: UnresolvedCallStrategy = UnresolvedCallStrategy.SYMBOLIC,
-    io_provider: Any = None,
+    io_provider: RecordIOProvider = NO_IO_PROVIDER,
     *,
     builtins: Mapping[FuncName, Builtin],
     initial_vm: VMState,
@@ -1179,7 +1182,7 @@ def resume_linked(
     verbose: bool = False,
     backend: str = LLMProvider.CLAUDE,
     unresolved_call_strategy: UnresolvedCallStrategy = UnresolvedCallStrategy.SYMBOLIC,
-    io_provider: Any = None,
+    io_provider: RecordIOProvider = NO_IO_PROVIDER,
     permit_unresolved_call_targets: bool = True,
     *,
     builtins: Mapping[FuncName, Builtin],
@@ -1197,7 +1200,7 @@ def resume_linked(
         builtins=builtins,
         io_provider=io_provider,
     )
-    if io_provider is not None:
+    if io_provider is not NO_IO_PROVIDER:
         state.vm.io_provider = io_provider
     state.vm.declarations = _declarations_at(linked, state.entered)
     return resume(
@@ -1465,7 +1468,7 @@ def run(
     frontend_type: str = constants.FRONTEND_DETERMINISTIC,
     llm_client: Any = None,  # Any: Optional LLM client injection — see red-dragon-c7y2
     unresolved_call_strategy: UnresolvedCallStrategy = UnresolvedCallStrategy.SYMBOLIC,
-    io_provider: Any = None,  # Any: CobolIOProvider — optional COBOL I/O injection
+    io_provider: RecordIOProvider = NO_IO_PROVIDER,
     copybook_dirs: list[Path] = [],
     tolerant: bool = False,
     null_access: NullAccess = WARN_AND_IGNORE,
@@ -1493,8 +1496,10 @@ def run(
             (default: ``DEFAULT_BUILTINS``, the core table). An HLASM run adds
             the HLASM run inputs it is not given: the host clock, an empty
             PARM and no DD definitions. Callers add the floating-point
-            builtins, ``declare_file_builtins()``, and the DD builtin and
-            file-provider inputs from ``dd_run_inputs(dds)``.
+            builtins and an HLASM program's files: ``declare_file_builtins()``,
+            the DD builtin and ``RunInputs`` from ``dd_run_inputs(dds)``, and a
+            ``RealFileProvider`` over those inputs as ``io_provider``. Each part
+            exists here; red-dragon-forge composes them into a run-time stack.
     """
     lang = Language(language)
     pipeline_start = time.perf_counter()

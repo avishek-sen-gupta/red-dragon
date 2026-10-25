@@ -8,7 +8,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from hlasm_asg.assembly_inputs import AssemblyInputs
-from interpreter.cobol.real_file_provider import RealFileIOProvider
 from interpreter.field_name import FieldName
 from interpreter.frontends import get_hlasm_parser
 from interpreter.hlasm.bfp_builtins import bfp_builtins
@@ -25,6 +24,7 @@ from interpreter.project.entry_point import EntryPoint
 from interpreter.project.hlasm_compile import compile_hlasm
 from interpreter.project.hlasm_compile_options import HlasmCompileOptions
 from interpreter.project.source_file import SourceFile
+from interpreter.record_io.real_file_provider import RealFileProvider
 from interpreter.run import initial_vm_state, run_linked
 from interpreter.var_name import VarName
 from interpreter.vm.builtins import compose_builtins, core_builtins
@@ -99,7 +99,7 @@ def _run_vm(
             EntryPoint.function(lambda ref: ref.label == linked.entry_func_label),
             max_steps=MAX_STEPS,
             initial_vm=initial_vm_state(
-                io_provider=RealFileIOProvider(Path(), provider_inputs)
+                io_provider=RealFileProvider(Path(), provider_inputs)
             ),
             builtins=compose_builtins(
                 core_builtins(),

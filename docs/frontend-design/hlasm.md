@@ -62,7 +62,7 @@ addresses.
 | `interpreter/hlasm/cobol_linkage.py`, `cobol_program.py`, `cobol_owner.py` | Calls between COBOL and HLASM (see COBOL Linkage) |
 | `interpreter/hlasm/program_services.py` | SVC 6, 8 and 9: LINK, LOAD, DELETE |
 | `interpreter/hlasm/program_entry.py` | `__entry_<NAME>`, the variable COBOL's CALL shares, with the name uppercased: `program_entry_name(name)` at lowering time, `emit_program_entry_name` in IR for LINK's run-time name |
-| `interpreter/hlasm/data_set_services.py` | SVC 19, 20, 200 and 201: OPEN, CLOSE, GET, PUT over the COBOL file provider |
+| `interpreter/hlasm/data_set_services.py` | SVC 19, 20, 200 and 201: OPEN, CLOSE, GET, PUT over the record provider (`interpreter.record_io`) |
 | `interpreter/hlasm_run_inputs/` | The HLASM run inputs, a sibling of `interpreter.hlasm` so `run()` can import it (the import contracts keep `interpreter.run` from `interpreter.hlasm`): `run_input_names.py` (builtin names, PARM area sizes, the positions of `__hlasm_dd`'s facts), `run_input_builtins.py` (`run_input_builtins(clock, parm)`; `unsupplied_run_input_builtins()`, the host clock, an empty PARM and no DD definitions, which `run()` adds under any builtins it is given) |
 | `interpreter/hlasm_run_inputs/dd_definition.py`, `record_format.py`, `dd_builtins.py`, `dd_run_inputs.py` | `DdDefinition(path, recfm, lrecl, blksize)`, one per DDNAME; `dd_builtins(dds)`: `__hlasm_dd(name)` answers `[1, RECFM byte, LRECL, BLKSIZE]`, 0 where not given, or zeros for a DDNAME not supplied; `dd_run_inputs(dds)` returns that builtin and the `RunInputs` whose `path_overrides` send each DDNAME to its DD's path, for the caller's file provider |
 | `interpreter/hlasm_run_inputs/declare_file_builtins.py` | `declare_file_builtins()`: `__hlasm_declare_file(ddname, variable, record_length)` declares the provider's sequential `FileFrame` for OPEN. It imports `interpreter.record_io`, not `interpreter.cobol`; callers compose it |
@@ -521,8 +521,7 @@ primitives, `__hlasm_dd` and `__hlasm_declare_file`.
   returns the buffer in R1; CLOSE writes the last one, as IBM's does.
 - GET or PUT on a DCB without DCBOFOPN abends `S0C1`: IBM's macros branch through the DCB's
   routine field, which an unopened DCB does not hold, and an unowned branch here abends `S0C1`.
-- Driver outcomes are compared by `AccessCondition` position (OK 0, END_OF_FILE 2), named in
-  `hlasm_constants` since `interpreter.hlasm` cannot import `interpreter.cobol`.
+- Driver outcomes are compared by `AccessCondition` position, from `interpreter.record_io`.
 - **Any other SVC number** logs the number and abends `S0C1`. This is a project
   choice, not z/OS behaviour.
 
@@ -1526,7 +1525,12 @@ layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.
   - `declare_file_builtins()`, for OPEN;
   - a PARM, from `run_input_builtins(clock, parm)`;
   - the DDs, from `dd_run_inputs(dds)`: its `__hlasm_dd` builtin, and its `RunInputs` given to the
-    file provider. That is where each DD's path goes: OPEN of a DDNAME reads and writes that path.
+    file provider. That is where each DD's path goes: OPEN of a DDNAME reads and writes that path;
+  - the file provider, `RealFileProvider(base_dir, inputs)` from `interpreter.record_io`, as
+    `io_provider`.
+
+  Every part exists in this repository and none imports `interpreter.cobol`. red-dragon-forge
+  composes them, with COBOL's, into the run-time stack (red-dragon-6lic).
 - DCBD maps `DCBMACR` at 50, as before OPEN. `DCBMACRF` (offset 42 after OPEN) is not mapped:
   DDNAME stays at 40, so nothing is moved there.
 - GET on a DCB opened OUTPUT or EXTEND branches to EODAD rather than failing; CLOSE always sets
@@ -1646,7 +1650,7 @@ layout wave 2 builds on (`docs/superpowers/specs/2026-10-23-hlasm-vector-design.
 | `tests/z390/test_data_set_services_differential.py` | The fixed move, fixed locate and V copies against z390, DDNAMEs through the environment; z390 drops the record a locate PUT leaves at CLOSE |
 | `tests/unit/hlasm/test_dd_definitions.py` | `__hlasm_dd` for a DD with every field, one with a path only, and a DDNAME not supplied |
 | `tests/unit/hlasm/test_time_service.py` | TIME's words for TOD values across 1900, 2000 (leap day, day 366), 2023 and 2100 |
-| `tests/unit/hlasm/test_service_lowering.py` | The provider outcome positions the lowering compares match `AccessCondition`, and the program entry prefix matches COBOL's; SVC 6, 8, 9, 10, 11, 19, 20, 120, 200 and 201 call only existing builtins (and LINK the far branch) and leave nothing symbolic |
+| `tests/unit/hlasm/test_service_lowering.py` | The program entry prefix matches COBOL's; SVC 6, 8, 9, 10, 11, 19, 20, 120, 200 and 201 call only existing builtins (and LINK the far branch) and leave nothing symbolic |
 | `tests/integration/hlasm/test_far_branch.py` | A module entered at its own R14 running there; a call through a V-constant and BALR; a return that skips a level; a branch to the job step's `0xFF0` ending the step; a linking branch into a module below; `B 4(,14)`; a plain branch out that calls; `BSM 0,14` to an R14 without the mode bit; an unowned address abending `S0C1` |
 | `tests/z390/test_far_branch_differential.py` | The call and the skipped-level return against z390 (SYSOBJ autolink) |
 | `tests/integration/hlasm/test_program_services.py` | CALL inline, `MF=L` and `MF=(E,list)` with VL; LOAD's R0 and R1, `CALL (15)`, DELETE of a loaded name (0), again (4) and of an unloaded one (4); LINK with PARAM and VL leaving the program's registers, by `EPLOC=addr`, `EPLOC=(r)` and a hand-coded R15 list, and a callback inside it branching to `0xFF0`; a missing name: LINK raising in both modes, its lowercase `EP=` name uppercased, LOAD `S806` by macro and by hand with a leftover R15, and ERRET; operand refusals |

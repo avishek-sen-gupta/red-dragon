@@ -24,8 +24,6 @@ from interpreter.hlasm.hlasm_constants import (
     MAKE_LIST,
     ONE_BYTE,
     OPERATION_EXCEPTION_ABEND,
-    PROVIDER_END_OF_FILE,
-    PROVIDER_OK,
     RETURN_CODE_REGISTER,
     STRING_TO_BYTES,
     SVC_PARAMETER_REGISTER,
@@ -54,6 +52,7 @@ from interpreter.instructions import (
 )
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import BinopKind
+from interpreter.record_io.access_result import AccessCondition
 from interpreter.register import Register
 from interpreter.var_name import VarName
 
@@ -183,9 +182,11 @@ def _call(emitter: HlasmEmitter, name: FuncName, *args: Register) -> Register:
     return emitter.call(name, (*args, emitter.str_(NO_PROGRAM)))
 
 
-def _outcome_is(emitter: HlasmEmitter, raw: Register, position: int) -> Register:
+def _outcome_is(
+    emitter: HlasmEmitter, raw: Register, condition: AccessCondition
+) -> Register:
     outcome = _call(emitter, IO_OUTCOME, raw)
-    return emitter.binop(BinopKind.EQ, outcome, emitter.int_(position))
+    return emitter.binop(BinopKind.EQ, outcome, emitter.int_(condition.position()))
 
 
 def _each_entry(emitter: HlasmEmitter, body: EntryBody) -> None:
@@ -330,7 +331,7 @@ def _attempt_open(
     lrecl = _merged_lrecl(emitter, dcb, facts)
     _declared(emitter, dcb, name, lrecl)
     raw = _call(emitter, OPEN_FILE, name, mode)
-    _otherwise_to(emitter, _outcome_is(emitter, raw, PROVIDER_OK), failed)
+    _otherwise_to(emitter, _outcome_is(emitter, raw, AccessCondition.OK), failed)
     _opened(emitter, dcb, lrecl)
 
 
@@ -441,7 +442,7 @@ def _descriptor(emitter: HlasmEmitter, dcb: Register, data: Register) -> Registe
 
 def _read(emitter: HlasmEmitter, dcb: Register) -> Register:
     raw = _call(emitter, READ_RECORD, _ddname(emitter, dcb), emitter.str_(NO_KEY))
-    ended = _outcome_is(emitter, raw, PROVIDER_END_OF_FILE)
+    ended = _outcome_is(emitter, raw, AccessCondition.END_OF_FILE)
     _when(emitter, ended, lambda: _end_of_data(emitter, dcb))
     text = _call(emitter, IO_DATA, raw)
     data = emitter.call(STRING_TO_BYTES, (text, emitter.str_(LATIN1)))
