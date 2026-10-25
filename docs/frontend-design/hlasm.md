@@ -1639,7 +1639,8 @@ chapter 23), with every extended mnemonic (VFAEZBS, VSTRCFS, VSTRSZH, ...). ES 0
 - A J-constant naming a class, a control section or a DSECT no Q-constant names is refused by the binder (`UnsupportedBinding`, red-dragon-6uyp.104).
   An LTR on an unresolved EXTRN sees its stub address, not 0 (ruling R66).
 - LOAD returns the same copy every time: there is no fresh copy for a non-reusable module.
-  LINK and LOAD find only SD and LD names of the image. A LINK to a missing name raises, as a
+  LINK and LOAD find SD and LD names and the COBOL programs of the image; a COBOL program is
+  called through its stub by its USING signature, as a branch to it is. A LINK to a missing name raises, as a
   COBOL dynamic CALL does, even when unresolved targets are permitted; its PARAM list is not
   passed. z390's LINK returns R15 as 0; its test pins that (red-dragon-6uyp.74).
 - The layout of LOAD's ERRET code in R1 is unconfirmed: IBM's LOAD page says only "system
@@ -1713,7 +1714,6 @@ chapter 23), with every extended mnemonic (VFAEZBS, VSTRCFS, VSTRSZH, ...). ES 0
   value takes two words; no VL bit follows a trailing BY VALUE. A BY VALUE length other than 1, 2, 4 or 8, which IBM
   refuses, gives a zero word (COBOL → HLASM) or a zero-filled copy (HLASM → COBOL).
   RETURN-CODE is a halfword: COBOL keeps R15's low halfword.
-- LINK and LOAD do not find COBOL programs of a mixed image (red-dragon-6uyp.100).
 - `ABEND` takes only a self-defining code of 0-4095. Register notation (`ABEND (R2)`) and larger codes are not supported.
 
 ## Test Coverage
@@ -1783,7 +1783,7 @@ chapter 23), with every extended mnemonic (VFAEZBS, VSTRCFS, VSTRSZH, ...). ES 0
 | `tests/unit/hlasm/test_object_module.py` | ESD, TXT, RLD and END of an assembly with private code, a COM, ENTRY, EXTRN, WXTRN, A and V constants; XD records and the RLDs of Q, QL2, J and CXD; signed items of A(X-Y), Y(X+X-Y+DF), A(X-E1+3) and the image of A(DF+DF) |
 | `tests/unit/hlasm/test_binder.py` | Layout offsets, CM merge, name resolution (local, image, COBOL stub, weak zero, stub), entry points, far-branch table, unresolved warning; duplicates in either language; XD merge and pseudo-register layout; a J naming no XD refused |
 | `tests/unit/hlasm/test_cobol_linkage.py` | The job step's `__entry_<NAME>` functions, the shared conversion, the far branch's COBOL call |
-| `tests/integration/hlasm/test_cobol_linkage.py` | Mixed image: start-up order, entry by name, PROGRAM-ID vs CSECT refused; COBOL → HLASM list with every mode, OMITTED middle and last, RETURN-CODE; HLASM → COBOL by signature, short VL list; nesting with register restore; abend under COBOL; CANCEL |
+| `tests/integration/hlasm/test_cobol_linkage.py` | Mixed image: start-up order, entry by name, PROGRAM-ID vs CSECT refused; COBOL → HLASM list with every mode, OMITTED middle and last, RETURN-CODE; HLASM → COBOL by signature, short VL list; LINK and LOAD-then-BALR to a COBOL program, LOAD of a missing name `S806`; nesting with register restore; abend under COBOL; CANCEL |
 | `tests/integration/hlasm/test_binder.py` | Two modules: a V-constant to a later module's ENTRY and its data; PARM supplied and empty; BALR to an unresolved EXTRN, permitted and refused; a CSECT in two units refused; two modules sharing DXDs through Q, J and CXD in a GETMAINed area; a QY offset decoded and used by STY and LY; A(X-Y) and Y(X-Y) across sections and A(E1-E2) across modules |
 | `tests/z390/test_binder_differential.py` | The two-module V-constant program against z390's linker (SYSOBJ autolink); A(X-Y), Y(X-Y) and A(E1-E2), which z390's loader refuses (error 119, RC 16, pinned) |
 | `tests/integration/hlasm/test_storage_layout.py` | Section regions and address constants; `*` in each constant after `DC 0F`, and in a duplicated literal; out-of-range values refused with their line, a literal's included; CCW images with relocated addresses, a literal operand's included, and an unresolved external address holding its stub; V-constants to another section; an S-type literal resolved through the USING at its pool |

@@ -1,5 +1,5 @@
 # pyright: standard
-"""The image's start-up IR, run once: the machine state, a bit per module for the far branch, one doubleword-aligned region per module with its sections' variables, one region per common section, the stub range, every TXT record, every RLD (an address, a pseudo-register offset or length, or their total; the signed items at one field, wherever they sit, summed and stored once), and the names table LINK and LOAD read."""
+"""The image's start-up IR, run once: the machine state, a bit per module for the far branch, one doubleword-aligned region per module with its sections' variables, one region per common section, the stub range, every TXT record, every RLD (an address, a pseudo-register offset or length, or their total; the signed items at one field, wherever they sit, summed and stored once), and the names table LINK and LOAD read, which names each COBOL program by its stub."""
 
 from collections.abc import Callable, Mapping, Sequence
 from functools import reduce
@@ -224,18 +224,13 @@ def _dispatch_state(emitter: HlasmEmitter) -> None:
     ]
 
 
-def _name_entry(
-    emitter: HlasmEmitter, binder: Binder, named: tuple[str, PlacedName]
-) -> None:
-    name, placed = named
+def _name_entry(emitter: HlasmEmitter, named: tuple[str, BoundName, int]) -> None:
+    name, bound, doublewords = named
     entry = emitter.fresh_reg()
     emitter.emit_inst(NewObject(result_reg=entry))
     fields = (
-        (NAME_ADDRESS_FIELD, bound_address(emitter, placed)),
-        (
-            NAME_LENGTH_FIELD,
-            emitter.int_(binder.layouts[placed.module].length // DOUBLEWORD_BYTES),
-        ),
+        (NAME_ADDRESS_FIELD, bound_address(emitter, bound)),
+        (NAME_LENGTH_FIELD, emitter.int_(doublewords)),
         (NAME_LOADS_FIELD, emitter.int_(0)),
     )
     _ = [
@@ -255,7 +250,20 @@ def _names(emitter: HlasmEmitter, binder: Binder) -> None:
     table = emitter.fresh_reg()
     emitter.emit_inst(NewObject(result_reg=table))
     emitter.emit_inst(StoreVar(name=NAMES_VAR, value_reg=table))
-    _ = [_name_entry(emitter, binder, named) for named in binder.entry_points().items()]
+    _ = [_name_entry(emitter, named) for named in _named(binder)]
+
+
+def _named(binder: Binder) -> tuple[tuple[str, BoundName, int], ...]:
+    return (
+        *(
+            (name, placed, binder.layouts[placed.module].length // DOUBLEWORD_BYTES)
+            for name, placed in binder.entry_points().items()
+        ),
+        *(
+            (name, binder.stubs[name], STUB_BYTES // DOUBLEWORD_BYTES)
+            for name in binder.programs
+        ),
+    )
 
 
 def _module_bits(emitter: HlasmEmitter, binder: Binder) -> None:

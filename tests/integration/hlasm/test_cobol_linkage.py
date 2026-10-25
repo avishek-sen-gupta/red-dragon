@@ -1,5 +1,5 @@
 # pyright: standard
-"""COBOL and HLASM in one image: both start-ups in a fixed order, each program entered by name, one duplicate check over both languages; a COBOL CALL builds a standard R1 list, an HLASM call to a COBOL program walks one by its USING signature, calls nest, and an HLASM abend ends the run unit."""
+"""COBOL and HLASM in one image: both start-ups in a fixed order, each program entered by name, one duplicate check over both languages; a COBOL CALL builds a standard R1 list, an HLASM call, LINK or LOAD-then-BALR to a COBOL program walks one by its USING signature, calls nest, and an HLASM abend ends the run unit."""
 
 from pathlib import Path
 
@@ -229,6 +229,56 @@ ASMABND  CSECT
          ABEND 5
          END
 """
+COBTWO = b"""\
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. COBTWO.
+       DATA DIVISION.
+       LINKAGE SECTION.
+       01  LK-A   PIC X(4).
+       01  LK-N   PIC S9(9) COMP-5.
+       PROCEDURE DIVISION USING LK-A LK-N.
+           MOVE 'DONE' TO LK-A.
+           COMPUTE RETURN-CODE = LK-N + 1.
+           GOBACK.
+"""
+LINKS_AND_LOADS_COBTWO = b"""\
+ASMLINK  CSECT
+         LR    12,15
+         USING ASMLINK,12
+         LR    11,14
+         LINK  EP=cobtwo,PARAM=(FIELD,NUMBER),VL=1
+         LR    2,15
+         L     3,FIELD
+         L     4,NUMBER
+         LOAD  EP=COBTWO
+         LR    15,0
+         LA    6,NUMBER2
+         O     6,=X'80000000'
+         ST    6,LIST+4
+         LA    1,LIST
+         BALR  14,15
+         LR    5,15
+         L     6,FIELD2
+         LR    14,11
+         LA    15,1
+         BR    14
+LIST     DC    A(FIELD2)
+         DC    A(0)
+FIELD    DC    CL4' '
+NUMBER   DC    F'41'
+FIELD2   DC    CL4' '
+NUMBER2  DC    F'6'
+         LTORG
+         END
+"""
+LOADS_NOPE = b"""\
+ASMNOPE  CSECT
+         LR    12,15
+         USING ASMNOPE,12
+         LOAD  EP=NOPE
+         BR    14
+         END
+"""
 EBCDIC = "cp037"
 LOW_WORD = 0xFFFFFFFF
 
@@ -416,4 +466,24 @@ def test_a_program_id_that_is_also_a_csect_is_refused_naming_both(tmp_path: Path
 
     assert str(refused.value) == (
         "program ASMMAIN is in the image twice: ASM.asm and ASMMAIN.cbl"
+    )
+
+
+@covers(NotLanguageFeature.INFRASTRUCTURE)
+def test_link_and_load_reach_a_cobol_program_by_its_using_signature(tmp_path: Path):
+    image = _image((COBTWO,), (LINKS_AND_LOADS_COBTWO, LOADS_NOPE), tmp_path)
+
+    vm = _entered(image, "ASMLINK")
+    missing = _entered(image, "ASMNOPE")
+
+    assert (
+        hlasm_run_of(vm, ""),
+        [gpr(vm, r) & LOW_WORD for r in (2, 4, 5)],
+        [(gpr(vm, r) & LOW_WORD).to_bytes(4, "big") for r in (3, 6)],
+        hlasm_run_of(missing, ""),
+    ) == (
+        HlasmRun(return_code=1, abend="", stdout=""),
+        [42, 41, 7],
+        ["DONE".encode(EBCDIC), "DONE".encode(EBCDIC)],
+        HlasmRun(return_code=0, abend="S806", stdout=""),
     )
