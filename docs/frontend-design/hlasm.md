@@ -1619,7 +1619,8 @@ chapter 23), with every extended mnemonic (VFAEZBS, VSTRCFS, VSTRSZH, ...). ES 0
 - VSTRC: L is true when the V2 element is below the V3 limit, H when above. Other V4 bits
   are ignored.
 - VSTRS follows Figures 23-2 and 23-3. A length past 16, or not a multiple of the element
-  size, is unpredictable; the IR does not fail on it.
+  size, is unpredictable; the IR does not fail on it. With ZS, a V3 zero that cuts the length to
+  a multiple of the element size gives a defined result.
 - Reserved M bits abend `S0C6`: VFEE and VFENE M5 bits 0-1, VISTR M5 bits 0-2, VSTRS M6
   bits 0, 1 and 3.
 

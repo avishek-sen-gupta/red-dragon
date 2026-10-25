@@ -481,12 +481,15 @@ CASES: Mapping[str, Case] = {
 }
 
 CHECKS: Mapping[str, str] = {
-    "VFAE element size 3": line("VFAE", "1,2,3,3,1") + line("VST", "1,OUT"),
-    "VFEE element size 3": line("VFEE", "1,2,3,3,1") + line("VST", "1,OUT"),
-    "VFENE element size 3": line("VFENE", "1,2,3,3,1") + line("VST", "1,OUT"),
-    "VISTR element size 3": line("VISTR", "1,2,3,1") + line("VST", "1,OUT"),
-    "VSTRC element size 3": line("VSTRC", "1,2,3,4,3,1") + line("VST", "1,OUT"),
-    "VSTRS element size 3": line("VSTRS", "1,2,3,4,3") + line("VST", "1,OUT"),
+    "VFAE element size 3 (PoO 23-2)": line("VFAE", "1,2,3,3,1") + line("VST", "1,OUT"),
+    "VFEE element size 3 (PoO 23-3)": line("VFEE", "1,2,3,3,1") + line("VST", "1,OUT"),
+    "VFENE element size 3 (PoO 23-5)": line("VFENE", "1,2,3,3,1")
+    + line("VST", "1,OUT"),
+    "VISTR element size 3 (PoO 23-5)": line("VISTR", "1,2,3,1") + line("VST", "1,OUT"),
+    "VSTRC element size 3 (PoO 23-7)": line("VSTRC", "1,2,3,4,3,1")
+    + line("VST", "1,OUT"),
+    "VSTRS element size 3 (PoO 23-9)": line("VSTRS", "1,2,3,4,3")
+    + line("VST", "1,OUT"),
     "VFEE M5 bit 0 (PoO 23-3)": line("VFEE", "1,2,3,0,8") + line("VST", "1,OUT"),
     "VFENE M5 bit 1 (PoO 23-5)": line("VFENE", "1,2,3,0,4") + line("VST", "1,OUT"),
     "VISTR M5 bit 2 (PoO 23-6)": line("VISTR", "1,2,0,2") + line("VST", "1,OUT"),
