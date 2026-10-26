@@ -1,0 +1,12 @@
+         MACRO
+&NAME    STIMER &TYPE,&BINTVL=
+         AIF   ('&TYPE' EQ 'WAIT').HAVEW
+         MNOTE 8,'STIMER: ONLY WAIT IS SUPPORTED'
+         MEXIT
+.HAVEW   AIF   ('&BINTVL' NE '').HAVEB
+         MNOTE 8,'STIMER: BINTVL IS REQUIRED'
+         MEXIT
+.HAVEB   ANOP
+&NAME    LA    1,&BINTVL
+         SVC   47
+         MEND

@@ -1,5 +1,5 @@
 # pyright: standard
-"""A machine clock that always reads the same TOD clock and CPU timer, so clock instructions store known values."""
+"""A machine clock that always reads the same TOD clock and CPU timer, so clock instructions store known values, and whose waits take no time."""
 
 from interpreter.hlasm_run_inputs.machine_clock import MachineClock
 
@@ -13,3 +13,6 @@ class FixedMachineClock(MachineClock):
 
     def cpu_timer(self) -> int:
         return FIXED_CPU_TIMER
+
+    def wait(self, hundredths: int) -> None:
+        return None

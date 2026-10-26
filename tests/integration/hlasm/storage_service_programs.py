@@ -1,5 +1,5 @@
 # pyright: standard
-"""GETMAIN, FREEMAIN, STORAGE and TIME programs shared by the VM tests and the z390 differential tests."""
+"""GETMAIN, FREEMAIN, STORAGE, TIME and STIMER programs shared by the VM tests and the z390 differential tests."""
 
 from collections.abc import Mapping
 
@@ -340,6 +340,8 @@ BAD_OPERANDS = (
     "         GETMAIN RU,LV=8,SP=(1)\n"
     "         FREEMAIN R,LV=(1),A=(2)\n"
     "         STORAGE RELEASE,LENGTH=(1),ADDR=(2)\n"
+    "         STIMER REAL,BINTVL=X\n"
+    "         STIMER WAIT\n"
     "         END\n"
 )
 BAD_OPERAND_REFUSALS = (
@@ -359,4 +361,6 @@ BAD_OPERAND_REFUSALS = (
     ("GETMAIN: SP REGISTER MUST BE 2 TO 12", 15),
     ("FREEMAIN: LV=(1) NOT ALLOWED ON A RELEASE", 16),
     ("STORAGE: LENGTH=(1) NOT ALLOWED ON A RELEASE", 17),
+    ("STIMER: ONLY WAIT IS SUPPORTED", 18),
+    ("STIMER: BINTVL IS REQUIRED", 19),
 )

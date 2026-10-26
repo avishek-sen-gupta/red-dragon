@@ -1,5 +1,5 @@
 # pyright: standard
-"""GETMAIN, FREEMAIN, STORAGE and TIME from our maclib, run in the VM: aligned areas, released only as obtained, and the time and date from the run's TOD clock."""
+"""GETMAIN, FREEMAIN, STORAGE, TIME and STIMER from our maclib, run in the VM: aligned areas, released only as obtained, and the time and date from the run's TOD clock."""
 
 import pytest
 

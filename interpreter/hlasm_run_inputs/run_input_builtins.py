@@ -1,5 +1,5 @@
 # pyright: standard
-"""The clock and PARM run-input builtins, and the run inputs a run gets when its caller supplies none: the host clock, an empty PARM and no DD definitions."""
+"""The clock and PARM run-input builtins, and the run inputs a run gets when its caller supplies none: the host clock and sleep, an empty PARM and no DD definitions."""
 
 import time
 from collections.abc import Mapping
@@ -19,5 +19,7 @@ def run_input_builtins(clock: MachineClock, parm: str) -> Mapping[FuncName, Buil
 
 
 def unsupplied_run_input_builtins() -> Mapping[FuncName, Builtin]:
-    clock = SystemMachineClock(wall_ns=time.time_ns, cpu_ns=time.process_time_ns)
+    clock = SystemMachineClock(
+        wall_ns=time.time_ns, cpu_ns=time.process_time_ns, sleep=time.sleep
+    )
     return compose_builtins(run_input_builtins(clock, NO_PARM), dd_builtins(NO_DDS))

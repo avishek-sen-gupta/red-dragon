@@ -52,7 +52,7 @@ addresses.
 | `interpreter/hlasm/assembly_diagnostics.py` | The unit's diagnostics below error level (che4z warnings and MNOTEs, DC conversion warnings) as `UnitDiagnostic`s |
 | `interpreter/project/hlasm_compile_options.py` | `HlasmCompileOptions(names, clock)`: the inputs `compile_hlasm` takes; `clock` is an `AssemblyClock` (`hlasm_asg/assembly_clock.py`; COBOL's `CompileClock`, which the import contracts keep from `interpreter.project`), `SystemAssemblyClock` by default |
 | `interpreter/frontends/__init__.py` | `get_hlasm_parser(syslib)`: the bridge parser with `hlasm-bridge/maclib/` first on SYSLIB |
-| `hlasm-bridge/maclib/` | Our macros: `WTO`, `ABEND`, `SAVE`, `RETURN`, `YREGS`, `GETMAIN`, `FREEMAIN`, `STORAGE`, `TIME`, `DCB`, `DCBD`, `OPEN`, `CLOSE`, `GET`, `PUT`, and their `RD*` helpers |
+| `hlasm-bridge/maclib/` | Our macros: `WTO`, `ABEND`, `SAVE`, `RETURN`, `YREGS`, `GETMAIN`, `FREEMAIN`, `STORAGE`, `TIME`, `STIMER`, `DCB`, `DCBD`, `OPEN`, `CLOSE`, `GET`, `PUT`, and their `RD*` helpers |
 | `hlasm_asg/program/` | The bridge JSON models, one class per file. A D(X,B) storage operand also carries its address as written (`written`): the section and offset of an implicit address, before USING resolution, or the absolute displacement. Each DC/DS operand carries its offset and bit offset from che4z's location counter, its length unit (bytes, or bits for `L.n`), scale and exponent. `*` is the address of each constant: an address operand that names the location counter is exported per duplication copy (`ADDRESSES_PER_COPY`), each value evaluated at its own address. An S-constant is a base and displacement resolved through USING. `DC 0F` has an `OMITTED` nominal. CCW, CCW0 and CCW1 are statements with their command code, address, flags and count. Each literal carries the origin of the statement that first used it, a CCW's literals included. The program lists AMODE and RMODE statements, and each diagnostic its macro call stack (`related`) |
 | `interpreter/hlasm/hlasm_frontend.py` | `HlasmFrontend(program, module)`: `lower()`, `object_module`, `entry_name`, `entry_label` |
 | `interpreter/hlasm/machine.py` | GPR region (`__hlasm_gprs`, 8 bytes per register), `__hlasm_cc`, `__hlasm_pm`, `__hlasm_tod_last` (the last STCK value); the access-register region (`__hlasm_ars`, 4 bytes per register, all 0); the vector-register region (`__hlasm_vrs`, 16 bytes per register, all 0) and `__hlasm_fpc`, allocated after the sections so their addresses do not move |
@@ -145,12 +145,12 @@ addresses.
 | `interpreter/hlasm/program_status.py` | SPM, IPM, EPSW |
 | `interpreter/hlasm/checksum.py` | CKSM |
 | `interpreter/hlasm/clock_instructions.py` | STCK, STCKF, STCKE, ECTG |
-| `interpreter/hlasm_run_inputs/machine_clock.py`, `clock_builtins.py` | `MachineClock` (TOD clock, CPU timer); `clock_builtins(clock)`, the `__hlasm_tod_clock` and `__hlasm_cpu_timer` builtins over it |
+| `interpreter/hlasm_run_inputs/machine_clock.py`, `clock_builtins.py` | `MachineClock` (TOD clock, CPU timer, interval wait); `clock_builtins(clock)`, the `__hlasm_tod_clock`, `__hlasm_cpu_timer` and `__hlasm_wait` builtins over it |
 | `interpreter/hlasm/integer_outcome.py` | A fixed-point conversion builtin's result list: the integer image, the IEEE words and the CC (3 when invalid, else the source's sign); shared by the BFP and DFP builtins |
 | `interpreter/hlasm/bfp_builtins.py`, `bfp_fields.py`, `bfp_layout.py`, `bfp_operation.py` | `bfp_builtins()`, one `__hlasm_bfp_<operation>_<format>` builtin per operation and format over `zarch_float`; operands arrive as `[sign, biased exponent, fraction]` lists and results leave as fields plus the trap, flag and DXC bits (ruling R43) |
 | `interpreter/hlasm/hfp_builtins.py`, `hfp_layout.py`, `hfp_operation.py`, `hfp_slots.py` | `hfp_builtins()`, one `__hlasm_hfp_<operation>_<format>` builtin per operation and source format over `zarch_float`; operands arrive as `[sign, characteristic, fraction]` lists and results leave as the same fields, characteristic modulo 128, plus condition bits (ruling R46); the conversions take M3 first and return `[image, cc]` (to fixed) or BFP fields and the CC (to BFP) |
 | `interpreter/hlasm/dfp_builtins.py`, `dfp_fields.py`, `dfp_operation.py`, `ieee_words.py` | `dfp_builtins()`, one `__hlasm_dfp_<operation>_<format>` builtin per operation and format over `zarch_float`; operands arrive as `[negative, e, significand]` lists and results leave in the BFP result-list layout, the quantum condition as FPC bit X'04' (ruling R49) |
-| `interpreter/hlasm_run_inputs/system_machine_clock.py` | `SystemMachineClock`, the host clock over injected wall and process-CPU nanosecond readings: TOD from wall time since 1900-01-01 UTC (no leap seconds), CPU timer down from 2^63 - 1 at 4096 units per microsecond |
+| `interpreter/hlasm_run_inputs/system_machine_clock.py` | `SystemMachineClock`, the host clock over injected wall and process-CPU nanosecond readings: TOD from wall time since 1900-01-01 UTC (no leap seconds), CPU timer down from 2^63 - 1 at 4096 units per microsecond; `wait` calls the injected `sleep` with the interval in seconds |
 | `interpreter/hlasm/cpu_attributes.py` | ECAG's constant attributes |
 | `interpreter/hlasm/facility_list.py` | STFLE's constant facility list |
 | `interpreter/hlasm/register_part.py`, `register_parts.py` | `RegisterPart`: the low word, high word or whole register, or an access register, that a lowering reads and writes, and `merge` for bytes under a mask |
@@ -176,6 +176,7 @@ addresses.
 | `interpreter/hlasm/abend_completion.py` | SVC 13 in IR |
 | `interpreter/hlasm/storage_services.py`, `storage_request.py` | SVC 10 and SVC 120 in IR over the allocation table |
 | `interpreter/hlasm/time_service.py` | SVC 11 in IR: `time_words` turns a TOD value into the DEC, BIN and date words |
+| `interpreter/hlasm/timer_service.py` | SVC 47 in IR: STIMER WAIT on the fullword interval at R1 |
 | `interpreter/hlasm/statement_location.py` | Each statement's source line, set on the IR it lowers to |
 | `interpreter/hlasm/fixed_width_ir.py` | Fixed-width signed add/subtract/multiply, load-and-test, complement, absolute and negative-absolute and logical add/subtract with carry-in, bitwise connectives, logical and signed shifts and rotates, each with its condition code, the sign CC (0 zero, 1 leftmost bit one, 2 other), and division truncating toward zero, built in IR |
 | `interpreter/hlasm/inline_ir.py` | Splices a builder's IR under fresh registers; `inline_pair` splits a returned pair, such as (result, CC) |
@@ -436,6 +437,7 @@ conventions but expand only to lowered opcodes:
 | `GETMAIN RU\|RC`, `FREEMAIN RU\|RC` | IBM's layout: R0 = length, R15 = subpool × 256 + flags (X'01' release, X'02' unconditional, X'04' page); `SVC 120`. `SP=(r)` takes the register's low byte (`LLCR`, `SLL`, `OILL`) |
 | `STORAGE OBTAIN\|RELEASE,LENGTH=,ADDR=[,SP=][,COND=][,BNDRY=][,LOC=]` | As the SVC 120 forms. OBTAIN stores R1 with `ST 1,addr`, or `LR r,1` for `ADDR=(r)`; RELEASE loads R1 from `ADDR` as FREEMAIN does from `A` |
 | `TIME [DEC\|BIN][,LINKAGE=SVC]` | `LA 1,2` (DEC) or `LA 1,1` (BIN), IBM's codes, then `SVC 11` |
+| `STIMER WAIT,BINTVL=addr` | `LA 1,addr`, then `SVC 47`. Our own register convention, not IBM's parameter list |
 | `CALL ep\|(15)\|(r)[,(p,...)][,VL]` | `BRAS 1` around `DC AL4(p),...` (unaligned, so the list starts where R1 points; VL adds X'80000000' to the last word), `L 15,=V(ep)` or `LR 15,r`, `BALR 14,15` |
 | `CALL ,(p,...)[,VL],MF=L` | The list alone: `DC A(p),...` under the call's label |
 | `CALL ep,(p,...)[,VL],MF=(E,list\|(r))` | `LA 1,list` or `LR 1,r`, then `LA 14,p` and `ST 14,4i(,1)` per parameter, `OI` on the last for VL, then as above |
@@ -452,7 +454,7 @@ conventions but expand only to lowered opcodes:
 or `PAGE`, and `PAGE` only on the SVC 120 forms. Missing `LV`, `LENGTH`, `A` or `ADDR`,
 another type, `COND` other than `YES` or `NO`, `SP=(r)` outside 2-12, `SP` with
 `R,LV=(0)`, `LV=(1)` or `LENGTH=(1)` on a release, TIME types other than `DEC` and `BIN`,
-and `LINKAGE` other than `SVC` are `MNOTE 8`. So are a CALL third operand other than `VL`, `MF`
+`LINKAGE` other than `SVC`, and STIMER other than `WAIT` or without `BINTVL` are `MNOTE 8`. So are a CALL third operand other than `VL`, `MF`
 other than `L` or `(E,list)`, `MF=L` without a list, a missing entry or a bad register; LINK `VL`
 other than 1; and on LINK, LOAD and DELETE, no `EP` or `EPLOC`, both, an `EP` over 8 characters,
 or an `EPLOC` register outside 2-12 (IBM's range). On DCB, `DSORG` other than `PS`, `MACRF` other than
@@ -466,7 +468,7 @@ are the 72-byte format-0 area. The differential tests run against z390's `mac/` 
 identifier, so they expect its flag and R14/R15 slots to differ; the identifier layout rests on the VM tests.
 
 SVCs are lowered in IR over existing builtins. The services use the table membership
-builtin, the string and list builtins, the TOD clock builtin, the COBOL file provider's
+builtin, the string and list builtins, the TOD clock and wait builtins, the COBOL file provider's
 primitives, `__hlasm_dd` and `__hlasm_declare_file`.
 
 - **SVC 35** reads the text length from the list at R1, copies the text a byte at a
@@ -491,6 +493,8 @@ primitives, `__hlasm_dd` and `__hlasm_declare_file`.
   are not lowered. R1 is then the date as packed
   `0CYYDDDF` (C is 0 for 19xx, 1 for 20xx). R15 is 0. No zone offset is applied, so local
   time is the TOD clock's UTC; leap seconds are ignored.
+- **SVC 47** reads the fullword at R1 as a binary interval in hundredths of a second and
+  calls `__hlasm_wait` with it, so the run really pauses; R15 is 0. Only `WAIT` is lowered.
 - The SVC 6, 8 and 9 inputs are IBM's: SVC 6 takes R15 → `A(name),A(DCB)` and R1 the parameter
   list; SVC 8 R0 → the name and R1 the DCB address, its high bit asking for a return on error;
   SVC 9 R0 → the name. The DCB is ignored.

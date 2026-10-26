@@ -1,5 +1,5 @@
 # pyright: standard
-"""SVC: the supervisor calls lowered in IR (WTO, ABEND, GETMAIN/FREEMAIN, TIME, STORAGE, LINK, LOAD, DELETE, OPEN, CLOSE, GET, PUT), by number, the number written or set by EX; any other number abends S0C1."""
+"""SVC: the supervisor calls lowered in IR (WTO, ABEND, GETMAIN/FREEMAIN, TIME, STIMER WAIT, STORAGE, LINK, LOAD, DELETE, OPEN, CLOSE, GET, PUT), by number, the number written or set by EX; any other number abends S0C1."""
 
 import logging
 from collections.abc import Callable, Mapping
@@ -27,6 +27,7 @@ from interpreter.hlasm.hlasm_constants import (
     OPEN_SVC,
     OPERATION_EXCEPTION_ABEND,
     PUT_SVC,
+    STIMER_SVC,
     STORAGE_SVC,
     TIME_SVC,
     WTO_SVC,
@@ -36,6 +37,7 @@ from interpreter.hlasm.program_services import emit_delete, emit_link, emit_load
 from interpreter.hlasm.statement_lowering import StatementLowering
 from interpreter.hlasm.storage_services import emit_getmain_freemain, emit_storage
 from interpreter.hlasm.time_service import emit_time
+from interpreter.hlasm.timer_service import emit_stimer_wait
 from interpreter.hlasm.write_to_operator import emit_write_to_operator
 
 logger = logging.getLogger(__name__)
@@ -45,6 +47,7 @@ _SERVICES: Mapping[int, Callable[[HlasmEmitter], None]] = {
     ABEND_SVC: emit_abend_completion,
     GETMAIN_FREEMAIN_SVC: emit_getmain_freemain,
     TIME_SVC: emit_time,
+    STIMER_SVC: emit_stimer_wait,
     STORAGE_SVC: emit_storage,
     LINK_SVC: emit_link,
     LOAD_SVC: emit_load,

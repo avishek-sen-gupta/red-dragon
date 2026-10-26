@@ -310,6 +310,7 @@ GPR_LOAD = ("LoadRegion", 4)
 GPR_STORE = ("WriteRegion", 4)
 SVC_10_GPR_ACCESSES = (GPR_LOAD, GPR_LOAD, GPR_STORE, GPR_LOAD)
 SVC_11_GPR_ACCESSES = (GPR_LOAD, GPR_STORE, GPR_STORE, GPR_STORE)
+SVC_47_ACCESSES = (GPR_LOAD, ("LoadRegion", 4), GPR_STORE)
 SVC_120_GPR_ACCESSES = (GPR_LOAD, GPR_LOAD, GPR_STORE, GPR_LOAD, GPR_STORE)
 NAME_LOAD = ("LoadRegion", 8)
 SVC_6_ACCESSES = (
@@ -436,6 +437,7 @@ def test_a_data_field_target_lowers_once_with_byte_one_from_r1():
                 0,
                 11,
                 1,
+                47,
                 120,
                 6,
                 8,
@@ -467,6 +469,7 @@ def test_a_data_field_target_lowers_once_with_byte_one_from_r1():
                 ("LoadRegion", 4),
                 *SVC_10_GPR_ACCESSES,
                 *SVC_11_GPR_ACCESSES,
+                *SVC_47_ACCESSES,
                 *SVC_120_GPR_ACCESSES,
                 *SVC_6_ACCESSES,
                 *SVC_8_ACCESSES,

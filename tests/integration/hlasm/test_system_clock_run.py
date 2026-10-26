@@ -1,6 +1,8 @@
 # pyright: standard
 """An HLASM STCK run through run() with the system clock builtins stores the TOD clock the injected host readings give."""
 
+import time
+
 from interpreter.constants import Language
 from interpreter.default_builtins import DEFAULT_BUILTINS
 from interpreter.hlasm_run_inputs.clock_builtins import clock_builtins
@@ -19,7 +21,9 @@ STCK_INTO_R2 = "         STCK   OUT\n         LMG    2,2,OUT\n"
 
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_stck_under_run_stores_the_system_clock_reading():
-    clock = SystemMachineClock(wall_ns=lambda: START_OF_1972_UNIX_NS, cpu_ns=lambda: 0)
+    clock = SystemMachineClock(
+        wall_ns=lambda: START_OF_1972_UNIX_NS, cpu_ns=lambda: 0, sleep=time.sleep
+    )
     vm = run(
         program(STCK_INTO_R2),
         language=Language.HLASM,

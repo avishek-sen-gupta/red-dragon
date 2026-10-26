@@ -1,6 +1,8 @@
 # pyright: standard
 """The system machine clock turns host readings into a 104-bit TOD clock since 1900 and a CPU timer counting down from the top."""
 
+import time
+
 from interpreter.hlasm_run_inputs.system_machine_clock import SystemMachineClock
 from tests.covers import NotLanguageFeature, covers
 
@@ -13,10 +15,10 @@ CPU_TIMER_START = 0x7FFFFFFF_FFFFFFFF
 @covers(NotLanguageFeature.INFRASTRUCTURE)
 def test_host_readings_become_the_tod_clock_and_cpu_timer():
     on_the_microsecond = SystemMachineClock(
-        wall_ns=lambda: START_OF_1972_UNIX_NS, cpu_ns=lambda: 1_500
+        wall_ns=lambda: START_OF_1972_UNIX_NS, cpu_ns=lambda: 1_500, sleep=time.sleep
     )
     a_nanosecond_later = SystemMachineClock(
-        wall_ns=lambda: START_OF_1972_UNIX_NS + 1, cpu_ns=lambda: 0
+        wall_ns=lambda: START_OF_1972_UNIX_NS + 1, cpu_ns=lambda: 0, sleep=time.sleep
     )
 
     assert (
