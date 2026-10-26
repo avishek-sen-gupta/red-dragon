@@ -12,7 +12,7 @@
 - **Terminology guard:** `precommit-scripts/check-terminology`, with rules at `~/.config/git/terminology.toml` generated from a blocklist by `precommit-scripts/blocklist-to-toml`. Both live outside the repo, so they are per-machine.
 - **Issue tracker:** beads (`bd`) over Dolt. `.beads/` is gitignored; `issues/issues.jsonl` is the tracked source of truth. See `issues/README.md`.
 - **ADRs:** `docs/architectural-design-decisions.md`
-- **Living docs:** `README.md`, `docs/ir-reference.md`, `docs/type-system.md`, `docs/linker-design.md` — updated in the same commit as the change they describe
+- **Living docs:** `README.md`, `docs/ir-reference.md`, `docs/type-system.md`, `docs/linker-design.md`, `docs/zos-divergences.md` — updated in the same commit as the change they describe
 - **Specs (immutable):** `docs/superpowers/specs/`, `docs/superpowers/plans/` — never modify. Newer specs supersede older ones by convention.
 
 ### Test markers
