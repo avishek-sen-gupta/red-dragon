@@ -33,7 +33,7 @@ them that way: importing anything under `interpreter` runs
 `interpreter.cobol` lowers it, and `cobol_memory` holds storage algebra. A
 consumer that only reads COBOL or computes byte ranges must not pay for the VM.
 `hlasm_asg` runs the che4z bridge and models its JSON; `interpreter.hlasm` lowers it.
-`infrastructure` holds z/OS infrastructure below the VM (abend types) and imports nothing under `interpreter`.
+`infrastructure` holds z/OS infrastructure below the VM (abend types, record-access drivers) and imports nothing under `interpreter`.
 
 ## External Dependencies
 
