@@ -59,7 +59,7 @@ from cobol_asg.initialize_category import InitializeCategory
 from cobol_asg.initialize_replacing import InitializeReplacing
 from cobol_asg.operand_kind import OperandKind
 from cobol_asg.range_object import RangeObject
-from cobol_asg.ref_mod import RefModOperand
+from cobol_asg.ref_mod import FunctionCallOperand, RefModOperand
 from cobol_asg.selection_condition import SelectionCondition
 from cobol_asg.set_operand import SetOperand
 from cobol_asg.truth_value import TruthValue
@@ -1855,6 +1855,22 @@ class TestRoundTrip:
 
 
 class TestStringRefModAst:
+    def test_a_function_sending_names_no_field_and_round_trips(self):
+        """STRING FUNCTION TRIM(WS-VAR) ... sends the function's value: no field is
+        named TRIM, so the sending's value names nothing and the function carries it."""
+        data = {
+            "value": {
+                "kind": "function",
+                "name": "TRIM",
+                "args": [{"kind": "ref", "name": "WS-VAR"}],
+            }
+        }
+        sending = StringSending.from_dict(data)
+
+        assert sending.value == RefModOperand(name="")
+        assert sending.function == FunctionCallOperand.from_dict(data["value"])
+        assert sending.to_dict() == data
+
     def test_string_sending_from_dict_plain_field(self):
         """StringSending with plain field name produces RefModOperand with no ref_mod."""
         sending = StringSending.from_dict({"value": {"name": "WS-SRC"}})

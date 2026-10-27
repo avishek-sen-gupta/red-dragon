@@ -2503,9 +2503,32 @@ public final class StatementSerializer {
         if (!(unwrapped instanceof ASGElementImpl)) {
             return new JsonArray();
         }
+        ParserRuleContext ctx = ((ASGElementImpl) unwrapped).getCtx();
+        JsonArray written = undefinedTableSubscripts(unwrapped, ctx);
+        if (written.size() > 0) {
+            return written;
+        }
         JsonArray fromQualifier = new JsonArray();
-        collectInTableSubscripts(((ASGElementImpl) unwrapped).getCtx(), fromQualifier);
+        collectInTableSubscripts(ctx, fromQualifier);
         return fromQualifier;
+    }
+
+    /**
+     * The subscripts written on a name the program never declares, as when its
+     * copybook is missing. ProLeap resolves no TableCall for it, but the undefined
+     * call it creates keeps the operand's own {@code tableCall} as its context, so the
+     * subscripts are read from there as written.
+     */
+    private static JsonArray undefinedTableSubscripts(Call call, ParserRuleContext ctx) {
+        JsonArray out = new JsonArray();
+        if (call.getCallType() != Call.CallType.UNDEFINED_CALL
+                || !(ctx instanceof CobolParser.TableCallContext tableCall)) {
+            return out;
+        }
+        for (CobolParser.SubscriptContext sub : tableCall.subscript()) {
+            out.add(serializeSubscriptCtx(sub));
+        }
+        return out;
     }
 
     private static JsonArray serializeSubscripts(List<Subscript> subscripts) {

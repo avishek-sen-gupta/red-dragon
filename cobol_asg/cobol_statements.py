@@ -912,7 +912,8 @@ class StringSending:
     The sending operand is usually a field reference / literal (``value``), but
     it may also be an intrinsic ``FUNCTION`` call — e.g.
     ``STRING FUNCTION TRIM(WS-VAR) ' ...' INTO WS-MSG`` — in which case
-    ``function`` is populated and lowering evaluates the call (red-dragon-zuhj).
+    ``function`` is populated, ``value`` names nothing rather than a field called
+    after the function, and lowering evaluates the call (red-dragon-zuhj).
     ``delimiter`` is the DELIMITED BY operand; DELIMITED BY SIZE leaves it unwritten.
     """
 
@@ -929,7 +930,11 @@ class StringSending:
             else None
         )
         return cls(
-            value=RefModOperand.from_dict(raw_value),
+            value=(
+                RefModOperand(name="")
+                if isinstance(function, FunctionCallOperand)
+                else RefModOperand.from_dict(raw_value)
+            ),
             delimiter=_operand(data, "delimiter"),
             function=function,
         )
