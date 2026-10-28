@@ -174,6 +174,8 @@ addresses.
 | `interpreter/hlasm/register_span.py` | `RegisterSpan`: the bit positions a RISBG-family field selects within (whole register, high word, low word) and the wrapping range mask |
 | `interpreter/hlasm/boolean_connective.py` | A bitwise connective: the binop and whether the right operand or the result is complemented; the eight connectives |
 | `interpreter/hlasm/abend_completion.py` | SVC 13 in IR |
+| `interpreter/hlasm/hlasm_outcome.py` | `hlasm_return_code(vm)`: R15's low word, unsigned (a program that never sets R15 leaves the entry address; after an abend R15 is not a return code). `hlasm_abend(vm)`: `()` or one `SystemAbend`/`UserAbend` parsed from `__hlasm_abend`; `()` too when the image has no HLASM |
+| `interpreter/project/program_language.py` | `program_language(linked, name)`: the `Language` of the program of that name; `ProgramNotInImage` when absent |
 | `interpreter/hlasm/storage_services.py`, `storage_request.py` | SVC 10 and SVC 120 in IR over the allocation table |
 | `interpreter/hlasm/time_service.py` | SVC 11 in IR: `time_words` turns a TOD value into the DEC, BIN and date words |
 | `interpreter/hlasm/timer_service.py` | SVC 47 in IR: STIMER WAIT on the fullword interval at R1 |
