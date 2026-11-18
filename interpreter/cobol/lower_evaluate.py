@@ -6,12 +6,20 @@ from collections.abc import Sequence
 from functools import reduce
 
 from cobol_asg.any_object import AnyObject
-from cobol_asg.cobol_expression import ExprNode, expr_to_dict
+from cobol_asg.cobol_expression import ExprNode
 from cobol_asg.cobol_statements import (
     CobolStatementType,
     EvaluateStatement,
     WhenOtherStatement,
     WhenStatement,
+)
+from cobol_asg.condition import (
+    Combination,
+    Condition,
+    Connective,
+    Parenthesised,
+    RelationalOperator,
+    RelationTest,
 )
 from cobol_asg.evaluate_selection import SelectionObject, SelectionSubject
 from cobol_asg.expression_subject import ExpressionSubject
@@ -123,21 +131,19 @@ def _selection_pair(
     return _combine(scope, "==", subject_truth, object_truth)
 
 
-def _value_test(subject: ExprNode, obj: ValueObject | RangeObject) -> dict:
+def _value_test(subject: ExprNode, obj: ValueObject | RangeObject) -> Condition:
     if isinstance(obj, ValueObject):
-        return {"not": obj.negated, "relation": _relation(subject, "==", obj.value)}
-    return {
-        "not": obj.negated,
-        "condition": {
-            "op": "AND",
-            "left": {"relation": _relation(subject, ">=", obj.low)},
-            "right": {"relation": _relation(subject, "<=", obj.high)},
-        },
-    }
-
-
-def _relation(left: ExprNode, op: str, right: ExprNode) -> dict:
-    return {"left": expr_to_dict(left), "op": op, "right": expr_to_dict(right)}
+        return RelationTest(
+            subject, RelationalOperator.EQUAL, obj.value, negated=obj.negated
+        )
+    return Parenthesised(
+        inner=Combination(
+            Connective.AND,
+            RelationTest(subject, RelationalOperator.GREATER_OR_EQUAL, obj.low),
+            RelationTest(subject, RelationalOperator.LESS_OR_EQUAL, obj.high),
+        ),
+        negated=obj.negated,
+    )
 
 
 def _subject_truth(

@@ -4,6 +4,7 @@ import pytest
 
 from cobol_asg.cobol_parser import make_cobol_parser
 from cobol_asg.cobol_statements import IfStatement
+from cobol_asg.condition import condition_to_dict
 from interpreter.cobol.features import CobolFeature
 from tests.covers import covers
 from tests.integration.cobol_helpers import (
@@ -125,7 +126,7 @@ class TestCombinedConditions:
                 "relation": {"left": x1, "op": op, "right": ref(name)},
             }
 
-        assert stmt.condition == {
+        assert condition_to_dict(stmt.condition) == {
             "op": "OR",
             "left": {
                 "op": "OR",

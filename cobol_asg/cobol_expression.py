@@ -49,6 +49,25 @@ class FigurativeNode:
 
 
 @dataclass(frozen=True)
+class AllLiteralNode:
+    """The figurative constant ALL of a nonnumeric literal: ``IF WS-LINE = ALL '-'``.
+
+    ``literal`` is the repeated literal as written, quotes included.
+    """
+
+    literal: str
+
+
+@dataclass(frozen=True)
+class AddressOfNode:
+    """``ADDRESS OF <item>``: the item's address, not its value."""
+
+    name: str
+    qualifiers: tuple[str, ...] = ()
+    subscripts: tuple[ExprNode, ...] = ()
+
+
+@dataclass(frozen=True)
 class LengthOfNode:
     """``LENGTH OF <field>``: the field's byte length, a compile-time constant.
 
@@ -129,6 +148,8 @@ class FunctionNode:
 ExprNode = (
     LiteralNode
     | FigurativeNode
+    | AllLiteralNode
+    | AddressOfNode
     | LengthOfNode
     | DfhRespNode
     | AllSubscriptNode
@@ -171,6 +192,8 @@ def _literal(d: JsonExpr) -> ExprNode:
 
 
 def _figurative(d: JsonExpr) -> ExprNode:
+    if "literal" in d:
+        return AllLiteralNode(literal=_text(d, "literal"))
     return FigurativeNode(value=_text(d, "value"))
 
 
@@ -182,6 +205,14 @@ def _qualifiers(d: JsonExpr) -> tuple[str, ...]:
 
 def _length_of(d: JsonExpr) -> ExprNode:
     return LengthOfNode(name=_text(d, "name"), qualifiers=_qualifiers(d))
+
+
+def _address_of(d: JsonExpr) -> ExprNode:
+    return AddressOfNode(
+        name=_text(d, "name"),
+        qualifiers=_qualifiers(d),
+        subscripts=_children(d, "subscripts"),
+    )
 
 
 def _dfhresp(d: JsonExpr) -> ExprNode:
@@ -243,6 +274,7 @@ _BUILDERS: Mapping[str, Callable[[JsonExpr], ExprNode]] = {
     "function": _function,
     "figurative": _figurative,
     "length_of": _length_of,
+    "address_of": _address_of,
     "dfhresp": _dfhresp,
     "all": _all_subscript,
 }
@@ -260,7 +292,9 @@ def expr_from_dict(d: JsonExpr) -> ExprNode:
     - {"kind": "neg", "expr": {...}} — unary negation (folded into binop * -1)
     - {"kind": "function", "name": "TRIM", "args": [{...}]} — intrinsic function
     - {"kind": "figurative", "value": "ZEROS"} — figurative constant operand
+    - {"kind": "figurative", "value": "ALL", "literal": "'-'"} — ALL literal
     - {"kind": "length_of", "name": "WS-A"} — LENGTH OF special register
+    - {"kind": "address_of", "name": "WS-A"} — ADDRESS OF an item
     - {"kind": "dfhresp", "condition": "NORMAL"} — CICS response code
     - {"kind": "all"} — the subscript ALL of a function's table argument
     """
@@ -298,6 +332,19 @@ def _literal_dict(node: LiteralNode) -> dict:
 
 def _figurative_dict(node: FigurativeNode) -> dict:
     return {"kind": "figurative", "value": node.value}
+
+
+def _all_literal_dict(node: AllLiteralNode) -> dict:
+    return {"kind": "figurative", "value": "ALL", "literal": node.literal}
+
+
+def _address_of_dict(node: AddressOfNode) -> dict:
+    return {
+        "kind": "address_of",
+        "name": node.name,
+        **_qualifiers_dict(node.qualifiers),
+        **_subscripts_dict(node.subscripts),
+    }
 
 
 def _length_of_dict(node: LengthOfNode) -> dict:
@@ -356,6 +403,8 @@ def _function_dict(node: FunctionNode) -> dict:
 _SERIALIZERS: Mapping[type, Callable[..., dict]] = {
     LiteralNode: _literal_dict,
     FigurativeNode: _figurative_dict,
+    AllLiteralNode: _all_literal_dict,
+    AddressOfNode: _address_of_dict,
     LengthOfNode: _length_of_dict,
     DfhRespNode: _dfhresp_dict,
     AllSubscriptNode: _all_subscript_dict,

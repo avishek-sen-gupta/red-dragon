@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from cobol_asg.cobol_expression import JsonExpr, expr_from_dict
+from cobol_asg.cobol_expression import ExprNode
 from cobol_asg.cobol_statements import SetStatement
 from cobol_asg.operand_kind import OperandKind
 from cobol_asg.set_operand import SetOperand
@@ -35,14 +35,14 @@ class PointerLowering:
     span: SourceSpan | None
 
     def address_of(
-        self, name: str, qualifiers: Sequence[str], subscripts: Sequence[JsonExpr]
+        self, name: str, qualifiers: Sequence[str], subscripts: Sequence[ExprNode]
     ) -> Register:
         """The item's address: its region register plus its offset."""
         ref, region_reg = self.ctx.resolve_field_ref(
             name,
             self.materialised,
             tuple(qualifiers),
-            subscripts=tuple(expr_from_dict(s) for s in subscripts),
+            subscripts=tuple(subscripts),
             span=self.span,
         )
         address = self.ctx.fresh_reg()
@@ -95,7 +95,7 @@ class PointerLowering:
             operand.name,
             self.materialised,
             operand.qualifiers,
-            subscripts=tuple(expr_from_dict(s) for s in operand.subscripts),
+            subscripts=operand.subscripts,
             span=self.span,
         )
 

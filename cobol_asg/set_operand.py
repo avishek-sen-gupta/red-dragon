@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from cobol_asg.cobol_expression import JsonExpr
+from cobol_asg.cobol_expression import ExprNode, JsonExpr, expr_from_dict, expr_to_dict
 from cobol_asg.operand_kind import OperandKind
 
 
@@ -14,7 +14,7 @@ class SetOperand:
     kind: OperandKind
     name: str = ""
     qualifiers: tuple[str, ...] = ()
-    subscripts: tuple[JsonExpr, ...] = ()
+    subscripts: tuple[ExprNode, ...] = ()
     value: str = ""
 
     @property
@@ -28,7 +28,7 @@ class SetOperand:
                 "kind": self.kind.value,
                 "name": self.name,
                 "qualifiers": list(self.qualifiers),
-                "subscripts": list(self.subscripts),
+                "subscripts": [expr_to_dict(s) for s in self.subscripts],
             }
         return {"kind": self.kind.value, "value": self.value}
 
@@ -46,8 +46,8 @@ def set_operand_from_dict(data: JsonExpr) -> SetOperand:
     )
 
 
-def _expressions(value: str | JsonExpr | Sequence[JsonExpr]) -> tuple[JsonExpr, ...]:
-    """The subscript expressions of a reference, as the bridge wrote them."""
+def _expressions(value: str | JsonExpr | Sequence[JsonExpr]) -> tuple[ExprNode, ...]:
+    """The subscript expressions of a reference."""
     if isinstance(value, (str, Mapping)):
         return ()
-    return tuple(item for item in value if isinstance(item, Mapping))
+    return tuple(expr_from_dict(item) for item in value if isinstance(item, Mapping))

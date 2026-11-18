@@ -6,7 +6,8 @@ import logging
 
 from cobol_asg.cobol_statements import SearchStatement
 from cobol_asg.ref_mod import RefModOperand
-from interpreter.cobol.condition_lowering import _lower_condition_str, lower_condition
+from cobol_asg.condition import UnparsedCondition
+from interpreter.cobol.condition_lowering import lower_condition
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.field_resolution import ResolvedFieldRef
 from interpreter.cobol.lowering_scope import LoweringScope
@@ -257,12 +258,9 @@ def lower_search(
 
     ctx.emit_inst(Label_(label=body_label), span=span)
     for when in stmt.whens:
-        if not when.condition:
+        if when.condition == UnparsedCondition(text=""):
             continue
-        if isinstance(when.condition, dict):
-            cond_reg = lower_condition(scope, when.condition)
-        else:
-            cond_reg = _lower_condition_str(scope, when.condition)
+        cond_reg = lower_condition(scope, when.condition)
         when_true = ctx.fresh_label("search_when_true")
         when_next = ctx.fresh_label("search_when_next")
         ctx.emit_inst(

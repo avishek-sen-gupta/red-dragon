@@ -17,8 +17,6 @@ from cobol_asg.cobol_expression import (
     FunctionNode,
     LiteralNode,
     RefModNode,
-    expr_from_dict,
-    expr_to_dict,
 )
 from cobol_asg.cobol_field import NO_ODO_OBJECT
 from cobol_asg.cobol_statements import (
@@ -436,41 +434,41 @@ _INTRINSIC_FUNCTIONS = {
 
 
 def _lower_function_arg_to_string(
-    scope: LoweringScope, arg: dict, precision: ArithmeticPrecision
+    scope: LoweringScope, arg: ExprNode, precision: ArithmeticPrecision
 ) -> Register:
-    """Lower one intrinsic-function argument dict to a string-valued register.
+    """Lower one intrinsic-function argument to a string-valued register.
 
     Field references are decoded then stringified (intrinsics like UPPER-CASE
     operate on character data); literals are parsed as constants.
     """
     ctx, span = scope.ctx, scope.span
-    kind = arg.get("kind", "lit")
-    if kind == "ref":
+    if isinstance(arg, (FieldRefNode, RefModNode)):
         return _lower_ref_function_arg(scope, arg)
-    if kind == "lit":
-        return ctx.const_to_reg(ctx.parse_literal(arg.get("value", "")), span=span)
+    if isinstance(arg, LiteralNode):
+        return ctx.const_to_reg(ctx.parse_literal(arg.value), span=span)
     from interpreter.cobol.condition_lowering import lower_expr_node
 
-    value_reg = lower_expr_node(scope, expr_from_dict(arg), precision)
+    value_reg = lower_expr_node(scope, arg, precision)
     return ctx.emit_to_string(value_reg, span=span)
 
 
-def _lower_ref_function_arg(scope: LoweringScope, arg: dict) -> Register:
+def _lower_ref_function_arg(
+    scope: LoweringScope, arg: FieldRefNode | RefModNode
+) -> Register:
     # Delegated rather than re-resolved: this path used to call
     # resolve_field_ref with neither the subscripts nor the reference
     # modification the node carries, so FUNCTION f(TBL(I)) always read
-    # occurrence 1 (red-dragon-jscx). _lower_expr_dict is the one place that
-    # decodes a structured ref, and it honours both.
+    # occurrence 1 (red-dragon-jscx). _lower_operand is the one place that
+    # decodes a condition operand, and it honours both.
     from interpreter.cobol.condition_lowering import (
-        _lower_expr_dict,
+        _lower_operand,
         _unresolvable_operand,
     )
 
     ctx, materialised, span = scope.ctx, scope.materialised, scope.span
-    name = arg.get("name", "")
-    if not ctx.has_field(name, materialised):
-        return _unresolvable_operand(scope, name)
-    decoded = _lower_expr_dict(scope, arg)
+    if not ctx.has_field(arg.name, materialised):
+        return _unresolvable_operand(scope, arg.name)
+    decoded = _lower_operand(scope, arg)
     return ctx.emit_to_string(decoded, span=span)
 
 
@@ -492,9 +490,7 @@ def lower_function_operand(
 
     precision = standalone_precision(
         ctx,
-        FunctionNode(
-            name=operand.name, args=tuple(expr_from_dict(a) for a in operand.args)
-        ),
+        FunctionNode(name=operand.name, args=operand.args),
         materialised,
     )
     return lower_function_in_expression(
@@ -510,21 +506,11 @@ def lower_function_in_expression(
         operand,
         args=tuple(
             chain.from_iterable(
-                _all_subscripts_expanded(arg, scope.materialised)
-                for arg in operand.args
+                _occurrences_named(arg, scope.materialised) for arg in operand.args
             )
         ),
     )
     return lowering(scope, expanded, precision)
-
-
-def _all_subscripts_expanded(
-    arg: dict, materialised: MaterialisedSectionedLayout
-) -> tuple[dict, ...]:
-    return tuple(
-        expr_to_dict(node)
-        for node in _occurrences_named(expr_from_dict(arg), materialised)
-    )
 
 
 def _occurrences_named(
@@ -1922,7 +1908,7 @@ def _set_operand_ref(
         operand.name,
         scope.materialised,
         qualifiers=operand.qualifiers,
-        subscripts=tuple(expr_from_dict(s) for s in operand.subscripts),
+        subscripts=operand.subscripts,
         span=scope.span,
     )
 

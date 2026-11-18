@@ -4,6 +4,7 @@ import itertools
 from collections import Counter
 from collections.abc import Mapping, Sequence
 
+from cobol_asg.condition import condition_from_dict
 from cobol_asg.alphabet_item import AlphabetItem
 from cobol_asg.alphabet_link import AlphabetLink
 from cobol_asg.alphabet_literal_kind import AlphabetLiteralKind
@@ -606,14 +607,16 @@ class TestProcedureDivisionLowering:
         ]
         stmts = [
             IfStatement(
-                condition={
-                    "not": False,
-                    "relation": {
-                        "left": {"kind": "ref", "name": "WS-A"},
-                        "op": ">",
-                        "right": {"kind": "lit", "value": "0"},
-                    },
-                },
+                condition=condition_from_dict(
+                    {
+                        "not": False,
+                        "relation": {
+                            "left": {"kind": "ref", "name": "WS-A"},
+                            "op": ">",
+                            "right": {"kind": "lit", "value": "0"},
+                        },
+                    }
+                ),
                 children=[
                     DisplayStatement(
                         operands=(RefModOperand(name="POSITIVE", kind=OperandKind.LIT),)
@@ -642,14 +645,16 @@ class TestProcedureDivisionLowering:
         ]
         stmts = [
             IfStatement(
-                condition={
-                    "not": False,
-                    "relation": {
-                        "left": {"kind": "ref", "name": "WS-A"},
-                        "op": ">",
-                        "right": {"kind": "lit", "value": "0"},
-                    },
-                },
+                condition=condition_from_dict(
+                    {
+                        "not": False,
+                        "relation": {
+                            "left": {"kind": "ref", "name": "WS-A"},
+                            "op": ">",
+                            "right": {"kind": "lit", "value": "0"},
+                        },
+                    }
+                ),
                 children=[
                     DisplayStatement(
                         operands=(RefModOperand(name="POSITIVE", kind=OperandKind.LIT),)
@@ -789,14 +794,16 @@ class TestProcedureDivisionLowering:
         ]
         stmts = [
             IfStatement(
-                condition={
-                    "not": False,
-                    "relation": {
-                        "left": {"kind": "ref", "name": "WS-A"},
-                        "op": ">",
-                        "right": {"kind": "lit", "value": "0"},
-                    },
-                },
+                condition=condition_from_dict(
+                    {
+                        "not": False,
+                        "relation": {
+                            "left": {"kind": "ref", "name": "WS-A"},
+                            "op": ">",
+                            "right": {"kind": "lit", "value": "0"},
+                        },
+                    }
+                ),
                 children=[
                     DisplayStatement(
                         operands=(
@@ -1333,14 +1340,16 @@ class TestPerformLoopLowering:
                     )
                 ],
                 spec=PerformUntilSpec(
-                    condition={
-                        "not": False,
-                        "relation": {
-                            "left": {"kind": "ref", "name": "WS-A"},
-                            "op": ">",
-                            "right": {"kind": "lit", "value": "10"},
-                        },
-                    },
+                    condition=condition_from_dict(
+                        {
+                            "not": False,
+                            "relation": {
+                                "left": {"kind": "ref", "name": "WS-A"},
+                                "op": ">",
+                                "right": {"kind": "lit", "value": "10"},
+                            },
+                        }
+                    ),
                     test_before=True,
                 ),
             ),
@@ -1400,14 +1409,16 @@ class TestPerformLoopLowering:
                     )
                 ],
                 spec=PerformUntilSpec(
-                    condition={
-                        "not": False,
-                        "relation": {
-                            "left": {"kind": "ref", "name": "WS-A"},
-                            "op": ">",
-                            "right": {"kind": "lit", "value": "10"},
-                        },
-                    },
+                    condition=condition_from_dict(
+                        {
+                            "not": False,
+                            "relation": {
+                                "left": {"kind": "ref", "name": "WS-A"},
+                                "op": ">",
+                                "right": {"kind": "lit", "value": "10"},
+                            },
+                        }
+                    ),
                     test_before=False,
                 ),
             ),
@@ -1472,14 +1483,16 @@ class TestPerformLoopLowering:
                     varying_var=FieldRefNode(name="WS-IDX"),
                     varying_from=LiteralNode(value="1"),
                     varying_by=LiteralNode(value="1"),
-                    condition={
-                        "not": False,
-                        "relation": {
-                            "left": {"kind": "ref", "name": "WS-IDX"},
-                            "op": ">",
-                            "right": {"kind": "lit", "value": "5"},
-                        },
-                    },
+                    condition=condition_from_dict(
+                        {
+                            "not": False,
+                            "relation": {
+                                "left": {"kind": "ref", "name": "WS-IDX"},
+                                "op": ">",
+                                "right": {"kind": "lit", "value": "5"},
+                            },
+                        }
+                    ),
                     test_before=True,
                 ),
             ),
@@ -1539,14 +1552,14 @@ class TestPerformLoopLowering:
                     varying_var=FieldRefNode(name="WS-I"),
                     varying_from=LiteralNode(value="1"),
                     varying_by=LiteralNode(value="1"),
-                    condition=until_i,
+                    condition=condition_from_dict(until_i),
                     test_before=True,
                     after_specs=(
                         PerformVaryingSpec(
                             varying_var=FieldRefNode(name="WS-J"),
                             varying_from=LiteralNode(value="1"),
                             varying_by=LiteralNode(value="1"),
-                            condition=until_j,
+                            condition=condition_from_dict(until_j),
                         ),
                     ),
                 ),
@@ -1619,14 +1632,14 @@ class TestPerformLoopLowering:
                     varying_var=FieldRefNode(name="WS-I"),
                     varying_from=LiteralNode(value="1"),
                     varying_by=LiteralNode(value="1"),
-                    condition=until_i,
+                    condition=condition_from_dict(until_i),
                     test_before=False,
                     after_specs=(
                         PerformVaryingSpec(
                             varying_var=FieldRefNode(name="WS-J"),
                             varying_from=LiteralNode(value="1"),
                             varying_by=LiteralNode(value="1"),
-                            condition=until_j,
+                            condition=condition_from_dict(until_j),
                         ),
                     ),
                 ),
@@ -2357,14 +2370,16 @@ class TestTier2Lowering:
                 ],
             ),
             IfStatement(
-                condition={
-                    "not": False,
-                    "relation": {
-                        "left": {"kind": "ref", "name": "WS-B"},
-                        "op": "=",
-                        "right": {"kind": "ref", "name": "WS-X"},
-                    },
-                },
+                condition=condition_from_dict(
+                    {
+                        "not": False,
+                        "relation": {
+                            "left": {"kind": "ref", "name": "WS-B"},
+                            "op": "==",
+                            "right": {"kind": "ref", "name": "WS-X"},
+                        },
+                    }
+                ),
                 children=[
                     DisplayStatement(
                         operands=(RefModOperand(name="'EQ'", kind=OperandKind.LIT),)
@@ -2398,7 +2413,7 @@ class TestTier2Lowering:
 
         def tested(condition: Mapping[str, str | Mapping[str, str]]) -> IfStatement:
             return IfStatement(
-                condition={"not": False, **condition},
+                condition=condition_from_dict({"not": False, **condition}),
                 children=[
                     DisplayStatement(
                         operands=(RefModOperand(name="'Y'", kind=OperandKind.LIT),)
@@ -2495,7 +2510,7 @@ class TestSearchLowering:
                 varying=RefModOperand(name="WS-IDX"),
                 whens=[
                     SearchWhen(
-                        condition="WS-IDX = 5",
+                        condition=condition_from_dict("WS-IDX = 5"),
                         children=[
                             DisplayStatement(
                                 operands=(
@@ -2547,7 +2562,7 @@ class TestSearchLowering:
             SearchStatement(
                 table=RefModOperand(name="WS-TABLE"),
                 varying=RefModOperand(name="WS-IDX"),
-                whens=[SearchWhen(condition="WS-IDX = 5")],
+                whens=[SearchWhen(condition=condition_from_dict("WS-IDX = 5"))],
             )
         ]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
@@ -2580,7 +2595,7 @@ class TestSearchLowering:
         stmts = [
             SearchStatement(
                 table=RefModOperand(name="WS-TABLE"),
-                whens=[SearchWhen(condition="WS-IDX = 5")],
+                whens=[SearchWhen(condition=condition_from_dict("WS-IDX = 5"))],
                 at_end=[
                     DisplayStatement(
                         operands=(
@@ -2622,8 +2637,8 @@ class TestSearchLowering:
                 table=RefModOperand(name="WS-TABLE"),
                 varying=RefModOperand(name="WS-IDX"),
                 whens=[
-                    SearchWhen(condition="WS-IDX = 3"),
-                    SearchWhen(condition="WS-IDX = 7"),
+                    SearchWhen(condition=condition_from_dict("WS-IDX = 3")),
+                    SearchWhen(condition=condition_from_dict("WS-IDX = 7")),
                 ],
             )
         ]

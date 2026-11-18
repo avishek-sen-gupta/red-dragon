@@ -1,5 +1,6 @@
 """Tests for condition lowering with level-88 condition name expansion."""
 
+from cobol_asg.condition import condition_from_dict
 from cobol_asg.asg_types import CobolASG, CobolField
 from cobol_asg.condition_name import ConditionName, ConditionValue
 from interpreter.cobol.condition_lowering import lower_condition
@@ -48,14 +49,16 @@ class TestFigurativeConditions:
         ctx, materialised = _setup_with_fields(fields)
         lower_condition(
             LoweringScope(ctx, materialised, None),
-            {
-                "not": False,
-                "relation": {
-                    "left": {"kind": "ref", "name": "WS-X"},
-                    "op": "==",
-                    "right": {"kind": "figurative", "value": "SPACES"},
-                },
-            },
+            condition_from_dict(
+                {
+                    "not": False,
+                    "relation": {
+                        "left": {"kind": "ref", "name": "WS-X"},
+                        "op": "==",
+                        "right": {"kind": "figurative", "value": "SPACES"},
+                    },
+                }
+            ),
         )
         const_vals = [
             i.operands[0] for i in ctx.instructions if i.opcode == Opcode.CONST
@@ -74,14 +77,16 @@ class TestFigurativeConditions:
         ctx, materialised = _setup_with_fields(fields)
         lower_condition(
             LoweringScope(ctx, materialised, None),
-            {
-                "not": False,
-                "relation": {
-                    "left": {"kind": "figurative", "value": "SPACES"},
-                    "op": "==",
-                    "right": {"kind": "ref", "name": "WS-X"},
-                },
-            },
+            condition_from_dict(
+                {
+                    "not": False,
+                    "relation": {
+                        "left": {"kind": "figurative", "value": "SPACES"},
+                        "op": "==",
+                        "right": {"kind": "ref", "name": "WS-X"},
+                    },
+                }
+            ),
         )
         const_vals = [
             i.operands[0] for i in ctx.instructions if i.opcode == Opcode.CONST
@@ -97,14 +102,16 @@ class TestFigurativeConditions:
         ctx, materialised = _setup_with_fields(fields)
         lower_condition(
             LoweringScope(ctx, materialised, None),
-            {
-                "not": False,
-                "relation": {
-                    "left": {"kind": "ref", "name": "WS-X"},
-                    "op": "==",
-                    "right": {"kind": "figurative", "value": "ZEROS"},
-                },
-            },
+            condition_from_dict(
+                {
+                    "not": False,
+                    "relation": {
+                        "left": {"kind": "ref", "name": "WS-X"},
+                        "op": "==",
+                        "right": {"kind": "figurative", "value": "ZEROS"},
+                    },
+                }
+            ),
         )
         const_vals = [
             i.operands[0] for i in ctx.instructions if i.opcode == Opcode.CONST
@@ -141,7 +148,9 @@ class TestAbbreviatedConditions:
                 },
             },
         }
-        lower_condition(LoweringScope(ctx, materialised, None), node)
+        lower_condition(
+            LoweringScope(ctx, materialised, None), condition_from_dict(node)
+        )
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
         or_ops = [i for i in binop_insts if i.operands[0] == "or"]
         eq_ops = [i for i in binop_insts if i.operands[0] == "=="]
@@ -160,14 +169,16 @@ class TestConditionLoweringBasic:
         ctx, materialised = _setup_with_fields(fields)
         result_reg = lower_condition(
             LoweringScope(ctx, materialised, None),
-            {
-                "not": False,
-                "relation": {
-                    "left": {"kind": "ref", "name": "WS-A"},
-                    "op": ">",
-                    "right": {"kind": "lit", "value": "10"},
-                },
-            },
+            condition_from_dict(
+                {
+                    "not": False,
+                    "relation": {
+                        "left": {"kind": "ref", "name": "WS-A"},
+                        "op": ">",
+                        "right": {"kind": "lit", "value": "10"},
+                    },
+                }
+            ),
         )
         assert str(result_reg).startswith("%")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
@@ -187,7 +198,7 @@ class TestConditionLoweringBasic:
         ctx, materialised = _setup_with_fields(fields)
         result_reg = lower_condition(
             LoweringScope(ctx, materialised, None),
-            {"not": False, "text": "UNKNOWN-TOKEN"},
+            condition_from_dict({"not": False, "text": "UNKNOWN-TOKEN"}),
         )
         const_insts = [i for i in ctx.instructions if i.opcode == Opcode.CONST]
         last_const = const_insts[-1]
@@ -218,7 +229,7 @@ class TestConditionNameExpansion:
         ctx, materialised = _setup_with_fields(fields)
         result_reg = lower_condition(
             LoweringScope(ctx, materialised, None),
-            {"not": False, "condition_name": "STATUS-ACTIVE"},
+            condition_from_dict({"not": False, "condition_name": "STATUS-ACTIVE"}),
         )
         assert str(result_reg).startswith("%")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
@@ -259,7 +270,7 @@ class TestConditionNameExpansion:
         ctx, materialised = _setup_with_fields(fields)
         result_reg = lower_condition(
             LoweringScope(ctx, materialised, None),
-            {"not": False, "condition_name": "STATUS-VALID"},
+            condition_from_dict({"not": False, "condition_name": "STATUS-VALID"}),
         )
         assert str(result_reg).startswith("%")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
@@ -289,7 +300,7 @@ class TestConditionNameExpansion:
         ctx, materialised = _setup_with_fields(fields)
         result_reg = lower_condition(
             LoweringScope(ctx, materialised, None),
-            {"not": False, "condition_name": "STATUS-ALPHA"},
+            condition_from_dict({"not": False, "condition_name": "STATUS-ALPHA"}),
         )
         assert str(result_reg).startswith("%")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
@@ -333,7 +344,7 @@ class TestConditionNameExpansion:
         ctx, materialised = _setup_with_fields(fields)
         result_reg = lower_condition(
             LoweringScope(ctx, materialised, None),
-            {"not": False, "condition_name": "VALID-CODE"},
+            condition_from_dict({"not": False, "condition_name": "VALID-CODE"}),
         )
         assert str(result_reg).startswith("%")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
@@ -368,7 +379,7 @@ class TestConditionNameExpansion:
         ctx, materialised = _setup_with_fields(fields)
         result_reg = lower_condition(
             LoweringScope(ctx, materialised, None),
-            {"not": False, "text": "NONEXISTENT-COND"},
+            condition_from_dict({"not": False, "text": "NONEXISTENT-COND"}),
         )
         const_insts = [i for i in ctx.instructions if i.opcode == Opcode.CONST]
         last_const = const_insts[-1]
@@ -403,14 +414,16 @@ class TestConditionNameExpansion:
         ctx, materialised = _setup_with_fields(fields)
         result_reg = lower_condition(
             LoweringScope(ctx, materialised, None),
-            {
-                "not": False,
-                "relation": {
-                    "left": {"kind": "ref", "name": "WS-STATUS"},
-                    "op": "==",
-                    "right": {"kind": "lit", "value": "A"},
-                },
-            },
+            condition_from_dict(
+                {
+                    "not": False,
+                    "relation": {
+                        "left": {"kind": "ref", "name": "WS-STATUS"},
+                        "op": "==",
+                        "right": {"kind": "lit", "value": "A"},
+                    },
+                }
+            ),
         )
         assert str(result_reg).startswith("%")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
@@ -432,14 +445,16 @@ class TestHexLiteralRelation:
         ctx, materialised = _setup_with_fields(fields)
         lower_condition(
             LoweringScope(ctx, materialised, None),
-            {
-                "not": False,
-                "relation": {
-                    "left": {"kind": "ref", "name": "WS-X"},
-                    "op": "==",
-                    "right": {"kind": "lit", "value": "X'C1F2'"},
-                },
-            },
+            condition_from_dict(
+                {
+                    "not": False,
+                    "relation": {
+                        "left": {"kind": "ref", "name": "WS-X"},
+                        "op": "==",
+                        "right": {"kind": "lit", "value": "X'C1F2'"},
+                    },
+                }
+            ),
         )
         string_consts = [
             i.operands[0]

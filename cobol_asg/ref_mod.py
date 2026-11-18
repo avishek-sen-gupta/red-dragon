@@ -63,12 +63,11 @@ class RefModFunction:
     """An intrinsic FUNCTION call computing a reference-modification bound.
 
     ``M(1:FUNCTION LENGTH(M))`` — the call is the bound; the operand is still the
-    slice of ``M`` (red-dragon-pe45). ``args`` are structured expression dicts,
-    the same shape ``FunctionCallOperand`` carries.
+    slice of ``M`` (red-dragon-pe45).
     """
 
     name: str
-    args: tuple[dict, ...] = ()
+    args: tuple[ExprNode, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -126,7 +125,8 @@ def ref_mod_expr_from_dict(data: dict) -> RefModExpr:
 
     elif kind == "function":
         return RefModFunction(
-            name=data.get("name", ""), args=tuple(data.get("args", []) or [])
+            name=data.get("name", ""),
+            args=tuple(expr_from_dict(a) for a in data.get("args", []) or []),
         )
 
     elif kind == "binop":
@@ -155,7 +155,11 @@ def ref_mod_expr_to_dict(expr: RefModExpr) -> dict:
             **({"qualifiers": list(expr.qualifiers)} if expr.qualifiers else {}),
         }
     elif isinstance(expr, RefModFunction):
-        return {"kind": "function", "name": expr.name, "args": list(expr.args)}
+        return {
+            "kind": "function",
+            "name": expr.name,
+            "args": [expr_to_dict(a) for a in expr.args],
+        }
     elif isinstance(expr, RefModBinOp):
         return {
             "kind": "binop",
@@ -170,21 +174,29 @@ def ref_mod_expr_to_dict(expr: RefModExpr) -> dict:
 class FunctionCallOperand:
     """COBOL intrinsic FUNCTION call used as a value source.
 
-    Serialized by the bridge as {"kind": "function", "name": "...", "args": [...]}.
-    Each arg is a structured expression dict (the same shape consumed by the
-    COBOL expression lowering): {"kind": "ref"|"lit"|"binop"|..., ...}.
+    Serialized by the bridge as {"kind": "function", "name": "...", "args": [...]},
+    each argument an expression.
 
     Example: FUNCTION UPPER-CASE(WS-IN) → FunctionCallOperand(
-        name="UPPER-CASE", args=[{"kind": "ref", "name": "WS-IN"}])
+        name="UPPER-CASE", args=(FieldRefNode(name="WS-IN"),))
     """
 
     name: str
-    args: tuple[dict, ...] = ()
+    args: tuple[ExprNode, ...] = ()
 
     @classmethod
     def from_dict(cls, data: Mapping) -> FunctionCallOperand:
         raw_args = data.get("args", []) or []
-        return cls(name=data.get("name", ""), args=tuple(raw_args))
+        return cls(
+            name=data.get("name", ""), args=tuple(expr_from_dict(a) for a in raw_args)
+        )
+
+    def to_dict(self) -> dict:
+        return {
+            "kind": "function",
+            "name": self.name,
+            "args": [expr_to_dict(a) for a in self.args],
+        }
 
 
 def is_function_operand(data: object) -> bool:

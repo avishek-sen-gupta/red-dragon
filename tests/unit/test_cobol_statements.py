@@ -4,6 +4,12 @@ import pytest
 
 from cobol_asg.any_object import AnyObject
 from cobol_asg.cobol_expression import BinOpNode, FieldRefNode, LiteralNode
+from cobol_asg.condition import (
+    RelationalOperator,
+    RelationTest,
+    UnparsedCondition,
+    condition_from_dict,
+)
 from cobol_asg.cobol_statements import (
     AcceptStatement,
     AlteredGoto,
@@ -227,14 +233,11 @@ class TestParseStatementDispatch:
             }
         )
         assert isinstance(stmt, IfStatement)
-        assert stmt.condition == {
-            "not": False,
-            "relation": {
-                "left": {"kind": "ref", "name": "WS-A"},
-                "op": ">",
-                "right": {"kind": "lit", "value": "0"},
-            },
-        }
+        assert stmt.condition == RelationTest(
+            FieldRefNode(name="WS-A"),
+            RelationalOperator.GREATER,
+            LiteralNode(value="0"),
+        )
         assert len(stmt.children) == 1
         assert isinstance(stmt.children[0], DisplayStatement)
 
@@ -354,7 +357,7 @@ class TestParseStatementDispatch:
                     op="*", left=FieldRefNode(name="D8"), right=LiteralNode(value="9")
                 )
             ),
-            SelectionCondition(condition=relation),
+            SelectionCondition(condition=condition_from_dict(relation)),
             TruthValue(value=False),
         )
         when, other = stmt.children
@@ -365,7 +368,7 @@ class TestParseStatementDispatch:
                 low=LiteralNode(value="1"), high=FieldRefNode(name="X2"), negated=True
             ),
             TruthValue(value=True),
-            SelectionCondition(condition=relation),
+            SelectionCondition(condition=condition_from_dict(relation)),
         )
         assert [alt.objects for alt in when.alternatives] == [
             (
@@ -650,7 +653,7 @@ class TestParseStatementDispatch:
                 "varying": {"name": "WS-IDX"},
                 "whens": [
                     {
-                        "condition": "WS-IDX = 5",
+                        "condition": {"not": False, "text": "WS-IDX = 5"},
                         "children": [
                             {"type": "DISPLAY", "operands": [{"name": "FOUND"}]}
                         ],
@@ -664,7 +667,7 @@ class TestParseStatementDispatch:
             RefModOperand(name="WS-IDX"),
         )
         assert len(stmt.whens) == 1
-        assert stmt.whens[0].condition == "WS-IDX = 5"
+        assert stmt.whens[0].condition == UnparsedCondition(text="WS-IDX = 5")
         assert len(stmt.whens[0].children) == 1
 
     @covers(CobolFeature.SEARCH_LINEAR, CobolFeature.SEARCH_AT_END)
@@ -673,7 +676,7 @@ class TestParseStatementDispatch:
             {
                 "type": "SEARCH",
                 "table": {"name": "WS-TABLE"},
-                "whens": [{"condition": "WS-A = 1"}],
+                "whens": [{"condition": {"not": False, "text": "WS-A = 1"}}],
                 "at_end": [{"type": "DISPLAY", "operands": [{"name": "NOT FOUND"}]}],
             }
         )
@@ -1008,14 +1011,11 @@ class TestPerformSpecs:
             }
         )
         assert isinstance(stmt.spec, PerformUntilSpec)
-        assert stmt.spec.condition == {
-            "not": False,
-            "relation": {
-                "left": {"kind": "ref", "name": "WS-A"},
-                "op": ">",
-                "right": {"kind": "lit", "value": "10"},
-            },
-        }
+        assert stmt.spec.condition == RelationTest(
+            FieldRefNode(name="WS-A"),
+            RelationalOperator.GREATER,
+            LiteralNode(value="10"),
+        )
         assert stmt.spec.test_before is True
 
     @covers(
@@ -1097,14 +1097,11 @@ class TestPerformSpecs:
                 ),
             ),
         )
-        assert stmt.spec.condition == {
-            "not": False,
-            "relation": {
-                "left": {"kind": "ref", "name": "WS-IDX"},
-                "op": ">",
-                "right": {"kind": "lit", "value": "10"},
-            },
-        }
+        assert stmt.spec.condition == RelationTest(
+            FieldRefNode(name="WS-IDX"),
+            RelationalOperator.GREATER,
+            LiteralNode(value="10"),
+        )
 
     @covers(CobolFeature.PERFORM)
     def test_no_perform_type_gives_none_spec(self):
@@ -1641,7 +1638,7 @@ class TestRoundTrip:
             "varying": {"name": "WS-IDX", "qualifiers": ["WS-CTL"]},
             "whens": [
                 {
-                    "condition": "WS-IDX = 5",
+                    "condition": {"not": False, "text": "WS-IDX = 5"},
                     "children": [{"type": "DISPLAY", "operands": [{"name": "FOUND"}]}],
                 }
             ],
@@ -1654,7 +1651,7 @@ class TestRoundTrip:
             "type": "SEARCH",
             "table": {"name": "WS-TABLE"},
             "all": True,
-            "whens": [{"condition": "WS-A = 1"}],
+            "whens": [{"condition": {"not": False, "text": "WS-A = 1"}}],
             "at_end": [{"type": "DISPLAY", "operands": [{"name": "NOT FOUND"}]}],
         }
         assert self._round_trip(data) == data
@@ -1665,7 +1662,7 @@ class TestRoundTrip:
         data = {
             "type": "SEARCH",
             "table": {"name": "WS-TABLE"},
-            "whens": [{"condition": "WS-A = 1"}],
+            "whens": [{"condition": {"not": False, "text": "WS-A = 1"}}],
             "at_end": [{"type": "DISPLAY", "operands": [{"name": "NOT FOUND"}]}],
         }
         assert self._round_trip(data) == data

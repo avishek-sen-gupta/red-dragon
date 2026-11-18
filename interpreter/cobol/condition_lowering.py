@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from functools import reduce
+from typing import TypeGuard
 
 from cobol_asg.cobol_expression import (
+    AddressOfNode,
+    AllLiteralNode,
     BinOpNode,
     DfhRespNode,
     ExprNode,
@@ -15,10 +19,22 @@ from cobol_asg.cobol_expression import (
     LengthOfNode,
     LiteralNode,
     RefModNode,
-    expr_from_dict,
-    expr_to_dict,
 )
 from cobol_asg.cobol_types import CobolDataCategory
+from cobol_asg.condition import (
+    ClassKind,
+    ClassTest,
+    Combination,
+    Condition,
+    ConditionNameTest,
+    Connective,
+    Parenthesised,
+    RelationTest,
+    SignKind,
+    SignTest,
+    UnparsedCondition,
+    UserClassTest,
+)
 from cobol_asg.condition_name import ConditionValue
 from cobol_asg.nonnumeric_literal import literal_characters
 from cobol_asg.ref_mod import FunctionCallOperand, RefModOperand
@@ -246,78 +262,15 @@ def _expand_condition_name(
     return _emit_or_chain(scope, value_regs)
 
 
-def lower_condition(scope: LoweringScope, node: dict) -> Register:
-    """Lower a structured condition dict to a register holding a boolean,
-    recursively walking its nodes."""
-    ctx, span = scope.ctx, scope.span
-    if "op" in node:
-        # Compound: {"op": "AND"/"OR", "left": {...}, "right": {...}}
-        op = node["op"]
-        left_reg = lower_condition(scope, node["left"])
-        right_reg = lower_condition(scope, node["right"])
-        result = ctx.fresh_reg()
-        ctx.emit_inst(
-            Binop(
-                result_reg=result,
-                operator=resolve_binop("and" if op == "AND" else "or"),
-                left=Register(str(left_reg)),
-                right=Register(str(right_reg)),
-            ),
-            span=span,
-        )
-        return result
-
-    not_flag: bool = node.get("not", False)
-
-    if "condition_name" in node:
-        # 88-level condition name reference
-        name = node["condition_name"]
-        subscripts = tuple(
-            expr_from_dict(s) for s in node.get("condition_subscripts", [])
-        )
-        if ctx.condition_index.has_condition(name):
-            inner = _expand_condition_name(
-                scope,
-                ctx.condition_index.lookup(
-                    name, tuple(node.get("condition_qualifiers", ()))
-                ),
-                subscripts,
-            )
-        elif ctx.switches.has_condition(name):
-            inner = _lower_switch_condition(scope, ctx.switches.condition(name))
-        else:
-            # Fall back to string lowering for unresolved names
-            inner = _lower_condition_str(scope, name)
-    elif "condition" in node:
-        # Nested parenthesised condition
-        inner = lower_condition(scope, node["condition"])
-    elif "relation" in node:
-        # Structured relation: {"left": <expr>, "op": "...", "right": <expr>}
-        inner = _lower_relation_node(scope, node["relation"])
-    elif "class_name" in node:
-        # IS class-name: every character of the operand is in the set the
-        # SPECIAL-NAMES CLASS clause names.
-        inner = emit_all_characters_in(
-            scope.emitter,
-            ctx.emit_to_string(
-                _lower_expr_dict(scope, node["operand"]),
-                span=span,
-            ),
-            ctx.const_to_reg(ctx.class_names.characters(node["class_name"]), span=span),
-        )
-    elif "class" in node:
-        # Class condition: {"class": "NUMERIC"|"ALPHABETIC"|..., "operand": <expr>}
-        inner = _lower_class_condition(scope, node)
-    elif "sign" in node:
-        # Sign condition: {"sign": "POSITIVE"|"NEGATIVE"|"ZERO", "operand": <expr>}
-        inner = _lower_sign_condition(scope, node)
-    else:
-        # Fallback: flat text (CLASS/SIGN conditions, EVALUATE/SEARCH callers)
-        inner = _lower_condition_str(scope, node.get("text", ""))
-
-    if not not_flag:
+def lower_condition(scope: LoweringScope, node: Condition) -> Register:
+    """Lower a condition to a register holding a boolean, recursively walking its
+    tree."""
+    if isinstance(node, Combination):
+        return _lower_combination(scope, node)
+    inner = _lower_test(scope, node)
+    if not node.negated:
         return inner
-
+    ctx, span = scope.ctx, scope.span
     result = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
@@ -329,6 +282,80 @@ def lower_condition(scope: LoweringScope, node: dict) -> Register:
         span=span,
     )
     return result
+
+
+def _lower_combination(scope: LoweringScope, node: Combination) -> Register:
+    ctx, span = scope.ctx, scope.span
+    left_reg = lower_condition(scope, node.left)
+    right_reg = lower_condition(scope, node.right)
+    result = ctx.fresh_reg()
+    ctx.emit_inst(
+        Binop(
+            result_reg=result,
+            operator=resolve_binop(
+                "and" if node.connective is Connective.AND else "or"
+            ),
+            left=Register(str(left_reg)),
+            right=Register(str(right_reg)),
+        ),
+        span=span,
+    )
+    return result
+
+
+def _lower_test(
+    scope: LoweringScope,
+    node: (
+        RelationTest
+        | ConditionNameTest
+        | ClassTest
+        | UserClassTest
+        | SignTest
+        | Parenthesised
+        | UnparsedCondition
+    ),
+) -> Register:
+    """The test's own truth, before its NOT."""
+    match node:
+        case ConditionNameTest():
+            return _lower_condition_name(scope, node)
+        case Parenthesised():
+            return lower_condition(scope, node.inner)
+        case RelationTest():
+            return _lower_relation_node(scope, node)
+        case UserClassTest():
+            return _lower_user_class(scope, node)
+        case ClassTest():
+            return _lower_class_condition(scope, node)
+        case SignTest():
+            return _lower_sign_condition(scope, node)
+        case UnparsedCondition():
+            return _lower_condition_str(scope, node.text)
+
+
+def _lower_condition_name(scope: LoweringScope, node: ConditionNameTest) -> Register:
+    """An 88-level condition name, a switch-status name, or else the name as text."""
+    ctx = scope.ctx
+    if ctx.condition_index.has_condition(node.name):
+        return _expand_condition_name(
+            scope,
+            ctx.condition_index.lookup(node.name, node.qualifiers),
+            node.subscripts,
+        )
+    if ctx.switches.has_condition(node.name):
+        return _lower_switch_condition(scope, ctx.switches.condition(node.name))
+    return _lower_condition_str(scope, node.name)
+
+
+def _lower_user_class(scope: LoweringScope, node: UserClassTest) -> Register:
+    """IS class-name: every character of the operand is in the set the
+    SPECIAL-NAMES CLASS clause names."""
+    ctx, span = scope.ctx, scope.span
+    return emit_all_characters_in(
+        scope.emitter,
+        ctx.emit_to_string(_lower_operand(scope, node.operand), span=span),
+        ctx.const_to_reg(ctx.class_names.characters(node.class_name), span=span),
+    )
 
 
 def _lower_switch_condition(
@@ -359,47 +386,39 @@ def _lower_switch_condition(
     return result
 
 
-_OP_MAP: dict[str, str] = {
-    "==": "==",
-    ">": ">",
-    ">=": ">=",
-    "<": "<",
-    "<=": "<=",
-    "!=": "!=",
-}
-
-
 _DEFAULT_FIGURATIVE_LEN = 1
 
 
-def _field_byte_length(scope: LoweringScope, expr: dict) -> int | None:
-    """Return the byte length of a {"kind":"ref"} field operand, else None.
+def _field_byte_length(scope: LoweringScope, expr: ExprNode) -> int | None:
+    """Return the byte length of a field operand, else None.
 
     For a reference-modified operand WS-S(start:len) with a literal length, the
     sliced length governs (so a figurative sibling is sized to the slice, not the
     whole field). A non-literal ref-mod length falls back to the full field.
     """
     ctx, materialised, span = scope.ctx, scope.materialised, scope.span
-    if expr.get("kind") == "ref":
-        if "ref_mod_start" in expr:
-            slice_len = _ref_mod_slice_length(expr)
-            if slice_len is not None:
-                return slice_len
-        name = expr.get("name", "")
-        if ctx.has_field(name, materialised):
-            ref, _ = ctx.resolve_field_ref(
-                name,
-                materialised,
-                tuple(expr.get("qualifiers", ())),
-                tuple(expr_from_dict(s) for s in expr.get("subscripts", [])),
-                span=span,
-            )
-            return ref.fl.byte_length
-    return None
+    if not isinstance(expr, (FieldRefNode, RefModNode)):
+        return None
+    if isinstance(expr, RefModNode):
+        slice_len = _ref_mod_slice_length(expr)
+        if slice_len is not None:
+            return slice_len
+    if not ctx.has_field(expr.name, materialised):
+        return None
+    ref, _ = ctx.resolve_field_ref(
+        expr.name,
+        materialised,
+        expr.qualifiers,
+        expr.subscripts,
+        span=span,
+    )
+    return ref.fl.byte_length
 
 
-def _lower_figurative(scope: LoweringScope, fig: dict, sibling: dict) -> Register:
-    """Lower a {"kind":"figurative","value":...} operand.
+def _lower_figurative(
+    scope: LoweringScope, fig: FigurativeNode, sibling: ExprNode
+) -> Register:
+    """Lower a figurative constant operand.
 
     The figurative is materialised as a string literal whose length matches the
     *sibling* operand's field (so it equals the decoded field when the field
@@ -407,15 +426,13 @@ def _lower_figurative(scope: LoweringScope, fig: dict, sibling: dict) -> Registe
     sibling is not a field.
     """
     ctx, span = scope.ctx, scope.span
-    value = str(fig.get("value", "")).upper()
-    if value == _ALL:
-        return _lower_all_literal(scope, fig, sibling)
+    value = fig.value.upper()
     # ZERO / ZEROS against a NUMERIC field compares by value (integer 0), not as
     # a zero-filled character string — otherwise "1000.00" <= "0000000000.00"
     # would be a (broken) number-vs-string comparison (red-dragon-z6ad family).
     # NULL is the address 0.
     if value == "NULL" or (
-        value in ("ZERO", "ZEROS", "ZEROES") and _is_numeric_field(scope, sibling)
+        value in ("ZERO", "ZEROS", "ZEROES") and _is_numeric_field(sibling, scope)
     ):
         return ctx.const_to_reg(0, span=span)
     fill = ctx.figuratives.characters.get(value, " ")
@@ -426,15 +443,15 @@ def _lower_figurative(scope: LoweringScope, fig: dict, sibling: dict) -> Registe
     return ctx.const_to_reg(literal, span=span)
 
 
-def _lower_all_literal(scope: LoweringScope, fig: dict, sibling: dict) -> Register:
+def _lower_all_literal(
+    scope: LoweringScope, node: AllLiteralNode, sibling: ExprNode
+) -> Register:
     ctx, span = scope.ctx, scope.span
-    pattern = literal_characters(str(fig.get("literal", "")))
+    pattern = literal_characters(node.literal)
     length = _field_byte_length(scope, sibling)
     width = len(pattern) if length is None else length
     return ctx.const_to_reg(repeat_to_width(pattern, width), span=span)
 
-
-_ALL = "ALL"
 
 # Figuratives whose natural class is alphanumeric (character) rather than
 # numeric. ZERO/ZEROS is numeric and is intentionally excluded so a
@@ -449,88 +466,95 @@ _ALPHANUMERIC_FIGURATIVES: frozenset[str] = frozenset(
         "HIGH-VALUES",
         "QUOTE",
         "QUOTES",
-        _ALL,
     }
 )
 
 
-def _is_alphanumeric_operand(expr: dict) -> bool:
+def _is_alphanumeric_operand(expr: ExprNode) -> bool:
     """True if an operand is alphanumeric (character) data by its kind alone.
 
     Covers an alphanumeric figurative (SPACES / LOW-VALUES / HIGH-VALUES /
-    QUOTES — not numeric ZEROS) and a quoted non-numeric character literal
-    (e.g. '*'). A numeric literal (e.g. 11) is NOT alphanumeric. Determined
-    structurally from the operand dict — no source-text sniffing.
+    QUOTES — not numeric ZEROS), ALL literal, and a quoted non-numeric character
+    literal (e.g. '*'). A numeric literal (e.g. 11) is NOT alphanumeric.
+    Determined structurally from the operand — no source-text sniffing.
     """
-    kind = expr.get("kind")
-    if kind == "figurative":
-        return str(expr.get("value", "")).upper() in _ALPHANUMERIC_FIGURATIVES
-    return kind == "lit" and not expr.get("numeric", False)
+    match expr:
+        case FigurativeNode():
+            return expr.value.upper() in _ALPHANUMERIC_FIGURATIVES
+        case AllLiteralNode():
+            return True
+        case LiteralNode():
+            return not expr.numeric
+        case _:
+            return False
 
 
-def _is_numeric_field(scope: LoweringScope, expr: dict) -> bool:
+def _is_numeric_field(expr: ExprNode, scope: LoweringScope) -> TypeGuard[FieldRefNode]:
     """True if an operand is a reference to a numeric field (zoned / COMP-3 /
     binary / float). A reference-modified operand is a character slice, excluded.
     """
     ctx, materialised, span = scope.ctx, scope.materialised, scope.span
-    if expr.get("kind") != "ref" or "ref_mod_start" in expr:
+    if not isinstance(expr, FieldRefNode):
         return False
-    name = expr.get("name", "")
-    if not ctx.has_field(name, materialised):
+    if not ctx.has_field(expr.name, materialised):
         return False
-    ref, _ = ctx.resolve_field_ref(
-        name, materialised, tuple(expr.get("qualifiers", ())), span=span
-    )
+    ref, _ = ctx.resolve_field_ref(expr.name, materialised, expr.qualifiers, span=span)
     return ref.fl.type_descriptor.is_numeric
 
 
-def _is_nonnumeric_operand(scope: LoweringScope, expr: dict) -> bool:
+def _is_nonnumeric_operand(scope: LoweringScope, expr: ExprNode) -> bool:
     ctx, materialised = scope.ctx, scope.materialised
-    if _is_alphanumeric_operand(expr) or "ref_mod_start" in expr:
+    if _is_alphanumeric_operand(expr) or isinstance(expr, RefModNode):
         return True
     return (
-        expr.get("kind") == "ref"
-        and ctx.has_field(expr.get("name", ""), materialised)
-        and not _is_numeric_field(scope, expr)
+        isinstance(expr, FieldRefNode)
+        and ctx.has_field(expr.name, materialised)
+        and not _is_numeric_field(expr, scope)
     )
 
 
 def _lower_relation_operand(
-    scope: LoweringScope, expr: dict, sibling: dict
+    scope: LoweringScope, expr: ExprNode, sibling: ExprNode
 ) -> Register:
-    if expr.get("kind") == "figurative":
-        return _lower_figurative(scope, expr, sibling)
-    return _lower_expr_dict(scope, expr)
+    match expr:
+        case FigurativeNode():
+            return _lower_figurative(scope, expr, sibling)
+        case AllLiteralNode():
+            return _lower_all_literal(scope, expr, sibling)
+        case _:
+            return _lower_operand(scope, expr)
 
 
-def _lower_numeric_field_characters(scope: LoweringScope, expr: dict) -> Register:
+def _lower_numeric_field_characters(
+    scope: LoweringScope, expr: FieldRefNode
+) -> Register:
     ctx, materialised, span = scope.ctx, scope.materialised, scope.span
     ref, rr = ctx.resolve_field_ref(
-        expr.get("name", ""),
+        expr.name,
         materialised,
-        qualifiers=tuple(expr.get("qualifiers", ())),
-        subscripts=tuple(expr_from_dict(s) for s in expr.get("subscripts", [])),
+        qualifiers=expr.qualifiers,
+        subscripts=expr.subscripts,
         span=span,
     )
     return emit_field_digit_image(scope.emitter, rr, ref)
 
 
 def _lower_nonnumeric_operand(
-    scope: LoweringScope, expr: dict, sibling: dict
+    scope: LoweringScope, expr: ExprNode, sibling: ExprNode
 ) -> Register:
     ctx, span = scope.ctx, scope.span
-    if expr.get("kind") == "lit" and not _is_alphanumeric_operand(expr):
-        return ctx.const_to_reg(str(expr.get("value", "")).lstrip("+-"), span=span)
-    if _is_numeric_field(scope, expr):
+    if isinstance(expr, LiteralNode) and not _is_alphanumeric_operand(expr):
+        return ctx.const_to_reg(expr.value.lstrip("+-"), span=span)
+    if _is_numeric_field(expr, scope):
         return _lower_numeric_field_characters(scope, expr)
     return _lower_relation_operand(scope, expr, sibling)
 
 
 def _lower_relation_registers(
-    scope: LoweringScope, rel: dict
+    scope: LoweringScope, rel: RelationTest
 ) -> tuple[Register, Register]:
     ctx, span = scope.ctx, scope.span
-    left, right = rel["left"], rel["right"]
+    left, right = rel.left, rel.right
     if not any(_is_nonnumeric_operand(scope, e) for e in (left, right)):
         return (
             _lower_relation_operand(scope, left, right),
@@ -565,16 +589,15 @@ def _in_collating_order(scope: LoweringScope, value: Register) -> Register:
     return ordered
 
 
-def _lower_relation_node(scope: LoweringScope, rel: dict) -> Register:
-    """Lower a structured relation dict {"left": <expr>, "op": "...", "right": <expr>}."""
+def _lower_relation_node(scope: LoweringScope, rel: RelationTest) -> Register:
+    """Lower a relation test: left operand, operator, right operand."""
     ctx, span = scope.ctx, scope.span
     left_reg, right_reg = _lower_relation_registers(scope, rel)
-    op = _OP_MAP.get(rel.get("op", "=="), "==")
     result = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
             result_reg=result,
-            operator=resolve_binop(op),
+            operator=resolve_binop(rel.operator.value),
             left=Register(str(left_reg)),
             right=Register(str(right_reg)),
         ),
@@ -583,60 +606,53 @@ def _lower_relation_node(scope: LoweringScope, rel: dict) -> Register:
     return result
 
 
-_CLASS_BUILTIN: dict[str, str] = {
-    "NUMERIC": BuiltinName.IS_NUMERIC,
-    "ALPHABETIC": BuiltinName.IS_ALPHABETIC,
-    "ALPHABETIC-LOWER": BuiltinName.IS_ALPHABETIC_LOWER,
-    "ALPHABETIC-UPPER": BuiltinName.IS_ALPHABETIC_UPPER,
+_CLASS_BUILTIN: Mapping[ClassKind, str] = {
+    ClassKind.NUMERIC: BuiltinName.IS_NUMERIC,
+    ClassKind.ALPHABETIC: BuiltinName.IS_ALPHABETIC,
+    ClassKind.ALPHABETIC_LOWER: BuiltinName.IS_ALPHABETIC_LOWER,
+    ClassKind.ALPHABETIC_UPPER: BuiltinName.IS_ALPHABETIC_UPPER,
 }
 
 
-def _lower_class_condition(scope: LoweringScope, node: dict) -> Register:
-    """Lower a class condition {"class": <NAME>, "operand": <expr>} to a boolean.
+def _lower_class_condition(scope: LoweringScope, node: ClassTest) -> Register:
+    """Lower a class condition to a boolean.
 
     The operand's decoded value is converted to character data and passed to the
     matching COBOL-layer class-test builtin (__is_numeric / __is_alphabetic / ...).
-    An unknown class never matches (rather than silently evaluating TRUE).
     """
-    class_name = str(node.get("class", "")).upper()
-    operand = node.get("operand", {})
-    if class_name == "NUMERIC":
-        return _lower_numeric_class(scope, operand)
-    return _lower_class_builtin(scope, class_name, operand)
+    if node.kind is ClassKind.NUMERIC:
+        return _lower_numeric_class(scope, node.operand)
+    return _lower_class_builtin(scope, node.kind, node.operand)
 
 
-def _lower_numeric_class(scope: LoweringScope, operand: dict) -> Register:
-    if _is_numeric_field(scope, operand):
+def _lower_numeric_class(scope: LoweringScope, operand: ExprNode) -> Register:
+    if _is_numeric_field(operand, scope):
         return _lower_numeric_item_class(scope, operand)
     if _is_nonnumeric_operand(scope, operand):
         return emit_is_digits(
             scope.emitter,
-            scope.ctx.emit_to_string(_lower_expr_dict(scope, operand), span=scope.span),
+            scope.ctx.emit_to_string(_lower_operand(scope, operand), span=scope.span),
         )
-    return _lower_class_builtin(scope, "NUMERIC", operand)
+    return _lower_class_builtin(scope, ClassKind.NUMERIC, operand)
 
 
 def _lower_class_builtin(
-    scope: LoweringScope, class_name: str, operand: dict
+    scope: LoweringScope, kind: ClassKind, operand: ExprNode
 ) -> Register:
     e = scope.emitter
-    builtin = _CLASS_BUILTIN.get(class_name, "")
-    if not builtin:
-        logger.warning("unknown class condition %r — never matching", class_name)
-        return e.bool_(False)
     return e.call(
-        builtin,
-        e.ctx.emit_to_string(_lower_expr_dict(scope, operand), span=e.span),
+        _CLASS_BUILTIN[kind],
+        e.ctx.emit_to_string(_lower_operand(scope, operand), span=e.span),
     )
 
 
-def _lower_numeric_item_class(scope: LoweringScope, expr: dict) -> Register:
+def _lower_numeric_item_class(scope: LoweringScope, expr: FieldRefNode) -> Register:
     ctx, materialised, span = scope.ctx, scope.materialised, scope.span
     ref, rr = ctx.resolve_field_ref(
-        expr.get("name", ""),
+        expr.name,
         materialised,
-        qualifiers=tuple(expr.get("qualifiers", ())),
-        subscripts=tuple(expr_from_dict(s) for s in expr.get("subscripts", [])),
+        qualifiers=expr.qualifiers,
+        subscripts=expr.subscripts,
         span=span,
     )
     td = ref.fl.type_descriptor
@@ -654,32 +670,28 @@ _STORED_CLASS_TESTS = frozenset(
 )
 
 
-_SIGN_OP: dict[str, str] = {"POSITIVE": ">", "NEGATIVE": "<", "ZERO": "=="}
+_SIGN_OP: Mapping[SignKind, str] = {
+    SignKind.POSITIVE: ">",
+    SignKind.NEGATIVE: "<",
+    SignKind.ZERO: "==",
+}
 
 
-def _lower_sign_condition(scope: LoweringScope, node: dict) -> Register:
-    """Lower a sign condition {"sign": "POSITIVE"|"NEGATIVE"|"ZERO", "operand": <expr>}
-    to a boolean: the decoded operand value compared against zero (>0 / <0 / ==0).
+def _lower_sign_condition(scope: LoweringScope, node: SignTest) -> Register:
+    """Lower a sign condition to a boolean: the decoded operand value compared
+    against zero (>0 / <0 / ==0).
 
-    The enclosing ``not`` flag is applied by ``lower_condition`` (the bridge
-    folds an inner ``NOT POSITIVE`` into that flag), so this emits the bare
-    comparison. An unknown sign never matches rather than evaluating TRUE.
+    The test's NOT is applied by ``lower_condition`` (the bridge folds an inner
+    ``NOT POSITIVE`` into it), so this emits the bare comparison.
     """
     ctx, span = scope.ctx, scope.span
-    sign = str(node.get("sign", "")).upper()
-    op = _SIGN_OP.get(sign)
-    if op is None:
-        logger.warning("unknown sign condition %r — never matching", sign)
-        result = ctx.fresh_reg()
-        ctx.emit_inst(Const.bool_(result, False), span=span)
-        return result
-    operand_reg = _lower_expr_dict(scope, node.get("operand", {}))
+    operand_reg = _lower_operand(scope, node.operand)
     zero_reg = ctx.const_to_reg(0, span=span)
     result = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
             result_reg=result,
-            operator=resolve_binop(op),
+            operator=resolve_binop(_SIGN_OP[node.kind]),
             left=Register(str(operand_reg)),
             right=Register(str(zero_reg)),
         ),
@@ -688,44 +700,41 @@ def _lower_sign_condition(scope: LoweringScope, node: dict) -> Register:
     return result
 
 
-def _ref_mod_slice_length(expr: dict) -> int | None:
+def _ref_mod_slice_length(expr: RefModNode) -> int | None:
     """Return the static slice length of a ref-mod operand, if it is a literal."""
-    rm_len = expr.get("ref_mod_length")
-    if isinstance(rm_len, dict) and rm_len.get("kind") == "lit":
-        try:
-            return int(rm_len.get("value", ""))
-        except (TypeError, ValueError):
-            return None
-    return None
+    if not isinstance(expr.ref_mod_length, LiteralNode):
+        return None
+    try:
+        return int(expr.ref_mod_length.value)
+    except ValueError:
+        return None
 
 
-def _lower_ref_mod_operand(scope: LoweringScope, expr: dict) -> Register:
+def _lower_ref_mod_operand(scope: LoweringScope, expr: RefModNode) -> Register:
     """Lower a reference-modified field operand WS-S(start:length) in a condition.
 
     Decodes the underlying field to its character string and slices it with the
     1-based start (converted to 0-based) and optional length. The start and
-    length are themselves expression dicts (re-evaluated each call, so a loop
-    variable subscript reflects the current iteration). Returns a string-valued
-    register so it compares correctly against figurative/string siblings.
+    length are re-evaluated each call, so a loop variable subscript reflects the
+    current iteration. Returns a string-valued register so it compares correctly
+    against figurative/string siblings.
     """
     ctx, materialised, span = scope.ctx, scope.materialised, scope.span
-    name = expr.get("name", "")
-    if not ctx.has_field(name, materialised):
-        return _unresolvable_operand(scope, name)
+    if not ctx.has_field(expr.name, materialised):
+        return _unresolvable_operand(scope, expr.name)
 
-    subscripts = tuple(expr_from_dict(s) for s in expr.get("subscripts", []))
     ref, rr = ctx.resolve_field_ref(
-        name,
+        expr.name,
         materialised,
-        qualifiers=tuple(expr.get("qualifiers", ())),
-        subscripts=subscripts,
+        qualifiers=expr.qualifiers,
+        subscripts=expr.subscripts,
         span=span,
     )
     full_str_reg = ctx.emit_decode_field_characters(
         rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
     )
 
-    start_1based_reg = _lower_expr_dict(scope, expr["ref_mod_start"])
+    start_1based_reg = _lower_operand(scope, expr.ref_mod_start)
     one_reg = ctx.const_to_reg(1, span=span)
     start_0based_reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -738,9 +747,8 @@ def _lower_ref_mod_operand(scope: LoweringScope, expr: dict) -> Register:
         span=span,
     )
 
-    rm_len = expr.get("ref_mod_length")
-    if isinstance(rm_len, dict):
-        length_reg = _lower_expr_dict(scope, rm_len)
+    if expr.ref_mod_length is not None:
+        length_reg = _lower_operand(scope, expr.ref_mod_length)
     else:
         length_reg = ctx.const_to_reg(999999, span=span)
 
@@ -782,102 +790,73 @@ def _unresolvable_operand(scope: LoweringScope, name: str) -> Register:
     return ctx.const_to_reg(f"UNRESOLVABLE__{name}", span=span)
 
 
-def _lower_expr_dict(scope: LoweringScope, expr: dict) -> Register:
-    """Recursively lower an expression dict node to a register.
+def _lower_field_ref(scope: LoweringScope, expr: FieldRefNode) -> Register:
+    ctx, materialised, span = scope.ctx, scope.materialised, scope.span
+    if not ctx.has_field(expr.name, materialised):
+        return _unresolvable_operand(scope, expr.name)
+    ref, rr = ctx.resolve_field_ref(
+        expr.name,
+        materialised,
+        qualifiers=expr.qualifiers,
+        subscripts=expr.subscripts,
+        span=span,
+    )
+    return ctx.emit_decode_field(
+        rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
+    )
 
-    Supported kinds:
-    - {"kind": "ref", "name": "WS-A"} — field reference
-    - {"kind": "lit", "value": "10"} — literal constant
-    - {"kind": "binop", "op": "+", "left": <expr>, "right": <expr>} — arithmetic
-    - {"kind": "neg", "expr": <expr>} — unary negation
+
+def _lower_binop_operand(scope: LoweringScope, expr: BinOpNode) -> Register:
+    ctx, span = scope.ctx, scope.span
+    left_reg = _lower_operand(scope, expr.left)
+    right_reg = _lower_operand(scope, expr.right)
+    result = ctx.fresh_reg()
+    ctx.emit_inst(
+        Binop(
+            result_reg=result,
+            operator=resolve_binop(expr.op),
+            left=Register(str(left_reg)),
+            right=Register(str(right_reg)),
+        ),
+        span=span,
+    )
+    return result
+
+
+def _lower_operand(scope: LoweringScope, expr: ExprNode) -> Register:
+    """Lower a condition operand to a register.
+
+    Unlike :func:`lower_expr_node`, arithmetic is an ordinary ``Binop`` and a
+    reference-modified operand stays character data. A figurative constant, an
+    ALL literal or a DFHRESP reached here outside a relation lower to the empty
+    literal.
     """
     ctx, materialised, span = scope.ctx, scope.materialised, scope.span
-    kind = expr.get("kind", "lit")
-
-    if kind == "ref":
-        name = expr.get("name", "")
-        if "ref_mod_start" in expr:
+    match expr:
+        case FieldRefNode():
+            return _lower_field_ref(scope, expr)
+        case RefModNode():
             return _lower_ref_mod_operand(scope, expr)
-        if ctx.has_field(name, materialised):
-            subscripts = tuple(expr_from_dict(s) for s in expr.get("subscripts", []))
-            ref, rr = ctx.resolve_field_ref(
-                name,
-                materialised,
-                qualifiers=tuple(expr.get("qualifiers", ())),
-                subscripts=subscripts,
-                span=span,
+        case LiteralNode():
+            return ctx.const_to_reg(ctx.parse_literal(expr.value), span=span)
+        case AddressOfNode():
+            return PointerLowering(ctx, materialised, span).address_of(
+                expr.name, expr.qualifiers, expr.subscripts
             )
-            return ctx.emit_decode_field(
-                rr, ref.fl, ref.offset_reg, extent=ref.extent, span=span
-            )
-        return _unresolvable_operand(scope, name)
+        case BinOpNode():
+            return _lower_binop_operand(scope, expr)
+        case FunctionNode():
+            # Intrinsic FUNCTION call as a relation operand (red-dragon-ge72).
+            from interpreter.cobol.lower_arithmetic import lower_function_operand
 
-    if kind == "lit":
-        raw_val = expr.get("value", "")
-        parsed = ctx.parse_literal(raw_val)
-        return ctx.const_to_reg(parsed, span=span)
-
-    if kind == "address_of":
-        return PointerLowering(ctx, materialised, span).address_of(
-            expr["name"], expr.get("qualifiers", ()), expr.get("subscripts", ())
-        )
-
-    if kind == "binop":
-        left_reg = _lower_expr_dict(scope, expr["left"])
-        right_reg = _lower_expr_dict(scope, expr["right"])
-        # Preserve the operator; _OP_MAP is identity for its comparison keys, so
-        # the only effect of a default-to-"+" here was to silently corrupt every
-        # arithmetic "-"/"*"/"/" into "+" (red-dragon-kt70). resolve_binop handles
-        # the arithmetic operators directly.
-        raw_op = expr.get("op", "+")
-        op = _OP_MAP.get(raw_op, raw_op)
-        result = ctx.fresh_reg()
-        ctx.emit_inst(
-            Binop(
-                result_reg=result,
-                operator=resolve_binop(op),
-                left=Register(str(left_reg)),
-                right=Register(str(right_reg)),
-            ),
-            span=span,
-        )
-        return result
-
-    if kind == "function":
-        # Intrinsic FUNCTION call as a relation operand (red-dragon-ge72), e.g.
-        # FUNCTION UPPER-CASE(A) = FUNCTION UPPER-CASE(B). Delegate to the shared
-        # function-operand lowering so the call + args produce a computed value
-        # register that compares normally.
-        from interpreter.cobol.lower_arithmetic import lower_function_operand
-
-        operand = FunctionCallOperand.from_dict(expr)
-        return lower_function_operand(ctx, operand, materialised, span=span)
-
-    if kind == "length_of":
-        # LENGTH OF <field> as a ref-mod bound: NUMF(1:LENGTH OF N). This
-        # dispatcher's unknown-kind fallback is an empty literal, so the bound
-        # reached STRING_SLICE as '' and the slice raised. lower_expr_node is
-        # the one implementation of the register's constant byte length
-        # (red-dragon-twfl).
-        return lower_expr_node(scope, expr_from_dict(expr))
-
-    if kind == "neg":
-        inner = _lower_expr_dict(scope, expr["expr"])
-        zero_reg = ctx.const_to_reg(0, span=span)
-        result = ctx.fresh_reg()
-        ctx.emit_inst(
-            Binop(
-                result_reg=result,
-                operator=resolve_binop("-"),
-                left=Register(str(zero_reg)),
-                right=Register(str(inner)),
-            ),
-            span=span,
-        )
-        return result
-
-    # Unknown kind — treat as empty literal
-    return ctx.const_to_reg(ctx.parse_literal(""), span=span)
+            operand = FunctionCallOperand(name=expr.name, args=expr.args)
+            return lower_function_operand(ctx, operand, materialised, span=span)
+        case LengthOfNode():
+            # LENGTH OF <field> as a ref-mod bound: NUMF(1:LENGTH OF N)
+            # (red-dragon-twfl).
+            return lower_expr_node(scope, expr)
+        case _:
+            return ctx.const_to_reg(ctx.parse_literal(""), span=span)
 
 
 def _split_condition_subscript(token: str) -> tuple[str, tuple]:
@@ -1131,9 +1110,7 @@ def _lower_expr_node_body(
 
         result_reg = lower_function_in_expression(
             scope,
-            FunctionCallOperand(
-                name=node.name, args=tuple(expr_to_dict(arg) for arg in node.args)
-            ),
+            FunctionCallOperand(name=node.name, args=node.args),
             precision,
         )
         return _float_operand(scope, result_reg, floating)

@@ -6,6 +6,8 @@ from cobol_asg.asg_types import (
     CobolParagraph,
     CobolSection,
 )
+from cobol_asg.cobol_expression import FieldRefNode, LiteralNode
+from cobol_asg.condition import RelationalOperator, RelationTest
 from cobol_asg.ref_mod import RefModOperand
 from cobol_asg.cobol_statements import (
     ArithmeticStatement,
@@ -364,14 +366,11 @@ class TestCobolStatement:
         }
         stmt = parse_statement(data)
         assert isinstance(stmt, IfStatement)
-        assert stmt.condition == {
-            "not": False,
-            "relation": {
-                "left": {"kind": "ref", "name": "WS-A"},
-                "op": ">",
-                "right": {"kind": "lit", "value": "0"},
-            },
-        }
+        assert stmt.condition == RelationTest(
+            FieldRefNode(name="WS-A"),
+            RelationalOperator.GREATER,
+            LiteralNode(value="0"),
+        )
         assert len(stmt.children) == 1
         assert isinstance(stmt.children[0], DisplayStatement)
         assert parse_statement(stmt.to_dict()) == stmt

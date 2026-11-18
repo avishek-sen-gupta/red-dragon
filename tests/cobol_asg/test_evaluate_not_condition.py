@@ -1,5 +1,6 @@
 """WHEN NOT condition-name arrives with its NOT as written; the ASG reader applies it."""
 
+from cobol_asg.condition import condition_from_dict
 from cobol_asg.evaluate_selection import selection_object_from_dict
 from cobol_asg.selection_condition import SelectionCondition
 
@@ -23,17 +24,21 @@ def test_not_negates_the_condition_it_precedes() -> None:
             {"kind": "condition", "not": True, "condition": {**_NAME, "not": True}}
         ),
     ] == [
-        SelectionCondition(condition=_NAME),
-        SelectionCondition(condition={"not": True, "condition_name": "FLAG-ON"}),
+        SelectionCondition(condition=condition_from_dict(_NAME)),
         SelectionCondition(
-            condition={
-                "not": True,
-                "condition": {
-                    "op": "OR",
-                    "left": {"not": False, "condition_name": "A"},
-                    "right": {"not": False, "condition_name": "B"},
-                },
-            }
+            condition=condition_from_dict({"not": True, "condition_name": "FLAG-ON"})
         ),
-        SelectionCondition(condition=_NAME),
+        SelectionCondition(
+            condition=condition_from_dict(
+                {
+                    "not": True,
+                    "condition": {
+                        "op": "OR",
+                        "left": {"not": False, "condition_name": "A"},
+                        "right": {"not": False, "condition_name": "B"},
+                    },
+                }
+            )
+        ),
+        SelectionCondition(condition=condition_from_dict(_NAME)),
     ]

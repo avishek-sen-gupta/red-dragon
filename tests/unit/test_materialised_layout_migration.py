@@ -6,6 +6,8 @@ and are expected to FAIL initially.
 
 from __future__ import annotations
 
+from cobol_asg.condition import condition_from_dict
+
 from cobol_asg.asg_types import CobolASG, CobolField
 from cobol_asg.cobol_statements import (
     DisplayStatement,
@@ -165,7 +167,9 @@ class TestLowerConditionWithMaterialised:
                 "right": {"kind": "lit", "value": "10"},
             },
         }
-        result_reg = lower_condition(LoweringScope(ctx, materialised, None), condition)
+        result_reg = lower_condition(
+            LoweringScope(ctx, materialised, None), condition_from_dict(condition)
+        )
 
         assert str(result_reg).startswith("%")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]

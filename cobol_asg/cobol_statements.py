@@ -15,7 +15,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Union
 
-from cobol_asg.abbreviated_condition import resolve_condition
+from cobol_asg.abbreviated_condition import read_condition
 from cobol_asg.alternate_record_key import AlternateRecordKey
 from cobol_asg.call_target import CallTarget
 from cobol_asg.cobol_expression import (
@@ -27,6 +27,7 @@ from cobol_asg.cobol_expression import (
     field_ref_from_dict,
 )
 from cobol_asg.collating_sequence_phrase import CollatingSequencePhrase
+from cobol_asg.condition import Condition, condition_to_dict
 from cobol_asg.evaluate_selection import (
     SelectionObject,
     SelectionSubject,
@@ -96,7 +97,7 @@ class PerformTimesSpec:
 class PerformUntilSpec:
     """PERFORM ... UNTIL loop specification."""
 
-    condition: dict
+    condition: Condition
     test_before: bool = True  # TEST BEFORE (default) vs TEST AFTER
 
 
@@ -107,7 +108,7 @@ class PerformVaryingSpec:
     varying_var: FieldRefNode
     varying_from: ExprNode
     varying_by: ExprNode
-    condition: dict
+    condition: Condition
     test_before: bool = True
     after_specs: tuple[PerformVaryingSpec, ...] = field(default_factory=tuple)
 
@@ -225,11 +226,7 @@ class MoveStatement:
 
     def to_dict(self) -> dict:
         if isinstance(self.source, FunctionCallOperand):
-            source_dict: dict = {
-                "kind": "function",
-                "name": self.source.name,
-                "args": list(self.source.args),
-            }
+            source_dict: dict = self.source.to_dict()
         else:
             source_dict = self._operand_dict(self.source)
         operands = [source_dict]
@@ -463,7 +460,7 @@ class ComputeStatement:
 class IfStatement:
     """IF condition ... [ELSE ...] END-IF."""
 
-    condition: dict
+    condition: Condition
     children: list[CobolStatementType] = field(default_factory=list)
     else_children: list[CobolStatementType] = field(default_factory=list)
     span: SourceSpan | None = None
@@ -471,14 +468,14 @@ class IfStatement:
     @classmethod
     def from_dict(cls, data: dict) -> IfStatement:
         return cls(
-            condition=resolve_condition(data.get("condition", {})),
+            condition=read_condition(data.get("condition", {})),
             children=[parse_statement(c) for c in data.get("children", [])],
             else_children=[parse_statement(c) for c in data.get("else_children", [])],
             span=SourceSpan.from_dict(data),
         )
 
     def to_dict(self) -> dict:
-        result: dict = {"type": "IF", "condition": self.condition}
+        result: dict = {"type": "IF", "condition": condition_to_dict(self.condition)}
         if self.children:
             result["children"] = [c.to_dict() for c in self.children]
         if self.else_children:
@@ -945,11 +942,7 @@ class StringSending:
             **({"delimiter": self.delimiter.to_dict()} if self.delimiter.name else {}),
         }
         if self.function is not None:
-            result["value"] = {
-                "kind": "function",
-                "name": self.function.name,
-                "args": list(self.function.args),
-            }
+            result["value"] = self.function.to_dict()
         return result
 
 
@@ -1247,30 +1240,22 @@ class InspectStatement:
         return result
 
 
-def _when_condition(written: Mapping | str) -> dict | str:
-    match written:
-        case Mapping():
-            return resolve_condition(written)
-        case _:
-            return written
-
-
 @dataclass(frozen=True)
 class SearchWhen:
     """A WHEN clause inside a SEARCH statement."""
 
-    condition: dict | str
+    condition: Condition
     children: list[CobolStatementType] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict) -> SearchWhen:
         return cls(
-            condition=_when_condition(data.get("condition", "")),
+            condition=read_condition(data.get("condition", "")),
             children=[parse_statement(c) for c in data.get("children", [])],
         )
 
     def to_dict(self) -> dict:
-        result: dict = {"condition": self.condition}
+        result: dict = {"condition": condition_to_dict(self.condition)}
         if self.children:
             result["children"] = [c.to_dict() for c in self.children]
         return result
@@ -2241,7 +2226,7 @@ def _parse_perform_spec(
         return PerformTimesSpec(times=expr_from_dict(data["times"]))
     if perform_type == "UNTIL":
         return PerformUntilSpec(
-            condition=resolve_condition(data.get("until", {})),
+            condition=read_condition(data.get("until", {})),
             test_before=data.get("test_before", True),
         )
     if perform_type == "VARYING":
@@ -2251,7 +2236,7 @@ def _parse_perform_spec(
                 varying_var=field_ref_from_dict(a["varying_var"]),
                 varying_from=expr_from_dict(a["varying_from"]),
                 varying_by=expr_from_dict(a["varying_by"]),
-                condition=resolve_condition(a.get("until", {})),
+                condition=read_condition(a.get("until", {})),
             )
             for a in raw_afters
         )
@@ -2259,7 +2244,7 @@ def _parse_perform_spec(
             varying_var=field_ref_from_dict(data["varying_var"]),
             varying_from=expr_from_dict(data["varying_from"]),
             varying_by=expr_from_dict(data["varying_by"]),
-            condition=resolve_condition(data.get("until", {})),
+            condition=read_condition(data.get("until", {})),
             test_before=data.get("test_before", True),
             after_specs=after_specs,
         )
@@ -2277,7 +2262,7 @@ def _spec_to_dict(
     if isinstance(spec, PerformUntilSpec):
         return {
             "perform_type": "UNTIL",
-            "until": spec.condition,
+            "until": condition_to_dict(spec.condition),
             "test_before": spec.test_before,
         }
     if isinstance(spec, PerformVaryingSpec):
@@ -2286,7 +2271,7 @@ def _spec_to_dict(
             "varying_var": expr_to_dict(spec.varying_var),
             "varying_from": expr_to_dict(spec.varying_from),
             "varying_by": expr_to_dict(spec.varying_by),
-            "until": spec.condition,
+            "until": condition_to_dict(spec.condition),
             "test_before": spec.test_before,
         }
         if spec.after_specs:
@@ -2295,7 +2280,7 @@ def _spec_to_dict(
                     "varying_var": expr_to_dict(a.varying_var),
                     "varying_from": expr_to_dict(a.varying_from),
                     "varying_by": expr_to_dict(a.varying_by),
-                    "until": a.condition,
+                    "until": condition_to_dict(a.condition),
                 }
                 for a in spec.after_specs
             ]

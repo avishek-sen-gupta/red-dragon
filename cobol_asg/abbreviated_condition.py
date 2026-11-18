@@ -7,6 +7,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from functools import reduce
 
+from cobol_asg.condition import Condition, condition_from_dict
+
 _NEGATED = {"==": "!=", "!=": "==", ">": "<=", "<=": ">", "<": ">=", ">=": "<"}
 
 
@@ -80,11 +82,11 @@ def resolve_condition(written: Mapping) -> dict:
     return reduce(_link, written["rest"], start).tree()
 
 
-def negated_condition(condition: Mapping) -> dict:
-    """The condition with NOT applied: an atom's own NOT flips, a compound is wrapped."""
-    if "op" in condition:
-        return {"not": True, "condition": dict(condition)}
-    return {**condition, "not": not condition.get("not", False)}
+def read_condition(written: Mapping | str) -> Condition:
+    """The typed condition the bridge's written form resolves to."""
+    if isinstance(written, str):
+        return condition_from_dict(written)
+    return condition_from_dict(resolve_condition(written))
 
 
 def _link(chain: _Chain, link: Mapping) -> _Chain:

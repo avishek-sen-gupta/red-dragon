@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 
-from cobol_asg.abbreviated_condition import negated_condition, resolve_condition
+from cobol_asg.abbreviated_condition import read_condition
 from cobol_asg.any_object import AnyObject
 from cobol_asg.cobol_expression import expr_from_dict
+from cobol_asg.condition import Condition, negated
 from cobol_asg.expression_subject import ExpressionSubject
 from cobol_asg.range_object import RangeObject
 from cobol_asg.selection_condition import SelectionCondition
@@ -21,9 +22,7 @@ SelectionObject = (
 
 _SUBJECTS: Mapping[str, Callable[[Mapping], SelectionSubject]] = {
     "expr": lambda d: ExpressionSubject(expr=expr_from_dict(d["expr"])),
-    "condition": lambda d: SelectionCondition(
-        condition=resolve_condition(d["condition"])
-    ),
+    "condition": lambda d: SelectionCondition(condition=read_condition(d["condition"])),
     "boolean": lambda d: TruthValue(value=bool(d["value"])),
 }
 
@@ -44,12 +43,12 @@ _OBJECTS: Mapping[str, Callable[[Mapping], SelectionObject]] = {
 }
 
 
-def _object_condition(data: Mapping) -> dict:
+def _object_condition(data: Mapping) -> Condition:
     """A WHEN object's condition; a NOT written before it negates it."""
-    condition = resolve_condition(data["condition"])
+    condition = read_condition(data["condition"])
     if not data.get("not", False):
         return condition
-    return negated_condition(condition)
+    return negated(condition)
 
 
 def selection_subject_from_dict(data: Mapping) -> SelectionSubject:
