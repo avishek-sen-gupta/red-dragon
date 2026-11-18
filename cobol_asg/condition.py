@@ -8,6 +8,10 @@ reads that resolved form. ``condition_to_dict`` writes it back, so a statement's
 
 ``negated`` is a test's NOT. A combination carries none: the bridge writes NOT on a
 parenthesised combination as a ``Parenthesised`` around it.
+
+A combination holds its operands flat. The bridge nests ``A OR B OR C`` on the
+left, one level per operand, so a tree of pairs is as deep as the chain is long,
+and walking it -- reading, writing, comparing -- recursed once per operand.
 """
 
 from __future__ import annotations
@@ -15,6 +19,8 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from enum import Enum
+from functools import reduce
+from itertools import accumulate, repeat, takewhile
 
 from cobol_asg.cobol_expression import ExprNode, expr_from_dict, expr_to_dict
 
@@ -48,9 +54,10 @@ class SignKind(Enum):
 
 @dataclass(frozen=True)
 class Combination:
+    """``operands`` joined by ``connective``, in the order written; two or more."""
+
     connective: Connective
-    left: Condition
-    right: Condition
+    operands: tuple[Condition, ...]
 
 
 @dataclass(frozen=True)
@@ -129,11 +136,24 @@ def _exprs(raw: Sequence[Mapping]) -> tuple[ExprNode, ...]:
     return tuple(expr_from_dict(item) for item in raw)
 
 
+def _is_combination(d: Mapping | str) -> bool:
+    return isinstance(d, Mapping) and "op" in d and "left" in d
+
+
 def _combination(d: Mapping) -> Condition:
+    """The left-nested run of one connective, read as one combination."""
+    spine = tuple(
+        takewhile(
+            lambda node: _is_combination(node) and node["op"] == d["op"],
+            accumulate(repeat(None), lambda node, _: node["left"], initial=d),
+        )
+    )
     return Combination(
         connective=Connective(d["op"]),
-        left=condition_from_dict(d["left"]),
-        right=condition_from_dict(d["right"]),
+        operands=(
+            condition_from_dict(spine[-1]["left"]),
+            *(condition_from_dict(node["right"]) for node in reversed(spine)),
+        ),
     )
 
 
@@ -198,7 +218,7 @@ def condition_from_dict(d: Mapping | str) -> Condition:
     """The typed condition of a resolved condition dict; a bare string is unparsed text."""
     if isinstance(d, str):
         return UnparsedCondition(text=d)
-    if "op" in d and "left" in d:
+    if _is_combination(d):
         return _combination(d)
     return next(
         (read(d) for field, read in _READERS if field in d),
@@ -207,11 +227,15 @@ def condition_from_dict(d: Mapping | str) -> Condition:
 
 
 def _combination_dict(c: Combination) -> dict:
-    return {
-        "op": c.connective.value,
-        "left": condition_to_dict(c.left),
-        "right": condition_to_dict(c.right),
-    }
+    return reduce(
+        lambda left, right: {
+            "op": c.connective.value,
+            "left": left,
+            "right": condition_to_dict(right),
+        },
+        c.operands[1:],
+        condition_to_dict(c.operands[0]),
+    )
 
 
 def _relation_dict(c: RelationTest) -> dict:

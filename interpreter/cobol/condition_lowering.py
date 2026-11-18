@@ -64,7 +64,7 @@ from interpreter.cobol.sectioned_layout import MaterialisedSectionedLayout
 from interpreter.cobol.switch_condition import SwitchCondition
 from interpreter.func_name import FuncName
 from interpreter.instructions import Binop, CallFunction, Const
-from interpreter.operator_kind import resolve_binop
+from interpreter.operator_kind import BinopKind, resolve_binop
 from interpreter.register import Register
 
 logger = logging.getLogger(__name__)
@@ -285,16 +285,25 @@ def lower_condition(scope: LoweringScope, node: Condition) -> Register:
 
 
 def _lower_combination(scope: LoweringScope, node: Combination) -> Register:
+    operator = resolve_binop("and" if node.connective is Connective.AND else "or")
+    return reduce(
+        lambda left_reg, operand: _joined(
+            scope, operator, left_reg, lower_condition(scope, operand)
+        ),
+        node.operands[1:],
+        lower_condition(scope, node.operands[0]),
+    )
+
+
+def _joined(
+    scope: LoweringScope, operator: BinopKind, left_reg: Register, right_reg: Register
+) -> Register:
     ctx, span = scope.ctx, scope.span
-    left_reg = lower_condition(scope, node.left)
-    right_reg = lower_condition(scope, node.right)
     result = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
             result_reg=result,
-            operator=resolve_binop(
-                "and" if node.connective is Connective.AND else "or"
-            ),
+            operator=operator,
             left=Register(str(left_reg)),
             right=Register(str(right_reg)),
         ),

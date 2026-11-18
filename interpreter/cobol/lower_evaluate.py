@@ -139,8 +139,10 @@ def _value_test(subject: ExprNode, obj: ValueObject | RangeObject) -> Condition:
     return Parenthesised(
         inner=Combination(
             Connective.AND,
-            RelationTest(subject, RelationalOperator.GREATER_OR_EQUAL, obj.low),
-            RelationTest(subject, RelationalOperator.LESS_OR_EQUAL, obj.high),
+            (
+                RelationTest(subject, RelationalOperator.GREATER_OR_EQUAL, obj.low),
+                RelationTest(subject, RelationalOperator.LESS_OR_EQUAL, obj.high),
+            ),
         ),
         negated=obj.negated,
     )
